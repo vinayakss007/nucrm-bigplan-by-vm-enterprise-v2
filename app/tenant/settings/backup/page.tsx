@@ -135,7 +135,8 @@ export default function TenantBackupSettingsPage() {
       const res = await fetch('/api/tenant/backup', { signal });
       if (res.ok) {
         const d = await res.json();
-        setBackups(d.backups || []);
+        // #1300: prefer standardized { data } envelope, fall back to legacy key.
+        setBackups(d.data ?? d.backups ?? []);
       }
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return;

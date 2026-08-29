@@ -18,6 +18,7 @@ import { db } from '@/drizzle/db';
 import { sql } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { logError } from '@/lib/errors-server';
 
 export const GET = withApiRoute(async (req: NextRequest) => {
   try {
@@ -81,7 +82,7 @@ export const GET = withApiRoute(async (req: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[superadmin recent-activity]', err);
+    await logError({ error: err, context: 'superadmin/recent-activity GET', requestMethod: 'GET' });
     return apiError(err);
   }
 });

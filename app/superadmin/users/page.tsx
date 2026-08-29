@@ -160,6 +160,8 @@ export default function SuperAdminUsersPage() {
       toast.success(d.message || 'Transferred');
       setShowTransfer(false);
       setTransferTarget('');
+      // #1267: intentional full reload — ownership transfer invalidates the
+      // current session, so force a clean navigation to the login page.
       setTimeout(() => { window.location.href = '/auth/login'; }, 2000);
     } else {
       toast.error(d.error || 'Failed');

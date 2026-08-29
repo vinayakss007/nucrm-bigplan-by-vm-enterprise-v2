@@ -98,6 +98,8 @@ export default function LeadCaptureForm({
 
       if (redirectUrl) {
         setTimeout(() => {
+          // #1267: redirectUrl is a form-owner-configured, possibly external
+          // URL — must be a real browser navigation, not a router.push.
           window.location.href = redirectUrl;
         }, 2000);
       }

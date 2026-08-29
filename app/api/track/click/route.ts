@@ -15,6 +15,7 @@ import { db } from '@/drizzle/db';
 import { emailTracking, activities } from '@/drizzle/schema';
 import { eq, and, isNull, sql } from 'drizzle-orm';
 import { isPrivateIpv4, isPrivateIpv6, isBlockedHostname } from '@/lib/security/ssrf';
+import { checkPublicRateLimit } from '@/lib/rate-limit-simple';
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -40,7 +41,13 @@ export async function GET(req: NextRequest) {
   }
   }
 
-  if (trackId) {
+  // #1143: public, unauthenticated endpoint. Rate-limit the click-count write
+  // per IP to stop analytics inflation, but ALWAYS perform the redirect below so
+  // a real recipient's link never breaks — a suppressed write just avoids
+  // over-counting one click.
+  const rateLimited = checkPublicRateLimit(req, { max: 60, windowMs: 60_000, prefix: 'track-click' });
+
+  if (trackId && !rateLimited) {
     // Record click — fire and forget
     Promise.resolve().then(async () => {
       try {

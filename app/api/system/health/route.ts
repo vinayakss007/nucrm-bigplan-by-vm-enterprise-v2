@@ -50,6 +50,12 @@ interface MigrationHealthResult {
   status: 'healthy' | 'unknown';
 }
 
+interface EmailHealthResult {
+  configured: boolean;
+  provider: 'resend' | 'smtp' | 'console (dev)' | 'none';
+  status: 'healthy' | 'degraded';
+}
+
 interface SystemHealthResponse {
   status: 'healthy' | 'degraded' | 'unhealthy';
   timestamp: string;
@@ -58,6 +64,7 @@ interface SystemHealthResponse {
   disk: DiskHealthResult;
   backup: BackupHealthResult;
   migration: MigrationHealthResult;
+  email: EmailHealthResult;
 }
 
 // -------------------------------------------------------------------
@@ -85,7 +92,22 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     disk: { status: 'unknown' as 'healthy' | 'degraded' | 'unhealthy' },
     backup: { lastBackupTime: null, ageMinutes: null, status: 'unhealthy' },
     migration: { currentVersion: null, status: 'unknown' },
+    email: { configured: false, provider: 'none', status: 'degraded' },
   };
+
+  // Email provider configuration (#1041) — a missing provider in production is
+  // 'degraded': the app runs, but password resets / invites / notifications
+  // won't send. Surfacing it here makes the silent gap observable.
+  try {
+    const { getEmailProviderStatus } = await import('@/lib/email/service');
+    const emailStatus = getEmailProviderStatus();
+    health.email = {
+      ...emailStatus,
+      status: emailStatus.configured || process.env.NODE_ENV !== 'production' ? 'healthy' : 'degraded',
+    };
+  } catch {
+    health.email = { configured: false, provider: 'none', status: 'degraded' };
+  }
 
   // 1. Database health
   try {
@@ -195,6 +217,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     health.redis.status,
     health.disk.status,
     health.backup.status,
+    health.email.status,
   ];
 
   if (statuses.includes('unhealthy')) {

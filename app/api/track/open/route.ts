@@ -18,6 +18,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { emailTracking, activities } from '@/drizzle/schema';
 import { eq, and, isNull, sql } from 'drizzle-orm';
+import { checkPublicRateLimit } from '@/lib/rate-limit-simple';
 
 // 1x1 transparent GIF
 const PIXEL = Buffer.from(
@@ -28,7 +29,14 @@ const PIXEL = Buffer.from(
 export async function GET(req: NextRequest) {
   const trackId = new URL(req.url).searchParams.get('t');
 
-  if (trackId) {
+  // #1143: this endpoint is public and unauthenticated. Without a limit, anyone
+  // can hammer it to inflate open counts and log fake activities. Rate-limit the
+  // DB write per IP, but ALWAYS return the pixel so legitimate email clients
+  // (and any shared-NAT recipients) still render correctly — a suppressed write
+  // just means one open is not double-counted, never a broken image.
+  const rateLimited = checkPublicRateLimit(req, { max: 60, windowMs: 60_000, prefix: 'track-open' });
+
+  if (trackId && !rateLimited) {
     // Record open — fire and forget, never block
     Promise.resolve().then(async () => {
       try {

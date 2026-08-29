@@ -142,11 +142,21 @@ Open `http://<SERVER_IP>:3001` and check these panels:
 
 ### 3.1 Automatic Backups
 
-The cron container runs daily at 02:00 UTC. What it does:
+Two independent layers back up the data:
 
-1. `pg_dump` in custom format (`-Fc`) with compression level 6
-2. Uploads to MinIO (local S3) bucket `nucrm-backups`
-3. Keeps last 5 local copies in `/tmp/nucrm-backups/`
+1. **App scheduler** (`app/api/cron/auto-backup`) — per-tenant logical backups
+   into the DB with 90-day retention, triggered by the cron container daily at
+   02:00 UTC. `backup-health` (every 6h) alerts the super admin if no backup has
+   completed in 25 hours.
+2. **Full-cluster `pg_dump`** — `deploy/scripts/backup.sh`, run manually or from
+   your own host cron for disaster recovery.
+
+> **Topology:** In production, PostgreSQL runs on the **host**, not in a
+> container. `backup.sh` therefore does NOT `docker exec` into a Postgres
+> container — it runs `pg_dump`/`pg_restore` against `$DATABASE_URL` (using a
+> local pg client if present, otherwise a one-shot `postgres:16-alpine`
+> container on the compose network). The same script works in dev where
+> Postgres is containerised.
 
 Check status:
 
@@ -157,14 +167,15 @@ docker logs nucrm-cron --since 24h | grep -i backup
 ### 3.2 Manual Backup
 
 ```bash
-# Full backup (local + S3)
+# Full backup (local + upload to MinIO)
 bash deploy/scripts/backup.sh
 
-# Local only
+# Local only (no S3 upload)
 bash deploy/scripts/backup.sh --local
 
-# Backup files are saved to:
-ls -lh /tmp/nucrm-backups/
+# Backups are custom-format .dump files under /var/backups/nucrm
+# (durable across reboots — override with BACKUP_DIR). Last 7 kept locally.
+ls -lh /var/backups/nucrm/
 ```
 
 ### 3.3 Restore from Backup
@@ -173,41 +184,45 @@ ls -lh /tmp/nucrm-backups/
 # IMPORTANT: This overwrites the current database. Take a backup first!
 
 # 1. Find the backup file
-ls -lt /tmp/nucrm-backups/
+ls -lt /var/backups/nucrm/
 
-# 2. Restore
-bash deploy/scripts/backup.sh --restore /tmp/nucrm-backups/nucrm_backup_20260722_020000.sql.gz
+# 2. Restore (prompts for confirmation)
+bash deploy/scripts/backup.sh --restore /var/backups/nucrm/nucrm_backup_20260722_020000.dump
 ```
 
 ### 3.4 Point-in-Time Recovery (PITR)
 
-If WAL archiving is configured, you can restore to any point in time:
+If WAL archiving is configured, you can restore to any point in time. Because
+Postgres is on the host, run these against the host instance (adjust paths):
 
 ```bash
 # 1. Stop app
 docker compose -f deploy/docker-compose.production.yml stop app worker cron
 
-# 2. Restore base backup
-docker exec -i nucrm-postgres pg_restore -U nucrm -d nucrm \
-  --clean --if-exists < /tmp/nucrm-backups/BASE_BACKUP.sql.gz
+# 2. Restore base backup against $DATABASE_URL
+pg_restore --dbname "$DATABASE_URL" --clean --if-exists --no-owner \
+  /var/backups/nucrm/BASE_BACKUP.dump
 
-# 3. Create recovery.conf in PostgreSQL data dir
-#    (set restore_command to fetch WAL from S3, recovery_target_time to desired timestamp)
-
-# 4. Restart PostgreSQL — it will replay WAL to the target time
-docker restart nucrm-postgres
+# 3. Configure recovery on the host Postgres (restore_command to fetch WAL from
+#    S3, recovery_target_time to the desired timestamp) and restart Postgres so
+#    it replays WAL to the target time.
+sudo systemctl restart postgresql
 ```
 
 ### 3.5 Backup Verification
 
+Automated: `app/api/cron/backup-verify` restores the latest backup into a scratch
+schema and compares row counts. Manual full-dump verification against a scratch
+database:
+
 ```bash
-# Manual verification: restore backup to temp DB and check integrity
-docker exec nucrm-postgres createdb -U nucrm nucrm_verify
-docker exec -i nucrm-postgres pg_restore -U nucrm -d nucrm_verify \
-  --clean --if-exists --no-owner < /tmp/nucrm-backups/LATEST.sql.gz
-docker exec nucrm-postgres psql -U nucrm -d nucrm_verify -c "
-  SELECT schemaname, tablename, n_live_tup FROM pg_stat_user_tables;"
-docker exec nucrm-postgres dropdb -U nucrm nucrm_verify
+# Create a scratch DB, restore into it, check row counts, then drop it.
+SCRATCH="${DATABASE_URL%/*}/nucrm_verify"
+psql "$DATABASE_URL" -c "CREATE DATABASE nucrm_verify;"
+pg_restore --dbname "$SCRATCH" --clean --if-exists --no-owner \
+  /var/backups/nucrm/nucrm_backup_LATEST.dump
+psql "$SCRATCH" -c "SELECT schemaname, relname, n_live_tup FROM pg_stat_user_tables ORDER BY n_live_tup DESC LIMIT 10;"
+psql "$DATABASE_URL" -c "DROP DATABASE nucrm_verify;"
 ```
 
 ### 3.6 Backup Retention Policy

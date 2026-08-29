@@ -14,6 +14,7 @@ import { eq, and, sql, asc } from 'drizzle-orm';
 import { logSuperAdminAction } from '@/lib/audit/super-admin';
 import { concurrencyGuard, concurrencyGuardById } from '@/lib/api/concurrency';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { logError } from '@/lib/errors-server';
 
 export const GET = withApiRoute(async (request: NextRequest) => {
   try {
@@ -31,7 +32,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[superadmin/plans GET]', err);
+    await logError({ error: err, context: 'superadmin/plans GET', requestMethod: 'GET' });
     return apiError(err);
   }
 });
@@ -90,7 +91,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     if (err.code === '23505' || err.message?.includes('unique constraint')) {
       return NextResponse.json({ error: 'A plan with this identifier already exists' }, { status: 409 });
     }
-    console.error('[superadmin/plans POST]', err);
+    await logError({ error: err, context: 'superadmin/plans POST', requestMethod: 'POST' });
     return apiError(err);
   }
 });
@@ -170,7 +171,7 @@ export const PATCH = withApiRoute(async (request: NextRequest) => {
     if (err.code === '23505' || err.message?.includes('unique constraint')) {
       return NextResponse.json({ error: 'A plan with this name already exists' }, { status: 409 });
     }
-    console.error('[superadmin/plans PATCH]', err);
+    await logError({ error: err, context: 'superadmin/plans PATCH', requestMethod: 'PATCH' });
     return apiError(err);
   }
 });
@@ -209,7 +210,7 @@ export const DELETE = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[superadmin/plans DELETE]', err);
+    await logError({ error: err, context: 'superadmin/plans DELETE', requestMethod: 'DELETE' });
     return apiError(err);
   }
 });

@@ -13,6 +13,7 @@ import { eq, and, sql } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { concurrencyGuardById } from '@/lib/api/concurrency';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { logError } from '@/lib/errors-server';
 
 export const GET = withApiRoute(async (req: NextRequest,
   { params }: { params: Promise<{ id: string }> }) => {
@@ -34,7 +35,7 @@ export const GET = withApiRoute(async (req: NextRequest,
 
     return NextResponse.json({ data: template });
   } catch (err: unknown) {
-    console.error('[superadmin/templates/[id] GET]', err);
+    await logError({ error: err, context: 'superadmin/templates/[id] GET', requestMethod: 'GET' });
     return apiError(err);
   }
 });
@@ -109,7 +110,7 @@ export const PATCH = withApiRoute(async (req: NextRequest,
 
     return NextResponse.json({ data: updated });
   } catch (err: unknown) {
-    console.error('[superadmin/templates/[id] PATCH]', err);
+    await logError({ error: err, context: 'superadmin/templates/[id] PATCH', requestMethod: 'PATCH' });
     return apiError(err);
   }
 });
@@ -135,7 +136,7 @@ export const DELETE = withApiRoute(async (req: NextRequest,
 
     return NextResponse.json({ ok: true });
   } catch (err: unknown) {
-    console.error('[superadmin/templates/[id] DELETE]', err);
+    await logError({ error: err, context: 'superadmin/templates/[id] DELETE', requestMethod: 'DELETE' });
     return apiError(err);
   }
 });

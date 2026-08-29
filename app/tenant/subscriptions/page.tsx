@@ -64,6 +64,12 @@ export default function SubscriptionsPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    // #1342: reject non-positive / non-numeric amounts before hitting the API.
+    const amountNum = Number(form.amount);
+    if (!Number.isFinite(amountNum) || amountNum <= 0) {
+      toast.error('Amount must be a positive number');
+      return;
+    }
     try {
       const res = await fetch('/api/tenant/subscriptions', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -181,7 +187,7 @@ export default function SubscriptionsPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium mb-1">Amount *</label>
-                  <input type="number" step="0.01" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} required
+                  <input type="number" step="0.01" min="0.01" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} required
                     className="w-full px-3 py-2 border border-border rounded-lg bg-card text-sm" />
                 </div>
                 <div>

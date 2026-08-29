@@ -1,0 +1,32 @@
+# NuCRM Terraform variables — copy to terraform.tfvars and fill in.
+# terraform.tfvars is gitignored (it holds tokens). NEVER commit real tokens.
+
+# Which cloud: "hetzner" (default, CX32 8GB) or "digitalocean".
+cloud = "hetzner"
+
+name        = "nucrm-prod"
+environment = "production"
+domain      = "crm.yourdomain.com"
+
+# Provider token — set ONLY the one matching `cloud` above.
+# Prefer exporting instead of writing here:
+#   export TF_VAR_hcloud_token=xxxxx     (or TF_VAR_do_token)
+hcloud_token = ""
+# do_token   = ""
+
+# Sizing (defaults already match the documented 8GB / 4 vCPU target).
+# hcloud_server_type = "cx32"
+# hcloud_location    = "nbg1"
+# do_size            = "s-4vcpu-8gb"
+# do_region          = "fra1"
+
+# SSH public keys authorized on the deploy user (password login is disabled).
+ssh_public_keys = [
+  "ssh-ed25519 AAAA... you@example.com",
+]
+
+# Lock SSH down to your ranges (recommended). 80/443 stay open to the world.
+# admin_cidrs = ["203.0.113.10/32"]
+
+# ssh_port    = 22
+# deploy_user = "deploy"

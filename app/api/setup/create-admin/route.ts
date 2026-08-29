@@ -30,6 +30,9 @@ export async function POST(request: NextRequest) {
 
     let body;
     try { body = await readJsonBody(request); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
+
+    // Validate the request body before any DB writes (#1072). Returns a 400
+    // with field-level details on invalid input via the shared helper.
     const validated = validateBody(createAdminSchema, body);
     if (validated instanceof NextResponse) return validated;
     const { full_name, email, password, workspace_name } = validated.data;

@@ -33,7 +33,7 @@ export default function EmailAnalyticsPage() {
   const load = async (signal?: AbortSignal) => {
     setLoading(true);
     try {
-      const res = await fetch('/api/tenant/email/track', { signal });
+      const res = await fetch('/api/tenant/email/analytics', { signal });
       if (res.ok) {
         const d = await res.json();
         if (signal?.aborted) return;

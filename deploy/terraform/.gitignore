@@ -1,0 +1,19 @@
+# Terraform — never commit state (may contain secrets) or local provider caches.
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+
+# Variable files hold API tokens / SSH keys.
+*.tfvars
+*.tfvars.json
+!terraform.tfvars.example
+
+# Plan output can embed secrets.
+*.tfplan
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json

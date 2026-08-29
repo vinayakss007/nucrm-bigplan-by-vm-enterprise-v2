@@ -15,6 +15,7 @@ import { createBackupSchema } from '@/lib/api/schemas';
 import { logSuperAdminAction } from '@/lib/audit/super-admin';
 import { concurrencyGuard } from '@/lib/api/concurrency';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { logError } from '@/lib/errors-server';
 
 export const GET = withApiRoute(async (request: NextRequest) => {
   try {
@@ -33,7 +34,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
           .from(criticalDataBackups)
           .orderBy(desc(criticalDataBackups.backedUpAt))
           .limit(50)
-          .catch((err) => { console.error('[backups] critical data failed', err); return []; }),
+          .catch((err) => { void logError({ error: err, context: 'superadmin/backups critical data query' }); return []; }),
 
         db.select({
           totalBackups: sql<number>`count(*)::int`,
@@ -43,7 +44,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
         })
         .from(criticalDataBackups)
         .then(rows => rows[0])
-        .catch((err) => { console.error('[backups] stats failed', err); return { totalBackups: 0, restorable: 0, deletedRecords: 0, updatedRecords: 0 }; }),
+        .catch((err) => { void logError({ error: err, context: 'superadmin/backups stats query' }); return { totalBackups: 0, restorable: 0, deletedRecords: 0, updatedRecords: 0 }; }),
       ]);
 
       // Get table breakdown
@@ -54,7 +55,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
         })
         .from(criticalDataBackups)
         .groupBy(criticalDataBackups.tableName)
-        .catch((err) => { console.error('[backups] tableStats failed', err); return []; });
+        .catch((err) => { void logError({ error: err, context: 'superadmin/backups tableStats query' }); return []; });
 
  
  
@@ -62,7 +63,8 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       const stats: any = statsRes || { totalBackups: 0, restorable: 0, deletedRecords: 0, updatedRecords: 0 };
       stats.by_table = tableStats;
 
-      return NextResponse.json({ deleted, stats });
+      // #1300: standardize on { data }; keep top-level keys for backward compat.
+      return NextResponse.json({ data: { deleted, stats }, deleted, stats });
     }
 
     if (list === 'recent') {
@@ -92,9 +94,12 @@ export const GET = withApiRoute(async (request: NextRequest) => {
         .where(tenantFilter)
         .orderBy(desc(backupRecords.createdAt))
         .limit(50)
-        .catch((err) => { console.error('[backups] recent list failed', err); return []; });
+        .catch((err) => { void logError({ error: err, context: 'superadmin/backups recent list query' }); return []; });
       
-      return NextResponse.json({ backups });
+      // #1300: standardize list responses on the { data } envelope. `backups`
+      // is retained for backward compatibility with existing consumers during
+      // the transition (both point at the same array).
+      return NextResponse.json({ data: backups, backups });
     }
 
     // Default: return schedules (superadmin only)
@@ -116,14 +121,15 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       .from(backupSchedules)
       .leftJoin(tenants, eq(tenants.id, backupSchedules.tenantId))
       .orderBy(desc(backupSchedules.createdAt))
-      .catch((err) => { console.error('[backups] schedules failed', err); return []; });
+      .catch((err) => { void logError({ error: err, context: 'superadmin/backups schedules query' }); return []; });
 
-    return NextResponse.json({ schedules });
+    // #1300: standardize on { data }; keep `schedules` for backward compat.
+    return NextResponse.json({ data: schedules, schedules });
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) { 
-    console.error('[superadmin/backups GET]', err);
+    await logError({ error: err, context: 'superadmin/backups GET', requestMethod: 'GET' });
     return apiError(err); 
   }
 });
@@ -135,7 +141,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
     let body;
-    try { body = await readJsonBody(request); } catch (err) { console.error('[backups] JSON parse failed', err); return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
+    try { body = await readJsonBody(request); } catch (err) { void logError({ error: err, context: 'superadmin/backups POST JSON parse', level: 'warning' }); return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
 
     const parsed = validateBody(createBackupSchema, body);
     if (parsed instanceof NextResponse) return parsed;
@@ -184,7 +190,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) { 
-    console.error('[superadmin/backups POST]', err);
+    await logError({ error: err, context: 'superadmin/backups POST', requestMethod: 'POST' });
     return apiError(err); 
   }
 });

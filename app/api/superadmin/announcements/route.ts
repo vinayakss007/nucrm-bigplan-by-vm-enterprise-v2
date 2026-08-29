@@ -14,6 +14,7 @@ import { createAnnouncementSchema, updateAnnouncementSchema, deleteAnnouncementS
 import { logSuperAdminAction } from '@/lib/audit/super-admin';
 import { concurrencyGuardById } from '@/lib/api/concurrency';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { logError } from '@/lib/errors-server';
 
 export const GET = withApiRoute(async (request: NextRequest) => {
   try {
@@ -37,14 +38,14 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       .from(announcements)
       .orderBy(desc(announcements.createdAt))
       .limit(50)
-      .catch((err) => { console.error('[announcements] list failed', err); return []; });
+      .catch((err) => { void logError({ error: err, context: 'superadmin/announcements list query' }); return []; });
     
     return NextResponse.json({ data });
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[superadmin/announcements GET]', err);
+    await logError({ error: err, context: 'superadmin/announcements GET', requestMethod: 'GET' });
     return apiError(err);
   }
 });
@@ -90,7 +91,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[superadmin/announcements POST]', err);
+    await logError({ error: err, context: 'superadmin/announcements POST', requestMethod: 'POST' });
     return apiError(err);
   }
 });
@@ -139,7 +140,7 @@ export const PATCH = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[superadmin/announcements PATCH]', err);
+    await logError({ error: err, context: 'superadmin/announcements PATCH', requestMethod: 'PATCH' });
     return apiError(err);
   }
 });
@@ -170,7 +171,7 @@ export const DELETE = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[superadmin/announcements DELETE]', err);
+    await logError({ error: err, context: 'superadmin/announcements DELETE', requestMethod: 'DELETE' });
     return apiError(err);
   }
 });

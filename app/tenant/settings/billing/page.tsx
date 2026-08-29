@@ -71,6 +71,8 @@ export default function BillingPage() {
     });
     const d = await res.json();
     if (res.ok && d.url) {
+      // #1267: external navigation to the Stripe Checkout URL — must be a real
+      // browser navigation, not a client-side router.push.
       window.location.href = d.url;
     } else if (d.error?.includes('not configured')) {
       toast.error('Stripe is not configured yet. Contact support to upgrade.');

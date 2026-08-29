@@ -14,6 +14,7 @@ import { platformSettings } from '@/drizzle/schema';
 import { isNull } from 'drizzle-orm';
 import { logSuperAdminAction } from '@/lib/audit/super-admin';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { logError } from '@/lib/errors-server';
 
 const ALLOWED = [
   'platform_name', 'support_email', 'app_url', 'allow_signups', 'require_email_verify',
@@ -116,7 +117,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[superadmin/settings GET]', err);
+    await logError({ error: err, context: 'superadmin/settings GET', requestMethod: 'GET' });
     return apiError(err);
   }
 });
@@ -180,7 +181,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[superadmin/settings POST]', err);
+    await logError({ error: err, context: 'superadmin/settings POST', requestMethod: 'POST' });
     return apiError(err);
   }
 });

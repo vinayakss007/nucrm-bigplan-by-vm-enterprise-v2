@@ -7,6 +7,18 @@ import crypto from 'crypto';
 import { escapeHtml } from '@/lib/email/escape-html';
 import { generateUnsubscribeToken } from '@/lib/email/unsubscribe-token';
 
+/**
+ * A single file attachment for an outgoing email.
+ * `content` may be a Node Buffer (raw bytes) or a base64-encoded string; each
+ * provider adapter converts it into the shape that provider's API expects.
+ */
+export interface EmailAttachment {
+  filename: string;
+  /** Raw bytes as a Buffer, or a base64-encoded string. */
+  content: Buffer | string;
+  contentType?: string;
+}
+
 export interface EmailPayload {
   to: string | string[];
   subject: string;
@@ -16,6 +28,17 @@ export interface EmailPayload {
   replyTo?: string;
   /** When set, RFC 8058 List-Unsubscribe headers are added to the message */
   contactId?: string;
+  /** Optional file attachments; wired per-provider by each adapter. */
+  attachments?: EmailAttachment[];
+}
+
+/**
+ * Normalize an attachment's content to a base64 string for JSON HTTP APIs.
+ * A Buffer is base64-encoded; a string is assumed to be base64 already and
+ * passed through unchanged (so callers can supply pre-encoded content).
+ */
+function toBase64(content: Buffer | string): string {
+  return Buffer.isBuffer(content) ? content.toString('base64') : content;
 }
 
 export interface SendResult {
@@ -77,6 +100,16 @@ async function sendViaResend(payload: EmailPayload): Promise<SendResult> {
         text: payload.text,
         reply_to: payload.replyTo,
         headers: Object.keys(headers).length > 0 ? headers : undefined,
+        // Resend HTTP API accepts attachments: [{ filename, content }] with
+        // base64-encoded content. Only include the key when we actually have
+        // attachments so bodies stay byte-for-byte unchanged otherwise.
+        attachments: payload.attachments && payload.attachments.length > 0
+          ? payload.attachments.map((a) => ({
+              filename: a.filename,
+              content: toBase64(a.content),
+              ...(a.contentType ? { content_type: a.contentType } : {}),
+            }))
+          : undefined,
       }),
       signal: AbortSignal.timeout(15_000),
     });
@@ -148,6 +181,16 @@ async function sendViaSMTP(payload: EmailPayload): Promise<SendResult> {
       text: payload.text,
       replyTo: payload.replyTo,
       headers: Object.keys(smtpHeaders).length > 0 ? smtpHeaders : undefined,
+      // nodemailer accepts attachments: [{ filename, content, contentType }]
+      // with the Buffer/string content passed through directly (no base64
+      // conversion needed). Only set the key when non-empty.
+      attachments: payload.attachments && payload.attachments.length > 0
+        ? payload.attachments.map((a) => ({
+            filename: a.filename,
+            content: a.content,
+            ...(a.contentType ? { contentType: a.contentType } : {}),
+          }))
+        : undefined,
     });
 
     return { success: true, provider: 'smtp', messageId: info.messageId };
@@ -160,34 +203,98 @@ async function sendViaSMTP(payload: EmailPayload): Promise<SendResult> {
 }
 
 /**
+ * True when at least one real email provider (Resend or SMTP) is configured.
+ * Health checks and callers can use this to surface the gap up front instead of
+ * discovering it only when a password-reset silently fails (#1041).
+ */
+export function isEmailConfigured(): boolean {
+  return Boolean(process.env.RESEND_API_KEY || process.env.SMTP_HOST);
+}
+
+/** Which email provider will actually be used, for diagnostics/health. */
+export function getEmailProviderStatus(): {
+  configured: boolean;
+  provider: 'resend' | 'smtp' | 'console (dev)' | 'none';
+} {
+  if (process.env.RESEND_API_KEY) return { configured: true, provider: 'resend' };
+  if (process.env.SMTP_HOST) return { configured: true, provider: 'smtp' };
+  if (process.env.NODE_ENV !== 'production') return { configured: false, provider: 'console (dev)' };
+  return { configured: false, provider: 'none' };
+}
+
+/**
  * Send an email using whichever provider is configured.
  * Tries Resend first, falls back to SMTP.
  * In development with no provider configured, logs to console.
+ *
+ * #1041: email failures must NOT be silent. When no provider is configured in
+ * production, or when every configured provider fails, we record a structured
+ * error (errorLogs + Sentry via logError) so the gap is observable in the
+ * dashboard instead of password resets/invites vanishing without a trace.
  */
 export async function sendEmail(payload: EmailPayload): Promise<SendResult> {
+  const recipients = Array.isArray(payload.to) ? payload.to.join(', ') : payload.to;
+
   // Try Resend first
   if (process.env.RESEND_API_KEY) {
     const result = await sendViaResend(payload);
     if (result.success) return result;
     console.warn('[email] Resend failed, trying SMTP fallback:', result.error);
+
+    // If Resend was the only provider, this is a hard failure — make it loud.
+    if (!process.env.SMTP_HOST) {
+      await reportEmailFailure(`Resend send failed: ${result.error}`, payload.subject, recipients);
+      return result;
+    }
   }
 
   // Try SMTP
   if (process.env.SMTP_HOST) {
-    return sendViaSMTP(payload);
+    const result = await sendViaSMTP(payload);
+    if (!result.success) {
+      await reportEmailFailure(`SMTP send failed: ${result.error}`, payload.subject, recipients);
+    }
+    return result;
   }
 
   // Development fallback - log to console
   if (process.env.NODE_ENV !== 'production') {
-    const to = Array.isArray(payload.to) ? payload.to.join(', ') : payload.to;
-    console.log(`\n📧 [DEV EMAIL - not sent]\nTo: ${to}\nSubject: ${payload.subject}\n`);
+    console.log(`\n📧 [DEV EMAIL - not sent]\nTo: ${recipients}\nSubject: ${payload.subject}\n`);
     return { success: true, provider: 'console (dev)' };
   }
 
+  // Production with NO provider configured — the exact #1041 scenario. Loudly
+  // record it rather than returning a result the caller may ignore.
+  await reportEmailFailure(
+    'No email provider configured (set RESEND_API_KEY or SMTP_HOST). Email was NOT sent.',
+    payload.subject,
+    recipients,
+  );
   return {
     success: false,
     error: 'No email provider configured. Set RESEND_API_KEY or SMTP_HOST in your environment.',
   };
+}
+
+/** Record an email failure to the structured error log (best-effort, never throws). */
+async function reportEmailFailure(reason: string, subject: string, recipients: string): Promise<void> {
+  console.error(`[email] ${reason} | subject="${subject}"`);
+  try {
+    const { logError } = await import('@/lib/errors-server');
+    const { redactEmail } = await import('@/lib/logger/pii');
+    const redacted = recipients
+      .split(',')
+      .map((r) => redactEmail(r.trim()))
+      .join(', ');
+    await logError({
+      error: new Error(reason),
+      context: 'email:send-failure',
+      level: 'error',
+      metadata: { subject, recipients: redacted },
+    });
+  } catch {
+    // logging must never break the send path
+  }
 }
 
 /** Render a simple template string with {{variable}} placeholders */

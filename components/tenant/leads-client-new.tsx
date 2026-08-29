@@ -7,6 +7,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import { clientLogWarn } from '@/lib/client-logger';
 import {
   Target, Plus, Filter, Upload, Search, MoreHorizontal, Trash2,
   Phone, Mail, Building2, TrendingUp, User, Star, Archive, RotateCcw,
@@ -127,11 +128,11 @@ function QuickAddModal({ companies, teamMembers, contacts, onClose, onSuccess }:
     fetch('/api/tenant/products?limit=200', { signal: abort.signal })
       .then(r => r.ok ? r.json() : { data: [] })
       .then(d => { if (!abort.signal.aborted) setProducts(d.data ?? []); })
-      .catch((err) => { if (err?.name !== 'AbortError') console.warn('[leads] Failed to load products:', err); });
+      .catch((err) => { if (err?.name !== 'AbortError') clientLogWarn('leads', 'Failed to load products', err); });
     fetch('/api/tenant/services?limit=200', { signal: abort.signal })
       .then(r => r.ok ? r.json() : { services: [] })
       .then(d => { if (!abort.signal.aborted) setServices(d.data ?? d.services ?? []); })
-      .catch((err) => { if (err?.name !== 'AbortError') console.warn('[leads] Failed to load services:', err); });
+      .catch((err) => { if (err?.name !== 'AbortError') clientLogWarn('leads', 'Failed to load services', err); });
     return () => abort.abort();
   }, []);
 

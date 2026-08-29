@@ -32,6 +32,7 @@ import {
 } from '@/lib/ai/secrets';
 import { logSuperAdminAction } from '@/lib/audit/super-admin';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { logError } from '@/lib/errors-server';
 
 /** Accept any provider string — no hardcoded list. */
 
@@ -131,7 +132,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
 
     return NextResponse.json({ ok: true, provider, keyPrefix: result.keyPrefix });
   } catch (err) {
-    console.error('[superadmin ai-keys POST]', err);
+    await logError({ error: err, context: 'superadmin/ai-keys POST', requestMethod: 'POST' });
     return apiError(err);
   }
 });

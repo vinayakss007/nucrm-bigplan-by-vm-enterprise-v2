@@ -6,6 +6,7 @@
 "use client"
 
 import { useState, useCallback, useMemo } from 'react'
+import { useRouter } from 'next/navigation'
 import { MoreHorizontal, LogIn, AlertTriangle, Edit, XCircle } from 'lucide-react'
 import { cn, formatDate, formatRelativeTime } from '@/lib/utils'
 import { DataTable, ColumnDef, createSortableHeader } from '@/components/ui/data-table'
@@ -57,6 +58,7 @@ interface Props {
 }
 
 export default function TenantsDataTable({ initialTenants }: Props) {
+  const router = useRouter()
   const [tenants, setTenants] = useState(initialTenants)
   const [total, setTotal] = useState(initialTenants.length)
   const [loading, setLoading] = useState(false)
@@ -104,6 +106,10 @@ export default function TenantsDataTable({ initialTenants }: Props) {
       })
       if (res.ok) {
         toast.success('Impersonating tenant...')
+        // #1267: intentional full reload — impersonation swaps the session
+        // cookie, so we must reload to re-run middleware and rebuild all
+        // server components under the new tenant context (a client-side
+        // router.push would keep stale superadmin state).
         window.location.href = '/tenant/dashboard'
       } else {
         toast.error('Failed to impersonate')
@@ -205,7 +211,7 @@ export default function TenantsDataTable({ initialTenants }: Props) {
                 <LogIn className="mr-2 h-4 w-4" />
                 Impersonate
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => window.location.href = `/superadmin/tenants?id=${tenant.id}`}>
+              <DropdownMenuItem onClick={() => router.push(`/superadmin/tenants?id=${tenant.id}`)}>
                 <Edit className="mr-2 h-4 w-4" />
                 Edit
               </DropdownMenuItem>
@@ -222,7 +228,7 @@ export default function TenantsDataTable({ initialTenants }: Props) {
         )
       },
     },
-  ], [suspendTenant])
+  ], [suspendTenant, router])
 
   return (
     <div className="space-y-4 animate-fade-in">

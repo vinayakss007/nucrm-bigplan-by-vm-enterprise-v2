@@ -15,6 +15,7 @@ import { eq, sql } from 'drizzle-orm';
 import { BUILTIN_MODULES } from '@/lib/modules/registry';
 import { logSuperAdminAction } from '@/lib/audit/super-admin';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { logError } from '@/lib/errors-server';
 
 export const GET = withApiRoute(async (req: NextRequest) => {
   try {
@@ -56,7 +57,7 @@ export const GET = withApiRoute(async (req: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[superadmin/modules GET]', err);
+    await logError({ error: err, context: 'superadmin/modules GET', requestMethod: 'GET' });
     return apiError(err);
   }
 });
@@ -126,7 +127,7 @@ export const PATCH = withApiRoute(async (req: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[superadmin/modules PATCH]', err);
+    await logError({ error: err, context: 'superadmin/modules PATCH', requestMethod: 'PATCH' });
     return apiError(err);
   }
 });

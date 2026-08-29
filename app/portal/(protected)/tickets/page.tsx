@@ -108,6 +108,8 @@ function CreateTicketModal({ onClose, onCreated, sessionEmail }: { onClose: () =
   const create = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.subject.trim()) { toast.error('Subject is required'); return; }
+    // #1342: require a meaningful description so agents have context.
+    if (form.body.trim().length < 10) { toast.error('Please describe your issue in at least 10 characters'); return; }
     setSaving(true);
     try {
       const res = await fetch('/api/public/tickets', {
@@ -152,7 +154,7 @@ function CreateTicketModal({ onClose, onCreated, sessionEmail }: { onClose: () =
           </div>
           <div>
             <label className="block text-xs font-medium text-muted-foreground mb-1">Description</label>
-            <textarea rows={4} value={form.body} onChange={e => setForm(p => ({ ...p, body: e.target.value }))} className={inp} />
+            <textarea rows={4} required minLength={10} value={form.body} onChange={e => setForm(p => ({ ...p, body: e.target.value }))} className={inp} />
           </div>
           <div className="flex gap-3">
             <button type="button" onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-border text-sm font-medium hover:bg-accent">Cancel</button>

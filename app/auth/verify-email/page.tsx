@@ -23,6 +23,8 @@ function VerifyEmailContent() {
       .then(r => r.json())
       .then(d => {
         if (signal.aborted) return;
+        // #1267: intentional full reload — email verification changes auth
+        // state; reload so middleware/server components re-run authenticated.
         if (d.ok) { setStatus('success'); setMsg(d.email); redirectTimer = setTimeout(() => { window.location.href = '/tenant/dashboard'; }, 2500); }
         else { setStatus('error'); setMsg(d.error); }
       })

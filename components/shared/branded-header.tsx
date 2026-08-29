@@ -4,14 +4,18 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { BrandingConfig, generateCSSVariables } from '@/lib/branding';
+import { headers } from 'next/headers';
 import Image from 'next/image';
 
 interface BrandedHeaderProps {
   branding: BrandingConfig;
 }
 
-export function BrandedHeader({ branding }: BrandedHeaderProps) {
+export async function BrandedHeader({ branding }: BrandedHeaderProps) {
   const cssVars = generateCSSVariables(branding);
+
+  // Per-request CSP nonce set by proxy.ts (#1070), applied as defense-in-depth.
+  const nonce = (await headers()).get('x-nonce') ?? undefined;
 
   const layoutClasses: Record<string, string> = {
     default: 'justify-between',
@@ -23,7 +27,7 @@ export function BrandedHeader({ branding }: BrandedHeaderProps) {
 
   return (
     <>
-      <style dangerouslySetInnerHTML={{ __html: cssVars }} />
+      <style nonce={nonce} dangerouslySetInnerHTML={{ __html: cssVars }} />
       <header
         className={`flex items-center px-6 py-4 border-b ${layoutClass}`}
         style={{ backgroundColor: branding.primaryColor, color: '#ffffff' }}

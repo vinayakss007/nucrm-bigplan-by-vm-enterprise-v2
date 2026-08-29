@@ -53,7 +53,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       .where(sql`${usageSnapshots.snapshotDate} > CURRENT_DATE - 30`)
       .groupBy(usageSnapshots.snapshotDate)
       .orderBy(usageSnapshots.snapshotDate)
-      .catch((err) => { console.error('[usage] growth query failed', err); return []; }),
+      .catch((err) => { void logError({ error: err, context: 'superadmin/usage growth query' }); return []; }),
     ]);
 
     return NextResponse.json({ tenantUsage, growth });
@@ -61,7 +61,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[superadmin/usage GET]', err);
+    await logError({ error: err, context: 'superadmin/usage GET', requestMethod: 'GET' });
     return apiError(err);
   }
 });

@@ -7,6 +7,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import { clientLogWarn } from '@/lib/client-logger';
 import {
   Users, Plus, Download, Upload, Search, MoreHorizontal, Trash2,
   Phone, Building2, Calendar, User, Star, Archive,
@@ -142,7 +143,7 @@ export default function LeadsClient({
     fetch('/api/tenant/custom-fields?entityType=lead', { signal: abort.signal })
       .then(r => r.ok ? r.json() : { fields: [] })
       .then(d => { if (!abort.signal.aborted) setCustomFields(d.fields ?? []); })
-      .catch((err) => { if (err?.name !== 'AbortError') console.warn('[leads-client] Failed to load custom fields:', err); });
+      .catch((err) => { if (err?.name !== 'AbortError') clientLogWarn('leads-client', 'Failed to load custom fields', err); });
     return () => abort.abort();
   }, []);
 
@@ -151,7 +152,7 @@ export default function LeadsClient({
     fetch('/api/tenant/segments?entity_type=lead', { signal: abort.signal })
       .then(r => r.ok ? r.json() : { data: [] })
       .then(d => { if (!abort.signal.aborted) setSegments(d.data ?? []); })
-      .catch((err) => { if (err?.name !== 'AbortError') console.warn('[leads-client] Failed to load segments:', err); });
+      .catch((err) => { if (err?.name !== 'AbortError') clientLogWarn('leads-client', 'Failed to load segments', err); });
     return () => abort.abort();
   }, []);
 
@@ -160,7 +161,7 @@ export default function LeadsClient({
     fetch('/api/tenant/sequences', { signal: abort.signal })
       .then(r => r.ok ? r.json() : { data: [] })
       .then(d => { if (!abort.signal.aborted) setSequences(d.data ?? []); })
-      .catch((err) => { if (err?.name !== 'AbortError') console.warn('[leads-client] Failed to load sequences:', err); });
+      .catch((err) => { if (err?.name !== 'AbortError') clientLogWarn('leads-client', 'Failed to load sequences', err); });
     return () => abort.abort();
   }, []);
 
@@ -171,18 +172,18 @@ export default function LeadsClient({
     fetch('/api/tenant/products?limit=200', { signal: abort.signal })
       .then(r => r.ok ? r.json() : { data: [] })
       .then(d => { if (!abort.signal.aborted) setProducts(d.data ?? []); })
-      .catch((err) => { if (err?.name !== 'AbortError') console.warn('[leads-client] Failed to load products:', err); });
+      .catch((err) => { if (err?.name !== 'AbortError') clientLogWarn('leads-client', 'Failed to load products', err); });
     fetch('/api/tenant/services?limit=200', { signal: abort.signal })
       .then(r => r.ok ? r.json() : { services: [] })
       // The services route returns { services: [...] } while products returns
       // { data: [...] } — tolerate both until the response shapes are unified.
       .then(d => { if (!abort.signal.aborted) setServices(d.data ?? d.services ?? []); })
-      .catch((err) => { if (err?.name !== 'AbortError') console.warn('[leads-client] Failed to load services:', err); });
+      .catch((err) => { if (err?.name !== 'AbortError') clientLogWarn('leads-client', 'Failed to load services', err); });
     // Existing contacts, so a lead can be tied to one instead of creating a new.
     fetch('/api/tenant/contacts?limit=200', { signal: abort.signal })
       .then(r => r.ok ? r.json() : { data: [] })
       .then(d => { if (!abort.signal.aborted) setContactOptions(d.data ?? []); })
-      .catch((err) => { if (err?.name !== 'AbortError') console.warn('[leads-client] Failed to load contacts:', err); });
+      .catch((err) => { if (err?.name !== 'AbortError') clientLogWarn('leads-client', 'Failed to load contacts', err); });
     return () => abort.abort();
   }, []);
 

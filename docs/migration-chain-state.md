@@ -1,11 +1,33 @@
 # Migration chain: current state and required repair
 
-**Status: the migration chain cannot build the schema from an empty database.**
+**Status (updated 2026-08-29): the production runner `npm run db:migrate` DOES
+build a full schema from an empty database. Drizzle's native `migrate()` path
+(`npm run db:verify-chain`) still cannot — the two lineages collide there.**
 
-Verified empirically against PostgreSQL 16, not inferred. Reproduce with:
+There are two runners with different failure behaviour on a fresh database.
+Both were re-verified empirically against PostgreSQL 15 on 2026-08-29:
+
+| Command                   | Runner                                                                    | Fresh-DB result                                                                     |
+| ------------------------- | ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `npm run db:migrate`      | `scripts/migrate.ts` (statement-by-statement, tolerates `already exists`) | **PASS** — applies all 81 migrations, 2668 statements, 0 errors, 224 tables         |
+| `npm run db:verify-chain` | drizzle `migrate()` (one tx per file, no tolerance)                       | **FAIL** — stops at `0003_billing_migration`: `relation "contracts" already exists` |
+
+`db:migrate` is the path `.env.example`, `setup`, and disaster recovery use, so
+**the DR "empty → current schema" path works today** (contrary to the earlier
+version of this note). The squash below is still worth doing to make the chain
+clean enough that drizzle's own verifier passes too, but it is no longer a DR
+blocker.
+
+Reproduce the drizzle-native failure with:
 
 ```bash
 DATABASE_URL=postgres://user:pass@localhost:5432/scratch npm run db:verify-chain
+```
+
+Reproduce the working path with:
+
+```bash
+DATABASE_URL=postgres://user:pass@localhost:5432/scratch npm run db:migrate -- --yes
 ```
 
 ## Why nobody noticed
@@ -15,11 +37,14 @@ from the schema files — see `.github/workflows/ci.yml`, the "Sync database sch
 step. The migrations are therefore never executed by any automated process. The
 3000+ passing tests say nothing about whether they work.
 
-Production was almost certainly built the same way, which is why the application
-runs fine on a schema its own migrations cannot reproduce.
+Production was almost certainly built the same way. The application also runs
+fine on a schema rebuilt from scratch by `db:migrate` — that runner's
+error-tolerant fresh path absorbs the lineage overlap that breaks drizzle's
+native verifier (see the runner table at the top).
 
-Disaster recovery depends on rebuilding a schema. Right now that path is untested
-and broken.
+Disaster recovery depends on rebuilding a schema. Via `db:migrate` that path is
+now verified working (2026-08-29); via drizzle's native `migrate()` it is not.
+The squash below removes the discrepancy so both runners agree.
 
 ## Two overlapping lineages
 

@@ -156,7 +156,7 @@ export default function VisitorsPage() {
       ) : (
         <div className="admin-card overflow-hidden">
           <div className="overflow-x-auto">
-          <table className="w-full text-sm" aria-label="Visitor tracking data">
+          <table className="w-full min-w-[640px] text-sm" aria-label="Visitor tracking data">
             <thead>
               <tr className="border-b border-border text-left">
                 <th scope="col" className="px-4 py-3 font-medium text-muted-foreground">Fingerprint</th>

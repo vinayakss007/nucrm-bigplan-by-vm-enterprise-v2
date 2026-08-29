@@ -85,6 +85,7 @@
     "start:app": "next start",
     "test": "vitest run",
     "test:unit": "vitest run tests/unit tests/dashboard",
+    "test:billing": "tsx scripts/billing-lifecycle-test.ts",
     "test:integration": "vitest run tests/integration",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
@@ -126,6 +127,7 @@
     "@radix-ui/react-tabs": "1.1.21",
     "@radix-ui/react-tooltip": "1.2.16",
     "@sentry/nextjs": "^10.71.0",
+    "@tanstack/react-query": "^5.102.8",
     "@tanstack/react-table": "8.21.3",
     "@tanstack/react-virtual": "^3.14.10",
     "@xyflow/react": "^12.11.3",
@@ -147,6 +149,7 @@
     "next": "16.3.3",
     "next-themes": "0.4.6",
     "nodemailer": "^9.0.5",
+    "pdfkit": "^0.20.1",
     "pg": "^8.23.0",
     "pg-boss": "12.28.0",
     "postcss": "8.5.26",
@@ -177,6 +180,7 @@
     "@types/dompurify": "^3.2.0",
     "@types/node": "22.19.17",
     "@types/nodemailer": "^8.0.1",
+    "@types/pdfkit": "^0.17.6",
     "@types/pg": "^8.23.1",
     "@types/qrcode": "1.5.6",
     "@types/react": "19.2.18",
@@ -202,7 +206,13 @@
     "ws": "^8.21.0",
     "brace-expansion": "^2.1.4",
     "fast-uri": "^3.1.6",
-    "js-yaml": "^4.3.2"
+    "js-yaml": "^4.3.2",
+    "exceljs": {
+      "uuid": "^11.1.1"
+    },
+    "@esbuild-kit/core-utils": {
+      "esbuild": "^0.25.0"
+    }
   },
   "optionalDependencies": {
     "@rolldown/binding-linux-x64-gnu": "^1.2.5"

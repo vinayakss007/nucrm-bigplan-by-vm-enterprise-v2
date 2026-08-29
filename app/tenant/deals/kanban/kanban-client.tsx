@@ -191,8 +191,12 @@ export default function DealsKanbanPage() {
 
    
   useEffect(() => {
-    if (res?.deals) {
-      setDeals(res.deals as Deal[]);
+    // The deals API returns the standard { data, total } envelope. Read
+    // `data` first (falling back to the legacy `deals` key defensively) so the
+    // board actually populates.
+    const list = res?.data ?? res?.deals;
+    if (Array.isArray(list)) {
+      setDeals(list as Deal[]);
     }
   }, [res]);
 

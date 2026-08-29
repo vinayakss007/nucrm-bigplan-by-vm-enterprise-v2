@@ -13,6 +13,7 @@ import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { allocateCredits, getCreditBalance, getAggregatedUsage, getCreditHistory } from '@/lib/ai/credits';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { logError } from '@/lib/errors-server';
 
 const allocateSchema = z.object({
   action: z.enum(['allocate', 'topup', 'suspend', 'reactivate', 'set_cap']),
@@ -55,7 +56,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       data: { tenants: usage },
     });
   } catch (err: unknown) {
-    console.error('[api/ai-credits] GET error:', (err as Error).message);
+    await logError({ error: err, context: 'superadmin/ai-credits GET', requestMethod: 'GET' });
     return apiError(err);
   }
 });
@@ -188,7 +189,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
 
     return NextResponse.json({ error: `Invalid action: ${action}` }, { status: 400 });
   } catch (err: unknown) {
-    console.error('[api/ai-credits] POST error:', (err as Error).message);
+    await logError({ error: err, context: 'superadmin/ai-credits POST', requestMethod: 'POST' });
     return apiError(err);
   }
 });
