@@ -1,0 +1,14 @@
+{
+  "task_id": "task-1477-billing-verification-plan",
+  "task_description": "Draft the #1477 test-mode billing verification plan: a single markdown deliverable (BILLING-VERIFICATION-PLAN-1477.md at repo root) that documents an execution-ready end-to-end checklist for the Stripe/Razorpay/PayU billing lifecycle in test mode, covering every #1477 scope item (signup->provisioning->plan/subscription+entitlements, subscription status mapping incl. #1463, invoice numbering #1462, dunning #1464, proration, webhook idempotency #1274, refund/cancellation, currency/integer-cents), a fix-presence re-confirmation table for #1462/#1463/#1464/#1454, an automated-vs-manual coverage matrix, and a sign-off/acceptance section. Documentation only: no product code changes. Extends the existing Stripe-only harness/runbook to Razorpay + PayU.",
+  "status": "completed",
+  "feature_order": ["FEAT-001"],
+  "blocked_reason": null,
+  "verification": {
+    "build": "skipped",
+    "tests": "skipped",
+    "test_quality": "pass",
+    "docker_build": "skipped",
+    "summary": "Docs-only deliverable; no build/test applicable. Confirmed BILLING-VERIFICATION-PLAN-1477.md exists (446 lines, 14 sections), zero em dashes, prettier-clean. git status shows only the new markdown + .agents task files (no changes under app/ lib/ tests/ drizzle/ scripts/ docs/). Content accuracy spot-checked against source: #1463 status matrix (incomplete_expired->cancelled, incomplete/paused->past_due, default->past_due) matches app/api/webhooks/stripe/route.ts; idempotency keys (stripe:evt:{id}, razorpay:evt:{id} 24h TTL, PayU per-txnid on invoice_payments.reference) match handlers; #1462/#1464 anchors correct."
+  }
+}
