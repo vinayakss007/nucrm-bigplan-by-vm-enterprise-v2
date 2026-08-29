@@ -29,10 +29,12 @@ export default function InvoicesPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch('/api/tenant/billing/invoices')
+    const controller = new AbortController();
+    fetch('/api/tenant/billing/invoices', { signal: controller.signal })
       .then(r => r.json())
-      .then(d => { setInvoices(d.data || []); setLoading(false); })
-      .catch(() => setLoading(false));
+      .then(d => { if (controller.signal.aborted) return; setInvoices(d.data || []); setLoading(false); })
+      .catch((e) => { if ((e as Error)?.name === 'AbortError') return; setLoading(false); });
+    return () => controller.abort();
   }, []);
 
   return (

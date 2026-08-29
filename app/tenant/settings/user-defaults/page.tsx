@@ -34,17 +34,19 @@ export default function UserDefaultsPage() {
   const [isAdmin, setIsAdmin] = useState(true);
 
   useEffect(() => {
+  const controller = new AbortController();
   let ignore = false;
     Promise.all([
-      fetch('/api/tenant/admin/user-defaults').then(r => r.ok ? r.json() : { user_defaults: {} }),
-      fetch('/api/tenant/me').then(r => r.ok ? r.json() : {}),
+      fetch('/api/tenant/admin/user-defaults', { signal: controller.signal }).then(r => r.ok ? r.json() : { user_defaults: {} }),
+      fetch('/api/tenant/me', { signal: controller.signal }).then(r => r.ok ? r.json() : {}),
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ]).then(([d, me]: any[]) => { if (ignore) return; 
       setDefaults(d.user_defaults ?? { } );
       setOriginal(d.user_defaults ?? {});
       setIsAdmin(me?.is_admin ?? false);
-    }).finally(() => setLoading(false));
-    return () => { ignore = true; };
+    }).catch(e => { if ((e as Error)?.name === 'AbortError') return; throw e; })
+      .finally(() => { if (!ignore) setLoading(false); });
+    return () => { ignore = true; controller.abort(); };
 }, []);
 
   const dirty = useMemo(() => JSON.stringify(defaults) !== JSON.stringify(original), [defaults, original]);

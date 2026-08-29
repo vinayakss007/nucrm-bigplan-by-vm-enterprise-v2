@@ -56,13 +56,22 @@ export default function WebhooksPage() {
   const [testResult, setTestResult] = useState<Record<string,{status:string; statusCode:number|null; duration:number; errorMessage?:string|null}>>({});
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
 
-  const load = async () => {
+  const load = async (signal?: AbortSignal) => {
     setLoading(true);
-    const res = await fetch('/api/tenant/webhooks');
-    if (res.ok) { const d = await res.json(); setWebhooks(d.data ?? []); }
-    setLoading(false);
+    try {
+      const res = await fetch('/api/tenant/webhooks', { signal });
+      if (res.ok) { const d = await res.json(); if (signal?.aborted) return; setWebhooks(d.data ?? []); }
+      setLoading(false);
+    } catch (e) {
+      if ((e as Error)?.name === 'AbortError') return;
+      throw e;
+    }
   };
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    const controller = new AbortController();
+    load(controller.signal);
+    return () => controller.abort();
+  }, []);
 
   const loadDeliveries = async (id: string) => {
     if (deliveries[id]) return;

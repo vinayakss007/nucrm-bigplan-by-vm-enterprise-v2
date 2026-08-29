@@ -39,24 +39,32 @@ export default function CurrencySettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  const load = async () => {
+  const load = async (signal?: AbortSignal) => {
     setLoading(true);
     try {
-      const res = await fetch('/api/tenant/currency');
+      const res = await fetch('/api/tenant/currency', { signal });
       if (res.ok) {
         const d = await res.json();
+        if (signal?.aborted) return;
         const fetched = d.data ?? { currencies: [], baseCurrency: 'USD', rates: {} };
         if (!fetched.currencies || fetched.currencies.length === 0) {
           fetched.currencies = DEFAULT_CURRENCIES;
         }
         setData(fetched);
       }
+    } catch (e) {
+      if ((e as Error)?.name === 'AbortError') return;
+      throw e;
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    const controller = new AbortController();
+    load(controller.signal);
+    return () => controller.abort();
+  }, []);
 
   const setDefault = async (code: string) => {
     if (code === data.baseCurrency) return;

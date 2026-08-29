@@ -75,16 +75,18 @@ export default function PreferencesPage() {
   const { setTheme } = useTheme();
 
   useEffect(() => {
+  const controller = new AbortController();
   let ignore = false;
-    fetch('/api/user/preferences')
+    fetch('/api/user/preferences', { signal: controller.signal })
       .then(r => r.ok ? r.json() : { preferences: {}, workspace_defaults: {} })
       .then(d => { if (ignore) return;
         setPrefs(d.preferences ?? {});
         setOriginal(d.preferences ?? {});
         setWorkspaceDefaults(d.workspace_defaults ?? {});
       })
-      .finally(() => setLoading(false));
-    return () => { ignore = true; };
+      .catch(e => { if ((e as Error)?.name === 'AbortError') return; throw e; })
+      .finally(() => { if (!ignore) setLoading(false); });
+    return () => { ignore = true; controller.abort(); };
 }, []);
 
   const dirty = useMemo(() => JSON.stringify(prefs) !== JSON.stringify(original), [prefs, original]);

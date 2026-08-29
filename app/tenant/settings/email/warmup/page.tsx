@@ -52,21 +52,29 @@ export default function WarmupDashboardPage() {
   });
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     try {
-      const res = await fetch('/api/tenant/email-warmup');
+      const res = await fetch('/api/tenant/email-warmup', { signal });
       if (res.ok) {
         const d = await res.json();
+        if (signal?.aborted) return;
         setConfig(d.config ?? null);
         setPool(d.pool ?? []);
       }
+    } catch (e) {
+      if ((e as Error)?.name === 'AbortError') return;
+      throw e;
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    const controller = new AbortController();
+    load(controller.signal);
+    return () => controller.abort();
+  }, [load]);
 
   const toggleWarmup = async () => {
     if (!config) return;

@@ -31,22 +31,30 @@ export default function WebhookDLQPage() {
   const [purging, setPurging] = useState(false);
   const limit = 20;
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     try {
       const params = new URLSearchParams({ page: String(page), limit: String(limit) });
-      const res = await fetch(`/api/tenant/webhooks/dlq?${params}`);
+      const res = await fetch(`/api/tenant/webhooks/dlq?${params}`, { signal });
       if (res.ok) {
         const d = await res.json();
+        if (signal?.aborted) return;
         setEntries(d.data ?? []);
         setTotal(d.total ?? 0);
       }
+    } catch (e) {
+      if ((e as Error)?.name === 'AbortError') return;
+      throw e;
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
   }, [page]);
 
-  useEffect(() => { load(); }, [page, load]);
+  useEffect(() => {
+    const controller = new AbortController();
+    load(controller.signal);
+    return () => controller.abort();
+  }, [page, load]);
 
   const totalPages = Math.max(1, Math.ceil(total / limit));
 

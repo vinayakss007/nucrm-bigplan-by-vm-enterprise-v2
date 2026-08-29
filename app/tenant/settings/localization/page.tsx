@@ -54,17 +54,19 @@ export default function LocalizationPage() {
   const [newHoliday, setNewHoliday] = useState({ date: '', name: '' });
 
   useEffect(() => {
+  const controller = new AbortController();
   let ignore = false;
     Promise.all([
-      fetch('/api/tenant/admin/localization').then(r => r.ok ? r.json() : { localization: DEFAULTS }),
-      fetch('/api/tenant/me').then(r => r.ok ? r.json() : {}),
+      fetch('/api/tenant/admin/localization', { signal: controller.signal }).then(r => r.ok ? r.json() : { localization: DEFAULTS }),
+      fetch('/api/tenant/me', { signal: controller.signal }).then(r => r.ok ? r.json() : {}),
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ]).then(([d, me]: any[]) => { if (ignore) return; 
       const l = { ...DEFAULTS, ...(d.localization ?? { } ) };
       setLoc(l); setOriginal(l);
       setIsAdmin(me?.is_admin ?? false);
-    }).finally(() => setLoading(false));
-    return () => { ignore = true; };
+    }).catch(e => { if ((e as Error)?.name === 'AbortError') return; throw e; })
+      .finally(() => { if (!ignore) setLoading(false); });
+    return () => { ignore = true; controller.abort(); };
 }, []);
 
   const dirty = useMemo(() => JSON.stringify(loc) !== JSON.stringify(original), [loc, original]);

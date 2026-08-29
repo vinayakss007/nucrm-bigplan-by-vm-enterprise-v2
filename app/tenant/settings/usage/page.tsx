@@ -46,20 +46,28 @@ export default function UsageDashboardPage() {
   const [data, setData] = useState<UsageData | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     try {
-      const res = await fetch('/api/tenant/analytics/usage');
+      const res = await fetch('/api/tenant/analytics/usage', { signal });
       if (res.ok) {
         const d = await res.json();
+        if (signal?.aborted) return;
         setData(d.data);
       }
+    } catch (e) {
+      if ((e as Error)?.name === 'AbortError') return;
+      throw e;
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    const controller = new AbortController();
+    load(controller.signal);
+    return () => controller.abort();
+  }, [load]);
 
   const formatCurrency = (n: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
 

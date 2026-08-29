@@ -100,16 +100,18 @@ export default function NotificationsPage() {
   const [query, setQuery] = useState('');
 
   useEffect(() => {
-  let _ignore = false;
-    fetch('/api/tenant/notifications/matrix')
+  const controller = new AbortController();
+    fetch('/api/tenant/notifications/matrix', { signal: controller.signal })
       .then(r => r.ok ? r.json() : { matrix: {} })
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
       .then((d: any) => {
+        if (controller.signal.aborted) return;
         setMatrix(d.matrix ?? {});
         setOriginal(d.matrix ?? {});
       })
-      .finally(() => setLoading(false));
-    return () => { _ignore = true; };
+      .catch((e) => { if ((e as Error)?.name === 'AbortError') return; throw e; })
+      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    return () => { controller.abort(); };
 }, []);
 
   const dirty = JSON.stringify(matrix) !== JSON.stringify(original);

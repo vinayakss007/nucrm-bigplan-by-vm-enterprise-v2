@@ -23,8 +23,8 @@ export default function APIKeysPage() {
   const [copied, setCopied]   = useState(false);
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
 
-  const load = () => fetch('/api/tenant/api-keys').then(r=>r.json()).then(d=>{setKeys(d.data??[]);setLoading(false);});
-  useEffect(()=>{load();},[]);
+  const load = (signal?: AbortSignal) => fetch('/api/tenant/api-keys', { signal }).then(r=>r.json()).then(d=>{if(signal?.aborted)return;setKeys(d.data??[]);setLoading(false);}).catch(e=>{if(e?.name==='AbortError')return;throw e;});
+  useEffect(()=>{const controller=new AbortController();load(controller.signal);return()=>controller.abort();},[]);
 
   const create = async (e: React.FormEvent) => {
     e.preventDefault(); setCreating(true);

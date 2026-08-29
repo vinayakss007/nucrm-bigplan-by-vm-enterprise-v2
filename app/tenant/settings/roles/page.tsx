@@ -99,13 +99,23 @@ export default function RolesPermissionsPage() {
   const [editRole, setEditRole] = useState<any>(null);
   const [showEditor, setShowEditor] = useState(false);
 
-  const load = async () => {
-    const res = await fetch('/api/tenant/roles');
-    const data = await res.json();
-    setRoles(data.data||[]);
-    setLoading(false);
+  const load = async (signal?: AbortSignal) => {
+    try {
+      const res = await fetch('/api/tenant/roles', { signal });
+      const data = await res.json();
+      if (signal?.aborted) return;
+      setRoles(data.data||[]);
+      setLoading(false);
+    } catch (e) {
+      if ((e as Error)?.name === 'AbortError') return;
+      throw e;
+    }
   };
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    const controller = new AbortController();
+    load(controller.signal);
+    return () => controller.abort();
+  }, []);
 
   const del = async (id: string) => {
     await confirmThen('Delete this role? Users assigned this role will lose their permissions.', async () => {

@@ -37,15 +37,16 @@ export default function TelegramSettingsPage() {
   const [showToken, setShowToken] = useState(false);
 
   useEffect(() => {
+  const controller = new AbortController();
   let ignore = false;
-    fetch('/api/user/telegram')
+    fetch('/api/user/telegram', { signal: controller.signal })
       .then(r => r.json())
       .then(d => { if (ignore) return;
         if (d.ok) setSettings(d.settings);
       })
-      .catch(() => toast.error('Failed to load Telegram settings'))
-      .finally(() => setLoading(false));
-    return () => { ignore = true; };
+      .catch((e) => { if ((e as Error)?.name === 'AbortError') return; toast.error('Failed to load Telegram settings'); })
+      .finally(() => { if (!ignore) setLoading(false); });
+    return () => { ignore = true; controller.abort(); };
 }, []);
 
   const save = async () => {

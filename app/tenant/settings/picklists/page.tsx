@@ -38,17 +38,19 @@ export default function PicklistsPage() {
   const [activeCat, setActiveCat] = useState<Category>('lead_sources');
 
   useEffect(() => {
+  const controller = new AbortController();
   let ignore = false;
     Promise.all([
-      fetch('/api/tenant/admin/picklists').then(r => r.ok ? r.json() : { picklists: null }),
-      fetch('/api/tenant/me').then(r => r.ok ? r.json() : {}),
+      fetch('/api/tenant/admin/picklists', { signal: controller.signal }).then(r => r.ok ? r.json() : { picklists: null }),
+      fetch('/api/tenant/me', { signal: controller.signal }).then(r => r.ok ? r.json() : {}),
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ]).then(([d, me]: any[]) => { if (ignore) return; 
       setData(d.picklists ?? null);
       setOriginal(d.picklists ?? null);
       setIsAdmin(me?.is_admin ?? false);
-     } ).finally(() => setLoading(false));
-    return () => { ignore = true; };
+     } ).catch(e => { if ((e as Error)?.name === 'AbortError') return; throw e; })
+      .finally(() => { if (!ignore) setLoading(false); });
+    return () => { ignore = true; controller.abort(); };
 }, []);
 
   const dirty = data && original && JSON.stringify(data) !== JSON.stringify(original);

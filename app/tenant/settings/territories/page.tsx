@@ -54,20 +54,28 @@ export default function TerritoriesPage() {
     return result;
   };
 
-  const load = async () => {
+  const load = async (signal?: AbortSignal) => {
     setLoading(true);
     try {
-      const res = await fetch('/api/tenant/territories');
+      const res = await fetch('/api/tenant/territories', { signal });
       if (res.ok) {
         const d = await res.json();
+        if (signal?.aborted) return;
         setTerritories(d.data ?? []);
       }
+    } catch (e) {
+      if ((e as Error)?.name === 'AbortError') return;
+      throw e;
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    const controller = new AbortController();
+    load(controller.signal);
+    return () => controller.abort();
+  }, []);
 
   const allTerritories = flattenTree(territories);
 

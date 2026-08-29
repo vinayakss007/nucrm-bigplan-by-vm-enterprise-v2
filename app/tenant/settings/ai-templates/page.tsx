@@ -74,19 +74,28 @@ export default function AITemplatesPage() {
   const [editing, setEditing] = useState<Template | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
 
-  function load() {
+  function load(signal?: AbortSignal) {
     setLoading(true);
     setError(null);
-    fetch('/api/tenant/admin/ai-templates', { cache: 'no-store' })
+    fetch('/api/tenant/admin/ai-templates', { cache: 'no-store', signal })
       .then(async r => {
         if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? `HTTP ${r.status}`);
         return r.json();
       })
       .then(setData)
-      .catch(e => setError(e.message))
-      .finally(() => setLoading(false));
+      .catch(e => {
+        if (e?.name === 'AbortError') return;
+        setError(e.message);
+      })
+      .finally(() => {
+        if (!signal?.aborted) setLoading(false);
+      });
   }
-  useEffect(load, []);
+  useEffect(() => {
+    const controller = new AbortController();
+    load(controller.signal);
+    return () => controller.abort();
+  }, []);
 
   async function installSeed(slug: string) {
     setBusy('install:' + slug);
@@ -165,7 +174,7 @@ export default function AITemplatesPage() {
             Prompts for the AI Auto-Draft surface. The picker on <code>/tenant/ai/draft</code> lets reps choose a template, an entity, and the AI fills in the gaps using <code>{`{{contact.first_name}}`}</code> style tokens you put in the prompts.
           </p>
         </div>
-        <button onClick={load} className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border bg-card hover:bg-accent text-sm">
+        <button onClick={() => load()} className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border bg-card hover:bg-accent text-sm">
           <RefreshCw className={cn('w-3.5 h-3.5', loading && 'animate-spin')} />Refresh
         </button>
         <button

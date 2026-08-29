@@ -163,8 +163,21 @@ export default function IntegrationsPage() {
   const [loading, setLoading]           = useState(true);
   const [addType, setAddType]           = useState<IntegrationType | null>(null);
 
-  const load = async () => { const r=await fetch('/api/tenant/integrations').then(r=>r.json()); setIntegrations(r.data||[]); setLoading(false); };
-  useEffect(() => { load(); }, []);
+  const load = async (signal?: AbortSignal) => {
+    try {
+      const r=await fetch('/api/tenant/integrations', { signal }).then(r=>r.json());
+      if (signal?.aborted) return;
+      setIntegrations(r.data||[]); setLoading(false);
+    } catch (e) {
+      if ((e as Error)?.name === 'AbortError') return;
+      throw e;
+    }
+  };
+  useEffect(() => {
+    const controller = new AbortController();
+    load(controller.signal);
+    return () => controller.abort();
+  }, []);
 
   const toggle = async (id: string, active: boolean) => {
     await fetch(`/api/tenant/integrations/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({is_active:!active})});
