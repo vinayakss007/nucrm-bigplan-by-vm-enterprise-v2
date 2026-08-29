@@ -62,7 +62,8 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       const stats: any = statsRes || { totalBackups: 0, restorable: 0, deletedRecords: 0, updatedRecords: 0 };
       stats.by_table = tableStats;
 
-      return NextResponse.json({ deleted, stats });
+      // #1300: standardize on { data }; keep top-level keys for backward compat.
+      return NextResponse.json({ data: { deleted, stats }, deleted, stats });
     }
 
     if (list === 'recent') {
@@ -94,7 +95,10 @@ export const GET = withApiRoute(async (request: NextRequest) => {
         .limit(50)
         .catch((err) => { console.error('[backups] recent list failed', err); return []; });
       
-      return NextResponse.json({ backups });
+      // #1300: standardize list responses on the { data } envelope. `backups`
+      // is retained for backward compatibility with existing consumers during
+      // the transition (both point at the same array).
+      return NextResponse.json({ data: backups, backups });
     }
 
     // Default: return schedules (superadmin only)
@@ -118,7 +122,8 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       .orderBy(desc(backupSchedules.createdAt))
       .catch((err) => { console.error('[backups] schedules failed', err); return []; });
 
-    return NextResponse.json({ schedules });
+    // #1300: standardize on { data }; keep `schedules` for backward compat.
+    return NextResponse.json({ data: schedules, schedules });
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
