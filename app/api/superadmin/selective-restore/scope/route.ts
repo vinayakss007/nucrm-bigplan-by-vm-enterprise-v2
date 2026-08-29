@@ -15,6 +15,7 @@ import { extractTenantSQL } from '@/lib/restore/backup-parser';
 import { countExistingRecords, validateTenant } from '@/lib/restore/restore-executor';
 import { existsSync } from 'fs';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { logError } from '@/lib/errors-server';
 
 const scopeSchema = z.object({
   backup_id: z.string().min(1),
@@ -157,7 +158,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[selective-restore/scope POST]', err);
+    await logError({ error: err, context: 'selective-restore/scope POST', requestMethod: 'POST' });
     return apiError(err);
   }
 });
