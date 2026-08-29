@@ -1,0 +1,14 @@
+{
+  "task_id": "task-1070-nonce-based-csp",
+  "task_description": "Fix GitHub issue #1070 (SECURITY: CSP includes unsafe-inline for scripts and styles). Remove 'unsafe-inline' from script-src via a per-request nonce emitted by proxy.ts (Next 16 middleware), establishing a single source of truth for the CSP (remove the static CSP from next.config.mjs and the duplicate CSP from nginx.conf). Retain style-src 'unsafe-inline' with a documented rationale and follow-up (next/font, react-hot-toast inline style attributes, and tenant-branding <style> make full style-src removal fragile). Bug fix / hardening only; do not weaken any already-tightened directive or break realtime websockets, Sentry, images, workers, or the marketing site. Work on branch fix/1070-nonce-based-csp; do not push/PR (orchestrator publishes).",
+  "status": "completed",
+  "feature_order": ["FEAT-001", "FEAT-002"],
+  "blocked_reason": null,
+  "verification": {
+    "build": "pass",
+    "tests": "pass",
+    "test_quality": "pass",
+    "docker_build": "skipped",
+    "summary": "Independently re-verified on branch fix/1070-nonce-based-csp: `npm run typecheck` 0 errors; `npx eslint . --max-warnings=0` 0 warnings; `npx vitest run` on csp-nonce.test.ts (11) + proxy.test.ts (12) + security-hardening.test.ts (7) = 30/30 pass; `rm -rf .next && npm run build` exit 0 (no CSP/hydration errors). Test quality: csp-nonce.test.ts invokes the real proxy() and asserts the emitted CSP contains a per-request nonce and does NOT contain script-src 'self' 'unsafe-inline', verifies nonce uniqueness across requests, verifies CSP is set on forwarded request headers (the Next 16 contract) and NOT on /api/ responses, and asserts next.config.mjs/nginx.conf no longer carry the script-src unsafe-inline CSP — these would fail if the change were reverted. Docker build skipped: app deploys via pm2 (not Docker) per AGENTS.md and no live host is available for runtime CSP checks (documented as manual steps in FEAT-002). Note: docs/SECURITY-ANALYSIS.md shows large diff churn (136+/123-) that is mostly prettier table reformatting from the pre-commit hook plus the new CSP section; content preserved, docs-only."
+  }
+}
