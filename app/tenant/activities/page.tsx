@@ -5,7 +5,8 @@
  */
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
+import { useApiQuery } from '@/lib/query/client';
 import { Button } from '@/components/ui/button';
 import toast from 'react-hot-toast';
 import { Activity, ChevronLeft, ChevronRight } from 'lucide-react';
@@ -21,34 +22,29 @@ interface ActivityItem {
   created_at: string;
 }
 
+// API responses vary ({data} | {activities} | []); normalize.
+interface ActivitiesResponse { data?: ActivityItem[]; activities?: ActivityItem[] }
+
 export default function ActivitiesPage() {
-  const [activities, setActivities] = useState<ActivityItem[]>([]);
-  const [loading, setLoading] = useState(true);
   const [offset, setOffset] = useState(0);
   const limit = 50;
 
-  const fetchActivities = useCallback(async (signal?: AbortSignal) => {
-    setLoading(true);
-    try {
-      const res = await fetch(`/api/tenant/activities?limit=${limit}&offset=${offset}`, { signal });
-      if (!res.ok) throw new Error('Failed to fetch');
-      const data = await res.json();
-      setActivities(data.data ?? data.activities ?? data ?? []);
-    } catch (err) {
-      if (err instanceof DOMException && err.name === 'AbortError') return;
-      toast.error('Failed to load activities');
-    } finally {
-      // Only clear the spinner if this request was not superseded by a newer
-      // one; clearing it for an aborted request causes a loading flicker.
-      if (!signal?.aborted) setLoading(false);
-    }
-  }, [offset]);
+  // #1328: TanStack Query — offset is part of the queryKey, so paging back and
+  // forth is instant from cache and keepPreviousData avoids a loading flash.
+  const { data, isLoading, error } = useApiQuery<ActivitiesResponse | ActivityItem[]>(
+    ['tenant', 'activities', offset, limit],
+    `/api/tenant/activities?limit=${limit}&offset=${offset}`,
+    { placeholderData: (prev) => prev },
+  );
+  const activities: ActivityItem[] = Array.isArray(data)
+    ? data
+    : data?.data ?? data?.activities ?? [];
 
   useEffect(() => {
-    const controller = new AbortController();
-    fetchActivities(controller.signal);
-    return () => controller.abort();
-  }, [fetchActivities]);
+    if (error) toast.error('Failed to load activities');
+  }, [error]);
+
+  const loading = isLoading;
 
   const actionColor = (action: string) => {
     if (action.includes('create')) return 'bg-green-500';

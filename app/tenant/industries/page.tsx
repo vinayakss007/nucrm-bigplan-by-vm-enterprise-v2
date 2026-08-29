@@ -5,7 +5,9 @@
  */
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import { Loader2, Sparkles, Zap } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -21,50 +23,41 @@ interface IndustryTemplate {
 }
 
 export default function IndustriesPage() {
-  const [templates, setTemplates] = useState<IndustryTemplate[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [applying, setApplying] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+
+  // #1328: list via TanStack Query.
+  const { data, isLoading: loading, error } = useApiQuery<{ data?: IndustryTemplate[] }>(
+    ['tenant', 'industry-templates'],
+    '/api/tenant/industry-templates',
+  );
+  const templates: IndustryTemplate[] = data?.data ?? [];
 
   useEffect(() => {
-    const controller = new AbortController();
-    const { signal } = controller;
-    async function fetchTemplates() {
-      try {
-        const res = await fetch('/api/tenant/industry-templates', { signal });
-        if (!res.ok) throw new Error('Failed to load templates');
-        const data = await res.json();
-        if (signal.aborted) return;
-        setTemplates(data.data ?? []);
-      } catch (e) {
-        if ((e as Error)?.name === 'AbortError') return;
-        toast.error('Could not load industry templates');
-      } finally {
-        if (signal.aborted) return;
-        setLoading(false);
-      }
-    }
-    fetchTemplates();
-    return () => controller.abort();
-  }, []);
+    if (error) toast.error('Could not load industry templates');
+  }, [error]);
 
-  const handleApply = async (templateId: string) => {
-    setApplying(templateId);
-    try {
+  // Apply via useMutation; `variables` is the templateId so the button can show
+  // a per-row spinner without extra state.
+  const applyTemplate = useMutation({
+    mutationFn: async (templateId: string) => {
       const res = await fetch('/api/tenant/industry-templates', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ templateId }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to apply template');
-      toast.success(data.message || 'Template applied successfully!');
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to apply template');
-    } finally {
-      setApplying(null);
-    }
-  };
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error || 'Failed to apply template');
+      return body as { message?: string };
+    },
+    onSuccess: (body) => {
+      toast.success(body.message || 'Template applied successfully!');
+      queryClient.invalidateQueries({ queryKey: ['tenant', 'industry-templates'] });
+    },
+    onError: (err: Error) => toast.error(err.message || 'Failed to apply template'),
+  });
+
+  const handleApply = (templateId: string) => applyTemplate.mutate(templateId);
+  const applying = applyTemplate.isPending ? (applyTemplate.variables as string) : null;
 
   if (loading) {
     return (

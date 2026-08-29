@@ -4,12 +4,21 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect } from 'react';
+import type { ComponentType } from 'react';
+import { useApiQuery } from '@/lib/query/client';
 import { FileText, ExternalLink, ArrowLeft, AlertCircle, CheckCircle, Clock } from 'lucide-react';
 import { formatDate, cn } from '@/lib/utils';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const STATUS_ICONS: Record<string, any> = {
+interface Invoice {
+  id: string;
+  date: string;
+  type: string;
+  amount: string;
+  status: string;
+  invoiceUrl?: string | null;
+}
+
+const STATUS_ICONS: Record<string, ComponentType<{ className?: string }>> = {
   paid: CheckCircle,
   failed: AlertCircle,
   past_due: AlertCircle,
@@ -24,18 +33,12 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 export default function InvoicesPage() {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [invoices, setInvoices] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    fetch('/api/tenant/billing/invoices', { signal: controller.signal })
-      .then(r => r.json())
-      .then(d => { if (controller.signal.aborted) return; setInvoices(d.data || []); setLoading(false); })
-      .catch((e) => { if ((e as Error)?.name === 'AbortError') return; setLoading(false); });
-    return () => controller.abort();
-  }, []);
+  // #1328: TanStack Query replaces the fetch + useEffect + useState pattern.
+  const { data, isLoading: loading } = useApiQuery<{ data?: Invoice[] }>(
+    ['tenant', 'billing', 'invoices'],
+    '/api/tenant/billing/invoices',
+  );
+  const invoices: Invoice[] = data?.data ?? [];
 
   return (
     <div className="space-y-6 animate-fade-in">
