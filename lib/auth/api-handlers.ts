@@ -22,6 +22,7 @@ import { installDefaultModules } from '@/lib/modules/auto-install';
 import { isBlocked, recordFailedAttempt, recordSuccessfulLogin } from '@/lib/security/brute-force';
 import { validateBody } from '@/lib/api/validate';
 import { loginSchema, signupSchema } from '@/lib/api/schemas';
+import { redactEmail } from '@/lib/logger/pii';
 
 /**
  * Whether the CSRF cookie's Secure flag should be set for this request.
@@ -100,7 +101,8 @@ export async function POST_login(request: NextRequest) {
       sendAdminTelegram({
         icon: '🛡️',
         title: 'Account Blocked — Brute Force',
-        message: `Email: \`${email}\`\nIP: \`${ip}\`\nBlocked until: ${emailBlockCheck.blockedUntil?.toISOString() ?? 'N/A'}`,
+        // #1297: redact email before sending to Telegram (may be logged upstream).
+        message: `Email: \`${redactEmail(email)}\`\nIP: \`${ip}\`\nBlocked until: ${emailBlockCheck.blockedUntil?.toISOString() ?? 'N/A'}`,
       }).catch((e) => console.error('[api-handlers] Error:', e));
       return loginRespond(request, isForm, { 
         error: 'Too many login attempts for this account. Please try again later.',
@@ -412,7 +414,9 @@ export async function POST_signup(request: NextRequest) {
       botToken: process.env['TELEGRAM_BOT_TOKEN'] || '',
       chatId: process.env['TELEGRAM_CHAT_ID'] || '',
       title: '🎉 New User Signed Up',
-      message: `${user.fullName} (${user.email}) joined\nWorkspace: ${tenant.name} (${tenant.slug})`,
+      // #1297: never send the raw email to Telegram — its servers (and any bot
+      // infra in transit) may log the message body. Redact to first-char+domain.
+      message: `${user.fullName} (${redactEmail(user.email)}) joined\nWorkspace: ${tenant.name} (${tenant.slug})`,
       icon: '🟢',
       url: `${process.env.NEXT_PUBLIC_APP_URL}/tenant`,
     }).catch((e) => { console.error('[auth/signup] Telegram notification failed', e); });
