@@ -49,6 +49,7 @@ const MUTATING_LIMITS: Record<string, { post: number; patch: number; delete: num
   milestones: { post: 10, patch: 20, delete: 10 },
   // Misc
   cannedResponses: { post: 10, patch: 20, delete: 10 },
+  segments: { post: 10, patch: 20, delete: 10 },
   assignments: { post: 15, patch: 30, delete: 15 },
   services: { post: 10, patch: 20, delete: 10 },
   plugins: { post: 5, patch: 10, delete: 5 },

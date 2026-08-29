@@ -60,7 +60,7 @@ export const PLANS: Plan[] = [
       'Unlimited pipelines and custom stages',
       'Leads with scoring and assignment rules',
       'Support desk with tickets and notes',
-      'Quotes and proposals with PDF output',
+      'Quotes and proposals with print-ready output',
       'Forms builder with embeddable forms',
       'Email sync, WhatsApp and smart segments available as add-ons',
       'Lead, ticket and invoice dashboard widgets',
@@ -112,7 +112,7 @@ export const PLANS: Plan[] = [
       'SSO with SAML and OpenID Connect',
       'Custom roles with record and field-level permissions',
       'White label: your logo, colours and domain',
-      'Territories, team hierarchy and approval chains',
+      'Territories, team hierarchy and approvals',
       'Automated backups with point-in-time and selective restore',
       'Audit exports, DLP policies and IP allow-listing',
       'Dedicated onboarding, named contact and service-level agreement',
@@ -179,7 +179,7 @@ export const PLAN_MATRIX: {
   {
     group: 'Revenue operations',
     rows: [
-      { label: 'Quotes and proposals with PDF', free: false, starter: 'Add-on', pro: true, enterprise: true },
+      { label: 'Quotes and proposals (print-ready)', free: false, starter: 'Add-on', pro: true, enterprise: true },
       { label: 'Public offer links with accept and decline', free: false, starter: true, pro: true, enterprise: true },
       { label: 'Invoices, orders and payment tracking', free: false, starter: false, pro: true, enterprise: true },
       { label: 'Contracts, subscriptions and renewals', free: false, starter: false, pro: true, enterprise: true },
