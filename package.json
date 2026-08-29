@@ -205,7 +205,10 @@
     "ws": "^8.21.0",
     "brace-expansion": "^2.1.4",
     "fast-uri": "^3.1.6",
-    "js-yaml": "^4.3.2"
+    "js-yaml": "^4.3.2",
+    "@esbuild-kit/core-utils": {
+      "esbuild": "^0.25.0"
+    }
   },
   "optionalDependencies": {
     "@rolldown/binding-linux-x64-gnu": "^1.2.5"
