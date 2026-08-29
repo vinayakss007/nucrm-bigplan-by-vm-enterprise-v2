@@ -50,6 +50,12 @@ import {
 } from '@/lib/realtime/events';
 
 const PORT = Number(process.env['REALTIME_PORT'] ?? 4001);
+// Bind to loopback by default so the realtime port is never exposed on the
+// VM's public interface (#1042). nginx proxies /socket.io/ to it over the
+// internal network. In Docker it must bind 0.0.0.0 to be reachable across the
+// bridge network — compose sets REALTIME_HOST=0.0.0.0 and only `expose`s the
+// port (never publishes it), so it stays private to nucrm-net there.
+const HOST = process.env['REALTIME_HOST'] || '127.0.0.1';
 const REDIS_URL = process.env['REDIS_URL'] || 'redis://localhost:6379';
 const SESSION_COOKIE = 'nucrm_session';
 
@@ -189,8 +195,8 @@ async function main() {
     io.to(targetRoom(parsed)).emit(parsed.event, parsed.payload);
   });
 
-  httpServer.listen(PORT, () => {
-    console.log(`[Realtime] socket.io listening on :${PORT}${REALTIME_PATH}`);
+  httpServer.listen(PORT, HOST, () => {
+    console.log(`[Realtime] socket.io listening on ${HOST}:${PORT}${REALTIME_PATH}`);
   });
 
   // ── graceful shutdown ─────────────────────────────────────────────────────

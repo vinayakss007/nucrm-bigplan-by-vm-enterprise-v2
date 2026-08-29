@@ -93,6 +93,10 @@ services:
       - ENCRYPTION_KEY=${ENCRYPTION_KEY:?REQUIRED}
       - DATABASE_SSL=${DATABASE_SSL:-true}
       - REALTIME_PORT=4001
+      # Bind 0.0.0.0 INSIDE the container so nginx can reach it across the
+      # bridge network. It is only `expose`d (never published to the host), so
+      # it stays private to nucrm-net. The process default is 127.0.0.1 (#1042).
+      - REALTIME_HOST=0.0.0.0
     expose:
       - "4001"
     healthcheck:
@@ -165,6 +169,11 @@ services:
     network_mode: host
     environment:
       - DATABASE_URL=postgres://${POSTGRES_USER:-nucrm}:${POSTGRES_PASSWORD}@127.0.0.1:5432/${POSTGRES_DB:-nucrm}
+      # network_mode: host means pgbouncer binds directly on the host, and the
+      # `ports:` mapping below is a NO-OP. Without LISTEN_ADDR the pooler would
+      # bind 0.0.0.0:6432 and expose the DB to the internet (#1042). Pin it to
+      # loopback so only local processes (the app on this host) can reach it.
+      - LISTEN_ADDR=127.0.0.1
       - LISTEN_PORT=6432
       - AUTH_TYPE=scram-sha-256
       - POOL_MODE=transaction
@@ -173,6 +182,8 @@ services:
       - MAX_DB_CONNECTIONS=50
       - SERVER_RESET_QUERY=DISCARD ALL
       - IGNORE_STARTUP_PARAMETERS=extra_float_digits
+    # NOTE: ineffective under network_mode: host (kept for documentation only).
+    # The real bind restriction is LISTEN_ADDR above.
     ports:
       - "127.0.0.1:6432:6432"
     healthcheck:
