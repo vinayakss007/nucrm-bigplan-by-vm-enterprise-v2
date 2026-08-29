@@ -341,6 +341,8 @@ export default function SuperAdminTenantsPage() {
       if(res.ok) {
         sessionStorage.setItem('isImpersonating', 'true');
         sessionStorage.setItem('impersonateSessionId', d.sessionId || '');
+        // #1267: intentional full reload — impersonation swaps the session
+        // context; reload to re-run middleware and rebuild server components.
         window.location.href = `/tenant/dashboard`;
       } else toast.error(d.error);
       setImpersonating(null);

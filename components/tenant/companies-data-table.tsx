@@ -7,6 +7,7 @@
 
 import { useState, useCallback, useMemo, useEffect } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { Plus, MoreHorizontal, Edit, Trash2, Building2, Globe, Tag, UserPlus, Archive, RotateCcw } from 'lucide-react'
 
 import { useDeleteWithUndo } from '@/lib/use-delete-with-undo'
@@ -47,6 +48,7 @@ interface Props {
 }
 
 export default function CompaniesDataTable({ initialCompanies, permissions, _tenantId, _userId, teamMembers = [] }: Props) {
+  const router = useRouter()
   const [companies, setCompanies] = useState(initialCompanies)
   const [total, setTotal] = useState(initialCompanies.length)
   const [loading, setLoading] = useState(false)
@@ -211,7 +213,7 @@ export default function CompaniesDataTable({ initialCompanies, permissions, _ten
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => window.location.href = `/tenant/companies/${company.id}`}>
+              <DropdownMenuItem onClick={() => router.push(`/tenant/companies/${company.id}`)}>
                 <Edit className="mr-2 h-4 w-4" />
                 Edit
               </DropdownMenuItem>
@@ -230,7 +232,7 @@ export default function CompaniesDataTable({ initialCompanies, permissions, _ten
         )
       },
     },
-  ], [deleteEntity])
+  ], [deleteEntity, router])
 
   // ── Bulk actions ──────────────────────────────────────────
   const [_bulkBusy, setBulkBusy] = useState(false)
