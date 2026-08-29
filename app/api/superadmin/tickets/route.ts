@@ -69,7 +69,9 @@ export const GET = withApiRoute(async (request: NextRequest) => {
         .catch((err) => { void logError({ error: err, context: 'superadmin/tickets counts query' }); return { open: 0, in_progress: 0, resolved: 0, critical: 0 }; }),
     ]);
 
-    return NextResponse.json({ tickets, counts });
+    // #1093: standard { data, ... } envelope; legacy tickets/counts kept for
+    // backwards compatibility with the existing superadmin tickets page.
+    return NextResponse.json({ data: tickets, tickets, counts });
   } catch (err: unknown) {
     await logError({ error: err, context: 'superadmin/tickets GET', requestMethod: 'GET' });
     return apiError(err instanceof Error ? err : new Error(String(err)));

@@ -77,7 +77,9 @@ export const GET = withApiRoute(async (request: NextRequest) => {
         }),
     ]);
 
-    return NextResponse.json({ errors, summary });
+    // #1093: standard { data, meta, ... } envelope; legacy errors/summary kept
+    // for backwards compatibility with existing error-log consumers.
+    return NextResponse.json({ data: errors, meta: summary, errors, summary });
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
