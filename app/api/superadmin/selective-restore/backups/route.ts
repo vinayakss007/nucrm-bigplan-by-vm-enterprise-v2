@@ -13,6 +13,7 @@ import { writeFile, mkdir } from 'fs/promises';
 import { existsSync } from 'fs';
 import { join } from 'path';
 import { parseBackupFile, formatFileSize } from '@/lib/restore/backup-parser';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 const UPLOAD_DIR = join(process.cwd(), 'uploads', 'backups');
 
@@ -26,7 +27,7 @@ async function ensureUploadDir() {
 /**
  * GET: List all uploaded backups for selective restore
  */
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -83,12 +84,12 @@ export async function GET(request: NextRequest) {
     console.error('[selective-restore/backups GET]', err);
     return apiError(err);
   }
-}
+});
 
 /**
  * POST: Upload a new backup file for selective restore
  */
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -159,12 +160,12 @@ export async function POST(request: NextRequest) {
     console.error('[selective-restore/backups POST]', err);
     return apiError(err);
   }
-}
+});
 
 /**
  * DELETE: Remove an uploaded backup file
  */
-export async function DELETE(request: NextRequest) {
+export const DELETE = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -204,7 +205,7 @@ export async function DELETE(request: NextRequest) {
     console.error('[selective-restore/backups DELETE]', err);
     return apiError(err);
   }
-}
+});
 
 async function parseBackupAsync(backupId: string, filePath: string) {
   try {

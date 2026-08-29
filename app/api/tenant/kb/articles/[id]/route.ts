@@ -12,8 +12,9 @@ import { eq, and, sql } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
 import { concurrencyGuard } from '@/lib/api/concurrency';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
-export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export const GET = withApiRoute(async (request: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -45,9 +46,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   } catch (err: any) {
     return apiError(err);
   }
-}
+});
 
-export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export const PATCH = withApiRoute(async (request: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
   const limited = await rateLimitMutating(request, 'kbArticles', 'patch');
   if (limited) return limited;
@@ -81,9 +82,9 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   } catch (err: any) {
     return apiError(err);
   }
-}
+});
 
-export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export const DELETE = withApiRoute(async (request: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
   const limited = await rateLimitMutating(request, 'kbArticles', 'delete');
   if (limited) return limited;
@@ -99,9 +100,9 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
   } catch (err: any) {
     return apiError(err);
   }
-}
+});
 
-export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export const POST = withApiRoute(async (request: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -132,4 +133,4 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   } catch (err: any) {
     return apiError(err);
   }
-}
+});

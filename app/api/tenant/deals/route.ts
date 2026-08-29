@@ -8,6 +8,7 @@ import { apiError } from '@/lib/api-error';
 import { validateBody, validateQuery, readJsonBody } from '@/lib/api/validate';
 import { createDealSchema, dealQuerySchema } from '@/lib/api/schemas';
 import { requireAuth, requirePerm, can } from '@/lib/auth/middleware';
+import { withApiRoute } from '@/lib/api/with-api-route';
 import { checkLimit } from '@/lib/usage/middleware';
 import { db } from '@/drizzle/db';
 import { deals, contacts, companies, users, tenants, activities, pipelines, dealStages, tasks } from '@/drizzle/schema';
@@ -20,7 +21,10 @@ import { cache } from '@/lib/cache';
 import { archiveFilter } from '@/lib/api/deals-archive-filter';
 import { escapeLike } from '@/lib/api/sanitize-like';
 
-export async function GET(request: NextRequest) {
+// #1615: withApiRoute pins ONE connection for the whole handler body so the
+// auth check's setTenantContext() and every db query below (count + list) share
+// it and RLS stays enforced on the pinned connection. No-op under PgBouncer.
+export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -95,9 +99,9 @@ export async function GET(request: NextRequest) {
     console.error('[tenant deals GET]', err);
     return apiError(err);
   }
-}
+});
 
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -242,4 +246,4 @@ export async function POST(request: NextRequest) {
     console.error('[tenant deals POST]', err);
     return apiError(err);
   }
-}
+});

@@ -20,6 +20,7 @@ import { fireWebhooks } from '@/lib/webhooks';
 import { logError } from '@/lib/errors-server';
 import { createNotification } from '@/lib/notifications';
 import { escapeLike } from '@/lib/api/sanitize-like';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 // Whitelist for sort columns to prevent SQL injection
  
@@ -38,7 +39,7 @@ const ALLOWED_SORT_COLUMNS: Record<string, any> = {
 };
 
 // GET /api/tenant/leads - List leads with filtering and pagination
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -212,10 +213,10 @@ export async function GET(request: NextRequest) {
     console.error('[leads GET]', error);
     return NextResponse.json({ error: 'Failed to fetch leads' }, { status: 500 });
   }
-}
+});
 
 // POST /api/tenant/leads - Create a new lead
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -408,4 +409,4 @@ export async function POST(request: NextRequest) {
     console.error('[leads POST]', error);
     return NextResponse.json({ error: 'Failed to create lead' }, { status: 500 });
   }
-}
+});

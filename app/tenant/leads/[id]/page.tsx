@@ -10,6 +10,7 @@ import { eq, and, sql, desc, or, ilike } from 'drizzle-orm';
 import { notFound } from 'next/navigation';
 import LeadDetailClient from '@/components/tenant/lead-detail-client';
 import type { Lead, Activity, RelatedContact } from '@/components/tenant/lead-detail-client';
+import { withTenantScope } from '@/lib/api/with-api-route';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -20,6 +21,7 @@ const stripNulls = (obj: Record<string, any>): Record<string, any> =>
   Object.fromEntries(Object.entries(obj).map(([k, v]) => [k, v ?? undefined]));
 
 export default async function LeadDetailPage({ params }: PageProps) {
+  return withTenantScope(async () => {
   const ctx = await requireTenantCtx();
   const { id } = await params;
   
@@ -152,4 +154,6 @@ export default async function LeadDetailPage({ params }: PageProps) {
       userId={ctx.userId}
     />
   );
+
+  });
 }

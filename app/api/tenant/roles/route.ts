@@ -12,8 +12,9 @@ import { db } from '@/drizzle/db';
 import { roles } from '@/drizzle/schema';
 import { eq, and, isNull } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -38,9 +39,9 @@ export async function GET(request: NextRequest) {
     console.error('[roles GET]', err);
     return apiError(err);
   }
-}
+});
 
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const limited = await rateLimitMutating(request, 'roles', 'post');
     if (limited) return limited;
@@ -75,4 +76,4 @@ export async function POST(request: NextRequest) {
     console.error('[roles POST]', err);
     return apiError(err);
   }
-}
+});

@@ -9,8 +9,9 @@ import { getProvider, getIntegrationConfig } from '@/lib/calendar-sync/service';
 import { readJsonBody } from '@/lib/api/validate';
 import { signOAuthState } from '@/lib/calendar-sync/state';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -43,9 +44,9 @@ export async function GET(request: NextRequest) {
     console.error('[calendar-sync auth GET]', err);
     return NextResponse.json({ error: 'Failed to generate auth URL' }, { status: 500 });
   }
-}
+});
 
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const limited = await rateLimitMutating(request, 'calendarSync', 'post');
     if (limited) return limited;
@@ -96,4 +97,4 @@ export async function POST(request: NextRequest) {
     console.error('[calendar-sync POST]', err);
     return NextResponse.json({ error: 'Failed' }, { status: 500 });
   }
-}
+});

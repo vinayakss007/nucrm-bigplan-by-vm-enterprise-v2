@@ -17,12 +17,14 @@ import {
 import { eq, and, sql, desc } from 'drizzle-orm';
 import { notFound } from 'next/navigation';
 import DealDetailClient from '@/components/tenant/deal-detail-client';
+import { withTenantScope } from '@/lib/api/with-api-route';
 
 interface PageProps {
   params: Promise<{ id: string }>;
 }
 
 export default async function DealDetailPage({ params }: PageProps) {
+  return withTenantScope(async () => {
   const ctx = await requireTenantCtx();
   const { id } = await params;
 
@@ -155,4 +157,6 @@ export default async function DealDetailPage({ params }: PageProps) {
       userId={ctx.userId}
     />
   );
+
+  });
 }

@@ -13,13 +13,12 @@ import { contacts, activities } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { concurrencyGuard } from '@/lib/api/concurrency';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 const STATUSES = ['new', 'contacted', 'qualified', 'unqualified', 'converted', 'lost'];
 
-export async function PATCH(
-  request: NextRequest, 
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const PATCH = withApiRoute(async (request: NextRequest, 
+  { params }: { params: Promise<{ id: string }> }) => {
   try {
   const limited = await rateLimitMutating(request, 'contacts', 'patch');
   if (limited) return limited;
@@ -95,4 +94,4 @@ export async function PATCH(
   } catch (err: any) { 
     return apiError(err); 
   }
-}
+});

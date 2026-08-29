@@ -13,6 +13,7 @@ import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { concurrencyGuard } from '@/lib/api/concurrency';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 const brandingUpdateSchema = z.object({
   logoUrl: z.string().trim().max(500).nullable().optional(),
@@ -27,7 +28,7 @@ const brandingUpdateSchema = z.object({
   headerLayout: z.enum(['default', 'centered', 'minimal']).optional(),
 });
 
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -39,9 +40,9 @@ export async function GET(request: NextRequest) {
     console.error('[Branding] GET error:', error);
     return NextResponse.json({ error: message }, { status: 500 });
   }
-}
+});
 
-export async function PUT(request: NextRequest) {
+export const PUT = withApiRoute(async (request: NextRequest) => {
   try {
     const limited = await rateLimitMutating(request, 'branding', 'patch');
     if (limited) return limited;
@@ -136,4 +137,4 @@ export async function PUT(request: NextRequest) {
     console.error('[Branding] PUT error:', error);
     return NextResponse.json({ error: message }, { status: 500 });
   }
-}
+});

@@ -9,8 +9,9 @@ import { db } from '@/drizzle/db';
 import { contacts, companies, deals, activities, tasks, dealStages, pipelines } from '@/drizzle/schema';
 import { eq, and, isNull, notInArray, sql, desc, asc } from 'drizzle-orm';
 import { logError, tenantMeta } from '@/lib/errors-server';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   let ctx: Awaited<ReturnType<typeof requireAuth>> | undefined;
   try {
     ctx = await requireAuth(request);
@@ -148,4 +149,4 @@ export async function GET(request: NextRequest) {
       status: 'error'
     }, { status: 500 });
   }
-}
+});

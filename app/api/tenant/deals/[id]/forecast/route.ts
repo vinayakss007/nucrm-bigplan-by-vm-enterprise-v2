@@ -12,6 +12,7 @@ import { eq, and, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 const forecastSchema = z.object({
   expected_close_date: z.string().nullable().optional(),
@@ -30,7 +31,7 @@ async function assertDeal(tenantId: string, dealId: string) {
 }
 
 // GET /api/tenant/deals/:id/forecast - return the forecast for this deal (or empty)
-export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export const GET = withApiRoute(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -55,10 +56,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     return NextResponse.json({ data: forecast ?? null });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) { return apiError(err); }
-}
+});
 
 // POST /api/tenant/deals/:id/forecast - create or update forecast
-export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export const POST = withApiRoute(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
     const limited = await rateLimitMutating(req, 'deal-forecast', 'post');
     if (limited) return limited;
@@ -118,4 +119,4 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ data: result }, { status: existing ? 200 : 201 });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) { return apiError(err); }
-}
+});

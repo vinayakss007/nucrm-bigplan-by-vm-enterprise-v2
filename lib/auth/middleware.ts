@@ -12,6 +12,7 @@ import { verifyToken, hashToken } from '@/lib/auth/session';
 import { setTenantContext } from '@/lib/db/rls';
 import { tryApiKeyAuth } from '@/lib/auth/api-key';
 import { requestContext, withRequestId } from '@/lib/tenant/request-context';
+import { withPinnedConnection } from '@/lib/db/request-connection';
 import { ModuleRegistry } from '@/lib/modules/registry';
 import {
   validateCsrfToken,
@@ -154,7 +155,13 @@ async function isCachedContextStillAuthorized(
 
 export async function requireAuth(request: NextRequest): Promise<AuthContext | NextResponse> {
   const requestId = request.headers.get('x-request-id') || requestContext.generateId();
-  return withRequestId(requestId, async () => {
+  // #1615: pin ONE PoolClient for this scope so setTenantContext() (session GUC)
+  // and the subsequent auth/context queries all run on the SAME connection.
+  // No-op under PgBouncer. See lib/db/request-connection.ts for the mechanism and
+  // the documented scope boundary (the pin covers the auth + setTenantContext
+  // path; route-handler data queries that run after requireAuth returns are
+  // outside this ALS scope — see request-connection.ts header and DEPLOYMENT.md).
+  return withPinnedConnection(() => withRequestId(requestId, async () => {
 
     // Try API key auth first
     const apiKeyCtx = await tryApiKeyAuth(request);
@@ -304,7 +311,7 @@ export async function requireAuth(request: NextRequest): Promise<AuthContext | N
     requestContext.set(requestId, { ...ctx, cachedAt: Date.now() });
 
     return ctx;
-  });
+  }));
 }
 
 export function can(ctx: AuthContext, perm: string): boolean {

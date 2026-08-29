@@ -11,8 +11,9 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { sessions, invitations, passwordResets } from '@/drizzle/schema';
 import { lt, and, isNull, sql } from 'drizzle-orm';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   // Two ways to authorize this job:
   //  1. the scheduler presents the shared CRON_SECRET, or
   //  2. a logged-in super admin triggers it manually from the dashboard.
@@ -94,4 +95,4 @@ export async function POST(request: NextRequest) {
     console.error('[Cleanup:Main]', err);
     return apiError(err); 
   }
-}
+});

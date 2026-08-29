@@ -13,6 +13,7 @@ import {
   getPartnersByTenant,
 } from '@/lib/partners';
 import type { PartnerStatus } from '@/lib/partners';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 // Mirrors the fields the POST handler consumes and its previous manual checks:
 // name/email/type required, type constrained to the known PartnerType enum,
@@ -31,7 +32,7 @@ const createPartnerSchema = z.object({
  * GET /api/tenant/partners
  * List all partners for the current tenant.
  */
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -44,13 +45,13 @@ export async function GET(request: NextRequest) {
     console.error('[tenant partners GET]', err);
     return apiError(err);
   }
-}
+});
 
 /**
  * POST /api/tenant/partners
  * Create a new partner (admin only).
  */
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -81,4 +82,4 @@ export async function POST(request: NextRequest) {
     console.error('[tenant partners POST]', err);
     return apiError(err);
   }
-}
+});

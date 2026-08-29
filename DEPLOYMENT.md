@@ -114,6 +114,123 @@ attacker and fails SOC 2 / GDPR, so it is refused at startup.
   psql "host=<host> dbname=nucrm user=nucrm sslmode=require" -c 'SHOW ssl;'  # → on
   ```
 
+## Tenant isolation (RLS) — enforced in the default deploy (#1615)
+
+Tenant isolation is enforced by PostgreSQL Row-Level Security (RLS). Each request
+sets the `app.current_tenant` / `app.current_user` session GUCs via
+`setTenantContext()`, and the fail-closed `tenant_isolation` policy
+(migration `0039_rls_fail_closed_policy`) returns **zero rows** when the GUC is
+empty.
+
+- **Now enforced out of the box in the DEFAULT deploy.** The default deploy runs
+  the app under **pm2** against a plain `node-postgres` pool (NOT PgBouncer,
+  `PGBOUNCER_ENABLED` unset). Previously RLS was effectively non-functional on
+  that path: `setTenantContext()` set the GUC on one pooled connection that was
+  released immediately, and each subsequent `db` query checked out a _different_
+  connection whose GUC was empty, so the fail-closed policy denied every row and
+  RLS provided no real defense-in-depth. As of #1615 the app pins **one**
+  PoolClient per request (`lib/db/request-connection.ts` + the `db` proxy in
+  `drizzle/db.ts`) so the tenant GUC and the request's data queries run on the
+  **same** connection. RLS tenant isolation now works without PgBouncer.
+- **The pin does NOT serialize the pool.** It checks out a single connection for
+  the request and releases it at request end; concurrent requests still use
+  separate connections up to `DATABASE_POOL_SIZE`.
+- **On release, the tenant GUCs are reset** (in `withPinnedConnection`'s finally
+  block and by the pool's `release` handler in `lib/db/pool.ts`) so no stale
+  context can leak to the next checkout.
+- **PgBouncer is still SUPPORTED and compatible, but NO LONGER REQUIRED for RLS
+  correctness.** When `PGBOUNCER_ENABLED=true` the per-request pin is a no-op:
+  PgBouncer transaction-mode pooling plus `server_reset_query = 'DISCARD ALL'`
+  already handle GUC lifecycle, and the existing transaction/session semantics
+  are preserved unchanged.
+
+### Enclosing the whole handler in the pinned scope (`withApiRoute`)
+
+`AsyncLocalStorage` scopes are strictly lexical. Pinning **only** inside
+`requireAuth()` / `requireTenantCtx()` is not enough on its own: those helpers
+return before a route handler runs its own later `db` queries, so — without a
+wrapper — those handler queries run on unpinned pool connections and RLS does not
+protect them (the exact surface #1615 is about).
+
+To close that gap, route handlers are wrapped with **`withApiRoute()`**
+(`lib/api/with-api-route.ts`), which runs the **entire handler body** (auth +
+every subsequent `db` query) inside one `withPinnedConnection` scope:
+
+```ts
+import { withApiRoute } from '@/lib/api/with-api-route';
+
+export const GET = withApiRoute(async (request) => {
+  const ctx = await requireAuth(request);          // setTenantContext on the pin
+  if (ctx instanceof NextResponse) return ctx;
+  const data = await db.select()...;               // runs on the SAME pinned conn
+  return NextResponse.json({ data });
+});
+
+// dynamic routes: the second (params) argument is passed through unchanged
+export const GET = withApiRoute(async (request, { params }) => { ... });
+```
+
+`withApiRoute` preserves the `NextResponse` return value, propagates thrown
+errors, passes the route-params context through unchanged, and is a **no-op under
+PgBouncer**. Because `withPinnedConnection` reuses an already-pinned client for
+nested calls, `requireAuth()`'s own inner pin simply joins the wrapper's single
+per-request connection — still exactly one connection per request.
+
+**Server Components / server actions:** wrap the page body in **`withTenantScope`**
+(same module) so `requireTenantCtx()` and the page's later queries share the pin:
+
+```ts
+export default async function Page() {
+  return withTenantScope(async () => {
+    const ctx = await requireTenantCtx();
+    const rows = await db.select()...;   // on the pinned connection
+    return <View rows={rows} />;
+  });
+}
+```
+
+### Coverage — the full tenant-data surface is pinned
+
+The `withApiRoute` / `withTenantScope` migration is **complete** across the
+authenticated request surface:
+
+- **All API routes that call `requireAuth`** — every `app/api/**/route.ts`
+  handler that authenticates (388 route files, all HTTP methods
+  GET/POST/PUT/PATCH/DELETE/HEAD/OPTIONS) is exported through `withApiRoute`, so
+  each handler's own `db` queries run on the pinned connection and are protected
+  by RLS in the default (non-PgBouncer) deploy — not just by app-level
+  `tenant_id` filters. The conversion is a pure export-form rewrap; no
+  handler-body logic, try/catch, rate-limiting, or response shapes changed.
+  Dynamic routes keep their exact `{ params }` context shape.
+- **All Server Component pages / layouts that call `requireTenantCtx`** — every
+  `app/tenant/**/*.tsx` server page and layout (23 files, e.g. contacts, deals,
+  companies, leads, projects, tasks, dashboard, settings) wraps its body in
+  `withTenantScope`, so `requireTenantCtx()` and the page's later `db` queries
+  share one pinned connection. Next.js control-flow throws
+  (`redirect()` / `notFound()`) propagate correctly through
+  `withPinnedConnection`'s `try/finally` (the pinned client is still released and
+  the GUCs reset). `'use client'` components are not server-rendered and do not
+  call `requireTenantCtx`, so they are intentionally not wrapped.
+
+**Deliberately not wrapped (safe by design):**
+
+- **Public / unauthenticated endpoints** — health checks, webhook receivers,
+  login/signup/logout, and other routes that do not call `requireAuth` and do no
+  tenant-scoped `db` access. They set no tenant GUC, so there is nothing to pin
+  for RLS.
+- **`app/api/tenant/dashboard/route.ts`** delegates to the already-wrapped
+  `stats` route (`export { GET as getStats }`), so it inherits the pin rather
+  than double-wrapping.
+- Note: the pin is **fail-safe** — it only pins a connection; RLS still keys off
+  the GUC set by `setTenantContext`. Wrapping never widens access. Superadmin /
+  cross-tenant routes that call `requireAuth` are wrapped too; their intended
+  cross-tenant behavior is unaffected because those flows do not set a tenant GUC
+  (or set the appropriate one), and pinning changes only which connection the
+  query runs on.
+
+See `lib/api/with-api-route.ts` and `lib/db/request-connection.ts` for the
+mechanism and the exact boundary.
+
 ## SSL with Let's Encrypt
 
 ```bash

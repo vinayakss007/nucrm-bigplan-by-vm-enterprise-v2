@@ -10,8 +10,9 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { productTemplates, tenantTemplates } from '@/drizzle/schema';
 import { desc, sql } from 'drizzle-orm';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
-export async function GET(req: NextRequest) {
+export const GET = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -47,7 +48,7 @@ export async function GET(req: NextRequest) {
     console.error('[superadmin/templates GET]', err);
     return NextResponse.json({ error: message }, { status: 500 });
   }
-}
+});
 
 const createTemplateSchema = z.object({
   name: z.string().min(1).max(255),
@@ -61,7 +62,7 @@ const createTemplateSchema = z.object({
   status: z.enum(['active', 'draft', 'archived']).default('draft'),
 });
 
-export async function POST(req: NextRequest) {
+export const POST = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -99,4 +100,4 @@ export async function POST(req: NextRequest) {
     }
     return NextResponse.json({ error: message }, { status: 500 });
   }
-}
+});

@@ -9,12 +9,13 @@ import { createPortalSession } from '@/lib/stripe';
 import { db } from '@/drizzle/db';
 import { tenants } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 /**
  * POST /api/tenant/billing/stripe
  * Creates a Stripe Customer Portal session for managing billing.
  */
-export async function POST(req: NextRequest) {
+export const POST = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -38,4 +39,4 @@ export async function POST(req: NextRequest) {
     const message = err instanceof Error ? err.message : 'Internal server error';
     return NextResponse.json({ error: message }, { status: 500 });
   }
-}
+});

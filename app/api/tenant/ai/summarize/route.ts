@@ -14,6 +14,7 @@ import { GatewayError } from '@/lib/ai/gateway';
 import { requireAiFeature } from '@/lib/ai/plan-gate';
 import { summarizeEntity, type SummarizeEntityType } from '@/lib/ai/summarize';
 import { readJsonBody } from '@/lib/api/validate';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 interface PostBody {
   entity_type?: string;
@@ -25,7 +26,7 @@ function isSummarizeEntityType(s: unknown): s is SummarizeEntityType {
   return s === 'contact' || s === 'deal' || s === 'company';
 }
 
-export async function POST(req: NextRequest) {
+export const POST = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -81,4 +82,4 @@ export async function POST(req: NextRequest) {
     console.error('[ai/summarize POST]', err);
     return apiError(err);
   }
-}
+});

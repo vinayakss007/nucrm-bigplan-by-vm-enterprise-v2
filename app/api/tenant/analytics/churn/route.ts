@@ -13,12 +13,13 @@ import { eq, and, desc, sql } from 'drizzle-orm';
 import { concurrencyGuard } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 /**
  * GET /api/tenant/analytics/churn
  * Get churn predictions
  */
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -67,13 +68,13 @@ export async function GET(request: NextRequest) {
     console.error('[Churn Analytics] GET error:', error);
     return apiError(error);
   }
-}
+});
 
 /**
  * POST /api/tenant/analytics/churn/calculate
  * Calculate churn risk for a contact
  */
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -108,7 +109,7 @@ export async function POST(request: NextRequest) {
     console.error('[Churn Calculate] POST error:', error);
     return apiError(error);
   }
-}
+});
 
 /**
  * Mark churn prediction as actioned
@@ -116,9 +117,7 @@ export async function POST(request: NextRequest) {
  * Assuming this is app/api/tenant/analytics/churn/[id]/action/route.ts but the provided content was one big file.
  * Wait, the user provided a file with GET, POST and PATCH. PATCH has { params } in signature.
  */
-export async function PATCH(
-  request: NextRequest
-) {
+export const PATCH = withApiRoute(async (request: NextRequest) => {
   try {
   const limited = await rateLimitMutating(request, 'reports', 'patch');
   if (limited) return limited;
@@ -154,4 +153,4 @@ export async function PATCH(
     console.error('[Churn Action] PATCH error:', error);
     return apiError(error);
   }
-}
+});

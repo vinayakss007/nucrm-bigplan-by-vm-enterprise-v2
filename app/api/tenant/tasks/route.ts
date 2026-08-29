@@ -16,8 +16,9 @@ import { fireWebhooks } from '@/lib/webhooks';
 import { logError } from '@/lib/errors-server';
 import { createNotification } from '@/lib/notifications';
 import { cache } from '@/lib/cache';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -84,9 +85,9 @@ export async function GET(request: NextRequest) {
     console.error('[tasks GET]', err);
     return apiError(err);
   }
-}
+});
 
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -189,4 +190,4 @@ export async function POST(request: NextRequest) {
     console.error('[tasks POST]', err);
     return apiError(err);
   }
-}
+});

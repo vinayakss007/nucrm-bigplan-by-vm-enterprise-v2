@@ -12,12 +12,13 @@ import { db } from '@/drizzle/db';
 import { workflows, workflowActions } from '@/drizzle/schema';
 import { eq, and, sql, desc, isNull } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 /**
  * GET /api/tenant/workflows
  * List all workflows
  */
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -56,13 +57,13 @@ export async function GET(request: NextRequest) {
     console.error('[Workflows] GET error:', error);
     return apiError(error);
   }
-}
+});
 
 /**
  * POST /api/tenant/workflows
  * Create new workflow
  */
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const limited = await rateLimitMutating(request, 'workflows', 'post');
     if (limited) return limited;
@@ -139,4 +140,4 @@ export async function POST(request: NextRequest) {
     console.error('[Workflows] POST error:', error);
     return apiError(error);
   }
-}
+});

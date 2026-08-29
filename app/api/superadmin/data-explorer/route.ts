@@ -12,6 +12,7 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { sql } from 'drizzle-orm';
 import { logSuperAdminAction } from '@/lib/audit/super-admin';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 /**
  * Superadmin Cross-Tenant Data Search & Explorer
@@ -25,7 +26,7 @@ import { logSuperAdminAction } from '@/lib/audit/super-admin';
  *   ?field=email&value=xxx  — exact field search
  */
 
-export async function GET(req: NextRequest) {
+export const GET = withApiRoute(async (req: NextRequest) => {
   const ctx = await requireAuth(req);
   if (!ctx || ctx instanceof NextResponse) {
     return ctx instanceof NextResponse ? ctx : NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -46,7 +47,7 @@ export async function GET(req: NextRequest) {
   }
 
   return handleSearch(searchParams);
-}
+});
 
 // ── Global Search Across All Tenants ────────────────────────────────────────
 
@@ -412,7 +413,7 @@ const ALLOWED_COLUMNS: Record<string, string[]> = {
   modules: ['name', 'active'],
 };
 
-export async function PUT(req: NextRequest) {
+export const PUT = withApiRoute(async (req: NextRequest) => {
   const ctx = await requireAuth(req);
   if (!ctx || ctx instanceof NextResponse) {
     return ctx instanceof NextResponse ? ctx : NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -478,11 +479,11 @@ export async function PUT(req: NextRequest) {
   } catch (err: any) {
     return apiError(err);
   }
-}
+});
 
 // ── Delete a Record ─────────────────────────────────────────────────────────
 
-export async function DELETE(req: NextRequest) {
+export const DELETE = withApiRoute(async (req: NextRequest) => {
   const ctx = await requireAuth(req);
   if (!ctx || ctx instanceof NextResponse) {
     return ctx instanceof NextResponse ? ctx : NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -547,4 +548,4 @@ export async function DELETE(req: NextRequest) {
   } catch (err: any) {
     return apiError(err);
   }
-}
+});

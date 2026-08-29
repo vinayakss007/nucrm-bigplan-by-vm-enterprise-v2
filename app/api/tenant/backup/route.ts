@@ -11,6 +11,7 @@ import { backupRecords } from '@/drizzle/schema';
 import { desc } from 'drizzle-orm';
 import { readJsonBody } from '@/lib/api/validate';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 /**
  * GET /api/tenant/backup
@@ -21,7 +22,7 @@ import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
  * checksums, error messages). Only super-admins may read it, mirroring the
  * POST handler's gate.
  */
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -46,7 +47,7 @@ export async function GET(request: NextRequest) {
   } catch (err: any) {
     return apiError(err);
   }
-}
+});
 
 /**
  * POST /api/tenant/backup
@@ -56,7 +57,7 @@ export async function GET(request: NextRequest) {
  * operates on the full database. Regular tenant admins should use the
  * selective restore export instead (export/route.ts).
  */
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const limited = await rateLimitMutating(request, 'backup', 'post');
     if (limited) return limited;
@@ -107,4 +108,4 @@ export async function POST(request: NextRequest) {
       : err.message.slice(0, 500);
     return NextResponse.json({ error: 'Failed to run backup: ' + errorMsg }, { status: 500 });
   }
-}
+});

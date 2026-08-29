@@ -16,8 +16,9 @@ import { eq, and, sql } from 'drizzle-orm';
 import { requireAuth } from '@/lib/auth/require-auth';
 import { handleError, NotFoundError, ValidationError } from '@/lib/errors';
 import { devLogger } from '@/lib/dev-logger';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
-export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export const GET = withApiRoute(async (request: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -63,9 +64,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     devLogger.error(error as Error, 'GET /api/v1/deals/[id]');
     return handleError(error);
   }
-}
+});
 
-export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export const PUT = withApiRoute(async (request: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -130,9 +131,9 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     devLogger.error(error as Error, 'PUT /api/v1/deals/[id]');
     return handleError(error);
   }
-}
+});
 
-export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export const DELETE = withApiRoute(async (request: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -162,4 +163,4 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     devLogger.error(error as Error, 'DELETE /api/v1/deals/[id]');
     return handleError(error);
   }
-}
+});

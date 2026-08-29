@@ -25,11 +25,10 @@ import {
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { apiError } from '@/lib/api-error';
 import { readJsonBody } from '@/lib/api/validate';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
-export async function PATCH(
-  request: NextRequest,
-  context: { params: Promise<{ id: string }> },
-) {
+export const PATCH = withApiRoute(async (request: NextRequest,
+  context: { params: Promise<{ id: string }> },) => {
   const ctx = await requireAuth(request);
   if (ctx instanceof NextResponse) return ctx;
   if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
@@ -86,12 +85,10 @@ export async function PATCH(
 
   if (!updated) return NextResponse.json({ error: 'Update failed' }, { status: 500 });
   return NextResponse.json({ data: maskProvider(updated) });
-}
+});
 
-export async function DELETE(
-  request: NextRequest,
-  context: { params: Promise<{ id: string }> },
-) {
+export const DELETE = withApiRoute(async (request: NextRequest,
+  context: { params: Promise<{ id: string }> },) => {
   try {
     const limited = await rateLimitMutating(request, 'ssoProviders', 'delete');
     if (limited) return limited;
@@ -118,4 +115,4 @@ export async function DELETE(
   } catch (err) {
     return apiError(err);
   }
-}
+});

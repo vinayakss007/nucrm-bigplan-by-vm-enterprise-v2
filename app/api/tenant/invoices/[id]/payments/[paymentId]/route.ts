@@ -17,11 +17,10 @@ import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { logAudit } from '@/lib/audit';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { voidInvoicePayment, PaymentError } from '@/lib/billing/payments';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
-export async function DELETE(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string; paymentId: string }> }
-) {
+export const DELETE = withApiRoute(async (req: NextRequest,
+  { params }: { params: Promise<{ id: string; paymentId: string }> }) => {
   try {
     const limited = await rateLimitMutating(req, 'invoices', 'delete');
     if (limited) return limited;
@@ -65,4 +64,4 @@ export async function DELETE(
     console.error('[invoices payments DELETE]', err);
     return apiError(err);
   }
-}
+});

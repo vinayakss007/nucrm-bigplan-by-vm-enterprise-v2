@@ -9,12 +9,13 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { customPlugins, pluginExecutionLogs } from '@/drizzle/schema';
 import { eq, and, isNull, desc } from 'drizzle-orm';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 interface RouteContext {
   params: Promise<{ id: string }>;
 }
 
-export async function GET(request: NextRequest, context: RouteContext) {
+export const GET = withApiRoute(async (request: NextRequest, context: RouteContext) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -64,4 +65,4 @@ export async function GET(request: NextRequest, context: RouteContext) {
   } catch (err: unknown) {
     return apiError(err);
   }
-}
+});

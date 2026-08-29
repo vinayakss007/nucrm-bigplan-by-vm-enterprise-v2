@@ -12,15 +12,14 @@ import { eq, and, or, desc, sql } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
 import { concurrencyGuard } from '@/lib/api/concurrency';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 /**
  * GET /api/tenant/reports/[id]
  * Get saved report details
  */
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const GET = withApiRoute(async (request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -76,16 +75,14 @@ export async function GET(
     console.error('[Report] GET error:', error);
     return apiError(error);
   }
-}
+});
 
 /**
  * PATCH /api/tenant/reports/[id]
  * Update saved report
  */
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const PATCH = withApiRoute(async (request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }) => {
   try {
   const limited = await rateLimitMutating(request, 'reports', 'patch');
   if (limited) return limited;
@@ -143,16 +140,14 @@ export async function PATCH(
     console.error('[Report] PATCH error:', error);
     return apiError(error);
   }
-}
+});
 
 /**
  * DELETE /api/tenant/reports/[id]
  * Delete saved report
  */
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const DELETE = withApiRoute(async (request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }) => {
   try {
   const limited = await rateLimitMutating(request, 'reports', 'delete');
   if (limited) return limited;
@@ -184,16 +179,14 @@ export async function DELETE(
     console.error('[Report] DELETE error:', error);
     return apiError(error);
   }
-}
+});
 
 /**
  * POST /api/tenant/reports/[id]/run
  * Execute saved report
  */
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const POST = withApiRoute(async (request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -220,4 +213,4 @@ export async function POST(
     console.error('[Report Run] POST error:', error);
     return apiError(error);
   }
-}
+});

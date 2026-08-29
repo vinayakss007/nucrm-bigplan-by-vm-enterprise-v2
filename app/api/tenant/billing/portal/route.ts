@@ -22,8 +22,9 @@ import {
   stripeFetch,
   type StripeBillingPortalSession,
 } from '@/lib/stripe';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -68,4 +69,4 @@ export async function POST(request: NextRequest) {
     console.error('[Billing Portal]', err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
-}
+});

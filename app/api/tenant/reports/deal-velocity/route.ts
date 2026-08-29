@@ -9,6 +9,7 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { deals, dealStages } from '@/drizzle/schema';
 import { eq, and, sql, isNull } from 'drizzle-orm';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 /**
  * GET /api/tenant/reports/deal-velocity
@@ -21,7 +22,7 @@ import { eq, and, sql, isNull } from 'drizzle-orm';
  * - stage_distribution: current deal count per stage
  * - total_pipeline_value: sum of all active deal amounts
  */
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -102,4 +103,4 @@ export async function GET(request: NextRequest) {
   } catch (err: any) {
     return apiError(err);
   }
-}
+});

@@ -36,6 +36,7 @@ import {
   canTransition,
 } from '@/lib/offers';
 import { readJsonBody } from '@/lib/api/validate';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 interface SendBody {
   to_email?: string;
@@ -43,7 +44,7 @@ interface SendBody {
   message?: string;
 }
 
-export async function POST(req: NextRequest, { params }: { params: Promise<{ quoteId: string }> }) {
+export const POST = withApiRoute(async (req: NextRequest, { params }: { params: Promise<{ quoteId: string }> }) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -179,4 +180,4 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ quo
     console.error('[offers/send POST]', err);
     return apiError(err);
   }
-}
+});

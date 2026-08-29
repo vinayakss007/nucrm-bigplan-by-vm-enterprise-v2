@@ -1,0 +1,14 @@
+{
+  "task_id": "task-1615-rls-tenant-isolation",
+  "task_description": "Fix GitHub issue #1615 (CRITICAL, security): Postgres RLS is effectively non-functional in the default non-PgBouncer deploy because setTenantContext sets a session GUC on a pooled connection with no affinity to the request's subsequent data queries. Established per-request connection pinning (via AsyncLocalStorage) and a withApiRoute/withTenantScope wrapper so the tenant GUC is set on the same connection that runs the request's queries across the full authenticated surface; preserved the PgBouncer path and fail-closed policy; added automated cross-tenant tests that fail-without/pass-with the fix; updated deployment docs. Bug fix only — no new features. Branch fix/1615-rls-tenant-isolation, target main, not pushed/merged.",
+  "status": "completed",
+  "feature_order": ["FEAT-001", "FEAT-002"],
+  "blocked_reason": null,
+  "verification": {
+    "build": "pass",
+    "tests": "pass",
+    "test_quality": "pass",
+    "docker_build": "skipped",
+    "summary": "npm run typecheck exit 0; npx eslint . --max-warnings=0 exit 0 (zero warnings); full unit suite npx vitest run tests/unit/ => 325 files / 5376 tests passed. Proving tests are meaningful and fail-without/pass-with the fix: tests/unit/db-proxy-pinning.test.ts (DB-free proof the db proxy routes to the pinned client vs pool — the assertion !== 'pool' fails on unfixed code), tests/unit/with-api-route.test.ts (real withPinnedConnection primitive, asserts a client is pinned at the point the wrapped handler runs its later query), tests/unit/route-pinning-real-route.test.ts (imports the REAL production GET from app/api/tenant/analytics/stats/route.ts and asserts pinning at handler entry — fails if the route is reverted to a bare export), and tests/integration/rls-connection-affinity.test.ts (live-DB proof that a filter-less handler-shaped SELECT sees only tenant A rows via RLS alone; self-skips without Postgres, correct for CI). Coverage verified mechanically: grep for requireAuth route files lacking withApiRoute => 0 (388 routes wrapped); grep for requireTenantCtx pages lacking withTenantScope => 0 (23 pages wrapped). Skip list (public/webhook/auth/cron/SCIM/OAuth routes + logs/stream) is defensible: none call setTenantContext so they establish no RLS GUC. docker_build skipped (project deploys via pm2, not Docker; no image build applies and no live Postgres available in-sandbox). Semantic review reached APPROVED on v3. Two non-blocking follow-ups noted by the reviewer: add a CI/ESLint guard so future bare-export requireAuth routes can't silently re-open the gap, and document that wrapped handlers should not open their own inner partial pin."
+  }
+}

@@ -22,6 +22,7 @@ import {
   detectDuplicate,
 } from '@/lib/field-sales/card-scanner';
 import { logError } from '@/lib/errors-server';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 const scanBodySchema = z.object({
   text: z.string().min(1, 'Text is required').max(10000, 'Text too long'),
@@ -29,7 +30,7 @@ const scanBodySchema = z.object({
   source: z.enum(['business_card', 'qr_code']).optional(),
 });
 
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -160,4 +161,4 @@ export async function POST(request: NextRequest) {
     console.error('[contacts/scan POST]', err);
     return apiError(err, 'Internal server error', 500);
   }
-}
+});

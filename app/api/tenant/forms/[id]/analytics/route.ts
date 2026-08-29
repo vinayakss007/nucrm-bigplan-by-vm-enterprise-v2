@@ -9,6 +9,7 @@ import { forms, formSubmissions } from '@/drizzle/schema';
 import { eq, sql, and, gte } from 'drizzle-orm';
 import { requireAuth } from '@/lib/auth/middleware';
 import { readJsonBody } from '@/lib/api/validate';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 interface FormField {
   key: string;
@@ -82,10 +83,8 @@ export function computeFieldAnalytics(
   });
 }
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const GET = withApiRoute(async (req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -133,12 +132,10 @@ export async function GET(
   } catch {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
-}
+});
 
-export async function POST(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const POST = withApiRoute(async (req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -174,13 +171,13 @@ export async function POST(
   } catch {
     return NextResponse.json({ ok: false }, { status: 500 });
   }
-}
+});
 
-export async function OPTIONS() {
+export const OPTIONS = withApiRoute(async () => {
   return new Response(null, {
     headers: {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'POST, OPTIONS',
     },
   });
-}
+});

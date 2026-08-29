@@ -20,11 +20,10 @@ import { concurrencyGuard } from '@/lib/api/concurrency';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { updateAtRiskRuleSchema } from '@/lib/api/schemas';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
-export async function PATCH(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const PATCH = withApiRoute(async (req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }) => {
   try {
   const limited = await rateLimitMutating(req, 'reports', 'patch');
   if (limited) return limited;
@@ -77,12 +76,10 @@ export async function PATCH(
   } catch (error) {
     return apiError(error);
   }
-}
+});
 
-export async function DELETE(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const DELETE = withApiRoute(async (req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }) => {
   try {
   const limited = await rateLimitMutating(req, 'reports', 'delete');
   if (limited) return limited;
@@ -117,4 +114,4 @@ export async function DELETE(
   } catch (error) {
     return apiError(error);
   }
-}
+});

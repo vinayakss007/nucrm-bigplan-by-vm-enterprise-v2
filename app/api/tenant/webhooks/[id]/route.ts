@@ -13,8 +13,9 @@ import { eq, and, isNull } from 'drizzle-orm';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { updateWebhookSchema } from '@/lib/api/schemas';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
-export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> | { id: string } }) {
+export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params: Promise<{ id: string }> | { id: string } }) => {
   try {
   const limited = await rateLimitMutating(req, 'webhooks', 'patch');
   if (limited) return limited;
@@ -76,9 +77,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   } catch (err: any) { 
     return apiError(err); 
   }
-}
+});
 
-export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> | { id: string } }) {
+export const DELETE = withApiRoute(async (req: NextRequest, { params }: { params: Promise<{ id: string }> | { id: string } }) => {
   try {
   const limited = await rateLimitMutating(req, 'webhooks', 'delete');
   if (limited) return limited;
@@ -96,4 +97,4 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) { return apiError(err); }
-}
+});

@@ -33,6 +33,7 @@ import { checkRateLimit } from '@/lib/rate-limit';
 import { checkTokenAndLimits, recordUsage } from '@/lib/ai/common';
 import { logError } from '@/lib/errors-server';
 import { chat, GatewayError, type GatewayRequest } from '@/lib/ai/gateway';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 // FIX HIGH-03: Sanitize inputs to prevent prompt injection
 function sanitizeInput(input: string, maxLength: number = 500): string {
@@ -69,7 +70,7 @@ function activityActionFor(action: string): string {
   }
 }
 
-export async function POST(req: NextRequest) {
+export const POST = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -310,4 +311,4 @@ Score: ${sanitizedContact?.score ?? 0}/100`;
     logError({ error: err, context: 'ai-assistant' }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
     return apiError(err);
   }
-}
+});

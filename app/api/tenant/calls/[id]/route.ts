@@ -13,6 +13,7 @@ import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { concurrencyGuard } from '@/lib/api/concurrency';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 const updateCallSchema = z.object({
   direction: z.enum(['inbound', 'outbound']).optional(),
@@ -23,7 +24,7 @@ const updateCallSchema = z.object({
   assigned_to: z.string().uuid().optional().nullable(),
 });
 
-export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
   const limited = await rateLimitMutating(req, 'calls', 'patch');
   if (limited) return limited;
@@ -66,9 +67,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   } catch (err: unknown) {
     return apiError(err);
   }
-}
+});
 
-export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export const DELETE = withApiRoute(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
   const limited = await rateLimitMutating(req, 'calls', 'delete');
   if (limited) return limited;
@@ -90,4 +91,4 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   } catch (err: unknown) {
     return apiError(err);
   }
-}
+});

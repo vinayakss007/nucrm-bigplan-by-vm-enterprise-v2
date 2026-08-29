@@ -21,6 +21,7 @@ import { logAudit } from '@/lib/audit';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
 import { concurrencyGuard } from '@/lib/api/concurrency';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 const DEFAULTS = {
   password: {
@@ -62,7 +63,7 @@ function isDomain(s: string) {
   return /^(?:[a-z0-9-]+\.)+[a-z]{2,}$/i.test(s) && s.length <= 253;
 }
 
-export async function GET(req: NextRequest) {
+export const GET = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -91,9 +92,9 @@ export async function GET(req: NextRequest) {
   } catch (err: any) {
     return apiError(err);
   }
-}
+});
 
-export async function PATCH(req: NextRequest) {
+export const PATCH = withApiRoute(async (req: NextRequest) => {
   let ctx: Awaited<ReturnType<typeof requireAuth>> | undefined;
   try {
   const limited = await rateLimitMutating(req, 'settings', 'patch');
@@ -236,4 +237,4 @@ export async function PATCH(req: NextRequest) {
     void logError({ error: err, context: 'login-policy PATCH', ...tenantMeta(ctx) });
     return apiError(err);
   }
-}
+});

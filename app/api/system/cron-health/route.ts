@@ -15,8 +15,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { getCronHealth, getStaleJobs } from '@/lib/cron/health';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
-export async function GET(request: NextRequest): Promise<NextResponse> {
+export const GET = withApiRoute(async (request: NextRequest) => {
   const ctx = await requireAuth(request);
   if (ctx instanceof NextResponse) return ctx;
   if (!ctx.isSuperAdmin) {
@@ -37,4 +38,4 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     staleJobs: staleJobs.map(j => j.jobName),
     checkedAt: new Date().toISOString(),
   });
-}
+});

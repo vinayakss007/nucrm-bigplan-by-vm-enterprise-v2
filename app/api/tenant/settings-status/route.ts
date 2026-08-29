@@ -16,11 +16,12 @@ import { db } from '@/drizzle/db';
 import { tenants, users, tenantMembers } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 type StatusValue = 'configured' | 'default' | 'attention' | 'unknown';
 type StatusEntry = { status: StatusValue; hint?: string };
 
-export async function GET(req: NextRequest) {
+export const GET = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -133,4 +134,4 @@ export async function GET(req: NextRequest) {
   } catch (err: any) {
     return apiError(err);
   }
-}
+});

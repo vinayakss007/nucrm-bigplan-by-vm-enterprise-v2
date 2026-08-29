@@ -11,6 +11,7 @@ import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { sql } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 const ENTITY_CONFIG: Record<string, { label: string; searchFields: string[]; sortFields: string[]; defaultSort: string }> = {
   contacts: {
@@ -45,7 +46,7 @@ const ENTITY_CONFIG: Record<string, { label: string; searchFields: string[]; sor
   },
 };
 
-export async function GET(req: NextRequest) {
+export const GET = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -171,7 +172,7 @@ export async function GET(req: NextRequest) {
     console.error('[data-explorer GET]', err);
     return apiError(err);
   }
-}
+});
 
 const updateSchema = z.object({
   table: z.enum(['contacts', 'leads', 'deals', 'companies', 'tasks']),
@@ -201,7 +202,7 @@ const EDITABLE_FIELDS: Record<string, string[]> = {
   tasks: ['title', 'description', 'status', 'priority', 'due_date'],
 };
 
-export async function PUT(req: NextRequest) {
+export const PUT = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -247,14 +248,14 @@ export async function PUT(req: NextRequest) {
     console.error('[data-explorer PUT]', err);
     return apiError(err);
   }
-}
+});
 
 const deleteSchema = z.object({
   table: z.enum(['contacts', 'leads', 'deals', 'companies', 'tasks']),
   id: z.string().min(1),
 });
 
-export async function DELETE(req: NextRequest) {
+export const DELETE = withApiRoute(async (req: NextRequest) => {
   try {
   const limited = await rateLimitMutating(req, 'reports', 'delete');
   if (limited) return limited;
@@ -284,4 +285,4 @@ export async function DELETE(req: NextRequest) {
     console.error('[data-explorer DELETE]', err);
     return apiError(err);
   }
-}
+});

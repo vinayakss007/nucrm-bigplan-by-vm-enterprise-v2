@@ -13,11 +13,10 @@ import { eq } from 'drizzle-orm';
 import { BUILTIN_MODULES } from '@/lib/modules/registry';
 import { logSuperAdminAction } from '@/lib/audit/super-admin';
 import { readJsonBody } from '@/lib/api/validate';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
-export async function GET(
-  _req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const GET = withApiRoute(async (_req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }) => {
   try {
     const ctx = await requireAuth(_req);
     if (ctx instanceof NextResponse) return ctx;
@@ -53,12 +52,10 @@ export async function GET(
     console.error('[superadmin/plans/[id]/offerings GET]', err);
     return apiError(err);
   }
-}
+});
 
-export async function PUT(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const PUT = withApiRoute(async (req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -125,4 +122,4 @@ export async function PUT(
     console.error('[superadmin/plans/[id]/offerings PUT]', err);
     return apiError(err);
   }
-}
+});

@@ -6,10 +6,14 @@
 import { requireTenantCtx } from '@/lib/tenant/context';
 import { redirect } from 'next/navigation';
 import AuditLogClient from '@/components/tenant/settings/audit-client';
+import { withTenantScope } from '@/lib/api/with-api-route';
 
 export default async function AuditLogPage() {
+  return withTenantScope(async () => {
   const ctx = await requireTenantCtx();
   if (!ctx.isAdmin) redirect('/tenant/dashboard');
 
   return <AuditLogClient />;
+
+  });
 }

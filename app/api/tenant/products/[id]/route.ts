@@ -17,6 +17,7 @@ import { withConcurrencyGuard } from '@/lib/concurrency';
 import { updatedAtMs } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { apiError } from '@/lib/api-error';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -27,7 +28,7 @@ const updateProductSchema = z.object({
   base_price: z.coerce.number().min(0).optional(),
 });
 
-export async function GET(request: NextRequest, { params }: RouteContext) {
+export const GET = withApiRoute(async (request: NextRequest, { params }: RouteContext) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -55,9 +56,9 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
     console.error('[products GET by id]', error);
     return apiError(error);
   }
-}
+});
 
-export async function PATCH(request: NextRequest, { params }: RouteContext) {
+export const PATCH = withApiRoute(async (request: NextRequest, { params }: RouteContext) => {
   try {
   const limited = await rateLimitMutating(request, 'contacts', 'patch');
   if (limited) return limited;
@@ -119,9 +120,9 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
     console.error('[products PATCH]', error);
     return apiError(error);
   }
-}
+});
 
-export async function DELETE(request: NextRequest, { params }: RouteContext) {
+export const DELETE = withApiRoute(async (request: NextRequest, { params }: RouteContext) => {
   try {
   const limited = await rateLimitMutating(request, 'contacts', 'delete');
   if (limited) return limited;
@@ -151,4 +152,4 @@ export async function DELETE(request: NextRequest, { params }: RouteContext) {
     console.error('[products DELETE]', error);
     return apiError(error);
   }
-}
+});

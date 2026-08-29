@@ -12,6 +12,7 @@ import { eq, sql, desc, asc } from 'drizzle-orm';
 import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { logSuperAdminAction } from '@/lib/audit/super-admin';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 const tokenControlSchema = z.object({
   action: z.enum(['update_global_budget', 'update_tenant_limit', 'ack_alert']),
@@ -28,7 +29,7 @@ const tokenControlSchema = z.object({
  *  - View usage alerts and anomalies
  */
 
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -111,9 +112,9 @@ export async function GET(request: NextRequest) {
     console.error('[api/token-control] GET error:', err.message);
     return apiError(err);
   }
-}
+});
 
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -245,5 +246,5 @@ export async function POST(request: NextRequest) {
     console.error('[api/token-control] POST error:', err.message);
     return apiError(err);
   }
-}
+});
 

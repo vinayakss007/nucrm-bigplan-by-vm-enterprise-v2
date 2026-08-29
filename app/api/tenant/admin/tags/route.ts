@@ -25,6 +25,7 @@ import { apiError } from '@/lib/api-error';
 import { logAudit } from '@/lib/audit';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { tagActionSchema } from '@/lib/api/schemas';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 type Counts = { leads: number; contacts: number; companies: number; total: number };
 
@@ -66,7 +67,7 @@ async function aggregateTags(tenantId: string): Promise<Array<{ tag: string } & 
     .sort((a, b) => b.total - a.total || a.tag.localeCompare(b.tag));
 }
 
-export async function GET(req: NextRequest) {
+export const GET = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -80,7 +81,7 @@ export async function GET(req: NextRequest) {
   } catch (err: any) {
     return apiError(err);
   }
-}
+});
 
 async function renameAcrossTables(tenantId: string, fromTag: string, toTag: string) {
   // Use array_agg(DISTINCT) on unnest(array_replace(...)) to dedupe automatically.
@@ -125,7 +126,7 @@ async function deleteAcrossTables(tenantId: string, tag: string) {
 
 const _TAG_RE = /^[\w \-./&]{1,40}$/;
 
-export async function POST(req: NextRequest) {
+export const POST = withApiRoute(async (req: NextRequest) => {
   let ctx: Awaited<ReturnType<typeof requireAuth>> | undefined;
   try {
     ctx = await requireAuth(req);
@@ -182,4 +183,4 @@ export async function POST(req: NextRequest) {
     void logError({ error: err, context: 'tags POST', ...tenantMeta(ctx) });
     return apiError(err);
   }
-}
+});

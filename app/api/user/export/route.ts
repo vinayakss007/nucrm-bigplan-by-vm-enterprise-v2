@@ -14,8 +14,9 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { users, sessions, activities, notifications, tenantMembers, tenants } from '@/drizzle/schema';
 import { eq, desc } from 'drizzle-orm';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
-export async function GET(req: NextRequest) {
+export const GET = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -112,4 +113,4 @@ export async function GET(req: NextRequest) {
     console.error('[UserExport] Error:', err);
     return apiError(err);
   }
-}
+});

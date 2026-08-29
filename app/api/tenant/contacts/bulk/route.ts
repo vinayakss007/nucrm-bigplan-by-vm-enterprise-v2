@@ -23,10 +23,11 @@ import { logAudit } from '@/lib/audit';
 import { logError } from '@/lib/errors-server';
 import { invalidateWidgetCache } from '@/lib/dashboard/widget-cache';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 const MAX_BULK = 500;
 
-export async function POST(req: NextRequest) {
+export const POST = withApiRoute(async (req: NextRequest) => {
   const limited = await rateLimitMutating(req, 'bulk', 'post');
   if (limited) return limited;
  
@@ -423,5 +424,5 @@ export async function POST(req: NextRequest) {
     await logError({ error: err, context: 'contacts/bulk', tenantId: ctx?.tenantId });
     return apiError(err);
   }
-}
+});
 

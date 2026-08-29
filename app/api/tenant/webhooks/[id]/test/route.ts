@@ -10,8 +10,9 @@ import { db } from '@/drizzle/db';
 import { integrations } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
 import { safeFetch } from '@/lib/security/ssrf';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
-export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> | { id: string } }) {
+export const POST = withApiRoute(async (req: NextRequest, { params }: { params: Promise<{ id: string }> | { id: string } }) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -91,4 +92,4 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   } catch (err: unknown) {
     return apiError(err);
   }
-}
+});

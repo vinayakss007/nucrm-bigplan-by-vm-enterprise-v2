@@ -11,6 +11,7 @@ import { contacts, deals, activities, leads, tasks, tenants, contactTags, follow
 import { eq, and, sql } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 /**
  * POST /api/tenant/contacts/merge
@@ -22,7 +23,7 @@ import { readJsonBody } from '@/lib/api/validate';
  * reassigned to the primary contact. Tags, custom fields, follow-ups, and
  * conversion links are merged/preserved. The duplicate is then soft-deleted.
  */
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const limited = await rateLimitMutating(request, 'contacts-merge', 'post');
     if (limited) return limited;
@@ -205,4 +206,4 @@ export async function POST(request: NextRequest) {
   } catch (err: any) {
     return apiError(err);
   }
-}
+});

@@ -9,6 +9,7 @@ import { validateBody, validateQuery, readJsonBody } from '@/lib/api/validate';
 import { createContactSchema, contactQuerySchema } from '@/lib/api/schemas';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
+import { withApiRoute } from '@/lib/api/with-api-route';
 import { checkLimit } from '@/lib/usage/middleware';
 import { db } from '@/drizzle/db';
 import { contacts, companies, users, tenants, activities } from '@/drizzle/schema';
@@ -28,7 +29,10 @@ function canViewAll(ctx: any) {
   return ctx.isAdmin || ctx.permissions?.['all'] || ctx.permissions?.['contacts.view_all'];
 }
 
-export async function GET(request: NextRequest) {
+// #1615: withApiRoute pins ONE connection for the whole handler body so the
+// auth check's setTenantContext() and every db query below (count + list) share
+// it and RLS stays enforced on the pinned connection. No-op under PgBouncer.
+export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -125,9 +129,9 @@ export async function GET(request: NextRequest) {
     console.error('[contacts GET]', err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
-}
+});
 
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -261,4 +265,4 @@ export async function POST(request: NextRequest) {
     console.error('[contacts POST]', err);
     return apiError(err, "Internal server error", 500);
   }
-}
+});

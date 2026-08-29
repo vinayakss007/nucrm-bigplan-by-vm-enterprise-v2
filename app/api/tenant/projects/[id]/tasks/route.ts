@@ -12,13 +12,12 @@ import { db } from '@/drizzle/db';
 import { projects, projectTasks, tasks, users } from '@/drizzle/schema';
 import { eq, and, isNull } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const GET = withApiRoute(async (request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -69,12 +68,10 @@ export async function GET(
     console.error('[project-tasks GET]', err);
     return apiError(err);
   }
-}
+});
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const POST = withApiRoute(async (request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -141,12 +138,10 @@ export async function POST(
     console.error('[project-tasks POST]', err);
     return apiError(err);
   }
-}
+});
 
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const DELETE = withApiRoute(async (request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }) => {
   try {
   const limited = await rateLimitMutating(request, 'projects', 'delete');
   if (limited) return limited;
@@ -199,4 +194,4 @@ export async function DELETE(
     console.error('[project-tasks DELETE]', err);
     return apiError(err);
   }
-}
+});

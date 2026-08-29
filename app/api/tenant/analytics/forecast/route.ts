@@ -11,12 +11,13 @@ import { dealForecasts } from '@/drizzle/schema';
 import { revenueForecastSummary } from '@/drizzle/schema';
 import { eq, desc, sql } from 'drizzle-orm';
 import { readJsonBody } from '@/lib/api/validate';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 /**
  * GET /api/tenant/analytics/forecast
  * Get deal forecasts and revenue projections
  */
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -44,13 +45,13 @@ export async function GET(request: NextRequest) {
     console.error('[Forecast Analytics] GET error:', error);
     return apiError(error);
   }
-}
+});
 
 /**
  * POST /api/tenant/analytics/forecast/calculate
  * Calculate win probability for a deal
  */
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -85,4 +86,4 @@ export async function POST(request: NextRequest) {
     console.error('[Forecast Calculate] POST error:', error);
     return apiError(error);
   }
-}
+});

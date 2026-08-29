@@ -9,13 +9,14 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { backupRecords, backupSchedules } from '@/drizzle/schema';
 import { desc, eq, sql } from 'drizzle-orm';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 /**
  * GET /api/system/backup-status
  * Returns backup health information — last backup, next scheduled, totals.
  * Protected: superadmin only.
  */
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -67,4 +68,4 @@ export async function GET(request: NextRequest) {
   } catch (err: any) {
     return apiError(err);
   }
-}
+});

@@ -12,12 +12,13 @@ import { eq, and, isNull } from 'drizzle-orm';
 import { executePluginAction } from '@/lib/plugins/engine';
 import type { PluginDefinition, PluginAction, PluginAuthConfig } from '@/lib/plugins/types';
 import { readJsonBody } from '@/lib/api/validate';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 interface RouteContext {
   params: Promise<{ id: string }>;
 }
 
-export async function POST(request: NextRequest, context: RouteContext) {
+export const POST = withApiRoute(async (request: NextRequest, context: RouteContext) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -74,4 +75,4 @@ export async function POST(request: NextRequest, context: RouteContext) {
   } catch (err: unknown) {
     return apiError(err);
   }
-}
+});

@@ -12,10 +12,11 @@ import { eq, and, desc } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 const PORTAL_CONFIG_KEY = 'portal_config';
 
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -37,9 +38,9 @@ export async function GET(request: NextRequest) {
     console.error('[portal clients GET]', err);
     return apiError(err);
   }
-}
+});
 
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -97,9 +98,9 @@ export async function POST(request: NextRequest) {
     console.error('[portal clients POST]', err);
     return apiError(err);
   }
-}
+});
 
-export async function DELETE(request: NextRequest) {
+export const DELETE = withApiRoute(async (request: NextRequest) => {
   try {
   const limited = await rateLimitMutating(request, 'portalClients', 'delete');
   if (limited) return limited;
@@ -123,4 +124,4 @@ export async function DELETE(request: NextRequest) {
     console.error('[portal clients DELETE]', err);
     return apiError(err);
   }
-}
+});

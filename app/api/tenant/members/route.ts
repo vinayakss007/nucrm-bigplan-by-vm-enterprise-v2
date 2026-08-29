@@ -21,8 +21,9 @@ import { hashPassword } from '@/lib/auth/session';
 import { concurrencyGuard, checkStaleUpdate } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { deleteUserSessions } from '@/lib/cache/sessions';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -120,9 +121,9 @@ export async function POST(request: NextRequest) {
     console.error('[members POST]', err);
     return apiError(err);
   }
-}
+});
 
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -168,9 +169,9 @@ export async function GET(request: NextRequest) {
     console.error('[members GET]', err);
     return apiError(err);
   }
-}
+});
 
-export async function PATCH(request: NextRequest) {
+export const PATCH = withApiRoute(async (request: NextRequest) => {
   try {
   const limited = await rateLimitMutating(request, 'settings', 'patch');
   if (limited) return limited;
@@ -333,4 +334,4 @@ export async function PATCH(request: NextRequest) {
     console.error('[members PATCH]', err);
     return apiError(err);
   }
-}
+});

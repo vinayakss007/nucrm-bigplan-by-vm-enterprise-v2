@@ -13,11 +13,12 @@ import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { updateRoleSchema } from '@/lib/api/schemas';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { concurrencyGuard } from '@/lib/api/concurrency';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function PATCH(request: NextRequest, { params }: any) {
+export const PATCH = withApiRoute(async (request: NextRequest, { params }: any) => {
   try {
   const limited = await rateLimitMutating(request, 'roles', 'patch');
   if (limited) return limited;
@@ -53,12 +54,12 @@ export async function PATCH(request: NextRequest, { params }: any) {
   } catch (err: any) { 
     return apiError(err); 
   }
-}
+});
 
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function DELETE(request: NextRequest, { params }: any) {
+export const DELETE = withApiRoute(async (request: NextRequest, { params }: any) => {
   try {
   const limited = await rateLimitMutating(request, 'roles', 'delete');
   if (limited) return limited;
@@ -88,4 +89,4 @@ export async function DELETE(request: NextRequest, { params }: any) {
   } catch (err: any) { 
     return apiError(err); 
   }
-}
+});

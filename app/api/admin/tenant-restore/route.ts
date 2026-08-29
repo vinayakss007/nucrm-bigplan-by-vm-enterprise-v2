@@ -13,6 +13,7 @@ import { tenants, users, tenantBackupRecords, tenantRestoreRecords } from '@/dri
 import { eq, and, desc, sql } from 'drizzle-orm';
 import { TenantDataExporter } from '@/lib/tenant-data-export';
 import { TenantDataImporter } from '@/lib/tenant-data-import';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 const backupSchema = z.object({
   tenantId: z.string().min(1),
@@ -36,7 +37,7 @@ const restoreSchema = z.object({
  * DELETE /api/admin/tenant-restore?backupId=xxx   → Delete a tenant backup
  */
 
-export async function GET(req: NextRequest) {
+export const GET = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -110,9 +111,9 @@ export async function GET(req: NextRequest) {
     console.error('[Tenant Restore GET] Error:', err);
     return apiError(err instanceof Error ? err : new Error(String(err)));
   }
-}
+});
 
-export async function POST(req: NextRequest) {
+export const POST = withApiRoute(async (req: NextRequest) => {
   const ctx = await requireAuth(req);
   if (ctx instanceof NextResponse) return ctx;
   if (!ctx.isSuperAdmin) {
@@ -163,9 +164,9 @@ export async function POST(req: NextRequest) {
     console.error('[Tenant Restore POST] Error:', err);
     return apiError(err instanceof Error ? err : new Error(String(err)));
   }
-}
+});
 
-export async function PUT(req: NextRequest) {
+export const PUT = withApiRoute(async (req: NextRequest) => {
   const ctx = await requireAuth(req);
   if (ctx instanceof NextResponse) return ctx;
   if (!ctx.isSuperAdmin) {
@@ -256,9 +257,9 @@ export async function PUT(req: NextRequest) {
     console.error('[Tenant Restore PUT] Error:', err);
     return apiError(err instanceof Error ? err : new Error(String(err)));
   }
-}
+});
 
-export async function DELETE(req: NextRequest) {
+export const DELETE = withApiRoute(async (req: NextRequest) => {
   const ctx = await requireAuth(req);
   if (ctx instanceof NextResponse) return ctx;
   if (!ctx.isSuperAdmin) {
@@ -286,7 +287,7 @@ export async function DELETE(req: NextRequest) {
     console.error('[Tenant Restore DELETE] Error:', err);
     return apiError(err instanceof Error ? err : new Error(String(err)));
   }
-}
+});
 
 // ── Background Backup Function ──────────────────────────────────────────────
 

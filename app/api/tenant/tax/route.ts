@@ -14,6 +14,7 @@ import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { concurrencyGuard } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 const createTaxRateSchema = z.object({
   name: z.string().min(1, 'name is required'),
@@ -39,7 +40,7 @@ const updateTaxRateSchema = z.object({
  * List tax rates for the tenant.
  * Module-gated to 'sales-quotes'.
  */
-export async function GET(req: NextRequest) {
+export const GET = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -65,14 +66,14 @@ export async function GET(req: NextRequest) {
   } catch (err: any) {
     return apiError(err);
   }
-}
+});
 
 /**
  * POST /api/tenant/tax
  * Create a new tax rate.
  * Module-gated to 'sales-quotes'.
  */
-export async function POST(req: NextRequest) {
+export const POST = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -101,14 +102,14 @@ export async function POST(req: NextRequest) {
   } catch (err: any) {
     return apiError(err);
   }
-}
+});
 
 /**
  * PUT /api/tenant/tax
  * Update a tax rate.
  * Module-gated to 'sales-quotes'.
  */
-export async function PUT(req: NextRequest) {
+export const PUT = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -146,14 +147,14 @@ export async function PUT(req: NextRequest) {
   } catch (err: any) {
     return apiError(err);
   }
-}
+});
 
 /**
  * DELETE /api/tenant/tax
  * Soft-delete a tax rate (sets isActive to false).
  * Module-gated to 'sales-quotes'.
  */
-export async function DELETE(req: NextRequest) {
+export const DELETE = withApiRoute(async (req: NextRequest) => {
   try {
   const limited = await rateLimitMutating(req, 'taxRates', 'delete');
   if (limited) return limited;
@@ -185,4 +186,4 @@ export async function DELETE(req: NextRequest) {
   } catch (err: any) {
     return apiError(err);
   }
-}
+});

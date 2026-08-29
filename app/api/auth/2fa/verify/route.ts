@@ -14,6 +14,7 @@ import { z } from 'zod';
 import { verifyTOTP } from '@/lib/auth/totp';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 const verify2faBodySchema = z.object({
   token: z.string().regex(/^\d{6}$/, 'Token must be a 6-digit number'),
@@ -25,7 +26,7 @@ function generateBackupCodes(count = 8): { plain: string[]; hashed: string[] } {
   return { plain, hashed };
 }
 
-export async function POST(req: NextRequest) {
+export const POST = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -75,4 +76,4 @@ export async function POST(req: NextRequest) {
   } catch (err: any) { 
     return apiError(err); 
   }
-}
+});

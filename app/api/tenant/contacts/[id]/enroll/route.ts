@@ -12,11 +12,12 @@ import { db } from '@/drizzle/db';
 import { contacts, sequences, sequenceSteps, sequenceEnrollments } from '@/drizzle/schema';
 import { eq, and, asc, sql } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function POST(req: NextRequest, { params }: any) {
+export const POST = withApiRoute(async (req: NextRequest, { params }: any) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -104,12 +105,12 @@ export async function POST(req: NextRequest, { params }: any) {
   } catch (err: any) { 
     return apiError(err); 
   }
-}
+});
 
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function DELETE(req: NextRequest, { params }: any) {
+export const DELETE = withApiRoute(async (req: NextRequest, { params }: any) => {
   try {
   const limited = await rateLimitMutating(req, 'contacts', 'delete');
   if (limited) return limited;
@@ -142,4 +143,4 @@ export async function DELETE(req: NextRequest, { params }: any) {
   } catch (err: any) { 
     return apiError(err); 
   }
-}
+});

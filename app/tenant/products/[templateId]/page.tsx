@@ -7,8 +7,10 @@ import { requireTenantCtx } from '@/lib/tenant/context';
 import { PRODUCT_REGISTRY } from '@/lib/products/registry';
 import { notFound } from 'next/navigation';
 import ProductEntryClient from '@/components/tenant/product-entry-client';
+import { withTenantScope } from '@/lib/api/with-api-route';
 
 export default async function ProductEntryPage({ params }: { params: Promise<{ templateId: string }> }) {
+  return withTenantScope(async () => {
   const ctx = await requireTenantCtx();
   const { templateId } = await params;
 
@@ -24,4 +26,6 @@ export default async function ProductEntryPage({ params }: { params: Promise<{ t
       userId={ctx.userId}
     />
   );
+
+  });
 }

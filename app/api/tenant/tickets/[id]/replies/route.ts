@@ -10,8 +10,9 @@ import { db } from '@/drizzle/db';
 import { ticketReplies, supportTickets } from '@/drizzle/schema';
 import { eq, and, isNull } from 'drizzle-orm';
 import { readJsonBody } from '@/lib/api/validate';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
-export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export const POST = withApiRoute(async (request: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -55,4 +56,4 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     console.error('[ticket reply POST]', err);
     return apiError(err);
   }
-}
+});

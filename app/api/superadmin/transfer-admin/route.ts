@@ -14,6 +14,7 @@ import { eq } from 'drizzle-orm';
 import { logSuperAdminAction } from '@/lib/audit/super-admin';
 import { verifyPassword } from '@/lib/auth/session';
 import { deleteUserSessions } from '@/lib/cache/sessions';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 const schema = z.object({
   targetUserId: z.string().min(1),
@@ -28,7 +29,7 @@ const schema = z.object({
  * The caller loses super admin status; the target gains it.
  * This is the ONLY way to change super admin ownership besides initial setup.
  */
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -104,5 +105,5 @@ export async function POST(request: NextRequest) {
     console.error('[superadmin/transfer-admin POST]', err);
     return apiError(err);
   }
-}
+});
 

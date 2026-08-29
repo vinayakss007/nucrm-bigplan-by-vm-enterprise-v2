@@ -14,8 +14,9 @@ import { modules, tenantModules } from '@/drizzle/schema';
 import { eq, sql } from 'drizzle-orm';
 import { BUILTIN_MODULES } from '@/lib/modules/registry';
 import { logSuperAdminAction } from '@/lib/audit/super-admin';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
-export async function GET(req: NextRequest) {
+export const GET = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -58,7 +59,7 @@ export async function GET(req: NextRequest) {
     console.error('[superadmin/modules GET]', err);
     return apiError(err);
   }
-}
+});
 
 const updateModuleSchema = z.object({
   module_id: z.string().min(1),
@@ -66,7 +67,7 @@ const updateModuleSchema = z.object({
   is_available: z.boolean().optional(),
 });
 
-export async function PATCH(req: NextRequest) {
+export const PATCH = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -128,4 +129,4 @@ export async function PATCH(req: NextRequest) {
     console.error('[superadmin/modules PATCH]', err);
     return apiError(err);
   }
-}
+});

@@ -12,6 +12,7 @@ import { eq, and, isNull } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
 import { escapeCSV } from '@/lib/export';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 /**
  * GET /api/tenant/export
@@ -20,12 +21,12 @@ import { escapeCSV } from '@/lib/export';
  * message so clients and load-test tooling get a standard-correct response
  * instead of a bare 405.
  */
-export async function GET() {
+export const GET = withApiRoute(async () => {
   return NextResponse.json(
     { error: 'Method Not Allowed. Use POST /api/tenant/export with a JSON body { entity, format }.' },
     { status: 405, headers: { Allow: 'POST' } },
   );
-}
+});
 
 /**
  * POST /api/tenant/export
@@ -34,7 +35,7 @@ export async function GET() {
  * Body: { entity: 'contacts'|'companies'|'deals'|'leads'|'tasks'|'activities', format?: 'json'|'csv' }
  * Returns the data immediately for small datasets.
  */
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const limited = await rateLimitMutating(request, 'export', 'post');
     if (limited) return limited;
@@ -236,4 +237,4 @@ export async function POST(request: NextRequest) {
   } catch (err: any) {
     return apiError(err);
   }
-}
+});

@@ -13,6 +13,7 @@ import { z } from 'zod';
 import { concurrencyGuard } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 const updateCannedSchema = z.object({
   category: z.string().min(1).max(100).optional(),
@@ -21,7 +22,7 @@ const updateCannedSchema = z.object({
   shortcut: z.string().max(50).optional(),
 });
 
-export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export const PATCH = withApiRoute(async (request: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
   const limited = await rateLimitMutating(request, 'cannedResponses', 'patch');
   if (limited) return limited;
@@ -54,9 +55,9 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   } catch (err: unknown) {
     return apiError(err);
   }
-}
+});
 
-export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export const DELETE = withApiRoute(async (request: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
   const limited = await rateLimitMutating(request, 'cannedResponses', 'delete');
   if (limited) return limited;
@@ -76,4 +77,4 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
   } catch (err: unknown) {
     return apiError(err);
   }
-}
+});

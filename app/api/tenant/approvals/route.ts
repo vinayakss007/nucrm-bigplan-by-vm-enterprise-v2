@@ -28,10 +28,11 @@ import { approvalRequests, users } from '@/drizzle/schema/core';
 import { eq, and, desc, sql, count } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { apiError } from '@/lib/api-error';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 const VALID_STATUSES = new Set(['pending', 'approved', 'rejected', 'all']);
 
-export async function GET(req: NextRequest) {
+export const GET = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -118,4 +119,4 @@ export async function GET(req: NextRequest) {
   } catch (err) {
     return apiError(err);
   }
-}
+});

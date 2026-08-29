@@ -10,9 +10,22 @@ import { db } from '@/drizzle/db';
 import { tenants, users, plans, tenantMembers, roles } from '@/drizzle/schema';
 import { eq, and, or, sql, desc } from 'drizzle-orm';
 import { setTenantContext } from '@/lib/db/rls';
+import { withPinnedConnection } from '@/lib/db/request-connection';
 import type { TenantContext, TenantStatus, TenantSettings } from '@/types';
 
+/**
+ * #1615: pin ONE PoolClient for the whole server-component context resolution
+ * so setTenantContext() (session GUC) and the tenant/membership lookups here run
+ * on the SAME connection. No-op under PgBouncer. Note: Server Component data
+ * queries that run in the page AFTER requireTenantCtx() returns are outside this
+ * ALS scope — see lib/db/request-connection.ts header and DEPLOYMENT.md for the
+ * documented scope boundary.
+ */
 export async function requireTenantCtx(): Promise<TenantContext> {
+  return withPinnedConnection(() => requireTenantCtxInner());
+}
+
+async function requireTenantCtxInner(): Promise<TenantContext> {
   const cookieStore = await cookies();
   const token = cookieStore.get('nucrm_session')?.value;
   

@@ -11,8 +11,10 @@ import { companies, contacts as contactsTable, leads as leadsTable, deals as dea
 import { eq, and, sql, desc } from 'drizzle-orm';
 import { formatDate, formatCurrency } from '@/lib/utils';
 import { ArrowLeft, Globe, Phone, Building2, Users, TrendingUp } from 'lucide-react';
+import { withTenantScope } from '@/lib/api/with-api-route';
 
 export default async function CompanyDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  return withTenantScope(async () => {
   const { id: companyId } = await params;
   const ctx = await requireTenantCtx();
   const tid = ctx.tenantId;
@@ -284,4 +286,5 @@ export default async function CompanyDetailPage({ params }: { params: Promise<{ 
       </div>
     </div>
   );
+  });
 }

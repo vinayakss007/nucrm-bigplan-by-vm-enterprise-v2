@@ -13,8 +13,9 @@ import { db } from '@/drizzle/db';
 import { automations, automationRuns, users } from '@/drizzle/schema';
 import { eq, and, sql, desc, isNull } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
-export async function GET(req: NextRequest) {
+export const GET = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -63,9 +64,9 @@ export async function GET(req: NextRequest) {
     console.error('[automations GET]', err);
     return apiError(err);
   }
-}
+});
 
-export async function POST(req: NextRequest) {
+export const POST = withApiRoute(async (req: NextRequest) => {
   try {
     const limited = await rateLimitMutating(req, 'automations', 'post');
     if (limited) return limited;
@@ -111,4 +112,4 @@ export async function POST(req: NextRequest) {
     console.error('[automations POST]', err);
     return apiError(err);
   }
-}
+});

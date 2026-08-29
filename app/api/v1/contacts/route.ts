@@ -19,6 +19,7 @@ import { handleError, ValidationError } from '@/lib/errors';
 import { devLogger } from '@/lib/dev-logger';
 import { syncCalculatedFields } from '@/lib/formula/sync';
 import { SUNSET_DATE, MIGRATION_GUIDE_URL } from '@/lib/api/deprecation';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 function addDeprecationHeaders(response: NextResponse) {
   response.headers.set('Deprecation', 'true');
@@ -33,7 +34,7 @@ function addDeprecationHeaders(response: NextResponse) {
  * GET /api/v1/contacts
  * List all contacts for current tenant
  */
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     // Authenticate and get tenant context
     const ctx = await requireAuth(request);
@@ -122,13 +123,13 @@ export async function GET(request: NextRequest) {
     devLogger.error(error as Error, 'GET /api/v1/contacts');
     return handleError(error);
   }
-}
+});
 
 /**
  * POST /api/v1/contacts
  * Create a new contact
  */
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -198,4 +199,4 @@ export async function POST(request: NextRequest) {
     devLogger.error(error as Error, 'POST /api/v1/contacts');
     return handleError(error);
   }
-}
+});

@@ -10,6 +10,7 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { isPayUConfigured, createPaymentLink } from '@/lib/payu';
 import crypto from 'crypto';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 // This is an admin-initiated payment-link request (NOT the PayU provider
 // callback — that lives at /api/webhooks/payu). The payload is fully
@@ -33,7 +34,7 @@ const payuPaymentSchema = z.object({
  * Body: { quoteId, amount, customerName, customerEmail, customerPhone }
  * Returns: { action, params: { key, txnid, amount, hash, ... } }
  */
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -75,4 +76,4 @@ export async function POST(request: NextRequest) {
     const message = err instanceof Error ? err.message : 'Internal server error';
     return NextResponse.json({ error: message }, { status: 500 });
   }
-}
+});

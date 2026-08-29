@@ -15,6 +15,7 @@ import { getS3Config } from '@/lib/storage/s3-config';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
 import { randomUUID } from 'crypto';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 // H-C: upload validation, mirroring app/api/tenant/documents/upload-url.
 // Allowlist (not blocklist): anything not listed is rejected, preventing stored
@@ -42,7 +43,7 @@ function extractExtension(name: string): string {
   return ext;
 }
 
-export async function GET(req: NextRequest) {
+export const GET = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -107,9 +108,9 @@ export async function GET(req: NextRequest) {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) { return apiError(err); }
-}
+});
 
-export async function POST(req: NextRequest) {
+export const POST = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -218,9 +219,9 @@ export async function POST(req: NextRequest) {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) { return apiError(err); }
-}
+});
 
-export async function DELETE(req: NextRequest) {
+export const DELETE = withApiRoute(async (req: NextRequest) => {
   try {
   const limited = await rateLimitMutating(req, 'documents', 'delete');
   if (limited) return limited;
@@ -252,4 +253,4 @@ export async function DELETE(req: NextRequest) {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) { return apiError(err); }
-}
+});

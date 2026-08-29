@@ -11,15 +11,14 @@ import { requireAuth, can } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { contacts, contactLifecycleHistory, users } from '@/drizzle/schema';
 import { eq, and, desc, sql } from 'drizzle-orm';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 /**
  * POST /api/tenant/contacts/[id]/lifecycle
  * Update contact lifecycle stage
  */
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const POST = withApiRoute(async (request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -82,16 +81,14 @@ export async function POST(
     console.error('[Lifecycle] POST error:', error);
     return apiError(error);
   }
-}
+});
 
 /**
  * GET /api/tenant/contacts/[id]/lifecycle
  * Get contact lifecycle history
  */
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const GET = withApiRoute(async (request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -129,4 +126,4 @@ export async function GET(
     console.error('[Lifecycle] GET error:', error);
     return apiError(error);
   }
-}
+});

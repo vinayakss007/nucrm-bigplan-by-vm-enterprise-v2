@@ -114,6 +114,14 @@ vi.mock('@/lib/tenant/request-context', () => ({
   withRequestId: <T>(_requestId: string, fn: () => T): T => fn(),
 }));
 
+// #1615: requireAuth now wraps its body in withPinnedConnection to pin one
+// PoolClient for the auth + setTenantContext path. In these unit tests there is
+// no real pool, so stub it to run the callback directly (no client acquired).
+vi.mock('@/lib/db/request-connection', () => ({
+  withPinnedConnection: <T>(fn: () => Promise<T>): Promise<T> => fn(),
+  getPinnedClient: () => undefined,
+}));
+
 vi.mock('@/lib/modules/registry', () => ({
   ModuleRegistry: { hasModule: m.hasModule, hasFeature: m.hasFeature },
 }));

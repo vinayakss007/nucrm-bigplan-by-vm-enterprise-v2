@@ -16,11 +16,12 @@ import { fireWebhooks } from '@/lib/webhooks';
 import { concurrencyGuard } from '@/lib/api/concurrency';
 import { logError } from '@/lib/errors-server';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function GET(req: NextRequest, { params }: any) {
+export const GET = withApiRoute(async (req: NextRequest, { params }: any) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -59,12 +60,12 @@ export async function GET(req: NextRequest, { params }: any) {
     console.error('[company GET]', err);
     return apiError(err); 
   }
-}
+});
 
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function PATCH(req: NextRequest, { params }: any) {
+export const PATCH = withApiRoute(async (req: NextRequest, { params }: any) => {
   try {
   const limited = await rateLimitMutating(req, 'companies', 'patch');
   if (limited) return limited;
@@ -152,12 +153,12 @@ export async function PATCH(req: NextRequest, { params }: any) {
     console.error('[company PATCH]', err);
     return apiError(err); 
   }
-}
+});
 
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function DELETE(req: NextRequest, { params }: any) {
+export const DELETE = withApiRoute(async (req: NextRequest, { params }: any) => {
   try {
   const limited = await rateLimitMutating(req, 'companies', 'delete');
   if (limited) return limited;
@@ -202,4 +203,4 @@ export async function DELETE(req: NextRequest, { params }: any) {
     console.error('[company DELETE]', err);
     return apiError(err); 
   }
-}
+});

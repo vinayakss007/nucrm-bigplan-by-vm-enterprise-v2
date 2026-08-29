@@ -13,8 +13,9 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { apiError } from '@/lib/api-error';
 import { getAtRiskDeals } from '@/lib/ai/at-risk';
 import { requireAiFeature } from '@/lib/ai/plan-gate';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
-export async function GET(req: NextRequest) {
+export const GET = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -31,4 +32,4 @@ export async function GET(req: NextRequest) {
   } catch (error) {
     return apiError(error);
   }
-}
+});

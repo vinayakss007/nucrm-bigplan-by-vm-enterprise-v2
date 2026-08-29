@@ -11,6 +11,7 @@ import { contacts, deals, companies, tasks } from '@/drizzle/schema';
 import { eq, and, or, gte, lte, desc, sql, inArray } from 'drizzle-orm';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 /**
  * Advanced Search API — Multi-field filtering with pagination
@@ -37,7 +38,7 @@ import { readJsonBody } from '@/lib/api/validate';
  *   limit?: number,
  * }
  */
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -332,4 +333,4 @@ export async function POST(request: NextRequest) {
   } catch (err: any) {
     return apiError(err);
   }
-}
+});

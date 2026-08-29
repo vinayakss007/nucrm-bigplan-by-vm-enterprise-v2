@@ -12,6 +12,7 @@ import { plans, users, systemSettings } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { updateRateLimitsSchema } from '@/lib/api/schemas';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 const RATE_LIMIT_ENDPOINTS = [
   { key: 'api', label: 'API Requests', window: 60, windowLabel: 'per minute' },
@@ -27,7 +28,7 @@ const RATE_LIMIT_ENDPOINTS = [
   { key: 'bulk', label: 'Bulk Operations', window: 3600, windowLabel: 'per hour' },
 ];
 
-export async function GET(_request: NextRequest) {
+export const GET = withApiRoute(async (_request: NextRequest) => {
   try {
     const ctx = await requireAuth(_request);
     if (ctx instanceof NextResponse) return ctx;
@@ -82,9 +83,9 @@ export async function GET(_request: NextRequest) {
   } catch (err) {
     return apiError(err);
   }
-}
+});
 
-export async function PUT(request: NextRequest) {
+export const PUT = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -145,4 +146,4 @@ export async function PUT(request: NextRequest) {
   } catch (err) {
     return apiError(err);
   }
-}
+});

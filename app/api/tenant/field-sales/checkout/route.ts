@@ -9,6 +9,7 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { z } from 'zod';
 import { createCheckOut, getCheckInById } from '@/lib/field-sales/geo-checkin';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 const createCheckOutSchema = z.object({
   checkInId: z.string().min(1, 'checkInId is required'),
@@ -21,7 +22,7 @@ const createCheckOutSchema = z.object({
  * POST /api/tenant/field-sales/checkout
  * Create a check-out for an active check-in.
  */
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -61,4 +62,4 @@ export async function POST(request: NextRequest) {
     console.error('[field-sales/checkout POST]', err);
     return apiError(err);
   }
-}
+});

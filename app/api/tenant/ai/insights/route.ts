@@ -13,12 +13,13 @@ import { activities } from '@/drizzle/schema';
 import { eq, and, desc, sql, isNull } from 'drizzle-orm';
 import { can } from '@/lib/auth/middleware';
 import { readJsonBody } from '@/lib/api/validate';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 /**
  * POST /api/tenant/ai/insights
  * Generate AI insights for a contact/deal
  */
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -155,13 +156,13 @@ export async function POST(request: NextRequest) {
     console.error('[AI Insights] POST error:', error);
     return apiError(error);
   }
-}
+});
 
 /**
  * GET /api/tenant/ai/insights
  * Get AI insights
  */
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -206,4 +207,4 @@ export async function GET(request: NextRequest) {
     console.error('[AI Insights] GET error:', error);
     return apiError(error);
   }
-}
+});

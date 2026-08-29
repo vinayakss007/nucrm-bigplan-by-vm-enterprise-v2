@@ -11,10 +11,12 @@ import TenantShell from '@/components/tenant/layout/shell';
 import BrandingProvider from '@/components/branding/branding-provider';
 import PlanFeatureScript from '@/components/tenant/layout/plan-feature-script';
 import { tenantToBranding } from '@/lib/branding';
+import { withTenantScope } from '@/lib/api/with-api-route';
 
 export const dynamic = 'force-dynamic';
 
 export default async function TenantLayout({ children }: { children: React.ReactNode }) {
+  return withTenantScope(async () => {
   const ctx = await requireTenantCtx();
 
   const [user] = await db.select({
@@ -65,4 +67,6 @@ export default async function TenantLayout({ children }: { children: React.React
       </TenantShell>
     </BrandingProvider>
   );
+
+  });
 }

@@ -14,8 +14,9 @@ import { logAudit } from '@/lib/audit';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
 import { concurrencyGuard } from '@/lib/api/concurrency';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
-export async function GET(req: NextRequest) {
+export const GET = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -33,9 +34,9 @@ export async function GET(req: NextRequest) {
   } catch (err) {
     return apiError(err);
   }
-}
+});
 
-export async function PATCH(req: NextRequest) {
+export const PATCH = withApiRoute(async (req: NextRequest) => {
   try {
   const limited = await rateLimitMutating(req, 'aiTemplates', 'patch');
   if (limited) return limited;
@@ -82,4 +83,4 @@ export async function PATCH(req: NextRequest) {
     void logError({ error: err, context: 'ai-auto-followup PATCH' });
     return apiError(err);
   }
-}
+});

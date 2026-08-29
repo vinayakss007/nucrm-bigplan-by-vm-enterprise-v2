@@ -12,8 +12,9 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { apiError } from '@/lib/api-error';
 import { logAudit } from '@/lib/audit';
 import { recomputeAllLeads } from '@/lib/ai/lead-scoring';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
-export async function POST(req: NextRequest) {
+export const POST = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -31,4 +32,4 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     return apiError(err);
   }
-}
+});

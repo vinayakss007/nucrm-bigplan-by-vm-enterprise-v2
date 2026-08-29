@@ -30,11 +30,12 @@ import { requireAiFeature } from '@/lib/ai/plan-gate';
 import { concurrencyGuard } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 const VALID_STATUSES = new Set(['success', 'error', 'rate_limited', 'fallback_used']);
 const VALID_PROVIDERS = new Set(['openai', 'anthropic', 'groq', 'ollama', 'opencode', 'deepseek']);
 
-export async function GET(req: NextRequest) {
+export const GET = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -137,9 +138,9 @@ export async function GET(req: NextRequest) {
   } catch (err) {
     return apiError(err);
   }
-}
+});
 
-export async function PATCH(req: NextRequest) {
+export const PATCH = withApiRoute(async (req: NextRequest) => {
   try {
   const limited = await rateLimitMutating(req, 'aiTemplates', 'patch');
   if (limited) return limited;
@@ -178,4 +179,4 @@ export async function PATCH(req: NextRequest) {
   } catch (err) {
     return apiError(err);
   }
-}
+});

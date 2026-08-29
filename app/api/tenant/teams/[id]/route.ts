@@ -11,9 +11,10 @@ import { teams, teamMembers, users } from '@/drizzle/schema';
 import { eq, and, isNull } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { concurrencyGuard } from '@/lib/api/concurrency';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 // GET /api/tenant/teams/:id — team detail with its members.
-export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export const GET = withApiRoute(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -46,10 +47,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     return NextResponse.json({ data: { ...team, members } });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) { return apiError(err); }
-}
+});
 
 // PATCH /api/tenant/teams/:id — update team fields (admin only).
-export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
     const limited = await rateLimitMutating(req, 'teams', 'patch');
     if (limited) return limited;
@@ -81,11 +82,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     return NextResponse.json({ data: updated });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) { return apiError(err); }
-}
+});
 
 // DELETE /api/tenant/teams/:id — soft-delete the team (admin only). Members are
 // left in place; the ON DELETE SET NULL FKs mean leads/contacts keep working.
-export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export const DELETE = withApiRoute(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
     const limited = await rateLimitMutating(req, 'teams', 'delete');
     if (limited) return limited;
@@ -104,4 +105,4 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     return NextResponse.json({ data: { id, deleted: true } });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) { return apiError(err); }
-}
+});

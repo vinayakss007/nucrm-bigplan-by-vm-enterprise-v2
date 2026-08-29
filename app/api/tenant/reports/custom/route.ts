@@ -12,6 +12,7 @@ import { eq, and } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 const CUSTOM_REPORTS_KEY = 'custom_reports';
 
@@ -30,7 +31,7 @@ interface ReportConfig {
   sortOrder?: 'asc' | 'desc';
 }
 
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -54,9 +55,9 @@ export async function GET(request: NextRequest) {
     console.error('[custom reports GET]', err);
     return apiError(err);
   }
-}
+});
 
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -114,9 +115,9 @@ export async function POST(request: NextRequest) {
     console.error('[custom reports POST]', err);
     return apiError(err);
   }
-}
+});
 
-export async function DELETE(request: NextRequest) {
+export const DELETE = withApiRoute(async (request: NextRequest) => {
   try {
   const limited = await rateLimitMutating(request, 'reports', 'delete');
   if (limited) return limited;
@@ -153,4 +154,4 @@ export async function DELETE(request: NextRequest) {
     console.error('[custom reports DELETE]', err);
     return apiError(err);
   }
-}
+});

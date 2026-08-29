@@ -15,6 +15,7 @@ import { tasks } from '@/drizzle/schema';
 import { eq, and, asc, desc, sql, isNull } from 'drizzle-orm';
 import { concurrencyGuard } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 const VALID_ENTITY_TYPES = ['contact', 'company', 'deal', 'lead', 'task', 'user', 'tenant'] as const;
 type EntityType = typeof VALID_ENTITY_TYPES[number];
@@ -51,7 +52,7 @@ function sanitizeFieldKey(key: string): string {
 
 // ── GET: List custom fields for an entity type ──────────────────────────────
 
-export async function GET(req: NextRequest) {
+export const GET = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -158,11 +159,11 @@ export async function GET(req: NextRequest) {
   } catch (err: any) {
     return apiError(err);
   }
-}
+});
 
 // ── POST: Create custom field or set value or register feature ──────────────
 
-export async function POST(req: NextRequest) {
+export const POST = withApiRoute(async (req: NextRequest) => {
   const limited = await rateLimitMutating(req, 'customFields', 'post');
   if (limited) return limited;
   const ctx = await requireAuth(req);
@@ -341,11 +342,11 @@ export async function POST(req: NextRequest) {
     message: `Custom field '${fieldKey}' created for ${entityType}`,
     field: results[0]!,
   }, { status: 201 });
-}
+});
 
 // ── PUT: Update custom field definition ─────────────────────────────────────
 
-export async function PUT(req: NextRequest) {
+export const PUT = withApiRoute(async (req: NextRequest) => {
   const limited = await rateLimitMutating(req, 'customFields', 'patch');
   if (limited) return limited;
   const ctx = await requireAuth(req);
@@ -396,11 +397,11 @@ export async function PUT(req: NextRequest) {
   }
 
   return NextResponse.json({ message: 'Field updated', field: results[0]! });
-}
+});
 
 // ── DELETE: Remove custom field definition ──────────────────────────────────
 
-export async function DELETE(req: NextRequest) {
+export const DELETE = withApiRoute(async (req: NextRequest) => {
   const limited = await rateLimitMutating(req, 'customFields', 'delete');
   if (limited) return limited;
   const ctx = await requireAuth(req);
@@ -445,4 +446,4 @@ export async function DELETE(req: NextRequest) {
     message: `Field '${results[0]!.fieldKey}' deleted (data preserved in metadata)`, 
     field: results[0]! 
   });
-}
+});

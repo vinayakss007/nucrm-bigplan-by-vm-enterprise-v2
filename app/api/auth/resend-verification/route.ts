@@ -12,8 +12,9 @@ import { eq } from 'drizzle-orm';
 import { randomBytes, createHash } from 'crypto';
 import { sendEmail } from '@/lib/email/service';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const limited = await checkRateLimit(request, { action:'resend_verification', max:3, windowMinutes:60 });
     if (limited) return limited;
@@ -54,4 +55,4 @@ export async function POST(request: NextRequest) {
   } catch (err: any) { 
     return apiError(err); 
   }
-}
+});

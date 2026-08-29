@@ -11,6 +11,7 @@ import { dunningSettings } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 const dunningConfigSchema = z.object({
   maxRetries: z.number().min(1).max(10).optional().default(3),
@@ -26,7 +27,7 @@ const dunningConfigSchema = z.object({
  * GET /api/tenant/billing/dunning
  * Get dunning configuration for the tenant.
  */
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -56,13 +57,13 @@ export async function GET(request: NextRequest) {
   } catch (err: unknown) {
     return apiError(err);
   }
-}
+});
 
 /**
  * POST /api/tenant/billing/dunning
  * Create or update dunning configuration for the tenant.
  */
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -129,4 +130,4 @@ export async function POST(request: NextRequest) {
   } catch (err: unknown) {
     return apiError(err);
   }
-}
+});

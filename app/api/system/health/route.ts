@@ -20,6 +20,7 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { checkDatabaseHealth } from '@/lib/db/safe-connection';
 import { cache } from '@/lib/cache';
 import type { DatabaseHealthResult } from '@/lib/db/safe-connection';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 // -------------------------------------------------------------------
 // Types
@@ -63,7 +64,7 @@ interface SystemHealthResponse {
 // Handler
 // -------------------------------------------------------------------
 
-export async function GET(request: NextRequest): Promise<NextResponse> {
+export const GET = withApiRoute(async (request: NextRequest) => {
   // Auth: require superadmin
   const authResult = await requireAuth(request);
   if (authResult instanceof NextResponse) return authResult;
@@ -206,4 +207,4 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   const statusCode = health.status === 'unhealthy' ? 503 : 200;
   return NextResponse.json(health, { status: statusCode });
-}
+});

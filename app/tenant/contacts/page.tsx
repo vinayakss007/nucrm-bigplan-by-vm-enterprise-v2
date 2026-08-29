@@ -13,6 +13,7 @@ import dynamic from 'next/dynamic';
 import { getUserDefaultView } from '@/lib/user-defaults';
 import { toSnakeCase } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
+import { withTenantScope } from '@/lib/api/with-api-route';
 
 const ContactsClient = dynamic(() => import('@/components/tenant/contacts-client'));
 
@@ -41,6 +42,7 @@ function LoadingSkeleton() {
 }
 
 export default async function ContactsPage({ searchParams }: { searchParams: Promise<{ offset?: string; q?: string; lead_status?: string }> }) {
+  return withTenantScope(async () => {
   const ctx = await requireTenantCtx();
   const tid = ctx.tenantId;
   const sp = await searchParams;
@@ -108,4 +110,6 @@ export default async function ContactsPage({ searchParams }: { searchParams: Pro
       </Suspense>
     </div>
   );
+
+  });
 }

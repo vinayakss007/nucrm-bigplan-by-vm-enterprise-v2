@@ -10,8 +10,9 @@ import { activities } from '@/drizzle/schema';
 import { eq, and, isNull, desc } from 'drizzle-orm';
 import { withCache } from '@/lib/dashboard/widget-cache';
 import { logError, tenantMeta } from '@/lib/errors-server';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   let ctx: Awaited<ReturnType<typeof requireAuth>> | undefined;
   try {
     ctx = await requireAuth(request);
@@ -37,4 +38,4 @@ export async function GET(request: NextRequest) {
     void logError({ error: err, context: 'GET /api/tenant/dashboard/widgets/activity', ...tenantMeta(ctx) });
     return NextResponse.json({ error: 'Widget failed' }, { status: 500 });
   }
-}
+});

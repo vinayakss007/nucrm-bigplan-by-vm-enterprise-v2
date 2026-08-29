@@ -12,6 +12,7 @@ import { eq, and } from 'drizzle-orm';
 import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { allocateCredits, getCreditBalance, getAggregatedUsage, getCreditHistory } from '@/lib/ai/credits';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 const allocateSchema = z.object({
   action: z.enum(['allocate', 'topup', 'suspend', 'reactivate', 'set_cap']),
@@ -26,7 +27,7 @@ const allocateSchema = z.object({
  *   1. Centralized: Super admin allocates tokens, users consume from pool
  *   2. Personal: Users add their own API keys (tracked via ai_activity only)
  */
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -57,9 +58,9 @@ export async function GET(request: NextRequest) {
     console.error('[api/ai-credits] GET error:', (err as Error).message);
     return apiError(err);
   }
-}
+});
 
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -190,4 +191,4 @@ export async function POST(request: NextRequest) {
     console.error('[api/ai-credits] POST error:', (err as Error).message);
     return apiError(err);
   }
-}
+});

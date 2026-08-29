@@ -8,6 +8,7 @@ import { sendEmail } from '@/lib/email/service';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
 import { requireAuth } from '@/lib/auth/middleware';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 /** Constant-time string comparison to prevent timing attacks */
 function timingSafeEqual(a: string, b: string): boolean {
@@ -61,7 +62,7 @@ async function guardTestEmail(request: NextRequest): Promise<NextResponse | null
  *   -H "x-setup-key: $SETUP_KEY" \
  *   -d '{"to":"your-email@example.com"}'
  */
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const limited = await checkRateLimit(request, { action: 'test-email', max: 5, windowMinutes: 60 });
     if (limited) return limited;
@@ -127,9 +128,9 @@ export async function POST(request: NextRequest) {
       error: 'Email test failed',
     }, { status: 500 });
   }
-}
+});
 
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   const denied = await guardTestEmail(request);
   if (denied) return denied;
 
@@ -138,4 +139,4 @@ export async function GET(request: NextRequest) {
     usage: 'POST with { "to": "your@email.com" }',
     configured: !!(process.env.BREVO_SMTP_HOST && process.env.BREVO_SMTP_USER),
   });
-}
+});

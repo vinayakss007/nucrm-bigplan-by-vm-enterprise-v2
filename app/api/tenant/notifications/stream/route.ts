@@ -8,8 +8,9 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { notifications } from '@/drizzle/schema';
 import { eq, and, isNull, sql } from 'drizzle-orm';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof Response) return ctx;
@@ -87,4 +88,4 @@ export async function GET(request: NextRequest) {
     console.error('[notifications-stream] Auth failed', err);
     return new Response('Unauthorized', { status: 401 });
   }
-}
+});

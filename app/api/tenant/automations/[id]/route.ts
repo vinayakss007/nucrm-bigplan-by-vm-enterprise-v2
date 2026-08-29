@@ -13,15 +13,14 @@ import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { updateAutomationSchema } from '@/lib/api/schemas';
 import { concurrencyGuard } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 /**
  * GET /api/tenant/automations/[id]
  * Get automation details and recent runs
  */
-export async function GET(
-  req: NextRequest, 
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const GET = withApiRoute(async (req: NextRequest, 
+  { params }: { params: Promise<{ id: string }> }) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -83,16 +82,14 @@ export async function GET(
     console.error('[automation GET]', err);
     return apiError(err); 
   }
-}
+});
 
 /**
  * PATCH /api/tenant/automations/[id]
  * Update automation
  */
-export async function PATCH(
-  req: NextRequest, 
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const PATCH = withApiRoute(async (req: NextRequest, 
+  { params }: { params: Promise<{ id: string }> }) => {
   try {
   const limited = await rateLimitMutating(req, 'automations', 'patch');
   if (limited) return limited;
@@ -147,16 +144,14 @@ export async function PATCH(
     console.error('[automation PATCH]', err);
     return apiError(err); 
   }
-}
+});
 
 /**
  * DELETE /api/tenant/automations/[id]
  * Delete automation (soft delete)
  */
-export async function DELETE(
-  req: NextRequest, 
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const DELETE = withApiRoute(async (req: NextRequest, 
+  { params }: { params: Promise<{ id: string }> }) => {
   try {
   const limited = await rateLimitMutating(req, 'automations', 'delete');
   if (limited) return limited;
@@ -194,4 +189,4 @@ export async function DELETE(
     console.error('[automation DELETE]', err);
     return apiError(err); 
   }
-}
+});

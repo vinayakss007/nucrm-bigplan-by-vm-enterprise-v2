@@ -13,6 +13,7 @@ import { can } from '@/lib/auth/middleware';
 import { scoreLead, bulkScoreLeads } from '@/lib/ai/scoring';
 import { requireAiFeature } from '@/lib/ai/plan-gate';
 import { readJsonBody } from '@/lib/api/validate';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 /**
  * POST /api/tenant/ai/score
@@ -20,7 +21,7 @@ import { readJsonBody } from '@/lib/api/validate';
  * 
  * Body: { contact_id?: string, bulk?: boolean, limit?: number }
  */
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -60,7 +61,7 @@ export async function POST(request: NextRequest) {
     console.error('[AI Score] POST error:', error);
     return apiError(error);
   }
-}
+});
 
 /**
  * GET /api/tenant/ai/score
@@ -68,7 +69,7 @@ export async function POST(request: NextRequest) {
  *   ?contact_id=xxx - get score for specific contact
  *   (no params) - get top scored contacts
  */
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -135,4 +136,4 @@ export async function GET(request: NextRequest) {
     console.error('[AI Score] GET error:', error);
     return apiError(error);
   }
-}
+});

@@ -13,8 +13,9 @@ import { verifyPassword, hashPassword, createToken, hashToken, setSessionCookie 
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { changePasswordSchema } from '@/lib/api/schemas';
 import { concurrencyGuardById } from '@/lib/api/concurrency';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
-export async function PATCH(request: NextRequest) {
+export const PATCH = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -77,4 +78,4 @@ export async function PATCH(request: NextRequest) {
   } catch (err: any) { 
     return apiError(err); 
   }
-}
+});

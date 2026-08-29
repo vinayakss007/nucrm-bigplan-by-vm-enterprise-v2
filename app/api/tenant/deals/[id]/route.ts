@@ -21,8 +21,9 @@ import { withConcurrencyGuard } from '@/lib/concurrency';
 import { updatedAtMs } from '@/lib/api/concurrency';
 import { checkConcurrency } from '@/lib/api/optimistic-lock';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
-export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export const GET = withApiRoute(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -82,9 +83,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     console.error('[deals [id] GET]', err);
     return apiError(err);
   }
-}
+});
 
-export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
   const limited = await rateLimitMutating(req, 'deals', 'patch');
   if (limited) return limited;
@@ -276,9 +277,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     console.error('[deals [id] PATCH]', err);
     return apiError(err);
   }
-}
+});
 
-export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export const DELETE = withApiRoute(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
   const limited = await rateLimitMutating(req, 'deals', 'delete');
   if (limited) return limited;
@@ -352,7 +353,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     console.error('[deals [id] DELETE]', err);
     return apiError(err);
   }
-}
+});
 
  
  

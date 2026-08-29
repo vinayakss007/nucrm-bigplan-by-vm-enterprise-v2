@@ -13,6 +13,7 @@ import { eq, and, desc, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 const createCallSchema = z.object({
   contact_id: z.string().uuid('contact_id must be a valid UUID'),
@@ -30,7 +31,7 @@ const createCallSchema = z.object({
  * POST /api/tenant/calls
  * Log a call (inbound/outbound) with duration, notes, linked contact
  */
-export async function POST(req: NextRequest) {
+export const POST = withApiRoute(async (req: NextRequest) => {
   try {
     const limited = await rateLimitMutating(req, 'calls', 'post');
     if (limited) return limited;
@@ -79,13 +80,13 @@ export async function POST(req: NextRequest) {
   } catch (err: any) {
     return apiError(err);
   }
-}
+});
 
 /**
  * GET /api/tenant/calls
  * List call logs with optional contact filter
  */
-export async function GET(req: NextRequest) {
+export const GET = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -152,4 +153,4 @@ export async function GET(req: NextRequest) {
   } catch (err: any) {
     return apiError(err);
   }
-}
+});

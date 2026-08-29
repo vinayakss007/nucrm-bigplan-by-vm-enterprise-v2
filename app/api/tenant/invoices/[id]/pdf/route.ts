@@ -15,6 +15,7 @@ import { db } from '@/drizzle/db';
 import { invoices, invoiceLineItems, contacts } from '@/drizzle/schema';
 import { eq, and, sql, asc } from 'drizzle-orm';
 import { escapeHtml } from '@/lib/email/escape-html';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 function formatCurrency(amount: number | string | null): string {
   const num = typeof amount === 'string' ? parseFloat(amount) : (amount ?? 0);
@@ -130,10 +131,8 @@ function renderHTML(invoice: Record<string, unknown>, lineItems: Record<string, 
 </html>`;
 }
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const GET = withApiRoute(async (req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -185,4 +184,4 @@ export async function GET(
     console.error('[invoices [id] pdf GET]', err);
     return apiError(err);
   }
-}
+});

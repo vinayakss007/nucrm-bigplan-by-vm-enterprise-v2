@@ -11,6 +11,7 @@ import { auditLogs, users } from '@/drizzle/schema';
 import { eq, and, gte, lte, desc, isNull } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { escapeCSV } from '@/lib/export';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 /**
  * GET /api/tenant/audit/export
@@ -24,7 +25,7 @@ import { escapeCSV } from '@/lib/export';
  *
  * Returns paginated audit entries with user info.
  */
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const limited = await rateLimitMutating(request, 'audit-export', 'post');
     if (limited) return limited;
@@ -116,4 +117,4 @@ export async function GET(request: NextRequest) {
   } catch (err: any) {
     return apiError(err);
   }
-}
+});

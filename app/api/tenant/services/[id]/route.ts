@@ -12,11 +12,10 @@ import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
 import { apiError } from '@/lib/api-error';
 import { concurrencyGuard } from '@/lib/api/concurrency';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const GET = withApiRoute(async (request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -40,12 +39,10 @@ export async function GET(
     console.error('[services/[id]/GET]', error);
     return apiError(error);
   }
-}
+});
 
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const PATCH = withApiRoute(async (request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }) => {
   try {
   const limited = await rateLimitMutating(request, 'services', 'patch');
   if (limited) return limited;
@@ -105,12 +102,10 @@ export async function PATCH(
     console.error('[services/[id]/PATCH]', error);
     return apiError(error);
   }
-}
+});
 
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const DELETE = withApiRoute(async (request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }) => {
   try {
   const limited = await rateLimitMutating(request, 'services', 'delete');
   if (limited) return limited;
@@ -136,4 +131,4 @@ export async function DELETE(
     console.error('[services/[id]/DELETE]', error);
     return apiError(error);
   }
-}
+});

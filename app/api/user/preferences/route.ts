@@ -25,6 +25,7 @@ import { users, tenants } from '@/drizzle/schema';
 import { eq, sql } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { readJsonBody } from '@/lib/api/validate';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 const VALID = {
   // Appearance
@@ -116,7 +117,7 @@ const STRING_VALIDATED = [
 ] as const;
 const NUMBER_VALIDATED = ['default_page_size','default_meeting_duration'] as const;
 
-export async function GET(req: NextRequest) {
+export const GET = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -150,9 +151,9 @@ export async function GET(req: NextRequest) {
   } catch (err: any) {
     return apiError(err);
   }
-}
+});
 
-export async function PATCH(req: NextRequest) {
+export const PATCH = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -238,13 +239,13 @@ export async function PATCH(req: NextRequest) {
   } catch (err: any) {
     return apiError(err);
   }
-}
+});
 
 /**
  * DELETE /api/user/preferences
  * Reset all per-user overrides — fall back to workspace defaults.
  */
-export async function DELETE(req: NextRequest) {
+export const DELETE = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -261,4 +262,4 @@ export async function DELETE(req: NextRequest) {
   } catch (err: any) {
     return apiError(err);
   }
-}
+});

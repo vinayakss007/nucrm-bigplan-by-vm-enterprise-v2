@@ -10,6 +10,7 @@ import { getFieldPermissions, setFieldPermission } from '@/lib/rbac/field-permis
 import type { FieldAccessLevel } from '@/lib/rbac/field-permissions';
 import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 const setPermissionSchema = z.object({
   role_id: z.string().uuid(),
@@ -18,7 +19,7 @@ const setPermissionSchema = z.object({
   access_level: z.enum(['none', 'read', 'write', 'admin']),
 });
 
-export async function GET(req: NextRequest) {
+export const GET = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -39,9 +40,9 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ data: permissions });
   } catch (err: unknown) { return apiError(err); }
-}
+});
 
-export async function POST(req: NextRequest) {
+export const POST = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -62,4 +63,4 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ data: result }, { status: 201 });
   } catch (err: unknown) { return apiError(err); }
-}
+});

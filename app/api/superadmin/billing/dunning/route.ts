@@ -9,12 +9,13 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { dunningAttempts, tenants } from '@/drizzle/schema';
 import { desc, inArray } from 'drizzle-orm';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 /**
  * GET /api/superadmin/billing/dunning
  * Get all dunning attempts across all tenants (superadmin only).
  */
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -55,4 +56,4 @@ export async function GET(request: NextRequest) {
   } catch (err: unknown) {
     return apiError(err);
   }
-}
+});

@@ -45,6 +45,7 @@ import {
   type EntityType,
 } from '@/lib/ai/draft';
 import { readJsonBody } from '@/lib/api/validate';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 interface PostBody {
   template_id?: string;
@@ -58,7 +59,7 @@ function isEntityType(s: unknown): s is EntityType {
   return s === 'contact' || s === 'deal' || s === 'company' || s === 'lead' || s === 'ticket';
 }
 
-export async function POST(req: NextRequest) {
+export const POST = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -175,4 +176,4 @@ export async function POST(req: NextRequest) {
     console.error('[ai/draft POST]', err);
     return apiError(err);
   }
-}
+});

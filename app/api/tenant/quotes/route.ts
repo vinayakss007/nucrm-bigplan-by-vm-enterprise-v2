@@ -13,8 +13,9 @@ import { quotes, quoteLineItems } from '@/drizzle/schema';
 import { eq, and, desc, sql, count, isNull } from 'drizzle-orm';
 import { requireAuth, requireModule } from '@/lib/auth/middleware';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -52,9 +53,9 @@ export async function GET(request: NextRequest) {
     console.error('[quotes/GET]', error);
     return NextResponse.json({ error: 'Failed to fetch quotes' }, { status: 500 });
   }
-}
+});
 
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const limited = await rateLimitMutating(request, 'quotes', 'post');
     if (limited) return limited;
@@ -163,4 +164,4 @@ export async function POST(request: NextRequest) {
     console.error('[quotes/POST]', error);
     return NextResponse.json({ error: 'Failed to create quote' }, { status: 500 });
   }
-}
+});

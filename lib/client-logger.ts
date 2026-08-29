@@ -38,7 +38,6 @@ export function clientLogError(
 
   // Mirror to the console only in development for local debugging.
   if (process.env.NODE_ENV === 'development') {
-    // eslint-disable-next-line no-console
     console.error(`[${context}]`, error, extra ?? '');
   }
 }
@@ -50,7 +49,6 @@ export function clientLogError(
  */
 export function clientLogDebug(context: string, ...args: unknown[]): void {
   if (process.env.NODE_ENV === 'development') {
-    // eslint-disable-next-line no-console
     console.log(`[${context}]`, ...args);
   }
 }

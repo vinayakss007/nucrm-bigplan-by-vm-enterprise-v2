@@ -23,8 +23,9 @@ import {
   users 
 } from '@/drizzle/schema';
 import { eq, and, isNull, gte, desc, sql, count, sum } from 'drizzle-orm';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -274,4 +275,4 @@ export async function GET(request: NextRequest) {
     console.error('[reports GET]', err);
     return apiError(err);
   }
-}
+});

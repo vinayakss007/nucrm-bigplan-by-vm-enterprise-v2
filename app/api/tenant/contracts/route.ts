@@ -12,8 +12,9 @@ import { contracts } from '@/drizzle/schema';
 import { eq, and, desc, count } from 'drizzle-orm';
 import { requireAuth } from '@/lib/auth/middleware';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -38,9 +39,9 @@ export async function GET(request: NextRequest) {
     console.error('[contracts/GET]', error);
     return NextResponse.json({ error: 'Failed to fetch contracts' }, { status: 500 });
   }
-}
+});
 
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const limited = await rateLimitMutating(request, 'contracts', 'post');
     if (limited) return limited;
@@ -83,4 +84,4 @@ export async function POST(request: NextRequest) {
     console.error('[contracts/POST]', error);
     return NextResponse.json({ error: 'Failed to create contract' }, { status: 500 });
   }
-}
+});

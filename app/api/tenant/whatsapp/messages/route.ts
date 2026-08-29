@@ -14,8 +14,9 @@ import { db } from '@/drizzle/db';
 import { whatsappMessages, whatsappConversations } from '@/drizzle/schema';
 import { eq, and, asc } from 'drizzle-orm';
 import { parseLimitOffset } from '@/lib/api/query-params';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
-export async function GET(req: NextRequest) {
+export const GET = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -59,4 +60,4 @@ export async function GET(req: NextRequest) {
   } catch (err: any) {
     return apiError(err);
   }
-}
+});

@@ -24,6 +24,7 @@ import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 const checkoutSchema = z.object({
   plan: z.enum(['starter', 'pro', 'enterprise'], { message: 'Invalid plan. Choose starter, pro, or enterprise.' }),
@@ -36,7 +37,7 @@ const checkoutSchema = z.object({
  *
  * Body: { plan: 'starter' | 'pro' | 'enterprise', interval?: 'month' | 'year' }
  */
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const limited = await rateLimitMutating(request, 'billing', 'post');
     if (limited) return limited;
@@ -86,13 +87,13 @@ export async function POST(request: NextRequest) {
   } catch (err: any) {
     return apiError(err);
   }
-}
+});
 
 /**
  * GET /api/tenant/billing/checkout?action=portal
  * Creates a Stripe Customer Portal session for managing billing.
  */
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -119,4 +120,4 @@ export async function GET(request: NextRequest) {
   } catch (err: any) {
     return apiError(err);
   }
-}
+});

@@ -16,11 +16,10 @@ import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { convertLeadSchema } from '@/lib/api/schemas';
 import { requireAuth, can } from '@/lib/auth/middleware';
 import { convertLeadCore } from '@/lib/leads/convert';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
-export async function POST(
-  request: NextRequest, 
-  { params }: { params: Promise<{ id: string }> | { id: string } }
-) {
+export const POST = withApiRoute(async (request: NextRequest, 
+  { params }: { params: Promise<{ id: string }> | { id: string } }) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -73,4 +72,4 @@ export async function POST(
     console.error('[lead convert] error:', error);
     return apiError(error);
   }
-}
+});

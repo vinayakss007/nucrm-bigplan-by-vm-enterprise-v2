@@ -1,4 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+// #1615: routes/pages now run inside withPinnedConnection (via withApiRoute /
+// withTenantScope). In unit tests there is no real pool, so stub the primitive
+// to run the callback directly (matches tests/unit/auth-middleware-require-auth.test.ts).
+vi.mock('@/lib/db/request-connection', () => ({
+  withPinnedConnection: <T>(fn: () => Promise<T>): Promise<T> => fn(),
+  getPinnedClient: () => undefined,
+}));
+
 import { NextResponse } from 'next/server';
 
 vi.mock('@/lib/auth/middleware', () => ({

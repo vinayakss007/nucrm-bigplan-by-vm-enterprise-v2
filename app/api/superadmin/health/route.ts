@@ -10,6 +10,7 @@ import { db } from '@/drizzle/db';
 import { healthChecks } from '@/drizzle/schema';
 import { sql, desc, gt } from 'drizzle-orm';
 import { logError } from '@/lib/errors-server';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 async function runCheck(service: string, fn: () => Promise<{ latency_ms: number; message: string }>) {
   try {
@@ -23,7 +24,7 @@ async function runCheck(service: string, fn: () => Promise<{ latency_ms: number;
   }
 }
 
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -88,5 +89,5 @@ export async function GET(request: NextRequest) {
     console.error('[superadmin/health GET]', err);
     return apiError(err);
   }
-}
+});
 

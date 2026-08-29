@@ -14,8 +14,9 @@ import { requireAuth, can } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { savedReports, users } from '@/drizzle/schema';
 import { eq, desc } from 'drizzle-orm';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -45,4 +46,4 @@ export async function GET(request: NextRequest) {
     console.error('[reports saved GET]', err);
     return apiError(err);
   }
-}
+});

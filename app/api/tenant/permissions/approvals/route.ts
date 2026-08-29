@@ -12,6 +12,7 @@ import { approvalRequests } from '@/drizzle/schema/core';
 import { eq, and, desc } from 'drizzle-orm';
 import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 const approvalActionSchema = z.object({
   request_id: z.string().uuid(),
@@ -19,7 +20,7 @@ const approvalActionSchema = z.object({
   reason: z.string().max(1000).optional(),
 });
 
-export async function GET(req: NextRequest) {
+export const GET = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -42,9 +43,9 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ data: results });
   } catch (err: unknown) { return apiError(err); }
-}
+});
 
-export async function POST(req: NextRequest) {
+export const POST = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -71,4 +72,4 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ data: result });
   } catch (err: unknown) { return apiError(err); }
-}
+});

@@ -9,12 +9,13 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { users, tenantMembers } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 /**
  * GET: List users for a tenant (for selective restore user filtering)
  * Query param: tenant_id (required)
  */
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -51,4 +52,4 @@ export async function GET(request: NextRequest) {
     console.error('[selective-restore/users GET]', err);
     return apiError(err);
   }
-}
+});

@@ -16,6 +16,7 @@ import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { apiError } from '@/lib/api-error';
 import { escapeLike } from '@/lib/api/sanitize-like';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 const createProductSchema = z.object({
   name: z.string().trim().min(1).max(200),
@@ -26,7 +27,7 @@ const createProductSchema = z.object({
 
 const _updateProductSchema = createProductSchema.partial();
 
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -77,9 +78,9 @@ export async function GET(request: NextRequest) {
     console.error('[products GET]', error);
     return apiError(error);
   }
-}
+});
 
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const limited = await rateLimitMutating(request, 'products', 'post');
     if (limited) return limited;
@@ -123,4 +124,4 @@ export async function POST(request: NextRequest) {
     console.error('[products POST]', error);
     return apiError(error);
   }
-}
+});

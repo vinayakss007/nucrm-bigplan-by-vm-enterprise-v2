@@ -14,12 +14,13 @@ import { eq, desc } from 'drizzle-orm';
 import { getWarmUpStats } from '@/lib/email/warmup';
 import { concurrencyGuard } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 /**
  * GET /api/tenant/email-warmup
  * Get warm-up config and stats for current tenant
  */
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -51,13 +52,13 @@ export async function GET(request: NextRequest) {
   } catch (err: any) {
     return apiError(err);
   }
-}
+});
 
 /**
  * POST /api/tenant/email-warmup
  * Create or update warm-up config
  */
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -125,13 +126,13 @@ export async function POST(request: NextRequest) {
   } catch (err: unknown) {
     return apiError(err);
   }
-}
+});
 
 /**
  * PATCH /api/tenant/email-warmup/toggle
  * Enable/disable warm-up
  */
-export async function PATCH(request: NextRequest) {
+export const PATCH = withApiRoute(async (request: NextRequest) => {
   try {
   const limited = await rateLimitMutating(request, 'emailTemplates', 'patch');
   if (limited) return limited;
@@ -166,4 +167,4 @@ export async function PATCH(request: NextRequest) {
   } catch (err: any) {
     return apiError(err);
   }
-}
+});

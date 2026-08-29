@@ -14,8 +14,9 @@ import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { createBackupSchema } from '@/lib/api/schemas';
 import { logSuperAdminAction } from '@/lib/audit/super-admin';
 import { concurrencyGuard } from '@/lib/api/concurrency';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -125,9 +126,9 @@ export async function GET(request: NextRequest) {
     console.error('[superadmin/backups GET]', err);
     return apiError(err); 
   }
-}
+});
 
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -186,9 +187,9 @@ export async function POST(request: NextRequest) {
     console.error('[superadmin/backups POST]', err);
     return apiError(err); 
   }
-}
+});
 
-export async function PATCH(request: NextRequest) {
+export const PATCH = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -227,4 +228,4 @@ export async function PATCH(request: NextRequest) {
   } catch (err: any) {
     return apiError(err);
   }
-}
+});

@@ -13,6 +13,7 @@ import { eq, and, desc, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 const createActivitySchema = z.object({
   type: z.string().min(1, 'type is required'),
@@ -23,7 +24,7 @@ const createActivitySchema = z.object({
   eventType: z.string().optional(),
 });
 
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -97,9 +98,9 @@ export async function GET(request: NextRequest) {
     console.error('[activities GET]', err);
     return apiError(err, "Internal server error", 200);
   }
-}
+});
 
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const limited = await rateLimitMutating(request, 'activities', 'post');
     if (limited) return limited;
@@ -135,4 +136,4 @@ export async function POST(request: NextRequest) {
     console.error('[activities POST]', err);
     return apiError(err);
   }
-}
+});

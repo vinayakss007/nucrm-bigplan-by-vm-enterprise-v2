@@ -12,11 +12,10 @@ import { productTemplates } from '@/drizzle/schema';
 import { eq, and, sql } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { concurrencyGuardById } from '@/lib/api/concurrency';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const GET = withApiRoute(async (req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -38,7 +37,7 @@ export async function GET(
     console.error('[superadmin/templates/[id] GET]', err);
     return apiError(err);
   }
-}
+});
 
 const updateTemplateSchema = z.object({
   name: z.string().min(1).max(255).optional(),
@@ -54,10 +53,8 @@ const updateTemplateSchema = z.object({
   updated_at: z.string().datetime().optional(),
 });
 
-export async function PATCH(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const PATCH = withApiRoute(async (req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -115,12 +112,10 @@ export async function PATCH(
     console.error('[superadmin/templates/[id] PATCH]', err);
     return apiError(err);
   }
-}
+});
 
-export async function DELETE(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const DELETE = withApiRoute(async (req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -143,4 +138,4 @@ export async function DELETE(
     console.error('[superadmin/templates/[id] DELETE]', err);
     return apiError(err);
   }
-}
+});

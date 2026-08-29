@@ -8,8 +8,10 @@ import { db } from '@/drizzle/db';
 import { tasks, contacts, deals, users, tenantMembers } from '@/drizzle/schema';
 import { eq, and, or, sql, asc, desc } from 'drizzle-orm';
 import TasksDataTable from '@/components/tenant/tasks-data-table';
+import { withTenantScope } from '@/lib/api/with-api-route';
 
 export default async function TasksPage() {
+  return withTenantScope(async () => {
   const ctx = await requireTenantCtx();
   const permissions = {
     canCreate:  can(ctx, 'tasks.create'),
@@ -102,4 +104,6 @@ export default async function TasksPage() {
       permissions={permissions}
     />
   );
+
+  });
 }
