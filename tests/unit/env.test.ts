@@ -1,5 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
+// Strong, high-entropy fixture secrets. These intentionally use many distinct
+// characters so they pass the entropy gate in validateNotWeak(); all-same or
+// two-character strings (e.g. 'a'.repeat(48)) are now rejected as weak.
+const STRONG_JWT = '7f3c9a1e5b8d2f4a6c0e9b7d3f1a8c5e2d4b6f0a9c3e7d1b5f8a2c4e6d0b9f3a';
+const STRONG_SESSION = 'b2e8d4f6a0c9e3b7d1f5a9c2e6b4d8f0a3c7e1b5d9f3a7c0e4b8d2f6a1c5e9b3';
+const STRONG_CRON = '9a1c3e5b7d9f2a4c6e8b0d1f3a5c7e9b';
+const STRONG_ENCRYPTION = '4d6b8f0a2c9e1b3d5f7a9c0e2b4d6f8a1c3e5b7d9f0a2c4e6b8d1f3a5c7e9b0d';
+
 describe('validateEnv', () => {
   const OLD_ENV = process.env;
 
@@ -7,13 +15,13 @@ describe('validateEnv', () => {
     process.env = { ...OLD_ENV };
     process.env.NODE_ENV = 'development';
     process.env.DATABASE_URL = 'postgresql://user:pass@localhost:5432/test';
-    process.env.JWT_SECRET = 'a'.repeat(48);
-    process.env.SESSION_SECRET = 'c'.repeat(48);
+    process.env.JWT_SECRET = STRONG_JWT;
+    process.env.SESSION_SECRET = STRONG_SESSION;
     process.env.NEXT_PUBLIC_APP_URL = 'http://localhost:3000';
     process.env.SETUP_KEY = 'a'.repeat(24);
     process.env.ALLOWED_ORIGINS = 'http://localhost:3000';
-    process.env.CRON_SECRET = 'b'.repeat(32);
-    process.env.ENCRYPTION_KEY = 'd'.repeat(64);
+    process.env.CRON_SECRET = STRONG_CRON;
+    process.env.ENCRYPTION_KEY = STRONG_ENCRYPTION;
     process.env.DATABASE_POOL_SIZE = '5';
     delete process.env.REDIS_URL;
     delete process.env.RESEND_API_KEY;
@@ -28,13 +36,13 @@ describe('validateEnv', () => {
     const { validateEnv } = await import('@/lib/env');
     const config = validateEnv();
     expect(config.databaseUrl).toBe('postgresql://user:pass@localhost:5432/test');
-    expect(config.jwtSecret).toBe('a'.repeat(48));
-    expect(config.sessionSecret).toBe('c'.repeat(48));
+    expect(config.jwtSecret).toBe(STRONG_JWT);
+    expect(config.sessionSecret).toBe(STRONG_SESSION);
     expect(config.appUrl).toBe('http://localhost:3000');
     expect(config.nodeEnv).toBe('development');
     expect(config.databasePoolSize).toBe(5);
     expect(config.databaseSsl).toBe(false);
-    expect(config.encryptionKey).toBe('d'.repeat(64));
+    expect(config.encryptionKey).toBe(STRONG_ENCRYPTION);
   });
 
   it('throws when DATABASE_URL is missing', async () => {
@@ -119,6 +127,27 @@ describe('validateEnv', () => {
     process.env.ENCRYPTION_KEY = 'short';
     const { validateEnv } = await import('@/lib/env');
     expect(() => validateEnv()).toThrow('ENCRYPTION_KEY must be at least 32 characters');
+  });
+
+  it('throws when ENCRYPTION_KEY is long enough but low-entropy (all same character)', async () => {
+    // 32 chars, passes the length check, but 'aaaa...' has almost no entropy.
+    process.env.ENCRYPTION_KEY = 'a'.repeat(32);
+    const { validateEnv } = await import('@/lib/env');
+    expect(() => validateEnv()).toThrow('ENCRYPTION_KEY has insufficient entropy');
+  });
+
+  it('throws when ENCRYPTION_KEY is a repeated two-character block', async () => {
+    // 'abab...' still only has 2 unique characters.
+    process.env.ENCRYPTION_KEY = 'ab'.repeat(32);
+    const { validateEnv } = await import('@/lib/env');
+    expect(() => validateEnv()).toThrow('ENCRYPTION_KEY has insufficient entropy');
+  });
+
+  it('accepts a strong high-entropy ENCRYPTION_KEY', async () => {
+    process.env.ENCRYPTION_KEY = STRONG_ENCRYPTION;
+    const { validateEnv } = await import('@/lib/env');
+    expect(() => validateEnv()).not.toThrow();
+    expect(validateEnv().encryptionKey).toBe(STRONG_ENCRYPTION);
   });
 
   it('throws when ALLOWED_ORIGINS is missing', async () => {
@@ -225,13 +254,13 @@ describe('initEnv', () => {
     process.env = { ...OLD_ENV };
     process.env.NODE_ENV = 'development';
     process.env.DATABASE_URL = 'postgresql://user:pass@localhost:5432/test';
-    process.env.JWT_SECRET = 'a'.repeat(48);
-    process.env.SESSION_SECRET = 'c'.repeat(48);
+    process.env.JWT_SECRET = STRONG_JWT;
+    process.env.SESSION_SECRET = STRONG_SESSION;
     process.env.NEXT_PUBLIC_APP_URL = 'http://localhost:3000';
     process.env.SETUP_KEY = 'a'.repeat(24);
     process.env.ALLOWED_ORIGINS = 'http://localhost:3000';
-    process.env.CRON_SECRET = 'b'.repeat(32);
-    process.env.ENCRYPTION_KEY = 'd'.repeat(64);
+    process.env.CRON_SECRET = STRONG_CRON;
+    process.env.ENCRYPTION_KEY = STRONG_ENCRYPTION;
     process.env.DATABASE_POOL_SIZE = '5';
     delete process.env.REDIS_URL;
     delete process.env.RESEND_API_KEY;

@@ -51,6 +51,17 @@ function validateNotWeak(name: string, value: string): void {
       );
     }
   }
+
+  // Reject trivially low-entropy values (e.g. all-same-character keys like
+  // "aaaa..." or short repeated blocks like "ababab...") that satisfy the
+  // length check but provide almost no real key strength.
+  const uniqueChars = new Set(value).size;
+  if (uniqueChars <= 2) {
+    throw new Error(
+      `${name} has insufficient entropy (only ${uniqueChars} unique character${uniqueChars === 1 ? '' : 's'}).\n` +
+      `Generate a strong secret with: openssl rand -base64 64`
+    );
+  }
 }
 
 function getOptionalEnv(name: string, defaultValue?: string): string | undefined {
@@ -141,6 +152,11 @@ export function validateEnv(): EnvConfig {
     errors.push('ENCRYPTION_KEY is required for backup encryption');
   } else if (encryptionKey.length < 32) {
     errors.push('ENCRYPTION_KEY must be at least 32 characters (hex, 64 chars recommended)');
+  } else {
+ 
+ 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+    try { validateNotWeak('ENCRYPTION_KEY', encryptionKey); } catch (e: any) { errors.push(e.message); }
   }
 
   // Validate DATABASE_POOL_SIZE
