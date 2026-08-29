@@ -6,16 +6,20 @@
 /**
  * Invoice PDF Export
  * GET /api/tenant/invoices/[id]/pdf
- * Returns an HTML document styled for print/PDF export
+ * Returns a real application/pdf document by default. The original styled HTML
+ * print view is kept reachable behind ?format=html so existing consumers do
+ * not break.
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { invoices, invoiceLineItems, contacts } from '@/drizzle/schema';
+import { invoices, invoiceLineItems, contacts, tenants } from '@/drizzle/schema';
 import { eq, and, sql, asc } from 'drizzle-orm';
 import { escapeHtml } from '@/lib/email/escape-html';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { renderInvoicePdf } from '@/lib/pdf/render';
+import { mapInvoiceToPdfData, type InvoiceRow, type LineItemRow } from '@/lib/pdf/mappers';
 
 function formatCurrency(amount: number | string | null): string {
   const num = typeof amount === 'string' ? parseFloat(amount) : (amount ?? 0);
@@ -172,12 +176,41 @@ export const GET = withApiRoute(async (req: NextRequest,
       contactName = contact?.name || '';
     }
 
-    const html = renderHTML(invoice, items, contactName);
+    // Reuse the existing filename sanitization for both HTML and PDF responses.
+    const safeName = String(invoice.invoiceNumber || 'invoice').replace(/[^a-zA-Z0-9_\-]/g, '_');
 
-    return new NextResponse(html, {
+    // ?format=html preserves the original styled print view unchanged.
+    if (req.nextUrl.searchParams.get('format') === 'html') {
+      const html = renderHTML(invoice, items, contactName);
+      return new NextResponse(html, {
+        headers: {
+          'Content-Type': 'text/html; charset=utf-8',
+          'Content-Disposition': `inline; filename="${safeName}.html"`,
+        },
+      });
+    }
+
+    // Default: return real PDF bytes. Branding = tenant name (only source today).
+    const [tenant] = await db
+      .select({ name: tenants.name })
+      .from(tenants)
+      .where(eq(tenants.id, ctx.tenantId))
+      .limit(1);
+
+    const pdf = await renderInvoicePdf(
+      mapInvoiceToPdfData(
+        invoice as unknown as InvoiceRow,
+        items as unknown as LineItemRow[],
+        contactName,
+        tenant?.name,
+      ),
+    );
+
+    // A Node Buffer is wrapped as Uint8Array so the Response body type is satisfied.
+    return new NextResponse(new Uint8Array(pdf), {
       headers: {
-        'Content-Type': 'text/html; charset=utf-8',
-        'Content-Disposition': `inline; filename="${String(invoice.invoiceNumber || 'invoice').replace(/[^a-zA-Z0-9_\-]/g, '_')}.html"`,
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': `inline; filename="${safeName}.pdf"`,
       },
     });
   } catch (err) {
