@@ -60,7 +60,7 @@ export default function PortalInvoicesPage() {
       ) : (
         <div className="bg-card border border-border rounded-2xl overflow-hidden">
           <div className="overflow-x-auto">
-          <table className="w-full">
+          <table className="w-full min-w-[640px]">
             <thead><tr className="border-b border-border bg-muted/20">
               <th className="px-4 py-3 text-left text-[10px] font-bold text-muted-foreground uppercase">Invoice</th>
               <th className="px-4 py-3 text-left text-[10px] font-bold text-muted-foreground uppercase">Date</th>

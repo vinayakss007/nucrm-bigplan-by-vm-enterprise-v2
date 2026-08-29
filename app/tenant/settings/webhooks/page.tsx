@@ -207,7 +207,7 @@ export default function WebhooksPage() {
                 {WEBHOOK_EVENT_GROUPS.map(group => (
                   <div key={group.label}>
                     <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">{group.label}</p>
-                    <div className="grid grid-cols-2 gap-1.5">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
                       {group.events.map(event => (
                         <label key={event} className={cn('flex items-center gap-2 p-2 rounded-lg border cursor-pointer transition-colors text-sm',
                           form.events.includes(event) ? 'border-violet-300 bg-violet-50 dark:border-violet-700 dark:bg-violet-950/20' : 'border-border hover:bg-accent')}>
@@ -259,7 +259,7 @@ export default function WebhooksPage() {
                 {WEBHOOK_EVENT_GROUPS.map(group => (
                   <div key={group.label}>
                     <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">{group.label}</p>
-                    <div className="grid grid-cols-2 gap-1.5">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
                       {group.events.map(event => (
                         <label key={event} className={cn('flex items-center gap-2 p-2 rounded-lg border cursor-pointer transition-colors text-sm',
                           form.events.includes(event) ? 'border-violet-300 bg-violet-50 dark:border-violet-700 dark:bg-violet-950/20' : 'border-border hover:bg-accent')}>

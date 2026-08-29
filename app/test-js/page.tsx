@@ -24,7 +24,7 @@ export default function TestPage() {
   }
   
   return (
-    <div className="p-12 text-center font-sans">
+    <div className="p-6 sm:p-12 text-center font-sans">
       <h1>NuCRM JS Test</h1>
       <p className="text-2xl text-green-600">{test}</p>
       <button 

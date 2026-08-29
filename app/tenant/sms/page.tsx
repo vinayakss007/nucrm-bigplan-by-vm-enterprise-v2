@@ -168,7 +168,7 @@ export default function SmsPage() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="admin-card p-4">
           <p className="text-xs font-medium text-muted-foreground">Total Messages</p>
           <p className="text-2xl font-bold mt-1">{stats.total}</p>
@@ -213,7 +213,7 @@ export default function SmsPage() {
       ) : (
         <div className="admin-card overflow-hidden">
           <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full min-w-[640px] text-sm">
             <thead>
               <tr className="border-b border-border text-left">
                 <th className="px-4 py-3 font-medium text-muted-foreground">Direction</th>
