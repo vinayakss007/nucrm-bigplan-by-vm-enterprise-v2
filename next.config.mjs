@@ -68,12 +68,13 @@ let nextConfig = {
         { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
         { key: 'X-DNS-Prefetch-Control', value: 'on' },
         ...(process.env.NODE_ENV === 'production' ? [{ key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' }] : []),
-        // NOTE: 'unsafe-inline' in script-src is required by Next.js for hydration scripts.
-        // Style-src unsafe-inline is required for styled-jsx/CSS-in-JS.
-        // To fully remove unsafe-inline, switch to nonce-based CSP via proxy middleware
-        // (requires per-request headers + verifying every inline script/style; see Issue #657).
-        // object-src/base-uri/frame-src/worker-src are safe tightenings that need no nonce.
-        { key: 'Content-Security-Policy', value: process.env.NODE_ENV === 'production' ? "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' ws: wss:; frame-ancestors 'none'; frame-src 'self'; form-action 'self'; object-src 'none'; base-uri 'self'; worker-src 'self' blob:" : "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' ws: wss:; frame-ancestors 'none'; frame-src 'self'; form-action 'self'; object-src 'none'; base-uri 'self'; worker-src 'self' blob:" },
+        // Content-Security-Policy is intentionally NOT set here. It is emitted
+        // PER-REQUEST from proxy.ts (Next 16 middleware) with a fresh nonce so
+        // script-src can drop 'unsafe-inline' (#1070). proxy.ts is the SINGLE
+        // source of truth for the CSP — do not add a static CSP header here or
+        // it will conflict with / override the per-request nonce policy.
+        // style-src 'unsafe-inline' is retained in proxy.ts by design (next/font,
+        // react-hot-toast, tenant branding <style>); see proxy.ts buildCsp().
       ],
     }, {
       source: '/api/:path*',

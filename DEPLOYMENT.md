@@ -114,6 +114,49 @@ attacker and fails SOC 2 / GDPR, so it is refused at startup.
   psql "host=<host> dbname=nucrm user=nucrm sslmode=require" -c 'SHOW ssl;'  # → on
   ```
 
+## Content-Security-Policy — per-request nonce (#1070)
+
+The Content-Security-Policy is emitted **per request** from `proxy.ts` (the Next 16
+middleware), which is the **single source of truth** for the CSP. On every HTML page
+navigation the proxy generates a fresh base64 nonce, injects it into the CSP on both
+the forwarded request headers (so Next's app-render applies `nonce=` to its
+framework/hydration/injected scripts) and the response headers (for browser
+enforcement), and also sets an `x-nonce` response header.
+
+**What changed:** `script-src` dropped `'unsafe-inline'` in favour of
+`script-src 'self' 'nonce-<per-request>'` (in dev `'unsafe-eval'` is added for React
+Fast Refresh). This closes the primary reflected/stored XSS vector called out in
+#1070 — an injected inline `<script>` no longer executes because it lacks the
+per-request nonce.
+
+**`style-src 'unsafe-inline'` is RETAINED, by design.** Full style-src nonce/hash
+migration is a deliberate follow-up, not part of this fix, because these all emit
+inline styles that would break if `'unsafe-inline'` were removed:
+
+- **next/font** injects inline `<style>` for font-face declarations.
+- **react-hot-toast** sets inline `style` attributes on toast nodes.
+- **Tenant branding** renders server-component `<style>` blocks
+  (`components/branding/branding-provider.tsx`, `components/shared/branded-header.tsx`).
+
+As defense-in-depth those first-party branding `<style>` tags already receive the
+per-request nonce via `nonce={(await headers()).get('x-nonce')}`. A future change can
+migrate `style-src` to nonces/hashes once next/font and react-hot-toast inline styles
+are eliminated or hashed.
+
+All other directives are unchanged and remain hardened:
+`default-src 'self'; img-src 'self' data: blob:; font-src 'self' data:;
+connect-src 'self' ws: wss:; frame-ancestors 'none'; frame-src 'self';
+form-action 'self'; object-src 'none'; base-uri 'self'; worker-src 'self' blob:`.
+
+> **OPERATOR DEPENDENCY (read before deploying):** because the app now emits the CSP
+> per request with a nonce, **nginx (and any CDN / WAF / load balancer in front of the
+> app) MUST NOT set, strip, add, or override the `Content-Security-Policy` header.**
+> Doing so replaces the per-request nonce with a static value, which breaks script
+> hydration and re-opens the `unsafe-inline` XSS gap this fix closes. The bundled
+> `nginx.conf` has had its `add_header Content-Security-Policy ...` line removed for
+> this reason; keep it removed. `next.config.mjs` likewise no longer sets a static CSP
+> header — `proxy.ts` is the only place the CSP is defined.
+
 ## Tenant isolation (RLS) — enforced in the default deploy (#1615)
 
 Tenant isolation is enforced by PostgreSQL Row-Level Security (RLS). Each request

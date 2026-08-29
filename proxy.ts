@@ -35,6 +35,74 @@ function generateRequestId(): string {
   return globalThis.crypto.randomUUID();
 }
 
+/**
+ * Per-request CSP nonce (#1070). The value must match Next 16's nonce regex
+ * /^'nonce-([A-Za-z0-9+/_-]+={0,2})'$/ — base64 of a random UUID satisfies it.
+ * Next's app-render (get-script-nonce-from-header) reads the INCOMING request
+ * `content-security-policy` header, extracts the first script-src nonce, and
+ * applies it to all framework/hydration/injected scripts and Next-injected
+ * styles. So we must both (a) set the CSP on the FORWARDED request headers and
+ * (b) set the same CSP + an x-nonce header on the RESPONSE for the browser.
+ */
+function generateCspNonce(): string {
+  return Buffer.from(globalThis.crypto.randomUUID()).toString('base64');
+}
+
+/**
+ * Single source of truth for the Content-Security-Policy (#1070). All
+ * directives are byte-for-byte equivalent to the prior hardened policy EXCEPT
+ * script-src, which now uses a per-request nonce instead of 'unsafe-inline'.
+ *
+ * style-src RETAINS 'unsafe-inline' by design: next/font injects inline styles,
+ * react-hot-toast sets inline style attributes, and tenant branding renders
+ * server-component <style> blocks. Removing it would break tenant branding,
+ * fonts, and toasts. First-party <style> tags still receive the nonce as
+ * defense-in-depth (see components/branding/*). A follow-up may migrate
+ * style-src to nonces/hashes.
+ *
+ * In dev, 'unsafe-eval' is added to script-src for React Fast Refresh.
+ */
+function buildCsp(nonce: string): string {
+  const isProd = process.env['NODE_ENV'] === 'production';
+  const scriptSrc = isProd
+    ? `script-src 'self' 'nonce-${nonce}'`
+    : `script-src 'self' 'nonce-${nonce}' 'unsafe-eval'`;
+  return [
+    "default-src 'self'",
+    scriptSrc,
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob:",
+    "font-src 'self' data:",
+    "connect-src 'self' ws: wss:",
+    "frame-ancestors 'none'",
+    "frame-src 'self'",
+    "form-action 'self'",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "worker-src 'self' blob:",
+  ].join('; ');
+}
+
+/**
+ * Layers the per-request nonce CSP onto a page (HTML navigation) request.
+ * Sets the CSP on the forwarded REQUEST headers so Next 16 app-render can pick
+ * up the nonce, and returns a NextResponse whose response headers carry the
+ * same CSP plus x-nonce for browser enforcement. Never called for /api/ paths.
+ */
+function nextWithCsp(request: NextRequest): NextResponse {
+  const nonce = generateCspNonce();
+  const csp = buildCsp(nonce);
+
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set('content-security-policy', csp);
+  requestHeaders.set('x-nonce', nonce);
+
+  const response = NextResponse.next({ request: { headers: requestHeaders } });
+  response.headers.set('content-security-policy', csp);
+  response.headers.set('x-nonce', nonce);
+  return response;
+}
+
 // Public marketing site — the route group at app/(marketing). These must be
 // listed here or anonymous visitors get redirected to /auth/login and the
 // website is invisible to everyone who is not already a customer.
@@ -188,9 +256,11 @@ export async function proxy(request: NextRequest) {
     return response;
   }
 
-  // Non-API public paths pass through with CORS
+  // Non-API public paths pass through with CORS.
+  // Layer the per-request nonce CSP onto HTML page navigations (#1070); API
+  // paths never reach here so the page CSP never lands on /api/ responses.
   if (!isApiRequest(pathname) && isPublic(pathname)) {
-    const response = NextResponse.next();
+    const response = nextWithCsp(request);
     response.headers.set('x-request-id', requestId);
     setCORS(response, origin, pathname);
     return response;
@@ -275,7 +345,10 @@ export async function proxy(request: NextRequest) {
       }
     }
 
-    const response = NextResponse.next();
+    // Authenticated pass-through. For HTML page navigations, layer the
+    // per-request nonce CSP (#1070); API responses keep the plain pass-through
+    // so the page CSP never lands on /api/.
+    const response = isApiRequest(pathname) ? NextResponse.next() : nextWithCsp(request);
     response.headers.set('x-request-id', requestId);
     setCORS(response, origin, pathname);
     return response;
