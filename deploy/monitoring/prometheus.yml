@@ -14,10 +14,24 @@ scrape_configs:
   - job_name: "nucrm-app"
     metrics_path: "/api/metrics"
     scrape_interval: 30s
-    static_configs:
-      - targets: ["172.18.0.1:3000"]
-        labels:
-          service: "nucrm-app"
+    # The app resolves via Docker's internal DNS on the shared nucrm-net network.
+    # `app` is the compose service name; with multiple replicas Docker returns
+    # every replica's IP, so Prometheus scrapes each one. Do NOT hardcode a
+    # bridge-gateway IP here — the gateway is not the app and changes per host.
+    dns_sd_configs:
+      - names: ["app"]
+        type: A
+        port: 3000
+        refresh_interval: 30s
+    relabel_configs:
+      - target_label: service
+        replacement: "nucrm-app"
+    # /api/metrics fails closed in production unless a bearer token matching
+    # METRICS_SECRET is presented. The token is mounted read-only at this path
+    # by docker-compose.production.yml (see the prometheus service).
+    authorization:
+      type: Bearer
+      credentials_file: /etc/prometheus/metrics-token
 
   - job_name: "postgres"
     static_configs:

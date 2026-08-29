@@ -49,7 +49,19 @@ services:
     volumes:
       - ./nginx/nginx-production.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/ssl:/etc/nginx/ssl:ro
+      # Let's Encrypt live certs + the ACME http-01 challenge webroot. The nginx
+      # config serves /.well-known/acme-challenge/ from /var/www/certbot and
+      # reads certs from /etc/letsencrypt/live/... (see nginx-production.conf).
+      - letsencrypt:/etc/letsencrypt:ro
+      - certbot-webroot:/var/www/certbot
       - nginx-logs:/var/log/nginx
+    # Reload every 12h so a renewed certificate is picked up without a restart.
+    command:
+      - /bin/sh
+      - -c
+      - |
+        while :; do sleep 12h & wait $${!}; nginx -s reload; done & \
+        exec nginx -g 'daemon off;'
     depends_on:
       app:
         condition: service_healthy
@@ -74,6 +86,39 @@ services:
       interval: 10s
       timeout: 3s
       retries: 3
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  #  CERTBOT — Let's Encrypt certificate issuance + auto-renewal (#1040)
+  #
+  #  Renews every 12h (a no-op until a cert is within 30 days of expiry). Initial
+  #  issuance is done by deploy/scripts/setup-ssl.sh, which runs certbot once and
+  #  writes the cert into the shared `letsencrypt` volume that nginx mounts.
+  #  Requires DOMAIN + ACME_EMAIL in .env. With no real domain (IP only) skip
+  #  this and use the self-signed fallback that setup-ssl.sh generates.
+  # ═══════════════════════════════════════════════════════════════════════════
+  certbot:
+    image: certbot/certbot:v2.11.0
+    container_name: nucrm-certbot
+    volumes:
+      - letsencrypt:/etc/letsencrypt
+      - certbot-webroot:/var/www/certbot
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        trap exit TERM
+        while :; do
+          certbot renew --webroot -w /var/www/certbot --quiet
+          sleep 12h & wait $${!}
+        done
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+          cpus: "0.1"
+    restart: unless-stopped
+    networks:
+      - nucrm-net
 
   # ═══════════════════════════════════════════════════════════════════════════
   #  APP — Next.js 16 (scalable replicas)
@@ -132,6 +177,7 @@ services:
       - PAGERDUTY_ENABLED=${PAGERDUTY_ENABLED:-}
       - DATABASE_POOL_SIZE=${DATABASE_POOL_SIZE:-20}
       - DATABASE_SSL=${DATABASE_SSL:-true}
+      - METRICS_SECRET=${METRICS_SECRET:?METRICS_SECRET is required - Prometheus authenticates to /api/metrics with it - run deploy/generate-secrets.sh}
     expose:
       - "3000"
     deploy:
@@ -396,16 +442,27 @@ services:
   prometheus:
     image: prom/prometheus:v2.53.0
     container_name: nucrm-prometheus
+    # Write the metrics bearer token (from the env) to the credentials_file that
+    # prometheus.yml references, then exec Prometheus. Keeps the secret out of
+    # the config file and image layers while satisfying credentials_file.
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        printf '%s' "$${METRICS_SECRET}" > /etc/prometheus/metrics-token
+        chmod 600 /etc/prometheus/metrics-token
+        exec /bin/prometheus \
+          --config.file=/etc/prometheus/prometheus.yml \
+          --storage.tsdb.path=/prometheus \
+          --storage.tsdb.retention.time=30d \
+          --storage.tsdb.retention.size=2GB \
+          --web.enable-lifecycle
+    environment:
+      - METRICS_SECRET=${METRICS_SECRET:?METRICS_SECRET is required - Prometheus authenticates to /api/metrics with it - run deploy/generate-secrets.sh}
     volumes:
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./monitoring/alerts.yml:/etc/prometheus/alerts.yml:ro
       - prometheusdata:/prometheus
-    command:
-      - "--config.file=/etc/prometheus/prometheus.yml"
-      - "--storage.tsdb.path=/prometheus"
-      - "--storage.tsdb.retention.time=30d"
-      - "--storage.tsdb.retention.size=2GB"
-      - "--web.enable-lifecycle"
     ports:
       - "127.0.0.1:9090:9090"
     deploy:
@@ -521,6 +578,25 @@ services:
     networks:
       - nucrm-net
 
+  # Postgres runs on the HOST (not in this compose), so the exporter reaches it
+  # via host.docker.internal. prometheus.yml scrapes postgres-exporter:9187 and
+  # the PostgresDown alert (up{job="postgres"}) depends on this service existing.
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.15.0
+    container_name: nucrm-postgres-exporter
+    environment:
+      - DATA_SOURCE_NAME=postgresql://${POSTGRES_USER:-nucrm}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required - run deploy/generate-secrets.sh}@host.docker.internal:5432/${POSTGRES_DB:-nucrm}?sslmode=${POSTGRES_EXPORTER_SSLMODE:-require}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    deploy:
+      resources:
+        limits:
+          memory: 48M
+          cpus: "0.1"
+    restart: unless-stopped
+    networks:
+      - nucrm-net
+
 # ═══════════════════════════════════════════════════════════════════════════
 #  VOLUMES
 # ═══════════════════════════════════════════════════════════════════════════
@@ -536,6 +612,10 @@ volumes:
   nginx-logs:
     driver: local
   lokidata:
+    driver: local
+  letsencrypt:
+    driver: local
+  certbot-webroot:
     driver: local
 
 # ═══════════════════════════════════════════════════════════════════════════
