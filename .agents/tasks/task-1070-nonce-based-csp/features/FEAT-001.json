@@ -1,0 +1,24 @@
+{
+  "id": "FEAT-001",
+  "type": "chore",
+  "description": "Environment setup and baseline. Confirm Node/npm via nvm, dependencies present, and that the baseline builds/tests are green BEFORE making CSP changes, so any later failure is attributable to this change. This is required because CSP/hydration regressions only surface at build/runtime.",
+  "status": "completed",
+  "steps": [
+    "Load nvm: export NVM_DIR=\"$HOME/.nvm\"; . \"$NVM_DIR/nvm.sh\"; confirm `node -v` is 22.x and `npm -v` works.",
+    "If node_modules is missing, run `npm install`. It is already present per routing, so likely a no-op.",
+    "Run `npm run typecheck` and confirm 0 errors on the untouched branch (baseline).",
+    "Run `npx vitest run tests/unit/proxy.test.ts tests/unit/security-hardening.test.ts` and confirm they pass (baseline).",
+    "Do NOT run a full build yet (saved for the verification feature) unless you want a baseline; a baseline build is optional given ~5min cost."
+  ],
+  "acceptance_criteria": [
+    "`node -v` reports Node 22.x after sourcing nvm",
+    "`npm run typecheck` exits 0 on the unmodified branch",
+    "`npx vitest run tests/unit/proxy.test.ts tests/unit/security-hardening.test.ts` passes"
+  ],
+  "verification": [
+    "export NVM_DIR=\"$HOME/.nvm\"; . \"$NVM_DIR/nvm.sh\"; npm run typecheck",
+    "npx vitest run tests/unit/proxy.test.ts tests/unit/security-hardening.test.ts"
+  ],
+  "blocked_reason": null,
+  "findings": "Baseline verified GREEN on branch fix/1070-nonce-based-csp before any CSP changes. Environment: after sourcing nvm (export NVM_DIR=\"$HOME/.nvm\"; . \"$NVM_DIR/nvm.sh\"), node -v = v22.23.2, npm -v = 11.4.2. node_modules already present, no npm install needed. `npm run typecheck` (npx tsc --noEmit --pretty) exited 0 with no errors. `npx vitest run tests/unit/proxy.test.ts tests/unit/security-hardening.test.ts` passed: 2 test files, 19 tests (proxy.test.ts 12 tests, security-hardening.test.ts 7 tests), ~310ms. vitest v4.1.11. Did NOT run a full `npm run build` (optional, ~5min, deferred to the verification feature). Working tree clean aside from the untracked .agents task dir. Any typecheck/vitest failure in later CSP features is therefore attributable to those changes, not pre-existing state."
+}

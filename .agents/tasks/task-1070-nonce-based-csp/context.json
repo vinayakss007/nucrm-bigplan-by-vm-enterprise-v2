@@ -1,0 +1,27 @@
+{
+  "project_type": "Next.js 16.3.3 App Router SaaS CRM (multi-tenant) + TypeScript + PostgreSQL (Drizzle) + JWT auth; Sentry wired in; deployed via pm2 (next start) behind nginx",
+  "language": "TypeScript",
+  "build_system": "npm (Node 22 via nvm, NOT on PATH). MUST run `export NVM_DIR=\"$HOME/.nvm\"; . \"$NVM_DIR/nvm.sh\"` before any node/npm/git-commit command so the Husky pre-commit hook (prettier + eslint --max-warnings=0) works.",
+  "test_framework": "vitest (tests/unit/*.test.ts). Existing patterns: tests/unit/proxy.test.ts mocks next/server and imports @/proxy; tests/unit/security-hardening.test.ts asserts on file contents via fs.readFileSync.",
+  "build_command": "export NVM_DIR=\"$HOME/.nvm\"; . \"$NVM_DIR/nvm.sh\"; npm run build   (~5min; rm -rf .next first for a clean build; NEVER run two builds concurrently)",
+  "test_command": "export NVM_DIR=\"$HOME/.nvm\"; . \"$NVM_DIR/nvm.sh\"; npx vitest run tests/unit/proxy.test.ts tests/unit/security-hardening.test.ts   (full suite times out; run individual files)",
+  "verification_instructions": "1) npm run typecheck -> 0 errors. 2) npx eslint . --max-warnings=0 -> 0 warnings. 3) vitest run on proxy + security-hardening + any new csp test. 4) npm run build succeeds (CSP/hydration issues surface at build/runtime, not typecheck). Full postman suite needs a live app host (unavailable) so build + typecheck + lint + vitest is the substitute.",
+  "snapshot_or_generated_files": "null - no snapshot/generated files affected by this change",
+  "setup_instructions": "node_modules already present. If absent: export NVM_DIR=\"$HOME/.nvm\"; . \"$NVM_DIR/nvm.sh\"; npm install",
+  "environment_constraints": "network OPEN_INTERNET. Cannot push or open PRs (orchestrator publishes). Cannot run a live app host so runtime CSP-violation checks must be documented as manual verification steps. Do NOT push to main; work stays on branch fix/1070-nonce-based-csp.",
+  "contribution_requirements": "AGENTS.md: never commit/push to main; one issue per PR; branch fix/<desc>; PR targets main; commit message convention 'fix(#1070): ...'. Husky pre-commit runs prettier + eslint --max-warnings=0.",
+  "key_patterns": "VERIFIED NEXT 16 NONCE CONTRACT (from node_modules/next/dist/server/app-render/app-render.js:209 + get-script-nonce-from-header.js): app-render reads the INCOMING REQUEST header 'content-security-policy' (falls back to 'content-security-policy-report-only'), finds the 'script-src' directive, and extracts the FIRST source matching /^'nonce-([A-Za-z0-9+/_-]+={0,2})'$/. It then applies nonce= to all framework/hydration/injected scripts and to Next-injected styles and <Script nonce> components. Therefore proxy.ts must (a) generate a per-request base64 nonce, (b) build a CSP string containing script-src 'self' 'nonce-<value>' (prod) or +'unsafe-eval' (dev), (c) set that CSP on request headers via NextResponse.next({ request: { headers } }) so app-render sees it, AND (d) set the same CSP + an x-nonce header on the RESPONSE for browser enforcement. Next.js official guide confirms this middleware/proxy pattern (also sets custom x-nonce header). Nonce requires DYNAMIC rendering; pages are dynamic here (JWT auth), and proxy.ts matcher already excludes _next/static & static assets. INLINE SOURCE INVENTORY: no first-party inline <script> with raw JS (only <script src='/dark-reader-cleanup.js'> which is script-src 'self'); Sentry loads as bundles. Inline STYLE via <style dangerouslySetInnerHTML> exists in server components components/branding/branding-provider.tsx and components/shared/branded-header.tsx (tenant branding), plus next/font injected styles and react-hot-toast inline style attributes. These are why style-src 'unsafe-inline' removal is fragile.",
+  "relevant_files": [
+    "next.config.mjs (static CSP header ~line 71-76 to be made nonce-aware / reconciled to single source of truth)",
+    "proxy.ts (Next 16 middleware; add per-request nonce + dynamic CSP here)",
+    "nginx.conf (DUPLICATE CSP with unsafe-inline at add_header Content-Security-Policy; must be reconciled or it double-sets/overrides; operator dependency)",
+    "app/layout.tsx (root layout; loads <script src='/dark-reader-cleanup.js' defer />)",
+    "components/branding/branding-provider.tsx (server component, <style dangerouslySetInnerHTML> tenant CSS vars)",
+    "components/shared/branded-header.tsx (server component, <style dangerouslySetInnerHTML> branding)",
+    "tests/unit/proxy.test.ts (test pattern for proxy)",
+    "tests/unit/security-hardening.test.ts (file-content assertion pattern)",
+    "DEPLOYMENT.md (security posture docs to update)",
+    "sentry.client.config.ts / instrumentation-client.ts (confirm Sentry needs no inline script/style CSP relaxation)"
+  ],
+  "directory_structure": "app/ (App Router routes incl. layout.tsx, api/), components/ (branding/, shared/), lib/ (auth/, rate-limit-edge, branding.ts), proxy.ts + next.config.mjs + nginx.conf at root, tests/unit/ (vitest), DEPLOYMENT.md at root."
+}

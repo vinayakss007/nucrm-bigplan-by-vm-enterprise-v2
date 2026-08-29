@@ -1,0 +1,7 @@
+{
+  "task_id": "task-1070-nonce-based-csp",
+  "task_description": "Fix GitHub issue #1070 (SECURITY: CSP includes unsafe-inline for scripts and styles). Remove 'unsafe-inline' from script-src via a per-request nonce emitted by proxy.ts (Next 16 middleware), establishing a single source of truth for the CSP (remove the static CSP from next.config.mjs and the duplicate CSP from nginx.conf). Retain style-src 'unsafe-inline' with a documented rationale and follow-up (next/font, react-hot-toast inline style attributes, and tenant-branding <style> make full style-src removal fragile). Bug fix / hardening only; do not weaken any already-tightened directive or break realtime websockets, Sentry, images, workers, or the marketing site. Work on branch fix/1070-nonce-based-csp; do not push/PR (orchestrator publishes).",
+  "status": "in_progress",
+  "feature_order": ["FEAT-001", "FEAT-002"],
+  "blocked_reason": null
+}
