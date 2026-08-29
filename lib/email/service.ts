@@ -7,6 +7,18 @@ import crypto from 'crypto';
 import { escapeHtml } from '@/lib/email/escape-html';
 import { generateUnsubscribeToken } from '@/lib/email/unsubscribe-token';
 
+/**
+ * A single file attachment for an outgoing email.
+ * `content` may be a Node Buffer (raw bytes) or a base64-encoded string; each
+ * provider adapter converts it into the shape that provider's API expects.
+ */
+export interface EmailAttachment {
+  filename: string;
+  /** Raw bytes as a Buffer, or a base64-encoded string. */
+  content: Buffer | string;
+  contentType?: string;
+}
+
 export interface EmailPayload {
   to: string | string[];
   subject: string;
@@ -16,6 +28,17 @@ export interface EmailPayload {
   replyTo?: string;
   /** When set, RFC 8058 List-Unsubscribe headers are added to the message */
   contactId?: string;
+  /** Optional file attachments; wired per-provider by each adapter. */
+  attachments?: EmailAttachment[];
+}
+
+/**
+ * Normalize an attachment's content to a base64 string for JSON HTTP APIs.
+ * A Buffer is base64-encoded; a string is assumed to be base64 already and
+ * passed through unchanged (so callers can supply pre-encoded content).
+ */
+function toBase64(content: Buffer | string): string {
+  return Buffer.isBuffer(content) ? content.toString('base64') : content;
 }
 
 export interface SendResult {
@@ -77,6 +100,16 @@ async function sendViaResend(payload: EmailPayload): Promise<SendResult> {
         text: payload.text,
         reply_to: payload.replyTo,
         headers: Object.keys(headers).length > 0 ? headers : undefined,
+        // Resend HTTP API accepts attachments: [{ filename, content }] with
+        // base64-encoded content. Only include the key when we actually have
+        // attachments so bodies stay byte-for-byte unchanged otherwise.
+        attachments: payload.attachments && payload.attachments.length > 0
+          ? payload.attachments.map((a) => ({
+              filename: a.filename,
+              content: toBase64(a.content),
+              ...(a.contentType ? { content_type: a.contentType } : {}),
+            }))
+          : undefined,
       }),
       signal: AbortSignal.timeout(15_000),
     });
@@ -148,6 +181,16 @@ async function sendViaSMTP(payload: EmailPayload): Promise<SendResult> {
       text: payload.text,
       replyTo: payload.replyTo,
       headers: Object.keys(smtpHeaders).length > 0 ? smtpHeaders : undefined,
+      // nodemailer accepts attachments: [{ filename, content, contentType }]
+      // with the Buffer/string content passed through directly (no base64
+      // conversion needed). Only set the key when non-empty.
+      attachments: payload.attachments && payload.attachments.length > 0
+        ? payload.attachments.map((a) => ({
+            filename: a.filename,
+            content: a.content,
+            ...(a.contentType ? { contentType: a.contentType } : {}),
+          }))
+        : undefined,
     });
 
     return { success: true, provider: 'smtp', messageId: info.messageId };

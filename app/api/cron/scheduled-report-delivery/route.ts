@@ -7,6 +7,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifySecret } from '@/lib/crypto';
 import { generateExportData } from '@/lib/export';
 import { sendEmail } from '@/lib/email/service';
+import type { EmailAttachment } from '@/lib/email/service';
+import { renderReportPdf } from '@/lib/pdf/render';
 import { logError } from '@/lib/errors-server';
 import { db } from '@/drizzle/db';
 import { scheduledReports } from '@/drizzle/schema';
@@ -23,8 +25,10 @@ const REPORT_LOCK_TTL = 120; // 2 minutes
  * via lib/export/index.ts and emails it to the configured recipients via
  * lib/email/service.ts. Advances nextRunAt per the report frequency.
  *
- * Generated CSV content is delivered as plain text and as a <pre> block in the
- * HTML body (the generic sendEmail payload has no attachment facility).
+ * The generated report is delivered as a real file attachment (#1614): a .csv
+ * by default, or a .pdf rendered via lib/pdf when the report's configured
+ * format is 'pdf'. The email body is a short message; the data is no longer
+ * inlined into an HTML block.
  */
 
 type ExportEntityType = 'contacts' | 'deals' | 'tasks' | 'companies';
@@ -64,6 +68,57 @@ function escapeHtml(value: string): string {
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
+}
+
+/** Strip characters that are unsafe in a filename, collapsing to a safe stem. */
+function toSafeFilename(name: string): string {
+  const cleaned = String(name || '')
+    .replace(/[^a-zA-Z0-9._-]+/g, '_')
+    .replace(/^[._-]+|[._-]+$/g, '');
+  return cleaned || 'report';
+}
+
+/**
+ * Parse a CSV string produced by generateExportData into a header row plus data
+ * rows for tabular PDF rendering. escapeCSV wraps fields containing commas,
+ * quotes, or newlines in double quotes and doubles embedded quotes, so this
+ * parser honours quoted fields (including quoted commas and newlines).
+ */
+function parseCsv(csv: string): { columns: string[]; rows: string[][] } {
+  const records: string[][] = [];
+  let field = '';
+  let record: string[] = [];
+  let inQuotes = false;
+  const pushField = () => { record.push(field); field = ''; };
+  const pushRecord = () => { pushField(); records.push(record); record = []; };
+
+  for (let i = 0; i < csv.length; i++) {
+    const ch = csv[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        if (csv[i + 1] === '"') { field += '"'; i++; }
+        else { inQuotes = false; }
+      } else {
+        field += ch;
+      }
+    } else if (ch === '"') {
+      inQuotes = true;
+    } else if (ch === ',') {
+      pushField();
+    } else if (ch === '\n') {
+      pushRecord();
+    } else if (ch === '\r') {
+      // skip; handled by the following \n (or end of input)
+    } else {
+      field += ch;
+    }
+  }
+  // Flush any trailing field/record that was not newline-terminated.
+  if (field.length > 0 || record.length > 0) pushRecord();
+
+  const columns = records.length > 0 ? (records[0] ?? []) : [];
+  const rows = records.slice(1);
+  return { columns, rows };
 }
 
 export async function POST(req: NextRequest) {
@@ -117,11 +172,38 @@ export async function POST(req: NextRequest) {
         if (recipients.length === 0) {
           console.warn(`[scheduled-report] ${report.id}: no recipients, skipping send`);
         } else {
+          // #1614: deliver the report as a real file attachment instead of
+          // inlining the CSV into the HTML body. CSV by default; render a PDF
+          // via lib/pdf when the report's configured format is 'pdf'.
+          const format = String(report.format || 'csv').toLowerCase();
+          const safeName = toSafeFilename(report.name);
+          let attachment: EmailAttachment;
+          if (format === 'pdf') {
+            const { columns, rows } = parseCsv(csv || '');
+            const pdfBuffer = await renderReportPdf({
+              title: report.name,
+              columns,
+              rows,
+            });
+            attachment = {
+              filename: `${safeName}.pdf`,
+              content: pdfBuffer,
+              contentType: 'application/pdf',
+            };
+          } else {
+            attachment = {
+              filename: `${safeName}.csv`,
+              content: Buffer.from(csv || '', 'utf8'),
+              contentType: 'text/csv',
+            };
+          }
+
           await sendEmail({
             to: recipients,
             subject: `Scheduled report: ${report.name} (${report.format?.toUpperCase?.() ?? 'CSV'})`,
-            text: csv || 'No rows returned for this report period.',
-            html: `<p>Your scheduled report <strong>${escapeHtml(report.name)}</strong> (${escapeHtml(report.type)}) is ready.</p><pre style="font-size:11px;white-space:pre-wrap;background:#f6f6f6;padding:12px;border-radius:8px;">${escapeHtml(csv || 'No rows returned for this report period.')}</pre>`,
+            text: `Your scheduled report ${report.name} (${report.type}) is attached.`,
+            html: `<p>Your scheduled report <strong>${escapeHtml(report.name)}</strong> (${escapeHtml(report.type)}) is attached.</p>`,
+            attachments: [attachment],
           });
         }
 
