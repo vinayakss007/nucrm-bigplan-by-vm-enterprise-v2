@@ -11,6 +11,7 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { tenants, tenantMembers, roles, pipelines, dealStages } from '@/drizzle/schema';
 import { and, eq, sql } from 'drizzle-orm';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 // tenantId is optional: when omitted (or an empty body is sent) the handler
 // falls back to joining the first active tenant. Extra keys are ignored so a
@@ -19,7 +20,7 @@ const joinTenantSchema = z.object({
   tenantId: z.string().trim().min(1).optional(),
 });
 
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -132,9 +133,9 @@ export async function POST(request: NextRequest) {
     console.error('[superadmin/join-tenant POST]', err);
     return apiError(err);
   }
-}
+});
 
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -173,4 +174,4 @@ export async function GET(request: NextRequest) {
     console.error('[superadmin/join-tenant GET]', err);
     return apiError(err);
   }
-}
+});

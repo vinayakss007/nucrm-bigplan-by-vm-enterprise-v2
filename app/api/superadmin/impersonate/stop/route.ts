@@ -12,6 +12,7 @@ import { db } from '@/drizzle/db';
 import { users, tenantMembers } from '@/drizzle/schema';
 import { eq, and, sql } from 'drizzle-orm';
 import { logSuperAdminAction } from '@/lib/audit/super-admin';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 const schema = z.object({ sessionId: z.string().min(1) });
 
@@ -19,7 +20,7 @@ const schema = z.object({ sessionId: z.string().min(1) });
  * POST /api/superadmin/impersonate/stop
  * End current impersonation session
  */
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -108,13 +109,13 @@ export async function POST(request: NextRequest) {
     console.error('[Impersonation Stop] Error:', err);
     return apiError(err);
   }
-}
+});
 
 /**
  * GET /api/superadmin/impersonate/active
  * Get active impersonation sessions
  */
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -135,5 +136,5 @@ export async function GET(request: NextRequest) {
     console.error('[Impersonation List] Error:', err);
     return apiError(err);
   }
-}
+});
 

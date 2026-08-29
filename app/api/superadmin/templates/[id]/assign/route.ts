@@ -11,15 +11,14 @@ import { db } from '@/drizzle/db';
 import { productTemplates, tenantTemplates } from '@/drizzle/schema';
 import { eq, and, sql } from 'drizzle-orm';
 import { installTemplateModules } from '@/lib/modules/auto-install';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 const assignSchema = z.object({
   tenant_id: z.string().uuid(),
 });
 
-export async function POST(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const POST = withApiRoute(async (req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -74,4 +73,4 @@ export async function POST(
     console.error('[superadmin/templates/[id]/assign POST]', err);
     return NextResponse.json({ error: message }, { status: 500 });
   }
-}
+});

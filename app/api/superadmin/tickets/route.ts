@@ -13,8 +13,9 @@ import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { concurrencyGuardById } from '@/lib/api/concurrency';
 import { generatePortalToken } from '@/lib/ticket-portal';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -72,7 +73,7 @@ export async function GET(request: NextRequest) {
     console.error('[superadmin/tickets GET]', err);
     return apiError(err instanceof Error ? err : new Error(String(err)));
   }
-}
+});
 
 const createTicketSchema = z.object({
   subject: z.string().min(1),
@@ -90,7 +91,7 @@ const updateTicketSchema = z.object({
   updated_at: z.string().datetime().optional(),
 });
 
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -125,9 +126,9 @@ export async function POST(request: NextRequest) {
     console.error('[superadmin/tickets POST]', err);
     return apiError(err instanceof Error ? err : new Error(String(err)));
   }
-}
+});
 
-export async function PATCH(request: NextRequest) {
+export const PATCH = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -181,5 +182,5 @@ export async function PATCH(request: NextRequest) {
     console.error('[superadmin/tickets PATCH]', err);
     return apiError(err instanceof Error ? err : new Error(String(err)));
   }
-}
+});
 

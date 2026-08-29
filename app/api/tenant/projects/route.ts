@@ -13,8 +13,9 @@ import { db } from '@/drizzle/db';
 import { projects, users } from '@/drizzle/schema';
 import { eq, and, sql, desc, isNull } from 'drizzle-orm';
 import { ModuleRegistry } from '@/lib/modules/registry';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -69,9 +70,9 @@ export async function GET(request: NextRequest) {
     console.error('[projects GET]', err);
     return apiError(err);
   }
-}
+});
 
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const limited = await rateLimitMutating(request, 'projects', 'post');
     if (limited) return limited;
@@ -114,4 +115,4 @@ export async function POST(request: NextRequest) {
     console.error('[projects POST]', err);
     return apiError(err);
   }
-}
+});

@@ -13,11 +13,12 @@ import { followUps } from '@/drizzle/schema';
 import { eq, and, isNull } from 'drizzle-orm';
 import { concurrencyGuard } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function PATCH(req: NextRequest, { params }: any) {
+export const PATCH = withApiRoute(async (req: NextRequest, { params }: any) => {
   try {
   const limited = await rateLimitMutating(req, 'followUps', 'patch');
   if (limited) return limited;
@@ -76,12 +77,12 @@ export async function PATCH(req: NextRequest, { params }: any) {
     console.error('[follow-up PATCH]', err);
     return apiError(err);
   }
-}
+});
 
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function DELETE(req: NextRequest, { params }: any) {
+export const DELETE = withApiRoute(async (req: NextRequest, { params }: any) => {
   try {
   const limited = await rateLimitMutating(req, 'followUps', 'delete');
   if (limited) return limited;
@@ -113,4 +114,4 @@ export async function DELETE(req: NextRequest, { params }: any) {
     console.error('[follow-up DELETE]', err);
     return apiError(err);
   }
-}
+});

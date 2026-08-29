@@ -27,6 +27,7 @@ import { logAudit } from '@/lib/audit';
 import { SEED_DRAFT_TEMPLATES } from '@/lib/ai/draft';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { createAiTemplateSchema } from '@/lib/api/schemas';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 const VALID_KINDS = new Set(['email', 'note', 'reply', 'call_prep']);
 
@@ -66,7 +67,7 @@ function slugify(name: string): string {
     .slice(0, 60);
 }
 
-export async function GET(req: NextRequest) {
+export const GET = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -90,9 +91,9 @@ export async function GET(req: NextRequest) {
   } catch (err) {
     return apiError(err);
   }
-}
+});
 
-export async function POST(req: NextRequest) {
+export const POST = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -162,4 +163,4 @@ export async function POST(req: NextRequest) {
     void logError({ error: err, context: 'ai-templates POST' });
     return apiError(err);
   }
-}
+});

@@ -12,6 +12,7 @@ import { eq, and, sql, ne } from 'drizzle-orm';
 import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { isStripeConfigured } from '@/lib/stripe';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 const retrySchema = z.object({
   subscriptionId: z.string().uuid('Invalid subscription ID'),
@@ -31,7 +32,7 @@ class DunningCapReached extends Error {
  * 
  * Body: { subscriptionId: string }
  */
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -164,13 +165,13 @@ export async function POST(request: NextRequest) {
     }
     return apiError(err);
   }
-}
+});
 
 /**
  * GET /api/tenant/billing/dunning/retry
  * Get dunning attempts for a subscription.
  */
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -194,4 +195,4 @@ export async function GET(request: NextRequest) {
   } catch (err: unknown) {
     return apiError(err);
   }
-}
+});

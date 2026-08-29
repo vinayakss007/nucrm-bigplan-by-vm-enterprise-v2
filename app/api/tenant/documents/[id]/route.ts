@@ -14,11 +14,10 @@ import { documents } from '@/drizzle/schema';
 import { eq, and, isNull } from 'drizzle-orm';
 import { getSignedUrl, deleteObject } from '@/lib/storage/s3';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
-export async function GET(
-  request: NextRequest,
-  context: { params: Promise<{ id: string }> },
-) {
+export const GET = withApiRoute(async (request: NextRequest,
+  context: { params: Promise<{ id: string }> },) => {
   const ctx = await requireAuth(request);
   if (ctx instanceof NextResponse) return ctx;
 
@@ -68,12 +67,10 @@ export async function GET(
       download_url_expires_in_seconds: 600,
     },
   });
-}
+});
 
-export async function DELETE(
-  request: NextRequest,
-  context: { params: Promise<{ id: string }> },
-) {
+export const DELETE = withApiRoute(async (request: NextRequest,
+  context: { params: Promise<{ id: string }> },) => {
   const ctx = await requireAuth(request);
   if (ctx instanceof NextResponse) return ctx;
 
@@ -112,4 +109,4 @@ export async function DELETE(
     .where(eq(documents.id, id));
 
   return NextResponse.json({ ok: true });
-}
+});

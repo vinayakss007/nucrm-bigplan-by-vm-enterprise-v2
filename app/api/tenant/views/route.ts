@@ -11,12 +11,13 @@ import { db } from '@/drizzle/db';
 import { savedViews } from '@/drizzle/schema';
 import { eq, and, or, desc, isNull } from 'drizzle-orm';
 import { readJsonBody } from '@/lib/api/validate';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 /**
  * GET /api/tenant/views
  * List saved views for the current user + shared views from others
  */
-export async function GET(req: NextRequest) {
+export const GET = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -46,13 +47,13 @@ export async function GET(req: NextRequest) {
   } catch (err: unknown) {
     return apiError(err);
   }
-}
+});
 
 /**
  * POST /api/tenant/views
  * Create a saved view
  */
-export async function POST(req: NextRequest) {
+export const POST = withApiRoute(async (req: NextRequest) => {
   try {
     const limited = await rateLimitMutating(req, 'views', 'post');
     if (limited) return limited;
@@ -91,4 +92,4 @@ export async function POST(req: NextRequest) {
   } catch (err: unknown) {
     return apiError(err);
   }
-}
+});

@@ -15,6 +15,7 @@ import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { concurrencyGuard, checkStaleUpdate } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 const createTerritorySchema = z.object({
   name: z.string().min(1, 'name is required'),
@@ -33,7 +34,7 @@ const updateTerritorySchema = z.object({
   expectedUpdatedAt: z.coerce.date().optional(),
 });
 
-export async function GET(req: NextRequest) {
+export const GET = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -48,9 +49,9 @@ export async function GET(req: NextRequest) {
   } catch (err: any) {
     return apiError(err);
   }
-}
+});
 
-export async function POST(req: NextRequest) {
+export const POST = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -77,9 +78,9 @@ export async function POST(req: NextRequest) {
   } catch (err: any) {
     return apiError(err);
   }
-}
+});
 
-export async function PUT(req: NextRequest) {
+export const PUT = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -118,9 +119,9 @@ export async function PUT(req: NextRequest) {
   } catch (err: any) {
     return apiError(err);
   }
-}
+});
 
-export async function DELETE(req: NextRequest) {
+export const DELETE = withApiRoute(async (req: NextRequest) => {
   try {
   const limited = await rateLimitMutating(req, 'territories', 'delete');
   if (limited) return limited;
@@ -154,4 +155,4 @@ export async function DELETE(req: NextRequest) {
   } catch (err: any) {
     return apiError(err);
   }
-}
+});

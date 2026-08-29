@@ -10,8 +10,9 @@ import { db } from '@/drizzle/db';
 import { tenants, plans, usageSnapshots } from '@/drizzle/schema';
 import { eq, sql, desc, inArray } from 'drizzle-orm';
 import { logError } from '@/lib/errors-server';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -63,5 +64,5 @@ export async function GET(request: NextRequest) {
     console.error('[superadmin/usage GET]', err);
     return apiError(err);
   }
-}
+});
 

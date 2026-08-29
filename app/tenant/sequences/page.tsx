@@ -8,8 +8,10 @@ import { db } from '@/drizzle/db';
 import { sequences as sequencesTable, sequenceEnrollments, contacts } from '@/drizzle/schema';
 import { eq, sql, desc } from 'drizzle-orm';
 import SequencesClient from '@/components/tenant/sequences-client';
+import { withTenantScope } from '@/lib/api/with-api-route';
 
 export default async function SequencesPage() {
+  return withTenantScope(async () => {
   const ctx = await requireTenantCtx();
   
   const permissions = {
@@ -59,4 +61,6 @@ export default async function SequencesPage() {
       userId={ctx.userId}
     />
   );
+
+  });
 }

@@ -12,8 +12,9 @@ import { contacts, leads, deals, companies } from '@/drizzle/schema';
 import { tasks } from '@/drizzle/schema';
 import { eq, and, or, ilike, desc, sql, asc } from 'drizzle-orm';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -193,4 +194,4 @@ export async function GET(request: NextRequest) {
     console.error('[search GET]', err);
     return apiError(err);
   }
-}
+});

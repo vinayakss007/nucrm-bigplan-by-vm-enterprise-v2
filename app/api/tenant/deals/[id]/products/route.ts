@@ -14,6 +14,7 @@ import { z } from 'zod';
 import { validateBody } from '@/lib/api/validate';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { concurrencyGuard } from '@/lib/api/concurrency';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 const createDealProductSchema = z.object({
   product_name: z.string().trim().min(1, 'Product name is required').max(200),
@@ -34,7 +35,7 @@ async function assertDeal(tenantId: string, dealId: string) {
 }
 
 // GET /api/tenant/deals/:id/products — list line items for a deal.
-export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export const GET = withApiRoute(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -59,10 +60,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     return NextResponse.json({ data: items, total });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) { return apiError(err); }
-}
+});
 
 // POST /api/tenant/deals/:id/products — add a line item.
-export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export const POST = withApiRoute(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
     const limited = await rateLimitMutating(req, 'deal-products', 'post');
     if (limited) return limited;
@@ -92,10 +93,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ data: item }, { status: 201 });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) { return apiError(err); }
-}
+});
 
 // PATCH /api/tenant/deals/:id/products — update a line item (pass item_id in body).
-export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
     const limited = await rateLimitMutating(req, 'deal-products', 'patch');
     if (limited) return limited;
@@ -136,10 +137,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     return NextResponse.json({ data: updated });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) { return apiError(err); }
-}
+});
 
 // DELETE /api/tenant/deals/:id/products?item_id=... — remove a line item.
-export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export const DELETE = withApiRoute(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
     const limited = await rateLimitMutating(req, 'deal-products', 'delete');
     if (limited) return limited;
@@ -165,4 +166,4 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     return NextResponse.json({ data: { id: itemId, deleted: true } });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) { return apiError(err); }
-}
+});

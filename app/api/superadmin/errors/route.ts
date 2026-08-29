@@ -11,8 +11,9 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { errorLogs, tenants, users } from '@/drizzle/schema';
 import { eq, and, sql, desc } from 'drizzle-orm';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -83,7 +84,7 @@ export async function GET(request: NextRequest) {
     console.error('[superadmin/errors GET]', err);
     return apiError(err);
   }
-}
+});
 
 const createErrorSchema = z.object({
   level: z.string().optional().default('error'),
@@ -100,7 +101,7 @@ const resolveErrorSchema = z.object({
   level: z.string().optional(),
 });
 
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -126,9 +127,9 @@ export async function POST(request: NextRequest) {
       ...(process.env.NODE_ENV === 'development' ? { details: err instanceof Error ? err.message : String(err) } : {}),
     }, { status: 500 });
   }
-}
+});
 
-export async function PATCH(request: NextRequest) {
+export const PATCH = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -162,5 +163,5 @@ export async function PATCH(request: NextRequest) {
     console.error('[superadmin/errors PATCH]', err);
     return apiError(err);
   }
-}
+});
 

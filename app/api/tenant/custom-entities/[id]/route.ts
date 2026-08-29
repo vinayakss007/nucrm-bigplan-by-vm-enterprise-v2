@@ -11,6 +11,7 @@ import { eq, and, isNull } from 'drizzle-orm';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { apiError } from '@/lib/api-error';
 import { z } from 'zod';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 const updateEntitySchema = z.object({
   name: z.string().min(1).max(200).optional(),
@@ -27,7 +28,7 @@ const updateEntitySchema = z.object({
   isActive: z.boolean().optional(),
 });
 
-export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export const GET = withApiRoute(async (request: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -44,9 +45,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   } catch (err: unknown) {
     return apiError(err);
   }
-}
+});
 
-export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export const PATCH = withApiRoute(async (request: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -76,9 +77,9 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   } catch (err: unknown) {
     return apiError(err);
   }
-}
+});
 
-export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export const DELETE = withApiRoute(async (request: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -95,4 +96,4 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
   } catch (err: unknown) {
     return apiError(err);
   }
-}
+});

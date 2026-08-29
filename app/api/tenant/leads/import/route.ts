@@ -15,6 +15,7 @@ import { checkRateLimit } from '@/lib/rate-limit';
 import { resolveOrCreateContactForLead } from '@/lib/contacts/resolve';
 import { generateLeadOid } from '@/lib/leads/oid';
 import { logAudit } from '@/lib/audit';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 function parseCSV(text: string): Record<string, string>[] {
   const lines = text.split(/\r?\n/).filter(l => l.trim());
@@ -90,7 +91,7 @@ const VALID_STATUSES = ['new', 'contacted', 'qualified', 'unqualified', 'convert
 const VALID_LIFECYCLES = ['visitor', 'lead', 'marketing_qualified_lead', 'sales_qualified_lead', 'opportunity', 'customer', 'evangelist'];
 const VALID_AUTHORITY = ['decision_maker', 'influencer', 'user', 'unknown'];
 
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const limited = await checkRateLimit(request, { action: 'lead_csv_import', max: 10, windowMinutes: 60 });
     if (limited) return limited;
@@ -365,4 +366,4 @@ export async function POST(request: NextRequest) {
     console.error('[leads/import]', err);
     return apiError(err);
   }
-}
+});

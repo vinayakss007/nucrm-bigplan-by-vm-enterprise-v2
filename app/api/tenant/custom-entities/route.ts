@@ -12,6 +12,7 @@ import { eq, and, isNull, ilike, desc } from 'drizzle-orm';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { apiError } from '@/lib/api-error';
 import { z } from 'zod';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 const createEntitySchema = z.object({
   slug: z.string().min(1).max(100).regex(/^[a-z0-9_-]+$/),
@@ -29,7 +30,7 @@ const createEntitySchema = z.object({
   isActive: z.boolean().optional().default(true),
 });
 
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -60,9 +61,9 @@ export async function GET(request: NextRequest) {
   } catch (err: unknown) {
     return apiError(err);
   }
-}
+});
 
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -87,4 +88,4 @@ export async function POST(request: NextRequest) {
   } catch (err: unknown) {
     return apiError(err);
   }
-}
+});

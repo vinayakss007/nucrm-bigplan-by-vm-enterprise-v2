@@ -13,11 +13,10 @@ import { activities, users, contacts } from '@/drizzle/schema';
 import { eq, and, desc, isNull } from 'drizzle-orm';
 import { processMentions } from '@/lib/notifications';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
-export async function GET(
-  request: NextRequest, 
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const GET = withApiRoute(async (request: NextRequest, 
+  { params }: { params: Promise<{ id: string }> }) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -49,12 +48,10 @@ export async function GET(
   } catch (err: any) { 
     return apiError(err); 
   }
-}
+});
 
-export async function POST(
-  request: NextRequest, 
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const POST = withApiRoute(async (request: NextRequest, 
+  { params }: { params: Promise<{ id: string }> }) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -108,12 +105,10 @@ export async function POST(
   } catch (err: any) { 
     return apiError(err); 
   }
-}
+});
 
-export async function DELETE(
-  request: NextRequest, 
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const DELETE = withApiRoute(async (request: NextRequest, 
+  { params }: { params: Promise<{ id: string }> }) => {
   try {
   const limited = await rateLimitMutating(request, 'contacts', 'delete');
   if (limited) return limited;
@@ -147,4 +142,4 @@ export async function DELETE(
   } catch (err: any) { 
     return apiError(err); 
   }
-}
+});

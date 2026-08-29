@@ -11,8 +11,9 @@ import { users } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
 import { randomBytes, createHash } from 'crypto';
 import * as QRCode from 'qrcode';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -58,4 +59,4 @@ export async function POST(request: NextRequest) {
   } catch (err: any) {
     return apiError(err);
   }
-}
+});

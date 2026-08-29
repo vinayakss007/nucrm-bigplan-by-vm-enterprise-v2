@@ -189,26 +189,44 @@ export default async function Page() {
 }
 ```
 
-### Migration status and residual
+### Coverage — the full tenant-data surface is pinned
 
-- **Converted so far** (handler queries fully RLS-protected on the pinned conn):
-  - `app/api/admin/flags/route.ts` (GET/POST/DELETE)
-  - `app/api/tenant/contacts/route.ts` (GET/POST)
-  - `app/api/tenant/contacts/[id]/route.ts` (GET/PATCH/DELETE — dynamic route)
-  - `app/api/tenant/deals/route.ts` (GET/POST)
-- **Residual — remaining routes not yet converted.** The other route files (the
-  repo has ~484 `app/api/**/route.ts` handlers) still use the bare
-  `export async function GET(...)` form. For those, the pin covers the
-  auth + `setTenantContext` lookups but not the handler's own later queries;
-  application-level `tenant_id` filters remain the primary scoping mechanism for
-  them, exactly as before, and the fail-closed RLS policy is preserved as
-  defense-in-depth. Converting a route is a mechanical, low-risk edit: add the
-  `withApiRoute` import and change each `export async function METHOD(request, ...)`
-  to `export const METHOD = withApiRoute(async (request, ...) => { ... });`
-  (closing the function with `});`). No handler-body logic changes.
-- Fully extending RLS enforcement to every handler query is a large mechanical
-  migration tracked as a follow-up; it does not change any handler behavior, only
-  the wrapper each handler is exported through.
+The `withApiRoute` / `withTenantScope` migration is **complete** across the
+authenticated request surface:
+
+- **All API routes that call `requireAuth`** — every `app/api/**/route.ts`
+  handler that authenticates (388 route files, all HTTP methods
+  GET/POST/PUT/PATCH/DELETE/HEAD/OPTIONS) is exported through `withApiRoute`, so
+  each handler's own `db` queries run on the pinned connection and are protected
+  by RLS in the default (non-PgBouncer) deploy — not just by app-level
+  `tenant_id` filters. The conversion is a pure export-form rewrap; no
+  handler-body logic, try/catch, rate-limiting, or response shapes changed.
+  Dynamic routes keep their exact `{ params }` context shape.
+- **All Server Component pages / layouts that call `requireTenantCtx`** — every
+  `app/tenant/**/*.tsx` server page and layout (23 files, e.g. contacts, deals,
+  companies, leads, projects, tasks, dashboard, settings) wraps its body in
+  `withTenantScope`, so `requireTenantCtx()` and the page's later `db` queries
+  share one pinned connection. Next.js control-flow throws
+  (`redirect()` / `notFound()`) propagate correctly through
+  `withPinnedConnection`'s `try/finally` (the pinned client is still released and
+  the GUCs reset). `'use client'` components are not server-rendered and do not
+  call `requireTenantCtx`, so they are intentionally not wrapped.
+
+**Deliberately not wrapped (safe by design):**
+
+- **Public / unauthenticated endpoints** — health checks, webhook receivers,
+  login/signup/logout, and other routes that do not call `requireAuth` and do no
+  tenant-scoped `db` access. They set no tenant GUC, so there is nothing to pin
+  for RLS.
+- **`app/api/tenant/dashboard/route.ts`** delegates to the already-wrapped
+  `stats` route (`export { GET as getStats }`), so it inherits the pin rather
+  than double-wrapping.
+- Note: the pin is **fail-safe** — it only pins a connection; RLS still keys off
+  the GUC set by `setTenantContext`. Wrapping never widens access. Superadmin /
+  cross-tenant routes that call `requireAuth` are wrapped too; their intended
+  cross-tenant behavior is unaffected because those flows do not set a tenant GUC
+  (or set the appropriate one), and pinning changes only which connection the
+  query runs on.
 
 See `lib/api/with-api-route.ts` and `lib/db/request-connection.ts` for the
 mechanism and the exact boundary.

@@ -19,6 +19,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { apiError } from '@/lib/api-error';
 import { safeFetch, SsrfBlockedError } from '@/lib/security/ssrf';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 interface ModelEntry {
   id: string;
@@ -34,7 +35,7 @@ const DEFAULT_BASE_URLS: Record<string, string> = {
   opencode: 'https://opencode.ai/zen',
 };
 
-export async function GET(req: NextRequest) {
+export const GET = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -129,4 +130,4 @@ export async function GET(req: NextRequest) {
   } catch (err) {
     return apiError(err);
   }
-}
+});

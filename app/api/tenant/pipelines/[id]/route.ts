@@ -13,6 +13,7 @@ import { pipelines, dealStages, deals } from '@/drizzle/schema';
 import { eq, and, inArray, sql } from 'drizzle-orm';
 import { concurrencyGuard } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 /**
  * Raised inside the PATCH transaction when a requested stage removal would
@@ -28,7 +29,7 @@ class StageInUseError extends Error {
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function PATCH(req: NextRequest, { params }: any) {
+export const PATCH = withApiRoute(async (req: NextRequest, { params }: any) => {
   try {
   const limited = await rateLimitMutating(req, 'deals', 'patch');
   if (limited) return limited;
@@ -184,12 +185,12 @@ export async function PATCH(req: NextRequest, { params }: any) {
     }
     return apiError(err); 
   }
-}
+});
 
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function DELETE(req: NextRequest, { params }: any) {
+export const DELETE = withApiRoute(async (req: NextRequest, { params }: any) => {
   try {
   const limited = await rateLimitMutating(req, 'deals', 'delete');
   if (limited) return limited;
@@ -253,4 +254,4 @@ export async function DELETE(req: NextRequest, { params }: any) {
   } catch (err: any) { 
     return apiError(err); 
   }
-}
+});

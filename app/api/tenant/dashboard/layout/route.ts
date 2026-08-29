@@ -11,6 +11,7 @@ import { sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
  
  
@@ -20,7 +21,7 @@ const dashboardLayoutSchema: z.ZodType<{ layout: any }> = z.object({
   layout: z.array(z.record(z.string(), z.unknown())),
 });
 
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   const ctx = await requireAuth(request);
   if (ctx instanceof NextResponse) return ctx;
 
@@ -42,9 +43,9 @@ export async function GET(request: NextRequest) {
   );
 
   return NextResponse.json({ layout: layoutResult.layout, source: layoutResult.source });
-}
+});
 
-export async function PUT(request: NextRequest) {
+export const PUT = withApiRoute(async (request: NextRequest) => {
   const ctx = await requireAuth(request);
   if (ctx instanceof NextResponse) return ctx;
   const limited = await rateLimitMutating(request, 'dashboardLayout', 'put');
@@ -57,9 +58,9 @@ export async function PUT(request: NextRequest) {
 
   await saveLayout(ctx.tenantId, ctx.userId, layout);
   return NextResponse.json({ ok: true });
-}
+});
 
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   const ctx = await requireAuth(request);
   if (ctx instanceof NextResponse) return ctx;
   const limited = await rateLimitMutating(request, 'dashboardLayout', 'post');
@@ -88,4 +89,4 @@ export async function POST(request: NextRequest) {
     source: layoutResult.source,
     message: 'Layout reset to default',
   });
-}
+});

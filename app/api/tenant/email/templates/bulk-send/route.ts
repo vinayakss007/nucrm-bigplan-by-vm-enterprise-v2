@@ -13,6 +13,7 @@ import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
 import { addJob } from '@/lib/queue';
 import { escapeHtml } from '@/lib/email/escape-html';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 /**
  * POST /api/tenant/email/templates/bulk-send
@@ -29,7 +30,7 @@ import { escapeHtml } from '@/lib/email/escape-html';
  * mechanism the already-fixed app/api/tenant/email/bulk route uses. The worker
  * processes recipients in parallel batches with retries.
  */
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const limited = await rateLimitMutating(request, 'bulk-email', 'post');
     if (limited) return limited;
@@ -135,7 +136,7 @@ export async function POST(request: NextRequest) {
   } catch (err: any) {
     return apiError(err);
   }
-}
+});
 
 /**
  * Substitute static, recipient-independent variables ({{company}}, etc.) into a

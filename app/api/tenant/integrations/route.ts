@@ -12,8 +12,9 @@ import { db } from '@/drizzle/db';
 import { integrations } from '@/drizzle/schema';
 import { eq, desc } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -28,9 +29,9 @@ export async function GET(request: NextRequest) {
   } catch (err: unknown) {
     return apiError(err instanceof Error ? err : new Error(String(err)));
   }
-}
+});
 
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const limited = await rateLimitMutating(request, 'integrations', 'post');
     if (limited) return limited;
@@ -59,4 +60,4 @@ export async function POST(request: NextRequest) {
   } catch (err: unknown) {
     return apiError(err instanceof Error ? err : new Error(String(err)));
   }
-}
+});

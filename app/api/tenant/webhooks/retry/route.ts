@@ -11,6 +11,7 @@ import { sql } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
 import { safeFetch } from '@/lib/security/ssrf';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 /**
  * POST /api/tenant/webhooks/retry
@@ -20,7 +21,7 @@ import { safeFetch } from '@/lib/security/ssrf';
  *
  * Fetches the original payload from webhook_deliveries and re-sends it.
  */
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const limited = await rateLimitMutating(request, 'webhook-retry', 'post');
     if (limited) return limited;
@@ -110,4 +111,4 @@ export async function POST(request: NextRequest) {
   } catch (err: any) {
     return apiError(err);
   }
-}
+});

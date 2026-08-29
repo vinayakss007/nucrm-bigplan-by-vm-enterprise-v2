@@ -12,10 +12,11 @@ import { eq, and, isNull, desc } from 'drizzle-orm';
 import type { PluginAuthType, PluginAction, PluginAuthConfig } from '@/lib/plugins/types';
 import { encryptAuthConfig } from '@/lib/plugins/crypto';
 import { readJsonBody } from '@/lib/api/validate';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 const VALID_AUTH_TYPES: PluginAuthType[] = ['bearer', 'basic', 'api_key_header', 'api_key_query', 'oauth2_client_credentials', 'none'];
 
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -45,9 +46,9 @@ export async function GET(request: NextRequest) {
   } catch (err: unknown) {
     return apiError(err);
   }
-}
+});
 
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -113,4 +114,4 @@ export async function POST(request: NextRequest) {
   } catch (err: unknown) {
     return apiError(err);
   }
-}
+});

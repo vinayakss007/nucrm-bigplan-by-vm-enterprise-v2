@@ -9,8 +9,9 @@ import { db } from '@/drizzle/db';
 import { deals, dealStages, pipelines, contacts, companies } from '@/drizzle/schema';
 import { eq, asc } from 'drizzle-orm';
 import { escapeCSV } from '@/lib/export';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -64,4 +65,4 @@ export async function GET(request: NextRequest) {
     console.error('[deals export GET]', err);
     return NextResponse.json({ error: 'Export failed' }, { status: 500 });
   }
-}
+});

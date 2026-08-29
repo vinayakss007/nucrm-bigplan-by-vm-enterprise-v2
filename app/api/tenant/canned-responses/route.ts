@@ -12,6 +12,7 @@ import { eq, and, desc, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { readJsonBody } from '@/lib/api/validate';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 const createCannedSchema = z.object({
   category: z.string().min(1).max(100),
@@ -20,7 +21,7 @@ const createCannedSchema = z.object({
   shortcut: z.string().max(50).optional(),
 });
 
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -45,9 +46,9 @@ export async function GET(request: NextRequest) {
   } catch (err: unknown) {
     return apiError(err);
   }
-}
+});
 
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const limited = await rateLimitMutating(request, 'cannedResponses', 'post');
     if (limited) return limited;
@@ -77,4 +78,4 @@ export async function POST(request: NextRequest) {
   } catch (err: unknown) {
     return apiError(err);
   }
-}
+});

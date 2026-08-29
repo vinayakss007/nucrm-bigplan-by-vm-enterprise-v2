@@ -10,8 +10,9 @@ import { eq, and } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { requireAuth } from '@/lib/auth/middleware';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const limited = await checkRateLimit(request, { action: 'oauth-authorize', max: 20, windowMinutes: 1 });
     if (limited) return limited;
@@ -88,4 +89,4 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+});

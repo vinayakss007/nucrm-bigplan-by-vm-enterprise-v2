@@ -12,8 +12,9 @@ import { users } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { updateProfileSchema } from '@/lib/api/schemas';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
-export async function PATCH(request: NextRequest) {
+export const PATCH = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -67,4 +68,4 @@ export async function PATCH(request: NextRequest) {
   } catch (err: any) { 
     return apiError(err); 
   }
-}
+});

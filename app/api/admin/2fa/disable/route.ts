@@ -12,6 +12,7 @@ import { db } from '@/drizzle/db';
 import { users } from '@/drizzle/schema';
 import { eq, sql } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 const schema = z.object({
   user_email: z.string().email(),
@@ -21,7 +22,7 @@ const schema = z.object({
 /**
  * Admin Recovery: Disable 2FA for a user
  */
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -78,4 +79,4 @@ export async function POST(request: NextRequest) {
   } catch (err: unknown) {
     return apiError(err instanceof Error ? err : new Error(String(err)));
   }
-}
+});

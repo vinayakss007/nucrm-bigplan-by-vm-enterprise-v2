@@ -11,6 +11,7 @@ import { eq, and, sql } from 'drizzle-orm';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { apiError } from '@/lib/api-error';
 import { readJsonBody } from '@/lib/api/validate';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 function parseCSV(text: string): Record<string, string>[] {
   const lines = text.split(/\r?\n/).filter(l => l.trim());
@@ -50,7 +51,7 @@ const COLUMN_MAP: Record<string, string> = {
   'tags': 'tags', 'tag': 'tags',
 };
 
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const limited = await checkRateLimit(request, { action: 'csv_import', max: 10, windowMinutes: 60 });
     if (limited) return limited;
@@ -159,4 +160,4 @@ export async function POST(request: NextRequest) {
     console.error('[companies import POST]', err);
     return apiError(err);
   }
-}
+});

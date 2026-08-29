@@ -20,11 +20,12 @@ import { db } from '@/drizzle/db';
 import { leads, leadOffers, users } from '@/drizzle/schema';
 import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function GET(request: NextRequest, { params }: any) {
+export const GET = withApiRoute(async (request: NextRequest, { params }: any) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -141,4 +142,4 @@ export async function GET(request: NextRequest, { params }: any) {
     console.error('[contacts/leads] error:', error);
     return apiError(error, "Internal server error", 500);
   }
-}
+});

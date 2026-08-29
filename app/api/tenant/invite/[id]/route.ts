@@ -10,11 +10,12 @@ import { db } from '@/drizzle/db';
 import { invitations } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function DELETE(request: NextRequest, { params }: any) {
+export const DELETE = withApiRoute(async (request: NextRequest, { params }: any) => {
   try {
   const limited = await rateLimitMutating(request, 'settings', 'delete');
   if (limited) return limited;
@@ -39,4 +40,4 @@ export async function DELETE(request: NextRequest, { params }: any) {
     console.error('[Invitation] DELETE error:', err);
     return apiError(err);
   }
-}
+});

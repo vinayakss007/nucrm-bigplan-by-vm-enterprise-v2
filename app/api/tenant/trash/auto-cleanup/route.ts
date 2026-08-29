@@ -9,6 +9,7 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { contacts, companies, deals, tasks, leads, platformSettings } from '@/drizzle/schema';
 import { eq, and, isNotNull, lt, sql } from 'drizzle-orm';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 const TRASH_RETENTION_KEY = 'trash_retention_days';
 
@@ -24,7 +25,7 @@ async function getRetentionDays(tenantId: string): Promise<number> {
   return setting ? parseInt(String(setting.value)) : 30;
 }
 
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -115,9 +116,9 @@ export async function POST(request: NextRequest) {
     console.error('[trash-auto-cleanup]', err);
     return apiError(err);
   }
-}
+});
 
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -170,4 +171,4 @@ export async function GET(request: NextRequest) {
     console.error('[trash-cleanup-status]', err);
     return apiError(err);
   }
-}
+});

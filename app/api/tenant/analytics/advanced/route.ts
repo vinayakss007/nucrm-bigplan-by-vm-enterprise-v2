@@ -5,12 +5,13 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     await requireAuth(request);
     return NextResponse.json({ data: {} });
   } catch {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
-}
+});

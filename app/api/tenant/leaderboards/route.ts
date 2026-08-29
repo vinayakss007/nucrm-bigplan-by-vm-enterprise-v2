@@ -9,6 +9,7 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { requireModule } from '@/lib/modules/gate';
 import { db } from '@/drizzle/db';
 import { sql } from 'drizzle-orm';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 type Metric = 'deals_won' | 'revenue' | 'activities' | 'conversion';
 type Period = 'week' | 'month' | 'quarter' | 'custom';
@@ -44,7 +45,7 @@ function getDateRange(period: Period, start?: string, end?: string): { startDate
   return { startDate, endDate };
 }
 
-export async function GET(req: NextRequest) {
+export const GET = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -165,4 +166,4 @@ export async function GET(req: NextRequest) {
   } catch (err: any) {
     return apiError(err);
   }
-}
+});

@@ -12,15 +12,14 @@ import {
   getPartnerById,
   checkConflict,
 } from '@/lib/partners';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 /**
  * GET /api/tenant/partners/[id]/deals
  * List deal registrations for a partner.
  */
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export const GET = withApiRoute(async (request: NextRequest,
+  { params }: { params: Promise<{ id: string }> },) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -40,16 +39,14 @@ export async function GET(
     console.error('[tenant partner deals GET]', err);
     return apiError(err);
   }
-}
+});
 
 /**
  * POST /api/tenant/partners/[id]/deals
  * Register a new deal for a partner.
  */
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export const POST = withApiRoute(async (request: NextRequest,
+  { params }: { params: Promise<{ id: string }> },) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -105,4 +102,4 @@ export async function POST(
 
     return apiError(err);
   }
-}
+});

@@ -14,6 +14,7 @@ import { eq } from 'drizzle-orm';
 import { existsSync } from 'fs';
 import { executeSelectiveRestore, validateTenant, createPreRestoreSnapshot } from '@/lib/restore/restore-executor';
 import { logSuperAdminAction } from '@/lib/audit/super-admin';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 
 const executeRestoreSchema = z.object({
@@ -30,7 +31,7 @@ const executeRestoreSchema = z.object({
  * POST: Execute selective restore with SSE streaming
  * Streams progress updates to the client
  */
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -246,7 +247,7 @@ export async function POST(request: NextRequest) {
     console.error('[selective-restore/execute POST]', err);
     return apiError(err);
   }
-}
+});
 
 interface AuditLogParams {
   restore_log_id: string;

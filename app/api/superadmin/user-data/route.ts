@@ -12,6 +12,7 @@ import { users, contacts, deals, tasks, activities, tenantMembers } from '@/driz
 import { eq, and, or, ilike, sql, desc, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 const restoreUserDataSchema = z.object({
   user_id: z.string().uuid('user_id is required'),
@@ -48,7 +49,7 @@ const restoreUserDataSchema = z.object({
 
 // ── GET: Find user data ──────────────────────────────────────────────────────
 
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -289,11 +290,11 @@ export async function GET(request: NextRequest) {
   } catch (err: any) {
     return apiError(err);
   }
-}
+});
 
 // ── POST: Restore specific user records from backup ──────────────────────────
 
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -390,11 +391,11 @@ export async function POST(request: NextRequest) {
   } catch (err: any) {
     return apiError(err);
   }
-}
+});
 
 // ── DELETE: Soft-delete all user data (GDPR right-to-erasure) ────────────────
 
-export async function DELETE(request: NextRequest) {
+export const DELETE = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -454,4 +455,4 @@ export async function DELETE(request: NextRequest) {
   } catch (err: any) {
     return apiError(err);
   }
-}
+});

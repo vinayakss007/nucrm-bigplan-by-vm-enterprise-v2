@@ -7,10 +7,12 @@ import { requireTenantCtx } from '@/lib/tenant/context';
 import { redirect } from 'next/navigation';
 import { hasCompletedOnboarding } from '@/lib/onboarding/check';
 import DashboardClient from '@/components/tenant/dashboard-client';
+import { withTenantScope } from '@/lib/api/with-api-route';
 
 export const dynamic = 'force-dynamic';
 
 export default async function DashboardPage() {
+  return withTenantScope(async () => {
   const ctx = await requireTenantCtx();
 
   // Redirect first-time users to onboarding
@@ -27,4 +29,6 @@ export default async function DashboardPage() {
       isAdmin={ctx.isAdmin}
     />
   );
+
+  });
 }

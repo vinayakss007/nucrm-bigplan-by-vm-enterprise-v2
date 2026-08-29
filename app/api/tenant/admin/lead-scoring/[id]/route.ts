@@ -19,11 +19,10 @@ import { apiError } from '@/lib/api-error';
 import { logAudit } from '@/lib/audit';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
-export async function PATCH(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const PATCH = withApiRoute(async (req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }) => {
   try {
   const limited = await rateLimitMutating(req, 'leads', 'patch');
   if (limited) return limited;
@@ -70,12 +69,10 @@ export async function PATCH(
   } catch (err) {
     return apiError(err);
   }
-}
+});
 
-export async function DELETE(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const DELETE = withApiRoute(async (req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }) => {
   try {
   const limited = await rateLimitMutating(req, 'leads', 'delete');
   if (limited) return limited;
@@ -109,4 +106,4 @@ export async function DELETE(
   } catch (err) {
     return apiError(err);
   }
-}
+});

@@ -13,6 +13,7 @@ import { logAudit } from '@/lib/audit';
 import { logError } from '@/lib/errors-server';
 import { readJsonBody } from '@/lib/api/validate';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { withApiRoute } from '@/lib/api/with-api-route';
 const MAX_BULK = 500;
 const VALID_ENTITY_TYPES = ['contact', 'deal', 'lead', 'company', 'task'] as const;
 
@@ -25,7 +26,7 @@ const entityTables: Record<string, { table: any; idField: any; tenantField: any 
   task: { table: tasks, idField: tasks.id, tenantField: tasks.tenantId },
 };
 
-export async function POST(req: NextRequest) {
+export const POST = withApiRoute(async (req: NextRequest) => {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let ctx: any;
   try {
@@ -104,4 +105,4 @@ export async function POST(req: NextRequest) {
     await logError({ error: err, context: 'notes/bulk', tenantId: ctx?.tenantId });
     return apiError(err);
   }
-}
+});

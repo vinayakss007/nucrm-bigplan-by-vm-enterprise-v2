@@ -12,15 +12,14 @@ import { db } from '@/drizzle/db';
 import { workflows } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
 import { executeWorkflow } from '@/lib/automation/workflow-executor';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 /**
  * POST /api/tenant/workflows/[id]/run
  * Manually trigger a workflow execution
  */
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const POST = withApiRoute(async (request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -66,4 +65,4 @@ export async function POST(
     console.error('[Workflow Run] POST error:', err);
     return apiError(err);
   }
-}
+});

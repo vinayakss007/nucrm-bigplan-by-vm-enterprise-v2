@@ -9,8 +9,10 @@ import { tenantMembers, users, roles as rolesTable, invitations } from '@/drizzl
 import { eq, and, or, asc, desc, isNull, gt } from 'drizzle-orm';
 import { redirect } from 'next/navigation';
 import TeamSettingsClient from '@/components/tenant/settings/team-client';
+import { withTenantScope } from '@/lib/api/with-api-route';
 
 export default async function TeamPage() {
+  return withTenantScope(async () => {
   let ctx;
   try {
     ctx = await requireTenantCtx();
@@ -95,4 +97,6 @@ export default async function TeamPage() {
       currentUserId={ctx.userId}
     />
   );
+
+  });
 }

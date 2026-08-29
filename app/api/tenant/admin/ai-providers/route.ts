@@ -37,6 +37,7 @@ import {
 } from '@/lib/ai/secrets';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { concurrencyGuard } from '@/lib/api/concurrency';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 /** Named providers with built-in defaults. Any other key in the config is a custom provider. */
 const NAMED_PROVIDERS = ['openai', 'anthropic', 'groq', 'ollama', 'opencode'];
@@ -66,7 +67,7 @@ const DEFAULTS: Record<string, {
   opencode:  { enabled: false, default_model: 'deepseek-v4-flash-free',   temperature: 0.4, max_tokens: 1024, fallback_priority: 5, base_url: 'https://opencode.ai/zen' },
 };
 
-export async function GET(req: NextRequest) {
+export const GET = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -102,9 +103,9 @@ export async function GET(req: NextRequest) {
   } catch (err) {
     return apiError(err);
   }
-}
+});
 
-export async function PATCH(req: NextRequest) {
+export const PATCH = withApiRoute(async (req: NextRequest) => {
   try {
   const limited = await rateLimitMutating(req, 'ai-providers', 'patch');
   if (limited) return limited;
@@ -231,9 +232,9 @@ export async function PATCH(req: NextRequest) {
     void logError({ error: err, context: 'ai-providers PATCH' });
     return apiError(err);
   }
-}
+});
 
-export async function DELETE(req: NextRequest) {
+export const DELETE = withApiRoute(async (req: NextRequest) => {
   try {
   const limited = await rateLimitMutating(req, 'ai-providers', 'delete');
   if (limited) return limited;
@@ -260,4 +261,4 @@ export async function DELETE(req: NextRequest) {
   } catch (err) {
     return apiError(err);
   }
-}
+});

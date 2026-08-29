@@ -32,6 +32,7 @@ import { logAudit } from '@/lib/audit';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
 import { concurrencyGuard } from '@/lib/api/concurrency';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 export type PicklistEntry = { value: string; label: string; color?: string };
 export type PicklistCategory = 'lead_sources' | 'loss_reasons' | 'win_reasons' | 'activity_types' | 'deal_types' | 'industries';
@@ -99,7 +100,7 @@ function normalize(v: string) {
   return v.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
 }
 
-export async function GET(req: NextRequest) {
+export const GET = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -118,9 +119,9 @@ export async function GET(req: NextRequest) {
   } catch (err: any) {
     return apiError(err);
   }
-}
+});
 
-export async function PATCH(req: NextRequest) {
+export const PATCH = withApiRoute(async (req: NextRequest) => {
   let ctx: Awaited<ReturnType<typeof requireAuth>> | undefined;
   try {
   const limited = await rateLimitMutating(req, 'settings', 'patch');
@@ -213,4 +214,4 @@ export async function PATCH(req: NextRequest) {
     void logError({ error: err, context: 'picklists PATCH', ...tenantMeta(ctx) });
     return apiError(err);
   }
-}
+});

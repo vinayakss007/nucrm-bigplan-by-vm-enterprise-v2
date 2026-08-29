@@ -10,6 +10,7 @@ import { requireModule } from '@/lib/modules/gate';
 import { sendMessage, getSessionMessages } from '@/lib/chat';
 import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 const sendMessageSchema = z.object({
   content: z.string().min(1),
@@ -17,10 +18,8 @@ const sendMessageSchema = z.object({
   senderId: z.string().optional(),
 });
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ sessionId: string }> }
-) {
+export const GET = withApiRoute(async (req: NextRequest,
+  { params }: { params: Promise<{ sessionId: string }> }) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -38,12 +37,10 @@ export async function GET(
   } catch (err) {
     return apiError(err);
   }
-}
+});
 
-export async function POST(
-  req: NextRequest,
-  { params }: { params: Promise<{ sessionId: string }> }
-) {
+export const POST = withApiRoute(async (req: NextRequest,
+  { params }: { params: Promise<{ sessionId: string }> }) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -73,4 +70,4 @@ export async function POST(
   } catch (err) {
     return apiError(err);
   }
-}
+});

@@ -9,8 +9,9 @@ import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { testEmailSchema } from '@/lib/api/schemas';
 import { requireAuth } from '@/lib/auth/middleware';
 import { sendEmail } from '@/lib/email/service';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const limited = await checkRateLimit(request, { action:'email_test', max:5, windowMinutes:60 });
     if (limited) return limited;
@@ -55,4 +56,4 @@ export async function POST(request: NextRequest) {
     console.error('[email/test]', msg);
     return NextResponse.json({ ok: false, error: 'Email test failed' }, { status: 500 });
   }
-}
+});

@@ -14,6 +14,7 @@ import { encryptAuthConfig, decryptAuthConfig, redactAuthConfig } from '@/lib/pl
 import { concurrencyGuard } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 const VALID_AUTH_TYPES: PluginAuthType[] = ['bearer', 'basic', 'api_key_header', 'api_key_query', 'oauth2_client_credentials', 'none'];
 const VALID_STATUSES = ['active', 'disabled'] as const;
@@ -22,7 +23,7 @@ interface RouteContext {
   params: Promise<{ id: string }>;
 }
 
-export async function GET(request: NextRequest, context: RouteContext) {
+export const GET = withApiRoute(async (request: NextRequest, context: RouteContext) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -78,9 +79,9 @@ export async function GET(request: NextRequest, context: RouteContext) {
   } catch (err: unknown) {
     return apiError(err);
   }
-}
+});
 
-export async function PATCH(request: NextRequest, context: RouteContext) {
+export const PATCH = withApiRoute(async (request: NextRequest, context: RouteContext) => {
   try {
   const limited = await rateLimitMutating(request, 'plugins', 'patch');
   if (limited) return limited;
@@ -149,9 +150,9 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
   } catch (err: unknown) {
     return apiError(err);
   }
-}
+});
 
-export async function DELETE(request: NextRequest, context: RouteContext) {
+export const DELETE = withApiRoute(async (request: NextRequest, context: RouteContext) => {
   try {
   const limited = await rateLimitMutating(request, 'plugins', 'delete');
   if (limited) return limited;
@@ -178,4 +179,4 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
   } catch (err: unknown) {
     return apiError(err);
   }
-}
+});

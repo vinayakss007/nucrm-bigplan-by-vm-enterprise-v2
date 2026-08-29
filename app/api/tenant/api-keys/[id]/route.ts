@@ -11,18 +11,17 @@ import { db } from '@/drizzle/db';
 import { apiKeys } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 /**
  * GET /api/tenant/api-keys/[id]
  * Get API key details and usage stats
  */
-export async function GET(
-  request: NextRequest,
+export const GET = withApiRoute(async (request: NextRequest,
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  { params }: any
-) {
+  { params }: any) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -71,19 +70,17 @@ export async function GET(
     console.error('[API Keys] GET error:', error);
     return apiError(error);
   }
-}
+});
 
 /**
  * DELETE /api/tenant/api-keys/[id]
  * Revoke (delete) API key
  */
-export async function DELETE(
-  request: NextRequest,
+export const DELETE = withApiRoute(async (request: NextRequest,
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  { params }: any
-) {
+  { params }: any) => {
   try {
   const limited = await rateLimitMutating(request, 'integrations', 'delete');
   if (limited) return limited;
@@ -107,19 +104,17 @@ export async function DELETE(
     console.error('[API Keys] DELETE error:', error);
     return apiError(error);
   }
-}
+});
 
 /**
  * POST /api/tenant/api-keys/[id]/rotate
  * Rotate API key (revoke old, create new)
  */
-export async function POST(
-  request: NextRequest,
+export const POST = withApiRoute(async (request: NextRequest,
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  { params }: any
-) {
+  { params }: any) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -164,4 +159,4 @@ export async function POST(
     console.error('[API Keys] ROTATE error:', error);
     return apiError(error);
   }
-}
+});

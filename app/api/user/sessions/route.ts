@@ -12,13 +12,14 @@ import { eq, and, gt, ne, desc } from 'drizzle-orm';
 import { hashToken } from '@/lib/auth/session';
 import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 const deleteSessionSchema = z.object({
   sessionId: z.string().uuid().optional(),
   revokeAll: z.boolean().optional(),
 });
 
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -51,9 +52,9 @@ export async function GET(request: NextRequest) {
   } catch (err: any) { 
     return apiError(err); 
   }
-}
+});
 
-export async function DELETE(request: NextRequest) {
+export const DELETE = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -87,4 +88,4 @@ export async function DELETE(request: NextRequest) {
   } catch (err: any) { 
     return apiError(err); 
   }
-}
+});

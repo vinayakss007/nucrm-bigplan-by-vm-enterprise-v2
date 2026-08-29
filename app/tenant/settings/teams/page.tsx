@@ -9,11 +9,13 @@ import { teams, teamMembers, tenantMembers, users } from '@/drizzle/schema';
 import { eq, and, isNull, asc, sql } from 'drizzle-orm';
 import { redirect } from 'next/navigation';
 import TeamsClient from '@/components/tenant/settings/teams-client';
+import { withTenantScope } from '@/lib/api/with-api-route';
 
 // Manage sub-teams (Sales, Marketing, Support) — distinct from settings/team,
 // which manages the whole workforce and invitations. See docs/workflow-gaps.md
 // WF-04.
 export default async function TeamsPage() {
+  return withTenantScope(async () => {
   let ctx;
   try {
     ctx = await requireTenantCtx();
@@ -76,4 +78,6 @@ export default async function TeamsPage() {
   }));
 
   return <TeamsClient initialTeams={initialTeams} people={people} />;
+
+  });
 }

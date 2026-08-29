@@ -13,12 +13,13 @@ import { tenantModules } from '@/drizzle/schema/modules';
 import { eq, and, desc } from 'drizzle-orm';
 import { can } from '@/lib/auth/middleware';
 import { readJsonBody } from '@/lib/api/validate';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 /**
  * POST /api/tenant/ai/email-draft
  * Generate AI-powered email draft
  */
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -230,13 +231,13 @@ Best,
     console.error('[AI Email Draft] POST error:', error);
     return apiError(error);
   }
-}
+});
 
 /**
  * GET /api/tenant/ai/email-drafts
  * Get email drafts
  */
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -288,4 +289,4 @@ export async function GET(request: NextRequest) {
     console.error('[AI Email Drafts] GET error:', error);
     return apiError(error);
   }
-}
+});

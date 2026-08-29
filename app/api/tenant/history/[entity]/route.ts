@@ -8,13 +8,12 @@ import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
 import { getEntityHistory, getEntitySnapshots, type EntityType } from '@/lib/history';
 import { parseLimitOffset } from '@/lib/api/query-params';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 const VALID_ENTITIES = ['contact', 'company', 'deal', 'lead', 'task'];
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ entity: string }> }
-) {
+export const GET = withApiRoute(async (request: NextRequest,
+  { params }: { params: Promise<{ entity: string }> }) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -62,4 +61,4 @@ export async function GET(
     console.error('[history GET]', err);
     return apiError(err);
   }
-}
+});

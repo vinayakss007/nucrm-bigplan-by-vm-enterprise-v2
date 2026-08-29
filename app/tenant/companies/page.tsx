@@ -8,8 +8,10 @@ import { db } from '@/drizzle/db';
 import { companies, contacts } from '@/drizzle/schema';
 import { eq, and, isNull, sql, asc } from 'drizzle-orm';
 import CompaniesDataTable from '@/components/tenant/companies-data-table';
+import { withTenantScope } from '@/lib/api/with-api-route';
 
 export default async function CompaniesPage() {
+  return withTenantScope(async () => {
   const ctx = await requireTenantCtx();
   const permissions = {
     canCreate: can(ctx, 'companies.create'),
@@ -52,4 +54,6 @@ export default async function CompaniesPage() {
       userId={ctx.userId}
     />
   );
+
+  });
 }

@@ -10,11 +10,12 @@ import { db } from '@/drizzle/db';
 import { webhookQueue } from '@/drizzle/schema/support';
 import { webhooks } from '@/drizzle/schema';
 import { eq, and, desc, sql } from 'drizzle-orm';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function GET(req: NextRequest, { params }: any) {
+export const GET = withApiRoute(async (req: NextRequest, { params }: any) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -42,4 +43,4 @@ export async function GET(req: NextRequest, { params }: any) {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) { return apiError(err); }
-}
+});

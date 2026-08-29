@@ -14,6 +14,7 @@ import { eq, and, like } from 'drizzle-orm';
 import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from 'crypto';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { concurrencyGuard } from '@/lib/api/concurrency';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 const ALGORITHM = 'aes-256-gcm';
 const CONFIG_KEY_PREFIX = 'tenant_backup_config:';
@@ -111,7 +112,7 @@ function parseConfig(rows: { key: string; value: any }[], tenantId: string): Raw
 
 // ── GET: Read config ──
 
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -166,11 +167,11 @@ export async function GET(request: NextRequest) {
   } catch (err: any) {
     return apiError(err);
   }
-}
+});
 
 // ── PUT: Save config ──
 
-export async function PUT(request: NextRequest) {
+export const PUT = withApiRoute(async (request: NextRequest) => {
   try {
   const limited = await rateLimitMutating(request, 'settings', 'patch');
   if (limited) return limited;
@@ -290,11 +291,11 @@ export async function PUT(request: NextRequest) {
     console.error('[tenant-backup-config] Error:', err);
     return apiError(err);
   }
-}
+});
 
 // ── DELETE: Remove config ──
 
-export async function DELETE(request: NextRequest) {
+export const DELETE = withApiRoute(async (request: NextRequest) => {
   try {
   const limited = await rateLimitMutating(request, 'settings', 'delete');
   if (limited) return limited;
@@ -318,4 +319,4 @@ export async function DELETE(request: NextRequest) {
   } catch (err: any) {
     return apiError(err);
   }
-}
+});

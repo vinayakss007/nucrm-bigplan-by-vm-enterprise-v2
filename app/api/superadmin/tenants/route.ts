@@ -17,8 +17,9 @@ import { hashPassword } from '@/lib/auth/session';
 import { logSuperAdminAction } from '@/lib/audit/super-admin';
 import { invalidateTenantCache } from '@/lib/cache';
 import { concurrencyGuard } from '@/lib/api/concurrency';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -94,9 +95,9 @@ export async function GET(request: NextRequest) {
     console.error('[superadmin/tenants GET]', err);
     return apiError(err);
   }
-}
+});
 
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -203,9 +204,9 @@ export async function POST(request: NextRequest) {
     console.error('[superadmin/tenants POST]', err);
     return apiError(err);
   }
-}
+});
 
-export async function PATCH(request: NextRequest) {
+export const PATCH = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -280,9 +281,9 @@ export async function PATCH(request: NextRequest) {
     console.error('[superadmin/tenants PATCH]', err);
     return apiError(err);
   }
-}
+});
 
-export async function DELETE(request: NextRequest) {
+export const DELETE = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -390,5 +391,5 @@ export async function DELETE(request: NextRequest) {
     console.error('[superadmin/tenants DELETE]', err);
     return apiError(err);
   }
-}
+});
 

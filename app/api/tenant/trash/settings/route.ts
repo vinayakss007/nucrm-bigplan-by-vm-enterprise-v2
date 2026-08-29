@@ -11,10 +11,11 @@ import { platformSettings } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
 import { readJsonBody } from '@/lib/api/validate';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 const TRASH_RETENTION_KEY = 'trash_retention_days';
 
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -51,9 +52,9 @@ export async function GET(request: NextRequest) {
     console.error('[trash-settings GET]', err);
     return apiError(err);
   }
-}
+});
 
-export async function PUT(request: NextRequest) {
+export const PUT = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -89,4 +90,4 @@ export async function PUT(request: NextRequest) {
     console.error('[trash-settings PUT]', err);
     return apiError(err);
   }
-}
+});

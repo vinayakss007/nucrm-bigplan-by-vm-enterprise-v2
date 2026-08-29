@@ -11,6 +11,7 @@ import { eq } from 'drizzle-orm';
 import { logSuperAdminAction } from '@/lib/audit/super-admin';
 import { readJsonBody } from '@/lib/api/validate';
 import { concurrencyGuard } from '@/lib/api/concurrency';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 const LIMIT_FIELDS = [
   'maxUsers', 'maxContacts', 'maxDeals', 'maxStorageBytes',
@@ -19,10 +20,8 @@ const LIMIT_FIELDS = [
   'maxCustomFieldsPerEntity', 'maxFileUploadBytes',
 ] as const;
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const GET = withApiRoute(async (request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -59,12 +58,10 @@ export async function GET(
     console.error('[superadmin/tenants/[id]/limits/GET]', error);
     return NextResponse.json({ error: 'Failed' }, { status: 500 });
   }
-}
+});
 
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const PATCH = withApiRoute(async (request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -127,4 +124,4 @@ export async function PATCH(
     console.error('[superadmin/tenants/[id]/limits/PATCH]', error);
     return NextResponse.json({ error: 'Failed' }, { status: 500 });
   }
-}
+});

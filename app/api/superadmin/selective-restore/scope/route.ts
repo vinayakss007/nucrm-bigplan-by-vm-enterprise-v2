@@ -14,6 +14,7 @@ import { eq, and } from 'drizzle-orm';
 import { extractTenantSQL } from '@/lib/restore/backup-parser';
 import { countExistingRecords, validateTenant } from '@/lib/restore/restore-executor';
 import { existsSync } from 'fs';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 const scopeSchema = z.object({
   backup_id: z.string().min(1),
@@ -28,7 +29,7 @@ const scopeSchema = z.object({
  * POST: Get restore scope preview
  * Shows exactly what will be restored and what already exists
  */
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -159,7 +160,7 @@ export async function POST(request: NextRequest) {
     console.error('[selective-restore/scope POST]', err);
     return apiError(err);
   }
-}
+});
 
 function generateWarnings(tables: string[], existingCounts: Record<string, number>, restoreMode: string): string[] {
   const warnings: string[] = [];

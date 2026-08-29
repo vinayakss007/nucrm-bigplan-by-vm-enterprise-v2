@@ -12,13 +12,14 @@ import { eq, and, isNull } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
 import { concurrencyGuard } from '@/lib/api/concurrency';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 type Params = { params: Promise<{ id: string }> };
 
 /**
  * GET /api/tenant/views/[id]
  */
-export async function GET(req: NextRequest, { params }: Params) {
+export const GET = withApiRoute(async (req: NextRequest, { params }: Params) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -39,12 +40,12 @@ export async function GET(req: NextRequest, { params }: Params) {
   } catch (err: unknown) {
     return apiError(err);
   }
-}
+});
 
 /**
  * PATCH /api/tenant/views/[id]
  */
-export async function PATCH(req: NextRequest, { params }: Params) {
+export const PATCH = withApiRoute(async (req: NextRequest, { params }: Params) => {
   try {
   const limited = await rateLimitMutating(req, 'views', 'patch');
   if (limited) return limited;
@@ -89,12 +90,12 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   } catch (err: unknown) {
     return apiError(err);
   }
-}
+});
 
 /**
  * DELETE /api/tenant/views/[id]
  */
-export async function DELETE(req: NextRequest, { params }: Params) {
+export const DELETE = withApiRoute(async (req: NextRequest, { params }: Params) => {
   try {
   const limited = await rateLimitMutating(req, 'views', 'delete');
   if (limited) return limited;
@@ -124,4 +125,4 @@ export async function DELETE(req: NextRequest, { params }: Params) {
   } catch (err: unknown) {
     return apiError(err);
   }
-}
+});

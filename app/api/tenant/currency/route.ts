@@ -13,6 +13,7 @@ import {
 } from '@/lib/currency';
 import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 const setCurrencySchema = z.object({
   currency: z.string().min(1, 'Currency code is required'),
@@ -23,7 +24,7 @@ const setCurrencySchema = z.object({
  * Returns supported currencies with current rates.
  * No module gate - available to all tenants.
  */
-export async function GET(req: NextRequest) {
+export const GET = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -58,14 +59,14 @@ export async function GET(req: NextRequest) {
   } catch (err: any) {
     return apiError(err);
   }
-}
+});
 
 /**
  * POST /api/tenant/currency
  * Set tenant default currency.
  * No module gate - available to all tenants.
  */
-export async function POST(req: NextRequest) {
+export const POST = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -99,4 +100,4 @@ export async function POST(req: NextRequest) {
   } catch (err: any) {
     return apiError(err);
   }
-}
+});

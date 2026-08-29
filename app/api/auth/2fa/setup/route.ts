@@ -15,13 +15,14 @@ import { users } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
 import { verifyTOTP, generateTOTPSecret } from '@/lib/auth/totp';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 function generateOTPAuthURL(secret: string, email: string, issuer = 'NuCRM'): string {
   const enc = encodeURIComponent;
   return `otpauth://totp/${enc(issuer)}:${enc(email)}?secret=${secret}&issuer=${enc(issuer)}&algorithm=SHA1&digits=6&period=30`;
 }
 
-export async function POST(req: NextRequest) {
+export const POST = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -55,7 +56,7 @@ export async function POST(req: NextRequest) {
   } catch (err: any) { 
     return apiError(err); 
   }
-}
+});
 
 // Re-export the canonical TOTP helpers for any existing importers
 export { verifyTOTP, generateTOTPSecret };

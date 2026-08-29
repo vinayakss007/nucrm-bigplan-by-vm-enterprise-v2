@@ -13,10 +13,11 @@ import { platformSettings } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { concurrencyGuard } from '@/lib/api/concurrency';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 const IP_WHITELIST_KEY = 'ip_whitelist';
 
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -43,9 +44,9 @@ export async function GET(request: NextRequest) {
     console.error('[ip-whitelist GET]', err);
     return apiError(err);
   }
-}
+});
 
-export async function PUT(request: NextRequest) {
+export const PUT = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -97,9 +98,9 @@ export async function PUT(request: NextRequest) {
     console.error('[ip-whitelist PUT]', err);
     return apiError(err);
   }
-}
+});
 
-export async function DELETE(request: NextRequest) {
+export const DELETE = withApiRoute(async (request: NextRequest) => {
   try {
   const limited = await rateLimitMutating(request, 'settings', 'delete');
   if (limited) return limited;
@@ -124,4 +125,4 @@ export async function DELETE(request: NextRequest) {
     console.error('[ip-whitelist DELETE]', err);
     return apiError(err);
   }
-}
+});

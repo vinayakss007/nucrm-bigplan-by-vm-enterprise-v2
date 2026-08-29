@@ -28,13 +28,14 @@ import { logAudit } from '@/lib/audit';
 import { createNotification } from '@/lib/notifications';
 import { apiError } from '@/lib/api-error';
 import { logError } from '@/lib/errors-server';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 const assignSchema = z.object({
   assigned_to: uuidField,
   reason: z.string().trim().max(500).optional().nullable(),
 });
 
-export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export const POST = withApiRoute(async (request: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -178,4 +179,4 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     console.error('[leads/assign] error:', error);
     return apiError(error, "Internal server error", 500);
   }
-}
+});

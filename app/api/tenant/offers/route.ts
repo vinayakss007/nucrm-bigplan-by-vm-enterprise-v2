@@ -18,10 +18,11 @@ import { db } from '@/drizzle/db';
 import { quotes, contacts } from '@/drizzle/schema';
 import { eq, and, desc, sql, count, isNull } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 const VALID_STATUSES = new Set(['draft', 'sent', 'viewed', 'accepted', 'declined', 'expired', 'cancelled']);
 
-export async function GET(req: NextRequest) {
+export const GET = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -103,4 +104,4 @@ export async function GET(req: NextRequest) {
   } catch (err) {
     return apiError(err);
   }
-}
+});

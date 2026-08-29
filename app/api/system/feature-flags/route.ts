@@ -9,13 +9,14 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { getAllFlags, setFeatureFlag } from '@/lib/feature-flags';
 import type { FeatureFlag } from '@/lib/feature-flags';
 import { readJsonBody } from '@/lib/api/validate';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 /**
  * GET /api/system/feature-flags
  * List all feature flags and their current state.
  * Protected: superadmin only.
  */
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -27,7 +28,7 @@ export async function GET(request: NextRequest) {
   } catch (err: any) {
     return apiError(err);
   }
-}
+});
 
 /**
  * POST /api/system/feature-flags
@@ -35,7 +36,7 @@ export async function GET(request: NextRequest) {
  * Body: { key, enabled, rolloutPercentage?, targetTenants?, targetUsers?, description? }
  * Protected: superadmin only.
  */
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -68,4 +69,4 @@ export async function POST(request: NextRequest) {
   } catch (err: any) {
     return apiError(err);
   }
-}
+});

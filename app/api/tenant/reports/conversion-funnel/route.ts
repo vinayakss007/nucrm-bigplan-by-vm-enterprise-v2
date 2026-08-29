@@ -9,6 +9,7 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { deals, dealStages, pipelines } from '@/drizzle/schema';
 import { eq, and, isNull, sql } from 'drizzle-orm';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 /**
  * GET /api/tenant/reports/conversion-funnel
@@ -24,7 +25,7 @@ import { eq, and, isNull, sql } from 'drizzle-orm';
  *   to?    ISO date — only consider deals created on/before this date
  *   pipelineId? — restrict to one pipeline (default: default pipeline)
  */
-export async function GET(req: NextRequest) {
+export const GET = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -134,4 +135,4 @@ export async function GET(req: NextRequest) {
     console.error('[conversion-funnel GET]', err);
     return apiError(err);
   }
-}
+});

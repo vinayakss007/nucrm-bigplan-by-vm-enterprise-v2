@@ -8,8 +8,10 @@ import { db } from '@/drizzle/db';
 import { followUps, contacts, leads, deals, users } from '@/drizzle/schema';
 import { eq, and, isNull, asc, lte, sql } from 'drizzle-orm';
 import { MissedFollowUpsClient } from './missed-followups-client';
+import { withTenantScope } from '@/lib/api/with-api-route';
 
 export default async function MissedFollowUpsPage() {
+  return withTenantScope(async () => {
   const ctx = await requireTenantCtx();
   const now = new Date();
 
@@ -55,4 +57,6 @@ export default async function MissedFollowUpsPage() {
       items={followUpItems as any}
     />
   );
+
+  });
 }

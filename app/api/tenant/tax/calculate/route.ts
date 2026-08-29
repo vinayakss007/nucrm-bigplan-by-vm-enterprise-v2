@@ -9,6 +9,7 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { requireModule } from '@/lib/modules/gate';
 import { calculateTax, calculateCompoundTax, applyTaxToLineItems } from '@/lib/tax';
 import { readJsonBody } from '@/lib/api/validate';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -18,7 +19,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
  * Returns breakdown with each tax line.
  * Module-gated to 'sales-quotes'.
  */
-export async function POST(req: NextRequest) {
+export const POST = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -85,4 +86,4 @@ export async function POST(req: NextRequest) {
   } catch (err: any) {
     return apiError(err);
   }
-}
+});

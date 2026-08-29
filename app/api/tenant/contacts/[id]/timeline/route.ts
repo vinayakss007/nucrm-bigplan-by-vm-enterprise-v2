@@ -12,15 +12,14 @@ import { db } from '@/drizzle/db';
 import { activities, users, contacts } from '@/drizzle/schema';
 import { eq, and, desc, count } from 'drizzle-orm';
 import { parseLimitOffset } from '@/lib/api/query-params';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 /**
  * GET /api/tenant/contacts/[id]/timeline
  * Get contact timeline (activity feed)
  */
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const GET = withApiRoute(async (request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -78,16 +77,14 @@ export async function GET(
     console.error('[Timeline] GET error:', error);
     return apiError(error);
   }
-}
+});
 
 /**
  * POST /api/tenant/contacts/[id]/timeline
  * Add activity to contact timeline
  */
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const POST = withApiRoute(async (request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -140,4 +137,4 @@ export async function POST(
     console.error('[Timeline] POST error:', error);
     return apiError(error);
   }
-}
+});

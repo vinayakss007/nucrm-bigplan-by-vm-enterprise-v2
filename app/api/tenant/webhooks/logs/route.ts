@@ -10,8 +10,9 @@ import { db } from '@/drizzle/db';
 import { integrations } from '@/drizzle/schema';
 import { webhookQueue } from '@/drizzle/schema/support';
 import { eq, and, desc, sql, inArray } from 'drizzle-orm';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
-export async function GET(req: NextRequest) {
+export const GET = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -88,4 +89,4 @@ export async function GET(req: NextRequest) {
       limit,
     });
   } catch (err: unknown) { return apiError(err); }
-}
+});

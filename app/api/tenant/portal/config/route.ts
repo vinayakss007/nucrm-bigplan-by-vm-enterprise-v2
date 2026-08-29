@@ -12,6 +12,7 @@ import { eq, and } from 'drizzle-orm';
 import { readJsonBody } from '@/lib/api/validate';
 import { z } from 'zod';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 const PORTAL_CONFIG_KEY = 'portal_config';
 
@@ -25,7 +26,7 @@ const portalConfigSchema = z.object({
   allowed_domains: z.array(z.string().max(255)).max(10).optional().default([]),
 }).strict();
 
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -58,9 +59,9 @@ export async function GET(request: NextRequest) {
     console.error('[portal config GET]', err);
     return apiError(err);
   }
-}
+});
 
-export async function PUT(request: NextRequest) {
+export const PUT = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -103,4 +104,4 @@ export async function PUT(request: NextRequest) {
     console.error('[portal config PUT]', err);
     return apiError(err);
   }
-}
+});

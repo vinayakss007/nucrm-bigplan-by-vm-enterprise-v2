@@ -12,8 +12,9 @@ import { logAudit } from '@/lib/audit';
 import { concurrencyGuard } from '@/lib/api/concurrency';
 import { readJsonBody } from '@/lib/api/validate';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
-export async function GET(req: NextRequest) {
+export const GET = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -34,9 +35,9 @@ export async function GET(req: NextRequest) {
     console.error('[user prefs GET]', err);
     return NextResponse.json({ error: 'Failed to load preferences' }, { status: 500 });
   }
-}
+});
 
-export async function PUT(req: NextRequest) {
+export const PUT = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -86,4 +87,4 @@ export async function PUT(req: NextRequest) {
     console.error('[user prefs PUT]', err);
     return NextResponse.json({ error: 'Failed to save preferences' }, { status: 500 });
   }
-}
+});

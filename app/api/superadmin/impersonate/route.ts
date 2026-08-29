@@ -12,8 +12,9 @@ import { eq, and, sql, asc } from 'drizzle-orm';
 import { createToken, setSessionCookie } from '@/lib/auth/session';
 import { logSuperAdminAction } from '@/lib/audit/super-admin';
 import { readJsonBody } from '@/lib/api/validate';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -171,5 +172,5 @@ export async function POST(request: NextRequest) {
     console.error('[Impersonation] Error:', err);
     return apiError(err); 
   }
-}
+});
 

@@ -11,8 +11,9 @@ import { customFieldDefs, pipelines, dealStages } from '@/drizzle/schema';
 import { automations } from '@/drizzle/schema';
 import { INDUSTRY_TEMPLATES } from '@/lib/modules/industry-templates';
 import { readJsonBody } from '@/lib/api/validate';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
-export async function POST(req: NextRequest) {
+export const POST = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -83,4 +84,4 @@ export async function POST(req: NextRequest) {
     console.error('[IndustrySetup] error:', err);
     return apiError(err);
   }
-}
+});

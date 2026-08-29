@@ -13,6 +13,7 @@ import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { updateSubscription, getPriceId, isStripeConfigured } from '@/lib/stripe';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 const upgradeSchema = z.object({
   planId: z.string().min(1, 'Plan ID is required'),
@@ -25,7 +26,7 @@ const upgradeSchema = z.object({
  * 
  * Body: { planId: string, interval?: 'month' | 'year' }
  */
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const limited = await rateLimitMutating(request, 'billing', 'post');
     if (limited) return limited;
@@ -136,4 +137,4 @@ export async function POST(request: NextRequest) {
   } catch (err: unknown) {
     return apiError(err);
   }
-}
+});

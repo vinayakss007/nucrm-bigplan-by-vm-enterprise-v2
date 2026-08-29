@@ -12,12 +12,13 @@ import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { db } from '@/drizzle/db';
 import { sequences, sequenceSteps } from '@/drizzle/schema';
 import { eq, and, desc, isNull } from 'drizzle-orm';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 /**
  * GET /api/tenant/sequences
  * List all sequences
  */
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -53,13 +54,13 @@ export async function GET(request: NextRequest) {
     console.error('[sequences GET]', error);
     return apiError(error);
   }
-}
+});
 
 /**
  * POST /api/tenant/sequences
  * Create new sequence
  */
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const limited = await rateLimitMutating(request, 'sequences', 'post');
     if (limited) return limited;
@@ -126,4 +127,4 @@ export async function POST(request: NextRequest) {
     console.error('[sequences POST]', error);
     return apiError(error);
   }
-}
+});

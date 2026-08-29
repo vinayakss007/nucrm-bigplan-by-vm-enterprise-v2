@@ -11,8 +11,9 @@ import { integrations } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
 import { executeAction } from '@/lib/integrations/registry';
 import { readJsonBody } from '@/lib/api/validate';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -62,4 +63,4 @@ export async function POST(request: NextRequest) {
   } catch (err: any) {
     return apiError(err);
   }
-}
+});

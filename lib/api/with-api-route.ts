@@ -64,7 +64,7 @@ import { withPinnedConnection } from '@/lib/db/request-connection';
 export type RouteHandler<C = unknown> = (
   request: NextRequest,
   context: C
-) => Promise<Response> | Response;
+) => Promise<Response | undefined | void> | Response | undefined | void;
 
 /**
  * Wrap a Next.js route handler so its ENTIRE body runs inside a single
@@ -82,8 +82,10 @@ export type RouteHandler<C = unknown> = (
  * - Propagates thrown errors (the pinned client is still released + GUC-reset
  *   in withPinnedConnection's finally block).
  */
-export function withApiRoute<C = unknown>(handler: RouteHandler<C>): RouteHandler<C> {
-  return (request: NextRequest, context: C): Promise<Response> => {
+export function withApiRoute<C = unknown>(
+  handler: RouteHandler<C>
+): (request: NextRequest, context: C) => Promise<Response | undefined | void> {
+  return (request: NextRequest, context: C) => {
     return withPinnedConnection(async () => handler(request, context));
   };
 }

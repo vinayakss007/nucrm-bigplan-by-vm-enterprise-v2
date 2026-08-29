@@ -10,6 +10,7 @@ import { db } from '@/drizzle/db';
 import { contacts, companies, leads } from '@/drizzle/schema';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 /**
  * POST /api/tenant/import
@@ -20,7 +21,7 @@ import { readJsonBody } from '@/lib/api/validate';
  *
  * Returns: { imported: number, errors: Array<{ row: number, error: string }> }
  */
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const limited = await rateLimitMutating(request, 'import', 'post');
     if (limited) return limited;
@@ -150,4 +151,4 @@ export async function POST(request: NextRequest) {
   } catch (err: any) {
     return apiError(err);
   }
-}
+});

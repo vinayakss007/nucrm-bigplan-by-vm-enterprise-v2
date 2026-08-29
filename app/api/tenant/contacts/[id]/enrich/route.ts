@@ -10,6 +10,7 @@ import { db } from '@/drizzle/db';
 import { contacts } from '@/drizzle/schema';
 import { eq, and, sql } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 /**
  * POST /api/tenant/contacts/:id/enrich
@@ -22,7 +23,7 @@ import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
  *
  * Future: integrate with Clearbit, Apollo, ZoomInfo APIs.
  */
-export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export const POST = withApiRoute(async (request: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
     const limited = await rateLimitMutating(request, 'contact-enrich', 'post');
     if (limited) return limited;
@@ -101,4 +102,4 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   } catch (err: any) {
     return apiError(err);
   }
-}
+});

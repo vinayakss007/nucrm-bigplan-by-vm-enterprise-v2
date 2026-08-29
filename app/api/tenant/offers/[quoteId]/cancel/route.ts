@@ -19,8 +19,9 @@ import { eq, and, isNull, sql } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { logAudit } from '@/lib/audit';
 import { canTransition } from '@/lib/offers';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
-export async function POST(req: NextRequest, { params }: { params: Promise<{ quoteId: string }> }) {
+export const POST = withApiRoute(async (req: NextRequest, { params }: { params: Promise<{ quoteId: string }> }) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -87,4 +88,4 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ quo
   } catch (err) {
     return apiError(err);
   }
-}
+});

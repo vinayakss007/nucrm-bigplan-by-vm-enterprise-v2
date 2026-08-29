@@ -23,6 +23,7 @@ import { getSignedPutUrl } from '@/lib/storage/s3';
 import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 const uploadUrlSchema = z.object({
   name: z.string().min(1, 'name is required'),
@@ -57,7 +58,7 @@ const BLOCKED_EXTENSIONS = new Set([
   '.sh', '.ps1', '.js', '.mjs', '.php', '.jsp', '.asp', '.aspx', '.war',
 ]);
 
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   const ctx = await requireAuth(request);
   if (ctx instanceof NextResponse) return ctx;
 
@@ -118,7 +119,7 @@ export async function POST(request: NextRequest) {
       'Content-Type': mimeType,
     },
   });
-}
+});
 
 function extractExtension(name: string): string {
   const dot = name.lastIndexOf('.');

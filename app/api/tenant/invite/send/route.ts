@@ -15,13 +15,14 @@ import { sendEmail } from '@/lib/email/service';
 import { randomBytes } from 'crypto';
 import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 const inviteSendSchema = z.object({
   email: z.string().email('Valid email is required'),
   roleSlug: z.string().trim().max(50).optional().default('sales_rep'),
 });
 
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -156,4 +157,4 @@ export async function POST(request: NextRequest) {
     console.error('[invite/send]', err);
     return apiError(err);
   }
-}
+});

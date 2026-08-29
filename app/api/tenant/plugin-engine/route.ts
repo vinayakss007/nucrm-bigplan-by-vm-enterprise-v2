@@ -13,8 +13,9 @@ import { getAllProviders, getProviderDef } from '@/lib/integrations/registry';
 import { concurrencyGuard } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -61,9 +62,9 @@ export async function GET(request: NextRequest) {
   } catch (err: any) {
     return apiError(err);
   }
-}
+});
 
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -110,9 +111,9 @@ export async function POST(request: NextRequest) {
   } catch (err: any) {
     return apiError(err);
   }
-}
+});
 
-export async function PATCH(request: NextRequest) {
+export const PATCH = withApiRoute(async (request: NextRequest) => {
   try {
   const limited = await rateLimitMutating(request, 'plugins', 'patch');
   if (limited) return limited;
@@ -146,9 +147,9 @@ export async function PATCH(request: NextRequest) {
   } catch (err: any) {
     return apiError(err);
   }
-}
+});
 
-export async function DELETE(request: NextRequest) {
+export const DELETE = withApiRoute(async (request: NextRequest) => {
   try {
   const limited = await rateLimitMutating(request, 'plugins', 'delete');
   if (limited) return limited;
@@ -170,4 +171,4 @@ export async function DELETE(request: NextRequest) {
   } catch (err: any) {
     return apiError(err);
   }
-}
+});

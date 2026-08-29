@@ -9,13 +9,14 @@ import { db } from '@/drizzle/db';
 import { tenants, plans, users, errorLogs } from '@/drizzle/schema';
 import { eq, and, sql, desc, gt, between, or } from 'drizzle-orm';
 import { logError } from '@/lib/errors-server';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 /**
  * Super Admin Platform Stats API
  * Returns all platform statistics in a single request
  * Cached on client-side for 2 minutes
  */
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -127,5 +128,5 @@ export async function GET(request: NextRequest) {
     logError({ error: err, context: 'superadmin stats API' }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
     return NextResponse.json({ error: 'Failed to fetch platform stats' }, { status: 500 });
   }
-}
+});
 

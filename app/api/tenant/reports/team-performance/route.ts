@@ -9,13 +9,14 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { leads, users, teams } from '@/drizzle/schema';
 import { and, eq, isNull, sql } from 'drizzle-orm';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 // GET /api/tenant/reports/team-performance
 // Lead performance broken down by rep and by team, so a manager can see who was
 // given what, how much converted, and the pipeline value each carries — the
 // "see progress in reports" gap (docs/workflow-gaps.md WF-06). Handoff history
 // lives in lead_assignments and can be layered on later.
-export async function GET(req: NextRequest) {
+export const GET = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -87,4 +88,4 @@ export async function GET(req: NextRequest) {
   } catch (err: any) {
     return apiError(err);
   }
-}
+});

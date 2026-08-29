@@ -10,13 +10,14 @@ import { db } from '@/drizzle/db';
 import { quotes, quoteLineItems, contacts, companies, tenants } from '@/drizzle/schema';
 import { eq, and, asc, sql } from 'drizzle-orm';
 import { escapeHtml } from '@/lib/email/escape-html';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 /**
  * GET /api/tenant/quotes/:id/pdf
  * Generate a PDF for a quote (HTML-based, rendered server-side).
  * Returns Content-Type: application/pdf with Content-Disposition: attachment.
  */
-export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export const GET = withApiRoute(async (request: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -97,7 +98,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   } catch (err: any) {
     return apiError(err);
   }
-}
+});
 
 function generateQuoteHtml(data: {
   title: string;

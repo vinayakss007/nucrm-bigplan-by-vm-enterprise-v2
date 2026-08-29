@@ -16,6 +16,7 @@ import { spawn } from 'child_process';
 import { downloadFromS3, checkFileExists, deleteFile } from '@/lib/restore/runtime-fs';
 import { logError } from '@/lib/errors-server';
 import { logSuperAdminAction } from '@/lib/audit/super-admin';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 /**
  * Safely run pg_restore with input validation.
@@ -63,7 +64,7 @@ async function runPgRestore(inputPath: string): Promise<void> {
 }
 
 // GET: list available backups for restore
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -96,7 +97,7 @@ export async function GET(request: NextRequest) {
     console.error('[superadmin/restore GET]', err);
     return apiError(err);
   }
-}
+});
 
 const restoreSchema = z.object({
   backup_id: z.string().min(1),
@@ -104,7 +105,7 @@ const restoreSchema = z.object({
 });
 
 // POST: restore from a specific backup
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -201,5 +202,5 @@ export async function POST(request: NextRequest) {
     }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
     return apiError(err);
   }
-}
+});
 

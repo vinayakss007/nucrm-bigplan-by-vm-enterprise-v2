@@ -13,6 +13,7 @@ import { db } from '@/drizzle/db';
 import { platformSettings } from '@/drizzle/schema';
 import { isNull } from 'drizzle-orm';
 import { logSuperAdminAction } from '@/lib/audit/super-admin';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 const ALLOWED = [
   'platform_name', 'support_email', 'app_url', 'allow_signups', 'require_email_verify',
@@ -46,7 +47,7 @@ function isSecretKey(key: string): boolean {
   return SECRET_KEY_PATTERN.test(key);
 }
 
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -118,9 +119,9 @@ export async function GET(request: NextRequest) {
     console.error('[superadmin/settings GET]', err);
     return apiError(err);
   }
-}
+});
 
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -182,5 +183,5 @@ export async function POST(request: NextRequest) {
     console.error('[superadmin/settings POST]', err);
     return apiError(err);
   }
-}
+});
 

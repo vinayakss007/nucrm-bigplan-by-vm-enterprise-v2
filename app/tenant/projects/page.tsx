@@ -8,8 +8,10 @@ import { db } from '@/drizzle/db';
 import { projects, users, tenantMembers } from '@/drizzle/schema';
 import { eq, and, sql, desc, isNull } from 'drizzle-orm';
 import ProjectsDataTable from '@/components/tenant/projects-data-table';
+import { withTenantScope } from '@/lib/api/with-api-route';
 
 export default async function ProjectsPage() {
+  return withTenantScope(async () => {
   const ctx = await requireTenantCtx();
   const permissions = {
     canCreate: can(ctx, 'projects.create'),
@@ -76,4 +78,6 @@ export default async function ProjectsPage() {
       permissions={permissions}
     />
   );
+
+  });
 }

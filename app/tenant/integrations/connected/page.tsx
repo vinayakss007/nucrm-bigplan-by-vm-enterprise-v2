@@ -5,8 +5,12 @@
  */
 import { requireTenantCtx } from '@/lib/tenant/context';
 import { redirect } from 'next/navigation';
+import { withTenantScope } from '@/lib/api/with-api-route';
 
 export default async function IntegrationsConnectedPage() {
+  return withTenantScope(async () => {
   await requireTenantCtx();
   redirect('/tenant/settings/integrations');
+
+  });
 }

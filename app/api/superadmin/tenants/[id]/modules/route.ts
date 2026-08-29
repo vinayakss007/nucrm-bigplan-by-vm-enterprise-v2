@@ -13,8 +13,9 @@ import { tenantModules } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
 import { BUILTIN_MODULES, ModuleRegistry } from '@/lib/modules/registry';
 import { logSuperAdminAction } from '@/lib/audit/super-admin';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
-export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export const GET = withApiRoute(async (request: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -64,7 +65,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   } catch (err: any) {
     return apiError(err);
   }
-}
+});
 
 const moduleActionSchema = z.object({
   module_id: z.string().min(1),
@@ -74,7 +75,7 @@ const moduleActionSchema = z.object({
   features: z.array(z.string()).optional(),
 });
 
-export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export const POST = withApiRoute(async (request: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -162,4 +163,4 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   } catch (err: any) {
     return apiError(err);
   }
-}
+});

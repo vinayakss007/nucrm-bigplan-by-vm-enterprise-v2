@@ -12,6 +12,7 @@ import {
   createCheckIn,
   getUserCheckIns,
 } from '@/lib/field-sales/geo-checkin';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 const createCheckInSchema = z.object({
   lat: z.number().min(-90).max(90),
@@ -28,7 +29,7 @@ const createCheckInSchema = z.object({
  * POST /api/tenant/field-sales/checkin
  * Create a new geo check-in for the authenticated user.
  */
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -45,13 +46,13 @@ export async function POST(request: NextRequest) {
     console.error('[field-sales/checkin POST]', err);
     return apiError(err);
   }
-}
+});
 
 /**
  * GET /api/tenant/field-sales/checkin
  * List check-ins for the authenticated user with optional date filter.
  */
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -88,4 +89,4 @@ export async function GET(request: NextRequest) {
     console.error('[field-sales/checkin GET]', err);
     return apiError(err);
   }
-}
+});

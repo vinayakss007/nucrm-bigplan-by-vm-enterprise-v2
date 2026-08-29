@@ -10,6 +10,7 @@ import { db } from '@/drizzle/db';
 import { contacts, companies, deals, tasks, leads } from '@/drizzle/schema';
 import { eq, and, desc, sql, gt, lt } from 'drizzle-orm';
 import { readJsonBody } from '@/lib/api/validate';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
  
  
@@ -50,7 +51,7 @@ const REPORT_QUERIES: Record<string, any> = {
   },
 };
 
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -126,4 +127,4 @@ export async function POST(request: NextRequest) {
     console.error('[report run POST]', err);
     return apiError(err);
   }
-}
+});

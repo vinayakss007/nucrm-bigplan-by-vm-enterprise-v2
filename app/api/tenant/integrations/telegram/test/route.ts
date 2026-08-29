@@ -11,8 +11,9 @@ import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { readJsonBody } from '@/lib/api/validate';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
-export async function POST(req: NextRequest) {
+export const POST = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -53,4 +54,4 @@ export async function POST(req: NextRequest) {
     console.error('[telegram/test]', msg);
     return NextResponse.json({ error: 'Failed to send test message' }, { status: 500 });
   }
-}
+});

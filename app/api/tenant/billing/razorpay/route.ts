@@ -19,6 +19,7 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { readJsonBody, validateBody } from '@/lib/api/validate';
 import { isRazorpayConfigured, createOrder, getPlanAmount } from '@/lib/razorpay';
 import { z } from 'zod';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 const razorpayOrderSchema = z.object({
   plan: z.enum(['starter', 'growth', 'scale'], {
@@ -33,7 +34,7 @@ const razorpayOrderSchema = z.object({
  * POST /api/tenant/billing/razorpay
  * Creates a Razorpay order for subscription purchase.
  */
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -80,4 +81,4 @@ export async function POST(request: NextRequest) {
   } catch (err: any) {
     return apiError(err);
   }
-}
+});

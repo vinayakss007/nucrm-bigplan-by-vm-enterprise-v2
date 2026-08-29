@@ -13,8 +13,9 @@ import { apiError } from '@/lib/api-error';
 import { analyzeSentiment, updateDealSentiment } from '@/lib/ai/sentiment';
 import { requireAiFeature } from '@/lib/ai/plan-gate';
 import { readJsonBody } from '@/lib/api/validate';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
-export async function POST(req: NextRequest) {
+export const POST = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -40,4 +41,4 @@ export async function POST(req: NextRequest) {
     console.error('[api/ai/sentiment] POST error:', (err as Error).message);
     return apiError(err);
   }
-}
+});

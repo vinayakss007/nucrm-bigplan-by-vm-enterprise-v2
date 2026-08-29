@@ -8,8 +8,9 @@ import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { syncCalendarEvents } from '@/lib/calendar-sync/service';
 import { readJsonBody } from '@/lib/api/validate';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const limited = await rateLimitMutating(request, 'calendarSync', 'post');
     if (limited) return limited;
@@ -37,4 +38,4 @@ export async function POST(request: NextRequest) {
     console.error('[calendar-sync POST]', err);
     return NextResponse.json({ error: 'Sync failed' }, { status: 500 });
   }
-}
+});

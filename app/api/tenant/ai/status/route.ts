@@ -22,11 +22,12 @@ import { eq, sql, and, gte } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { listProviderKeyMeta } from '@/lib/ai/secrets';
 import { getAtRiskDeals } from '@/lib/ai/at-risk';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 /** Named providers to always show in the dashboard (even if not configured). */
 const NAMED_PROVIDER_IDS = ['openai', 'anthropic', 'groq', 'ollama', 'opencode', 'deepseek'];
 
-export async function GET(req: NextRequest) {
+export const GET = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -117,4 +118,4 @@ export async function GET(req: NextRequest) {
   } catch (err) {
     return apiError(err);
   }
-}
+});

@@ -13,8 +13,9 @@ import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { createAnnouncementSchema, updateAnnouncementSchema, deleteAnnouncementSchema } from '@/lib/api/schemas';
 import { logSuperAdminAction } from '@/lib/audit/super-admin';
 import { concurrencyGuardById } from '@/lib/api/concurrency';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -46,9 +47,9 @@ export async function GET(request: NextRequest) {
     console.error('[superadmin/announcements GET]', err);
     return apiError(err);
   }
-}
+});
 
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -92,9 +93,9 @@ export async function POST(request: NextRequest) {
     console.error('[superadmin/announcements POST]', err);
     return apiError(err);
   }
-}
+});
 
-export async function PATCH(request: NextRequest) {
+export const PATCH = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -141,9 +142,9 @@ export async function PATCH(request: NextRequest) {
     console.error('[superadmin/announcements PATCH]', err);
     return apiError(err);
   }
-}
+});
 
-export async function DELETE(request: NextRequest) {
+export const DELETE = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -172,5 +173,5 @@ export async function DELETE(request: NextRequest) {
     console.error('[superadmin/announcements DELETE]', err);
     return apiError(err);
   }
-}
+});
 

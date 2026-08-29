@@ -12,6 +12,7 @@ import { tenants } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 const moduleCheckoutSchema = z.object({
   module_id: z.string().min(1),
@@ -21,7 +22,7 @@ const moduleCheckoutSchema = z.object({
  * POST /api/tenant/billing/modules
  * Creates a Stripe Checkout session for purchasing a module add-on.
  */
-export async function POST(req: NextRequest) {
+export const POST = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -81,4 +82,4 @@ export async function POST(req: NextRequest) {
     const message = err instanceof Error ? err.message : 'Internal server error';
     return NextResponse.json({ error: message }, { status: 500 });
   }
-}
+});

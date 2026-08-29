@@ -27,6 +27,7 @@ import {
   recordInvoicePayment,
   PaymentError,
 } from '@/lib/billing/payments';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 const createPaymentSchema = z.object({
   amount: z.coerce.number().positive().max(999_999_999),
@@ -53,7 +54,7 @@ async function invoiceExists(invoiceId: string, tenantId: string): Promise<boole
   return Boolean(row);
 }
 
-export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export const GET = withApiRoute(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -72,9 +73,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     console.error('[invoices payments GET]', err);
     return apiError(err);
   }
-}
+});
 
-export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export const POST = withApiRoute(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
     const limited = await rateLimitMutating(req, 'invoices', 'post');
     if (limited) return limited;
@@ -130,4 +131,4 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     console.error('[invoices payments POST]', err);
     return apiError(err);
   }
-}
+});

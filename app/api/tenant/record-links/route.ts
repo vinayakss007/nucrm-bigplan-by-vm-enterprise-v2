@@ -14,6 +14,7 @@ import {
   RecordLinkError,
 } from '@/lib/record-links';
 import { readJsonBody } from '@/lib/api/validate';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 /**
  * Arbitrary "related records" associations.
@@ -31,7 +32,7 @@ function badRequest(message: string) {
   return NextResponse.json({ error: message }, { status: 400 });
 }
 
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -50,9 +51,9 @@ export async function GET(request: NextRequest) {
     if (err instanceof RecordLinkError) return badRequest(err.message);
     return apiError(err);
   }
-}
+});
 
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const limited = await rateLimitMutating(request, 'api', 'post');
     if (limited) return limited;
@@ -92,9 +93,9 @@ export async function POST(request: NextRequest) {
     if (err instanceof RecordLinkError) return badRequest(err.message);
     return apiError(err);
   }
-}
+});
 
-export async function DELETE(request: NextRequest) {
+export const DELETE = withApiRoute(async (request: NextRequest) => {
   try {
     const limited = await rateLimitMutating(request, 'api', 'delete');
     if (limited) return limited;
@@ -115,4 +116,4 @@ export async function DELETE(request: NextRequest) {
     if (err instanceof RecordLinkError) return badRequest(err.message);
     return apiError(err);
   }
-}
+});

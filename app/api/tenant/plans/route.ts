@@ -10,13 +10,14 @@ import { db } from '@/drizzle/db';
 import { plans } from '@/drizzle/schema';
 import { eq, asc } from 'drizzle-orm';
 import { dbCache } from '@/lib/db/cache';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 /**
  * GET /api/tenant/plans
  * Public read-only plans endpoint for tenant billing page.
  * Uses cache to reduce DB load.
  */
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -36,4 +37,4 @@ export async function GET(request: NextRequest) {
   } catch (err: any) {
     return apiError(err);
   }
-}
+});

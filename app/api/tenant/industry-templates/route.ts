@@ -10,9 +10,10 @@ import { db } from '@/drizzle/db';
 import { customFieldDefs, pipelines, dealStages, automations } from '@/drizzle/schema';
 import { INDUSTRY_TEMPLATES } from '@/lib/modules/industry-templates';
 import { readJsonBody } from '@/lib/api/validate';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 // GET /api/tenant/industry-templates - list all available industry templates
-export async function GET(req: NextRequest) {
+export const GET = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -34,9 +35,9 @@ export async function GET(req: NextRequest) {
     console.error('[IndustryTemplates] GET error:', err);
     return apiError(err);
   }
-}
+});
 
-export async function POST(req: NextRequest) {
+export const POST = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -102,4 +103,4 @@ export async function POST(req: NextRequest) {
     console.error('[IndustryTemplates] error:', err);
     return apiError(err);
   }
-}
+});

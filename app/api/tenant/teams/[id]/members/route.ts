@@ -10,6 +10,7 @@ import { db } from '@/drizzle/db';
 import { teams, teamMembers } from '@/drizzle/schema';
 import { eq, and, isNull } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 async function loadTeam(tenantId: string, id: string) {
   const [team] = await db
@@ -21,7 +22,7 @@ async function loadTeam(tenantId: string, id: string) {
 }
 
 // POST /api/tenant/teams/:id/members — add (or re-activate) a member (admin only).
-export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export const POST = withApiRoute(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
     const limited = await rateLimitMutating(req, 'teams', 'post');
     if (limited) return limited;
@@ -66,10 +67,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ data: member }, { status: 201 });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) { return apiError(err); }
-}
+});
 
 // DELETE /api/tenant/teams/:id/members?userId=... — remove a member (admin only).
-export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export const DELETE = withApiRoute(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
     const limited = await rateLimitMutating(req, 'teams', 'delete');
     if (limited) return limited;
@@ -96,4 +97,4 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     return NextResponse.json({ data: { teamId, userId, removed: true } });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) { return apiError(err); }
-}
+});

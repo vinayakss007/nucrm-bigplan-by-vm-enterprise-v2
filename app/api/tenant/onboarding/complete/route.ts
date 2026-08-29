@@ -10,6 +10,7 @@ import { markOnboardingComplete, recordOnboardingStep } from '@/lib/onboarding/c
 import { ModuleRegistry } from '@/lib/modules/registry';
 import { readJsonBody } from '@/lib/api/validate';
 import { db } from '@/drizzle/db';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 /**
  * POST /api/tenant/onboarding/complete
@@ -24,7 +25,7 @@ import { db } from '@/drizzle/db';
  *   pipeline_name?: string,
  * }
  */
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -86,13 +87,13 @@ export async function POST(request: NextRequest) {
     console.error('[Onboarding Complete] Error:', err);
     return apiError(err);
   }
-}
+});
 
 /**
  * GET /api/tenant/onboarding/complete
  * Check if current user has completed onboarding.
  */
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -107,4 +108,4 @@ export async function GET(request: NextRequest) {
   } catch (_err: any) {
     return NextResponse.json({ completed: false }); // Don't block on error
   }
-}
+});

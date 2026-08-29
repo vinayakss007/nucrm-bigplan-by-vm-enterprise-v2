@@ -29,6 +29,7 @@ import { apiError } from '@/lib/api-error';
 import { logAudit } from '@/lib/audit';
 import { readJsonBody } from '@/lib/api/validate';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 const RESOURCES = ['leads', 'contacts', 'deals', 'tasks', 'tickets'] as const;
 type Resource = typeof RESOURCES[number];
@@ -86,7 +87,7 @@ async function countOwned(tenantId: string, userId: string, onlyOpen: boolean) {
   };
 }
 
-export async function GET(req: NextRequest) {
+export const GET = withApiRoute(async (req: NextRequest) => {
   try {
     const { ctx, error } = await assertAdmin(req);
     if (error) return error;
@@ -108,9 +109,9 @@ export async function GET(req: NextRequest) {
   } catch (err: any) {
     return apiError(err);
   }
-}
+});
 
-export async function POST(req: NextRequest) {
+export const POST = withApiRoute(async (req: NextRequest) => {
   const limited = await rateLimitMutating(req, 'bulkTransfer', 'post');
   if (limited) return limited;
  
@@ -218,4 +219,4 @@ export async function POST(req: NextRequest) {
     void logError({ error: err, context: 'bulk-transfer POST', ...tenantMeta(ctx) });
     return apiError(err);
   }
-}
+});

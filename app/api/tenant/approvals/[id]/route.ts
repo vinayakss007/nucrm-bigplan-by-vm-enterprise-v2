@@ -24,13 +24,14 @@ import { approveRequest, rejectRequest } from '@/lib/rbac/approval-workflows';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
 import { concurrencyGuard } from '@/lib/api/concurrency';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 interface PatchBody {
   action?: 'approve' | 'reject';
   reason?: string;
 }
 
-export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
   const limited = await rateLimitMutating(req, 'deals', 'patch');
   if (limited) return limited;
@@ -101,4 +102,4 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   } catch (err) {
     return apiError(err);
   }
-}
+});

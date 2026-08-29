@@ -18,6 +18,7 @@ import { withConcurrencyGuard } from '@/lib/concurrency';
 import { updatedAtMs } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { apiError } from '@/lib/api-error';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 /**
  * PATCH body schema — every field the route consumes, all routed through Zod.
@@ -69,13 +70,11 @@ const patchLeadBodySchema = updateLeadSchema
  * GET /api/tenant/leads/[id]
  * Get a single lead with activities
  */
-export async function GET(
-  request: NextRequest, 
+export const GET = withApiRoute(async (request: NextRequest, 
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  { params }: any
-) {
+  { params }: any) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -146,19 +145,17 @@ export async function GET(
     console.error('Error fetching lead:', error);
     return apiError(error);
   }
-}
+});
 
 /**
  * PATCH /api/tenant/leads/[id]
  * Update a lead
  */
-export async function PATCH(
-  request: NextRequest, 
+export const PATCH = withApiRoute(async (request: NextRequest, 
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  { params }: any
-) {
+  { params }: any) => {
   try {
   const limited = await rateLimitMutating(request, 'leads', 'patch');
   if (limited) return limited;
@@ -273,19 +270,17 @@ export async function PATCH(
     console.error('Error updating lead:', error);
     return apiError(error);
   }
-}
+});
 
 /**
  * DELETE /api/tenant/leads/[id]
  * Soft delete a lead
  */
-export async function DELETE(
-  request: NextRequest, 
+export const DELETE = withApiRoute(async (request: NextRequest, 
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  { params }: any
-) {
+  { params }: any) => {
   try {
   const limited = await rateLimitMutating(request, 'leads', 'delete');
   if (limited) return limited;
@@ -329,4 +324,4 @@ export async function DELETE(
     console.error('Error deleting lead:', error);
     return apiError(error);
   }
-}
+});

@@ -9,12 +9,14 @@ import { tasks, contacts, deals, users } from '@/drizzle/schema';
 import { eq, and, isNull } from 'drizzle-orm';
 import { notFound } from 'next/navigation';
 import TaskDetailClient from '@/components/tenant/task-detail-client';
+import { withTenantScope } from '@/lib/api/with-api-route';
 
 interface PageProps {
   params: Promise<{ id: string }>;
 }
 
 export default async function TaskDetailPage({ params }: PageProps) {
+  return withTenantScope(async () => {
   const ctx = await requireTenantCtx();
   const { id } = await params;
 
@@ -69,4 +71,6 @@ export default async function TaskDetailPage({ params }: PageProps) {
       userId={ctx.userId}
     />
   );
+
+  });
 }

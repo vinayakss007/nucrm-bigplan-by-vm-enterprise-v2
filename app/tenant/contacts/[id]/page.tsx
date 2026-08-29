@@ -24,8 +24,10 @@ import {
 import { eq, and, sql, desc, isNull } from 'drizzle-orm';
 import { notFound } from 'next/navigation';
 import ContactDetailClient from '@/components/tenant/contact-detail-client';
+import { withTenantScope } from '@/lib/api/with-api-route';
 
 export default async function ContactDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  return withTenantScope(async () => {
   const ctx = await requireTenantCtx();
   const { id: contactId } = await params;
 
@@ -205,4 +207,6 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
       callLogs={callLogsList}
     />
   );
+
+  });
 }

@@ -20,6 +20,7 @@ import { eq, and, isNull, desc } from 'drizzle-orm';
 import { encrypt } from '@/lib/crypto';
 import { readJsonBody } from '@/lib/api/validate';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 interface OidcProviderInput {
   name: string;
@@ -33,7 +34,7 @@ interface OidcProviderInput {
   is_active?: boolean;
 }
 
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   const ctx = await requireAuth(request);
   if (ctx instanceof NextResponse) return ctx;
   if (!ctx.isAdmin) {
@@ -56,9 +57,9 @@ export async function GET(request: NextRequest) {
 
   const data = rows.map((r) => maskProvider(r));
   return NextResponse.json({ data });
-}
+});
 
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   const limited = await rateLimitMutating(request, 'ssoProviders', 'post');
   if (limited) return limited;
 
@@ -100,7 +101,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Failed to create provider' }, { status: 500 });
   }
   return NextResponse.json({ data: maskProvider(created) }, { status: 201 });
-}
+});
 
 // ── helpers (also used by the [id] route via direct import) ────────────────
 

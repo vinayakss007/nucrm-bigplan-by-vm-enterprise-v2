@@ -21,6 +21,7 @@ import { randomBytes } from 'crypto';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { getS3Config, isS3Configured } from '@/lib/storage/s3-config';
 import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 function getS3Client() {
   const cfg = getS3Config();
@@ -102,7 +103,7 @@ const MAX_FILE_SIZE = 25 * 1024 * 1024;
 const RESOURCE_TYPES = ['contact','deal','company','task','note'];
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export async function GET(req: NextRequest) {
+export const GET = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -156,9 +157,9 @@ export async function GET(req: NextRequest) {
     console.error('[files GET]', err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
-}
+});
 
-export async function POST(req: NextRequest) {
+export const POST = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -255,9 +256,9 @@ export async function POST(req: NextRequest) {
     console.error('[files POST]', err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
-}
+});
 
-export async function DELETE(req: NextRequest) {
+export const DELETE = withApiRoute(async (req: NextRequest) => {
   try {
     const limited = await rateLimitMutating(req, 'documents', 'delete');
     if (limited) return limited;
@@ -296,4 +297,4 @@ export async function DELETE(req: NextRequest) {
     console.error('[files DELETE]', err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
-}
+});

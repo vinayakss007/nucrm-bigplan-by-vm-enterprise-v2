@@ -14,10 +14,11 @@ import { createNotification } from '@/lib/notifications';
 import { logAudit } from '@/lib/audit';
 import { apiError } from '@/lib/api-error';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 // POST: assign one or many contacts to a rep
 // { contact_ids: string[], assign_to: string, reason?: string }
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -102,10 +103,10 @@ export async function POST(request: NextRequest) {
   } catch (err:any) { 
     return apiError(err); 
   }
-}
+});
 
 // DELETE: revoke (unassign) leads — set assigned_to = NULL or reassign to admin
-export async function DELETE(request: NextRequest) {
+export const DELETE = withApiRoute(async (request: NextRequest) => {
   try {
   const limited = await rateLimitMutating(request, 'leads', 'delete');
   if (limited) return limited;
@@ -164,4 +165,4 @@ export async function DELETE(request: NextRequest) {
   } catch (err:any) { 
     return apiError(err); 
   }
-}
+});

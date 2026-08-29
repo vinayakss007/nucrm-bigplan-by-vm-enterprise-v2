@@ -11,8 +11,9 @@ import { apiError } from '@/lib/api-error';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -26,4 +27,4 @@ export async function GET(request: NextRequest) {
     console.error('[super-admin backups GET]', err);
     return apiError(err);
   }
-}
+});

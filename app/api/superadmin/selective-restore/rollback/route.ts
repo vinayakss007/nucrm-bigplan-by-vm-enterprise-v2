@@ -12,13 +12,14 @@ import { db } from '@/drizzle/db';
 import { selectiveRestoreLogs, selectiveRestoreAuditLog } from '@/drizzle/schema';
 import { eq, sql } from 'drizzle-orm';
 import { rollbackToSnapshot } from '@/lib/restore/restore-executor';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 const schema = z.object({ restore_log_id: z.string().min(1) });
 
 /**
  * POST: Rollback a failed or unwanted restore to pre-restore snapshot
  */
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -115,4 +116,4 @@ export async function POST(request: NextRequest) {
     console.error('[selective-restore/rollback POST]', err);
     return apiError(err);
   }
-}
+});

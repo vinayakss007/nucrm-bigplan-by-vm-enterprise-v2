@@ -14,6 +14,7 @@ import { users, tenantMembers, tenants } from '@/drizzle/schema';
 import { eq, and, sql, ilike, desc, or } from 'drizzle-orm';
 import { hashPassword, validatePassword } from '@/lib/auth/session';
 import { concurrencyGuard } from '@/lib/api/concurrency';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 /**
  * Super Admin Users API
@@ -22,7 +23,7 @@ import { concurrencyGuard } from '@/lib/api/concurrency';
  * via POST /api/setup/create-admin with the SETUP_KEY.
  */
 
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -75,9 +76,9 @@ export async function GET(request: NextRequest) {
     console.error('[superadmin/users GET]', err);
     return apiError(err);
   }
-}
+});
 
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -123,13 +124,13 @@ export async function POST(request: NextRequest) {
     console.error('[superadmin/users POST]', err);
     return apiError(err);
   }
-}
+});
 
 /**
  * PATCH — Edit user details (full_name, role, status).
  * Super admin status changes remain blocked — use /api/superadmin/transfer-admin instead.
  */
-export async function PATCH(request: NextRequest) {
+export const PATCH = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -213,12 +214,12 @@ export async function PATCH(request: NextRequest) {
     console.error('[superadmin/users PATCH]', err);
     return apiError(err);
   }
-}
+});
 
 // DELETE is permanently blocked
-export async function DELETE(_request: NextRequest) {
+export const DELETE = withApiRoute(async (_request: NextRequest) => {
   return NextResponse.json({
     error: 'User deletion is disabled. Contact platform support if needed.'
   }, { status: 403 });
-}
+});
 

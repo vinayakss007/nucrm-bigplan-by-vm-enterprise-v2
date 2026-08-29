@@ -16,8 +16,9 @@ import { logger } from '@/lib/logger';
 import { randomBytes } from 'crypto';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { concurrencyGuard } from '@/lib/api/concurrency';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
-export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export const GET = withApiRoute(async (request: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -66,9 +67,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     console.error('[ticket GET]', err);
     return apiError(err);
   }
-}
+});
 
-export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export const PATCH = withApiRoute(async (request: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
   const limited = await rateLimitMutating(request, 'tickets', 'patch');
   if (limited) return limited;
@@ -205,9 +206,9 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     console.error('[ticket PATCH]', err);
     return apiError(err);
   }
-}
+});
 
-export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export const DELETE = withApiRoute(async (request: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
   const limited = await rateLimitMutating(request, 'tickets', 'delete');
   if (limited) return limited;
@@ -229,4 +230,4 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     console.error('[ticket DELETE]', err);
     return apiError(err);
   }
-}
+});

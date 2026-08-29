@@ -12,8 +12,9 @@ import { eq, and } from 'drizzle-orm';
 import { concurrencyGuard } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
-export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export const PATCH = withApiRoute(async (request: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
   const limited = await rateLimitMutating(request, 'kbCategories', 'patch');
   if (limited) return limited;
@@ -45,9 +46,9 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   } catch (err: any) {
     return apiError(err);
   }
-}
+});
 
-export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export const DELETE = withApiRoute(async (request: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
   const limited = await rateLimitMutating(request, 'kbCategories', 'delete');
   if (limited) return limited;
@@ -63,4 +64,4 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
   } catch (err: any) {
     return apiError(err);
   }
-}
+});

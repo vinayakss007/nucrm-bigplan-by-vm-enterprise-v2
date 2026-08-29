@@ -9,6 +9,7 @@ import { deals, contacts, companies, users, tenantMembers, pipelines, dealStages
 import { eq, and, or, isNull, desc, asc } from 'drizzle-orm';
 import { getUserDefaultView } from '@/lib/user-defaults';
 import dynamic from 'next/dynamic';
+import { withTenantScope } from '@/lib/api/with-api-route';
 
 const DealsPageClient = dynamic(() => import('./deals-page-client'), {
   loading: () => (
@@ -19,6 +20,7 @@ const DealsPageClient = dynamic(() => import('./deals-page-client'), {
 });
 
 export default async function DealsPage() {
+  return withTenantScope(async () => {
   const ctx = await requireTenantCtx();
   const tid = ctx.tenantId;
 
@@ -116,4 +118,6 @@ export default async function DealsPage() {
       defaultView={defaultView}
     />
   );
+
+  });
 }

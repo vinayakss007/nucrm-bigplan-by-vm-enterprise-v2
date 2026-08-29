@@ -23,6 +23,7 @@ import { logAudit } from '@/lib/audit';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
 import { concurrencyGuard, updatedAtMs } from '@/lib/api/concurrency';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 const VALID = {
   theme:           ['light', 'dark', 'system'],
@@ -61,7 +62,7 @@ const BOOLEAN_KEYS = [
   'show_tips', 'autosave_drafts', 'show_keyboard_hints', 'auto_cc_self',
 ];
 
-export async function GET(req: NextRequest) {
+export const GET = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -77,9 +78,9 @@ export async function GET(req: NextRequest) {
   } catch (err: any) {
     return apiError(err);
   }
-}
+});
 
-export async function PATCH(req: NextRequest) {
+export const PATCH = withApiRoute(async (req: NextRequest) => {
   let ctx: Awaited<ReturnType<typeof requireAuth>> | undefined;
   try {
   const limited = await rateLimitMutating(req, 'settings', 'patch');
@@ -163,9 +164,9 @@ export async function PATCH(req: NextRequest) {
     void logError({ error: err, context: 'user-defaults PATCH', ...tenantMeta(ctx) });
     return apiError(err);
   }
-}
+});
 
-export async function DELETE(req: NextRequest) {
+export const DELETE = withApiRoute(async (req: NextRequest) => {
   try {
   const limited = await rateLimitMutating(req, 'settings', 'delete');
   if (limited) return limited;
@@ -204,4 +205,4 @@ export async function DELETE(req: NextRequest) {
   } catch (err: any) {
     return apiError(err);
   }
-}
+});

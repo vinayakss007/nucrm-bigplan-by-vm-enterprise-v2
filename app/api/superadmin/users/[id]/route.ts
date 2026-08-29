@@ -8,11 +8,10 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { users, tenantMembers, tenants } from '@/drizzle/schema';
 import { eq, sql } from 'drizzle-orm';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const GET = withApiRoute(async (request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -74,4 +73,4 @@ export async function GET(
     console.error('[superadmin/users/[id]/GET]', error);
     return NextResponse.json({ error: 'Failed to fetch user' }, { status: 500 });
   }
-}
+});

@@ -11,8 +11,9 @@ import { eq, and, desc } from 'drizzle-orm';
 import { aliasedTable } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { parseLimitOffset } from '@/lib/api/query-params';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -58,4 +59,4 @@ export async function GET(request: NextRequest) {
     console.error('[leads/history]', err);
     return apiError(err); 
   }
-}
+});

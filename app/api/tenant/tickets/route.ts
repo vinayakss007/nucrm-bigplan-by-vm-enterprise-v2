@@ -15,15 +15,16 @@ import { eq, and, desc, sql, isNull } from 'drizzle-orm';
 import { fireWebhooks } from '@/lib/webhooks';
 import { logError } from '@/lib/errors-server';
 import { generatePortalToken } from '@/lib/ticket-portal';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 /**
  * Tenant Ticket Management
  * Restricted to Organizations with the 'service-helpdesk' module active.
  */
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   const limited = await checkRateLimit(request, { action: 'get', max: 120, windowMinutes: 1 }); if (limited) return limited;
   return _GET(request);
-}
+});
 
 async function _GET(request: NextRequest) {
   try {
@@ -93,7 +94,7 @@ async function _GET(request: NextRequest) {
   }
 }
 
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -152,4 +153,4 @@ export async function POST(request: NextRequest) {
     console.error('[tenant tickets POST]', err);
     return apiError(err);
   }
-}
+});

@@ -13,6 +13,7 @@ import { superAdminBackups } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
 import { parseBackupFile } from '@/lib/restore/backup-parser';
 import { existsSync } from 'fs';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 const schema = z.object({ backup_id: z.string().min(1) });
 
@@ -20,7 +21,7 @@ const schema = z.object({ backup_id: z.string().min(1) });
  * POST: Parse and preview backup file contents
  * Shows tenants, tables, and record counts without restoring anything
  */
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -89,4 +90,4 @@ export async function POST(request: NextRequest) {
     console.error('[selective-restore/preview POST]', err);
     return apiError(err);
   }
-}
+});

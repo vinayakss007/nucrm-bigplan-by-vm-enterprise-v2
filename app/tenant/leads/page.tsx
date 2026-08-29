@@ -11,6 +11,7 @@ import { Suspense } from 'react';
 import { getUserDefaultView } from '@/lib/user-defaults';
 import LeadsClient from '@/components/tenant/leads-client-new';
 import { Skeleton } from '@/components/ui/skeleton';
+import { withTenantScope } from '@/lib/api/with-api-route';
 
 function LoadingSkeleton() {
   return (
@@ -35,6 +36,7 @@ function LoadingSkeleton() {
 }
 
 export default async function LeadsPage() {
+  return withTenantScope(async () => {
   const ctx = await requireTenantCtx();
   const tid = ctx.tenantId;
 
@@ -144,4 +146,6 @@ export default async function LeadsPage() {
       />
     </Suspense>
   );
+
+  });
 }

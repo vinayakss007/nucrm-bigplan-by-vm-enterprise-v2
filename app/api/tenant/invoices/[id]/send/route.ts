@@ -20,8 +20,9 @@ import { logAudit } from '@/lib/audit';
 import { sendEmail } from '@/lib/email/service';
 import { sanitizeHTMLServer } from '@/lib/sanitize';
 import { readJsonBody } from '@/lib/api/validate';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
-export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export const POST = withApiRoute(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -114,4 +115,4 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     console.error('[invoices/send POST]', err);
     return apiError(err);
   }
-}
+});
