@@ -33,10 +33,43 @@ function line(label: string, value: unknown): void {
   console.log(`  ${label.padEnd(38)} ${String(value)}`);
 }
 
+/**
+ * Preflight TLS guard (#1474).
+ *
+ * `sslmode=disable` means the DB connection is plaintext — an in-network MITM
+ * exposure and a SOC 2 / GDPR blocker for a CRM holding customer PII. In
+ * production this is a hard failure; elsewhere it is a warning so local/dev
+ * setups without TLS are not blocked. Returns true when the caller should abort.
+ */
+function sslModeGuardShouldAbort(url: string): boolean {
+  if (!/sslmode=disable/i.test(url)) {
+    return false;
+  }
+  const isProduction = process.env.NODE_ENV === 'production';
+  if (isProduction) {
+    console.error('');
+    console.error('  ❌ REFUSING: DATABASE_URL contains sslmode=disable while NODE_ENV=production.');
+    console.error('     Plaintext DB traffic exposes credentials + PII to any in-network');
+    console.error('     attacker (SOC 2 / GDPR blocker). Use sslmode=require (or verify-full');
+    console.error('     with a CA) — see deploy/POSTGRES_PRODUCTION_GUIDE.md and DEPLOYMENT.md.');
+    return true;
+  }
+  console.warn('');
+  console.warn('  !! WARNING: DATABASE_URL contains sslmode=disable. This is acceptable only');
+  console.warn('     for local/dev on an isolated network. Never ship sslmode=disable to');
+  console.warn('     production — use sslmode=require (see DEPLOYMENT.md).');
+  return false;
+}
+
 async function main(): Promise<void> {
   const url = process.env.DATABASE_URL;
   if (!url) {
     console.error('ERROR: DATABASE_URL is required.');
+    process.exit(1);
+  }
+
+  // Preflight: block plaintext DB connections in production (#1474).
+  if (sslModeGuardShouldAbort(url)) {
     process.exit(1);
   }
 

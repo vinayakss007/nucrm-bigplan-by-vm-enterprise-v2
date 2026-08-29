@@ -88,6 +88,32 @@ bash deploy/scripts/deploy.sh
 
 See `deploy/.env.production` for the full documented template.
 
+## Database TLS (required in production)
+
+The app connects to Postgres over TLS in production. Plaintext DB traffic
+(`sslmode=disable`) exposes credentials and customer PII to any in-network
+attacker and fails SOC 2 / GDPR, so it is refused at startup.
+
+- `DATABASE_URL` must use `?sslmode=require` (or `?sslmode=verify-full` with a
+  CA) and `DATABASE_SSL=true`. The `deploy/.env.production` template already
+  ships this default; keep the two consistent.
+- `prod:preflight` (`npm run prod:preflight`) refuses to run when
+  `DATABASE_URL` contains `sslmode=disable` while `NODE_ENV=production`.
+- **Certificate verification:** in production the app verifies the server
+  certificate (`rejectUnauthorized: true`, see `lib/db/ssl-config.ts`). For
+  `sslmode=require` with a self-signed server cert the connection is encrypted
+  but the CA is not trusted, so set `DATABASE_SSL_REJECT_UNAUTHORIZED=false` (the
+  explicit escape hatch). For full verification, use `sslmode=verify-full` and
+  install a CA / Let's Encrypt cert the client trusts (system trust store or the
+  connection's `sslrootcert`), leaving `DATABASE_SSL_REJECT_UNAUTHORIZED` unset.
+- **Supplying the cert:** generate the DB server cert with
+  `deploy/postgres/generate-server-cert.sh`; see `deploy/POSTGRES_PRODUCTION_GUIDE.md`
+  for the full procedure. Verify with:
+
+  ```bash
+  psql "host=<host> dbname=nucrm user=nucrm sslmode=require" -c 'SHOW ssl;'  # → on
+  ```
+
 ## SSL with Let's Encrypt
 
 ```bash
