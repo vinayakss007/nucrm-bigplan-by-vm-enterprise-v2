@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { apiError } from '@/lib/api-error';
+import { logError } from '@/lib/errors-server';
 import { NextRequest, NextResponse } from 'next/server';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { updateContactSchema } from '@/lib/api/schemas';
@@ -78,7 +79,7 @@ export const POST = withApiRoute(async (request: NextRequest,
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
-    console.error('[Lifecycle] POST error:', error);
+    await logError({ error, context: 'tenant/contacts/[id]/lifecycle POST', requestMethod: 'POST' });
     return apiError(error);
   }
 });
@@ -123,7 +124,7 @@ export const GET = withApiRoute(async (request: NextRequest,
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
-    console.error('[Lifecycle] GET error:', error);
+    await logError({ error, context: 'tenant/contacts/[id]/lifecycle GET', requestMethod: 'GET' });
     return apiError(error);
   }
 });

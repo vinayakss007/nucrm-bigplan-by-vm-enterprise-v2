@@ -10,6 +10,7 @@ import { companies, activities } from '@/drizzle/schema';
 import { eq, and, sql } from 'drizzle-orm';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { apiError } from '@/lib/api-error';
+import { logError } from '@/lib/errors-server';
 import { readJsonBody } from '@/lib/api/validate';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
@@ -157,7 +158,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
 
     return NextResponse.json({ ok: true, results });
   } catch (err: unknown) {
-    console.error('[companies import POST]', err);
+    await logError({ error: err, context: 'tenant/companies import POST', requestMethod: 'POST' });
     return apiError(err);
   }
 });

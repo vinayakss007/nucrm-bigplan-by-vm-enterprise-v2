@@ -57,7 +57,7 @@ export const GET = withApiRoute(async (req: NextRequest, { params }: any) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) { 
-    console.error('[company GET]', err);
+    await logError({ error: err, context: 'tenant/companies/[id] GET', requestMethod: 'GET' });
     return apiError(err); 
   }
 });
@@ -150,7 +150,7 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: any) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) { 
-    console.error('[company PATCH]', err);
+    await logError({ error: err, context: 'tenant/companies/[id] PATCH', requestMethod: 'PATCH' });
     return apiError(err); 
   }
 });
@@ -200,7 +200,7 @@ export const DELETE = withApiRoute(async (req: NextRequest, { params }: any) => 
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) { 
-    console.error('[company DELETE]', err);
+    await logError({ error: err, context: 'tenant/companies/[id] DELETE', requestMethod: 'DELETE' });
     return apiError(err); 
   }
 });

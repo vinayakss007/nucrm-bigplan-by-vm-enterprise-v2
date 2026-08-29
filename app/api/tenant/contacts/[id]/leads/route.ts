@@ -20,6 +20,7 @@ import { db } from '@/drizzle/db';
 import { leads, leadOffers, users } from '@/drizzle/schema';
 import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
+import { logError } from '@/lib/errors-server';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
  
@@ -139,7 +140,7 @@ export const GET = withApiRoute(async (request: NextRequest, { params }: any) =>
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
-    console.error('[contacts/leads] error:', error);
+    await logError({ error, context: 'tenant/contacts/[id]/leads GET', requestMethod: 'GET' });
     return apiError(error, "Internal server error", 500);
   }
 });
