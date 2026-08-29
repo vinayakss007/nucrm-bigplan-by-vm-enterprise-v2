@@ -127,7 +127,9 @@ export async function POST(request: NextRequest) {
     // (tenant_id, lower(email)), so we serialize per (tenant, email) using a
     // transaction-scoped Postgres advisory lock, then re-check inside the tx.
     const normalizedEmail = email.trim().toLowerCase();
-    let contactId!: string;
+    // #1142: this holds a LEAD id (leads.id) throughout — the public capture
+    // endpoint creates/updates a lead, not a contact. Named accordingly.
+    let leadId!: string;
 
     await db.transaction(async (tx) => {
       // Serialize concurrent submissions for the same (tenant, email). The lock
@@ -165,7 +167,7 @@ export async function POST(request: NextRequest) {
           .where(eq(leads.id, existingLead.id))
           .returning({ id: leads.id });
 
-        contactId = updated?.id ?? existingLead.id;
+        leadId = updated?.id ?? existingLead.id;
         return;
       }
 
@@ -187,23 +189,23 @@ export async function POST(request: NextRequest) {
       }).returning({ id: leads.id });
 
       if (!newLead) throw new Error('Failed to create lead');
-      contactId = newLead.id;
+      leadId = newLead.id;
 
       await tx.insert(leadActivities).values({
         tenantId: tenant_id,
-        leadId: contactId,
+        leadId: leadId,
         activityType: 'created',
         description: `Lead captured via ${safeSource}${form_id ? ` (form: ${form_id})` : ''}`,
       });
     });
 
     // Insert into formSubmissions if form_id provided
-    if (form_id && contactId) {
+    if (form_id && leadId) {
       await db.transaction(async (tx) => {
         await tx.insert(formSubmissions).values({
           tenantId: tenant_id,
           formId: form_id,
-          contactId: contactId,
+          contactId: leadId,
           data: { first_name: safeFirst, last_name: safeLast, email: email.trim().toLowerCase(), phone: phone.trim(), company: safeCompany, message: safeMessage, source: safeSource },
         });
 
@@ -214,20 +216,20 @@ export async function POST(request: NextRequest) {
     }
 
     // Notify workspace owner about new lead
-    if (tenant.ownerId && contactId) {
+    if (tenant.ownerId && leadId) {
       await createNotification({
         userId: tenant.ownerId,
         tenantId: tenant_id,
         type: 'contact_assigned',
         title: `New lead: ${safeFirst || ''} ${safeLast || email}`.trim(),
         body: `Via ${safeSource}${safeMessage ? ` — "${safeMessage.slice(0, 80)}"` : ''}`,
-        link: `/tenant/leads/${contactId}`,
+        link: `/tenant/leads/${leadId}`,
       }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
     }
 
     // Fire webhooks
     await fireWebhooks(tenant_id, 'contact.created', { // lead captured
-      id: contactId, 
+      id: leadId, 
       email: email.trim(),
       name: `${safeFirst || ''} ${safeLast || ''}`.trim(),
       source: safeSource,
@@ -235,7 +237,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       ok: true,
-      lead_id: contactId,
+      lead_id: leadId,
       message: 'Thank you! We will be in touch.',
     }, { status: 201 });
 
