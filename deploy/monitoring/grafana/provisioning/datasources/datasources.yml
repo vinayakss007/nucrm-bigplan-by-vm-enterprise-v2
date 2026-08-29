@@ -19,6 +19,11 @@ datasources:
     secureJsonData:
       password: ${POSTGRES_PASSWORD}
     jsonData:
+      # sslmode=disable is intentional here and ONLY safe because Grafana reaches
+      # Postgres over the isolated internal Docker network (nucrm-net) — this
+      # connection never leaves the host and is not exposed publicly (#1474).
+      # The application's own DATABASE_URL must still use sslmode=require in prod.
+      # If Postgres is ever moved off the private network, change this to require.
       sslmode: disable
       maxOpenConns: 5
       maxIdleConns: 2
