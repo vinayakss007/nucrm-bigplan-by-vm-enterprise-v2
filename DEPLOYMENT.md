@@ -144,33 +144,74 @@ empty.
   already handle GUC lifecycle, and the existing transaction/session semantics
   are preserved unchanged.
 
-### Scope boundary (residual, honest note)
+### Enclosing the whole handler in the pinned scope (`withApiRoute`)
 
-The pin is established inside `requireAuth()` (API routes) and
-`requireTenantCtx()` (Server Components), which wrap their bodies in
-`withPinnedConnection(...)`. Because Next.js App Router provides no global
-per-request async wrapper that user code can hook, and because
-`AsyncLocalStorage` scopes are strictly lexical, the pin is active for the
-**auth + `setTenantContext` + auth/membership lookups**, and is released when
-`requireAuth()` / `requireTenantCtx()` return — i.e. **before** the route
-handler's own later `db` queries run in the same function scope. Those
-handler-level data queries continue to run on unpinned pool connections.
+`AsyncLocalStorage` scopes are strictly lexical. Pinning **only** inside
+`requireAuth()` / `requireTenantCtx()` is not enough on its own: those helpers
+return before a route handler runs its own later `db` queries, so — without a
+wrapper — those handler queries run on unpinned pool connections and RLS does not
+protect them (the exact surface #1615 is about).
 
-Consequences and why this is still the right minimal change:
+To close that gap, route handlers are wrapped with **`withApiRoute()`**
+(`lib/api/with-api-route.ts`), which runs the **entire handler body** (auth +
+every subsequent `db` query) inside one `withPinnedConnection` scope:
 
-- Application-level `tenant_id` filters (present on the handler queries) remain
-  the primary tenant-scoping mechanism, exactly as before.
-- The fail-closed RLS policy is preserved as defense-in-depth and is now
-  **actually functional** on the pinned scope (previously it was inert on the
-  non-PgBouncer path for every scope).
-- Fully extending RLS enforcement to every handler's data queries would require
-  either wrapping every route handler in `withPinnedConnection` (hundreds of
-  edits, out of scope for this bug fix) or a framework-level per-request hook
-  that Next.js does not expose. Route handlers (and Server Component pages) can
-  opt into full-request pinning today by wrapping their body in
-  `withPinnedConnection(async () => { ... })` from `@/lib/db/request-connection`.
+```ts
+import { withApiRoute } from '@/lib/api/with-api-route';
 
-See `lib/db/request-connection.ts` for the mechanism and the exact boundary.
+export const GET = withApiRoute(async (request) => {
+  const ctx = await requireAuth(request);          // setTenantContext on the pin
+  if (ctx instanceof NextResponse) return ctx;
+  const data = await db.select()...;               // runs on the SAME pinned conn
+  return NextResponse.json({ data });
+});
+
+// dynamic routes: the second (params) argument is passed through unchanged
+export const GET = withApiRoute(async (request, { params }) => { ... });
+```
+
+`withApiRoute` preserves the `NextResponse` return value, propagates thrown
+errors, passes the route-params context through unchanged, and is a **no-op under
+PgBouncer**. Because `withPinnedConnection` reuses an already-pinned client for
+nested calls, `requireAuth()`'s own inner pin simply joins the wrapper's single
+per-request connection — still exactly one connection per request.
+
+**Server Components / server actions:** wrap the page body in **`withTenantScope`**
+(same module) so `requireTenantCtx()` and the page's later queries share the pin:
+
+```ts
+export default async function Page() {
+  return withTenantScope(async () => {
+    const ctx = await requireTenantCtx();
+    const rows = await db.select()...;   // on the pinned connection
+    return <View rows={rows} />;
+  });
+}
+```
+
+### Migration status and residual
+
+- **Converted so far** (handler queries fully RLS-protected on the pinned conn):
+  - `app/api/admin/flags/route.ts` (GET/POST/DELETE)
+  - `app/api/tenant/contacts/route.ts` (GET/POST)
+  - `app/api/tenant/contacts/[id]/route.ts` (GET/PATCH/DELETE — dynamic route)
+  - `app/api/tenant/deals/route.ts` (GET/POST)
+- **Residual — remaining routes not yet converted.** The other route files (the
+  repo has ~484 `app/api/**/route.ts` handlers) still use the bare
+  `export async function GET(...)` form. For those, the pin covers the
+  auth + `setTenantContext` lookups but not the handler's own later queries;
+  application-level `tenant_id` filters remain the primary scoping mechanism for
+  them, exactly as before, and the fail-closed RLS policy is preserved as
+  defense-in-depth. Converting a route is a mechanical, low-risk edit: add the
+  `withApiRoute` import and change each `export async function METHOD(request, ...)`
+  to `export const METHOD = withApiRoute(async (request, ...) => { ... });`
+  (closing the function with `});`). No handler-body logic changes.
+- Fully extending RLS enforcement to every handler query is a large mechanical
+  migration tracked as a follow-up; it does not change any handler behavior, only
+  the wrapper each handler is exported through.
+
+See `lib/api/with-api-route.ts` and `lib/db/request-connection.ts` for the
+mechanism and the exact boundary.
 
 ## SSL with Let's Encrypt
 

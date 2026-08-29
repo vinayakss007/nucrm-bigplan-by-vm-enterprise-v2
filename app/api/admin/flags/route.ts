@@ -5,10 +5,14 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
+import { withApiRoute } from '@/lib/api/with-api-route';
 import { getAllFlags, isEnabled, setOverride, deleteOverride, DEFINED_FLAGS } from '@/lib/flags';
 import { readJsonBody } from '@/lib/api/validate';
 
-export async function GET(request: NextRequest) {
+// #1615: withApiRoute pins ONE connection for the whole handler body so the
+// auth check's setTenantContext() and every db query below share it and RLS
+// stays enforced. No-op under PgBouncer.
+export const GET = withApiRoute(async (request: NextRequest) => {
   const ctx = await requireAuth(request);
   if (ctx instanceof NextResponse) return ctx;
   if (!ctx.isSuperAdmin) {
@@ -17,9 +21,9 @@ export async function GET(request: NextRequest) {
 
   const flags = await getAllFlags();
   return NextResponse.json({ flags });
-}
+});
 
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   const ctx = await requireAuth(request);
   if (ctx instanceof NextResponse) return ctx;
   if (!ctx.isSuperAdmin) {
@@ -40,9 +44,9 @@ export async function POST(request: NextRequest) {
     enabled: await isEnabled(key),
     override: { enabled, tenantIds, userIds, percentage },
   });
-}
+});
 
-export async function DELETE(request: NextRequest) {
+export const DELETE = withApiRoute(async (request: NextRequest) => {
   const ctx = await requireAuth(request);
   if (ctx instanceof NextResponse) return ctx;
   if (!ctx.isSuperAdmin) {
@@ -55,4 +59,4 @@ export async function DELETE(request: NextRequest) {
 
   await deleteOverride(key);
   return NextResponse.json({ key, enabled: await isEnabled(key) });
-}
+});

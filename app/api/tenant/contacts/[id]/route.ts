@@ -8,6 +8,7 @@ import { apiError } from '@/lib/api-error';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { updateContactSchema } from '@/lib/api/schemas';
 import { requireAuth, requirePerm, can } from '@/lib/auth/middleware';
+import { withApiRoute } from '@/lib/api/with-api-route';
 import { db } from '@/drizzle/db';
 import { contacts, companies, users, activities, tenants } from '@/drizzle/schema';
 import { eq, and, sql, ne } from 'drizzle-orm';
@@ -20,7 +21,10 @@ import { withConcurrencyGuard } from '@/lib/concurrency';
 import { updatedAtMs } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
-export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+// #1615: withApiRoute pins ONE connection for the whole handler body (auth +
+// all db queries share it) so RLS is enforced on the pinned connection. The
+// route-context (params) is passed through unchanged. No-op under PgBouncer.
+export const GET = withApiRoute(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -92,9 +96,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     console.error('[contacts [id] GET]', err);
     return apiError(err);
   }
-}
+});
 
-export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
   const limited = await rateLimitMutating(req, 'contacts', 'patch');
   if (limited) return limited;
@@ -273,9 +277,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     console.error('[contacts [id] PATCH]', err);
     return apiError(err);
   }
-}
+});
 
-export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export const DELETE = withApiRoute(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
   const limited = await rateLimitMutating(req, 'contacts', 'delete');
   if (limited) return limited;
@@ -351,5 +355,5 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     console.error('[contacts [id] DELETE]', err);
     return apiError(err);
   }
-}
+});
 

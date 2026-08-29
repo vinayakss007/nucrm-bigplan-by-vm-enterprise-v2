@@ -52,6 +52,7 @@ import { randomUUID } from 'crypto';
 import { db } from '../../drizzle/db';
 import { setTenantContext } from '../../lib/db/rls';
 import { withPinnedConnection } from '../../lib/db/request-connection';
+import { withApiRoute } from '../../lib/api/with-api-route';
 import * as schema from '../../drizzle/schema';
 import { eq } from 'drizzle-orm';
 
@@ -222,5 +223,48 @@ describe.skipIf(!dbAvailable)('RLS connection affinity (#1615)', () => {
       expect(getPinnedClient()).toBeDefined();
     });
     expect(getPinnedClient()).toBeUndefined();
+  });
+
+  // REVIEW v1 FOLLOW-UP (#1615, review issue #2): drive an ACTUAL withApiRoute-
+  // wrapped handler shaped exactly like a real route — auth sets the tenant
+  // context, then the handler runs its OWN filter-LESS db query. This proves the
+  // wrapper (not a hand-written withPinnedConnection block) makes RLS enforce
+  // isolation on the handler-query surface #1615 is about.
+  //
+  // FAIL-WITHOUT-FIX: on the pre-fix code the handler body ran outside any pin,
+  // so setTenantContext() landed on connection C1 (released at once) and the
+  // handler's `SELECT ... FROM contacts` ran on C2 with an empty GUC → fail-
+  // closed → ZERO rows → the "own row IS returned" assertion FAILS.
+  // PASS-WITH-FIX: withApiRoute pins one client for the whole body, so the GUC
+  // set during auth is visible to the handler's query.
+  it('a withApiRoute-wrapped handler sees RLS-enforced isolation for its own filter-less query', async () => {
+    // A route handler shaped like the real ones: "auth" sets tenant context,
+    // then the handler issues a db query with NO app-level tenant_id filter.
+    const handler = withApiRoute(async () => {
+      // stands in for requireAuth() → setTenantContext(tenantA)
+      await setTenantContext(tenantAId, userAId);
+      // the handler's OWN later query — RLS is the only gate here
+      const result = await db.execute(sql`SELECT id, tenant_id FROM contacts`);
+      const rows = (result.rows ?? []) as Array<{ id: string; tenant_id: string }>;
+      return Response.json({ rows });
+    });
+
+    const res = await handler(
+      new Request('http://test/api/tenant/contacts') as never,
+      undefined as never
+    );
+    const { rows } = (await res.json()) as {
+      rows: Array<{ id: string; tenant_id: string }>;
+    };
+    const ids = rows.map((r) => r.id);
+
+    // own-tenant row visible (FAILS pre-fix: 0 rows)...
+    expect(ids).toContain(contactAId);
+    // ...cross-tenant row hidden despite no app-level filter (RLS alone)...
+    expect(ids).not.toContain(contactBId);
+    // ...and every returned row belongs to tenant A.
+    for (const row of rows) {
+      expect(row.tenant_id).toBe(tenantAId);
+    }
   });
 });
