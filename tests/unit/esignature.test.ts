@@ -9,8 +9,9 @@ vi.mock('@/drizzle/db', () => ({
   db: {
     insert: vi.fn(),
     update: vi.fn(),
+    select: vi.fn(() => ({ from: vi.fn(() => ({ where: vi.fn(() => ({ orderBy: vi.fn(async () => []) })) })) })),
     query: {
-      signingRequests: { findFirst: vi.fn() },
+      signingRequests: { findFirst: vi.fn(), findMany: vi.fn() },
       signingEvents: { findFirst: vi.fn() },
     },
     transaction: vi.fn(async (cb: (tx: unknown) => Promise<unknown>) => {
@@ -32,11 +33,16 @@ vi.mock('drizzle-orm', () => ({
   sql: vi.fn(),
 }));
 
+let _tokenCounter = 0;
 vi.mock('crypto', () => ({
   createHmac: vi.fn(() => ({
     update: vi.fn(() => ({
       digest: vi.fn((_encoding: string) => 'mocked-digest'),
     })),
+  })),
+  // Deterministic per-call token so tests can assert distinct signer tokens.
+  randomBytes: vi.fn((_n: number) => ({
+    toString: (_enc: string) => `tok${++_tokenCounter}`,
   })),
 }));
 
@@ -83,19 +89,119 @@ describe('E-Signature - InternalAdapter', () => {
     expect(result.externalId).toMatch(/^internal-/);
   });
 
-  it('getStatus always returns pending', async () => {
+  it('getStatus derives status from the persisted request (#1613)', async () => {
+    (db.query.signingRequests.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue({ status: 'signed' });
     const { InternalAdapter } = await import('@/lib/esignature');
     const adapter = new InternalAdapter();
-    const status = await adapter.getStatus('any-id');
-
-    expect(status).toBe('pending');
+    expect(await adapter.getStatus('internal-abc')).toBe('signed');
   });
 
-  it('validateWebhook always returns true', async () => {
+  it('getStatus falls back to pending when the request is unknown', async () => {
+    (db.query.signingRequests.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(null);
     const { InternalAdapter } = await import('@/lib/esignature');
     const adapter = new InternalAdapter();
-    expect(adapter.validateWebhook({}, {})).toBe(true);
-    expect(adapter.validateWebhook(null, {})).toBe(true);
+    expect(await adapter.getStatus('missing')).toBe('pending');
+  });
+
+  it('validateWebhook rejects — the internal provider has no external webhook (#1613)', async () => {
+    const { InternalAdapter } = await import('@/lib/esignature');
+    const adapter = new InternalAdapter();
+    expect(adapter.validateWebhook({}, {})).toBe(false);
+    expect(adapter.validateWebhook(null, {})).toBe(false);
+  });
+
+  it('createRequest mints an unguessable internal external id', async () => {
+    const { InternalAdapter } = await import('@/lib/esignature');
+    const adapter = new InternalAdapter();
+    const r = await adapter.createRequest({
+      documentId: 'd', signers: [{ email: 'a@b.com', name: 'A' }], provider: 'internal', tenantId: 't',
+    });
+    expect(r.externalId).toMatch(/^internal-/);
+  });
+});
+
+describe('E-Signature - internal signer flow (#1613)', () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it('createSigningRequest mints a per-signer token for the internal provider', async () => {
+    mockTxReturning.mockResolvedValue([{
+      id: 'req-1', tenantId: 't-1', documentId: 'd-1', provider: 'internal',
+      status: 'sent', externalId: 'internal-x', signers: [], metadata: {},
+    }]);
+    const { createSigningRequest } = await import('@/lib/esignature');
+    const result = await createSigningRequest({
+      documentId: 'd-1', signers: [{ email: 'a@b.com', name: 'A' }, { email: 'c@d.com', name: 'C' }],
+      provider: 'internal', tenantId: 't-1',
+    });
+    expect(result.signers).toHaveLength(2);
+    expect(result.signers[0]!.token).toBeTruthy();
+    expect(result.signers[1]!.token).toBeTruthy();
+    expect(result.signers[0]!.token).not.toBe(result.signers[1]!.token);
+  });
+
+  it('getInternalSigningByToken resolves the matching signer', async () => {
+    (db.query.signingRequests.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: 'r1', tenantId: 't1', documentId: 'd1', provider: 'internal', status: 'sent', externalId: 'e1',
+        signers: [{ email: 'a@b.com', name: 'A', token: 'TOKEN-A' }], metadata: {} },
+    ]);
+    const { getInternalSigningByToken } = await import('@/lib/esignature');
+    const view = await getInternalSigningByToken('TOKEN-A');
+    expect(view).not.toBeNull();
+    expect(view!.signer.email).toBe('a@b.com');
+    expect(view!.alreadyResolved).toBe(false);
+  });
+
+  it('getInternalSigningByToken returns null for an unknown token', async () => {
+    (db.query.signingRequests.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: 'r1', tenantId: 't1', documentId: 'd1', provider: 'internal', status: 'sent', externalId: 'e1',
+        signers: [{ email: 'a@b.com', name: 'A', token: 'TOKEN-A' }], metadata: {} },
+    ]);
+    const { getInternalSigningByToken } = await import('@/lib/esignature');
+    expect(await getInternalSigningByToken('nope')).toBeNull();
+    expect(await getInternalSigningByToken('')).toBeNull();
+  });
+
+  it('recordInternalSignerEvent marks the request signed once all signers sign', async () => {
+    (db.query.signingRequests.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: 'r1', tenantId: 't1', documentId: 'd1', provider: 'internal', status: 'viewed', externalId: 'e1',
+        signers: [{ email: 'a@b.com', name: 'A', token: 'TOKEN-A' }], metadata: {} },
+    ]);
+    const { recordInternalSignerEvent } = await import('@/lib/esignature');
+    const res = await recordInternalSignerEvent('TOKEN-A', 'signed');
+    expect(res.ok).toBe(true);
+    expect(res.status).toBe('signed');
+    expect(mockTxUpdate).toHaveBeenCalled();
+    expect(mockTxInsert).toHaveBeenCalled();
+  });
+
+  it('recordInternalSignerEvent declines the whole request on any decline', async () => {
+    (db.query.signingRequests.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: 'r1', tenantId: 't1', documentId: 'd1', provider: 'internal', status: 'sent', externalId: 'e1',
+        signers: [{ email: 'a@b.com', name: 'A', token: 'TOKEN-A' }, { email: 'c@d.com', name: 'C', token: 'TOKEN-C' }], metadata: {} },
+    ]);
+    const { recordInternalSignerEvent } = await import('@/lib/esignature');
+    const res = await recordInternalSignerEvent('TOKEN-A', 'declined');
+    expect(res.ok).toBe(true);
+    expect(res.status).toBe('declined');
+  });
+
+  it('recordInternalSignerEvent is idempotent for an already-resolved signer', async () => {
+    (db.query.signingRequests.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: 'r1', tenantId: 't1', documentId: 'd1', provider: 'internal', status: 'signed', externalId: 'e1',
+        signers: [{ email: 'a@b.com', name: 'A', token: 'TOKEN-A', signedAt: '2026-01-01T00:00:00Z' }], metadata: {} },
+    ]);
+    const { recordInternalSignerEvent } = await import('@/lib/esignature');
+    const res = await recordInternalSignerEvent('TOKEN-A', 'signed');
+    expect(res.ok).toBe(false);
+    expect(res.reason).toBe('already_resolved');
+  });
+
+  it('recordInternalSignerEvent returns not_found for an unknown token', async () => {
+    (db.query.signingRequests.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    const { recordInternalSignerEvent } = await import('@/lib/esignature');
+    const res = await recordInternalSignerEvent('missing', 'signed');
+    expect(res.ok).toBe(false);
+    expect(res.reason).toBe('not_found');
   });
 });
 

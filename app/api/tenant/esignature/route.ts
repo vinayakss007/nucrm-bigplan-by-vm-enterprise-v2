@@ -101,7 +101,17 @@ export const POST = withApiRoute(async (req: NextRequest) => {
       metadata: body.metadata || {},
     });
 
-    return NextResponse.json({ data: request }, { status: 201 });
+    // #1613: for the built-in provider, return each signer's public signing
+    // link so the caller can deliver it (email/copy). External providers host
+    // their own signer UI, so no link is returned.
+    const appUrl = process.env['NEXT_PUBLIC_APP_URL']?.replace(/\/$/, '') ?? '';
+    const signerLinks = request.provider === 'internal'
+      ? request.signers
+          .filter((s) => s.token)
+          .map((s) => ({ email: s.email, name: s.name, url: `${appUrl}/p/sign/${s.token}` }))
+      : [];
+
+    return NextResponse.json({ data: request, signerLinks }, { status: 201 });
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
