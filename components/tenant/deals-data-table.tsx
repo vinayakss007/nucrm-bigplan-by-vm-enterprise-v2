@@ -6,6 +6,7 @@
 "use client"
 
 import { useState, useCallback, useMemo, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { Plus, MoreHorizontal, Edit, Trash2, DollarSign, Tag, UserPlus, ArrowRightLeft, Trophy, Layers, Archive, RotateCcw } from 'lucide-react'
 import { cn, formatCurrency, formatDate, toSnakeCase } from '@/lib/utils'
 import { DataTable, ColumnDef, createSortableHeader } from '@/components/ui/data-table'
@@ -60,6 +61,7 @@ interface Props {
 }
 
 export default function DealsDataTable({ initialDeals, contacts: initialContacts, companies: initialCompanies, teamMembers, permissions }: Props) {
+  const router = useRouter()
   const [deals, setDeals] = useState(initialDeals)
   const [contactList, setContactList] = useState(initialContacts)
   const [companyList, setCompanyList] = useState(initialCompanies)
@@ -245,7 +247,7 @@ export default function DealsDataTable({ initialDeals, contacts: initialContacts
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => window.location.href = `/tenant/deals?deal=${deal.id}`}>
+              <DropdownMenuItem onClick={() => router.push(`/tenant/deals?deal=${deal.id}`)}>
                 <Edit className="mr-2 h-4 w-4" />
                 Edit
               </DropdownMenuItem>
@@ -264,7 +266,7 @@ export default function DealsDataTable({ initialDeals, contacts: initialContacts
         )
       },
     },
-  ], [deleteEntity])
+  ], [deleteEntity, router])
 
   // ── Bulk actions ──────────────────────────────────────────
   const [_bulkBusy, setBulkBusy] = useState(false)
