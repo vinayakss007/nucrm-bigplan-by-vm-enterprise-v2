@@ -102,6 +102,22 @@ export default function SlaPage() {
         return;
       }
 
+      // #1342: bound the SLA times (1 minute .. 1 year) and require the
+      // response target to be no later than the resolution target.
+      const MAX_MINUTES = 525_600; // 365 days
+      const { responseTimeMinutes: rt, resolutionTimeMinutes: rlt } = form;
+      if (!Number.isFinite(rt) || rt < 1 || rt > MAX_MINUTES ||
+          !Number.isFinite(rlt) || rlt < 1 || rlt > MAX_MINUTES) {
+        toast.error(`Response and resolution times must be between 1 and ${MAX_MINUTES} minutes`);
+        setSaving(false);
+        return;
+      }
+      if (rt > rlt) {
+        toast.error('Response time cannot be longer than resolution time');
+        setSaving(false);
+        return;
+      }
+
       const payload = {
         ...(editing ? { id: editing.id } : {}),
         name: form.name,
@@ -251,11 +267,11 @@ export default function SlaPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-muted-foreground mb-1">Response Time (min)</label>
-                  <input type="number" min={1} value={form.responseTimeMinutes} onChange={e => setForm(f => ({ ...f, responseTimeMinutes: Number(e.target.value) }))} className={inp} />
+                  <input type="number" min={1} max={525600} value={form.responseTimeMinutes} onChange={e => setForm(f => ({ ...f, responseTimeMinutes: Number(e.target.value) }))} className={inp} />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-muted-foreground mb-1">Resolution Time (min)</label>
-                  <input type="number" min={1} value={form.resolutionTimeMinutes} onChange={e => setForm(f => ({ ...f, resolutionTimeMinutes: Number(e.target.value) }))} className={inp} />
+                  <input type="number" min={1} max={525600} value={form.resolutionTimeMinutes} onChange={e => setForm(f => ({ ...f, resolutionTimeMinutes: Number(e.target.value) }))} className={inp} />
                 </div>
               </div>
               <div>

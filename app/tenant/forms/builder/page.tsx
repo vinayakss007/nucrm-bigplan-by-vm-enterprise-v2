@@ -70,6 +70,21 @@ export default function FormBuilderPage() {
   };
 
   const handleSave = async () => {
+    // #1342: validate before saving — a form needs a name, at least one field,
+    // and every field must have a non-empty label.
+    if (!name.trim()) {
+      toast.error('Form name is required');
+      return;
+    }
+    if (!fields.length) {
+      toast.error('Add at least one field');
+      return;
+    }
+    const unlabeled = fields.findIndex((f) => !String(f?.label ?? '').trim());
+    if (unlabeled !== -1) {
+      toast.error(`Field ${unlabeled + 1} is missing a label`);
+      return;
+    }
     setSaving(true);
     try {
       const res = await fetch('/api/tenant/forms', {
@@ -181,6 +196,8 @@ export default function FormBuilderPage() {
                       <input 
                         value={field.label}
                         onChange={(e) => updateField(field.id, { label: e.target.value })}
+                        required
+                        aria-required="true"
                         className="w-full bg-muted/50 border border-transparent focus:border-violet-500 px-3 py-2 rounded-lg text-sm transition-all"
                       />
                     </div>
