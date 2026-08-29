@@ -4,7 +4,9 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import { DollarSign, Loader2, Check, ArrowRightLeft } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
@@ -34,40 +36,34 @@ const DEFAULT_CURRENCIES: CurrencyInfo[] = [
   { code: 'SGD', name: 'Singapore Dollar', symbol: 'S$' },
 ];
 
+const CURRENCY_QUERY = ['tenant', 'currency'] as const;
+const EMPTY_CURRENCY: CurrencyData = { currencies: [], baseCurrency: 'USD', rates: {} };
+
 export default function CurrencySettingsPage() {
-  const [data, setData] = useState<CurrencyData>({ currencies: [], baseCurrency: 'USD', rates: {} });
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [saving, setSaving] = useState(false);
 
-  const load = async (signal?: AbortSignal) => {
-    setLoading(true);
-    try {
-      const res = await fetch('/api/tenant/currency', { signal });
-      if (res.ok) {
-        const d = await res.json();
-        if (signal?.aborted) return;
-        const fetched = d.data ?? { currencies: [], baseCurrency: 'USD', rates: {} };
-        if (!fetched.currencies || fetched.currencies.length === 0) {
-          fetched.currencies = DEFAULT_CURRENCIES;
-        }
-        setData(fetched);
-      }
-    } catch (e) {
-      if ((e as Error)?.name === 'AbortError') return;
-      throw e;
-    } finally {
-      if (!signal?.aborted) setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    const controller = new AbortController();
-    load(controller.signal);
-    return () => controller.abort();
-  }, []);
+  // #1328: TanStack Query. `select` applies the default-currencies fallback so
+  // the component always sees a populated list.
+  const { data, isLoading: loading } = useApiQuery<{ data?: CurrencyData }>(
+    CURRENCY_QUERY,
+    '/api/tenant/currency',
+    {
+      select: (raw) => {
+        const fetched = raw?.data ?? EMPTY_CURRENCY;
+        return {
+          data: {
+            ...fetched,
+            currencies: fetched.currencies?.length ? fetched.currencies : DEFAULT_CURRENCIES,
+          },
+        };
+      },
+    },
+  );
+  const currencyData: CurrencyData = data?.data ?? EMPTY_CURRENCY;
 
   const setDefault = async (code: string) => {
-    if (code === data.baseCurrency) return;
+    if (code === currencyData.baseCurrency) return;
     setSaving(true);
     try {
       const res = await fetch('/api/tenant/currency', {
@@ -76,7 +72,11 @@ export default function CurrencySettingsPage() {
         body: JSON.stringify({ currency: code }),
       });
       if (res.ok) {
-        setData(prev => ({ ...prev, baseCurrency: code }));
+        // Optimistically update the cached base currency, then revalidate.
+        queryClient.setQueryData<{ data?: CurrencyData }>(CURRENCY_QUERY, (prev) =>
+          prev?.data ? { data: { ...prev.data, baseCurrency: code } } : prev,
+        );
+        queryClient.invalidateQueries({ queryKey: CURRENCY_QUERY });
         toast.success(`Default currency set to ${code}`);
       } else {
         const d = await res.json();
@@ -87,7 +87,7 @@ export default function CurrencySettingsPage() {
     }
   };
 
-  const currencies = data.currencies.length > 0 ? data.currencies : DEFAULT_CURRENCIES;
+  const currencies = currencyData.currencies.length > 0 ? currencyData.currencies : DEFAULT_CURRENCIES;
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -98,7 +98,7 @@ export default function CurrencySettingsPage() {
         </div>
         <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-violet-50 dark:bg-violet-950/30 border border-violet-200 dark:border-violet-800">
           <DollarSign className="w-4 h-4 text-violet-600" />
-          <span className="text-sm font-semibold text-violet-700 dark:text-violet-300">Base: {data.baseCurrency}</span>
+          <span className="text-sm font-semibold text-violet-700 dark:text-violet-300">Base: {currencyData.baseCurrency}</span>
         </div>
       </div>
 
@@ -113,8 +113,8 @@ export default function CurrencySettingsPage() {
           {/* Currency Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {currencies.map(c => {
-              const isBase = c.code === data.baseCurrency;
-              const rate = data.rates[c.code];
+              const isBase = c.code === currencyData.baseCurrency;
+              const rate = currencyData.rates[c.code];
               return (
                 <div key={c.code} className={cn(
                   'admin-card p-4 relative transition-all',
@@ -137,7 +137,7 @@ export default function CurrencySettingsPage() {
                   {rate !== undefined && !isBase && (
                     <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1">
                       <ArrowRightLeft className="w-3 h-3" />
-                      1 {data.baseCurrency} = {rate} {c.code}
+                      1 {currencyData.baseCurrency} = {rate} {c.code}
                     </p>
                   )}
                   {!isBase && (
@@ -156,13 +156,14 @@ export default function CurrencySettingsPage() {
           </div>
 
           {/* Exchange Rates Table */}
-          {Object.keys(data.rates).length > 0 && (
+          {Object.keys(currencyData.rates).length > 0 && (
             <div className="admin-card overflow-hidden">
               <div className="px-4 py-3 border-b border-border">
                 <h3 className="font-semibold text-sm">Exchange Rates</h3>
-                <p className="text-xs text-muted-foreground">Relative to {data.baseCurrency}</p>
+                <p className="text-xs text-muted-foreground">Relative to {currencyData.baseCurrency}</p>
               </div>
-              <table className="w-full text-sm">
+              <div className="overflow-x-auto">
+              <table className="w-full min-w-[400px] text-sm">
                 <thead>
                   <tr className="border-b border-border text-left">
                     <th className="px-4 py-3 font-medium text-muted-foreground">Currency</th>
@@ -170,7 +171,7 @@ export default function CurrencySettingsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {Object.entries(data.rates).map(([code, rate]) => (
+                  {Object.entries(currencyData.rates).map(([code, rate]) => (
                     <tr key={code} className="border-b border-border last:border-0 hover:bg-accent/50">
                       <td className="px-4 py-3 font-medium">{code}</td>
                       <td className="px-4 py-3 text-muted-foreground">{rate}</td>
@@ -178,6 +179,7 @@ export default function CurrencySettingsPage() {
                   ))}
                 </tbody>
               </table>
+              </div>
             </div>
           )}
         </>

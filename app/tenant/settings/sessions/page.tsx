@@ -4,34 +4,43 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import { Monitor, Smartphone, Globe, LogOut, Shield, Trash2 } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import { cn, formatRelativeTime } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import SettingsEmptyState from '@/components/shared/settings-empty-state';
 
+interface UserSession {
+  id: string;
+  user_agent?: string | null;
+  ip_address?: string | null;
+  is_current?: boolean;
+  created_at: string;
+}
+
+const SESSIONS_QUERY = ['user', 'sessions'] as const;
+
 export default function SessionsPage() {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [sessions, setSessions] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [revoking, setRevoking] = useState<string|null>(null);
 
-  const load = (signal?: AbortSignal) => {
-    fetch('/api/user/sessions', { signal }).then(r=>r.json()).then(d=>{if(signal?.aborted)return;setSessions(d.data??[]); setLoading(false);}).catch(e=>{if(e?.name==='AbortError')return;throw e;});
-  };
-  useEffect(() => {
-    const controller = new AbortController();
-    load(controller.signal);
-    return () => controller.abort();
-  }, []);
+  // #1328: list via TanStack Query (types the sessions, removes an `any`).
+  const { data, isLoading: loading } = useApiQuery<{ data?: UserSession[] }>(
+    SESSIONS_QUERY,
+    '/api/user/sessions',
+  );
+  const sessions: UserSession[] = data?.data ?? [];
+  const reload = () => queryClient.invalidateQueries({ queryKey: SESSIONS_QUERY });
 
   const revoke = async (sessionId: string) => {
     await confirmThen('Revoke this session? The device will be signed out.', async () => {
       setRevoking(sessionId);
       await fetch('/api/user/sessions', { method:'DELETE', headers:{'Content-Type':'application/json'}, body:JSON.stringify({sessionId}) });
       toast.success('Session revoked');
-      load();
+      reload();
       setRevoking(null);
     });
   };
@@ -40,7 +49,7 @@ export default function SessionsPage() {
     await confirmThen('Sign out all other devices? You will remain signed in here.', async () => {
       await fetch('/api/user/sessions', { method:'DELETE', headers:{'Content-Type':'application/json'}, body:JSON.stringify({revokeAll:true}) });
       toast.success('All other sessions revoked');
-      load();
+      reload();
     });
   };
 
