@@ -138,6 +138,11 @@ export interface TenantContext {
 // ── Module System ──────────────────────────────────────────────
 export type ModuleStatus = 'available' | 'installed' | 'active' | 'disabled' | 'error';
 
+export interface ModulePricingEntry {
+  enabled: boolean;
+  price?: number;
+}
+
 export interface ModuleManifest {
   id: string;           // unique slug: 'automation-pro', 'whatsapp-bot', 'ai-assistant'
   name: string;
@@ -147,8 +152,7 @@ export interface ModuleManifest {
   category: 'messaging' | 'automation' | 'ai' | 'analytics' | 'integration' | 'utility';
   icon: string;         // emoji or URL
   minCrmVersion: string;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  pricing: Record<string, { enabled: boolean; price?: number; [key: string]: any }>;
+  pricing: Record<string, ModulePricingEntry>;
   features: string[];
   permissions: string[];       // permissions this module needs
   database?: { migrations: string[] };
