@@ -12,6 +12,7 @@ import { logSuperAdminAction } from '@/lib/audit/super-admin';
 import { readJsonBody } from '@/lib/api/validate';
 import { concurrencyGuard } from '@/lib/api/concurrency';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { logError } from '@/lib/errors-server';
 
 const LIMIT_FIELDS = [
   'maxUsers', 'maxContacts', 'maxDeals', 'maxStorageBytes',
@@ -55,7 +56,7 @@ export const GET = withApiRoute(async (request: NextRequest,
 
     return NextResponse.json({ data: limits, planId: tenant.planId });
   } catch (error) {
-    console.error('[superadmin/tenants/[id]/limits/GET]', error);
+    await logError({ error, context: 'superadmin/tenants/[id]/limits GET', requestMethod: 'GET' });
     return NextResponse.json({ error: 'Failed' }, { status: 500 });
   }
 });
@@ -121,7 +122,7 @@ export const PATCH = withApiRoute(async (request: NextRequest,
 
     return NextResponse.json({ ok: true, limitOverrides: newOverrides });
   } catch (error) {
-    console.error('[superadmin/tenants/[id]/limits/PATCH]', error);
+    await logError({ error, context: 'superadmin/tenants/[id]/limits PATCH', requestMethod: 'PATCH' });
     return NextResponse.json({ error: 'Failed' }, { status: 500 });
   }
 });
