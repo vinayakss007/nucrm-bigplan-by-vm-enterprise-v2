@@ -86,6 +86,35 @@ export function buildSubscriptionUpdated(params: {
   };
 }
 
+/**
+ * Build a `customer.subscription.updated` event WITHOUT `metadata.tenant_id`.
+ *
+ * Real Stripe-originated `subscription.*` events do not necessarily carry the
+ * `tenant_id` we set at checkout time. The handler resolves the tenant solely
+ * via `metadata.tenant_id` and safely drops the event (early return) when it is
+ * absent. This negative fixture pins that documented drop-on-missing-metadata
+ * behavior: relaying it must leave tenant state UNCHANGED.
+ */
+export function buildSubscriptionUpdatedNoTenant(params: {
+  status: string;
+  priceId?: string;
+}): StripeEventEnvelope {
+  const object: Record<string, unknown> = {
+    id: `sub_${randomBytes(10).toString('hex')}`,
+    object: 'subscription',
+    status: params.status,
+    cancel_at_period_end: false,
+    // Intentionally NO metadata.tenant_id — handler must ignore this event.
+    items: { data: [{ price: { id: params.priceId ?? '' } }] },
+  };
+  return {
+    id: eventId(),
+    type: 'customer.subscription.updated',
+    created: nowSeconds(),
+    data: { object },
+  };
+}
+
 /** Build a `customer.subscription.deleted` event. */
 export function buildSubscriptionDeleted(params: {
   tenantId: string;

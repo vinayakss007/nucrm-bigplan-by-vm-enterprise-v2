@@ -14,6 +14,7 @@ import { signStripeWebhook } from '@/scripts/billing-harness/webhook-sign';
 import {
   buildCheckoutSessionCompleted,
   buildSubscriptionUpdated,
+  buildSubscriptionUpdatedNoTenant,
   buildSubscriptionDeleted,
   buildInvoicePaymentSucceeded,
   buildInvoicePaymentFailed,
@@ -90,6 +91,19 @@ describe('billing-harness/webhook-sign + lib/stripe verifier round-trip', () => 
     );
   });
 
+  it('signs + verifies the no-tenant negative fixture (handler, not verifier, drops it)', async () => {
+    // The signer/verifier contract is agnostic to metadata; the DROP happens in
+    // the webhook handler (missing metadata.tenant_id ⇒ early return), not in the
+    // verifier. This proves the negative fixture round-trips like any other event.
+    const { verifyWebhookSignature } = await import('@/lib/stripe');
+    const event = buildSubscriptionUpdatedNoTenant({ status: 'active' });
+    const body = JSON.stringify(event);
+    const signature = signStripeWebhook(body, WEBHOOK_SECRET);
+    const parsed = await verifyWebhookSignature(body, signature);
+    expect(parsed.type).toBe('customer.subscription.updated');
+    expect((parsed.data.object as { metadata?: unknown }).metadata).toBeUndefined();
+  });
+
   it('honours an explicit timestamp in the header', async () => {
     const { verifyWebhookSignature } = await import('@/lib/stripe');
     const ts = Math.floor(Date.now() / 1000) - 60; // still within 300s tolerance
@@ -142,6 +156,23 @@ describe('billing-harness/fixtures', () => {
     expect(obj.metadata.tenant_id).toBe('t2');
     expect(obj.status).toBe('past_due');
     expect(obj.cancel_at_period_end).toBe(true);
+    expect(obj.items.data[0]!.price.id).toBe('price_pro_monthly');
+  });
+
+  it('subscription.updated (no-tenant variant) omits metadata.tenant_id but keeps the shape', () => {
+    const event = buildSubscriptionUpdatedNoTenant({ status: 'canceled', priceId: 'price_pro_monthly' });
+    expect(event.type).toBe('customer.subscription.updated');
+    expect(event.id.startsWith('evt_')).toBe(true);
+    const obj = event.data.object as {
+      metadata?: { tenant_id?: string };
+      status: string;
+      cancel_at_period_end: boolean;
+      items: { data: Array<{ price: { id: string } }> };
+    };
+    // The whole point of the negative fixture: NO tenant_id anywhere.
+    expect(obj.metadata).toBeUndefined();
+    expect(obj.status).toBe('canceled');
+    expect(obj.cancel_at_period_end).toBe(false);
     expect(obj.items.data[0]!.price.id).toBe('price_pro_monthly');
   });
 
