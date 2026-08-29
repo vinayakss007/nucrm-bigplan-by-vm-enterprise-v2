@@ -5,8 +5,9 @@
  */
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { Loader2, CheckCircle, AlertCircle } from 'lucide-react';
+import { buildPublicFormSchema, validateForm, type PublicFormFieldDef } from '@/lib/validation/forms';
 
 interface FormSettings {
   success_message?: string;
@@ -59,13 +60,30 @@ export default function PublicFormClient({ form }: { form: FormProps }) {
     return () => observer.disconnect();
   }, [form.id, success]);
 
-  const fields = Array.isArray(form.fields) ? form.fields : [];
+  const fields = useMemo(
+    () => (Array.isArray(form.fields) ? form.fields : []),
+    [form.fields]
+  );
   const settings = form.settings || {};
+
+  const validationSchema = useMemo(
+    () => buildPublicFormSchema(fields as PublicFormFieldDef[]),
+    [fields]
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
     setError('');
+
+    const validation = validateForm(validationSchema, formData);
+    if (!validation.success) {
+      const firstError =
+        validation.errors._form || Object.values(validation.errors)[0] || 'Please complete the required fields.';
+      setError(firstError);
+      return;
+    }
+
+    setLoading(true);
 
     try {
       const res = await fetch('/api/forms/submit', {

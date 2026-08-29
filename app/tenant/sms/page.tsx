@@ -9,6 +9,7 @@ import { MessageSquare, Plus, X, Loader2, Send, ArrowUpRight, ArrowDownLeft, Fil
 import { cn, formatDate } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import { logError } from '@/lib/errors-client';
+import { smsComposeSchema, validateForm } from '@/lib/validation/forms';
 
 interface SmsMessage {
   id: string;
@@ -106,17 +107,25 @@ export default function SmsPage() {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Client-side validation: require a plausible E.164-style phone number
-    // (optional leading +, 7-15 digits) before hitting the SMS API (#1342).
+    // Client-side validation via the shared zod schema. The schema applies the
+    // same E.164-style phone rule (optional leading +, 7-15 digits) and the
+    // body-or-template requirement before hitting the SMS API.
+    const validation = validateForm(smsComposeSchema, {
+      to: form.to,
+      body: form.body,
+      templateId: useTemplate ? form.templateId : undefined,
+    });
+    if (!validation.success) {
+      const firstError =
+        validation.errors._form ||
+        Object.values(validation.errors)[0] ||
+        'Please check the form and try again.';
+      toast.error(firstError);
+      return;
+    }
+    // Preserve the #1342 behavior: strip spaces/parens/dashes and send the
+    // normalized value to the API.
     const normalizedTo = form.to.replace(/[\s()-]/g, '');
-    if (!/^\+?\d{7,15}$/.test(normalizedTo)) {
-      toast.error('Enter a valid phone number (e.g. +15550123456)');
-      return;
-    }
-    if (!useTemplate && !form.body.trim()) {
-      toast.error('Message body cannot be empty');
-      return;
-    }
     setSending(true);
     try {
       // Send the same normalized value we validated above; the SMS API stores

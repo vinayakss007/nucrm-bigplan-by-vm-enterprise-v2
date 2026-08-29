@@ -11,6 +11,7 @@ import { AlertTriangle } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import { cn, formatRelativeTime } from '@/lib/utils';
 import toast from 'react-hot-toast';
+import { webhookFormSchema, validateForm } from '@/lib/validation/forms';
 
 const WEBHOOK_EVENT_GROUPS = [
   { label: 'Contacts', events: ['contact.created','contact.updated','contact.deleted','contact.restored'] },
@@ -86,7 +87,13 @@ export default function WebhooksPage() {
   };
 
   const create = async (e: React.FormEvent) => {
-    e.preventDefault(); setSaving(true);
+    e.preventDefault();
+    const validation = validateForm(webhookFormSchema, form);
+    if (!validation.success) {
+      toast.error(validation.errors._form || Object.values(validation.errors)[0] || 'Please check the form and try again.');
+      return;
+    }
+    setSaving(true);
     const res = await fetch('/api/tenant/webhooks', {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify(form),
@@ -103,7 +110,13 @@ export default function WebhooksPage() {
   };
 
   const edit = async (e: React.FormEvent) => {
-    e.preventDefault(); if (!editingWebhook) return; setSaving(true);
+    e.preventDefault(); if (!editingWebhook) return;
+    const validation = validateForm(webhookFormSchema, form);
+    if (!validation.success) {
+      toast.error(validation.errors._form || Object.values(validation.errors)[0] || 'Please check the form and try again.');
+      return;
+    }
+    setSaving(true);
     const res = await fetch(`/api/tenant/webhooks/${editingWebhook.id}`, {
       method:'PATCH', headers:{'Content-Type':'application/json'},
       body: JSON.stringify(form),
