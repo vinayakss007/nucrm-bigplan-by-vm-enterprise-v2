@@ -243,7 +243,7 @@ export const COMPARISONS: Comparison[] = [
       'Export modules to CSV or extract over the API',
       'Map standard and custom fields during import',
       'Install the industry blueprint closest to your sector',
-      'Recreate workflows and approval chains in the visual builder',
+      'Recreate workflows and approvals in the visual builder',
       'Publish your knowledge base and portal from NuCRM to consolidate logins',
     ],
   },
