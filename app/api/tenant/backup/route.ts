@@ -41,7 +41,9 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       limit: 50,
     });
 
-    return NextResponse.json({ backups });
+    // #1300: standardize list responses on { data }; keep `backups` for
+    // backward compatibility with existing consumers.
+    return NextResponse.json({ data: backups, backups });
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -14,6 +14,7 @@ import { eq } from 'drizzle-orm';
 import { parseBackupFile } from '@/lib/restore/backup-parser';
 import { existsSync } from 'fs';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { logError } from '@/lib/errors-server';
 
 const schema = z.object({ backup_id: z.string().min(1) });
 
@@ -87,7 +88,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[selective-restore/preview POST]', err);
+    await logError({ error: err, context: 'selective-restore/preview POST', requestMethod: 'POST' });
     return apiError(err);
   }
 });

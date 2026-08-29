@@ -61,8 +61,7 @@ export default async function TasksPage() {
       where: eq(contacts.tenantId, ctx.tenantId),
       columns: { id: true, firstName: true, lastName: true },
       orderBy: [asc(contacts.firstName)]
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    }).then(c => c.map((contact: any) => ({ id: contact.id, first_name: contact.firstName, last_name: contact.lastName }))),
+    }).then(c => c.map((contact) => ({ id: contact.id, first_name: contact.firstName ?? '', last_name: contact.lastName ?? '' }))),
 
     db.query.deals.findMany({
       where: eq(deals.tenantId, ctx.tenantId),
@@ -78,29 +77,31 @@ export default async function TasksPage() {
       .from(tenantMembers)
       .innerJoin(users, eq(users.id, tenantMembers.userId))
       .where(and(eq(tenantMembers.tenantId, ctx.tenantId), eq(tenantMembers.status, 'active')))
+      .then(rows => rows.map(r => ({ user_id: r.user_id, full_name: r.full_name ?? '' })))
   ]);
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const tasksList = tasksRaw.map((t: any) => ({
-    ...t,
-    due_date: t.dueDate,
-    completed_at: t.completedAt,
-    created_at: t.createdAt,
+  // Normalize DB rows to the shape TasksDataTable expects: ISO-string dates and
+  // a computed contact_name (#1341 — replaces the previous `as any` casts).
+  const tasksList = tasksRaw.map((t) => ({
+    id: t.id,
+    title: t.title,
+    description: t.description,
+    priority: t.priority,
+    completed: t.completed ?? false,
+    deal_title: t.deal_title,
+    assignee_name: t.assignee_name,
+    due_date: t.dueDate ? new Date(t.dueDate).toISOString() : null,
+    completed_at: t.completedAt ? new Date(t.completedAt).toISOString() : null,
+    created_at: t.createdAt ? new Date(t.createdAt).toISOString() : new Date().toISOString(),
     contact_name: [t.firstName, t.lastName].filter(Boolean).join(' ') || null,
-    first_name: t.firstName,
-    last_name: t.lastName,
   }));
 
   return (
     <TasksDataTable
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      initialTasks={tasksList as any} 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      contacts={contactsList as any} 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      deals={dealsList as any}
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      teamMembers={teamMembers as any} 
+      initialTasks={tasksList}
+      contacts={contactsList}
+      deals={dealsList}
+      teamMembers={teamMembers}
       permissions={permissions}
     />
   );

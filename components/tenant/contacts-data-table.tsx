@@ -13,6 +13,7 @@ import { cn, formatDate } from '@/lib/utils'
 import { confirmThen } from '@/components/ui/confirm-dialog'
 import { InlineEdit } from '@/components/ui/inline-edit'
 import { DataTable, ColumnDef, createSortableHeader } from '@/components/ui/data-table'
+import { clientLogWarn } from '@/lib/client-logger'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -330,7 +331,7 @@ export default function ContactsDataTable({
     fetch('/api/tenant/custom-fields?entityType=contact', { signal: abort.signal })
       .then(r => r.ok ? r.json() : { fields: [] })
       .then(d => { if (!abort.signal.aborted) setCustomFields(d.fields ?? []); })
-      .catch((err) => { if (err?.name !== 'AbortError') console.warn('[contacts-data-table] Failed to load custom fields:', err); });
+      .catch((err) => { if (err?.name !== 'AbortError') clientLogWarn('contacts-data-table', 'Failed to load custom fields', err); });
     return () => abort.abort();
   }, [])
 
@@ -339,7 +340,7 @@ export default function ContactsDataTable({
     fetch('/api/tenant/segments?entity_type=contact', { signal: abort.signal })
       .then(r => r.ok ? r.json() : { data: [] })
       .then(d => { if (!abort.signal.aborted) setSegments(d.data ?? []); })
-      .catch((err) => { if (err?.name !== 'AbortError') console.warn('[contacts-data-table] Failed to load segments:', err); });
+      .catch((err) => { if (err?.name !== 'AbortError') clientLogWarn('contacts-data-table', 'Failed to load segments', err); });
     return () => abort.abort();
   }, [])
 
@@ -348,7 +349,7 @@ export default function ContactsDataTable({
     fetch('/api/tenant/sequences', { signal: abort.signal })
       .then(r => r.ok ? r.json() : { data: [] })
       .then(d => { if (!abort.signal.aborted) setSequences(d.data ?? []); })
-      .catch((err) => { if (err?.name !== 'AbortError') console.warn('[contacts-data-table] Failed to load sequences:', err); });
+      .catch((err) => { if (err?.name !== 'AbortError') clientLogWarn('contacts-data-table', 'Failed to load sequences', err); });
     return () => abort.abort();
   }, [])
 
@@ -357,7 +358,7 @@ export default function ContactsDataTable({
     fetch('/api/tenant/email-templates', { signal: abort.signal })
       .then(r => r.ok ? r.json() : { data: [] })
       .then(d => { if (!abort.signal.aborted) setEmailTemplates(d.data ?? []); })
-      .catch((err) => { if (err?.name !== 'AbortError') console.warn('[contacts-data-table] Failed to load email templates:', err); });
+      .catch((err) => { if (err?.name !== 'AbortError') clientLogWarn('contacts-data-table', 'Failed to load email templates', err); });
     return () => abort.abort();
   }, [])
 
@@ -699,7 +700,7 @@ export default function ContactsDataTable({
         const data = await res.json()
         if (res.ok) {
           toast.success(`Sent ${data.sent} email(s), ${data.failed} failed`)
-          if (data.errors?.length) console.warn('Bulk email errors:', data.errors)
+          if (data.errors?.length) clientLogWarn('contacts-data-table', 'Bulk email had per-recipient errors', data.errors)
         } else {
           toast.error(data.error || 'Failed to send emails')
         }

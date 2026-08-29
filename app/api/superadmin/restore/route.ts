@@ -94,7 +94,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[superadmin/restore GET]', err);
+    await logError({ error: err, context: 'superadmin/restore GET', requestMethod: 'GET' });
     return apiError(err);
   }
 });
@@ -193,7 +193,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[restore POST]', err);
+    await logError({ error: err, context: 'superadmin/restore POST', requestMethod: 'POST' });
     await db.insert(errorLogs).values({
       level: 'fatal',
       code: 'RESTORE_FAILED',

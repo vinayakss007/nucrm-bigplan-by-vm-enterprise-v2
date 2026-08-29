@@ -17,10 +17,8 @@ interface SavedView {
   id: string;
   name: string;
   entityType: string;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  filters: Record<string, any>;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  columns?: any;
+  filters: Record<string, unknown>;
+  columns?: unknown;
   isShared: boolean;
   isDefault: boolean;
   userId: string;
@@ -28,11 +26,9 @@ interface SavedView {
 
 interface SavedViewsProps {
   entityType: string;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  currentFilters: Record<string, any>;
+  currentFilters: Record<string, unknown>;
   currentQuery: string;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  onApplyView: (filters: Record<string, any>, query?: string) => void;
+  onApplyView: (filters: Record<string, unknown>, query?: string) => void;
 }
 
 export function SavedViews({ entityType, currentFilters, currentQuery, onApplyView }: SavedViewsProps) {

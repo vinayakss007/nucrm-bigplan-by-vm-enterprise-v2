@@ -1,0 +1,92 @@
+#cloud-config
+# NuCRM VM bootstrap (#897). Rendered by Terraform; runs on first boot.
+# Result: a hardened Ubuntu host with Docker + compose, a non-root deploy user,
+# a baseline firewall, and the backup directory ready. App deploy is a separate
+# step (deploy/scripts/deploy.sh) once you copy the repo + .env onto the box.
+
+hostname: ${hostname}
+fqdn: ${fqdn}
+preserve_hostname: false
+
+users:
+  - name: ${deploy_user}
+    groups: [sudo, docker]
+    shell: /bin/bash
+    sudo: "ALL=(ALL) NOPASSWD:ALL"
+    lock_passwd: true
+    ssh_authorized_keys:
+%{ for key in ssh_public_keys ~}
+      - ${key}
+%{ endfor ~}
+
+package_update: true
+package_upgrade: true
+packages:
+  - ca-certificates
+  - curl
+  - gnupg
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - postgresql-client
+  - git
+
+write_files:
+  # Harden SSH: no root login, no passwords, custom port.
+  - path: /etc/ssh/sshd_config.d/10-nucrm-hardening.conf
+    permissions: "0644"
+    content: |
+      Port ${ssh_port}
+      PermitRootLogin no
+      PasswordAuthentication no
+      ChallengeResponseAuthentication no
+      KbdInteractiveAuthentication no
+      X11Forwarding no
+      MaxAuthTries 3
+      ClientAliveInterval 300
+      ClientAliveCountMax 2
+
+  # Enable automatic security updates.
+  - path: /etc/apt/apt.conf.d/20auto-upgrades
+    permissions: "0644"
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+
+  # A tiny marker the deploy user / CI can check to know bootstrap finished.
+  - path: /etc/nucrm-provisioned
+    permissions: "0644"
+    content: |
+      provisioned_by=terraform
+      domain=${domain}
+      deploy_user=${deploy_user}
+
+runcmd:
+  # ── Docker Engine + Compose plugin (official repo) ──────────────────────────
+  - install -m 0755 -d /etc/apt/keyrings
+  - curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+  - chmod a+r /etc/apt/keyrings/docker.asc
+  - echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo $VERSION_CODENAME) stable" > /etc/apt/sources.list.d/docker.list
+  - apt-get update -y
+  - DEBIAN_FRONTEND=noninteractive apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+  - systemctl enable --now docker
+  - usermod -aG docker ${deploy_user}
+
+  # ── Baseline firewall (deploy/scripts/setup-firewall.sh refines this later) ──
+  - ufw --force reset
+  - ufw default deny incoming
+  - ufw default allow outgoing
+  - ufw allow ${ssh_port}/tcp
+  - ufw allow 80/tcp
+  - ufw allow 443/tcp
+  - ufw --force enable
+
+  # ── Durable backup dir (matches BACKUP_DIR in .env.production) ───────────────
+  - mkdir -p /var/backups/nucrm
+  - chown ${deploy_user}:${deploy_user} /var/backups/nucrm
+
+  # ── Apply SSH hardening ─────────────────────────────────────────────────────
+  - systemctl enable --now fail2ban
+  - systemctl restart ssh || systemctl restart sshd || true
+
+final_message: "NuCRM VM provisioned in $UPTIME s. Next: copy the repo + .env, run deploy/scripts/deploy.sh"

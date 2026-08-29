@@ -13,22 +13,53 @@ import Link from 'next/link';
 import { getFromCache, setInCache } from '@/lib/client-cache';
 import SettingsEmptyState from '@/components/shared/settings-empty-state';
 
+interface OrgTenant {
+  name?: string;
+  status?: string;
+  trial_ends_at?: string | null;
+}
+interface Org {
+  tenant?: OrgTenant;
+  plan?: Plan;
+  usage?: Usage;
+}
+interface Plan {
+  name?: string;
+  price_monthly?: number;
+  price_yearly?: number;
+  max_contacts?: number;
+  max_deals?: number;
+  max_users?: number;
+  max_automations?: number;
+}
+interface Member {
+  id: string;
+  full_name?: string | null;
+  email?: string;
+  role_slug?: string;
+}
+interface Usage {
+  current_contacts?: number;
+  current_deals?: number;
+}
+interface AdminOverview {
+  org: Org | null;
+  plan: Plan | null;
+  members: Member[];
+  usage: Usage;
+}
+
 export default function OrganizationAdminPage() {
   const cacheKey = 'org:admin:overview';
   
   // Initialize from cache for instant loading
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const cachedData = typeof window !== 'undefined' ? getFromCache<any>(cacheKey) : null;
+  const cachedData = typeof window !== 'undefined' ? getFromCache<AdminOverview>(cacheKey) : null;
   
   const [loading, setLoading] = useState(!cachedData);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [org, setOrg] = useState<any>(cachedData?.org || null);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [plan, setPlan] = useState<any>(cachedData?.plan || null);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [members, setMembers] = useState<any[]>(cachedData?.members || []);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [usage, setUsage] = useState<any>(cachedData?.usage || {});
+  const [org, setOrg] = useState<Org | null>(cachedData?.org || null);
+  const [plan, setPlan] = useState<Plan | null>(cachedData?.plan || null);
+  const [members, setMembers] = useState<Member[]>(cachedData?.members || []);
+  const [usage, setUsage] = useState<Usage>(cachedData?.usage || {});
 
   const load = useCallback(async (signal?: AbortSignal) => {
     try {
@@ -70,8 +101,7 @@ export default function OrganizationAdminPage() {
     
     // Auto-refresh every 3 minutes
     const interval = setInterval(() => {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const cached = getFromCache<any>(cacheKey);
+      const cached = getFromCache<AdminOverview>(cacheKey);
       if (cached) {
         setOrg(cached.org);
         setPlan(cached.plan);
@@ -377,8 +407,14 @@ export default function OrganizationAdminPage() {
   );
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function UsageStatCard({ icon: Icon, label, current, max, color }: any) {
+interface UsageStatCardProps {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  current: number;
+  max: number;
+  color: string;
+}
+function UsageStatCard({ icon: Icon, label, current, max, color }: UsageStatCardProps) {
   const percent = max < 0 ? 0 : (current / max) * 100;
   const colorClasses: Record<string, string> = {
     violet: 'bg-violet-500/10 text-violet-600',

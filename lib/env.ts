@@ -52,16 +52,50 @@ function validateNotWeak(name: string, value: string): void {
     }
   }
 
-  // Reject trivially low-entropy values (e.g. all-same-character keys like
-  // "aaaa..." or short repeated blocks like "ababab...") that satisfy the
-  // length check but provide almost no real key strength.
+  // Reject low-entropy values that satisfy the length check but provide almost
+  // no real key strength. #1309: a bare unique-character count is a weak proxy —
+  // it lets predictable patterns through (e.g. "abcabcabc…" has 3 unique chars
+  // but ~1.58 bits/char). Instead measure Shannon entropy per character.
+  //
+  // Reference points (bits/char):
+  //   "aaaa…"            -> 0.00   (rejected)
+  //   "abab…"            -> 1.00   (rejected)
+  //   "abcabc…"          -> ~1.58  (rejected)
+  //   well-distributed hex (16 symbols) -> up to 4.00 (accepted)
+  //   base64 (64 symbols)               -> up to 6.00 (accepted)
+  //
+  // 3.0 bits/char cleanly separates real random secrets (hex/base64/openssl)
+  // from repeated or small-alphabet placeholders. A genuinely random 32-char
+  // hex key carries ~128 bits total, far above any practical concern.
+  const MIN_BITS_PER_CHAR = 3.0;
+  const entropy = shannonEntropyPerChar(value);
   const uniqueChars = new Set(value).size;
-  if (uniqueChars <= 2) {
+  if (entropy < MIN_BITS_PER_CHAR) {
     throw new Error(
-      `${name} has insufficient entropy (only ${uniqueChars} unique character${uniqueChars === 1 ? '' : 's'}).\n` +
+      `${name} has insufficient entropy (${entropy.toFixed(2)} bits/char across ` +
+      `${uniqueChars} unique character${uniqueChars === 1 ? '' : 's'}; ` +
+      `${MIN_BITS_PER_CHAR.toFixed(1)} required).\n` +
       `Generate a strong secret with: openssl rand -base64 64`
     );
   }
+}
+
+/**
+ * Shannon entropy in bits per character for a string. 0 for empty/single-char
+ * inputs. Used to reject low-entropy secrets that pass the length check.
+ */
+function shannonEntropyPerChar(value: string): number {
+  if (value.length === 0) return 0;
+  const freq = new Map<string, number>();
+  for (const ch of value) {
+    freq.set(ch, (freq.get(ch) ?? 0) + 1);
+  }
+  let entropy = 0;
+  for (const count of freq.values()) {
+    const p = count / value.length;
+    entropy -= p * Math.log2(p);
+  }
+  return entropy;
 }
 
 function getOptionalEnv(name: string, defaultValue?: string): string | undefined {

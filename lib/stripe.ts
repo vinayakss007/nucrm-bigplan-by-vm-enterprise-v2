@@ -55,8 +55,11 @@ export interface StripeBillingPortalSession {
 
 export interface StripeCustomer {
   id: string;
-  object: string;
-  email: string | null;
+  object?: string;
+  email?: string | null;
+  name?: string | null;
+  metadata?: Record<string, string>;
+  [key: string]: unknown;
 }
 
 /**
@@ -88,16 +91,10 @@ function getWebhookSecret(): string {
 
 // ── Core Stripe API Call ─────────────────────────────────────────────────────
 
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function stripeRequest<T = any>(
+async function stripeRequest<T = unknown>(
   endpoint: string,
   method: 'GET' | 'POST' | 'DELETE' = 'GET',
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  body?: Record<string, any>
+  body?: Record<string, unknown>
 ): Promise<T> {
   const headers: Record<string, string> = {
     'Authorization': `Bearer ${getStripeKey()}`,
@@ -128,10 +125,7 @@ async function stripeRequest<T = any>(
  * { subscription_data: { metadata: { tenant_id: 'abc' } } }
  * → { 'subscription_data[metadata][tenant_id]': 'abc' }
  */
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function flattenObject(obj: Record<string, any>, prefix = ''): Record<string, string> {
+function flattenObject(obj: Record<string, unknown>, prefix = ''): Record<string, string> {
   const result: Record<string, string> = {};
 
   for (const [key, value] of Object.entries(obj)) {
@@ -141,14 +135,14 @@ function flattenObject(obj: Record<string, any>, prefix = ''): Record<string, st
 
     if (Array.isArray(value)) {
       value.forEach((item, i) => {
-        if (typeof item === 'object') {
-          Object.assign(result, flattenObject(item, `${fullKey}[${i}]`));
+        if (item !== null && typeof item === 'object') {
+          Object.assign(result, flattenObject(item as Record<string, unknown>, `${fullKey}[${i}]`));
         } else {
           result[`${fullKey}[${i}]`] = String(item);
         }
       });
     } else if (typeof value === 'object') {
-      Object.assign(result, flattenObject(value, fullKey));
+      Object.assign(result, flattenObject(value as Record<string, unknown>, fullKey));
     } else {
       result[fullKey] = String(value);
     }
@@ -200,6 +194,46 @@ export async function stripeFetch<T = unknown>(
   return parsed as T;
 }
 
+// ── Stripe object shapes (#1269) ─────────────────────────────────────────────
+// Lightweight structural types for the Stripe REST objects this module returns.
+// They cover the fields callers actually read; unknown extra fields are allowed
+// via the index signature, so this replaces the former `Promise<any>` returns
+// without pretending to be the full Stripe SDK types.
+
+export interface StripeSubscriptionItem {
+  id: string;
+  price?: { id: string } | null;
+  [key: string]: unknown;
+}
+
+export interface StripeSubscription {
+  id: string;
+  status?: string;
+  cancel_at_period_end?: boolean;
+  current_period_start: number;
+  current_period_end: number;
+  items?: { data?: StripeSubscriptionItem[] };
+  metadata?: Record<string, string>;
+  [key: string]: unknown;
+}
+
+export interface StripeCheckoutSession {
+  id: string;
+  url?: string | null;
+  customer?: string | StripeCustomer | null;
+  subscription?: string | StripeSubscription | null;
+  [key: string]: unknown;
+}
+
+export interface StripeInvoice {
+  id: string;
+  amount_due?: number;
+  amount_paid?: number;
+  status?: string;
+  hosted_invoice_url?: string | null;
+  [key: string]: unknown;
+}
+
 // ── Customer Management ──────────────────────────────────────────────────────
 
 export async function createCustomer(params: {
@@ -218,10 +252,7 @@ export async function createCustomer(params: {
   });
 }
 
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function getCustomer(customerId: string): Promise<any> {
+export async function getCustomer(customerId: string): Promise<StripeCustomer> {
   return stripeRequest(`/customers/${customerId}`);
 }
 
@@ -229,10 +260,7 @@ export async function updateCustomer(customerId: string, params: {
   email?: string;
   name?: string;
   metadata?: Record<string, string>;
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-}): Promise<any> {
+}): Promise<StripeCustomer> {
   return stripeRequest(`/customers/${customerId}`, 'POST', params);
 }
 
@@ -253,10 +281,7 @@ export interface CheckoutParams {
 
 export async function createCheckoutSession(params: CheckoutParams): Promise<{ id: string; url: string }> {
   const appUrl = getAppUrl();
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const body: Record<string, any> = {
+  const body: Record<string, unknown> = {
     mode: params.mode,
     success_url: params.successUrl || `${appUrl}/tenant/settings/billing?session_id={CHECKOUT_SESSION_ID}&success=true`,
     cancel_url: params.cancelUrl || `${appUrl}/tenant/settings/billing?cancelled=true`,
@@ -288,26 +313,17 @@ export async function createCheckoutSession(params: CheckoutParams): Promise<{ i
   return stripeRequest('/checkout/sessions', 'POST', body);
 }
 
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function getCheckoutSession(sessionId: string): Promise<any> {
+export async function getCheckoutSession(sessionId: string): Promise<StripeCheckoutSession> {
   return stripeRequest(`/checkout/sessions/${sessionId}?expand[]=subscription&expand[]=customer`);
 }
 
 // ── Subscriptions ────────────────────────────────────────────────────────────
 
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function getSubscription(subscriptionId: string): Promise<any> {
+export async function getSubscription(subscriptionId: string): Promise<StripeSubscription> {
   return stripeRequest(`/subscriptions/${subscriptionId}`);
 }
 
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function cancelSubscription(subscriptionId: string, atPeriodEnd = true): Promise<any> {
+export async function cancelSubscription(subscriptionId: string, atPeriodEnd = true): Promise<StripeSubscription> {
   if (atPeriodEnd) {
     return stripeRequest(`/subscriptions/${subscriptionId}`, 'POST', {
       cancel_at_period_end: 'true',
@@ -316,10 +332,7 @@ export async function cancelSubscription(subscriptionId: string, atPeriodEnd = t
   return stripeRequest(`/subscriptions/${subscriptionId}`, 'DELETE');
 }
 
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function resumeSubscription(subscriptionId: string): Promise<any> {
+export async function resumeSubscription(subscriptionId: string): Promise<StripeSubscription> {
   return stripeRequest(`/subscriptions/${subscriptionId}`, 'POST', {
     cancel_at_period_end: 'false',
   });
@@ -329,12 +342,8 @@ export async function updateSubscription(subscriptionId: string, params: {
   priceId?: string;
   quantity?: number;
   metadata?: Record<string, string>;
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-}): Promise<any> {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const body: Record<string, any> = {};
+}): Promise<StripeSubscription> {
+  const body: Record<string, unknown> = {};
 
   if (params.priceId) {
     // Get current subscription to find item ID
@@ -364,17 +373,11 @@ export async function createPortalSession(customerId: string, returnUrl?: string
 
 // ── Invoices ─────────────────────────────────────────────────────────────────
 
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function listInvoices(customerId: string, limit = 10): Promise<{ data: any[] }> {
+export async function listInvoices(customerId: string, limit = 10): Promise<{ data: StripeInvoice[] }> {
   return stripeRequest(`/invoices?customer=${customerId}&limit=${limit}&status=paid`);
 }
 
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function getUpcomingInvoice(customerId: string): Promise<any> {
+export async function getUpcomingInvoice(customerId: string): Promise<StripeInvoice> {
   return stripeRequest(`/invoices/upcoming?customer=${customerId}`);
 }
 

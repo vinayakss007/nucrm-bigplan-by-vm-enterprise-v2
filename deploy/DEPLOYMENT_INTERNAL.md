@@ -128,7 +128,7 @@ curl -X POST https://crm.yourdomain.com/api/emergency/recover \
 docker compose -f deploy/docker-compose.production.yml stop app worker cron
 
 # 2. Restore from latest backup
-bash deploy/scripts/backup.sh --restore /tmp/nucrm-backups/nucrm_backup_YYYYMMDD_HHMMSS.sql.gz
+bash deploy/scripts/backup.sh --restore /var/backups/nucrm/nucrm_backup_YYYYMMDD_HHMMSS.dump
 
 # 3. Restart
 docker compose -f deploy/docker-compose.production.yml start app worker cron
@@ -148,7 +148,7 @@ docker system prune -a --volumes --filter "until=48h"
 # Edit deploy/monitoring/prometheus.yml: --storage.tsdb.retention.time=7d
 
 # 4. Purge old backups
-find /tmp/nucrm-backups -mtime +7 -delete
+find /var/backups/nucrm -mtime +7 -delete
 ```
 
 ### E4: VM Unresponsive

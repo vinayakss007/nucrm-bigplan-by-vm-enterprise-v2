@@ -32,12 +32,28 @@ import { useUndoRedo } from './use-undo-redo'
 
 // ─── Custom Node Data Type ─────────────────────────────────────────────────────
 
+/** Free-form node configuration. Keys/shape vary per node type, so values are
+ *  `unknown` — read sites narrow before use (replaces the former `any`, #1268). */
+type WorkflowConfig = Record<string, unknown>;
+
+/** A persisted workflow action as returned by the workflows API. */
+interface WorkflowAction {
+  action_type: string;
+  action_config?: WorkflowConfig;
+}
+
+/** Narrow an unknown thrown value to a display message (replaces `catch (e: any)`). */
+function errorMessage(err: unknown, fallback: string): string {
+  if (err instanceof Error && err.message) return err.message;
+  if (typeof err === 'string' && err) return err;
+  return fallback;
+}
+
 interface CustomNodeData extends Record<string, unknown> {
   label: string;
   nodeType: string;
   description?: string;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  config: Record<string, any>;
+  config: WorkflowConfig;
   configPreview?: string;
 }
 
@@ -152,8 +168,7 @@ export default function WorkflowBuilder({ workflowId, onSave }: Props) {
   const [testing, setTesting] = useState(false)
   const [showPalette, setShowPalette] = useState(true)
   const [selectedNode, setSelectedNode] = useState<string | null>(null)
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [_nodeConfig, _setNodeConfig] = useState<Record<string, any>>({})
+  const [_nodeConfig, _setNodeConfig] = useState<WorkflowConfig>({})
   const [loading, setLoading] = useState(!!workflowId)
 
   // Undo/Redo
@@ -229,15 +244,14 @@ export default function WorkflowBuilder({ workflowId, onSave }: Props) {
           setNodes(wf.nodes)
         } else if (wf.actions && wf.actions.length > 0) {
           // Convert actions to nodes
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const actionNodes: CustomNode[] = wf.actions.map((action: any, i: number) => ({
+          const actionNodes: CustomNode[] = wf.actions.map((action: WorkflowAction, i: number) => ({
             id: `action-${i + 1}`,
             type: 'workflowNode',
             position: { x: 400, y: 200 + i * 180 },
             data: {
               label: action.action_type.replace('action_', '').replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()),
               nodeType: `action_${action.action_type}`,
-              config: action.action_config,
+              config: action.action_config ?? {},
             },
           }))
           const triggerNode: CustomNode = {
@@ -266,9 +280,8 @@ export default function WorkflowBuilder({ workflowId, onSave }: Props) {
           }
           setNodes([triggerNode])
         }
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } catch (err: any) {
-        toast.error(err.message || 'Failed to load workflow')
+      } catch (err: unknown) {
+        toast.error(errorMessage(err, 'Failed to load workflow'))
       } finally {
         setLoading(false)
       }
@@ -376,8 +389,13 @@ export default function WorkflowBuilder({ workflowId, onSave }: Props) {
           condition_config: {},
         }))
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const body: any = {
+      const body: {
+        name: string;
+        description: string;
+        trigger_type: string;
+        nodes: CustomNode[];
+        actions?: typeof actions;
+      } = {
         name: workflowName.trim(),
         description: workflowDescription,
         trigger_type: triggerType,
@@ -399,9 +417,8 @@ export default function WorkflowBuilder({ workflowId, onSave }: Props) {
 
       toast.success(workflowId ? 'Workflow updated' : 'Workflow created')
       onSave?.()
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to save workflow')
+    } catch (err: unknown) {
+      toast.error(errorMessage(err, 'Failed to save workflow'))
     } finally {
       setSaving(false)
     }
@@ -426,9 +443,8 @@ export default function WorkflowBuilder({ workflowId, onSave }: Props) {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
       toast.success(`Test execution started: ${data.execution_id}`)
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (err: any) {
-      toast.error(err.message || 'Test failed')
+    } catch (err: unknown) {
+      toast.error(errorMessage(err, 'Test failed'))
     } finally {
       setTesting(false)
     }
@@ -641,8 +657,9 @@ export default function WorkflowBuilder({ workflowId, onSave }: Props) {
                 const node = nodes.find(n => n.id === selectedNode)
                 if (!node) return null
                 const _palette = NODE_PALETTE.find(p => p.type === node.data.nodeType)
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const cfg = node.data.config as any
+                // The config editor only reads/writes primitive fields; view the
+                // untyped config through a record of optional primitives (#1268).
+                const cfg = node.data.config as Record<string, string | number | undefined>
 
                 return (
                   <>

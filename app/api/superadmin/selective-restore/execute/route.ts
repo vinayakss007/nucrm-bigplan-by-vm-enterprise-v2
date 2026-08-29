@@ -15,6 +15,7 @@ import { existsSync } from 'fs';
 import { executeSelectiveRestore, validateTenant, createPreRestoreSnapshot } from '@/lib/restore/restore-executor';
 import { logSuperAdminAction } from '@/lib/audit/super-admin';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { logError } from '@/lib/errors-server';
 
 
 const executeRestoreSchema = z.object({
@@ -211,7 +212,12 @@ export const POST = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
         } catch (err: any) {
-          console.error('[selective-restore/execute]', err);
+          await logError({
+            error: err,
+            context: 'selective-restore/execute stream',
+            userId: ctx.userId,
+            metadata: { restoreLogId: restoreLog.id, tenantId: tenant_id, backup_id, tables, restore_mode },
+          });
 
           await db
             .update(selectiveRestoreLogs)
@@ -244,7 +250,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[selective-restore/execute POST]', err);
+    await logError({ error: err, context: 'selective-restore/execute POST', requestMethod: 'POST' });
     return apiError(err);
   }
 });
@@ -274,6 +280,11 @@ async function createAuditLog(params: AuditLogParams) {
       // In schema, selectiveRestoreAuditLog has: tenantId, action, tableName, recordId, oldData, newData, performedBy, performedAt.
     });
   } catch (err) {
-    console.error('[SelectiveRestore:AuditLog]', err);
+    await logError({
+      error: err,
+      context: 'selective-restore/execute createAuditLog',
+      userId: params.performed_by,
+      metadata: { restoreLogId: params.restore_log_id, tenantId: params.tenant_id, action: params.action },
+    });
   }
 }

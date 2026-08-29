@@ -12,6 +12,7 @@ import { db } from '@/drizzle/db';
 import { errorLogs, tenants, users } from '@/drizzle/schema';
 import { eq, and, sql, desc } from 'drizzle-orm';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { logError } from '@/lib/errors-server';
 
 export const GET = withApiRoute(async (request: NextRequest) => {
   try {
@@ -56,7 +57,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
         .orderBy(desc(errorLogs.createdAt))
         .limit(limit)
         .catch((e) => {
-          console.error('[superadmin/errors] DB query failed:', e);
+          void logError({ error: e, context: 'superadmin/errors list query' });
           return [];
         }),
 
@@ -71,7 +72,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
         .from(errorLogs)
         .then(rows => rows[0])
         .catch((e) => {
-          console.error('[superadmin/errors] summary query failed:', e);
+          void logError({ error: e, context: 'superadmin/errors summary query' });
           return { fatal_unresolved: 0, error_unresolved: 0, warn_unresolved: 0, last_hour: 0, last_day: 0 };
         }),
     ]);
@@ -81,7 +82,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[superadmin/errors GET]', err);
+    await logError({ error: err, context: 'superadmin/errors GET', requestMethod: 'GET' });
     return apiError(err);
   }
 });
@@ -121,7 +122,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     });
     return NextResponse.json({ ok: true }, { status: 201 });
   } catch (err) {
-    console.error('[superadmin/errors POST] failed:', err);
+    await logError({ error: err, context: 'superadmin/errors POST', requestMethod: 'POST' });
     return NextResponse.json({
       error: 'Failed to log error',
       ...(process.env.NODE_ENV === 'development' ? { details: err instanceof Error ? err.message : String(err) } : {}),
@@ -160,7 +161,7 @@ export const PATCH = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[superadmin/errors PATCH]', err);
+    await logError({ error: err, context: 'superadmin/errors PATCH', requestMethod: 'PATCH' });
     return apiError(err);
   }
 });

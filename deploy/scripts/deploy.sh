@@ -44,12 +44,16 @@ preflight() {
     [[ -z "${POSTGRES_PASSWORD:-}" ]] && err "POSTGRES_PASSWORD is empty"
     ok "Critical env vars present"
 
-    # SSL check
-    if [[ ! -f "nginx/ssl/fullchain.pem" ]]; then
-        warn "No SSL certs in deploy/nginx/ssl/ — HTTPS will fail. Use self-signed for testing:"
-        echo "  openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout deploy/nginx/ssl/privkey.pem -out deploy/nginx/ssl/fullchain.pem -subj '/CN=localhost'"
+    # SSL check — certs live in the `letsencrypt` volume under live/nucrm,
+    # issued/renewed by deploy/scripts/setup-ssl.sh (Let's Encrypt) with a
+    # self-signed fallback for IP-only testing. nginx reads live/nucrm.
+    if docker run --rm -v nucrm_letsencrypt:/le alpine:3.20 \
+         test -e /le/live/nucrm/fullchain.pem 2>/dev/null; then
+        ok "TLS certificate present (live/nucrm)"
     else
-        ok "SSL certificates found"
+        warn "No TLS certificate yet. After the stack is up, run:"
+        echo "  bash deploy/scripts/setup-ssl.sh        # Let's Encrypt for \$DOMAIN (self-signed if IP-only)"
+        echo "nginx will fail to start HTTPS until this is done."
     fi
 }
 
@@ -114,13 +118,16 @@ case "${1:-}" in
     --rebuild)  preflight; deploy --rebuild; migrate ;;
     *)          preflight; deploy; migrate;
                 echo ""
+                APP_URL="${NEXT_PUBLIC_APP_URL:-https://${DOMAIN:-your-domain}}"
                 echo -e "${GREEN}╔════════════════════════════════════════════════════════╗${NC}"
-                echo -e "${GREEN}║  NuCRM Production Deployment Complete!                 ║${NC}"
-                echo -e "${GREEN}║                                                        ║${NC}"
-                echo -e "${GREEN}║  App:      https://crm.yourdomain.com                  ║${NC}"
-                echo -e "${GREEN}║  Setup:    https://crm.yourdomain.com/setup            ║${NC}"
-                echo -e "${GREEN}║  Grafana:  http://localhost:3001                        ║${NC}"
-                echo -e "${GREEN}║  MinIO:    http://localhost:9001                        ║${NC}"
+                echo -e "${GREEN}║  NuCRM Production Deployment Complete!                  ║${NC}"
                 echo -e "${GREEN}╚════════════════════════════════════════════════════════╝${NC}"
+                echo -e "  App:      ${APP_URL}"
+                echo -e "  Setup:    ${APP_URL}/setup"
+                echo -e "  Grafana:  http://localhost:3001   (via SSH tunnel — see DEPLOYMENT_INTERNAL.md)"
+                echo -e "  MinIO:    http://localhost:9001   (via SSH tunnel)"
+                if [[ -z "${DOMAIN:-}" || "${DOMAIN:-}" == *yourdomain* ]]; then
+                    warn "DOMAIN not set to a real hostname — HTTPS is self-signed. Set DOMAIN + ACME_EMAIL in .env and run deploy/scripts/setup-ssl.sh"
+                fi
                 ;;
 esac
