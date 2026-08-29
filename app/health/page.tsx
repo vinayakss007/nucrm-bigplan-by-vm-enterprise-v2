@@ -7,6 +7,7 @@
 
 import { useEffect, useState } from 'react';
 import { CheckCircle, AlertCircle, XCircle, Loader2, Database, Mail, User, Cpu } from 'lucide-react';
+import { clientLogError } from '@/lib/client-logger';
 
 interface HealthStatus {
   status: 'healthy' | 'degraded' | 'unhealthy';
@@ -47,7 +48,7 @@ export default function HealthPage() {
         setLoading(false);
       })
       .catch(err => {
-        console.error(err);
+        clientLogError('health:fetch', err);
         setLoading(false);
       });
   }, []);
@@ -57,7 +58,7 @@ export default function HealthPage() {
     fetch('/api/health')
       .then(r => r.json())
       .then(d => setHealth(d))
-      .catch(err => console.error('[health] refresh failed', err))
+      .catch(err => clientLogError('health:refresh', err))
       .finally(() => setLoading(false));
   };
 

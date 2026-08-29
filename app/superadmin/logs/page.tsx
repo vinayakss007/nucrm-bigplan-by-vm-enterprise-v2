@@ -6,6 +6,7 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
 import { Terminal, Download, Trash2, Pause, Play } from 'lucide-react';
+import { clientLogError } from '@/lib/client-logger';
 
 type LogEntry = {
   level: 'info' | 'warn' | 'error' | 'debug' | 'success';
@@ -51,7 +52,7 @@ export default function LiveLogsPage() {
         try {
           const entry: LogEntry = JSON.parse(e.data);
           setLogs(prev => [...prev.slice(-999), entry]);
-        } catch (e) { console.error('[logs] Parse error:', e); }
+        } catch (e) { clientLogError('logs:parse', e); }
       };
       es.onerror = () => {
         if (mounted) setConnected(false);

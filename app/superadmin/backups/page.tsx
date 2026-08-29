@@ -6,6 +6,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { clientLogError } from '@/lib/client-logger';
 import {
   Clock,
   Calendar,
@@ -107,7 +108,7 @@ export default function SuperAdminBackups() {
       if (data.schedules) setSchedules(data.schedules);
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return;
-      console.error('Failed to load schedules:', err);
+      clientLogError('backups:load-schedules', err);
     }
   };
 
@@ -118,7 +119,7 @@ export default function SuperAdminBackups() {
       if (data.backups) setBackups(data.backups);
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return;
-      console.error('Failed to load backups:', err);
+      clientLogError('backups:load-backups', err);
     }
   };
 
@@ -130,7 +131,7 @@ export default function SuperAdminBackups() {
       if (data.stats) setCriticalStats(data.stats);
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return;
-      console.error('Failed to load critical data:', err);
+      clientLogError('backups:load-critical', err);
     }
   };
 
@@ -166,7 +167,7 @@ export default function SuperAdminBackups() {
       });
       loadSchedules();
     } catch (err) {
-      console.error('Failed to toggle schedule:', err);
+      clientLogError('backups:toggle-schedule', err);
     }
   };
 
@@ -184,7 +185,7 @@ export default function SuperAdminBackups() {
         loadCriticalData();
       }
     } catch (err) {
-      console.error('Restore failed:', err);
+      clientLogError('backups:restore', err);
     }
   };
 

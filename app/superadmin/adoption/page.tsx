@@ -12,6 +12,7 @@ import {
   Activity, ArrowRightLeft, History, RefreshCw, Building2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { clientLogError } from '@/lib/client-logger';
 
 type Adoption = {
   total_tenants: number;
@@ -42,8 +43,8 @@ export default function AdoptionMonitoringPage() {
   const load = async (abortSignal?: AbortSignal) => {
     setRefreshing(true);
     const [adoptionRes, activityRes] = await Promise.all([
-      fetch('/api/superadmin/adoption', { signal: abortSignal }).then(r => r.ok ? r.json() : null).catch((err) => { console.error('[adoption] fetch failed', err); return null; }),
-      fetch('/api/superadmin/recent-activity?limit=20', { signal: abortSignal }).then(r => r.ok ? r.json() : null).catch((err) => { console.error('[adoption] activity fetch failed', err); return null; }),
+      fetch('/api/superadmin/adoption', { signal: abortSignal }).then(r => r.ok ? r.json() : null).catch((err) => { clientLogError('adoption:fetch', err); return null; }),
+      fetch('/api/superadmin/recent-activity?limit=20', { signal: abortSignal }).then(r => r.ok ? r.json() : null).catch((err) => { clientLogError('adoption:activity-fetch', err); return null; }),
     ]);
     setData(adoptionRes);
     setActivity(activityRes);

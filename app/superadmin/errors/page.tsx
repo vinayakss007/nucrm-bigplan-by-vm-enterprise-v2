@@ -5,6 +5,7 @@
  */
 'use client';
 import { useState, useEffect, useCallback } from 'react';
+import { clientLogError } from '@/lib/client-logger';
 import { AlertTriangle, CheckCheck, RefreshCw, X, ChevronDown, ChevronRight, Search, Book, Copy, Check } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import { cn, formatRelativeTime } from '@/lib/utils';
@@ -73,7 +74,7 @@ export default function ErrorsPage() {
     try {
       const res = await fetch('/api/superadmin/errors?' + q, { signal: abortSignal });
       if (!res.ok) {
-        const errBody = await res.json().catch((err) => { console.error('[errors] parse error body failed', err); return { error: `HTTP ${res.status}` }; });
+        const errBody = await res.json().catch((err) => { clientLogError('errors:parse-error-body', err); return { error: `HTTP ${res.status}` }; });
         throw new Error(errBody.error || `Request failed (${res.status})`);
       }
       const d = await res.json();
@@ -99,7 +100,7 @@ export default function ErrorsPage() {
         method:'PATCH', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ id, resolveAll, level: lvl }),
       });
-      if (!res.ok) throw new Error((await res.json().catch((err) => { console.error('[errors] parse resolve failed', err); return {}; })).error || 'Resolve failed');
+      if (!res.ok) throw new Error((await res.json().catch((err) => { clientLogError('errors:parse-resolve', err); return {}; })).error || 'Resolve failed');
       toast.success(resolveAll ? 'All resolved' : 'Marked resolved');
       load();
     } catch (err: unknown) {

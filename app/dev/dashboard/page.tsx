@@ -18,6 +18,7 @@
  */
 
 import { useState, useEffect } from 'react';
+import { clientLogError } from '@/lib/client-logger';
 
 interface DashboardData {
   timestamp: string;
@@ -97,7 +98,7 @@ export default function DevelopmentDashboard() {
 
       setLoading(false);
     } catch (error) {
-      console.error('Failed to fetch dashboard data:', error);
+      clientLogError('dev-dashboard:fetch', error);
       setLoading(false);
     }
   };

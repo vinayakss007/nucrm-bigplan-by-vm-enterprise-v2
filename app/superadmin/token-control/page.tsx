@@ -6,6 +6,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { clientLogError } from '@/lib/client-logger';
 import {
   Coins,
   TrendingUp,
@@ -48,7 +49,7 @@ export default function SuperAdminTokenControl() {
       if (t.tenants) setTopTenants(t.tenants);
       if (a.alerts) setAlerts(a.alerts);
       if (k.keys) setApiKeys(k.keys);
-    } catch (err) { console.error(err); }
+    } catch (err) { clientLogError('token-control:load', err); }
     finally { setLoading(false); }
   };
 

@@ -8,6 +8,7 @@ import { useState, useEffect } from 'react';
 import { CheckCircle, XCircle, AlertTriangle, RefreshCw, Activity, Database, Mail, Server, Wifi } from 'lucide-react';
 import { cn, formatRelativeTime } from '@/lib/utils';
 import { logError } from '@/lib/errors-client';
+import { clientLogError } from '@/lib/client-logger';
 import toast from 'react-hot-toast';
 
 interface HealthCheck {
@@ -45,7 +46,7 @@ export default function HealthPage() {
   const run = async (abortSignal?: AbortSignal) => {
     setLoading(true);
     const [sa, app] = await Promise.all([
-      fetch('/api/superadmin/health', { signal: abortSignal }).then(r=>r.json()).catch((err) => { console.error('[health] superadmin health fetch failed', err); return {checks:[]}; }),
+      fetch('/api/superadmin/health', { signal: abortSignal }).then(r=>r.json()).catch((err) => { clientLogError('superadmin-health:fetch', err); return {checks:[]}; }),
       fetch('/api/health', { signal: abortSignal }).then(r=>r.json()).catch((err) => logError({ error: err, context: "async-catch:[context]" })),
     ]);
     setChecks(sa.checks||[]); setAppHealth(app);

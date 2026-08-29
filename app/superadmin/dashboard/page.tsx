@@ -9,6 +9,7 @@ import { verifyToken } from '@/lib/auth/session';
 import { db } from '@/drizzle/db';
 import { users, tenants, plans, errorLogs } from '@/drizzle/schema';
 import { eq, and, sql, desc, between } from 'drizzle-orm';
+import { logger } from '@/lib/logger';
 import SuperAdminDashboardClient from '@/components/superadmin/superadmin-dashboard-client';
 
 export default async function SuperAdminDashboard() {
@@ -29,7 +30,7 @@ export default async function SuperAdminDashboard() {
   if (!user?.isSuperAdmin) redirect('/tenant/dashboard');
 
   const [statsRes, recentTenants, recentErrors, expiringSoon] = await Promise.all([
-    db.execute(sql`SELECT public.platform_stats() as data`).catch((err) => { console.error('[dashboard] platform_stats failed', err); return { rows: [{ data: {} }] }; }),
+    db.execute(sql`SELECT public.platform_stats() as data`).catch((err) => { logger.error('[dashboard] platform_stats failed', { error: err instanceof Error ? err.message : String(err) }); return { rows: [{ data: {} }] }; }),
 
     db.select({
       id: tenants.id,
@@ -46,7 +47,7 @@ export default async function SuperAdminDashboard() {
     .leftJoin(users, eq(users.id, tenants.ownerId))
     .orderBy(desc(tenants.createdAt))
     .limit(6)
-    .catch((err) => { console.error('[dashboard] recentTenants failed', err); return []; }),
+    .catch((err) => { logger.error('[dashboard] recentTenants failed', { error: err instanceof Error ? err.message : String(err) }); return []; }),
 
     db.select({
       level: errorLogs.level,
@@ -60,7 +61,7 @@ export default async function SuperAdminDashboard() {
     ))
     .orderBy(desc(errorLogs.createdAt))
     .limit(5)
-    .catch((err) => { console.error('[dashboard] recentErrors failed', err); return []; }),
+    .catch((err) => { logger.error('[dashboard] recentErrors failed', { error: err instanceof Error ? err.message : String(err) }); return []; }),
 
     db.select({
       id: tenants.id,
@@ -74,7 +75,7 @@ export default async function SuperAdminDashboard() {
       between(tenants.trialEndsAt, sql`now()`, sql`now() + interval '3 days'`)
     ))
     .orderBy(tenants.trialEndsAt)
-    .catch((err) => { console.error('[dashboard] expiringSoon failed', err); return []; }),
+    .catch((err) => { logger.error('[dashboard] expiringSoon failed', { error: err instanceof Error ? err.message : String(err) }); return []; }),
   ]);
 
   const s = (statsRes as unknown as { rows?: [{ data?: Record<string, unknown> }] })?.rows?.[0]?.data ?? {};
