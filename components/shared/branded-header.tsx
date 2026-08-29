@@ -14,7 +14,8 @@ interface BrandedHeaderProps {
 export async function BrandedHeader({ branding }: BrandedHeaderProps) {
   const cssVars = generateCSSVariables(branding);
 
-  // Per-request CSP nonce set by proxy.ts (#1070), applied as defense-in-depth.
+  // Per-request CSP nonce set by proxy.ts (#1070). REQUIRED: style-src is
+  // nonce-based, so this inline <style> must carry the nonce or be blocked.
   const nonce = (await headers()).get('x-nonce') ?? undefined;
 
   const layoutClasses: Record<string, string> = {
