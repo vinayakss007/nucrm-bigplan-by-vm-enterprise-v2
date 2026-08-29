@@ -10,6 +10,7 @@ import {
   CreditCard, AlertTriangle,
   ToggleLeft, ToggleRight, Info,
   Database, Zap, Eye, EyeOff,
+  type LucideIcon,
 } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import { clientLogError } from '@/lib/client-logger';
@@ -30,8 +31,7 @@ const SECRET_KEYS = [
 const isSecretKey = (k: string): boolean => (SECRET_KEYS as readonly string[]).includes(k);
 
 export default function SuperAdminSettingsPage() {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [s, setS] = useState<Record<string,any>>({
+  const [s, setS] = useState<Record<string, string>>({
     platform_name:'NuCRM', support_email:'', app_url:'',
     allow_signups:'true', require_email_verify:'true', maintenance_mode:'false',
     default_trial_days:'14', default_plan:'free', max_free_tenants:'1000',
@@ -55,8 +55,12 @@ export default function SuperAdminSettingsPage() {
     fetch('/api/superadmin/settings', { signal: abort.signal }).then(r=>r.json()).then(d=>{ if (abort.signal.aborted) return;
       if(d.data) {
         // #1095: never load secret values (even redacted) into client state.
+        // Settings persist as strings; coerce any non-string values so state
+        // stays Record<string, string> for the controlled inputs.
         const nonSecret = Object.fromEntries(
-          Object.entries(d.data as Record<string, unknown>).filter(([k]) => !isSecretKey(k))
+          Object.entries(d.data as Record<string, unknown>)
+            .filter(([k]) => !isSecretKey(k))
+            .map(([k, v]) => [k, v == null ? '' : String(v)])
         );
         setS(prev => ({...prev, ...nonSecret}));
       }
@@ -65,10 +69,9 @@ export default function SuperAdminSettingsPage() {
     return () => abort.abort();
   }, []);
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const set = (k: string) => (e: React.ChangeEvent<any>) => setS(p=>({...p,[k]:e.target.value}));
+  const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => setS(p=>({...p,[k]:e.target.value}));
   const toggle = (k: string) => setS(p=>({...p,[k]: p[k]==='true'?'false':'true'}));
-  const bool = (k: string) => s[k]==='true'||s[k]===true;
+  const bool = (k: string) => s[k]==='true';
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault(); setSaving(true);
@@ -107,8 +110,7 @@ export default function SuperAdminSettingsPage() {
       </button>
     </div>
   );
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const Sec  = ({icon:Icon,title,desc,badge,children}:any) => (
+  const Sec  = ({icon:Icon,title,desc,badge,children}:{icon:LucideIcon;title:string;desc?:string;badge?:string;children:React.ReactNode}) => (
     <div className="rounded-xl border border-white/10 bg-white/[0.03]">
       <div className="flex items-center gap-3 px-5 py-3.5 border-b border-white/10">
         <div className="w-8 h-8 rounded-lg bg-violet-500/20 flex items-center justify-center shrink-0"><Icon className="w-4 h-4 text-violet-400"/></div>

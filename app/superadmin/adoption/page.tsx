@@ -10,6 +10,7 @@ import {
   Crown, Loader2, Globe, Lock, ListChecks, Settings as SettingsIcon,
   ShieldCheck, ShieldX, ShieldAlert, Users, Plane, Sparkles, AlertTriangle,
   Activity, ArrowRightLeft, History, RefreshCw, Building2,
+  type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { clientLogError } from '@/lib/client-logger';
@@ -22,8 +23,8 @@ type Adoption = {
 };
 
 type AuditRow = {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  id: string; action: string; entity_type: string; created_at: string; new_data: any;
+  id: string; action: string; entity_type: string; created_at: string;
+  new_data: { count?: number | null; total?: number | null } & Record<string, unknown> | null;
   tenant_id: string; tenant_name: string | null;
   user_id: string | null; user_name: string | null; user_email: string | null;
 };
@@ -156,8 +157,7 @@ export default function AdoptionMonitoringPage() {
   );
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function Stat({ icon: Icon, label, value, sub, accent }: { icon: any; label: string; value: number | string; sub?: string; accent?: 'amber' | 'red' | 'emerald' }) {
+function Stat({ icon: Icon, label, value, sub, accent }: { icon: LucideIcon; label: string; value: number | string; sub?: string; accent?: 'amber' | 'red' | 'emerald' }) {
   const accentBg =
     accent === 'amber'   ? 'bg-amber-50 dark:bg-amber-950/30 border-amber-300/80 dark:border-amber-800/80 shadow-sm' :
     accent === 'red'     ? 'bg-red-50 dark:bg-red-950/30 border-red-300/80 dark:border-red-800/80 shadow-sm' :
@@ -175,8 +175,7 @@ function Stat({ icon: Icon, label, value, sub, accent }: { icon: any; label: str
 }
 
 function Card({ title, desc, icon: Icon, accent, children }: {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  title: string; desc?: string; icon?: any; accent?: 'amber';
+  title: string; desc?: string; icon?: LucideIcon; accent?: 'amber';
   children: React.ReactNode;
 }) {
   return (
@@ -199,8 +198,7 @@ function Card({ title, desc, icon: Icon, accent, children }: {
   );
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function Bar({ icon: Icon, label, count, total }: { icon: any; label: string; count: number; total: number }) {
+function Bar({ icon: Icon, label, count, total }: { icon: LucideIcon; label: string; count: number; total: number }) {
   const p = total === 0 ? 0 : Math.round((count / total) * 100);
   return (
     <div>
@@ -223,8 +221,7 @@ function Bar({ icon: Icon, label, count, total }: { icon: any; label: string; co
 }
 
 function DriftRow({ icon: Icon, label, sub, count, total, severity, positive }: {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  icon: any; label: string; sub: string; count: number; total: number;
+  icon: LucideIcon; label: string; sub: string; count: number; total: number;
   severity: 'ok' | 'info' | 'warn' | 'danger'; positive?: boolean;
 }) {
   const tones = {
