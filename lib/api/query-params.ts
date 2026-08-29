@@ -200,6 +200,38 @@ export function parsePageLimit(
 }
 
 /**
+ * Minimal, safe limit/offset parser for list endpoints that page with an
+ * explicit `offset` cursor instead of a `page` number (e.g. timeline,
+ * whatsapp messages, entity history).
+ *
+ * Guarantees:
+ * - `limit` is clamped to [1, maxLimit] (default cap 200) — prevents
+ *   `?limit=999999` table dumps / DoS.
+ * - `offset` is clamped to >= 0 — prevents `?offset=-5` producing an invalid
+ *   negative OFFSET (Postgres 500).
+ * - NaN/`"0"` limit / empty inputs fall back to sane defaults.
+ *
+ * Accepts either a URLSearchParams or a NextRequest.
+ */
+export function parseLimitOffset(
+  input: URLSearchParams | NextRequest,
+  opts: { defaultLimit?: number; maxLimit?: number } = {},
+): { limit: number; offset: number } {
+  const searchParams =
+    input instanceof URLSearchParams ? input : new URL(input.url).searchParams;
+  const defaultLimit = opts.defaultLimit ?? DEFAULT_LIMIT;
+  const maxLimit = opts.maxLimit ?? MAX_LIMIT;
+
+  const limitRaw = parseInt(searchParams.get('limit') ?? String(defaultLimit), 10);
+  const offsetRaw = parseInt(searchParams.get('offset') ?? '0', 10);
+
+  const limit = Math.min(Math.max(1, Number.isNaN(limitRaw) ? defaultLimit : limitRaw), maxLimit);
+  const offset = Math.max(0, Number.isNaN(offsetRaw) ? 0 : offsetRaw);
+
+  return { limit, offset };
+}
+
+/**
  * Parse all query parameters from a request.
  */
 export function parseQueryParams(req: NextRequest, config: QueryParamsConfig = {}): ParsedQueryParams {

@@ -11,6 +11,7 @@ import { requireAuth, can } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { activities, users, contacts } from '@/drizzle/schema';
 import { eq, and, desc, count } from 'drizzle-orm';
+import { parseLimitOffset } from '@/lib/api/query-params';
 
 /**
  * GET /api/tenant/contacts/[id]/timeline
@@ -29,8 +30,7 @@ export async function GET(
 
     const { id } = await params;
     const { searchParams } = new URL(request.url);
-    const limit = Math.min(200, Math.max(1, parseInt(searchParams.get('limit') || '50') || 50));
-    const offset = Math.max(0, parseInt(searchParams.get('offset') || '0') || 0);
+    const { limit, offset } = parseLimitOffset(searchParams, { defaultLimit: 50, maxLimit: 200 });
     const eventType = searchParams.get('event_type');
 
     // Build filters
