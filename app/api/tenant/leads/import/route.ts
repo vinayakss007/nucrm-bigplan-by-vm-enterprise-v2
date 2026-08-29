@@ -5,6 +5,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
+import { logError } from '@/lib/errors-server';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { importSchema } from '@/lib/api/schemas';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
@@ -363,7 +364,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[leads/import]', err);
+    await logError({ error: err, context: 'tenant/leads/import POST', requestMethod: 'POST' });
     return apiError(err);
   }
 });

@@ -80,7 +80,7 @@ export const GET = withApiRoute(async (req: NextRequest, { params }: { params: P
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[deals [id] GET]', err);
+    await logError({ error: err, context: 'tenant/deals/[id] GET', requestMethod: 'GET' });
     return apiError(err);
   }
 });
@@ -249,9 +249,9 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params:
           userId: ctx.userId,
           event: 'deal.stage_changed',
           data: { ...row, id: dealId, stage_from: prev.stageId, stage_to: updateData.stageId },
-        }).catch(err => console.error('[deals PATCH] deal.stage_changed automation failed:', err));
+        }).catch(err => { void logError({ error: err, context: 'tenant/deals/[id] PATCH stage_changed automation' }); });
       } catch (e) {
-        console.error('[deals PATCH] automation import failed:', e);
+        await logError({ error: e, context: 'tenant/deals/[id] PATCH automation import' });
       }
 
       // Check if 'won' stage - get stage name to compare
@@ -274,7 +274,7 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params:
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[deals [id] PATCH]', err);
+    await logError({ error: err, context: 'tenant/deals/[id] PATCH', requestMethod: 'PATCH' });
     return apiError(err);
   }
 });
@@ -350,7 +350,7 @@ export const DELETE = withApiRoute(async (req: NextRequest, { params }: { params
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[deals [id] DELETE]', err);
+    await logError({ error: err, context: 'tenant/deals/[id] DELETE', requestMethod: 'DELETE' });
     return apiError(err);
   }
 });
@@ -402,7 +402,7 @@ async function handleDealWon(ctx: any, dealId: string, row: any) {
         }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
       }
     } catch (e) {
-      console.error('[deal-won] Email failed:', e);
+      await logError({ error: e, context: 'tenant/deals/[id] deal-won email' });
     }
   }
 
@@ -418,7 +418,7 @@ async function handleDealWon(ctx: any, dealId: string, row: any) {
       metadata: { ...((row.metadata as Record<string, unknown>) || {}), won_at: new Date().toISOString() }
     })
     .where(eq(deals.id, dealId))
-    .catch(err => console.error('[deal-won] Failed to update metadata:', err));
+    .catch(err => { void logError({ error: err, context: 'tenant/deals/[id] deal-won metadata update' }); });
 
   // Trigger Automations
   try {
@@ -428,9 +428,9 @@ async function handleDealWon(ctx: any, dealId: string, row: any) {
       userId: ctx.userId,
       event: 'deal.won',
       data: { ...row, id: dealId },
-    }).catch(err => console.error('[deal-won] Automation evaluation failed:', err));
+    }).catch(err => { void logError({ error: err, context: 'tenant/deals/[id] deal-won automation eval' }); });
   } catch (e) {
-    console.error('[deal-won] Automation import failed:', e);
+    await logError({ error: e, context: 'tenant/deals/[id] deal-won automation import' });
   }
 }
 
