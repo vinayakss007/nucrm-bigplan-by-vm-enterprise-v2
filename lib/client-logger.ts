@@ -52,3 +52,29 @@ export function clientLogDebug(context: string, ...args: unknown[]): void {
     console.log(`[${context}]`, ...args);
   }
 }
+
+/**
+ * Non-fatal client warning (#1301). Used for recoverable/optional failures
+ * (e.g. "failed to load optional custom fields") that used to be bare
+ * `console.warn` calls left in production, cluttering end users' consoles.
+ *
+ * Records a Sentry breadcrumb (PII-scrubbed, useful for debugging without
+ * creating an issue) and mirrors to the console only in development, so devs
+ * keep local visibility while production stays quiet.
+ */
+export function clientLogWarn(
+  context: string,
+  message: string,
+  error?: unknown,
+): void {
+  Sentry.addBreadcrumb({
+    level: 'warning',
+    category: context,
+    message,
+    ...(error !== undefined ? { data: { error: String(error) } } : {}),
+  });
+
+  if (process.env.NODE_ENV === 'development') {
+    console.warn(`[${context}] ${message}`, error ?? '');
+  }
+}
