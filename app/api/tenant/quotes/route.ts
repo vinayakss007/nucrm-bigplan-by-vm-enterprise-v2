@@ -10,7 +10,7 @@ import { parsePageLimit } from '@/lib/api/query-params';
 import { sumLineItems, documentTotal, lineTotal } from '@/lib/money';
 import { db } from '@/drizzle/db';
 import { quotes, quoteLineItems } from '@/drizzle/schema';
-import { eq, and, desc, sql, count } from 'drizzle-orm';
+import { eq, and, desc, sql, count, isNull } from 'drizzle-orm';
 import { requireAuth, requireModule } from '@/lib/auth/middleware';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
     const dealId = searchParams.get('dealId');
     const { page, limit, offset } = parsePageLimit(searchParams);
 
-    const conditions: ReturnType<typeof eq>[] = [eq(quotes.tenantId, tenantId)];
+    const conditions = [eq(quotes.tenantId, tenantId), isNull(quotes.deletedAt)];
     if (status) conditions.push(eq(quotes.status, status));
     if (contactId) conditions.push(eq(quotes.contactId, contactId));
     if (dealId) conditions.push(eq(quotes.dealId, dealId));
@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
 
     const results = await db.select().from(quotes).where(whereClause).orderBy(desc(quotes.createdAt)).limit(limit).offset(offset);
 
-    const totalRes = await db.select({ count: count() }).from(quotes).where(eq(quotes.tenantId, tenantId));
+    const totalRes = await db.select({ count: count() }).from(quotes).where(and(eq(quotes.tenantId, tenantId), isNull(quotes.deletedAt)));
     const total = totalRes[0]?.count ?? 0;
 
     return NextResponse.json({
@@ -77,52 +77,86 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Title is required' }, { status: 400 });
     }
 
-    const countResult = await db.select({ count: sql<number>`count(*)` }).from(quotes).where(eq(quotes.tenantId, tenantId));
-    const quoteNumber = `QT-${String(Number(countResult[0]?.count ?? 0) + 1).padStart(5, '0')}`;
-
     const subtotal = items?.length ? sumLineItems(items) : 0;
     const totalAmount = documentTotal(subtotal, discount ?? 0, tax);
 
-    const quote = await db.transaction(async (tx) => {
-      const [q] = await tx.insert(quotes).values({
-        tenantId,
-        contactId: contactId || null,
-        dealId: null,
-        quoteNumber,
-        title,
-        status: status ?? 'draft',
-        subtotal: subtotal.toFixed(2),
-        discount: String(discount ?? 0),
-        tax: String(tax),
-        totalAmount: totalAmount.toFixed(2),
-        expiresAt: expiryDate ? new Date(expiryDate) : null,
-        notes,
-        terms,
-        createdBy: userId,
-      }).returning();
+    // #1611: Generate the quote number inside the transaction while holding a
+    // row lock on the tenant, deriving it from MAX(sequence) (not COUNT(*)).
+    // The old COUNT(*)+1 approach reused numbers after any delete, counted
+    // soft-deleted rows, and was not concurrency-safe. Retry on the unique
+    // constraint in case of a race despite the lock. Mirrors the invoice fix
+    // (#1462) in app/api/tenant/invoices/route.ts.
+    const MAX_RETRIES = 3;
+    let quote: typeof quotes.$inferSelect | undefined;
 
-      if (!q) throw new Error('Failed to create quote');
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      try {
+        quote = await db.transaction(async (tx) => {
+          // Serialize quote-number generation for this tenant.
+          await tx.execute(sql`SELECT id FROM tenants WHERE id = ${tenantId} FOR UPDATE`);
 
-      if (items?.length) {
-        const lineItems = items.map((item: { name?: string; description?: string | null; quantity?: number; unit_price?: number; product_id?: string | null; service_id?: string | null; item_type?: string | null; tax_amount?: number | null; discount_amount?: number | null; discount_percent?: number | null }, idx: number) => ({
-          tenantId,
-          quoteId: q.id,
-          productId: item.product_id ?? null,
-          serviceId: item.service_id ?? null,
-          itemType: item.item_type ?? (item.service_id ? 'service' : 'product'),
-          description: item.description ?? '',
-          quantity: String(item.quantity ?? 1),
-          unitPrice: String(item.unit_price ?? 0),
-          discountPercent: '0',
-          taxPercent: String(item.tax_amount ?? 0),
-          total: lineTotal(item.quantity ?? 1, item.unit_price ?? 0).toFixed(2),
-          sortOrder: idx,
-        } as typeof quoteLineItems.$inferInsert));
-        await tx.insert(quoteLineItems).values(lineItems as typeof quoteLineItems.$inferInsert[]);
+          const [maxRow] = await tx.select({
+            maxNum: sql<number>`COALESCE(MAX(
+              CASE WHEN ${quotes.quoteNumber} ~ '^QT-[0-9]+$'
+              THEN CAST(SUBSTRING(${quotes.quoteNumber} FROM 4) AS integer)
+              ELSE 0 END
+            ), 0)`
+          }).from(quotes).where(and(eq(quotes.tenantId, tenantId), isNull(quotes.deletedAt)));
+
+          const seq = ((maxRow?.maxNum as number) ?? 0) + 1;
+          const quoteNumber = `QT-${String(seq).padStart(5, '0')}`;
+
+          const [q] = await tx.insert(quotes).values({
+            tenantId,
+            contactId: contactId || null,
+            dealId: null,
+            quoteNumber,
+            title,
+            status: status ?? 'draft',
+            subtotal: subtotal.toFixed(2),
+            discount: String(discount ?? 0),
+            tax: String(tax),
+            totalAmount: totalAmount.toFixed(2),
+            expiresAt: expiryDate ? new Date(expiryDate) : null,
+            notes,
+            terms,
+            createdBy: userId,
+          }).returning();
+
+          if (!q) throw new Error('Failed to create quote');
+
+          if (items?.length) {
+            const lineItems = items.map((item: { name?: string; description?: string | null; quantity?: number; unit_price?: number; product_id?: string | null; service_id?: string | null; item_type?: string | null; tax_amount?: number | null; discount_amount?: number | null; discount_percent?: number | null }, idx: number) => ({
+              tenantId,
+              quoteId: q.id,
+              productId: item.product_id ?? null,
+              serviceId: item.service_id ?? null,
+              itemType: item.item_type ?? (item.service_id ? 'service' : 'product'),
+              description: item.description ?? '',
+              quantity: String(item.quantity ?? 1),
+              unitPrice: String(item.unit_price ?? 0),
+              discountPercent: '0',
+              taxPercent: String(item.tax_amount ?? 0),
+              total: lineTotal(item.quantity ?? 1, item.unit_price ?? 0).toFixed(2),
+              sortOrder: idx,
+            } as typeof quoteLineItems.$inferInsert));
+            await tx.insert(quoteLineItems).values(lineItems as typeof quoteLineItems.$inferInsert[]);
+          }
+
+          return q;
+        });
+        break; // success
+      } catch (err: unknown) {
+        const isUniqueViolation = err instanceof Error &&
+          ((err as { code?: string }).code === '23505' || err.message.includes('unique'));
+        if (isUniqueViolation && attempt < MAX_RETRIES - 1) continue;
+        throw err;
       }
+    }
 
-      return q;
-    });
+    if (!quote) {
+      return NextResponse.json({ error: 'Failed to create quote' }, { status: 500 });
+    }
 
     return NextResponse.json({ quote }, { status: 201 });
   } catch (error) {

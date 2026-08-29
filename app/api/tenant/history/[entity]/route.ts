@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
 import { getEntityHistory, getEntitySnapshots, type EntityType } from '@/lib/history';
+import { parseLimitOffset } from '@/lib/api/query-params';
 
 const VALID_ENTITIES = ['contact', 'company', 'deal', 'lead', 'task'];
 
@@ -26,7 +27,7 @@ export async function GET(
     const { searchParams } = new URL(request.url);
     const entityId = searchParams.get('entity_id');
     const type = searchParams.get('type') || 'changes';
-    const limit = Math.min(200, Math.max(1, parseInt(searchParams.get('limit') || '50') || 50));
+    const { limit } = parseLimitOffset(searchParams, { defaultLimit: 50, maxLimit: 200 });
 
     if (!entityId) {
       return NextResponse.json({ error: 'entity_id required' }, { status: 400 });

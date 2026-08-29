@@ -10,14 +10,16 @@ import { leadAssignments, leads, users } from '@/drizzle/schema';
 import { eq, and, desc } from 'drizzle-orm';
 import { aliasedTable } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
+import { parseLimitOffset } from '@/lib/api/query-params';
 
 export async function GET(request: NextRequest) {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
     
-    const leadId = new URL(request.url).searchParams.get('lead_id');
-    const limit = Math.min(200, Math.max(1, parseInt(new URL(request.url).searchParams.get('limit') || '50') || 50));
+    const { searchParams } = new URL(request.url);
+    const leadId = searchParams.get('lead_id');
+    const { limit } = parseLimitOffset(searchParams, { defaultLimit: 50, maxLimit: 200 });
 
     const assignedToUser = aliasedTable(users, 'assigned_to_user');
     

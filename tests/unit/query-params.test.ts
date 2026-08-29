@@ -3,7 +3,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { NextRequest } from 'next/server';
-import { parseQueryParams, parsePageLimit } from '@/lib/api/query-params';
+import { parseQueryParams, parsePageLimit, parseLimitOffset } from '@/lib/api/query-params';
 
 function makeRequest(queryString: string): NextRequest {
   return new NextRequest(`http://localhost/api/test?${queryString}`);
@@ -266,5 +266,51 @@ describe('parsePageLimit', () => {
   it('accepts a NextRequest as input', () => {
     const req = new NextRequest('http://localhost/api/test?page=2&limit=25');
     expect(parsePageLimit(req)).toEqual({ page: 2, limit: 25, offset: 25 });
+  });
+});
+
+
+describe('parseLimitOffset', () => {
+  const sp = (qs: string) => new URLSearchParams(qs);
+
+  it('parses valid limit/offset', () => {
+    expect(parseLimitOffset(sp('limit=20&offset=40'))).toEqual({ limit: 20, offset: 40 });
+  });
+
+  it('applies defaults when params are absent', () => {
+    expect(parseLimitOffset(sp(''))).toEqual({ limit: 50, offset: 0 });
+  });
+
+  it('honours a custom defaultLimit', () => {
+    expect(parseLimitOffset(sp(''), { defaultLimit: 100 })).toEqual({ limit: 100, offset: 0 });
+  });
+
+  it('caps limit at maxLimit (default 200) — prevents ?limit=999999 table dumps', () => {
+    expect(parseLimitOffset(sp('limit=999999')).limit).toBe(200);
+  });
+
+  it('honours a custom maxLimit', () => {
+    expect(parseLimitOffset(sp('limit=5000'), { maxLimit: 100 }).limit).toBe(100);
+  });
+
+  it('clamps limit=0 up to 1', () => {
+    expect(parseLimitOffset(sp('limit=0')).limit).toBe(1);
+  });
+
+  it('clamps negative limit up to 1', () => {
+    expect(parseLimitOffset(sp('limit=-10')).limit).toBe(1);
+  });
+
+  it('clamps negative offset up to 0 (avoids invalid negative OFFSET / Postgres 500)', () => {
+    expect(parseLimitOffset(sp('offset=-5')).offset).toBe(0);
+  });
+
+  it('falls back to defaults for non-numeric input', () => {
+    expect(parseLimitOffset(sp('limit=xyz&offset=abc'))).toEqual({ limit: 50, offset: 0 });
+  });
+
+  it('accepts a NextRequest as input', () => {
+    const req = new NextRequest('http://localhost/api/test?limit=25&offset=50');
+    expect(parseLimitOffset(req)).toEqual({ limit: 25, offset: 50 });
   });
 });
