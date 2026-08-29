@@ -619,6 +619,10 @@ npm run test:coverage       # With coverage report
 npm run test:watch          # Watch mode
 ```
 
+Latest full end-to-end run against a real database (migrate → seed → build →
+route/DB exercise → full suite: 5610 passed / 0 failed) is documented in
+[`docs/E2E-VERIFICATION-2026-08-29.md`](docs/E2E-VERIFICATION-2026-08-29.md).
+
 ---
 
 ## Scripts (~25 scripts)
