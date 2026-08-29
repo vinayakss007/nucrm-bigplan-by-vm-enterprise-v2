@@ -39,23 +39,30 @@ export default function DocumentsPage() {
   const [dragOver, setDragOver] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  const loadDocuments = useCallback(async () => {
+  const loadDocuments = useCallback(async (signal?: AbortSignal) => {
     try {
       const params = new URLSearchParams();
       if (currentFolder) params.set('folderId', currentFolder);
-      const res = await fetch(`/api/tenant/documents?${params}`);
+      const res = await fetch(`/api/tenant/documents?${params}`, { signal });
       if (res.ok) {
         const { data } = await res.json();
+        if (signal?.aborted) return;
         setDocuments(data.documents ?? []);
         setFolders(data.folders ?? []);
       }
-    } catch {
+    } catch (e) {
+      if ((e as Error)?.name === 'AbortError') return;
       // Failed to load documents
     }
+    if (signal?.aborted) return;
     setLoading(false);
   }, [currentFolder]);
 
-  useEffect(() => { loadDocuments(); }, [loadDocuments]);
+  useEffect(() => {
+    const controller = new AbortController();
+    loadDocuments(controller.signal);
+    return () => controller.abort();
+  }, [loadDocuments]);
 
   function navigateToFolder(folder: Folder) {
     setCurrentFolder(folder.id);

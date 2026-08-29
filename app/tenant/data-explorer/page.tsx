@@ -90,7 +90,7 @@ export default function DataExplorerPage() {
 
   const columns = COLUMNS[entityType];
 
-  const handleSearch = useCallback(async () => {
+  const handleSearch = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     try {
       const params = new URLSearchParams({
@@ -102,19 +102,24 @@ export default function DataExplorerPage() {
       });
       if (query.trim()) params.set('q', query.trim());
 
-      const res = await fetch(`/api/tenant/data-explorer?${params}`);
+      const res = await fetch(`/api/tenant/data-explorer?${params}`, { signal });
       if (!res.ok) throw new Error('Search failed');
       const data = await res.json();
+      if (signal?.aborted) return;
       setResults(data);
-    } catch {
+    } catch (e) {
+      if ((e as Error)?.name === 'AbortError') return;
       toast.error('Search failed');
     } finally {
+      if (signal?.aborted) return;
       setLoading(false);
     }
   }, [query, entityType, page, sort, order]);
 
   useEffect(() => {
-    handleSearch();
+    const controller = new AbortController();
+    handleSearch(controller.signal);
+    return () => controller.abort();
   }, [handleSearch]);
 
   useEffect(() => {
@@ -247,7 +252,7 @@ export default function DataExplorerPage() {
           )}
         </div>
         <button
-          onClick={handleSearch}
+          onClick={() => handleSearch()}
           disabled={loading}
           className="px-4 py-2 bg-violet-600 text-white rounded-xl text-sm font-semibold hover:bg-violet-700 transition-colors disabled:opacity-50 flex items-center gap-1.5"
         >

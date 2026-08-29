@@ -31,20 +31,27 @@ export default function PlanOfferingsPanel({ planId, planName, onClose }: PlanOf
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal?: AbortSignal) => {
     try {
-      const res = await fetch(`/api/superadmin/plans/${planId}/offerings`);
+      const res = await fetch(`/api/superadmin/plans/${planId}/offerings`, { signal });
       if (!res.ok) throw new Error('Failed to load');
       const data = await res.json();
+      if (signal?.aborted) return;
       setOfferings(data.offerings || []);
-    } catch {
+    } catch (e) {
+      if ((e as Error)?.name === 'AbortError') return;
       toast.error('Failed to load module offerings');
     } finally {
+      if (signal?.aborted) return;
       setLoading(false);
     }
   }, [planId]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    const controller = new AbortController();
+    load(controller.signal);
+    return () => controller.abort();
+  }, [load]);
 
   const toggleModule = (moduleId: string) => {
     setOfferings(prev => prev.map(o =>

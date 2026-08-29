@@ -24,16 +24,28 @@ export default function KBArticlePage() {
   const [voted, setVoted] = useState<'helpful' | 'not_helpful' | null>(null);
   const [showEdit, setShowEdit] = useState(false);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal?: AbortSignal) => {
     try {
-      const res = await fetch(`/api/tenant/kb/articles/${params.id}`);
+      const res = await fetch(`/api/tenant/kb/articles/${params.id}`, { signal });
+      if (signal?.aborted) return;
       if (!res.ok) { router.push('/tenant/kb'); return; }
       const d = await res.json();
+      if (signal?.aborted) return;
       setArticle(d.data as KBArticle);
-    } catch (err) { logError({ error: err, context: "catch:[context]" }); } finally { setLoading(false); }
+    } catch (err) {
+      if ((err as Error)?.name === 'AbortError') return;
+      logError({ error: err, context: "catch:[context]" });
+    } finally {
+      if (signal?.aborted) return;
+      setLoading(false);
+    }
   }, [params.id, router]);
 
-  useEffect(() => { load(); }, [params.id, load]);
+  useEffect(() => {
+    const controller = new AbortController();
+    load(controller.signal);
+    return () => controller.abort();
+  }, [params.id, load]);
 
   const vote = async (action: 'helpful' | 'not_helpful') => {
     if (voted) return;

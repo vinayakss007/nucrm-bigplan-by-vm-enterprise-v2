@@ -54,19 +54,25 @@ export default function QuoteDetailPage() {
   const [showEmailDialog, setShowEmailDialog] = useState(false);
 
   useEffect(() => {
+    const controller = new AbortController();
+    const { signal } = controller;
     const fetchQuote = async () => {
       try {
-        const res = await fetch(`/api/tenant/quotes/${id}`);
+        const res = await fetch(`/api/tenant/quotes/${id}`, { signal });
         if (!res.ok) throw new Error('Not found');
         const data = await res.json();
+        if (signal.aborted) return;
         setQuote(data.data);
-      } catch {
+      } catch (e) {
+        if ((e as Error)?.name === 'AbortError') return;
         toast.error('Failed to load quote');
       } finally {
+        if (signal.aborted) return;
         setLoading(false);
       }
     };
     fetchQuote();
+    return () => controller.abort();
   }, [id]);
 
   const handleEdit = () => {

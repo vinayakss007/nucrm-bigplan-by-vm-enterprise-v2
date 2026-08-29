@@ -26,19 +26,25 @@ export default function IndustriesPage() {
   const [applying, setApplying] = useState<string | null>(null);
 
   useEffect(() => {
+    const controller = new AbortController();
+    const { signal } = controller;
     async function fetchTemplates() {
       try {
-        const res = await fetch('/api/tenant/industry-templates');
+        const res = await fetch('/api/tenant/industry-templates', { signal });
         if (!res.ok) throw new Error('Failed to load templates');
         const data = await res.json();
+        if (signal.aborted) return;
         setTemplates(data.data ?? []);
-      } catch {
+      } catch (e) {
+        if ((e as Error)?.name === 'AbortError') return;
         toast.error('Could not load industry templates');
       } finally {
+        if (signal.aborted) return;
         setLoading(false);
       }
     }
     fetchTemplates();
+    return () => controller.abort();
   }, []);
 
   const handleApply = async (templateId: string) => {

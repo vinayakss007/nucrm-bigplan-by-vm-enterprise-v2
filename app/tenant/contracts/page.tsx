@@ -51,24 +51,38 @@ function ContractsPageInner() {
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({ contactId: initialContactId, title: '', contractType: 'service', startDate: '', endDate: '', totalValue: '', terms: '', notes: '' });
 
-  useEffect(() => { fetchContracts(); fetchContacts(); }, []);
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchContracts(controller.signal);
+    fetchContacts(controller.signal);
+    return () => controller.abort();
+  }, []);
 
-  const fetchContacts = async () => {
+  const fetchContacts = async (signal?: AbortSignal) => {
     try {
-      const res = await fetch('/api/tenant/contacts');
+      const res = await fetch('/api/tenant/contacts', { signal });
       const data = await res.json();
+      if (signal?.aborted) return;
       setContacts(data.contacts || []);
-    } catch { toast.error('Failed to load contacts'); }
+    } catch (e) {
+      if ((e as Error)?.name === 'AbortError') return;
+      toast.error('Failed to load contacts');
+    }
   };
 
-  const fetchContracts = async () => {
+  const fetchContracts = async (signal?: AbortSignal) => {
     try {
-      const res = await fetch('/api/tenant/contracts');
+      const res = await fetch('/api/tenant/contracts', { signal });
       const data = await res.json();
+      if (signal?.aborted) return;
       setContracts(data.contracts || []);
-    } catch {
+    } catch (e) {
+      if ((e as Error)?.name === 'AbortError') return;
       toast.error('Failed to load contracts');
-    } finally { setLoading(false); }
+    } finally {
+      if (signal?.aborted) return;
+      setLoading(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {

@@ -91,19 +91,27 @@ export default function ApprovalsPage() {
     return p.toString();
   }, [filter]);
 
-  function load() {
+  function load(signal?: AbortSignal) {
     setLoading(true);
     setError(null);
-    fetch(`/api/tenant/approvals?${qs}`, { cache: 'no-store' })
+    fetch(`/api/tenant/approvals?${qs}`, { cache: 'no-store', signal })
       .then(async r => {
         if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? `HTTP ${r.status}`);
         return r.json();
       })
-      .then(setData)
-      .catch(e => setError(e.message || 'Failed to load'))
-      .finally(() => setLoading(false));
+      .then(d => { if (signal?.aborted) return; setData(d); })
+      .catch(e => {
+        if ((e as Error)?.name === 'AbortError') return;
+        setError(e.message || 'Failed to load');
+      })
+      .finally(() => { if (signal?.aborted) return; setLoading(false); });
   }
-  useEffect(load, [qs]);
+  useEffect(() => {
+    const controller = new AbortController();
+    load(controller.signal);
+    return () => controller.abort();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [qs]);
 
   async function decide(row: Row, action: 'approve' | 'reject', reason?: string) {
     setBusyId(row.id);
@@ -141,7 +149,7 @@ export default function ApprovalsPage() {
           </p>
         </div>
         <button
-          onClick={load}
+          onClick={() => load()}
           className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border bg-card hover:bg-accent text-sm transition-colors"
         >
           <RefreshCw className={cn('w-3.5 h-3.5', loading && 'animate-spin')} />

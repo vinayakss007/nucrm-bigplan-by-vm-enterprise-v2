@@ -41,16 +41,21 @@ export default function HealthPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch('/api/health')
+    const controller = new AbortController();
+    const { signal } = controller;
+    fetch('/api/health', { signal })
       .then(r => r.json())
       .then(d => {
+        if (signal.aborted) return;
         setHealth(d);
         setLoading(false);
       })
       .catch(err => {
+        if ((err as Error)?.name === 'AbortError') return;
         clientLogError('health:fetch', err);
         setLoading(false);
       });
+    return () => controller.abort();
   }, []);
 
   const refresh = () => {

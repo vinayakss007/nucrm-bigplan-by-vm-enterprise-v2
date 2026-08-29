@@ -25,15 +25,18 @@ export default function ContactTimeline({ contactId }: { contactId: string }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const controller = new AbortController();
+    const { signal } = controller;
     async function load() {
       try {
         const [actRes, callRes, meetRes, taskRes, dealRes] = await Promise.all([
-          fetch(`/api/tenant/activities?contact_id=${contactId}`).then(r => r.ok ? r.json() : { data: [] }),
-          fetch(`/api/tenant/calls?contact_id=${contactId}`).then(r => r.ok ? r.json() : { data: [] }),
-          fetch(`/api/tenant/meetings?contact_id=${contactId}`).then(r => r.ok ? r.json() : { data: [] }),
-          fetch(`/api/tenant/tasks?contact_id=${contactId}`).then(r => r.ok ? r.json() : { data: [] }),
-          fetch(`/api/tenant/deals?contact_id=${contactId}`).then(r => r.ok ? r.json() : { data: [] }),
+          fetch(`/api/tenant/activities?contact_id=${contactId}`, { signal }).then(r => r.ok ? r.json() : { data: [] }),
+          fetch(`/api/tenant/calls?contact_id=${contactId}`, { signal }).then(r => r.ok ? r.json() : { data: [] }),
+          fetch(`/api/tenant/meetings?contact_id=${contactId}`, { signal }).then(r => r.ok ? r.json() : { data: [] }),
+          fetch(`/api/tenant/tasks?contact_id=${contactId}`, { signal }).then(r => r.ok ? r.json() : { data: [] }),
+          fetch(`/api/tenant/deals?contact_id=${contactId}`, { signal }).then(r => r.ok ? r.json() : { data: [] }),
         ]);
+        if (signal.aborted) return;
 
         const activities: TimelineEntry[] = (actRes.data ?? actRes.activities ?? []).map((a: Record<string, unknown>) => ({
           id: a.id as string, type: 'activity' as const,
@@ -76,13 +79,16 @@ export default function ContactTimeline({ contactId }: { contactId: string }) {
           .slice(0, 50);
 
         setEntries(merged);
-      } catch {
+      } catch (e) {
+        if ((e as Error)?.name === 'AbortError') return;
         // non-critical
       } finally {
+        if (signal.aborted) return;
         setLoading(false);
       }
     }
     load();
+    return () => controller.abort();
   }, [contactId]);
 
   const typeConfig = {

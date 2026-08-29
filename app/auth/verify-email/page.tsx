@@ -16,13 +16,21 @@ function VerifyEmailContent() {
 
   useEffect(() => {
     if (!token) { setStatus('error'); setMsg('No verification token provided.'); return; }
-    fetch('/api/auth/verify-email', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({token}) })
+    const controller = new AbortController();
+    const { signal } = controller;
+    let redirectTimer: ReturnType<typeof setTimeout> | undefined;
+    fetch('/api/auth/verify-email', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({token}), signal })
       .then(r => r.json())
       .then(d => {
-        if (d.ok) { setStatus('success'); setMsg(d.email); setTimeout(() => { window.location.href = '/tenant/dashboard'; }, 2500); }
+        if (signal.aborted) return;
+        if (d.ok) { setStatus('success'); setMsg(d.email); redirectTimer = setTimeout(() => { window.location.href = '/tenant/dashboard'; }, 2500); }
         else { setStatus('error'); setMsg(d.error); }
       })
-      .catch(() => { setStatus('error'); setMsg('Verification failed. Please try again.'); });
+      .catch((e) => {
+        if ((e as Error)?.name === 'AbortError') return;
+        setStatus('error'); setMsg('Verification failed. Please try again.');
+      });
+    return () => { controller.abort(); if (redirectTimer) clearTimeout(redirectTimer); };
   }, [token]);
 
   return (

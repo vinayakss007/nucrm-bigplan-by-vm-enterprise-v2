@@ -60,11 +60,13 @@ export default function DealRelatedPanel({ dealId }: { dealId: string }) {
 
   useEffect(() => {
     let cancelled = false;
+    const controller = new AbortController();
+    const { signal } = controller;
 
     async function load() {
       const getJson = async (url: string): Promise<Record<string, unknown>> => {
         try {
-          const r = await fetch(url);
+          const r = await fetch(url, { signal });
           if (!r.ok) return {};
           return (await r.json()) as Record<string, unknown>;
         } catch {
@@ -81,7 +83,7 @@ export default function DealRelatedPanel({ dealId }: { dealId: string }) {
         getJson('/api/tenant/invoices?limit=100'),
       ]);
 
-      if (cancelled) return;
+      if (cancelled || signal.aborted) return;
 
       setFollowUps(Array.isArray(fuRes.data) ? (fuRes.data as FollowUpItem[]) : []);
       setQuotes(Array.isArray(qRes.quotes) ? (qRes.quotes as QuoteItem[]) : []);
@@ -96,6 +98,7 @@ export default function DealRelatedPanel({ dealId }: { dealId: string }) {
     load();
     return () => {
       cancelled = true;
+      controller.abort();
     };
   }, [dealId]);
 

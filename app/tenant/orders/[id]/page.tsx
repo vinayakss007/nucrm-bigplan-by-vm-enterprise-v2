@@ -62,19 +62,25 @@ export default function OrderDetailPage() {
   const [form, setForm] = useState<Partial<Order>>({});
 
   useEffect(() => {
+    const controller = new AbortController();
+    const { signal } = controller;
     const fetchOrder = async () => {
       try {
-        const res = await fetch(`/api/tenant/orders/${id}`);
+        const res = await fetch(`/api/tenant/orders/${id}`, { signal });
         if (!res.ok) throw new Error('Not found');
         const data = await res.json();
+        if (signal.aborted) return;
         setOrder(data.data);
-      } catch {
+      } catch (e) {
+        if ((e as Error)?.name === 'AbortError') return;
         toast.error('Failed to load order');
       } finally {
+        if (signal.aborted) return;
         setLoading(false);
       }
     };
     fetchOrder();
+    return () => controller.abort();
   }, [id]);
 
   const handleEdit = () => {

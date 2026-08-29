@@ -26,19 +26,28 @@ export default function IntegrationsPage() {
   const [activeTab, setActiveTab] = useState<'installed' | 'available'>('installed');
   const [showAdd, setShowAdd] = useState<string | null>(null);
 
-  const load = async () => {
+  const load = async (signal?: AbortSignal) => {
     try {
       const [iRes, pRes] = await Promise.all([
-        fetch('/api/tenant/plugin-engine').then(r => r.json()),
-        fetch('/api/tenant/plugin-engine?type=providers').then(r => r.json()),
+        fetch('/api/tenant/plugin-engine', { signal }).then(r => r.json()),
+        fetch('/api/tenant/plugin-engine?type=providers', { signal }).then(r => r.json()),
       ]);
+      if (signal?.aborted) return;
       setInstances(iRes.data || []);
       setProviders(pRes.data || []);
-    } catch { toast.error('Failed to load integrations'); }
+    } catch (e) {
+      if ((e as Error)?.name === 'AbortError') return;
+      toast.error('Failed to load integrations');
+    }
+    if (signal?.aborted) return;
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    const controller = new AbortController();
+    load(controller.signal);
+    return () => controller.abort();
+  }, []);
 
   const removeIntegration = async (id: string) => {
     await confirmThen('Remove this integration?', async () => {

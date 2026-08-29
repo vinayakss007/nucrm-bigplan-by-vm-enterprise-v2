@@ -129,10 +129,13 @@ export default function LeadDetailClient({ lead, activities, relatedContacts, te
 
   // Fetch pipelines for convert dialog
   useEffect(() => {
-    fetch('/api/tenant/pipelines')
+    const controller = new AbortController();
+    const { signal } = controller;
+    fetch('/api/tenant/pipelines', { signal })
       .then(r => r.ok ? r.json() : { data: [] })
-      .then(d => setPipelinesData(d.data ?? d.pipelines ?? d ?? []))
+      .then(d => { if (signal.aborted) return; setPipelinesData(d.data ?? d.pipelines ?? d ?? []); })
       .catch(() => {});
+    return () => controller.abort();
   }, []);
 
   const submitConvert = async () => {

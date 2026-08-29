@@ -62,23 +62,39 @@ function QuotesPageInner() {
     discount: '0', tax: '0',
   });
 
-  useEffect(() => { fetchQuotes(); fetchContacts(); }, []);
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchQuotes(controller.signal);
+    fetchContacts(controller.signal);
+    return () => controller.abort();
+  }, []);
 
-  const fetchContacts = async () => {
+  const fetchContacts = async (signal?: AbortSignal) => {
     try {
-      const res = await fetch('/api/tenant/contacts');
+      const res = await fetch('/api/tenant/contacts', { signal });
       const data = await res.json();
+      if (signal?.aborted) return;
       setContacts(data.contacts || []);
-    } catch { toast.error('Failed to load contacts'); }
+    } catch (e) {
+      if ((e as Error)?.name === 'AbortError') return;
+      toast.error('Failed to load contacts');
+    }
   };
 
-  const fetchQuotes = async () => {
+  const fetchQuotes = async (signal?: AbortSignal) => {
     try {
-      const res = await fetch('/api/tenant/quotes');
+      const res = await fetch('/api/tenant/quotes', { signal });
       const data = await res.json();
+      if (signal?.aborted) return;
       setQuotes(data.quotes || []);
-    } catch { toast.error('Failed to load quotes'); }
-    finally { setLoading(false); }
+    } catch (e) {
+      if ((e as Error)?.name === 'AbortError') return;
+      toast.error('Failed to load quotes');
+    }
+    finally {
+      if (signal?.aborted) return;
+      setLoading(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {

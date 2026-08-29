@@ -28,21 +28,28 @@ export default function EmailsPage() {
   const [form, setForm] = useState({ to: '', subject: '', body: '' });
   const [sending, setSending] = useState(false);
 
-  const fetchEmails = useCallback(async () => {
+  const fetchEmails = useCallback(async (signal?: AbortSignal) => {
     try {
-      const res = await fetch('/api/tenant/email/tracking');
+      const res = await fetch('/api/tenant/email/tracking', { signal });
       if (!res.ok) throw new Error('Failed to fetch');
       const data = await res.json();
+      if (signal?.aborted) return;
       setEmails(data.data ?? data.emails ?? data ?? []);
-    } catch {
+    } catch (e) {
+      if ((e as Error)?.name === 'AbortError') return;
       // tracking endpoint may not exist yet
       setEmails([]);
     } finally {
+      if (signal?.aborted) return;
       setLoading(false);
     }
   }, []);
 
-  useEffect(() => { fetchEmails(); }, [fetchEmails]);
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchEmails(controller.signal);
+    return () => controller.abort();
+  }, [fetchEmails]);
 
   const handleSend = async () => {
     if (!form.to.trim() || !form.subject.trim()) { toast.error('To and Subject required'); return; }

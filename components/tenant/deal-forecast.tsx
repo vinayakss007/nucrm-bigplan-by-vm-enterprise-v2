@@ -31,11 +31,12 @@ export default function DealForecast({ dealId }: { dealId: string }) {
     confidence_level: 'medium',
   });
 
-  const fetchForecast = useCallback(async () => {
+  const fetchForecast = useCallback(async (signal?: AbortSignal) => {
     try {
-      const res = await fetch(`/api/tenant/deals/${dealId}/forecast`);
+      const res = await fetch(`/api/tenant/deals/${dealId}/forecast`, { signal });
       if (!res.ok) return;
       const data = await res.json();
+      if (signal?.aborted) return;
       const f = data.data;
       if (f) {
         setForecast(f);
@@ -46,14 +47,20 @@ export default function DealForecast({ dealId }: { dealId: string }) {
           confidence_level: f.confidence_level || 'medium',
         });
       }
-    } catch {
+    } catch (e) {
+      if ((e as Error)?.name === 'AbortError') return;
       // non-critical
     } finally {
+      if (signal?.aborted) return;
       setLoading(false);
     }
   }, [dealId]);
 
-  useEffect(() => { fetchForecast(); }, [fetchForecast]);
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchForecast(controller.signal);
+    return () => controller.abort();
+  }, [fetchForecast]);
 
   const handleSave = async () => {
     try {

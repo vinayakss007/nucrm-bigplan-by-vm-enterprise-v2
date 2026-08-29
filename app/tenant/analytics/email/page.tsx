@@ -30,12 +30,13 @@ export default function EmailAnalyticsPage() {
   const [data, setData] = useState<EmailTrackingData | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const load = async () => {
+  const load = async (signal?: AbortSignal) => {
     setLoading(true);
     try {
-      const res = await fetch('/api/tenant/email/track');
+      const res = await fetch('/api/tenant/email/track', { signal });
       if (res.ok) {
         const d = await res.json();
+        if (signal?.aborted) return;
         const raw = d.data ?? d;
         setData({
           totalTracked: raw.totalTracked ?? raw.total ?? 0,
@@ -46,12 +47,20 @@ export default function EmailAnalyticsPage() {
           events: raw.events ?? [],
         });
       }
+    } catch (e) {
+      if ((e as Error)?.name === 'AbortError') return;
+      throw e;
     } finally {
+      if (signal?.aborted) return;
       setLoading(false);
     }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    const controller = new AbortController();
+    load(controller.signal);
+    return () => controller.abort();
+  }, []);
 
   if (loading) {
     return (

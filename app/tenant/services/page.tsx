@@ -77,39 +77,49 @@ export default function ServicesPage() {
   });
 
   useEffect(() => {
-    fetchServices();
-    fetchContacts();
-    fetchCompanies();
+    const controller = new AbortController();
+    const { signal } = controller;
+    fetchServices(signal);
+    fetchContacts(signal);
+    fetchCompanies(signal);
+    return () => controller.abort();
   }, []);
 
-  const fetchServices = async () => {
+  const fetchServices = async (signal?: AbortSignal) => {
     try {
-      const res = await fetch('/api/tenant/services');
+      const res = await fetch('/api/tenant/services', { signal });
       const data = await res.json();
+      if (signal?.aborted) return;
       setServices(data.services || []);
-    } catch {
+    } catch (e) {
+      if ((e as Error)?.name === 'AbortError') return;
       // Failed to load services
     } finally {
+      if (signal?.aborted) return;
       setLoading(false);
     }
   };
 
-  const fetchContacts = async () => {
+  const fetchContacts = async (signal?: AbortSignal) => {
     try {
-      const res = await fetch('/api/tenant/contacts?limit=500');
+      const res = await fetch('/api/tenant/contacts?limit=500', { signal });
       const data = await res.json();
+      if (signal?.aborted) return;
       setContacts(data.data || []);
-    } catch {
+    } catch (e) {
+      if ((e as Error)?.name === 'AbortError') return;
       // Failed to load contacts
     }
   };
 
-  const fetchCompanies = async () => {
+  const fetchCompanies = async (signal?: AbortSignal) => {
     try {
-      const res = await fetch('/api/tenant/companies?limit=500');
+      const res = await fetch('/api/tenant/companies?limit=500', { signal });
       const data = await res.json();
+      if (signal?.aborted) return;
       setCompanies(data.data || []);
-    } catch {
+    } catch (e) {
+      if ((e as Error)?.name === 'AbortError') return;
       // Failed to load companies
     }
   };

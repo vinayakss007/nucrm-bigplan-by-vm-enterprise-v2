@@ -52,19 +52,25 @@ export default function SubscriptionDetailPage() {
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
 
   useEffect(() => {
+    const controller = new AbortController();
+    const { signal } = controller;
     const fetchSubscription = async () => {
       try {
-        const res = await fetch(`/api/tenant/subscriptions/${id}`);
+        const res = await fetch(`/api/tenant/subscriptions/${id}`, { signal });
         if (!res.ok) throw new Error('Not found');
         const data = await res.json();
+        if (signal.aborted) return;
         setSubscription(data.data);
-      } catch {
+      } catch (e) {
+        if ((e as Error)?.name === 'AbortError') return;
         toast.error('Failed to load subscription');
       } finally {
+        if (signal.aborted) return;
         setLoading(false);
       }
     };
     fetchSubscription();
+    return () => controller.abort();
   }, [id]);
 
   const handleEdit = () => {

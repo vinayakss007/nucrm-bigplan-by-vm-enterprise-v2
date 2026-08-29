@@ -24,14 +24,21 @@ function AcceptInviteContent() {
 
   useEffect(() => {
     if (!token) { setError('Invalid invitation link'); setLoading(false); return; }
+    const controller = new AbortController();
+    const { signal } = controller;
     // Fetch invite details
-    fetch(`/api/auth/invite-details?token=${token}`)
+    fetch(`/api/auth/invite-details?token=${token}`, { signal })
       .then(r => r.json())
       .then(d => {
+        if (signal.aborted) return;
         if (d.error) { setError(d.error); } else { setInvitation(d); setIsLoggedIn(d.isLoggedIn); }
         setLoading(false);
       })
-      .catch(() => { setError('Failed to load invitation'); setLoading(false); });
+      .catch((e) => {
+        if ((e as Error)?.name === 'AbortError') return;
+        setError('Failed to load invitation'); setLoading(false);
+      });
+    return () => controller.abort();
   }, [token, router]);
 
   const accept = async (e: React.FormEvent) => {

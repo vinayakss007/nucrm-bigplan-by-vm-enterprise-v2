@@ -91,20 +91,28 @@ function SearchPageContent() {
   const inputRef = useRef<HTMLInputElement>(null);
   const timerRef = useRef<NodeJS.Timeout | undefined>(undefined);
 
-  const search = useCallback(async (q: string, type = activeType) => {
+  const search = useCallback(async (q: string, type = activeType, signal?: AbortSignal) => {
     if (!q.trim()) { setResults(null); return; }
     setLoading(true);
     const params = new URLSearchParams({ q, type, limit: '12' });
-    const res = await fetch('/api/tenant/search?' + params);
-    const data = await res.json();
-    setResults(data);
-    setLoading(false);
+    try {
+      const res = await fetch('/api/tenant/search?' + params, { signal });
+      const data = await res.json();
+      if (signal?.aborted) return;
+      setResults(data);
+      setLoading(false);
+    } catch (e) {
+      if ((e as Error)?.name === 'AbortError') return;
+      throw e;
+    }
   }, [activeType]);
 
   useEffect(() => {
+    const controller = new AbortController();
     const q = searchParams.get('q');
-    if (q) { setQuery(q); search(q); }
+    if (q) { setQuery(q); search(q, undefined, controller.signal); }
     inputRef.current?.focus();
+    return () => controller.abort();
   }, [searchParams, search]);
 
   const handleInput = (val: string) => {

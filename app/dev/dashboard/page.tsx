@@ -78,38 +78,45 @@ export default function DevelopmentDashboard() {
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [activeTab, setActiveTab] = useState<'overview' | 'requests' | 'queries' | 'errors'>('overview');
 
-  const fetchData = async () => {
+  const fetchData = async (signal?: AbortSignal) => {
     try {
-      const res = await fetch('/api/dev/dashboard');
+      const res = await fetch('/api/dev/dashboard', { signal });
       const jsonData = await res.json();
+      if (signal?.aborted) return;
       setData(jsonData);
 
-      const logsRes = await fetch('/api/dev/logs?limit=50');
+      const logsRes = await fetch('/api/dev/logs?limit=50', { signal });
       const logsData = await logsRes.json();
+      if (signal?.aborted) return;
       setRequests(logsData.requests || []);
 
-      const queriesRes = await fetch('/api/dev/queries?limit=50&slow=true');
+      const queriesRes = await fetch('/api/dev/queries?limit=50&slow=true', { signal });
       const queriesData = await queriesRes.json();
+      if (signal?.aborted) return;
       setQueries(queriesData.queries || []);
 
-      const errorsRes = await fetch('/api/dev/errors?limit=20');
+      const errorsRes = await fetch('/api/dev/errors?limit=20', { signal });
       const errorsData = await errorsRes.json();
+      if (signal?.aborted) return;
       setErrors(errorsData.errors || []);
 
       setLoading(false);
     } catch (error) {
+      if ((error as Error)?.name === 'AbortError') return;
       clientLogError('dev-dashboard:fetch', error);
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchData();
+    const controller = new AbortController();
+    fetchData(controller.signal);
 
     if (autoRefresh) {
-      const interval = setInterval(fetchData, 5000); // Refresh every 5 seconds
-      return () => clearInterval(interval);
+      const interval = setInterval(() => fetchData(controller.signal), 5000); // Refresh every 5 seconds
+      return () => { clearInterval(interval); controller.abort(); };
     }
+    return () => controller.abort();
   }, [autoRefresh]);
 
   const formatUptime = (seconds: number) => {
@@ -189,7 +196,7 @@ export default function DevelopmentDashboard() {
           </div>
           <div className="flex gap-4">
             <button
-              onClick={fetchData}
+              onClick={() => fetchData()}
               className="px-4 py-2 bg-blue-600 rounded hover:bg-blue-700"
             >
               🔄 Refresh

@@ -135,21 +135,27 @@ export default function SuperAdminDashboardClient({
   const mrr = Number(stats.mrr ?? 0);
 
   // Global search
-  const handleSearch = useCallback(async (q: string) => {
+  const handleSearch = useCallback(async (q: string, signal?: AbortSignal) => {
     if (q.length < 2) { setSearchResults([]); return; }
     setSearching(true);
     try {
-      const res = await fetch(`/api/superadmin/search?q=${encodeURIComponent(q)}`);
+      const res = await fetch(`/api/superadmin/search?q=${encodeURIComponent(q)}`, { signal });
       const data = await res.json();
+      if (signal?.aborted) return;
       setSearchResults(data.results ?? []);
     } catch (err) {
+      if ((err as Error)?.name === 'AbortError') return;
       logError({ error: err, context: 'superadmin-search' });
-    } finally { setSearching(false); }
+    } finally {
+      if (signal?.aborted) return;
+      setSearching(false);
+    }
   }, []);
 
   useEffect(() => {
-    const t = setTimeout(() => { if (searchQuery) handleSearch(searchQuery); }, 300);
-    return () => clearTimeout(t);
+    const controller = new AbortController();
+    const t = setTimeout(() => { if (searchQuery) handleSearch(searchQuery, controller.signal); }, 300);
+    return () => { clearTimeout(t); controller.abort(); };
   }, [searchQuery, handleSearch]);
 
   useEffect(() => {
@@ -163,13 +169,15 @@ export default function SuperAdminDashboardClient({
   // Fetch health, revenue, usage, activity on mount
   useEffect(() => {
     let ignore = false;
+    const controller = new AbortController();
+    const { signal } = controller;
     Promise.all([
-      fetch('/api/superadmin/health').then(r => r.json()).catch(() => ({ checks: [] })),
-      fetch('/api/superadmin/revenue').then(r => r.json()).catch(() => ({})),
-      fetch('/api/superadmin/usage').then(r => r.json()).catch(() => ({})),
-      fetch('/api/superadmin/recent-activity?limit=10').then(r => r.json()).catch(() => ({})),
+      fetch('/api/superadmin/health', { signal }).then(r => r.json()).catch(() => ({ checks: [] })),
+      fetch('/api/superadmin/revenue', { signal }).then(r => r.json()).catch(() => ({})),
+      fetch('/api/superadmin/usage', { signal }).then(r => r.json()).catch(() => ({})),
+      fetch('/api/superadmin/recent-activity?limit=10', { signal }).then(r => r.json()).catch(() => ({})),
     ]).then(([health, rev, usage, act]) => {
-      if (ignore) return;
+      if (ignore || signal.aborted) return;
       setHealthChecks(health.checks ?? []);
       setRevenueData(rev);
       setUsageData(usage);
@@ -186,7 +194,7 @@ export default function SuperAdminDashboardClient({
       setHealthLoading(false);
       setActivityLoading(false);
     });
-    return () => { ignore = true; };
+    return () => { ignore = true; controller.abort(); };
   }, []);
 
   const allUp = healthChecks.every(c => c.status === 'up');

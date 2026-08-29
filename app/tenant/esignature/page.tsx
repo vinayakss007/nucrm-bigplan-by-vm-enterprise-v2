@@ -56,22 +56,31 @@ export default function EsignaturePage() {
 
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
       if (filter !== 'all') params.set('status', filter);
-      const res = await fetch(`/api/tenant/esignature?${params}`);
+      const res = await fetch(`/api/tenant/esignature?${params}`, { signal });
       if (res.ok) {
         const d = await res.json();
+        if (signal?.aborted) return;
         setRequests(d.data ?? []);
       }
+    } catch (e) {
+      if ((e as Error)?.name === 'AbortError') return;
+      throw e;
     } finally {
+      if (signal?.aborted) return;
       setLoading(false);
     }
   }, [filter]);
 
-  useEffect(() => { load(); }, [filter, load]);
+  useEffect(() => {
+    const controller = new AbortController();
+    load(controller.signal);
+    return () => controller.abort();
+  }, [filter, load]);
 
   const openCreate = () => {
     setForm({ documentId: '', provider: 'internal', signers: [{ name: '', email: '' }] });

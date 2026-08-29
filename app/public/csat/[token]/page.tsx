@@ -19,14 +19,21 @@ export default function CSATResponsePage() {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    fetch(`/api/public/csat/${token}`)
+    const controller = new AbortController();
+    const { signal } = controller;
+    fetch(`/api/public/csat/${token}`, { signal })
       .then(r => r.json())
       .then(d => {
+        if (signal.aborted) return;
         if (d.error) setError(d.error);
         else if (d.data?.respondedAt) setError('You have already responded to this survey');
       })
-      .catch(() => setError('Invalid survey link'))
-      .finally(() => setLoading(false));
+      .catch((e) => {
+        if ((e as Error)?.name === 'AbortError') return;
+        setError('Invalid survey link');
+      })
+      .finally(() => { if (signal.aborted) return; setLoading(false); });
+    return () => controller.abort();
   }, [token]);
 
   const emojis = ['😞', '😕', '😐', '😊', '😄'];

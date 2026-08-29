@@ -49,19 +49,25 @@ export default function ContractDetailPage() {
   const [form, setForm] = useState<Partial<Contract>>({});
 
   useEffect(() => {
+    const controller = new AbortController();
+    const { signal } = controller;
     const fetchContract = async () => {
       try {
-        const res = await fetch(`/api/tenant/contracts/${id}`);
+        const res = await fetch(`/api/tenant/contracts/${id}`, { signal });
         if (!res.ok) throw new Error('Not found');
         const data = await res.json();
+        if (signal.aborted) return;
         setContract(data.data);
-      } catch {
+      } catch (e) {
+        if ((e as Error)?.name === 'AbortError') return;
         toast.error('Failed to load contract');
       } finally {
+        if (signal.aborted) return;
         setLoading(false);
       }
     };
     fetchContract();
+    return () => controller.abort();
   }, [id]);
 
   const handleEdit = () => {

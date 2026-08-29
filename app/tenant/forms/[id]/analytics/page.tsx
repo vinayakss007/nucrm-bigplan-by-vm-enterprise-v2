@@ -67,15 +67,21 @@ export default function FormAnalyticsPage() {
   const [days, setDays] = useState(30);
 
   useEffect(() => {
+    const controller = new AbortController();
+    const { signal } = controller;
     setLoading(true);
-    fetch(`/api/tenant/forms/${formId}/analytics?days=${days}`)
+    fetch(`/api/tenant/forms/${formId}/analytics?days=${days}`, { signal })
       .then((r) => {
         if (!r.ok) throw new Error('Failed');
         return r.json();
       })
-      .then(setData)
-      .catch(() => router.push('/tenant/forms'))
-      .finally(() => setLoading(false));
+      .then((d) => { if (signal.aborted) return; setData(d); })
+      .catch((e) => {
+        if ((e as Error)?.name === 'AbortError') return;
+        router.push('/tenant/forms');
+      })
+      .finally(() => { if (signal.aborted) return; setLoading(false); });
+    return () => controller.abort();
   }, [formId, days, router]);
 
   if (loading) {

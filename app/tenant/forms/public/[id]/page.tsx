@@ -23,19 +23,25 @@ export default function PublicFormPage() {
   const [values, setValues] = useState<Record<string, unknown>>({});
 
   useEffect(() => {
+    const controller = new AbortController();
+    const { signal } = controller;
     const loadForm = async () => {
       try {
-        const res = await fetch(`/api/tenant/forms/public/${formId}`);
+        const res = await fetch(`/api/tenant/forms/public/${formId}`, { signal });
         const data = await res.json();
+        if (signal.aborted) return;
         if (!res.ok) throw new Error(data.error);
         setForm(data);
       } catch (err: unknown) {
+        if ((err as Error)?.name === 'AbortError') return;
         toast.error(err instanceof Error ? err.message : 'Failed to load form');
       } finally {
+        if (signal.aborted) return;
         setLoading(false);
       }
     };
     loadForm();
+    return () => controller.abort();
   }, [formId]);
 
   const submit = async (e: React.FormEvent) => {

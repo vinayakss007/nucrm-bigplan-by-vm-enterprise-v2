@@ -38,18 +38,24 @@ export default function OnboardingChecklist() {
   const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
+    const controller = new AbortController();
+    const { signal } = controller;
     async function checkProgress() {
       try {
-        const res = await fetch('/api/tenant/onboarding/progress');
+        const res = await fetch('/api/tenant/onboarding/progress', { signal });
+        if (signal.aborted) return;
         if (!res.ok) { setLoading(false); return; }
         const data = await res.json();
+        if (signal.aborted) return;
         const done = new Set<string>(data.completed || []);
         setCompleted(done);
         // Auto-dismiss if all done
         if (done.size >= STEPS.length) setDismissed(true);
-      } catch {
+      } catch (e) {
+        if ((e as Error)?.name === 'AbortError') return;
         // non-critical
       } finally {
+        if (signal.aborted) return;
         setLoading(false);
       }
     }
@@ -57,9 +63,10 @@ export default function OnboardingChecklist() {
     if (typeof window !== 'undefined' && localStorage.getItem('nucrm_onboarding_dismissed') === '1') {
       setDismissed(true);
       setLoading(false);
-      return;
+      return () => controller.abort();
     }
     checkProgress();
+    return () => controller.abort();
   }, []);
 
   const handleDismiss = () => {

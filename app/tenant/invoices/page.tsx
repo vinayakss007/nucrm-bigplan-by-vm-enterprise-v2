@@ -61,24 +61,36 @@ function InvoicesPageInner() {
     taxRate: '0',
   });
 
-  useEffect(() => { fetchInvoices(); fetchContacts(); }, []);
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchInvoices(controller.signal);
+    fetchContacts(controller.signal);
+    return () => controller.abort();
+  }, []);
 
-  const fetchContacts = async () => {
+  const fetchContacts = async (signal?: AbortSignal) => {
     try {
-      const res = await fetch('/api/tenant/contacts');
+      const res = await fetch('/api/tenant/contacts', { signal });
       const data = await res.json();
+      if (signal?.aborted) return;
       setContacts(data.contacts || []);
-    } catch { toast.error('Failed to load contacts'); }
+    } catch (e) {
+      if ((e as Error)?.name === 'AbortError') return;
+      toast.error('Failed to load contacts');
+    }
   };
 
-  const fetchInvoices = async () => {
+  const fetchInvoices = async (signal?: AbortSignal) => {
     try {
-      const res = await fetch('/api/tenant/invoices');
+      const res = await fetch('/api/tenant/invoices', { signal });
       const data = await res.json();
+      if (signal?.aborted) return;
       setInvoices(data.data || []);
-    } catch {
+    } catch (e) {
+      if ((e as Error)?.name === 'AbortError') return;
       toast.error('Failed to load invoices');
     } finally {
+      if (signal?.aborted) return;
       setLoading(false);
     }
   };

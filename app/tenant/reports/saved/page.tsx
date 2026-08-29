@@ -40,18 +40,25 @@ export default function SavedReportsPage() {
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
 
-  const load = async () => {
+  const load = async (signal?: AbortSignal) => {
     try {
-      const res = await fetch('/api/tenant/reports/saved');
+      const res = await fetch('/api/tenant/reports/saved', { signal });
       const d = await res.json();
+      if (signal?.aborted) return;
       setReports(d.data || []);
-    } catch {
+    } catch (e) {
+      if ((e as Error)?.name === 'AbortError') return;
       toast.error('Failed to load reports');
     }
+    if (signal?.aborted) return;
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    const controller = new AbortController();
+    load(controller.signal);
+    return () => controller.abort();
+  }, []);
 
   const filtered = reports.filter(r => {
     const matchesSearch = !search || r.name.toLowerCase().includes(search.toLowerCase()) || r.createdByName?.toLowerCase().includes(search.toLowerCase());

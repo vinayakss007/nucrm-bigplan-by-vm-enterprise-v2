@@ -102,10 +102,13 @@ export function CampaignBuilder({ onCreated, onClose }: Props) {
   });
 
   useEffect(() => {
-    fetch('/api/tenant/lead-warming/events')
+    const controller = new AbortController();
+    const { signal } = controller;
+    fetch('/api/tenant/lead-warming/events', { signal })
       .then(r => r.ok ? r.json() : { data: [] })
-      .then(d => setEvents(d.data ?? []))
+      .then(d => { if (signal.aborted) return; setEvents(d.data ?? []); })
       .catch(() => {});
+    return () => controller.abort();
   }, []);
 
   const update = useCallback(<K extends keyof CampaignData>(key: K, value: CampaignData[K]) => {

@@ -36,24 +36,31 @@ export default function TenantFeaturesPanel({ tenantId, tenantName, plan, onClos
   const [saving, setSaving] = useState<string | null>(null);
   const [overrides, setOverrides] = useState<Record<string, string[]>>({});
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal?: AbortSignal) => {
     try {
-      const res = await fetch(`/api/superadmin/tenants/${tenantId}/modules`);
+      const res = await fetch(`/api/superadmin/tenants/${tenantId}/modules`, { signal });
       if (!res.ok) throw new Error('Failed to load');
       const data = await res.json();
+      if (signal?.aborted) return;
       const mods = (data.data || []).filter((m: ModuleFeature) => m.features?.length > 0 && m.status === 'active');
       setModules(mods);
       const init: Record<string, string[]> = {};
       mods.forEach((m: ModuleFeature) => { init[m.id] = m.enabledFeatures || []; });
       setOverrides(init);
-    } catch {
+    } catch (e) {
+      if ((e as Error)?.name === 'AbortError') return;
       toast.error('Failed to load tenant modules');
     } finally {
+      if (signal?.aborted) return;
       setLoading(false);
     }
   }, [tenantId]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    const controller = new AbortController();
+    load(controller.signal);
+    return () => controller.abort();
+  }, [load]);
 
   const toggleFeature = (moduleId: string, feature: string) => {
     setOverrides(prev => {

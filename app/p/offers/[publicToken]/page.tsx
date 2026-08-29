@@ -63,11 +63,11 @@ export default function PublicOfferPage({ params }: { params: Promise<{ publicTo
   const [declineForm, setDeclineForm] = useState({ email: '', reason: '' });
   const [submittedStatus, setSubmittedStatus] = useState<'accepted' | 'declined' | null>(null);
 
-  function load() {
+  function load(signal?: AbortSignal) {
     setLoading(true);
     setError(null);
     setErrorStatus(null);
-    fetch(`/api/public/offers/${publicToken}`, { cache: 'no-store' })
+    fetch(`/api/public/offers/${publicToken}`, { cache: 'no-store', signal })
       .then(async r => {
         if (!r.ok) {
           const body = await r.json().catch(() => ({}));
@@ -75,14 +75,20 @@ export default function PublicOfferPage({ params }: { params: Promise<{ publicTo
         }
         return r.json();
       })
-      .then(setData)
+      .then(d => { if (signal?.aborted) return; setData(d); })
       .catch((e: Error & { status?: number }) => {
+        if (e?.name === 'AbortError') return;
         setError(e.message);
         setErrorStatus(e.status ?? null);
       })
-      .finally(() => setLoading(false));
+      .finally(() => { if (signal?.aborted) return; setLoading(false); });
   }
-  useEffect(load, [publicToken]);
+  useEffect(() => {
+    const controller = new AbortController();
+    load(controller.signal);
+    return () => controller.abort();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [publicToken]);
 
   async function accept() {
     setBusy('accept');

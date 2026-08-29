@@ -22,20 +22,29 @@ export default function KBPage() {
   const [activeCategory, setActiveCategory] = useState('all');
   const [showCreate, setShowCreate] = useState(false);
 
-  const load = async () => {
+  const load = async (signal?: AbortSignal) => {
     setLoading(true);
     try {
       const [aRes, cRes] = await Promise.all([
-        fetch('/api/tenant/kb/articles?status=published').then(r => r.json()),
-        fetch('/api/tenant/kb/categories').then(r => r.json()),
+        fetch('/api/tenant/kb/articles?status=published', { signal }).then(r => r.json()),
+        fetch('/api/tenant/kb/categories', { signal }).then(r => r.json()),
       ]);
+      if (signal?.aborted) return;
       setArticles(aRes.data || []);
       setCategories(cRes.data || []);
-    } catch { toast.error('Failed to load knowledge base'); }
+    } catch (e) {
+      if ((e as Error)?.name === 'AbortError') return;
+      toast.error('Failed to load knowledge base');
+    }
+    if (signal?.aborted) return;
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    const controller = new AbortController();
+    load(controller.signal);
+    return () => controller.abort();
+  }, []);
 
   const filtered = articles.filter(a => {
     if (activeCategory !== 'all' && a.categoryId !== activeCategory) return false;

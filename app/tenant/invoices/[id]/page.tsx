@@ -66,19 +66,25 @@ export default function InvoiceDetailPage() {
   const [showEmailDialog, setShowEmailDialog] = useState(false);
 
   useEffect(() => {
+    const controller = new AbortController();
+    const { signal } = controller;
     const fetchInvoice = async () => {
       try {
-        const res = await fetch(`/api/tenant/invoices/${id}`);
+        const res = await fetch(`/api/tenant/invoices/${id}`, { signal });
         if (!res.ok) throw new Error('Not found');
         const data = await res.json();
+        if (signal.aborted) return;
         setInvoice(data.data);
-      } catch {
+      } catch (e) {
+        if ((e as Error)?.name === 'AbortError') return;
         toast.error('Failed to load invoice');
       } finally {
+        if (signal.aborted) return;
         setLoading(false);
       }
     };
     fetchInvoice();
+    return () => controller.abort();
   }, [id]);
 
   const handleEdit = () => {
