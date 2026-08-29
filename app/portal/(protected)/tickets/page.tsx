@@ -12,10 +12,18 @@ import toast from 'react-hot-toast';
 
 interface PortalSession { email: string; name: string; permissions: { quotes: boolean; invoices: boolean; cases: boolean }; }
 
+interface PortalTicket {
+  id: string;
+  status?: string | null;
+  category?: string | null;
+  subject?: string | null;
+  body?: string | null;
+  created_at?: string | null;
+}
+
 export default function PortalTicketsPage() {
   const router = useRouter();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [tickets, setTickets] = useState<any[]>([]);
+  const [tickets, setTickets] = useState<PortalTicket[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [session, setSession] = useState<PortalSession | null>(null);
@@ -81,8 +89,8 @@ export default function PortalTicketsPage() {
               <div className="flex items-start justify-between">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
-                    <span className={cn('text-[10px] font-bold px-2 py-0.5 rounded-full', statusColor[ticket.status])}>
-                      {ticket.status.replace('_', ' ')}
+                    <span className={cn('text-[10px] font-bold px-2 py-0.5 rounded-full', statusColor[ticket.status ?? 'open'])}>
+                      {(ticket.status ?? 'open').replace('_', ' ')}
                     </span>
                     <span className="text-xs text-muted-foreground">{ticket.category}</span>
                   </div>

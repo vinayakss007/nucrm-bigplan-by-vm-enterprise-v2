@@ -11,10 +11,18 @@ import { cn, formatDate, formatCurrency } from '@/lib/utils';
 
 interface PortalSession { email: string; name: string; permissions: { quotes: boolean; invoices: boolean; cases: boolean }; }
 
+interface PortalInvoice {
+  id: string;
+  invoice_number?: string | null;
+  created_at?: string | null;
+  total?: number | null;
+  amount?: number | null;
+  status?: string | null;
+}
+
 export default function PortalInvoicesPage() {
   const router = useRouter();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [invoices, setInvoices] = useState<any[]>([]);
+  const [invoices, setInvoices] = useState<PortalInvoice[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -77,7 +85,7 @@ export default function PortalInvoicesPage() {
                   <td className="px-4 py-3 text-sm text-muted-foreground">{formatDate(inv.created_at)}</td>
                   <td className="px-4 py-3 text-sm font-semibold">{formatCurrency(inv.total || inv.amount || 0)}</td>
                   <td className="px-4 py-3">
-                    <span className={cn('text-[10px] font-bold px-2 py-0.5 rounded-full capitalize', statusColor[inv.status] || statusColor['pending'])}>
+                    <span className={cn('text-[10px] font-bold px-2 py-0.5 rounded-full capitalize', statusColor[inv.status ?? 'pending'] || statusColor['pending'])}>
                       {inv.status}
                     </span>
                   </td>
