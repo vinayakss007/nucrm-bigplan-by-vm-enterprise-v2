@@ -1,0 +1,28 @@
+{
+  "id": "FEAT-001",
+  "type": "chore",
+  "description": "Establish a green baseline before touching RLS internals. Confirm the toolchain works and capture current behavior of the affected modules so the fix in FEAT-002 can be validated against a known-good starting point.",
+  "status": "completed",
+  "steps": [
+    "Load nvm in the shell for every node/npm command: `export NVM_DIR=\"$HOME/.nvm\"; . \"$NVM_DIR/nvm.sh\"`.",
+    "Confirm node_modules is present; if not, run `npm install`.",
+    "Run `npm run typecheck` and confirm it passes (record any pre-existing errors — there should be none on a clean main).",
+    "Run `npm run lint` and confirm zero warnings/errors (eslint . with the repo config; the pre-commit hook enforces --max-warnings=0).",
+    "Run `npx vitest run tests/unit/rls.test.ts` and confirm all existing RLS unit tests pass.",
+    "Run `npx vitest run tests/integration/tenant-isolation.test.ts` and record whether it executed against a DB or self-skipped (isDatabaseAvailable()==false). Note the outcome in findings.",
+    "Record the exact commands and their pass/skip status in the feature findings so FEAT-002 can reproduce them."
+  ],
+  "acceptance_criteria": [
+    "`npm run typecheck` exits 0",
+    "`npm run lint` exits 0 with no warnings",
+    "`npx vitest run tests/unit/rls.test.ts` passes",
+    "Baseline behavior of tests/integration/tenant-isolation.test.ts (ran vs self-skipped) is documented in findings"
+  ],
+  "verification": [
+    "npm run typecheck",
+    "npm run lint",
+    "npx vitest run tests/unit/rls.test.ts"
+  ],
+  "blocked_reason": null,
+  "findings": "Baseline captured on branch fix/1615-rls-tenant-isolation (HEAD 5892cc03). Toolchain: node v22.23.2, npm 11.4.2 (loaded via `export NVM_DIR=\"$HOME/.nvm\"; . \"$NVM_DIR/nvm.sh\"`). node_modules already present (no npm install needed). No source files modified by this baseline feature; only .agents task state touched.\n\nCommands run and results:\n1. `npm run typecheck` (npx tsc --noEmit --pretty) -> PASS, exit 0, zero errors.\n2. `npm run lint` (eslint .) -> exit 0, BUT reports 2 PRE-EXISTING warnings (both in lib/client-logger.ts:41 and :53 — 'Unused eslint-disable directive (no problems were reported from no-console)'). These exist on the clean branch and are NOT caused by any change here (git status shows lib/client-logger.ts unmodified). NOTE FOR FEAT-002: `npm run lint` = plain `eslint .` and does NOT pass --max-warnings=0, so it exits 0; however the Husky pre-commit hook runs eslint with --max-warnings=0, so a commit will FAIL on these 2 warnings. FEAT-002 must either run `eslint --fix` on lib/client-logger.ts (auto-fixable) before committing, or otherwise these warnings will block the commit hook. Both are auto-fixable per eslint output.\n3. `npx vitest run tests/unit/rls.test.ts` -> PASS, 1 file / 12 tests passed.\n4. `npx vitest run tests/integration/tenant-isolation.test.ts` -> SELF-SKIPPED: 1 file skipped / 7 tests skipped (isDatabaseAvailable()==false; DATABASE_URL is unset in this sandbox). Exit 0. This is expected/acceptable per orchestrator; the integration test must be written to fail-without-fix / pass-with-fix when a live Postgres with RLS migrations IS present (CI).\n\nDid NOT run: `npm run build` (~5min, not required — typecheck is the fast gate), full `npm run test` suite (times out, no live app host), and postman/full-test-suite.sh (needs live app host, unavailable). No commit created (no file changes outside .agents task state)."
+}

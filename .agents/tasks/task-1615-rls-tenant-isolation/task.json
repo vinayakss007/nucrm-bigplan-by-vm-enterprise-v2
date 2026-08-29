@@ -1,0 +1,7 @@
+{
+  "task_id": "task-1615-rls-tenant-isolation",
+  "task_description": "Fix GitHub issue #1615 (CRITICAL, security): Postgres RLS is effectively non-functional in the default non-PgBouncer deploy because setTenantContext sets a session GUC on a pooled connection with no affinity to the request's subsequent data queries. Establish per-request connection pinning (via existing AsyncLocalStorage) so the tenant GUC is set on the same connection that runs the request's queries; preserve the PgBouncer path and fail-closed policy; add an automated cross-tenant test that fails-without/passes-with the fix; update deployment docs. Bug fix only — no new features. Branch fix/1615-rls-tenant-isolation, target main, do not push/merge.",
+  "status": "in_progress",
+  "feature_order": ["FEAT-001", "FEAT-002"],
+  "blocked_reason": null
+}

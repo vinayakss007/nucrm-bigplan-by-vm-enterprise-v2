@@ -1,0 +1,28 @@
+{
+  "project_type": "Next.js 16 multi-tenant CRM (App Router, API routes), TypeScript, PostgreSQL via Drizzle ORM over node-postgres pool, JWT auth",
+  "language": "TypeScript",
+  "build_system": "npm (Node 22 via nvm — NOT on PATH; must run `export NVM_DIR=\"$HOME/.nvm\"; . \"$NVM_DIR/nvm.sh\"` before any node/npm/git-commit command). Husky pre-commit runs prettier + eslint --max-warnings=0.",
+  "test_framework": "vitest (tests/unit, tests/integration, tests/dashboard); playwright for e2e. Integration tests skip themselves if DATABASE_URL is unreachable (see isDatabaseAvailable() pattern in tests/integration/tenant-isolation.test.ts).",
+  "build_command": "npm run typecheck (full `npm run build` takes ~5min; typecheck is the fast gate)",
+  "test_command": "npm run test:unit  (unit); npm run test:integration (needs live Postgres, else skipped). Do NOT run `npm run test` full suite — it times out; run individual files with `npx vitest run <file>`.",
+  "verification_instructions": "1) export nvm env. 2) `npm run typecheck` must pass. 3) `npm run lint` must pass with zero warnings (eslint --max-warnings=0 enforced by hook; note `npm run lint` = `eslint .`). 4) `npx vitest run tests/unit/rls.test.ts` and any new unit test must pass. 5) Integration test (tests/integration/*rls*/*tenant-isolation*) runs only when DATABASE_URL points at a reachable Postgres with RLS migrations applied; otherwise it self-skips — that is acceptable in this sandbox, but the test MUST be written so it fails-without-fix / passes-with-fix when a DB IS present. The AGENTS.md-mandated postman/full-test-suite.sh needs a live app host (unavailable here); typecheck + lint + vitest is the accepted substitute per the orchestrator.",
+  "snapshot_or_generated_files": "none relevant to this change",
+  "setup_instructions": "node_modules already present. If missing: `export NVM_DIR=\"$HOME/.nvm\"; . \"$NVM_DIR/nvm.sh\"; npm install`. Work on branch fix/1615-rls-tenant-isolation (already created from main).",
+  "environment_constraints": "Network OPEN_INTERNET. No live app host for postman suite. Postgres may not be reachable in-sandbox, so integration RLS test may self-skip locally but MUST be correct for CI where Postgres+Redis are available. Never push to main; orchestrator publishes the PR.",
+  "contribution_requirements": "AGENTS.md: never commit to main; branch fix/<desc> (using fix/1615-rls-tenant-isolation); one issue per PR; target main; do NOT merge. Keep scope to issue #1615 only.",
+  "key_patterns": "Global `db` is a Proxy (drizzle/db.ts) over drizzle(getPool()). Top-level db.execute/db.select each check out a fresh pooled connection and release it immediately — NO connection affinity across a request. lib/db/rls.ts setTenantContext(no tx) sets app.current_tenant as a SESSION GUC (is_local=false); lib/db/pool.ts has a pool.on('release') handler (non-PgBouncer) that RESETS app.current_tenant/app.current_user to '' on every release. RLS policy (migration 0039_rls_fail_closed_policy.sql) is fail-closed: empty GUC => NULL => zero rows. AsyncLocalStorage already exists in lib/tenant/request-context.ts (asyncLocalStorage store + requestIdStorage; withRequestId/withRequestContext). requireAuth (lib/auth/middleware.ts) already wraps its body in withRequestId. Route handlers import { db } from '@/drizzle/db' or '@/lib/db' and use it directly.",
+  "relevant_files": [
+    "lib/db/pool.ts",
+    "lib/db/rls.ts",
+    "drizzle/db.ts",
+    "lib/auth/middleware.ts",
+    "lib/tenant/context.ts",
+    "lib/tenant/request-context.ts",
+    "drizzle/migrations/0015_rls_policies.sql",
+    "drizzle/migrations/0039_rls_fail_closed_policy.sql",
+    "tests/integration/tenant-isolation.test.ts",
+    "tests/unit/rls.test.ts",
+    "DEPLOYMENT.md"
+  ],
+  "directory_structure": "app/api/**/route.ts = API handlers (use db directly after requireAuth). lib/db/ = pool, rls, drizzle client wiring. lib/auth/middleware.ts = requireAuth. lib/tenant/ = request-context (AsyncLocalStorage) + context.ts (server-component ctx). drizzle/migrations/ = SQL migrations incl. RLS policies. tests/unit + tests/integration = vitest."
+}

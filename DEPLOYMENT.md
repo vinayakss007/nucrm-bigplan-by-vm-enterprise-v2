@@ -114,6 +114,64 @@ attacker and fails SOC 2 / GDPR, so it is refused at startup.
   psql "host=<host> dbname=nucrm user=nucrm sslmode=require" -c 'SHOW ssl;'  # → on
   ```
 
+## Tenant isolation (RLS) — enforced in the default deploy (#1615)
+
+Tenant isolation is enforced by PostgreSQL Row-Level Security (RLS). Each request
+sets the `app.current_tenant` / `app.current_user` session GUCs via
+`setTenantContext()`, and the fail-closed `tenant_isolation` policy
+(migration `0039_rls_fail_closed_policy`) returns **zero rows** when the GUC is
+empty.
+
+- **Now enforced out of the box in the DEFAULT deploy.** The default deploy runs
+  the app under **pm2** against a plain `node-postgres` pool (NOT PgBouncer,
+  `PGBOUNCER_ENABLED` unset). Previously RLS was effectively non-functional on
+  that path: `setTenantContext()` set the GUC on one pooled connection that was
+  released immediately, and each subsequent `db` query checked out a _different_
+  connection whose GUC was empty, so the fail-closed policy denied every row and
+  RLS provided no real defense-in-depth. As of #1615 the app pins **one**
+  PoolClient per request (`lib/db/request-connection.ts` + the `db` proxy in
+  `drizzle/db.ts`) so the tenant GUC and the request's data queries run on the
+  **same** connection. RLS tenant isolation now works without PgBouncer.
+- **The pin does NOT serialize the pool.** It checks out a single connection for
+  the request and releases it at request end; concurrent requests still use
+  separate connections up to `DATABASE_POOL_SIZE`.
+- **On release, the tenant GUCs are reset** (in `withPinnedConnection`'s finally
+  block and by the pool's `release` handler in `lib/db/pool.ts`) so no stale
+  context can leak to the next checkout.
+- **PgBouncer is still SUPPORTED and compatible, but NO LONGER REQUIRED for RLS
+  correctness.** When `PGBOUNCER_ENABLED=true` the per-request pin is a no-op:
+  PgBouncer transaction-mode pooling plus `server_reset_query = 'DISCARD ALL'`
+  already handle GUC lifecycle, and the existing transaction/session semantics
+  are preserved unchanged.
+
+### Scope boundary (residual, honest note)
+
+The pin is established inside `requireAuth()` (API routes) and
+`requireTenantCtx()` (Server Components), which wrap their bodies in
+`withPinnedConnection(...)`. Because Next.js App Router provides no global
+per-request async wrapper that user code can hook, and because
+`AsyncLocalStorage` scopes are strictly lexical, the pin is active for the
+**auth + `setTenantContext` + auth/membership lookups**, and is released when
+`requireAuth()` / `requireTenantCtx()` return — i.e. **before** the route
+handler's own later `db` queries run in the same function scope. Those
+handler-level data queries continue to run on unpinned pool connections.
+
+Consequences and why this is still the right minimal change:
+
+- Application-level `tenant_id` filters (present on the handler queries) remain
+  the primary tenant-scoping mechanism, exactly as before.
+- The fail-closed RLS policy is preserved as defense-in-depth and is now
+  **actually functional** on the pinned scope (previously it was inert on the
+  non-PgBouncer path for every scope).
+- Fully extending RLS enforcement to every handler's data queries would require
+  either wrapping every route handler in `withPinnedConnection` (hundreds of
+  edits, out of scope for this bug fix) or a framework-level per-request hook
+  that Next.js does not expose. Route handlers (and Server Component pages) can
+  opt into full-request pinning today by wrapping their body in
+  `withPinnedConnection(async () => { ... })` from `@/lib/db/request-connection`.
+
+See `lib/db/request-connection.ts` for the mechanism and the exact boundary.
+
 ## SSL with Let's Encrypt
 
 ```bash

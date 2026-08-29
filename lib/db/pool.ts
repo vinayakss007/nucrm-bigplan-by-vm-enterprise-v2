@@ -202,6 +202,14 @@ export function getPool(): Pool {
     // => deny), a request can never inherit a previous request's tenant
     // context. (pg-pool's `verify` hook is NOT used: it only runs for brand-new
     // physical connections, not on reuse of idle ones — verified empirically.)
+    //
+    // #1615: as of the per-request connection pinning fix
+    // (lib/db/request-connection.ts + drizzle/db.ts), a request now pins ONE
+    // client for its whole lifetime and releases it exactly ONCE at request end
+    // (not once per query). This 'release' handler still runs on that single
+    // release and remains the defense-in-depth reset that prevents a stale
+    // tenant GUC from leaking to the next checkout. withPinnedConnection() also
+    // issues the same reset in its finally block; keeping both is intentional.
     if (!pgBouncer) {
       global.__pgPool.on('release', (_err: Error | undefined, client: PoolClient) => {
         // Fire-and-forget: RESET cannot fail meaningfully, and any error is

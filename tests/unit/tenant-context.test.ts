@@ -109,6 +109,14 @@ vi.mock('@/lib/db/rls', () => ({
   setTenantContext: vi.fn().mockResolvedValue(undefined),
 }));
 
+// #1615: requireTenantCtx now wraps its body in withPinnedConnection to pin one
+// PoolClient for the auth + setTenantContext path. There is no real pool in
+// these unit tests, so stub it to run the callback directly (no client acquired).
+vi.mock('@/lib/db/request-connection', () => ({
+  withPinnedConnection: <T>(fn: () => Promise<T>): Promise<T> => fn(),
+  getPinnedClient: () => undefined,
+}));
+
 // ─── Import after mocks ──────────────────────────────────────────────────────
 import { requireTenantCtx, can, isAtLimit } from '@/lib/tenant/context';
 import type { TenantContext } from '@/types';
