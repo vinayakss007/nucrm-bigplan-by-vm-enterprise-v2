@@ -12,8 +12,8 @@
 
 import { db } from '@/drizzle/db';
 import { signingRequests, signingEvents } from '@/drizzle/schema/esignature';
-import { eq, and } from 'drizzle-orm';
-import { createHmac } from 'crypto';
+import { eq, and, asc } from 'drizzle-orm';
+import { createHmac, randomBytes } from 'crypto';
 
 // ── Types ─────────────────────────────────────────────
 
@@ -28,6 +28,15 @@ export interface Signer {
   name: string;
   order?: number;
   role?: string;
+  /**
+   * Per-signer opaque token for the built-in (internal) signing flow. It is the
+   * credential for the public signer page at /p/sign/[token]. Only set for the
+   * `internal` provider; external providers host their own signer UI. (#1613)
+   */
+  token?: string;
+  /** Per-signer terminal state for the internal flow. */
+  signedAt?: string | null;
+  declinedAt?: string | null;
 }
 
 export interface SigningRequest {
@@ -216,20 +225,45 @@ export class HelloSignAdapter implements SigningProviderAdapter {
   }
 }
 
-// ── Internal Adapter (no external service) ────────────
+// ── Internal Adapter (built-in, no external service) ──
+//
+// The built-in provider needs no third-party API. A signing request is created
+// locally, each signer gets an opaque token (their link to /p/sign/[token]),
+// and status is derived from the recorded `signing_events` in our own DB.
+// There is no inbound provider webhook for the internal flow — the public
+// signer route (POST /api/public/sign/[token]) records events directly — so
+// validateWebhook() rejects rather than blindly trusting an unsigned payload.
 
 export class InternalAdapter implements SigningProviderAdapter {
   async createRequest(_input: CreateSigningRequestInput): Promise<{ externalId: string }> {
-    return { externalId: `internal-${Date.now()}` };
+    // Opaque, unguessable id used to correlate the request; per-signer tokens
+    // (the actual signing credentials) are minted in createSigningRequest().
+    return { externalId: `internal-${randomBytes(16).toString('hex')}` };
   }
 
-  async getStatus(_externalId: string): Promise<SigningStatus> {
-    return 'pending';
+  async getStatus(externalId: string): Promise<SigningStatus> {
+    // Derive status from our own persisted request rather than returning a
+    // hard-coded 'pending'. Falls back to 'pending' only when unknown.
+    const row = await db.query.signingRequests.findFirst({
+      where: and(
+        eq(signingRequests.externalId, externalId),
+        eq(signingRequests.provider, 'internal'),
+      ),
+    });
+    return (row?.status as SigningStatus) ?? 'pending';
   }
 
   validateWebhook(_payload: unknown, _headers: Record<string, string>): boolean {
-    return true;
+    // The internal provider has no external webhook. Any webhook claiming to be
+    // `internal` is illegitimate — reject it. Internal signer actions go through
+    // the authenticated-by-token public signer route instead.
+    return false;
   }
+}
+
+/** Generate an unguessable per-signer signing token. */
+function generateSignerToken(): string {
+  return randomBytes(32).toString('base64url');
 }
 
 // ── Provider Factory ──────────────────────────────────
@@ -258,6 +292,13 @@ export async function createSigningRequest(input: CreateSigningRequestInput): Pr
   // Create request with provider
   const { externalId } = await adapter.createRequest(input);
 
+  // For the built-in provider, mint a per-signer token so each recipient has a
+  // real link to the public signer page. External providers host signing
+  // themselves, so no token is stored. (#1613)
+  const signers: Signer[] = input.provider === 'internal'
+    ? input.signers.map((s) => ({ ...s, token: generateSignerToken(), signedAt: null, declinedAt: null }))
+    : input.signers;
+
   // Store in database (both tables in a single transaction)
   const result = await db.transaction(async (tx) => {
     const [row] = await tx.insert(signingRequests).values({
@@ -266,14 +307,14 @@ export async function createSigningRequest(input: CreateSigningRequestInput): Pr
       provider: input.provider,
       status: 'sent',
       externalId,
-      signers: input.signers,
+      signers,
       metadata: input.metadata || {},
     }).returning();
 
     if (!row) throw new Error('Failed to create signing request');
 
     // Record the sent event for each signer
-    for (const signer of input.signers) {
+    for (const signer of signers) {
       await tx.insert(signingEvents).values({
         requestId: row.id,
         tenantId: input.tenantId,
@@ -293,9 +334,146 @@ export async function createSigningRequest(input: CreateSigningRequestInput): Pr
     provider: result.provider as SigningProvider,
     status: result.status as SigningStatus,
     externalId: result.externalId,
-    signers: input.signers,
+    signers,
     metadata: (result.metadata as Record<string, unknown>) || {},
   };
+}
+
+// ── Built-in (internal) signer flow ───────────────────
+// These power the public signer page at /p/sign/[token]. The token is the
+// credential; no auth session is required. All lookups are constant-time-ish
+// (indexed request scan + token compare) and never leak tenant data.
+
+export interface InternalSignerView {
+  request: SigningRequest;
+  signer: Signer;
+  documentId: string;
+  status: SigningStatus;
+  alreadyResolved: boolean; // signer already signed or declined
+}
+
+/**
+ * Resolve a signing request + the specific signer by their opaque token.
+ * Returns null when the token matches no internal signer.
+ */
+export async function getInternalSigningByToken(token: string): Promise<InternalSignerView | null> {
+  if (!token) return null;
+
+  // Scan internal requests and match the signer token in JSONB. Volume is low
+  // (open signing requests per instance), and provider is indexed.
+  const rows = await db.query.signingRequests.findMany({
+    where: eq(signingRequests.provider, 'internal'),
+    orderBy: (r, { desc }) => [desc(r.createdAt)],
+    limit: 500,
+  });
+
+  for (const row of rows) {
+    const signers = (row.signers as Signer[]) || [];
+    const signer = signers.find((s) => s.token === token);
+    if (!signer) continue;
+
+    const request: SigningRequest = {
+      id: row.id,
+      tenantId: row.tenantId,
+      documentId: row.documentId,
+      provider: 'internal',
+      status: row.status as SigningStatus,
+      externalId: row.externalId,
+      signers,
+      metadata: (row.metadata as Record<string, unknown>) || {},
+    };
+    return {
+      request,
+      signer,
+      documentId: row.documentId,
+      status: row.status as SigningStatus,
+      alreadyResolved: Boolean(signer.signedAt || signer.declinedAt),
+    };
+  }
+  return null;
+}
+
+/**
+ * Record a signer action (viewed | signed | declined) for the built-in flow.
+ * - Writes a real row into `signing_events`.
+ * - Stamps the per-signer signedAt/declinedAt in the signers JSONB.
+ * - Rolls the request status up: signed once ALL signers have signed;
+ *   declined as soon as ANY signer declines; viewed on first open.
+ *
+ * Idempotent for terminal states: a signer who already signed/declined cannot
+ * change the outcome.
+ */
+export async function recordInternalSignerEvent(
+  token: string,
+  event: SigningEventType,
+  meta?: { ip?: string; userAgent?: string },
+): Promise<{ ok: boolean; status?: SigningStatus; reason?: string }> {
+  const view = await getInternalSigningByToken(token);
+  if (!view) return { ok: false, reason: 'not_found' };
+
+  const { request, signer } = view;
+
+  if ((event === 'signed' || event === 'declined') && (signer.signedAt || signer.declinedAt)) {
+    return { ok: false, reason: 'already_resolved', status: request.status };
+  }
+
+  const now = new Date().toISOString();
+  const updatedSigners: Signer[] = request.signers.map((s) => {
+    if (s.token !== token) return s;
+    if (event === 'signed') return { ...s, signedAt: now };
+    if (event === 'declined') return { ...s, declinedAt: now };
+    return s;
+  });
+
+  // Compute the rolled-up request status.
+  let newStatus: SigningStatus = request.status;
+  if (event === 'declined') {
+    newStatus = 'declined';
+  } else if (event === 'signed') {
+    const allSigned = updatedSigners.every((s) => Boolean(s.signedAt));
+    newStatus = allSigned ? 'signed' : request.status === 'declined' ? 'declined' : 'sent';
+  } else if (event === 'viewed' && request.status === 'sent') {
+    newStatus = 'viewed';
+  }
+
+  await db.transaction(async (tx) => {
+    await tx.update(signingRequests)
+      .set({ status: newStatus, signers: updatedSigners })
+      .where(eq(signingRequests.id, request.id));
+
+    await tx.insert(signingEvents).values({
+      requestId: request.id,
+      tenantId: request.tenantId,
+      signerEmail: signer.email,
+      event,
+      metadata: { ip: meta?.ip, userAgent: meta?.userAgent },
+    });
+  });
+
+  return { ok: true, status: newStatus };
+}
+
+/**
+ * Public-safe list of signing events for a request (for the signer page audit
+ * trail). Emails are returned as-is because the signer already knows the
+ * participants of their own request.
+ */
+export async function listSigningEvents(requestId: string): Promise<
+  Array<{ event: string; signerEmail: string; eventAt: string }>
+> {
+  const rows = await db.select({
+    event: signingEvents.event,
+    signerEmail: signingEvents.signerEmail,
+    eventAt: signingEvents.eventAt,
+  })
+    .from(signingEvents)
+    .where(eq(signingEvents.requestId, requestId))
+    .orderBy(asc(signingEvents.eventAt));
+  return rows.map((r) => ({
+    event: r.event,
+    signerEmail: r.signerEmail,
+    eventAt: (r.eventAt instanceof Date ? r.eventAt : new Date(r.eventAt)).toISOString(),
+  }));
 }
 
 /**
