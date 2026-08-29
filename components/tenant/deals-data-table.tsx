@@ -8,6 +8,7 @@
 import { useState, useCallback, useMemo, useEffect } from 'react'
 import { Plus, MoreHorizontal, Edit, Trash2, DollarSign, Tag, UserPlus, ArrowRightLeft, Trophy, Layers, Archive, RotateCcw } from 'lucide-react'
 import { cn, formatCurrency, formatDate, toSnakeCase } from '@/lib/utils'
+import { clientLogWarn } from '@/lib/client-logger'
 import { DataTable, ColumnDef, createSortableHeader } from '@/components/ui/data-table'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -276,7 +277,7 @@ export default function DealsDataTable({ initialDeals, contacts: initialContacts
     fetch('/api/tenant/custom-fields?entityType=deal', { signal: abort.signal })
       .then(r => r.ok ? r.json() : { fields: [] })
       .then(d => { if (!abort.signal.aborted) setCustomFields(d.fields ?? []); })
-      .catch((err) => { if (err?.name !== 'AbortError') console.warn('[deals-data-table] Failed to load custom fields:', err); });
+      .catch((err) => { if (err?.name !== 'AbortError') clientLogWarn('deals-data-table', 'Failed to load custom fields', err); });
     return () => abort.abort();
   }, [])
 
@@ -285,7 +286,7 @@ export default function DealsDataTable({ initialDeals, contacts: initialContacts
     fetch('/api/tenant/segments?entity_type=deal', { signal: abort.signal })
       .then(r => r.ok ? r.json() : { data: [] })
       .then(d => { if (!abort.signal.aborted) setSegments(d.data ?? []); })
-      .catch((err) => { if (err?.name !== 'AbortError') console.warn('[deals-data-table] Failed to load segments:', err); });
+      .catch((err) => { if (err?.name !== 'AbortError') clientLogWarn('deals-data-table', 'Failed to load segments', err); });
     return () => abort.abort();
   }, [])
   const callBulk = useCallback(async (action: string, ids: string[], payload: Record<string, unknown> = {}, isSelectAll = false) => {

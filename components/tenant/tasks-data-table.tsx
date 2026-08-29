@@ -8,6 +8,7 @@
 import { useState, useCallback, useMemo, useEffect } from 'react'
 import { Plus, MoreHorizontal, Edit, Trash2, CheckCircle, AlertTriangle, Columns, UserPlus, Flag, Calendar as CalendarIcon, RotateCcw, Archive } from 'lucide-react'
 import { cn, formatDate, formatRelativeTime } from '@/lib/utils'
+import { clientLogWarn } from '@/lib/client-logger'
 import { DataTable, ColumnDef, createSortableHeader } from '@/components/ui/data-table'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -294,7 +295,7 @@ export default function TasksDataTable({ initialTasks, contacts, deals, teamMemb
     fetch('/api/tenant/custom-fields?entityType=task', { signal: abort.signal })
       .then(r => r.ok ? r.json() : { fields: [] })
       .then(d => { if (!abort.signal.aborted) setCustomFields(d.fields ?? []); })
-      .catch((err) => { if (err?.name !== 'AbortError') console.warn('[tasks-data-table] Failed to load custom fields:', err); });
+      .catch((err) => { if (err?.name !== 'AbortError') clientLogWarn('tasks-data-table', 'Failed to load custom fields', err); });
     return () => abort.abort();
   }, [])
 
@@ -303,7 +304,7 @@ export default function TasksDataTable({ initialTasks, contacts, deals, teamMemb
     fetch('/api/tenant/segments?entity_type=task', { signal: abort.signal })
       .then(r => r.ok ? r.json() : { data: [] })
       .then(d => { if (!abort.signal.aborted) setSegments(d.data ?? []); })
-      .catch((err) => { if (err?.name !== 'AbortError') console.warn('[tasks-data-table] Failed to load segments:', err); });
+      .catch((err) => { if (err?.name !== 'AbortError') clientLogWarn('tasks-data-table', 'Failed to load segments', err); });
     return () => abort.abort();
   }, [])
 
