@@ -47,26 +47,33 @@ export default function TicketsPage() {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const limit = 50;
 
-  const loadTickets = useCallback(async () => {
+  const loadTickets = useCallback(async (signal?: AbortSignal) => {
     try {
       setLoading(true);
       const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
       if (filter !== 'all') params.set('status', filter);
       if (search) params.set('q', search);
-      const res = await fetch(`/api/tenant/tickets?${params}`);
+      const res = await fetch(`/api/tenant/tickets?${params}`, { signal });
       const d = await res.json();
+      if (signal?.aborted) return;
       if (res.ok) { setTickets(d.data || []); setTotal(d.total ?? 0); }
       else if (res.status === 403) {
         setTickets([]);
       }
-    } catch {
+    } catch (e) {
+      if ((e as Error)?.name === 'AbortError') return;
       toast.error('Failed to load tickets');
     } finally {
+      if (signal?.aborted) return;
       setLoading(false);
     }
   }, [offset, filter, search]);
 
-  useEffect(() => { loadTickets(); }, [loadTickets]);
+  useEffect(() => {
+    const controller = new AbortController();
+    loadTickets(controller.signal);
+    return () => controller.abort();
+  }, [loadTickets]);
   useEffect(() => { setSelectedIds(new Set()); }, [filter, search]);
 
   const toggleOne = useCallback((id: string) => {

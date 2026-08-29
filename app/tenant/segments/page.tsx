@@ -26,20 +26,27 @@ export default function SegmentsPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState({ name: '', entity_type: 'contacts', filters: '' });
 
-  const fetchSegments = useCallback(async () => {
+  const fetchSegments = useCallback(async (signal?: AbortSignal) => {
     try {
-      const res = await fetch('/api/tenant/segments');
+      const res = await fetch('/api/tenant/segments', { signal });
       if (!res.ok) throw new Error('Failed to fetch');
       const data = await res.json();
+      if (signal?.aborted) return;
       setSegments(data.data ?? data.segments ?? data ?? []);
-    } catch {
+    } catch (e) {
+      if ((e as Error)?.name === 'AbortError') return;
       toast.error('Failed to load segments');
     } finally {
+      if (signal?.aborted) return;
       setLoading(false);
     }
   }, []);
 
-  useEffect(() => { fetchSegments(); }, [fetchSegments]);
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchSegments(controller.signal);
+    return () => controller.abort();
+  }, [fetchSegments]);
 
   const handleCreate = async () => {
     if (!form.name.trim()) { toast.error('Name required'); return; }

@@ -63,15 +63,21 @@ export default function CustomReportBuilder() {
 
   useEffect(() => {
     setSelectedColumns(currentType.columns.slice(0, 5));
-    loadSaved();
+    const controller = new AbortController();
+    loadSaved(controller.signal);
+    return () => controller.abort();
   }, [reportType, currentType.columns]);
 
-  const loadSaved = async () => {
+  const loadSaved = async (signal?: AbortSignal) => {
     try {
-      const res = await fetch('/api/tenant/reports/custom');
+      const res = await fetch('/api/tenant/reports/custom', { signal });
       const d = await res.json();
+      if (signal?.aborted) return;
       setSavedReports(d.data || []);
-    } catch (err) { logError({ error: err, context: "catch:[context]" }); }
+    } catch (err) {
+      if ((err as Error)?.name === 'AbortError') return;
+      logError({ error: err, context: "catch:[context]" });
+    }
   };
 
   const toggleColumn = (col: string) => {

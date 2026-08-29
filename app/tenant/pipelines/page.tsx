@@ -54,22 +54,29 @@ export default function PipelinesPage() {
   // Delete state
   const [deleteTarget, setDeleteTarget] = useState<Pipeline | null>(null);
 
-  const loadPipelines = useCallback(async () => {
+  const loadPipelines = useCallback(async (signal?: AbortSignal) => {
     try {
       setLoading(true);
       setError(null);
-      const res = await fetch('/api/tenant/pipelines');
+      const res = await fetch('/api/tenant/pipelines', { signal });
       if (!res.ok) throw new Error('Failed to fetch pipelines');
       const json = await res.json();
+      if (signal?.aborted) return;
       setPipelines(json.data ?? []);
     } catch (err) {
+      if ((err as Error)?.name === 'AbortError') return;
       setError(err instanceof Error ? err.message : 'Failed to load pipelines');
     } finally {
+      if (signal?.aborted) return;
       setLoading(false);
     }
   }, []);
 
-  useEffect(() => { loadPipelines(); }, [loadPipelines]);
+  useEffect(() => {
+    const controller = new AbortController();
+    loadPipelines(controller.signal);
+    return () => controller.abort();
+  }, [loadPipelines]);
 
   const toggleExpand = (id: string) => {
     setExpanded(prev => {
@@ -175,7 +182,7 @@ export default function PipelinesPage() {
         <div className="text-center py-16 border border-dashed border-border rounded-2xl">
           <p className="text-red-500 font-medium">{error}</p>
           <button
-            onClick={loadPipelines}
+            onClick={() => loadPipelines()}
             className="mt-4 px-4 py-2 rounded-xl bg-violet-600 text-white text-sm font-semibold hover:bg-violet-700"
           >
             Retry

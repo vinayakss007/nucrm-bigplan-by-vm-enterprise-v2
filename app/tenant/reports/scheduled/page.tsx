@@ -32,16 +32,25 @@ export default function ScheduledReportsPage() {
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
 
-  const load = async () => {
+  const load = async (signal?: AbortSignal) => {
     try {
-      const res = await fetch('/api/tenant/reports/scheduled');
+      const res = await fetch('/api/tenant/reports/scheduled', { signal });
       const d = await res.json();
+      if (signal?.aborted) return;
       setReports(d.data || []);
-    } catch { toast.error('Failed to load'); }
+    } catch (e) {
+      if ((e as Error)?.name === 'AbortError') return;
+      toast.error('Failed to load');
+    }
+    if (signal?.aborted) return;
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    const controller = new AbortController();
+    load(controller.signal);
+    return () => controller.abort();
+  }, []);
 
   const toggleStatus = async (id: string, current: string) => {
     const newStatus = current === 'active' ? 'paused' : 'active';

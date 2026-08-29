@@ -37,11 +37,12 @@ function applyToHtml(prefs: any) {
   } catch { /* Fallback to default on corrupted storage data */ }
 }
 
-async function fetchAndApply() {
+async function fetchAndApply(signal?: AbortSignal) {
   try {
-    const res = await fetch('/api/user/preferences', { cache: 'no-store' });
+    const res = await fetch('/api/user/preferences', { cache: 'no-store', signal });
     if (!res.ok) return;
     const data = await res.json();
+    if (signal?.aborted) return;
     applyToHtml(data.preferences ?? {});
     // Cache a tiny copy so reload feels instant before the next fetch
     try { sessionStorage.setItem('nucrm.prefs.cache', JSON.stringify(data.preferences ?? {})); } catch { /* Fallback to default on corrupted storage data */ }
@@ -56,11 +57,12 @@ export default function UserPreferencesApplier() {
       if (cached) applyToHtml(JSON.parse(cached));
     } catch { /* Fallback to default on corrupted storage data */ }
 
-    fetchAndApply();
+    const controller = new AbortController();
+    fetchAndApply(controller.signal);
 
     const handler = () => fetchAndApply();
     window.addEventListener('nucrm:prefs-changed', handler);
-    return () => window.removeEventListener('nucrm:prefs-changed', handler);
+    return () => { window.removeEventListener('nucrm:prefs-changed', handler); controller.abort(); };
   }, []);
 
   return null;

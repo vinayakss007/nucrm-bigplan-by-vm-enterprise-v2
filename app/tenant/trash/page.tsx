@@ -34,15 +34,25 @@ export default function TrashPage() {
   const [restoring, setRestoring] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     const q = filter !== 'all' ? `?type=${filter}` : '';
-    const res = await fetch('/api/tenant/trash' + q);
-    const data = await res.json();
-    setItems(data.data ?? []);
-    setLoading(false);
+    try {
+      const res = await fetch('/api/tenant/trash' + q, { signal });
+      const data = await res.json();
+      if (signal?.aborted) return;
+      setItems(data.data ?? []);
+      setLoading(false);
+    } catch (e) {
+      if ((e as Error)?.name === 'AbortError') return;
+      throw e;
+    }
   }, [filter]);
-  useEffect(() => { load(); }, [filter, load]);
+  useEffect(() => {
+    const controller = new AbortController();
+    load(controller.signal);
+    return () => controller.abort();
+  }, [filter, load]);
 
   const restore = async (item: TrashItem) => {
     await confirmThen(`Restore "${item.name}"?`, async () => {

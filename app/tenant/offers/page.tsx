@@ -78,19 +78,27 @@ export default function OffersListPage() {
     return p.toString();
   }, [page, statusFilter]);
 
-  function load() {
+  function load(signal?: AbortSignal) {
     setLoading(true);
     setError(null);
-    fetch(`/api/tenant/offers?${qs}`, { cache: 'no-store' })
+    fetch(`/api/tenant/offers?${qs}`, { cache: 'no-store', signal })
       .then(async r => {
         if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? `HTTP ${r.status}`);
         return r.json();
       })
-      .then(setData)
-      .catch(e => setError(e.message || 'Failed to load'))
-      .finally(() => setLoading(false));
+      .then(d => { if (signal?.aborted) return; setData(d); })
+      .catch(e => {
+        if ((e as Error)?.name === 'AbortError') return;
+        setError(e.message || 'Failed to load');
+      })
+      .finally(() => { if (signal?.aborted) return; setLoading(false); });
   }
-  useEffect(load, [qs]);
+  useEffect(() => {
+    const controller = new AbortController();
+    load(controller.signal);
+    return () => controller.abort();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [qs]);
 
   const filteredOffers = useMemo(() => {
     if (!data) return [];
@@ -121,7 +129,7 @@ export default function OffersListPage() {
           </p>
         </div>
         <button
-          onClick={load}
+          onClick={() => load()}
           className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border bg-card hover:bg-accent text-sm transition-colors"
         >
           <RefreshCw className={cn('w-3.5 h-3.5', loading && 'animate-spin')} />

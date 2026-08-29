@@ -62,24 +62,36 @@ function OrdersPageInner() {
     items: [{ description: '', quantity: '1', unitPrice: '0' }],
   });
 
-  useEffect(() => { fetchOrders(); fetchContacts(); }, []);
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchOrders(controller.signal);
+    fetchContacts(controller.signal);
+    return () => controller.abort();
+  }, []);
 
-  const fetchContacts = async () => {
+  const fetchContacts = async (signal?: AbortSignal) => {
     try {
-      const res = await fetch('/api/tenant/contacts');
+      const res = await fetch('/api/tenant/contacts', { signal });
       const data = await res.json();
+      if (signal?.aborted) return;
       setContacts(data.contacts || []);
-    } catch { toast.error('Failed to load contacts'); }
+    } catch (e) {
+      if ((e as Error)?.name === 'AbortError') return;
+      toast.error('Failed to load contacts');
+    }
   };
 
-  const fetchOrders = async () => {
+  const fetchOrders = async (signal?: AbortSignal) => {
     try {
-      const res = await fetch('/api/tenant/orders');
+      const res = await fetch('/api/tenant/orders', { signal });
       const data = await res.json();
+      if (signal?.aborted) return;
       setOrders(data.orders || []);
-    } catch {
+    } catch (e) {
+      if ((e as Error)?.name === 'AbortError') return;
       toast.error('Failed to load orders');
     } finally {
+      if (signal?.aborted) return;
       setLoading(false);
     }
   };

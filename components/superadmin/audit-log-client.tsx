@@ -102,7 +102,7 @@ export default function AuditLogClient() {
   const [dateTo, setDateTo] = useState('');
   const [expanded, setExpanded] = useState<string | null>(null);
 
-  const fetchLogs = useCallback(async () => {
+  const fetchLogs = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
@@ -115,20 +115,27 @@ export default function AuditLogClient() {
       if (dateFrom) params.set('start_date', dateFrom);
       if (dateTo) params.set('end_date', dateTo + 'T23:59:59Z');
 
-      const res = await fetch(`/api/super-admin/audit-logs?${params}`);
+      const res = await fetch(`/api/super-admin/audit-logs?${params}`, { signal });
       if (!res.ok) throw new Error('Failed to fetch');
       const data: AuditLogResponse = await res.json();
+      if (signal?.aborted) return;
       setLogs(data.data);
       setTotal(data.total);
-    } catch {
+    } catch (e) {
+      if ((e as Error)?.name === 'AbortError') return;
       setLogs([]);
       setTotal(0);
     } finally {
+      if (signal?.aborted) return;
       setLoading(false);
     }
   }, [page, actionF, targetF, search, tenantSearch, dateFrom, dateTo]);
 
-  useEffect(() => { fetchLogs(); }, [fetchLogs]);
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchLogs(controller.signal);
+    return () => controller.abort();
+  }, [fetchLogs]);
 
   const totalPages = Math.ceil(total / PAGE_SIZE);
 

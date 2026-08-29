@@ -205,16 +205,25 @@ export default function EmailTemplatesPage() {
   const [creating, setCreating] = useState(false);
   const [filter, setFilter] = useState('all');
 
-  const load = async () => {
+  const load = async (signal?: AbortSignal) => {
     setLoading(true);
     try {
-      const res = await fetch('/api/tenant/email-templates');
+      const res = await fetch('/api/tenant/email-templates', { signal });
       const d = await res.json();
+      if (signal?.aborted) return;
       setTemplates(d.data ?? []);
-    } catch { toast.error('Failed to load templates'); }
+    } catch (e) {
+      if ((e as Error)?.name === 'AbortError') return;
+      toast.error('Failed to load templates');
+    }
+    if (signal?.aborted) return;
     setLoading(false);
   };
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    const controller = new AbortController();
+    load(controller.signal);
+    return () => controller.abort();
+  }, []);
 
   const save = async (t: Partial<Template>) => {
     const isNew = !t.id;

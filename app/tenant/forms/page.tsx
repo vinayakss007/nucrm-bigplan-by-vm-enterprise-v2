@@ -73,13 +73,22 @@ export default function FormsPage() {
     settings:{ success_message:'Thank you! We will be in touch.', notify_email:'' },
   });
 
-  const load = async () => {
+  const load = async (signal?: AbortSignal) => {
     setLoading(true);
-    const res = await fetch(`/api/tenant/forms?limit=${limit}&offset=${offset}`);
-    if (res.ok) { const d = await res.json(); setForms(d.data ?? []); setTotal(d.total ?? 0); }
-    setLoading(false);
+    try {
+      const res = await fetch(`/api/tenant/forms?limit=${limit}&offset=${offset}`, { signal });
+      if (res.ok) { const d = await res.json(); if (signal?.aborted) return; setForms(d.data ?? []); setTotal(d.total ?? 0); }
+      setLoading(false);
+    } catch (e) {
+      if ((e as Error)?.name === 'AbortError') return;
+      throw e;
+    }
   };
-  useEffect(() => { load(); }, [offset]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const controller = new AbortController();
+    load(controller.signal);
+    return () => controller.abort();
+  }, [offset]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const create = async (e: React.FormEvent) => {
     e.preventDefault(); setSaving(true);

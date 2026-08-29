@@ -42,12 +42,22 @@ export default function ModulesPage() {
   const [settingsForm, setSettingsForm] = useState<Record<string,string>>({});
   const [saving, setSaving]       = useState(false);
 
-  const load = async () => {
-    const res = await fetch('/api/tenant/modules');
-    const d = await res.json();
-    setModules(d.data ?? []); setLoading(false);
+  const load = async (signal?: AbortSignal) => {
+    try {
+      const res = await fetch('/api/tenant/modules', { signal });
+      const d = await res.json();
+      if (signal?.aborted) return;
+      setModules(d.data ?? []); setLoading(false);
+    } catch (e) {
+      if ((e as Error)?.name === 'AbortError') return;
+      throw e;
+    }
   };
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    const controller = new AbortController();
+    load(controller.signal);
+    return () => controller.abort();
+  }, []);
 
   const filtered = category === 'all' ? modules : modules.filter(m => m.category === category);
 

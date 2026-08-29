@@ -35,20 +35,27 @@ export default function MeetingsPage() {
     location: '', meeting_url: '', contact_id: '', deal_id: '', status: 'scheduled',
   });
 
-  const fetchMeetings = useCallback(async () => {
+  const fetchMeetings = useCallback(async (signal?: AbortSignal) => {
     try {
-      const res = await fetch('/api/tenant/meetings');
+      const res = await fetch('/api/tenant/meetings', { signal });
       if (!res.ok) throw new Error('Failed to fetch meetings');
       const data = await res.json();
+      if (signal?.aborted) return;
       setMeetings(data.data ?? data.meetings ?? data ?? []);
-    } catch {
+    } catch (e) {
+      if ((e as Error)?.name === 'AbortError') return;
       toast.error('Failed to load meetings');
     } finally {
+      if (signal?.aborted) return;
       setLoading(false);
     }
   }, []);
 
-  useEffect(() => { fetchMeetings(); }, [fetchMeetings]);
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchMeetings(controller.signal);
+    return () => controller.abort();
+  }, [fetchMeetings]);
 
   const handleCreate = async () => {
     if (!form.title.trim()) { toast.error('Title required'); return; }

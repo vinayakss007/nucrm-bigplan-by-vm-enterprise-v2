@@ -36,16 +36,28 @@ export default function TicketDetailPage() {
 
   const ticketId = params['id'] as string;
 
-  const loadTicket = useCallback(async () => {
+  const loadTicket = useCallback(async (signal?: AbortSignal) => {
     try {
-      const res = await fetch(`/api/tenant/tickets/${ticketId}`);
+      const res = await fetch(`/api/tenant/tickets/${ticketId}`, { signal });
+      if (signal?.aborted) return;
       if (!res.ok) { toast.error('Failed to load ticket'); router.push('/tenant/tickets'); return; }
       const d = await res.json();
+      if (signal?.aborted) return;
       setTicket(d.data);
-    } catch { toast.error('Failed to load'); } finally { setLoading(false); }
+    } catch (e) {
+      if ((e as Error)?.name === 'AbortError') return;
+      toast.error('Failed to load');
+    } finally {
+      if (signal?.aborted) return;
+      setLoading(false);
+    }
   }, [ticketId, router]);
 
-  useEffect(() => { loadTicket(); }, [loadTicket]);
+  useEffect(() => {
+    const controller = new AbortController();
+    loadTicket(controller.signal);
+    return () => controller.abort();
+  }, [loadTicket]);
 
   const sendReply = async () => {
     if (!replyText.trim()) { toast.error('Reply cannot be empty'); return; }

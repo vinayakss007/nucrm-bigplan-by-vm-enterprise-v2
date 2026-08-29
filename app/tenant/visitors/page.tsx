@@ -31,26 +31,33 @@ export default function VisitorsPage() {
   const [sortBy, setSortBy] = useState<SortField>('lastSeenAt');
   const [sortDesc, setSortDesc] = useState(true);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
       if (filter !== 'all') params.set('filter', filter);
       if (minScore) params.set('min_score', minScore);
       if (maxScore) params.set('max_score', maxScore);
-      const res = await fetch(`/api/tenant/visitors?${params}`);
+      const res = await fetch(`/api/tenant/visitors?${params}`, { signal });
       if (res.ok) {
         const d = await res.json();
+        if (signal?.aborted) return;
         setVisitors(d.data ?? []);
       }
-    } catch {
+    } catch (e) {
+      if ((e as Error)?.name === 'AbortError') return;
       toast.error('Failed to load visitors');
     } finally {
+      if (signal?.aborted) return;
       setLoading(false);
     }
   }, [filter, minScore, maxScore]);
 
-  useEffect(() => { load(); }, [filter, minScore, maxScore, load]);
+  useEffect(() => {
+    const controller = new AbortController();
+    load(controller.signal);
+    return () => controller.abort();
+  }, [filter, minScore, maxScore, load]);
 
   const sorted = [...visitors].sort((a, b) => {
     if (sortBy === 'score') return sortDesc ? b.score - a.score : a.score - b.score;

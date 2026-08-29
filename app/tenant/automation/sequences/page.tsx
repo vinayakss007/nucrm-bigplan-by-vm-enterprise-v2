@@ -33,13 +33,18 @@ export default function SequencesPage() {
     ],
   });
 
-  const load = async () => {
+  const load = async (signal?: AbortSignal) => {
     setLoading(true);
-    const res = await fetch('/api/tenant/sequences').catch(() => null);
-    if (res?.ok) { const d = await res.json(); setSequences(d.data ?? []); }
+    const res = await fetch('/api/tenant/sequences', { signal }).catch(() => null);
+    if (signal?.aborted) return;
+    if (res?.ok) { const d = await res.json(); if (signal?.aborted) return; setSequences(d.data ?? []); }
     setLoading(false);
   };
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    const controller = new AbortController();
+    load(controller.signal);
+    return () => controller.abort();
+  }, []);
 
   const create = async (e: React.FormEvent) => {
     e.preventDefault(); setSaving(true);

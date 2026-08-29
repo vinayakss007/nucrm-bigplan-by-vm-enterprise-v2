@@ -21,16 +21,19 @@ export default function DealTimeline({ dealId }: { dealId: string }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const controller = new AbortController();
+    const { signal } = controller;
     async function load() {
       try {
         const [actRes, callRes, meetRes] = await Promise.all([
-          fetch(`/api/tenant/activities?deal_id=${dealId}`).then(r => r.ok ? r.json() : { data: [] }),
-          fetch(`/api/tenant/calls?deal_id=${dealId}`).then(r => r.ok ? r.json() : { data: [] }),
+          fetch(`/api/tenant/activities?deal_id=${dealId}`, { signal }).then(r => r.ok ? r.json() : { data: [] }),
+          fetch(`/api/tenant/calls?deal_id=${dealId}`, { signal }).then(r => r.ok ? r.json() : { data: [] }),
           // NOTE: GET /api/tenant/meetings has no deal filter, so it is
           // narrowed client-side on dealId below. Without that, every meeting
           // in the tenant would appear on every deal's timeline.
-          fetch(`/api/tenant/meetings?limit=500`).then(r => r.ok ? r.json() : { data: [] }),
+          fetch(`/api/tenant/meetings?limit=500`, { signal }).then(r => r.ok ? r.json() : { data: [] }),
         ]);
+        if (signal.aborted) return;
 
         const activities: TimelineEntry[] = ((actRes.data ?? actRes.activities ?? actRes) as Array<Record<string, unknown>>).map((a) => ({
           id: a.id as string,
@@ -63,13 +66,16 @@ export default function DealTimeline({ dealId }: { dealId: string }) {
           .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
         setEntries(merged);
-      } catch {
+      } catch (e) {
+        if ((e as Error)?.name === 'AbortError') return;
         // non-critical
       } finally {
+        if (signal.aborted) return;
         setLoading(false);
       }
     }
     load();
+    return () => controller.abort();
   }, [dealId]);
 
   const typeConfig = {

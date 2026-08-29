@@ -52,17 +52,22 @@ export default function ChatPage() {
   const [replyText, setReplyText] = useState('');
   const [sendingReply, setSendingReply] = useState(false);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
       if (filter !== 'all') params.set('status', filter);
-      const res = await fetch(`/api/tenant/chat?${params}`);
+      const res = await fetch(`/api/tenant/chat?${params}`, { signal });
       if (res.ok) {
         const d = await res.json();
+        if (signal?.aborted) return;
         setSessions(d.data ?? []);
       }
+    } catch (e) {
+      if ((e as Error)?.name === 'AbortError') return;
+      throw e;
     } finally {
+      if (signal?.aborted) return;
       setLoading(false);
     }
   }, [filter]);
@@ -105,7 +110,11 @@ export default function ChatPage() {
     }
   };
 
-  useEffect(() => { load(); }, [filter, load]);
+  useEffect(() => {
+    const controller = new AbortController();
+    load(controller.signal);
+    return () => controller.abort();
+  }, [filter, load]);
 
   return (
     <div className="space-y-4 animate-fade-in">

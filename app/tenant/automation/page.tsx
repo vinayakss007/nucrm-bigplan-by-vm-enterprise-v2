@@ -69,12 +69,13 @@ export default function AutomationPage() {
   });
   const [saving, setSaving] = useState(false);
 
-  const load = async () => {
+  const load = async (signal?: AbortSignal) => {
     setLoading(true);
     const [pb, cu] = await Promise.all([
-      fetch('/api/tenant/automation/workflows').then(r => r.json()).catch(() => ({data:[]})),
-      fetch('/api/tenant/automations').then(r => r.json()).catch(() => ({data:[]})),
+      fetch('/api/tenant/automation/workflows', { signal }).then(r => r.json()).catch(() => ({data:[]})),
+      fetch('/api/tenant/automations', { signal }).then(r => r.json()).catch(() => ({data:[]})),
     ]);
+    if (signal?.aborted) return;
     // Merge prebuilts with DB state
     const pbData = PREBUILT.map(p => {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -85,7 +86,11 @@ export default function AutomationPage() {
     setCustoms(cu.data ?? []);
     setLoading(false);
   };
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    const controller = new AbortController();
+    load(controller.signal);
+    return () => controller.abort();
+  }, []);
 
   const togglePrebuilt = async (id: string, current: boolean) => {
     setToggling(id);

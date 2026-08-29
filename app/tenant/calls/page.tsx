@@ -55,18 +55,23 @@ export default function CallsPage() {
   }, [calls, searchQuery, directionFilter]);
 
   useEffect(() => {
-    fetchCalls();
-    fetch('/api/tenant/contacts?limit=200').then(r => r.json()).catch(() => ({ data: [] })).then(res => {
+    const controller = new AbortController();
+    const { signal } = controller;
+    fetchCalls(signal);
+    fetch('/api/tenant/contacts?limit=200', { signal }).then(r => r.json()).catch(() => ({ data: [] })).then(res => {
+      if (signal.aborted) return;
       setContacts(res.data || []);
     });
+    return () => controller.abort();
   }, []);
 
-  function fetchCalls() {
+  function fetchCalls(signal?: AbortSignal) {
     setLoading(true);
-    fetch('/api/tenant/calls?limit=100')
+    fetch('/api/tenant/calls?limit=100', { signal })
       .then(r => r.json())
       .catch(() => ({ data: [] }))
       .then(res => {
+        if (signal?.aborted) return;
         setCalls(res.data || []);
         setLoading(false);
       });

@@ -40,15 +40,26 @@ export default function SubscriptionsPage() {
     autoRenew: true, paymentMethod: '', last4: '',
   });
 
-  useEffect(() => { fetchSubscriptions(); }, []);
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchSubscriptions(controller.signal);
+    return () => controller.abort();
+  }, []);
 
-  const fetchSubscriptions = async () => {
+  const fetchSubscriptions = async (signal?: AbortSignal) => {
     try {
-      const res = await fetch('/api/tenant/subscriptions');
+      const res = await fetch('/api/tenant/subscriptions', { signal });
       const data = await res.json();
+      if (signal?.aborted) return;
       setSubscriptions(data.data || []);
-    } catch { toast.error('Failed to load subscriptions'); }
-    finally { setLoading(false); }
+    } catch (e) {
+      if ((e as Error)?.name === 'AbortError') return;
+      toast.error('Failed to load subscriptions');
+    }
+    finally {
+      if (signal?.aborted) return;
+      setLoading(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {

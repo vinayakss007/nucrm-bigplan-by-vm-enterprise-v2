@@ -14,16 +14,18 @@ export default function EmailVerifyBanner({ email }: { email: string; emailVerif
   const [sent, setSent] = useState(false);
   const [serverVerified, setServerVerified] = useState(false);
 
-  const checkVerification = useCallback(async () => {
+  const checkVerification = useCallback(async (signal?: AbortSignal) => {
     try {
-      const res = await fetch('/api/tenant/onboarding/complete');
+      const res = await fetch('/api/tenant/onboarding/complete', { signal });
       if (res.ok) {
         const data = await res.json();
+        if (signal?.aborted) return;
         if (data.completed) {
           setServerVerified(true);
         }
       }
     } catch (e) {
+      if ((e as Error)?.name === 'AbortError') return;
       console.error('[email-verify-banner] Error:', e);
     }
   }, []);
@@ -33,7 +35,9 @@ export default function EmailVerifyBanner({ email }: { email: string; emailVerif
     if (localStorage.getItem(dismissedKey) === 'true') {
       setDismissed(true);
     }
-    checkVerification();
+    const controller = new AbortController();
+    checkVerification(controller.signal);
+    return () => controller.abort();
   }, [email, checkVerification]);
 
   if (dismissed || serverVerified) return null;

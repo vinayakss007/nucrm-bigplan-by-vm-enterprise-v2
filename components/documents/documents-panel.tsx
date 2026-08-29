@@ -48,26 +48,31 @@ export default function DocumentsPanel({ entityType, entityId, readOnly = false 
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     try {
       const params = new URLSearchParams({
         linked_entity_type: entityType,
         linked_entity_id: entityId,
       });
-      const res = await fetch(`/api/tenant/documents?${params}`);
+      const res = await fetch(`/api/tenant/documents?${params}`, { signal });
       const json = await res.json();
+      if (signal?.aborted) return;
       if (!res.ok) throw new Error(json.error || 'Failed to load documents');
       setDocs(json.data ?? []);
     } catch (err) {
+      if ((err as Error)?.name === 'AbortError') return;
       toast.error(err instanceof Error ? err.message : 'Failed to load');
     } finally {
+      if (signal?.aborted) return;
       setLoading(false);
     }
   }, [entityType, entityId]);
 
   useEffect(() => {
-    load();
+    const controller = new AbortController();
+    load(controller.signal);
+    return () => controller.abort();
   }, [load]);
 
   const uploadFile = async (file: File) => {

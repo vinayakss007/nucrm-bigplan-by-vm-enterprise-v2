@@ -44,16 +44,23 @@ export default function ProductsPage() {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [form, setForm] = useState({ name: '', description: '', sku: '', base_price: '' });
 
-  useEffect(() => { fetchProducts(); }, []);
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchProducts(controller.signal);
+    return () => controller.abort();
+  }, []);
 
-  const fetchProducts = async () => {
+  const fetchProducts = async (signal?: AbortSignal) => {
     try {
-      const res = await fetch('/api/tenant/products?limit=200');
+      const res = await fetch('/api/tenant/products?limit=200', { signal });
       const data = await res.json();
+      if (signal?.aborted) return;
       setProducts(data.data || []);
-    } catch {
+    } catch (e) {
+      if ((e as Error)?.name === 'AbortError') return;
       // Failed to load products
     } finally {
+      if (signal?.aborted) return;
       setLoading(false);
     }
   };

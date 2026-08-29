@@ -69,9 +69,12 @@ export default function DealDetailClient({ deal, tasks, activities, permissions,
   // Fetch dynamic pipeline stages; fall back to defaults if unavailable (#756 item 8).
   const [_STAGES, setSTAGES] = useState(DEFAULT_STAGES);
   useEffect(() => {
-    fetch('/api/tenant/pipelines')
+    const controller = new AbortController();
+    const { signal } = controller;
+    fetch('/api/tenant/pipelines', { signal })
       .then(r => r.ok ? r.json() : null)
       .then(d => {
+        if (signal.aborted) return;
         const stages = d?.stages ?? d?.data?.stages ?? d?.data;
         if (Array.isArray(stages) && stages.length > 0) {
           setSTAGES(stages.map((s: { id: string; name: string; color?: string }) => ({
@@ -80,6 +83,7 @@ export default function DealDetailClient({ deal, tasks, activities, permissions,
         }
       })
       .catch(() => { /* keep defaults */ });
+    return () => controller.abort();
   }, []);
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<'overview' | 'tasks' | 'activities' | 'documents' | 'related' | 'timeline' | 'forecast'>('overview');
@@ -106,11 +110,14 @@ export default function DealDetailClient({ deal, tasks, activities, permissions,
 
   // Fetch pipeline stages from API (falls back to defaults)
   useEffect(() => {
+    const controller = new AbortController();
+    const { signal } = controller;
     async function loadStages() {
       try {
-        const res = await fetch('/api/tenant/pipelines');
+        const res = await fetch('/api/tenant/pipelines', { signal });
         if (!res.ok) return;
         const data = await res.json();
+        if (signal.aborted) return;
         const pipelines = data.data ?? data.pipelines ?? data ?? [];
         if (Array.isArray(pipelines) && pipelines.length > 0) {
           // Find the first pipeline's stages or flatten all stages
@@ -132,11 +139,13 @@ export default function DealDetailClient({ deal, tasks, activities, permissions,
             })));
           }
         }
-      } catch {
+      } catch (e) {
+        if ((e as Error)?.name === 'AbortError') return;
         // fallback to defaults
       }
     }
     loadStages();
+    return () => controller.abort();
   }, []);
 
   const stage = stages.find(s => s.id === deal.stage) || stages[0]!;

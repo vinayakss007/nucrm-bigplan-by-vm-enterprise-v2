@@ -64,22 +64,31 @@ export default function OfferDetailPage({ params }: { params: Promise<{ id: stri
   const [sendForm, setSendForm] = useState({ to_email: '', message: '', expires_at: '' });
   const [linkCopied, setLinkCopied] = useState(false);
 
-  function load() {
+  function load(signal?: AbortSignal) {
     setLoading(true);
     setError(null);
-    fetch(`/api/tenant/quotes/${id}`, { cache: 'no-store' })
+    fetch(`/api/tenant/quotes/${id}`, { cache: 'no-store', signal })
       .then(async r => {
         if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? `HTTP ${r.status}`);
         return r.json();
       })
       .then(d => {
+        if (signal?.aborted) return;
         setQuote(d.quote ?? d);
         setItems(d.line_items ?? d.lineItems ?? []);
       })
-      .catch(e => setError(e.message || 'Failed to load offer'))
-      .finally(() => setLoading(false));
+      .catch(e => {
+        if ((e as Error)?.name === 'AbortError') return;
+        setError(e.message || 'Failed to load offer');
+      })
+      .finally(() => { if (signal?.aborted) return; setLoading(false); });
   }
-  useEffect(load, [id]);
+  useEffect(() => {
+    const controller = new AbortController();
+    load(controller.signal);
+    return () => controller.abort();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
 
   const offerMeta = (quote?.metadata?.offer ?? {}) as Record<string, unknown>;
   const publicToken = (offerMeta['public_token'] ?? null) as string | null;

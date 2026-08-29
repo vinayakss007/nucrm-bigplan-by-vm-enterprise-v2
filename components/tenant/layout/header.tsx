@@ -52,27 +52,30 @@ export default function TenantHeader({ tenant, profile, roleSlug, onToggleSideba
   // component.
   useEffect(() => () => clearTimeout(timerRef.current), []);
 
-  const loadNotifications = useCallback(async () => {
+  const loadNotifications = useCallback(async (signal?: AbortSignal) => {
     try {
       const [unreadRes, notifRes] = await Promise.all([
-        fetch('/api/tenant/notifications/unread'),
-        fetch('/api/tenant/notifications'),
+        fetch('/api/tenant/notifications/unread', { signal }),
+        fetch('/api/tenant/notifications', { signal }),
       ]);
       const [unreadData, notifData] = await Promise.all([
         unreadRes.json(),
         notifRes.json(),
       ]);
+      if (signal?.aborted) return;
       setUnread(unreadData.count ?? 0);
       setNotifications((notifData.data ?? []).slice(0, 8).map((n: any) => toSnakeCase(n)));
     } catch (error) {
+      if ((error as Error)?.name === 'AbortError') return;
       console.error('[header] Failed to load notifications:', error);
     }
   }, []);
 
   useEffect(() => {
-    loadNotifications();
-    const iv = setInterval(loadNotifications, 60_000);
-    return () => clearInterval(iv);
+    const controller = new AbortController();
+    loadNotifications(controller.signal);
+    const iv = setInterval(() => loadNotifications(controller.signal), 60_000);
+    return () => { clearInterval(iv); controller.abort(); };
   }, [loadNotifications]);
 
   useEffect(() => {

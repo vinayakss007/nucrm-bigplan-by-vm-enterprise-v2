@@ -16,16 +16,25 @@ export default function KBCategoriesPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [_editing, setEditing] = useState<string | null>(null);
 
-  const load = async () => {
+  const load = async (signal?: AbortSignal) => {
     try {
-      const res = await fetch('/api/tenant/kb/categories');
+      const res = await fetch('/api/tenant/kb/categories', { signal });
       const d = await res.json();
+      if (signal?.aborted) return;
       setCategories(d.data || []);
-    } catch { toast.error('Failed to load categories'); }
+    } catch (e) {
+      if ((e as Error)?.name === 'AbortError') return;
+      toast.error('Failed to load categories');
+    }
+    if (signal?.aborted) return;
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    const controller = new AbortController();
+    load(controller.signal);
+    return () => controller.abort();
+  }, []);
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const _create = async (data: any) => {
