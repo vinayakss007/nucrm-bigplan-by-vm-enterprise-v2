@@ -1,5 +1,27 @@
 #!/usr/bin/env sh
 
+# ── Env-file guard (#1125) ────────────────────────────────────────────────────
+# Hard-block committing any .env* file except .env.example, regardless of
+# whether gitleaks is installed. This is the last line of defence against
+# leaking real secrets (DB passwords, JWT/encryption keys, API tokens) — the
+# incident #1125 was exactly this class of mistake. Dependency-free; always runs.
+# Allowlist: committed TEMPLATES that contain only placeholders, never real
+# secrets — .env.example (anywhere) and deploy/.env.production (documented
+# <<<REQUIRED>>> template). Everything else matching .env* is blocked.
+BLOCKED_ENV="$(git diff --cached --name-only --diff-filter=AM \
+  | grep -E '(^|/)\.env($|\.[^/]+$)' \
+  | grep -Ev '(^|/)\.env\.example$' \
+  | grep -Ev '^deploy/\.env\.production$' || true)"
+if [ -n "$BLOCKED_ENV" ]; then
+  echo "✖ Refusing to commit environment files (they may contain real secrets):"
+  echo "$BLOCKED_ENV" | sed 's/^/    /'
+  echo ""
+  echo "  Only .env.example may be committed. If a file was tracked by mistake:"
+  echo "    git rm --cached <file> && echo '<file>' matches .gitignore's .env* rule"
+  echo "  To commit an intentional template, name it *.example."
+  exit 1
+fi
+
 # Gitleaks: detect secrets in staged files
 GITLEAKS_BIN=""
 if command -v gitleaks >/dev/null 2>&1; then
