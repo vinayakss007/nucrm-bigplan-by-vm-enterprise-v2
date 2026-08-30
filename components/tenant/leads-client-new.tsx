@@ -340,15 +340,15 @@ function QuickAddModal({ companies, teamMembers, contacts, onClose, onSuccess }:
 }
 
 interface CompanyOpt { id: string; name: string }
-interface TeamMemberOpt { user_id: string; full_name: string }
-interface ContactOpt { id: string; first_name: string; last_name: string; email: string | null; phone: string | null; job_title: string | null; company_id: string | null; company_name: string | null }
+interface TeamMemberOpt { user_id: string; full_name: string | null }
+interface ContactOpt { id: string; first_name: string; last_name: string | null; email: string | null; phone: string | null; job_title: string | null; company_id: string | null; company_name: string | null }
 
 interface Props {
   permissions: Record<string,boolean>;
   teamMembers: TeamMemberOpt[];
   companies: CompanyOpt[];
   contacts: ContactOpt[];
-  stats: { lead_status: string; count: string }[];
+  stats: { lead_status: string; count: number }[];
   sources: { lead_source: string | null; count?: unknown }[];
   tenantId: string;
   userId: string;
