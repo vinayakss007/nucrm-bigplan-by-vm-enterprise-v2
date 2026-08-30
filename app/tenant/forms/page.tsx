@@ -12,7 +12,6 @@ import { Plus, FileText, ExternalLink, Copy, Check, ToggleLeft, ToggleRight,
 import { cn, formatRelativeTime } from '@/lib/utils';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import Pagination from '@/components/tenant/pagination';
-import { Breadcrumb } from '@/components/shared/breadcrumb';
 import { ListSkeleton } from '@/components/shared/page-skeleton';
 import toast from 'react-hot-toast';
 
@@ -177,7 +176,6 @@ export default function FormsPage() {
 
   return (
     <div className="max-w-[1600px] mx-auto space-y-6 animate-fade-in">
-      <Breadcrumb />
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-bold">Forms</h1>

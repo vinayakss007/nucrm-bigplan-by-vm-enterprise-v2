@@ -16,6 +16,7 @@ import { ShortcutsModal } from '@/components/shared/shortcuts-modal';
 import { useHotkeys } from '@/components/shared/use-hotkeys';
 import { setupCmdSSave } from '@/components/shared/save-shortcut';
 import UserPreferencesApplier from '@/components/shared/user-preferences-applier';
+import { Breadcrumb } from '@/components/shared/breadcrumb';
 
 interface Props {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -194,6 +195,10 @@ export default function TenantShell({ tenant, profile, roleSlug, permissions, is
             onToggleSidebar={() => { if (window.innerWidth < 768) setMobileOpen(o=>!o); else toggle(); }}
           />
           <main id="main-content" className="flex-1 overflow-y-auto scrollbar-thin p-4 sm:p-5 page-enter" role="main">
+            {/* #1118: global breadcrumb — auto-generates from the URL and renders
+                nothing on the dashboard root, so every tenant page gets a
+                consistent path-back to Dashboard without per-page wiring. */}
+            <Breadcrumb />
             {children}
           </main>
         </div>
