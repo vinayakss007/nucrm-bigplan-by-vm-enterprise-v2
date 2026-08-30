@@ -72,3 +72,12 @@ server.key
 server.crt
 deploy/postgres/server.crt
 deploy/postgres/server.key
+
+
+# Test / simulation scratch artifacts — keep the repo root clean.
+# Curated screenshots belong in docs/; throwaway captures do not.
+*-test.png
+tmp/*
+!tmp/.gitkeep
+tmp_*.sql
+*.log.[0-9]

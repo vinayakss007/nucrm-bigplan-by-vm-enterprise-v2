@@ -11,16 +11,16 @@ hardcoded secrets, TLS bypass, and pool/SSL wiring.
 
 ## TL;DR — what is actually green vs. red right now
 
-| Check | Result | Notes |
-|---|---|---|
-| `tsc --noEmit` | ✅ 0 errors | Strict mode clean across the whole tree |
-| `eslint .` | ✅ 0 errors | 152 warnings (see LOW-1) |
-| Unit + dashboard tests | ✅ 5,309 passed / 0 failed (318 files) | Previously-documented failing tests are fixed |
-| Integration tests | ❌ **5 failed** / 204 passed / 21 skipped | See HIGH-2 |
-| `npm audit` (prod deps) | ❌ **30 vulns: 7 high, 22 moderate, 1 low** | See CRIT-1 / HIGH-1 |
-| `sql.raw()` sites | ✅ none | Old SQLi surface fully removed |
-| Hardcoded secrets in source | ✅ none | Only env-var mappings + seed UUIDs |
-| `@ts-ignore` / `NODE_TLS_REJECT` | ✅ none in prod code | — |
+| Check                            | Result                                      | Notes                                         |
+| -------------------------------- | ------------------------------------------- | --------------------------------------------- |
+| `tsc --noEmit`                   | ✅ 0 errors                                 | Strict mode clean across the whole tree       |
+| `eslint .`                       | ✅ 0 errors                                 | 152 warnings (see LOW-1)                      |
+| Unit + dashboard tests           | ✅ 5,309 passed / 0 failed (318 files)      | Previously-documented failing tests are fixed |
+| Integration tests                | ❌ **5 failed** / 204 passed / 21 skipped   | See HIGH-2                                    |
+| `npm audit` (prod deps)          | ❌ **30 vulns: 7 high, 22 moderate, 1 low** | See CRIT-1 / HIGH-1                           |
+| `sql.raw()` sites                | ✅ none                                     | Old SQLi surface fully removed                |
+| Hardcoded secrets in source      | ✅ none                                     | Only env-var mappings + seed UUIDs            |
+| `@ts-ignore` / `NODE_TLS_REJECT` | ✅ none in prod code                        | —                                             |
 
 The good news: the big-ticket items from the old docs (SQLi via `sql.raw`, contacts
 cross-tenant leak, type errors, most failing tests) are genuinely fixed. The issues below
@@ -32,6 +32,7 @@ tracking docs.
 ## CRITICAL
 
 ### CRIT-1. `dompurify` has a HIGH-severity XSS advisory — and it is the app's only XSS defense
+
 - **Evidence:** `npm audit` flags `dompurify` (GHSA — "XSS via `selectedcontent` re-clone").
 - **Why it's critical here:** `lib/sanitize.ts` wraps DOMPurify and is the sanitizer behind
   **every** `dangerouslySetInnerHTML` in the app — email templates
@@ -42,6 +43,7 @@ tracking docs.
   test that feeds the advisory's payload through `sanitizeHTML()`.
 
 ### CRIT-2. Two backup DB pools connect WITHOUT the SSL hardening every other pool uses
+
 - **Evidence:**
   - `app/api/cron/auto-backup/route.ts:45` → `new Pool({ connectionString: process.env.DATABASE_URL })`
   - `app/api/cron/backup-verify/route.ts:116` and `:208` → `new Pool({ connectionString: ... })`
@@ -59,15 +61,16 @@ tracking docs.
 ## HIGH
 
 ### HIGH-1. Production dependency vulnerabilities (7 high), including one with NO fix available
-| Package | Installed | Severity | Advisory summary |
-|---|---|---|---|
-| `dompurify` | (nested) | high | XSS (see CRIT-1) |
-| `nodemailer` | 8.0.9 | high | `raw` option bypasses `disableFileAccess`/`disableUrlAccess` → arbitrary file read + SSRF |
-| `xlsx` | 0.18.5 | high | Prototype pollution + ReDoS — **no fixed version published** |
-| `mathjs` | 14.9.1 | high | Unsafe object property setter (prototype pollution) |
-| `js-yaml` | 4.1.1 | high (transitive) | Quadratic-complexity DoS via merge-key aliases |
-| `brace-expansion` | transitive | high | DoS via large numeric range |
-| `fast-uri` | transitive | high | Host confusion via backslash authority delimiter |
+
+| Package           | Installed  | Severity          | Advisory summary                                                                          |
+| ----------------- | ---------- | ----------------- | ----------------------------------------------------------------------------------------- |
+| `dompurify`       | (nested)   | high              | XSS (see CRIT-1)                                                                          |
+| `nodemailer`      | 8.0.9      | high              | `raw` option bypasses `disableFileAccess`/`disableUrlAccess` → arbitrary file read + SSRF |
+| `xlsx`            | 0.18.5     | high              | Prototype pollution + ReDoS — **no fixed version published**                              |
+| `mathjs`          | 14.9.1     | high              | Unsafe object property setter (prototype pollution)                                       |
+| `js-yaml`         | 4.1.1      | high (transitive) | Quadratic-complexity DoS via merge-key aliases                                            |
+| `brace-expansion` | transitive | high              | DoS via large numeric range                                                               |
+| `fast-uri`        | transitive | high              | Host confusion via backslash authority delimiter                                          |
 
 - **`nodemailer` / `mathjs`** have fixes but they are major-version bumps (`nodemailer@9`,
   `mathjs@15`) → need code-compat review, not a blind `audit fix --force`.
@@ -77,9 +80,10 @@ tracking docs.
 - **Fix order:** dompurify → nodemailer → mathjs → transitive (`npm audit fix`) → xlsx decision.
 
 ### HIGH-2. Integration test suite is RED — 5 failures block CI
+
 - **Command:** `npm run test:integration` → 5 failed / 204 passed / 21 skipped.
 - **Root cause (single):** every failure throws `Environment validation failed: ENCRYPTION_KEY
-  is required for backup encryption`. The fixtures in
+is required for backup encryption`. The fixtures in
   `tests/integration/critical-coverage.test.ts` (~line 537/544) and
   `tests/integration/vulnerability-security.test.ts` (~line 545) construct a "valid" env but
   omit `ENCRYPTION_KEY` (and `SESSION_SECRET`), which `lib/env.ts:validateEnv()` now requires.
@@ -95,6 +99,7 @@ tracking docs.
 ## MEDIUM
 
 ### MED-1. `react-hooks/exhaustive-deps` warnings in 3 production client components
+
 - **Locations:** `app/tenant/analytics/analytics-client.tsx:32-33`,
   `app/tenant/analytics/forecast/forecast-client.tsx:34`,
   `app/tenant/notifications/page.tsx:49`.
@@ -103,6 +108,7 @@ tracking docs.
   correctly in tests but misbehave with real user interaction. Worth a manual review of each.
 
 ### MED-2. `console.log` in 14 API route files
+
 - **Evidence:** 14 files under `app/api/**` still use `console.log(`.
 - **Risk:** unstructured logging can leak PII into stdout/log aggregation and bypasses the
   Sentry PII-scrub pipeline (`sentry-pii-scrub.ts`). Convert to the structured logger and gate
@@ -113,17 +119,20 @@ tracking docs.
 ## LOW
 
 ### LOW-1. 152 ESLint warnings
+
 - 94 `@typescript-eslint/no-explicit-any` (mostly in `tests/**`), 47 `unused-imports/no-unused-vars`,
   11 `react-hooks/exhaustive-deps` (the prod ones are MED-1). Not launch-blocking, but the
   `any` usages in SDK/test code erode the "0 type errors" guarantee at the test boundary.
 
 ### LOW-2. Three lockfiles committed (`package-lock.json`, `pnpm-lock.yaml`, `yarn.lock`)
+
 - Ambiguous install source; different CI/dev machines can resolve different trees. Pick one
   package manager and delete the other two lockfiles.
 
 ---
 
 ## Verified fixed since the old docs (do NOT re-fix)
+
 - `sql.raw()` SQL-injection surface — **gone** (0 call sites).
 - TypeScript errors — **0** across 211K LOC.
 - Unit/dashboard failing tests (contact-timeline, saved-reports, pipelines-stage-safety) — **pass**.
@@ -133,6 +142,7 @@ tracking docs.
 - sharp/libvips CRITICAL CVEs from the 2026-08-23 audit — no longer present.
 
 ## Recommended launch order
+
 1. **CRIT-1** dompurify bump (+ regression test) — small, high payoff.
 2. **CRIT-2** SSL on the 3 backup pools — a few lines, closes a plaintext-DB path.
 3. **HIGH-2** fix the 5 integration fixtures — unblocks the security test suite.
