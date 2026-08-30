@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/errors-server';
 import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
@@ -36,7 +37,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[roles GET]', err);
+    void logError({ error: err, context: 'tenant/roles GET' });
     return apiError(err);
   }
 });
@@ -73,7 +74,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[roles POST]', err);
+    void logError({ error: err, context: 'tenant/roles POST' });
     return apiError(err);
   }
 });

@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/errors-server';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { createOrderSchema } from '@/lib/api/schemas';
 import { parsePageLimit } from '@/lib/api/query-params';
@@ -52,7 +53,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       totalPages: Math.ceil(total / limit)
     });
   } catch (error) {
-    console.error('[orders/GET]', error);
+    void logError({ error, context: 'tenant/orders GET' });
     return NextResponse.json({ error: 'Failed to fetch orders' }, { status: 500 });
   }
 });
@@ -138,7 +139,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
 
     return NextResponse.json({ order }, { status: 201 });
   } catch (error) {
-    console.error('[orders/POST]', error);
+    void logError({ error, context: 'tenant/orders POST' });
     return NextResponse.json({ error: 'Failed to create order' }, { status: 500 });
   }
 });

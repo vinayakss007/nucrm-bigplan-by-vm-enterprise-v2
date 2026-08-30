@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/errors-server';
 import { apiError } from '@/lib/api-error';
 import { requireAuth, requirePerm, requireModule } from '@/lib/auth/middleware';
 import { checkLimit } from '@/lib/usage/middleware';
@@ -61,7 +62,7 @@ export const GET = withApiRoute(async (req: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[automations GET]', err);
+    void logError({ error: err, context: 'tenant/automations GET' });
     return apiError(err);
   }
 });
@@ -109,7 +110,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[automations POST]', err);
+    void logError({ error: err, context: 'tenant/automations POST' });
     return apiError(err);
   }
 });

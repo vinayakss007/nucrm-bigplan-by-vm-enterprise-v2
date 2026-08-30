@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/errors-server';
 import { apiError } from '@/lib/api-error';
 import { db } from '@/drizzle/db';
 import { portalClients, platformSettings } from '@/drizzle/schema';
@@ -128,7 +129,7 @@ export async function POST(request: NextRequest) {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[portal login]', err);
+    void logError({ error: err, context: 'tenant/portal/login' });
     return apiError(err);
   }
 }
@@ -156,7 +157,7 @@ export async function GET(request: NextRequest) {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[portal status]', err);
+    void logError({ error: err, context: 'tenant/portal/login status' });
     return apiError(err);
   }
 }

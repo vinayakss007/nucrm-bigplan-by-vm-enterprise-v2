@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/errors-server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { auditLogs, users, editHistory } from '@/drizzle/schema';
@@ -131,7 +132,7 @@ export const GET = withApiRoute(async (req: NextRequest) => {
       offset,
     });
   } catch (error) {
-    console.error('[AUDIT_API]', error);
+    void logError({ error, context: 'tenant/audit GET' });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 });

@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/errors-server';
 import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
@@ -77,7 +78,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     }
 
     let body;
-    try { body = await readJsonBody(request); } catch (err) { console.error('[backup] JSON parse failed', err); return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
+    try { body = await readJsonBody(request); } catch (err) { void logError({ error: err, context: 'tenant/backup JSON parse', level: 'warning' }); return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
 
     // Validate the request body (#1072) — bounds backup_type to the allowed
     // enum and rejects unexpected shapes with a 400 before triggering pg_dump.
@@ -104,7 +105,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
         message: 'Backup completed successfully',
       });
     } else {
-      const cronError = await cronRes.json().catch((err) => { console.error('[backup] cron response parse failed', err); return { error: `HTTP ${cronRes.status}` }; });
+      const cronError = await cronRes.json().catch((err) => { void logError({ error: err, context: 'tenant/backup cron response parse', level: 'warning' }); return { error: `HTTP ${cronRes.status}` }; });
       return NextResponse.json({ error: cronError.error || 'Backup failed' }, { status: 500 });
     }
  

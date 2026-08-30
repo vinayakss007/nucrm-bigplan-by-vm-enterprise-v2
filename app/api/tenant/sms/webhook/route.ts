@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/errors-server';
 import { apiError } from '@/lib/api-error';
 import { validateTwilioSignature, handleIncomingSMS, updateDeliveryStatus } from '@/lib/sms';
 import type { IncomingSMSPayload, DeliveryStatusPayload } from '@/lib/sms';
@@ -43,7 +44,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Invalid signature' }, { status: 403 });
       }
     } else if (process.env['NODE_ENV'] === 'production') {
-      console.error('[sms-webhook] TWILIO_AUTH_TOKEN is not set. Rejecting webhook request.');
+      void logError({ error: new Error('TWILIO_AUTH_TOKEN is not set; rejecting SMS webhook'), context: 'tenant/sms/webhook missing-secret', level: 'warning' });
       return NextResponse.json({ error: 'SMS webhook secret not configured' }, { status: 403 });
     } else {
       console.warn('[sms-webhook] TWILIO_AUTH_TOKEN is not set — skipping signature validation (dev only)');

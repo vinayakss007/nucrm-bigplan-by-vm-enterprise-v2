@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/errors-server';
 import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
 import {
@@ -36,7 +37,7 @@ export const GET = withApiRoute(async (request: NextRequest,
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[tenant partner deals GET]', err);
+    void logError({ error: err, context: 'tenant/partners/[id]/deals GET' });
     return apiError(err);
   }
 });
@@ -90,7 +91,7 @@ export const POST = withApiRoute(async (request: NextRequest,
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[tenant partner deals POST]', err);
+    void logError({ error: err, context: 'tenant/partners/[id]/deals POST' });
 
     // Return 404 for partner-not-found, 400 for partner-inactive
     if (err.message === 'Partner not found') {

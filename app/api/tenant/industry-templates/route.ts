@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/errors-server';
 import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
@@ -32,7 +33,7 @@ export const GET = withApiRoute(async (req: NextRequest) => {
     return NextResponse.json({ data });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[IndustryTemplates] GET error:', err);
+    void logError({ error: err, context: 'tenant/industry-templates GET' });
     return apiError(err);
   }
 });
@@ -100,7 +101,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[IndustryTemplates] error:', err);
+    void logError({ error: err, context: 'tenant/industry-templates' });
     return apiError(err);
   }
 });

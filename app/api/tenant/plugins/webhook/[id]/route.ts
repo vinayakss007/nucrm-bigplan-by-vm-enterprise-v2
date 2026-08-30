@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/errors-server';
 import { apiError, notFound } from '@/lib/api-error';
 import { db } from '@/drizzle/db';
 import { customPlugins } from '@/drizzle/schema';
@@ -101,7 +102,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     try {
       body = JSON.parse(rawBody);
     } catch (err) {
-      console.error('[plugins] webhook parse error', err);
+      void logError({ error: err, context: 'tenant/plugins/webhook parse', level: 'warning' });
     }
 
     // Extract relevant headers

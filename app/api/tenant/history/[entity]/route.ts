@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/errors-server';
 import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
 import { getEntityHistory, getEntitySnapshots, type EntityType } from '@/lib/history';
@@ -58,7 +59,7 @@ export const GET = withApiRoute(async (request: NextRequest,
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[history GET]', err);
+    void logError({ error: err, context: 'tenant/history/[entity] GET' });
     return apiError(err);
   }
 });

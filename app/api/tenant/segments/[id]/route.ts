@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/errors-server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { segments } from '@/drizzle/schema';
@@ -45,7 +46,7 @@ export const DELETE = withApiRoute(
 
       return NextResponse.json({ ok: true, message: 'Segment deleted' });
     } catch (err) {
-      console.error('[segments/[id] DELETE]', err);
+      void logError({ error: err, context: 'tenant/segments/[id] DELETE' });
       return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     }
   },

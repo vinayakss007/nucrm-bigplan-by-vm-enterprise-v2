@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/errors-server';
 import { apiError } from '@/lib/api-error';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
@@ -53,7 +54,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[dead-letter GET]', err);
+    void logError({ error: err, context: 'tenant/jobs/dead-letter GET' });
     return apiError(err);
   }
 });
@@ -136,7 +137,7 @@ export const PATCH = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[dead-letter PATCH]', err);
+    void logError({ error: err, context: 'tenant/jobs/dead-letter PATCH' });
     return apiError(err);
   }
 });

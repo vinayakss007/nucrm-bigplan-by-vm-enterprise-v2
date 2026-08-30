@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/errors-server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { segments } from '@/drizzle/schema';
@@ -67,7 +68,7 @@ export const GET = withApiRoute(async (req: NextRequest) => {
 
     return NextResponse.json({ data });
   } catch (err) {
-    console.error('[segments GET]', err);
+    void logError({ error: err, context: 'tenant/segments GET' });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 });
@@ -148,7 +149,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
       { status: 201 },
     );
   } catch (err) {
-    console.error('[segments POST]', err);
+    void logError({ error: err, context: 'tenant/segments POST' });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 });

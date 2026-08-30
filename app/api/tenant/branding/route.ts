@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/errors-server';
 import { requireAuth, can } from '@/lib/auth/middleware';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { getBrandingForTenant, BrandingConfig } from '@/lib/branding';
@@ -37,7 +38,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     return NextResponse.json({ data: branding });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Internal server error';
-    console.error('[Branding] GET error:', error);
+    void logError({ error, context: 'tenant/branding GET' });
     return NextResponse.json({ error: message }, { status: 500 });
   }
 });
@@ -134,7 +135,7 @@ export const PUT = withApiRoute(async (request: NextRequest) => {
       if (error.message === 'CONFLICT') return NextResponse.json({ error: 'Conflicts with another update' }, { status: 409 });
     }
     const message = error instanceof Error ? error.message : 'Internal server error';
-    console.error('[Branding] PUT error:', error);
+    void logError({ error, context: 'tenant/branding PUT' });
     return NextResponse.json({ error: message }, { status: 500 });
   }
 });

@@ -8,6 +8,7 @@
  * Send WhatsApp messages (template or free-form) via Meta Cloud API
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/errors-server';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { sendWhatsAppSchema } from '@/lib/api/schemas';
 import { requireAuth } from '@/lib/auth/middleware';
@@ -193,7 +194,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[WhatsApp Send] Error:', err.message);
+    void logError({ error: err, context: 'tenant/whatsapp/send' });
     return apiError(err);
   }
 });
