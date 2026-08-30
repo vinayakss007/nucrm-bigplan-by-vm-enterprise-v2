@@ -48,8 +48,7 @@ interface BackupRecord {
 }
 
 interface Props {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  initialBackups: any[]
+  initialBackups: BackupRecord[]
 }
 
 export default function BackupsDataTable({ initialBackups }: Props) {

@@ -53,8 +53,7 @@ interface Tenant {
 }
 
 interface Props {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  initialTenants: any[]
+  initialTenants: Tenant[]
 }
 
 export default function TenantsDataTable({ initialTenants }: Props) {

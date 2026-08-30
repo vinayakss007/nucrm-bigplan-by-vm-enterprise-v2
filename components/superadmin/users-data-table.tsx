@@ -26,8 +26,7 @@ interface User {
 }
 
 interface Props {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  initialUsers: any[]
+  initialUsers: User[]
 }
 
 export default function UsersDataTable({ initialUsers }: Props) {
