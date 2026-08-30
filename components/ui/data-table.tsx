@@ -185,10 +185,20 @@ export function DataTable<TData, TValue>({
     getFacetedUniqueValues: getFacetedUniqueValues(),
     onSortingChange: setSorting,
     onColumnVisibilityChange: setColumnVisibility,
-    onRowSelectionChange: onRowSelectionChange ? (updaterOrValue) => {
-      const newValue = typeof updaterOrValue === 'function' ? updaterOrValue(rowSelection) : updaterOrValue
-      onRowSelectionChange(newValue)
-    } : setRowSelection,
+    // #665: ALWAYS update the internal rowSelection state so `state.rowSelection`
+    // (and therefore the checkboxes and the selectedIds memo) stays accurate.
+    // Previously, when a parent supplied onRowSelectionChange we called ONLY the
+    // parent callback and never setRowSelection — so the table's own selection
+    // state never changed, breaking both the checkbox UI and bulk actions in
+    // parent-controlled mode. Now we update internal state and, if present,
+    // notify the parent with the resolved value.
+    onRowSelectionChange: (updaterOrValue) => {
+      setRowSelection((prev) => {
+        const newValue = typeof updaterOrValue === 'function' ? updaterOrValue(prev) : updaterOrValue
+        onRowSelectionChange?.(newValue)
+        return newValue
+      })
+    },
     onGlobalFilterChange: onGlobalFilterChange || setGlobalFilter,
     state: {
       sorting,
@@ -220,7 +230,13 @@ const virtualizer = useVirtualizer({
     const selectedRows = table.getFilteredSelectedRowModel().rows
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return selectedRows.map(row => row.original as any).map(row => row.id)
-  }, [table])
+    // #665: depend on the selection STATE (rowSelection) and the current data,
+    // not the `table` instance. TanStack returns a STABLE table ref, so a
+    // `[table]` dependency computed once (with an empty selection) and never
+    // recomputed — bulk actions then received an empty selectedIds. rowSelection
+    // changes on every select/deselect; data changes on page/refresh.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [table, rowSelection, data])
 
   // Derived values for select-all-matching feature (must be after table and selectedIds)
   const allPageSelected = table.getIsAllPageRowsSelected()
