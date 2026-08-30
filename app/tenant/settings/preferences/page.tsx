@@ -7,6 +7,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Save, Palette, Calendar, Clock, Loader2, RotateCcw, Mail, Lock, Zap, Search,
   PanelLeftClose, ShieldCheck,
+  type LucideIcon,
 } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import { useTheme } from 'next-themes';
@@ -61,8 +62,7 @@ const SECTIONS = [
 
 type SectionId = typeof SECTIONS[number]['id'];
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Prefs = Record<string, any>;
+type Prefs = Record<string, unknown>;
 
 export default function PreferencesPage() {
   const [prefs, setPrefs] = useState<Prefs>({});
@@ -91,8 +91,12 @@ export default function PreferencesPage() {
 
   const dirty = useMemo(() => JSON.stringify(prefs) !== JSON.stringify(original), [prefs, original]);
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const set = (k: string, v: any) => setPrefs(p => ({ ...p, [k]: v }));
+  const set = (k: string, v: unknown) => setPrefs(p => ({ ...p, [k]: v }));
+  // Read a preference as a string (controlled inputs need string values).
+  const pstr = (k: string, fallback = ''): string => {
+    const v = prefs[k];
+    return typeof v === 'string' ? v : v == null ? fallback : String(v);
+  };
 
   const save = async () => {
     setSaving(true);
@@ -105,7 +109,7 @@ export default function PreferencesPage() {
     if (res.ok) {
       toast.success('Preferences saved');
       setOriginal(prefs);
-      setTheme(prefs['theme']);
+      setTheme(pstr('theme','system'));
       // Notify the global applier to reapply data attributes
       window.dispatchEvent(new Event('nucrm:prefs-changed'));
     } else {
@@ -183,18 +187,18 @@ export default function PreferencesPage() {
       {(activeSection === 'appearance' || q) && (
         <Section icon={Palette} title="Appearance" hidden={!!(q && !match('appearance theme font dark light density accent color motion contrast sidebar avatar', q))}>
           <Field label="Language">
-            <select className={inp} value={prefs['locale'] ?? 'en'} onChange={e => set('locale', e.target.value)}>
+            <select className={inp} value={pstr('locale','en')} onChange={e => set('locale', e.target.value)}>
               {LOCALES.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
             </select>
           </Field>
 
           <Field label="Theme">
-            <RadioGroup value={prefs['theme'] ?? 'system'} onChange={v => set('theme', v)}
+            <RadioGroup value={pstr('theme','system')} onChange={v => set('theme', v)}
               options={[{ value: 'light', label: 'Light' }, { value: 'dark', label: 'Dark' }, { value: 'system', label: 'System' }]} />
           </Field>
 
           <Field label="Font size" hint="Large helps readability on smaller screens or for long sessions.">
-            <RadioGroup value={prefs['font_size'] ?? 'normal'} onChange={v => set('font_size', v)}
+            <RadioGroup value={pstr('font_size','normal')} onChange={v => set('font_size', v)}
               options={[
                 { value: 'small',  label: 'Small',  className: 'text-[11px]' },
                 { value: 'normal', label: 'Normal', className: 'text-[13px]' },
@@ -204,7 +208,7 @@ export default function PreferencesPage() {
           </Field>
 
           <Field label="UI density" hint="How tightly information is packed">
-            <RadioGroup value={prefs['ui_density'] ?? 'cozy'} onChange={v => set('ui_density', v)}
+            <RadioGroup value={pstr('ui_density','cozy')} onChange={v => set('ui_density', v)}
               options={[{ value: 'compact', label: 'Compact' }, { value: 'cozy', label: 'Cozy' }, { value: 'comfy', label: 'Comfortable' }]} />
           </Field>
 
@@ -227,7 +231,7 @@ export default function PreferencesPage() {
           </Field>
 
           <Field label="Sidebar default">
-            <RadioGroup value={prefs['sidebar_default'] ?? 'expanded'} onChange={v => set('sidebar_default', v)}
+            <RadioGroup value={pstr('sidebar_default','expanded')} onChange={v => set('sidebar_default', v)}
               options={[{ value: 'expanded', label: 'Expanded' }, { value: 'collapsed', label: 'Collapsed' }]} />
           </Field>
 
@@ -249,27 +253,27 @@ export default function PreferencesPage() {
         <Section icon={Calendar} title="Date & time" hidden={!!(q && !match('date time week format calendar fiscal', q))}>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <Field label="Date format">
-              <select className={inp} value={prefs['date_format'] ?? 'MM/DD/YYYY'} onChange={e => set('date_format', e.target.value)}>
+              <select className={inp} value={pstr('date_format','MM/DD/YYYY')} onChange={e => set('date_format', e.target.value)}>
                 <option value="MM/DD/YYYY">MM/DD/YYYY (US)</option>
                 <option value="DD/MM/YYYY">DD/MM/YYYY (UK / EU)</option>
                 <option value="YYYY-MM-DD">YYYY-MM-DD (ISO)</option>
               </select>
             </Field>
             <Field label="Time format">
-              <select className={inp} value={prefs['time_format'] ?? '12h'} onChange={e => set('time_format', e.target.value)}>
+              <select className={inp} value={pstr('time_format','12h')} onChange={e => set('time_format', e.target.value)}>
                 <option value="12h">12-hour (AM/PM)</option>
                 <option value="24h">24-hour</option>
               </select>
             </Field>
             <Field label="Week starts on">
-              <select className={inp} value={prefs['week_start'] ?? 'sunday'} onChange={e => set('week_start', e.target.value)}>
+              <select className={inp} value={pstr('week_start','sunday')} onChange={e => set('week_start', e.target.value)}>
                 <option value="sunday">Sunday</option>
                 <option value="monday">Monday</option>
               </select>
             </Field>
           </div>
           <Field label="Default calendar view">
-            <RadioGroup value={prefs['default_calendar_view'] ?? 'week'} onChange={v => set('default_calendar_view', v)}
+            <RadioGroup value={pstr('default_calendar_view','week')} onChange={v => set('default_calendar_view', v)}
               options={[{ value: 'day', label: 'Day' }, { value: 'week', label: 'Week' }, { value: 'month', label: 'Month' }, { value: 'agenda', label: 'Agenda' }]} />
           </Field>
         </Section>
@@ -278,14 +282,14 @@ export default function PreferencesPage() {
       {(activeSection === 'productivity' || q) && (
         <Section icon={Zap} title="Productivity" hidden={!!(q && !match('landing default page size view confirm keyboard shortcut link tab filter tip autosave', q))}>
           <Field label="Landing page after login">
-            <select className={inp} value={prefs['default_landing'] ?? '/tenant/dashboard'} onChange={e => set('default_landing', e.target.value)}>
+            <select className={inp} value={pstr('default_landing','/tenant/dashboard')} onChange={e => set('default_landing', e.target.value)}>
               {LANDING.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
             </select>
           </Field>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <Field label="Default record view">
-              <RadioGroup value={prefs['default_record_view'] ?? 'list'} onChange={v => set('default_record_view', v)}
+              <RadioGroup value={pstr('default_record_view','list')} onChange={v => set('default_record_view', v)}
                 options={[{ value: 'list', label: 'List' }, { value: 'kanban', label: 'Kanban' }, { value: 'card', label: 'Card' }, { value: 'calendar', label: 'Calendar' }]} />
             </Field>
             <Field label="Default page size">
@@ -296,7 +300,7 @@ export default function PreferencesPage() {
           </div>
 
           <Field label="Confirm destructive actions" hint="Always = confirm even small deletions. Danger only = bulk-delete & permanent ops.">
-            <RadioGroup value={prefs['confirm_destructive'] ?? 'always'} onChange={v => set('confirm_destructive', v)}
+            <RadioGroup value={pstr('confirm_destructive','always')} onChange={v => set('confirm_destructive', v)}
               options={[{ value: 'always', label: 'Always' }, { value: 'danger_only', label: 'Danger only' }, { value: 'never', label: 'Never' }]} />
           </Field>
 
@@ -331,19 +335,19 @@ export default function PreferencesPage() {
             <textarea
               rows={5}
               className={inp}
-              value={prefs['email_signature'] ?? ''}
+              value={pstr('email_signature','')}
               onChange={e => set('email_signature', e.target.value)}
               placeholder={`Best regards,\nYour Name\nYour Role`}
               maxLength={5000}
             />
             <p className="text-[11px] text-muted-foreground mt-1 text-right">
-              {(prefs['email_signature'] ?? '').length} / 5,000
+              {pstr('email_signature','').length} / 5,000
             </p>
           </Field>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <Field label="Email tracking by default">
-              <RadioGroup value={prefs['email_tracking_default'] ?? 'on'} onChange={v => set('email_tracking_default', v)}
+              <RadioGroup value={pstr('email_tracking_default','on')} onChange={v => set('email_tracking_default', v)}
                 options={[{ value: 'on', label: 'On' }, { value: 'off', label: 'Off' }, { value: 'ask', label: 'Ask each time' }]} />
             </Field>
             <Field label="Default meeting duration">
@@ -362,11 +366,11 @@ export default function PreferencesPage() {
       {(activeSection === 'privacy' || q) && (
         <Section icon={Lock} title="Privacy" hidden={!!(q && !match('privacy online status activity visible team manager', q))}>
           <Field label="Online status visible to">
-            <RadioGroup value={prefs['online_status_visible'] ?? 'team'} onChange={v => set('online_status_visible', v)}
+            <RadioGroup value={pstr('online_status_visible','team')} onChange={v => set('online_status_visible', v)}
               options={[{ value: 'everyone', label: 'Everyone' }, { value: 'team', label: 'My team' }, { value: 'nobody', label: 'Nobody' }]} />
           </Field>
           <Field label="Activity feed visible to" hint="Records you created or edited that show up in others' activity streams.">
-            <RadioGroup value={prefs['activity_visible_to'] ?? 'team'} onChange={v => set('activity_visible_to', v)}
+            <RadioGroup value={pstr('activity_visible_to','team')} onChange={v => set('activity_visible_to', v)}
               options={[{ value: 'everyone', label: 'Everyone' }, { value: 'team', label: 'Team' }, { value: 'managers', label: 'Managers' }, { value: 'nobody', label: 'Nobody' }]} />
           </Field>
         </Section>
@@ -375,7 +379,7 @@ export default function PreferencesPage() {
       {(activeSection === 'sidebar' || q) && (
         <SidebarCustomizeSection
           hidden={!!(q && !match('sidebar nav navigation hide show role view', q))}
-          hiddenItems={prefs['hidden_nav_items'] ?? []}
+          hiddenItems={Array.isArray(prefs['hidden_nav_items']) ? (prefs['hidden_nav_items'] as string[]) : []}
           onChange={(next: string[]) => set('hidden_nav_items', next)}
         />
       )}
@@ -415,8 +419,7 @@ function match(corpus: string, q: string) {
 
 const inp = 'w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function Section({ icon: Icon, title, hidden, children }: { icon: any; title: string; hidden?: boolean; children: React.ReactNode }) {
+function Section({ icon: Icon, title, hidden, children }: { icon: LucideIcon; title: string; hidden?: boolean; children: React.ReactNode }) {
   if (hidden) return null;
   return (
     <div className="rounded-xl border border-border bg-card p-5 space-y-4">

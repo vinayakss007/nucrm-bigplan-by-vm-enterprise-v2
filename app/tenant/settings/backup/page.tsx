@@ -7,7 +7,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   HardDrive, Database, Play, CheckCircle, XCircle, Clock, RefreshCw,
-  Save, Loader2, Eye, EyeOff, AlertTriangle, Settings
+  Save, Loader2, Eye, EyeOff, AlertTriangle, Settings,
+  type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
@@ -65,8 +66,7 @@ function formatRelativeTime(iso: string | null | undefined): string {
   return `${days}d ago`;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const STATUS_MAP: Record<string, { icon: any; color: string; bg: string }> = {
+const STATUS_MAP: Record<string, { icon: LucideIcon; color: string; bg: string }> = {
   completed: { icon: CheckCircle, color: 'text-emerald-600', bg: 'bg-emerald-500/10' },
   failed: { icon: XCircle, color: 'text-red-600', bg: 'bg-red-500/10' },
   running: { icon: RefreshCw, color: 'text-blue-600', bg: 'bg-blue-500/10' },
@@ -192,8 +192,7 @@ export default function TenantBackupSettingsPage() {
       } else {
         toast.error(d.error || 'Failed to save');
       }
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (_err: any) {
+    } catch {
       toast.error('Network error');
     }
     setSaving(false);

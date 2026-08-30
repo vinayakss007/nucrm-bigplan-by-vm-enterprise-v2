@@ -10,6 +10,7 @@ import Link from 'next/link';
 import {
   Search, X, Settings as SettingsIcon, ArrowRight,
   CheckCircle2, CircleDashed, AlertTriangle,
+  type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { SCOPES, visibleForRole,
@@ -26,8 +27,7 @@ import { SCOPES, visibleForRole,
 type StatusValue = 'configured' | 'default' | 'attention' | 'unknown';
 type StatusEntry = { status: StatusValue; hint?: string };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const STATUS_META: Record<StatusValue, { color: string; label: string; icon: any }> = {
+const STATUS_META: Record<StatusValue, { color: string; label: string; icon: LucideIcon }> = {
   configured: { color: 'text-emerald-600 dark:text-emerald-400', label: 'Configured', icon: CheckCircle2 },
   default:    { color: 'text-muted-foreground/70',                label: 'Default',     icon: CircleDashed },
   attention:  { color: 'text-amber-600 dark:text-amber-400',     label: 'Attention',   icon: AlertTriangle },

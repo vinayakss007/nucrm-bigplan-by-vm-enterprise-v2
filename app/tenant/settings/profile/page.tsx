@@ -11,9 +11,17 @@ import { cn } from '@/lib/utils';
 
 const TIMEZONES = ['UTC','America/New_York','America/Chicago','America/Denver','America/Los_Angeles','Europe/London','Europe/Paris','Europe/Berlin','Asia/Dubai','Asia/Kolkata','Asia/Singapore','Asia/Tokyo','Australia/Sydney'];
 
+interface UserProfile {
+  full_name?: string | null;
+  phone?: string | null;
+  timezone?: string | null;
+  avatar_url?: string | null;
+  email?: string | null;
+  email_verified?: boolean | null;
+}
+
 export default function ProfileSettingsPage() {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<UserProfile | null>(null);
   const [profile, setProfile] = useState({ full_name:'', phone:'', timezone:'UTC', avatar_url:'' });
   const [password, setPassword] = useState({ current:'', newPass:'', confirm:'' });
   const [prefs, setPrefs] = useState({ email_task_reminders:true, email_deal_updates:true, email_mentions:true, browser_notifications:false });
@@ -34,8 +42,7 @@ export default function ProfileSettingsPage() {
     e.preventDefault(); setSaving('profile');
     const res = await fetch('/api/user/profile',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(profile)});
     const d = await res.json();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    if(res.ok){toast.success('Profile updated');setUser((u:any)=>({...u,...d.user}));}
+    if(res.ok){toast.success('Profile updated');setUser((u)=>({...u,...d.user}));}
     else toast.error(d.error||'Failed');
     setSaving(null);
   };
