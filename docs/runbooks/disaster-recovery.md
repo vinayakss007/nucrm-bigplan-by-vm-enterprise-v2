@@ -9,6 +9,50 @@ Follow these steps in order during an incident.
 
 ---
 
+## 0. Operator tooling — day-to-day + break-glass
+
+One CLI wraps every backup/restore/verify action (thin wrapper over the tested
+`scripts/*.ts`). Run from the app directory with the environment loaded.
+
+```bash
+npm run dr status                 # DR readiness at a glance: latest backup age,
+                                  #   verified?, off-site?  (exit 1 if AT RISK)
+npm run dr list --limit 20        # recent backup_records (id, type, size, when, verified)
+npm run dr backup                 # create a backup now (pg_dump + off-site upload + retention)
+npm run dr verify [--id <uuid>]   # PROVE a backup restores (into a throwaway scratch DB)
+npm run dr restore <flags>        # recover — see below
+```
+
+**Restore (destructive — guarded):** delegates to `scripts/restore-db.ts`, which
+verifies checksum, decrypts if needed, refuses to clobber the live/catalog DB,
+and refuses a non-empty target unless told otherwise.
+
+```bash
+# Dry run first — locate + checksum + decrypt only, never writes:
+TARGET_DATABASE_URL=postgres://user:pass@host:5432/nucrm_restore \
+  npm run dr restore --latest --dry-run
+
+# Real recovery into a fresh DB (requires --confirm):
+TARGET_DATABASE_URL=postgres://user:pass@host:5432/nucrm_restore \
+  npm run dr restore --id <uuid> --confirm
+```
+
+### Startup preflight
+
+The app runs `scripts/preflight.ts` before `next start` (via
+`scripts/start-production.sh`). It refuses to boot if a critical dependency is
+missing — required env + secret strength, DB reachability, migrations applied,
+TLS in prod, Redis (when configured), email, and off-site backup storage.
+
+```bash
+npm run preflight                 # run the checks manually (respects NODE_ENV)
+STRICT=true npm run preflight     # treat warnings as failures too
+```
+
+If you must start despite a failure (emergency only): `PREFLIGHT_SKIP=true`.
+
+---
+
 ## 1. Database Failure
 
 ### Symptoms
