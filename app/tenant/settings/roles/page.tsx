@@ -13,8 +13,19 @@ import toast from 'react-hot-toast';
 
 const DANGER_COLORS = { safe:'text-emerald-500', moderate:'text-amber-500', danger:'text-red-500' };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function RoleEditor({ role, onSave, onClose }: any) {
+interface Role {
+  id?: string;
+  name?: string;
+  description?: string;
+  slug?: string;
+  permissions?: Record<string, boolean>;
+}
+
+function RoleEditor({ role, onSave, onClose }: {
+  role: Role | null;
+  onSave: (data: Role) => void;
+  onClose: () => void;
+}) {
   const [name, setName] = useState(role?.name||'');
   const [description, setDescription] = useState(role?.description||'');
   const [permissions, setPermissions] = useState<Record<string,boolean>>(role?.permissions||{});
@@ -57,7 +68,7 @@ function RoleEditor({ role, onSave, onClose }: any) {
                 <button onClick={() => setOpenCat(open?null:cat)} className="w-full flex items-center justify-between px-4 py-3 bg-muted/30 hover:bg-accent transition-colors">
                   <div className="flex items-center gap-3"><Shield className="w-4 h-4 text-violet-500" /><span className="text-sm font-semibold">{cat}</span><span className="text-xs text-muted-foreground">{catGranted}/{catPs.length}</span></div>
                   <div className="flex items-center gap-2">
-                    {role.slug!=='admin' && <><button type="button" onClick={e => {e.stopPropagation();setCatAll(cat,true);}} className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400">All</button><button type="button" onClick={e => {e.stopPropagation();setCatAll(cat,false);}} className="text-[10px] px-2 py-0.5 rounded-full bg-red-100 text-red-600 dark:bg-red-900/20 dark:text-red-400">None</button></>}
+                    {role?.slug!=='admin' && <><button type="button" onClick={e => {e.stopPropagation();setCatAll(cat,true);}} className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400">All</button><button type="button" onClick={e => {e.stopPropagation();setCatAll(cat,false);}} className="text-[10px] px-2 py-0.5 rounded-full bg-red-100 text-red-600 dark:bg-red-900/20 dark:text-red-400">None</button></>}
                     <ChevronDown className={cn('w-4 h-4 text-muted-foreground transition-transform', open&&'rotate-180')} />
                   </div>
                 </button>
@@ -66,7 +77,7 @@ function RoleEditor({ role, onSave, onClose }: any) {
                     const g = permissions[perm.id]||false;
                     return (
                       <div key={perm.id} className={cn('flex items-center gap-3 px-4 py-3 transition-colors', g?'bg-emerald-50/50 dark:bg-emerald-950/10':'hover:bg-accent/50')}>
-                        <button type="button" onClick={() => role.slug!=='admin' && toggle(perm.id)} disabled={role?.slug==='admin'}
+                        <button type="button" onClick={() => role?.slug!=='admin' && toggle(perm.id)} disabled={role?.slug==='admin'}
                           className={cn('w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all shrink-0', g?'bg-emerald-500 border-emerald-500':'border-border hover:border-violet-400', role?.slug==='admin'&&'opacity-60 cursor-not-allowed')}>
                           {g && <Check className="w-3 h-3 text-white" />}
                         </button>
@@ -92,11 +103,9 @@ function RoleEditor({ role, onSave, onClose }: any) {
 }
 
 export default function RolesPermissionsPage() {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [roles, setRoles] = useState<any[]>([]);
+  const [roles, setRoles] = useState<Role[]>([]);
   const [loading, setLoading] = useState(true);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [editRole, setEditRole] = useState<any>(null);
+  const [editRole, setEditRole] = useState<Role | null>(null);
   const [showEditor, setShowEditor] = useState(false);
 
   const load = async (signal?: AbortSignal) => {
@@ -145,15 +154,15 @@ export default function RolesPermissionsPage() {
                     <div>
                       <div className="flex items-center gap-2 flex-wrap">
                         <p className="font-semibold text-sm">{role.name}</p>
-                        {['admin','manager','sales','viewer'].includes(role.slug) && <span className="text-[10px] font-semibold bg-slate-100 dark:bg-slate-800 text-slate-500 px-1.5 py-0.5 rounded-full flex items-center gap-1"><Lock className="w-2.5 h-2.5" />System</span>}
+                        {['admin','manager','sales','viewer'].includes(role.slug ?? '') && <span className="text-[10px] font-semibold bg-slate-100 dark:bg-slate-800 text-slate-500 px-1.5 py-0.5 rounded-full flex items-center gap-1"><Lock className="w-2.5 h-2.5" />System</span>}
                       </div>
                       {role.description && <p className="text-xs text-muted-foreground mt-0.5">{role.description}</p>}
                       <p className="text-xs text-muted-foreground mt-1">{role.permissions?.all ? `All ${PERMISSIONS.length}` : g} permission{g!==1?'s':''}</p>
                     </div>
                   </div>
                   <div className="flex gap-1 ml-3 max-md:opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
-                    <button onClick={() => { setEditRole(role); setShowEditor(true); }} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border border-border hover:bg-accent transition-colors"><Edit className="w-3 h-3" />{['admin','manager','sales','viewer'].includes(role.slug)?'View':'Edit'}</button>
-                    {!['admin','manager','sales','viewer'].includes(role.slug) && <button onClick={() => del(role.id)} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-950/20 dark:hover:text-red-400 text-muted-foreground transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>}
+                    <button onClick={() => { setEditRole(role); setShowEditor(true); }} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border border-border hover:bg-accent transition-colors"><Edit className="w-3 h-3" />{['admin','manager','sales','viewer'].includes(role.slug ?? '')?'View':'Edit'}</button>
+                    {!['admin','manager','sales','viewer'].includes(role.slug ?? '') && <button onClick={() => role.id && del(role.id)} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-950/20 dark:hover:text-red-400 text-muted-foreground transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>}
                   </div>
                 </div>
               </div>
