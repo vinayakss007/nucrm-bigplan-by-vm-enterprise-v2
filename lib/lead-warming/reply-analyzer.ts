@@ -22,6 +22,7 @@ import { contacts, tasks } from '@/drizzle/schema';
 import { eq, and, sql } from 'drizzle-orm';
 import { createNotification } from '@/lib/notifications';
 import { updateContactDealsSentiment } from '@/lib/ai/sentiment';
+import { logError } from '@/lib/errors-server';
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -125,7 +126,7 @@ export async function analyzeReply(input: AnalyzeReplyInput): Promise<ReplyAnaly
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[lead-warming] AI reply analysis failed:', err.message);
+    await logError({ error: err, context: 'lead-warming AI reply analysis failed', tenantId: input.tenantId, userId: input.userId ?? undefined });
     // Fallback: rule-based analysis
     return fallbackAnalysis(input.replyContent);
   }
@@ -168,8 +169,10 @@ function parseAIResponse(raw: string): ReplyAnalysis {
       extractedEntities: cleanEntities(parsed.extracted_entities),
       requiresFollowUp: Boolean(parsed.requires_follow_up),
     };
-  } catch {
-    console.error('[lead-warming] Failed to parse AI response:', raw.slice(0, 200));
+  } catch (err) {
+    // Sync function with no tenant context in scope; fire-and-forget the log
+    // (logError swallows its own errors). The raw prefix aids debugging.
+    void logError({ error: err, context: 'lead-warming failed to parse AI response', metadata: { raw: raw.slice(0, 200) } });
     return fallbackAnalysis(raw);
   }
 }
@@ -305,7 +308,7 @@ export async function processIncomingReply(input: ProcessReplyInput): Promise<Re
       .limit(1);
 
     if (!originalMessage) {
-      console.error(`[lead-warming] Message not found: ${input.messageId}`);
+      await logError({ error: new Error(`Message not found: ${input.messageId}`), context: 'lead-warming processIncomingReply message not found', tenantId: input.tenantId, metadata: { messageId: input.messageId } });
       return null;
     }
 
@@ -394,7 +397,7 @@ export async function processIncomingReply(input: ProcessReplyInput): Promise<Re
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
-      console.error('[lead-warming] Failed to update deal sentiment:', err.message);
+      await logError({ error: err, context: 'lead-warming failed to update deal sentiment', tenantId: input.tenantId, metadata: { contactId: originalMessage.contactId } });
     }
 
     return analysis;
@@ -402,7 +405,7 @@ export async function processIncomingReply(input: ProcessReplyInput): Promise<Re
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[lead-warming] processIncomingReply error:', err.message);
+    await logError({ error: err, context: 'lead-warming processIncomingReply error', tenantId: input.tenantId, metadata: { messageId: input.messageId } });
     return null;
   }
 }
@@ -519,7 +522,7 @@ export async function analyzeUnprocessedReplies(limit: number = 50): Promise<{ p
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
-      console.error(`[lead-warming] Failed to analyze reply ${reply.id}:`, err.message);
+      await logError({ error: err, context: 'lead-warming failed to analyze reply', tenantId: reply.tenantId, metadata: { replyId: reply.id } });
       errors++;
     }
   }
