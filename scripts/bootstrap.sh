@@ -142,13 +142,18 @@ check_redis() {
   fi
 }
 
-# ─── Step 3: DB Sync ───
-sync_database() {
-  info "Syncing database schema..."
-  if npx drizzle-kit push --config=./drizzle.config.ts 2>&1; then
-    ok "Database schema synced"
+# ─── Step 3: DB Migrate (safe, versioned) ───
+# Uses scripts/migrate.ts, NOT `drizzle-kit push`. push force-syncs the schema
+# and can DROP columns/tables (data loss) on every run. migrate.ts only applies
+# genuinely pending migration files from the journal — if nothing is pending it
+# is a no-op, so this is safe to run on every start/restart.
+migrate_database() {
+  info "Applying pending database migrations..."
+  if npx tsx scripts/migrate.ts --yes 2>&1; then
+    ok "Database migrations applied (or none pending)"
   else
-    warn "Schema sync had issues (may be index conflicts, DB may still work)"
+    fail "Migrations failed — refusing to continue (see output above)"
+    exit 1
   fi
 }
 
@@ -245,7 +250,22 @@ mkdir -p "$APP_DIR/logs"
 
 check_postgres
 check_redis
-sync_database
+migrate_database
+
+# ─── Preflight gate ───
+# Validate env + secrets + DB + migrations + TLS + Redis + email + backups
+# BEFORE the app boots, so a fresh start tells you every blocker up front and
+# refuses to come up half-broken. Set PREFLIGHT_SKIP=true for emergency override.
+if [ "${PREFLIGHT_SKIP:-false}" != "true" ]; then
+  info "Running startup preflight..."
+  if ! npx tsx scripts/preflight.ts; then
+    fail "Preflight failed (see above). Fix the blockers, then run again — or set PREFLIGHT_SKIP=true to override."
+    exit 1
+  fi
+else
+  warn "PREFLIGHT_SKIP=true — skipping startup checks."
+fi
+
 check_setup
 check_build
 start_worker
