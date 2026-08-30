@@ -5,6 +5,7 @@
  */
 import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/errors-server';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { createSequenceSchema } from '@/lib/api/schemas';
 import { requireAuth, requirePerm, can } from '@/lib/auth/middleware';
@@ -51,7 +52,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
-    console.error('[sequences GET]', error);
+    void logError({ error, context: 'tenant/sequences GET' });
     return apiError(error);
   }
 });
@@ -124,7 +125,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
-    console.error('[sequences POST]', error);
+    void logError({ error, context: 'tenant/sequences POST' });
     return apiError(error);
   }
 });
