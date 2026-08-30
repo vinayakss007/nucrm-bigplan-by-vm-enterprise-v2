@@ -7,6 +7,10 @@
 **Multi-tenant Enterprise SaaS CRM** — Next.js 16, PostgreSQL, Drizzle ORM, TypeScript.  
 Self-hosted with full plugin engine, workflow automation, AI-powered insights, and 215 database tables.
 
+> **🤖 Contributors & AI agents — start here:** [`docs/agent-plans/`](./docs/agent-plans/README.md)
+> is the onboarding hub. It links the **Project Map**, **Maintenance Plan**, and
+> **Feature Addition Plan**, plus the mandatory rules in [`AGENTS.md`](./AGENTS.md).
+
 ---
 
 ## Quick Start
