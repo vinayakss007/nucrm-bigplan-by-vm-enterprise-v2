@@ -5,11 +5,11 @@
  */
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, RefreshCw, Loader2, Download, Filter } from 'lucide-react';
 import { formatCurrency, cn } from '@/lib/utils';
-import toast from 'react-hot-toast';
+import { useApiQuery } from '@/lib/query/client';
 
 interface FunnelStage {
   stageId: string;
@@ -58,37 +58,24 @@ function downloadCsv(csv: string) {
 }
 
 export default function ConversionFunnelPage() {
-  const [stages, setStages] = useState<FunnelStage[]>([]);
-  const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(true);
   const [rangeDays, setRangeDays] = useState(0);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams();
-      if (rangeDays > 0) {
-        params.set('from', new Date(Date.now() - rangeDays * 86400000).toISOString());
-      }
-      const res = await fetch(`/api/tenant/reports/conversion-funnel?${params.toString()}`, {
-        signal: AbortSignal.timeout?.(15000) ?? undefined,
-      });
-      if (!res.ok) throw new Error('Failed to load funnel');
-      const json = (await res.json()) as FunnelResponse;
-      setStages(json.data ?? []);
-      setTotal(json.total ?? 0);
-    } catch {
-      toast.error('Failed to load conversion funnel');
-    } finally {
-      setLoading(false);
-    }
-  }, [rangeDays]);
+  // #1328: TanStack Query. rangeDays is part of the query key, so changing the
+  // range refetches automatically; the refresh button calls refetch().
+  const funnelUrl = (() => {
+    const params = new URLSearchParams();
+    if (rangeDays > 0) params.set('from', new Date(Date.now() - rangeDays * 86400000).toISOString());
+    const qs = params.toString();
+    return `/api/tenant/reports/conversion-funnel${qs ? `?${qs}` : ''}`;
+  })();
 
-  useEffect(() => {
-    const abort = new AbortController();
-    void load();
-    return () => abort.abort();
-  }, [load]);
+  const { data: json, isLoading: loading, refetch } = useApiQuery<FunnelResponse>(
+    ['tenant', 'reports', 'conversion-funnel', rangeDays],
+    funnelUrl,
+  );
+  const stages: FunnelStage[] = json?.data ?? [];
+  const total = json?.total ?? 0;
+  const load = () => { refetch(); };
 
   const maxCount = Math.max(1, ...stages.map((s) => s.cumulativeCount));
 
