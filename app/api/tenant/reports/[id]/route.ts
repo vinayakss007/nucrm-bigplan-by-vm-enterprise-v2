@@ -12,6 +12,7 @@ import { eq, and, or, desc, sql } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
 import { concurrencyGuard } from '@/lib/api/concurrency';
+import { logError } from '@/lib/errors-server';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 /**
@@ -72,7 +73,7 @@ export const GET = withApiRoute(async (request: NextRequest,
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
-    console.error('[Report] GET error:', error);
+    await logError({ error: error, context: 'Report GET error', requestMethod: 'GET' });
     return apiError(error);
   }
 });
@@ -137,7 +138,7 @@ export const PATCH = withApiRoute(async (request: NextRequest,
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
-    console.error('[Report] PATCH error:', error);
+    await logError({ error: error, context: 'Report PATCH error', requestMethod: 'PATCH' });
     return apiError(error);
   }
 });
@@ -176,7 +177,7 @@ export const DELETE = withApiRoute(async (request: NextRequest,
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
-    console.error('[Report] DELETE error:', error);
+    await logError({ error: error, context: 'Report DELETE error', requestMethod: 'DELETE' });
     return apiError(error);
   }
 });
@@ -210,7 +211,7 @@ export const POST = withApiRoute(async (request: NextRequest,
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
-    console.error('[Report Run] POST error:', error);
+    await logError({ error: error, context: 'Report Run POST error', requestMethod: 'POST' });
     return apiError(error);
   }
 });

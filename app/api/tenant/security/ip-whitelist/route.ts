@@ -13,6 +13,7 @@ import { platformSettings } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { concurrencyGuard } from '@/lib/api/concurrency';
+import { logError } from '@/lib/errors-server';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 const IP_WHITELIST_KEY = 'ip_whitelist';
@@ -41,7 +42,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[ip-whitelist GET]', err);
+    await logError({ error: err, context: 'ip-whitelist GET', requestMethod: 'GET' });
     return apiError(err);
   }
 });
@@ -95,7 +96,7 @@ export const PUT = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[ip-whitelist PUT]', err);
+    await logError({ error: err, context: 'ip-whitelist PUT', requestMethod: 'PUT' });
     return apiError(err);
   }
 });
@@ -122,7 +123,7 @@ export const DELETE = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[ip-whitelist DELETE]', err);
+    await logError({ error: err, context: 'ip-whitelist DELETE', requestMethod: 'DELETE' });
     return apiError(err);
   }
 });

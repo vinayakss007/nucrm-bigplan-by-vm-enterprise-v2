@@ -12,6 +12,7 @@ import { eq, and } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
+import { logError } from '@/lib/errors-server';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 const CUSTOM_REPORTS_KEY = 'custom_reports';
@@ -52,7 +53,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[custom reports GET]', err);
+    await logError({ error: err, context: 'custom reports GET', requestMethod: 'GET' });
     return apiError(err);
   }
 });
@@ -112,7 +113,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[custom reports POST]', err);
+    await logError({ error: err, context: 'custom reports POST', requestMethod: 'POST' });
     return apiError(err);
   }
 });
@@ -151,7 +152,7 @@ export const DELETE = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[custom reports DELETE]', err);
+    await logError({ error: err, context: 'custom reports DELETE', requestMethod: 'DELETE' });
     return apiError(err);
   }
 });
