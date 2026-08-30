@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { verifySecret } from '@/lib/crypto';
+import { logError } from '@/lib/errors-server';
 import { acquireLock } from '@/lib/cache';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
@@ -100,7 +101,7 @@ export async function POST(request: NextRequest) {
             </div>
           `,
           text: `Hi ${name}, you have ${deals.length} at-risk deals. View them at ${process.env.NEXT_PUBLIC_APP_URL}/tenant/ai/at-risk`
-        }).catch(err => console.error(`[Cron At-Risk] Failed to send email to ${email}:`, err));
+        }).catch(err => void logError({ error: err, context: 'cron/process-at-risk email', level: 'warning' }));
         
         totalEmailsSent++;
       }
@@ -116,7 +117,7 @@ export async function POST(request: NextRequest) {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
-    console.error('[Cron At-Risk] Error:', error);
+    void logError({ error, context: 'cron/process-at-risk' });
     return apiError(error, "Internal server error", 500);
   }
 }

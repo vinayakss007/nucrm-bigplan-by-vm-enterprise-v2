@@ -138,7 +138,7 @@ export async function POST(request: NextRequest) {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err:any) { 
-    console.error('[TrialCheck] Error:', err);
+    void logError({ error: err, context: 'cron/trial-check' });
     return apiError(err); 
   }
 }

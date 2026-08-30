@@ -15,6 +15,7 @@
  */
 
 import { verifySecret } from '@/lib/crypto';
+import { logError } from '@/lib/errors-server';
 import { acquireLock } from '@/lib/cache';
 import { NextRequest, NextResponse } from 'next/server';
 import { processLeadWarming, resetMonthlyCounters } from '@/lib/lead-warming/engine';
@@ -64,7 +65,7 @@ export async function POST(req: NextRequest) {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[cron/lead-warming] Error:', err.message);
+    void logError({ error: err, context: 'cron/lead-warming' });
     return apiError(err, "Internal server error", 500);
   }
 }

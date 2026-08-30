@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { apiError } from '@/lib/api-error';
+import { logError } from '@/lib/errors-server';
 import { acquireLock } from '@/lib/cache';
 import { verifySecret } from '@/lib/crypto';
 import { NextRequest, NextResponse } from 'next/server';
@@ -83,7 +84,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       const row = result.rows[0] as { count: number };
       r['trash_purged'] = row?.count ?? 0;
     } catch (err) {
-      console.error('[Cleanup:PurgeTrash]', err);
+      void logError({ error: err, context: 'cron/cleanup purge-trash', level: 'warning' });
       r['trash_purged'] = 0;
     }
 
@@ -92,7 +93,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) { 
-    console.error('[Cleanup:Main]', err);
+    void logError({ error: err, context: 'cron/cleanup' });
     return apiError(err); 
   }
 });
