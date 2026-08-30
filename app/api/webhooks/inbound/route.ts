@@ -249,7 +249,6 @@ async function resolveItemMapping(
     if (mappings.length === 0) return untouched;
     return applyFieldMappings(item.entity, item.data, mappings);
   } catch (err) {
-    console.error('[webhook] Failed to load field mappings:', err);
     logError({ error: err, context: 'webhook-inbound:load-field-mappings' }).catch(() => undefined);
     return untouched;
   }
@@ -362,7 +361,7 @@ export async function logWebhookDelivery(input: {
       createdAt: new Date(),
     });
   } catch (err) {
-    console.error('[webhook] Failed to log delivery:', err);
+    void logError({ error: err, context: 'webhook-inbound:log-delivery' });
   }
 }
 
@@ -1119,7 +1118,7 @@ export async function POST(request: NextRequest) {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     const duration = Date.now() - startTime;
-    console.error('[inbound webhook]', err);
+    void logError({ error: err, context: 'webhook-inbound POST', tenantId: apiKeyRow?.tenantId });
 
     if (apiKeyRow) {
       logWebhookDelivery({
@@ -1177,7 +1176,7 @@ export async function GET(request: NextRequest) {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[inbound webhook GET]', err);
+    void logError({ error: err, context: 'webhook-inbound GET' });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

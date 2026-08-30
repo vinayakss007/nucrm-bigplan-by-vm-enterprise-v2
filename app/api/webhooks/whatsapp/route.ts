@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { apiError } from '@/lib/api-error';
+import { logError } from '@/lib/errors-server';
 /**
  * WhatsApp Business API Webhook
  */
@@ -62,14 +63,14 @@ export async function POST(req: NextRequest) {
       enqueued = true;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (enqueueErr: any) {
-      console.error('[WhatsApp Webhook] Queue unavailable, falling back to inline processing:', enqueueErr?.message);
+      void logError({ error: enqueueErr, context: 'webhook-whatsapp:queue-unavailable-fallback-inline', level: 'warning' });
     }
 
     if (!enqueued) {
       try {
         await processWhatsAppPayload(body);
       } catch (processErr) {
-        console.error('[WhatsApp Webhook] Inline processing failed — returning 500 for Meta redelivery:', processErr);
+        void logError({ error: processErr, context: 'webhook-whatsapp:inline-processing' });
         return NextResponse.json({ error: 'Processing failed' }, { status: 500 });
       }
     }
@@ -79,7 +80,7 @@ export async function POST(req: NextRequest) {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[WhatsApp Webhook] Error:', err.message);
+    void logError({ error: err, context: 'webhook-whatsapp POST' });
     return apiError(err);
   }
 }

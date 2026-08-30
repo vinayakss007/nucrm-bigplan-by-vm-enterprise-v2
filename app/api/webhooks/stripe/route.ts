@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
     const body = await request.text();
     event = await verifyWebhookSignature(body, signature);
   } catch (err) {
-    console.error('[Stripe Webhook] Verification failed:', err);
+    void logError({ error: err, context: 'webhook-stripe:signature-verification', level: 'warning' });
     if (err instanceof StripeError) {
       return apiError(err, "Bad request", 400);
     }
@@ -105,7 +105,7 @@ export async function POST(request: NextRequest) {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error(`[Stripe Webhook] Error processing ${eventType}:`, err.message);
+    void logError({ error: err, context: 'webhook-stripe:process-event', metadata: { eventType } });
     // Return 500 so Stripe retries — critical for subscription activations
     return NextResponse.json({ error: 'Processing failed' }, { status: 500 });
   }
@@ -288,9 +288,9 @@ async function handlePaymentSucceeded(invoice: any) {
           amount_paid: invoice.amount_paid,
           customer: invoice.customer,
         },
-      }).catch(err => console.error('[Stripe] invoice.paid automation failed:', err));
+      }).catch(err => void logError({ error: err, context: 'webhook-stripe:invoice.paid automation', tenantId: tenant.id }));
     } catch (e) {
-      console.error('[Stripe] automation import failed:', e);
+      void logError({ error: e, context: 'webhook-stripe:automation import', tenantId: tenant.id });
     }
 
     console.log(`[Stripe] Payment succeeded for tenant ${tenant.id}`);
@@ -320,7 +320,7 @@ async function handlePaymentFailed(invoice: any) {
       icon: '💳',
       title: 'Payment Failed',
       message: `Tenant: \`${tenant.id}\`\nAmount: ${invoice.amount_paid ? `$${(invoice.amount_paid / 100).toFixed(2)}` : 'N/A'}\nStatus: past_due`,
-    }).catch((e) => console.error('[stripe webhook] Error:', e));
+    }).catch((e) => void logError({ error: e, context: 'webhook-stripe:payment-failed telegram', tenantId: tenant.id }));
   }
 }
 
