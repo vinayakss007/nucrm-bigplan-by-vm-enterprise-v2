@@ -18,12 +18,12 @@ import {
   Scale, Shield, Save, ArrowRightLeft, Upload, Send,   BrainCircuit, FileEdit, Target, AlertTriangle, Activity, Heart, Bot,
   BarChart3, MessageSquare,
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 
 export type SettingsItem = {
   href: string;
   label: string;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  icon: any;
+  icon: LucideIcon;
   desc?: string;
   adminOnly?: boolean;
   badge?: 'new' | 'beta';
@@ -41,8 +41,7 @@ export type SettingsScope = {
   id: 'personal' | 'workspace' | 'admin';
   label: string;
   desc: string;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  icon: any;
+  icon: LucideIcon;
   adminOnly?: boolean;
 };
 
