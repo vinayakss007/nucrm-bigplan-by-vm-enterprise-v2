@@ -4,7 +4,9 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import { FileSignature, Plus, X, Loader2, Trash2, UserPlus } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
 import toast from 'react-hot-toast';
@@ -43,11 +45,9 @@ const providerColors: Record<string, string> = {
 };
 
 export default function EsignaturePage() {
-  const [requests, setRequests] = useState<SigningRequest[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [filter, setFilter] = useState<string>('all');
   const [showCreate, setShowCreate] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     documentId: '',
     provider: 'internal' as string,
@@ -56,31 +56,39 @@ export default function EsignaturePage() {
 
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
 
-  const load = useCallback(async (signal?: AbortSignal) => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams();
-      if (filter !== 'all') params.set('status', filter);
-      const res = await fetch(`/api/tenant/esignature?${params}`, { signal });
-      if (res.ok) {
-        const d = await res.json();
-        if (signal?.aborted) return;
-        setRequests(d.data ?? []);
-      }
-    } catch (e) {
-      if ((e as Error)?.name === 'AbortError') return;
-      throw e;
-    } finally {
-      if (signal?.aborted) return;
-      setLoading(false);
-    }
-  }, [filter]);
+  // #1328: list via TanStack Query (was raw fetch + useEffect). status filter is
+  // part of the key so each view refetches and caches independently.
+  const params = new URLSearchParams();
+  if (filter !== 'all') params.set('status', filter);
+  const { data, isLoading: loading, error } = useApiQuery<{ data?: SigningRequest[] }>(
+    ['tenant', 'esignature', { filter }],
+    `/api/tenant/esignature?${params}`,
+  );
+  const requests: SigningRequest[] = data?.data ?? [];
+  if (error) toast.error('Failed to load signing requests');
 
-  useEffect(() => {
-    const controller = new AbortController();
-    load(controller.signal);
-    return () => controller.abort();
-  }, [filter, load]);
+  const createRequest = useMutation({
+    mutationFn: async () => {
+      const res = await fetch('/api/tenant/esignature', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          documentId: form.documentId,
+          provider: form.provider,
+          signers: form.signers,
+        }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || 'Failed to create signing request');
+    },
+    onSuccess: () => {
+      toast.success('Signing request created');
+      setShowCreate(false);
+      queryClient.invalidateQueries({ queryKey: ['tenant', 'esignature'] });
+    },
+    onError: (e: Error) => toast.error(e.message || 'Failed to create signing request'),
+  });
+  const saving = createRequest.isPending;
 
   const openCreate = () => {
     setForm({ documentId: '', provider: 'internal', signers: [{ name: '', email: '' }] });
@@ -102,34 +110,13 @@ export default function EsignaturePage() {
     }));
   };
 
-  const submit = async (e: React.FormEvent) => {
+  const submit = (e: React.FormEvent) => {
     e.preventDefault();
     if (form.signers.some(s => !s.name || !s.email)) {
       toast.error('All signers must have name and email');
       return;
     }
-    setSaving(true);
-    try {
-      const res = await fetch('/api/tenant/esignature', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          documentId: form.documentId,
-          provider: form.provider,
-          signers: form.signers,
-        }),
-      });
-      const d = await res.json();
-      if (res.ok) {
-        toast.success('Signing request created');
-        setShowCreate(false);
-        load();
-      } else {
-        toast.error(d.error || 'Failed to create signing request');
-      }
-    } finally {
-      setSaving(false);
-    }
+    createRequest.mutate();
   };
 
   return (

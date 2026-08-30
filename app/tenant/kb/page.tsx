@@ -4,7 +4,9 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import Link from 'next/link';
 import { Book, Search, Plus, Clock, Eye, ThumbsUp, ChevronRight, FolderPlus } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
@@ -27,37 +29,33 @@ interface KBCategory {
   name: string;
 }
 
+const KB_ARTICLES_QUERY = ['tenant', 'kb', 'articles', 'published'] as const;
+const KB_CATEGORIES_QUERY = ['tenant', 'kb', 'categories'] as const;
+
 export default function KBPage() {
-  const [articles, setArticles] = useState<KBArticle[]>([]);
-  const [categories, setCategories] = useState<KBCategory[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState('all');
   const [showCreate, setShowCreate] = useState(false);
 
-  const load = async (signal?: AbortSignal) => {
-    setLoading(true);
-    try {
-      const [aRes, cRes] = await Promise.all([
-        fetch('/api/tenant/kb/articles?status=published', { signal }).then(r => r.json()),
-        fetch('/api/tenant/kb/categories', { signal }).then(r => r.json()),
-      ]);
-      if (signal?.aborted) return;
-      setArticles(aRes.data || []);
-      setCategories(cRes.data || []);
-    } catch (e) {
-      if ((e as Error)?.name === 'AbortError') return;
-      toast.error('Failed to load knowledge base');
-    }
-    if (signal?.aborted) return;
-    setLoading(false);
-  };
+  // #1328: reads via TanStack Query (were parallel raw fetch + useEffect).
+  const { data: articlesData, isLoading: articlesLoading, error: articlesError } = useApiQuery<{ data?: KBArticle[] }>(
+    KB_ARTICLES_QUERY,
+    '/api/tenant/kb/articles?status=published',
+  );
+  const { data: categoriesData, isLoading: categoriesLoading } = useApiQuery<{ data?: KBCategory[] }>(
+    KB_CATEGORIES_QUERY,
+    '/api/tenant/kb/categories',
+  );
+  const articles: KBArticle[] = articlesData?.data ?? [];
+  const categories: KBCategory[] = categoriesData?.data ?? [];
+  const loading = articlesLoading || categoriesLoading;
+  if (articlesError) toast.error('Failed to load knowledge base');
 
-  useEffect(() => {
-    const controller = new AbortController();
-    load(controller.signal);
-    return () => controller.abort();
-  }, []);
+  const load = () => {
+    queryClient.invalidateQueries({ queryKey: KB_ARTICLES_QUERY });
+    queryClient.invalidateQueries({ queryKey: KB_CATEGORIES_QUERY });
+  };
 
   const filtered = articles.filter(a => {
     if (activeCategory !== 'all' && a.categoryId !== activeCategory) return false;

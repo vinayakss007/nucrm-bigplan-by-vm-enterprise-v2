@@ -4,7 +4,9 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useMemo, Suspense } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import { useSearchParams } from 'next/navigation';
 import { Plus, Search, FileText, X, Calendar, DollarSign, User, Loader2, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -39,65 +41,54 @@ export default function ContractsPage() {
   );
 }
 
+const CONTRACTS_QUERY = ['tenant', 'contracts'] as const;
+const CONTRACT_CONTACTS_QUERY = ['tenant', 'contacts', 'for-contracts'] as const;
+
 function ContractsPageInner() {
   const searchParams = useSearchParams();
+  const queryClient = useQueryClient();
   const initialContactId = searchParams.get('contactId') || '';
-  const [contracts, setContracts] = useState<Contract[]>([]);
-  const [contacts, setContacts] = useState<Contact[]>([]);
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [contactFilter, setContactFilter] = useState(initialContactId);
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({ contactId: initialContactId, title: '', contractType: 'service', startDate: '', endDate: '', totalValue: '', terms: '', notes: '' });
 
-  useEffect(() => {
-    const controller = new AbortController();
-    fetchContracts(controller.signal);
-    fetchContacts(controller.signal);
-    return () => controller.abort();
-  }, []);
+  // #1328: reads via TanStack Query (were raw fetch + useEffect).
+  const { data: contractsData, isLoading: loading, error: contractsError } = useApiQuery<{ contracts?: Contract[] }>(
+    CONTRACTS_QUERY,
+    '/api/tenant/contracts',
+  );
+  const contracts: Contract[] = useMemo(() => contractsData?.contracts ?? [], [contractsData]);
+  if (contractsError) toast.error('Failed to load contracts');
 
-  const fetchContacts = async (signal?: AbortSignal) => {
-    try {
-      const res = await fetch('/api/tenant/contacts', { signal });
-      const data = await res.json();
-      if (signal?.aborted) return;
-      setContacts(data.contacts || []);
-    } catch (e) {
-      if ((e as Error)?.name === 'AbortError') return;
-      toast.error('Failed to load contacts');
-    }
-  };
+  const { data: contactsData, error: contactsError } = useApiQuery<{ contacts?: Contact[] }>(
+    CONTRACT_CONTACTS_QUERY,
+    '/api/tenant/contacts',
+  );
+  const contacts: Contact[] = useMemo(() => contactsData?.contacts ?? [], [contactsData]);
+  if (contactsError) toast.error('Failed to load contacts');
 
-  const fetchContracts = async (signal?: AbortSignal) => {
-    try {
-      const res = await fetch('/api/tenant/contracts', { signal });
-      const data = await res.json();
-      if (signal?.aborted) return;
-      setContracts(data.contracts || []);
-    } catch (e) {
-      if ((e as Error)?.name === 'AbortError') return;
-      toast.error('Failed to load contracts');
-    } finally {
-      if (signal?.aborted) return;
-      setLoading(false);
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
+  const createContract = useMutation({
+    mutationFn: async () => {
       const res = await fetch('/api/tenant/contracts', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),
       });
       if (!res.ok) throw new Error('Failed');
+    },
+    onSuccess: () => {
       toast.success('Contract created');
       setShowModal(false);
       setForm({ contactId: '', title: '', contractType: 'service', startDate: '', endDate: '', totalValue: '', terms: '', notes: '' });
-      fetchContracts();
-    } catch { toast.error('Failed to create contract'); }
+      queryClient.invalidateQueries({ queryKey: CONTRACTS_QUERY });
+    },
+    onError: () => toast.error('Failed to create contract'),
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    createContract.mutate();
   };
 
   const getContactName = (contactId: string | null) => {
