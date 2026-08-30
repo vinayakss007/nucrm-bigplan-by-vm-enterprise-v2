@@ -4,7 +4,9 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import { Plus, Shield, X, Loader2, Trash2, ToggleLeft, ToggleRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
@@ -30,12 +32,12 @@ interface SlaPolicy {
   breachCount: number;
 }
 
+const SLA_QUERY = ['tenant', 'sla'] as const;
+
 export default function SlaPage() {
-  const [policies, setPolicies] = useState<SlaPolicy[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<SlaPolicy | null>(null);
-  const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     name: '',
     priority: 'medium' as string,
@@ -46,28 +48,15 @@ export default function SlaPage() {
 
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
 
-  const load = async (signal?: AbortSignal) => {
-    setLoading(true);
-    try {
-      const res = await fetch('/api/tenant/sla', { signal });
-      if (res.ok) {
-        const d = await res.json();
-        if (signal?.aborted) return;
-        setPolicies(d.data ?? []);
-      }
-    } catch (e) {
-      if ((e as Error)?.name === 'AbortError') return;
-      throw e;
-    } finally {
-      if (!signal?.aborted) setLoading(false);
-    }
-  };
+  // #1328: list via TanStack Query (was raw fetch + useEffect).
+  const { data, isLoading: loading, error } = useApiQuery<{ data?: SlaPolicy[] }>(
+    SLA_QUERY,
+    '/api/tenant/sla',
+  );
+  const policies: SlaPolicy[] = data?.data ?? [];
+  if (error) toast.error('Failed to load SLA policies');
 
-  useEffect(() => {
-    const controller = new AbortController();
-    load(controller.signal);
-    return () => controller.abort();
-  }, []);
+  const reload = () => queryClient.invalidateQueries({ queryKey: SLA_QUERY });
 
   const openCreate = () => {
     setEditing(null);
@@ -87,35 +76,8 @@ export default function SlaPage() {
     setShowModal(true);
   };
 
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSaving(true);
-    try {
-      let escalationRules: unknown[];
-      try {
-        escalationRules = JSON.parse(form.escalationRules);
-      } catch {
-        toast.error('Invalid JSON in escalation rules');
-        setSaving(false);
-        return;
-      }
-
-      // #1342: bound the SLA times (1 minute .. 1 year) and require the
-      // response target to be no later than the resolution target.
-      const MAX_MINUTES = 525_600; // 365 days
-      const { responseTimeMinutes: rt, resolutionTimeMinutes: rlt } = form;
-      if (!Number.isFinite(rt) || rt < 1 || rt > MAX_MINUTES ||
-          !Number.isFinite(rlt) || rlt < 1 || rlt > MAX_MINUTES) {
-        toast.error(`Response and resolution times must be between 1 and ${MAX_MINUTES} minutes`);
-        setSaving(false);
-        return;
-      }
-      if (rt > rlt) {
-        toast.error('Response time cannot be longer than resolution time');
-        setSaving(false);
-        return;
-      }
-
+  const savePolicy = useMutation({
+    mutationFn: async (escalationRules: unknown[]) => {
       const payload = {
         ...(editing ? { id: editing.id } : {}),
         name: form.name,
@@ -124,47 +86,78 @@ export default function SlaPage() {
         resolutionTimeMinutes: form.resolutionTimeMinutes,
         escalationRules,
       };
-
       const res = await fetch('/api/tenant/sla', {
         method: editing ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-      const d = await res.json();
-      if (res.ok) {
-        toast.success(editing ? 'Policy updated' : 'Policy created');
-        setShowModal(false);
-        load();
-      } else {
-        toast.error(d.error || 'Failed to save');
-      }
-    } finally {
-      setSaving(false);
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || 'Failed to save');
+      return Boolean(editing);
+    },
+    onSuccess: (wasEditing) => {
+      toast.success(wasEditing ? 'Policy updated' : 'Policy created');
+      setShowModal(false);
+      reload();
+    },
+    onError: (e: Error) => toast.error(e.message || 'Failed to save'),
+  });
+  const saving = savePolicy.isPending;
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    let escalationRules: unknown[];
+    try {
+      escalationRules = JSON.parse(form.escalationRules);
+    } catch {
+      toast.error('Invalid JSON in escalation rules');
+      return;
     }
+
+    // #1342: bound the SLA times (1 minute .. 1 year) and require the
+    // response target to be no later than the resolution target.
+    const MAX_MINUTES = 525_600; // 365 days
+    const { responseTimeMinutes: rt, resolutionTimeMinutes: rlt } = form;
+    if (!Number.isFinite(rt) || rt < 1 || rt > MAX_MINUTES ||
+        !Number.isFinite(rlt) || rlt < 1 || rlt > MAX_MINUTES) {
+      toast.error(`Response and resolution times must be between 1 and ${MAX_MINUTES} minutes`);
+      return;
+    }
+    if (rt > rlt) {
+      toast.error('Response time cannot be longer than resolution time');
+      return;
+    }
+
+    savePolicy.mutate(escalationRules);
   };
 
-  const toggleActive = async (p: SlaPolicy) => {
-    const res = await fetch('/api/tenant/sla', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: p.id, isActive: !p.isActive }),
-    });
-    if (res.ok) {
-      setPolicies(prev => prev.map(x => x.id === p.id ? { ...x, isActive: !x.isActive } : x));
-      toast.success(p.isActive ? 'Policy deactivated' : 'Policy activated');
-    }
-  };
+  const toggleActiveMutation = useMutation({
+    mutationFn: async (p: SlaPolicy) => {
+      const res = await fetch('/api/tenant/sla', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: p.id, isActive: !p.isActive }),
+      });
+      if (!res.ok) throw new Error('Failed to update');
+      return p;
+    },
+    onSuccess: (p) => { toast.success(p.isActive ? 'Policy deactivated' : 'Policy activated'); reload(); },
+  });
+  const toggleActive = (p: SlaPolicy) => toggleActiveMutation.mutate(p);
 
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch('/api/tenant/sla', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, isActive: false }),
+      });
+      if (!res.ok) throw new Error('Failed to remove');
+    },
+    onSuccess: () => { toast.success('Policy removed'); reload(); },
+  });
   const del = async (id: string) => {
-    const res = await fetch('/api/tenant/sla', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, isActive: false }),
-    });
-    if (res.ok) {
-      setPolicies(prev => prev.filter(x => x.id !== id));
-      toast.success('Policy removed');
-    }
+    deleteMutation.mutate(id);
   };
 
   return (

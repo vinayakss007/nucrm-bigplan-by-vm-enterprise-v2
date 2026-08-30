@@ -4,7 +4,9 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import { Plus, Receipt, X, Loader2, Trash2, Pencil, Star } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import { cn } from '@/lib/utils';
@@ -22,12 +24,12 @@ interface TaxRate {
   createdAt: string;
 }
 
+const TAX_QUERY = ['tenant', 'tax'] as const;
+
 export default function TaxSettingsPage() {
-  const [rates, setRates] = useState<TaxRate[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<TaxRate | null>(null);
-  const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     name: '',
     rate: 0,
@@ -39,28 +41,15 @@ export default function TaxSettingsPage() {
 
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
 
-  const load = async (signal?: AbortSignal) => {
-    setLoading(true);
-    try {
-      const res = await fetch('/api/tenant/tax', { signal });
-      if (res.ok) {
-        const d = await res.json();
-        if (signal?.aborted) return;
-        setRates(d.data ?? []);
-      }
-    } catch (e) {
-      if ((e as Error)?.name === 'AbortError') return;
-      throw e;
-    } finally {
-      if (!signal?.aborted) setLoading(false);
-    }
-  };
+  // #1328: list via TanStack Query (was raw fetch + useEffect).
+  const { data, isLoading: loading, error } = useApiQuery<{ data?: TaxRate[] }>(
+    TAX_QUERY,
+    '/api/tenant/tax',
+  );
+  const rates: TaxRate[] = data?.data ?? [];
+  if (error) toast.error('Failed to load tax rates');
 
-  useEffect(() => {
-    const controller = new AbortController();
-    load(controller.signal);
-    return () => controller.abort();
-  }, []);
+  const reload = () => queryClient.invalidateQueries({ queryKey: TAX_QUERY });
 
   const openCreate = () => {
     setEditing(null);
@@ -81,7 +70,36 @@ export default function TaxSettingsPage() {
     setShowModal(true);
   };
 
-  const submit = async (e: React.FormEvent) => {
+  const saveRate = useMutation({
+    mutationFn: async () => {
+      const payload = {
+        ...(editing ? { id: editing.id } : {}),
+        name: form.name,
+        rate: form.rate,
+        type: form.type,
+        isDefault: form.isDefault,
+        ...(form.country ? { country: form.country } : {}),
+        ...(form.state ? { state: form.state } : {}),
+      };
+      const res = await fetch('/api/tenant/tax', {
+        method: editing ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || 'Failed to save');
+      return Boolean(editing);
+    },
+    onSuccess: (wasEditing) => {
+      toast.success(wasEditing ? 'Tax rate updated' : 'Tax rate created');
+      setShowModal(false);
+      reload();
+    },
+    onError: (e: Error) => toast.error(e.message || 'Failed to save'),
+  });
+  const saving = saveRate.isPending;
+
+  const submit = (e: React.FormEvent) => {
     e.preventDefault();
     // #1342: bound the tax rate. A percentage rate must be within 0..100;
     // a fixed-amount rate must simply be non-negative.
@@ -93,45 +111,21 @@ export default function TaxSettingsPage() {
       toast.error('Percentage tax rate cannot exceed 100%');
       return;
     }
-    setSaving(true);
-    try {
-      const payload = {
-        ...(editing ? { id: editing.id } : {}),
-        name: form.name,
-        rate: form.rate,
-        type: form.type,
-        isDefault: form.isDefault,
-        ...(form.country ? { country: form.country } : {}),
-        ...(form.state ? { state: form.state } : {}),
-      };
-
-      const res = await fetch('/api/tenant/tax', {
-        method: editing ? 'PUT' : 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      const d = await res.json();
-      if (res.ok) {
-        toast.success(editing ? 'Tax rate updated' : 'Tax rate created');
-        setShowModal(false);
-        load();
-      } else {
-        toast.error(d.error || 'Failed to save');
-      }
-    } finally {
-      setSaving(false);
-    }
+    saveRate.mutate();
   };
+
+  const deleteRate = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/tenant/tax?id=${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete');
+    },
+    onSuccess: () => { toast.success('Tax rate deleted'); reload(); },
+    onError: () => toast.error('Failed to delete'),
+  });
 
   const del = async (id: string) => {
     await confirmThen('Delete this tax rate?', async () => {
-      const res = await fetch(`/api/tenant/tax?id=${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        setRates(prev => prev.filter(x => x.id !== id));
-        toast.success('Tax rate deleted');
-      } else {
-        toast.error('Failed to delete');
-      }
+      deleteRate.mutate(id);
     });
   };
 
