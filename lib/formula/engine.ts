@@ -16,6 +16,7 @@
  */
 
 import { create, all } from 'mathjs';
+import { logger } from '@/lib/logger';
 
 // Create a restricted mathjs instance — no dangerous functions
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -32,7 +33,7 @@ for (const fn of BLOCKED_FUNCTIONS) {
   try {
     delete (math as unknown as Record<string, unknown>)[fn];
   } catch {
-    console.error('[formula] Failed to delete blocked function', fn);
+    logger.error('[formula] Failed to delete blocked function', { fn });
   }
 }
 
@@ -72,7 +73,7 @@ export class FormulaEngine {
 
       // 2. Validate formula length (prevent DoS via extremely long formulas)
       if (cleanFormula.length > 1000) {
-        console.error('[FormulaEngine] Formula too long (>1000 chars)');
+        logger.warn('[FormulaEngine] Formula too long (>1000 chars)');
         return null;
       }
 
@@ -91,7 +92,7 @@ export class FormulaEngine {
 
       for (const pattern of dangerousPatterns) {
         if (pattern.test(cleanFormula)) {
-          console.error(`[FormulaEngine] Blocked dangerous pattern in formula: "${cleanFormula}"`);
+          logger.warn('[FormulaEngine] Blocked dangerous pattern in formula', { formula: cleanFormula });
           return null;
         }
       }
@@ -106,7 +107,7 @@ export class FormulaEngine {
 
       return result;
     } catch (err) {
-      console.error(`[FormulaEngine] Evaluation failed: "${formula}"`, err);
+      logger.error('[FormulaEngine] Evaluation failed', { formula, error: err instanceof Error ? err.message : String(err) });
       return null;
     }
   }
