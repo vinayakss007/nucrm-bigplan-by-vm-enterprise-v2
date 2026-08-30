@@ -195,6 +195,22 @@ export default function SuperAdminModulesPage() {
                 </tr>
               </thead>
               <tbody>
+                {filtered.length === 0 && (
+                  /* #1071: empty state so the matrix never renders a blank table */
+                  <tr>
+                    <td colSpan={PLANS.length + 3} className="text-center py-16">
+                      <Package className="w-10 h-10 text-white/15 mx-auto mb-3" />
+                      <p className="text-sm font-semibold text-white/70">
+                        {search ? 'No modules match your search' : 'No modules configured'}
+                      </p>
+                      <p className="text-xs text-white/30 mt-1">
+                        {search
+                          ? 'Try a different name, category, or module ID.'
+                          : 'Modules will appear here once they are registered.'}
+                      </p>
+                    </td>
+                  </tr>
+                )}
                 {filtered.map(m => (
                   <tr key={m.id} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
                     {/* Module info */}
