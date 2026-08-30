@@ -13,6 +13,7 @@ import { db } from '@/drizzle/db';
 import { leads, leadScoringRules } from '@/drizzle/schema';
 import { eq, and, isNull, desc, sql } from 'drizzle-orm';
 import { chat } from './gateway';
+import { logger } from '@/lib/logger';
 
 export interface ScoreResult {
   score: number;
@@ -89,7 +90,7 @@ Notes: ${lead.notes?.slice(0, 500) || 'None'}` }],
         next_action: parsed.next_action,
       };
     } catch (err) {
-      console.error('[lead-scoring] AI call failed:', err);
+      logger.error('[lead-scoring] AI call failed', { error: err instanceof Error ? err.message : String(err) });
       // Fallback to 50 if AI fails and no rules applied
       score = 50;
       aiAnalysis = { reason: 'AI analysis failed, used default score.', next_action: 'Review manually' };
@@ -136,7 +137,7 @@ export async function recomputeAllLeads(
       await computeLeadScore(tenantId, lead.id, { useAI: true, userId });
       count++;
     } catch (err) {
-      console.error(`[lead-scoring] Failed for lead ${lead.id}:`, err);
+      logger.error('[lead-scoring] Failed for lead', { leadId: lead.id, error: err instanceof Error ? err.message : String(err) });
     }
   }
 

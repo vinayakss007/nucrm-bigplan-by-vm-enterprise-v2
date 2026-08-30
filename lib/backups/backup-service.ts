@@ -13,6 +13,7 @@ import { uploadBackupArtifact } from './offsite';
 import { encryptBackupFile, isEncryptionEnabled } from './encrypt';
 import { isS3Configured, describeS3ConfigGap } from '@/lib/storage/s3-config';
 import { alertSuperAdmin } from '@/lib/email/service';
+import { logger } from '@/lib/logger';
 
 const exec = promisify(execCb);
 
@@ -173,7 +174,7 @@ export async function createBackup(options: BackupOptions): Promise<BackupResult
         fs.unlinkSync(finalPath);
       } catch (uploadErr) {
         offsiteError = uploadErr instanceof Error ? uploadErr.message : String(uploadErr);
-        console.error('[backup-service] S3 upload failed, keeping local copy:', offsiteError);
+        logger.error('[backup-service] S3 upload failed, keeping local copy', { error: offsiteError });
       }
     } else {
       offsiteError = describeS3ConfigGap();
@@ -223,7 +224,7 @@ export async function createBackup(options: BackupOptions): Promise<BackupResult
         `lost if the container is replaced. Investigate S3/R2 credentials and ` +
         `re-run the backup.`
       ).catch((err) => {
-        console.error('[backup-service] Failed to send off-site failure alert:', err);
+        logger.error('[backup-service] Failed to send off-site failure alert', { error: err instanceof Error ? err.message : String(err) });
       });
     }
 

@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { sendTelegram } from '@/lib/email/service';
+import { logger } from '@/lib/logger';
 
 function getAdminChat(): { botToken: string; chatId: string } | null {
   const botToken = process.env['TELEGRAM_BOT_TOKEN'] || '';
@@ -27,5 +28,5 @@ export async function sendAdminTelegram(opts: {
     message: opts.message,
     icon: opts.icon,
     url: opts.url,
-  }).catch((e) => console.error('[telegram-admin] Error:', e));
+  }).catch((e) => logger.error('[telegram-admin] Error', { error: e instanceof Error ? e.message : String(e) }));
 }
