@@ -38,6 +38,19 @@ const COLUMN_ALIASES: Record<string, Record<string, string>> = {
 
 type ParsedRow = Record<string, string>;
 
+type ImportResultData = {
+  count?: number;
+  results?: {
+    imported?: number;
+    updated?: number;
+    skipped?: number;
+    errors?: string[];
+  };
+};
+type ImportResult =
+  | { type: 'success'; data: ImportResultData }
+  | { type: 'error'; message: string };
+
 // #1075: this page does client-side spreadsheet/CSV parsing (exceljs),
 // drag-and-drop upload and a multi-step mapping flow — a malformed file can
 // throw during render/handlers. Isolate it in an error boundary so a fault
@@ -54,8 +67,7 @@ function ImportExportInner() {
   const [tab, setTab] = useState<'import' | 'export'>('import');
   const [entityType, setEntityType] = useState('contacts');
   const [importing, setImporting] = useState(false);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [result, setResult] = useState<any>(null);
+  const [result, setResult] = useState<ImportResult | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [exporting, setExporting] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -217,10 +229,10 @@ function ImportExportInner() {
       setResult({ type: 'success', data });
       setStep('preview');
       toast.success('Import completed');
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (err: any) {
-      setResult({ type: 'error', message: err.message });
-      toast.error(err.message);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Import failed';
+      setResult({ type: 'error', message });
+      toast.error(message);
     } finally {
       setImporting(false);
     }
@@ -239,9 +251,8 @@ function ImportExportInner() {
       a.click();
       URL.revokeObjectURL(url);
       toast.success('Export downloaded');
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (err: any) {
-      toast.error(err.message || 'Export failed');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Export failed');
     } finally {
       setExporting(false);
     }
@@ -426,7 +437,7 @@ function ImportExportInner() {
                       {result.data.results?.updated ?? 0} updated,
                       {result.data.results?.skipped ?? 0} skipped
                     </p>
-                    {result.data.results?.errors?.length > 0 && (
+                    {(result.data.results?.errors?.length ?? 0) > 0 && result.data.results?.errors && (
                       <details className="mt-2">
                         <summary className="text-xs text-red-600 cursor-pointer">View errors ({result.data.results.errors.length})</summary>
                         <ul className="mt-1 text-xs text-red-600/80 max-h-32 overflow-y-auto">
