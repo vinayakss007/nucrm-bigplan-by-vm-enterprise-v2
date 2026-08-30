@@ -69,6 +69,7 @@
     "backup:verify": "npx tsx scripts/verify-backup.ts",
     "backup:restore": "npx tsx scripts/restore-db.ts",
     "preflight": "npx tsx scripts/preflight.ts",
+    "infra:check": "bash deploy/scripts/infra-readiness.sh",
     "dr": "npx tsx scripts/dr.ts",
     "db:restore": "npx tsx scripts/restore-db.ts",
     "db:reset": "npx tsx scripts/drop-all.ts && npm run db:migrate",
