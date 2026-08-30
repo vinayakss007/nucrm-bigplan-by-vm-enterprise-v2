@@ -7,6 +7,7 @@
 
 import { useState, useCallback, useMemo, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { useOpenCreateParam } from '@/hooks/use-open-create-param'
 import { Plus, MoreHorizontal, Edit, Trash2, DollarSign, Tag, UserPlus, ArrowRightLeft, Trophy, Layers, Archive, RotateCcw } from 'lucide-react'
 import { cn, formatCurrency, formatDate, toSnakeCase } from '@/lib/utils'
 import { clientLogWarn } from '@/lib/client-logger'
@@ -70,6 +71,8 @@ export default function DealsDataTable({ initialDeals, contacts: initialContacts
   const [total, setTotal] = useState(initialDeals.length)
   const [loading, setLoading] = useState(false)
   const [showAdd, setShowAdd] = useState(false)
+  // Open the create form when arriving via ⌘K "New Deal" (?action=create).
+  useOpenCreateParam(() => setShowAdd(true))
   const [globalFilter, setGlobalFilter] = useState('')
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 20 })
   const [stages, setStages] = useState<{ id: string; name: string; pipeline: string }[]>([])
