@@ -245,26 +245,6 @@ export default function FollowUpsPage() {
                     )}>
                       {fu.status}
                     </span>
-                    {fu.status !== 'completed' && (
-                      <button
-                        onClick={async () => {
-                          const res = await fetch(`/api/tenant/follow-ups?id=${fu.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'completed' }) });
-                          if (res.ok) { toast.success('Marked complete'); fetchData(); } else { toast.error('Failed'); }
-                        }}
-                        className="text-xs px-2 py-1 rounded border border-border hover:bg-emerald-50 dark:hover:bg-emerald-950/20 hover:text-emerald-700 transition-colors"
-                      >
-                        Complete
-                      </button>
-                    )}
-                    <button
-                      onClick={async () => {
-                        const res = await fetch(`/api/tenant/follow-ups?id=${fu.id}`, { method: 'DELETE' });
-                        if (res.ok) { toast.success('Deleted'); fetchData(); } else { toast.error('Failed'); }
-                      }}
-                      className="text-xs px-2 py-1 rounded border border-border hover:bg-red-50 dark:hover:bg-red-950/20 hover:text-red-700 text-muted-foreground transition-colors"
-                    >
-                      Delete
-                    </button>
                     {fu.missedDays != null && fu.missedDays > 0 && (
                       <span className="text-xs text-red-500 font-medium whitespace-nowrap">
                         {fu.missedDays}d overdue
