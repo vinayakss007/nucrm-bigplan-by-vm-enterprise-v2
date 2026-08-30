@@ -8,15 +8,16 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   ArrowRightLeft, AlertCircle, ArrowRight, Loader2, RefreshCw,
   UserCheck, Users, TrendingUp, CheckSquare, LifeBuoy, ShieldX,
+  type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
 type Member = { user_id: string; full_name: string; email: string; role_slug: string };
 type Counts = { leads: number; contacts: number; deals: number; tasks: number; tickets: number };
+type MemberApiRow = { userId: string; fullName?: string | null; email: string; roleSlug?: string | null };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const RESOURCE_META: { key: keyof Counts; label: string; icon: any }[] = [
+const RESOURCE_META: { key: keyof Counts; label: string; icon: LucideIcon }[] = [
   { key: 'leads',    label: 'Leads',    icon: UserCheck },
   { key: 'contacts', label: 'Contacts', icon: Users },
   { key: 'deals',    label: 'Deals',    icon: TrendingUp },
@@ -51,10 +52,12 @@ export default function BulkTransferPage() {
       fetch('/api/tenant/members', { signal: controller.signal }).then(r => r.ok ? r.json() : { data: [] }),
       fetch('/api/tenant/me', { signal: controller.signal }).then(r => r.ok ? r.json() : {}),
       fetch('/api/tenant/teams', { signal: controller.signal }).then(r => r.ok ? r.json() : { data: [] }),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ]).then(([mem, me, tms]: any[]) => { if (ignore) return; 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      setMembers((mem.data ?? []).map((m: any) => ({
+    ]).then(([mem, me, tms]: [
+      { data?: MemberApiRow[] },
+      { user?: { id?: string | null }; is_admin?: boolean },
+      { data?: { id: string; name: string }[] },
+    ]) => { if (ignore) return; 
+      setMembers((mem.data ?? []).map((m) => ({
         user_id: m.userId, full_name: m.fullName ?? m.email, email: m.email, role_slug: m.roleSlug ?? '',
        } )));
       setMe({ id: me?.user?.id ?? '', is_admin: me?.is_admin ?? false });
