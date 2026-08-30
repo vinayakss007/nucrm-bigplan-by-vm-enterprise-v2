@@ -18,6 +18,7 @@ import {
   useReactTable,
   type SortingState,
   type ColumnDef,
+  type Column,
   type RowSelectionState,
 } from "@tanstack/react-table"
 import {
@@ -228,8 +229,7 @@ const virtualizer = useVirtualizer({
 
   const selectedIds = React.useMemo(() => {
     const selectedRows = table.getFilteredSelectedRowModel().rows
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return selectedRows.map(row => row.original as any).map(row => row.id)
+    return selectedRows.map(row => (row.original as { id: string }).id)
     // #665: depend on the selection STATE (rowSelection) and the current data,
     // not the `table` instance. TanStack returns a STABLE table ref, so a
     // `[table]` dependency computed once (with an empty selection) and never
@@ -750,6 +750,14 @@ const handleBulkAction = async (action: BulkAction) => {
   )
 }
 
+// Minimal structural type for the sortable-header column: only the methods used
+// here. Accepting this instead of Column<unknown, unknown> keeps the header
+// callable with any concretely-typed Column<TData> passed by callers.
+type SortableColumn = Pick<
+  Column<unknown, unknown>,
+  "getIsSorted" | "toggleSorting"
+>
+
 // Helper to create sortable column headers
 export function createSortableHeader(
   label: string,
@@ -757,8 +765,7 @@ export function createSortableHeader(
 ) {
   return {
     accessorKey,
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    header: ({ column }: any) => {
+    header: ({ column }: { column: SortableColumn }) => {
       const sortState = column.getIsSorted()
       return (
         <Button

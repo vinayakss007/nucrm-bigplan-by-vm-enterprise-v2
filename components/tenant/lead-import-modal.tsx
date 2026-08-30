@@ -14,6 +14,13 @@ interface Props {
   onClose: () => void;
 }
 
+interface ImportResult {
+  imported: number;
+  updated: number;
+  skipped: number;
+  errors: string[];
+}
+
 const SAMPLE_CSV = `first_name,last_name,email,phone,company_name,lead_status,lead_source,budget,authority_level,timeline,city,country,notes
 Jane,Smith,jane@acme.com,+1-555-0101,Acme Corp,new,website,50000,decision_maker,1-3 months,New York,USA,Interested in Pro plan
 Bob,Jones,bob@globex.com,+1-555-0202,Globex Inc,contacted,referral,,influencer,3-6 months,Chicago,USA,Follow up next week
@@ -25,13 +32,11 @@ type Step = 'upload' | 'preview' | 'result';
 export default function LeadImportModal({ onDone, onClose }: Props) {
   const [step, setStep] = useState<Step>('upload');
   const [csvText, setCsvText] = useState('');
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [preview, setPreview] = useState<any[]>([]);
+  const [preview, setPreview] = useState<Record<string, string>[]>([]);
   const [headers, setHeaders] = useState<string[]>([]);
   const [opts, setOpts] = useState({ skipDuplicates: true, updateExisting: false });
   const [importing, setImporting] = useState(false);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [result, setResult] = useState<any>(null);
+  const [result, setResult] = useState<ImportResult | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -87,9 +92,8 @@ export default function LeadImportModal({ onDone, onClose }: Props) {
       if (!res.ok) { toast.error(data.error || 'Import failed'); setImporting(false); return; }
       setResult(data.results);
       setStep('result');
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (err: any) {
-      toast.error(err.message);
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : String(err));
     }
     setImporting(false);
   };
