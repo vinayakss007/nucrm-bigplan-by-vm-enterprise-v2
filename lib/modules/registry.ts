@@ -13,6 +13,7 @@ import { tenantModules, modules } from '@/drizzle/schema/modules';
 import { tenants } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
 import type { ModuleManifest } from '@/types';
+import { logger } from '@/lib/logger';
 
 export const BUILTIN_MODULES: ModuleManifest[] = [
   {
@@ -365,7 +366,7 @@ export class ModuleRegistry {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
-      console.error('[ModuleRegistry] install error:', err);
+      logger.error('[ModuleRegistry] install error', { error: err instanceof Error ? err.message : String(err) });
       return { ok: false, error: err.message };
     }
   }

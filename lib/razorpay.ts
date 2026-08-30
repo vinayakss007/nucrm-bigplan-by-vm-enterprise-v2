@@ -22,6 +22,7 @@
  */
 
 import { webcrypto } from 'crypto';
+import { logger } from '@/lib/logger';
 
 const RAZORPAY_API = 'https://api.razorpay.com/v1';
 
@@ -165,7 +166,7 @@ async function razorpayRequest<T = any>(
   if (!response.ok) {
     const errMsg = data?.error?.description || `Razorpay API error: ${response.status}`;
     const errCode = data?.error?.code;
-    console.error('[Razorpay] API Error:', data?.error);
+    logger.error('[Razorpay] API Error', { error: data?.error });
     throw new RazorpayApiError(errMsg, errCode, response.status);
   }
 

@@ -15,6 +15,8 @@
  * Usage: Add to app/layout.tsx or main provider
  */
 
+import { logger } from '@/lib/logger';
+
 // Detect if using Neon database
 function isNeonDatabase(): boolean {
   const dbUrl = process.env['NEXT_PUBLIC_DATABASE_URL'] || process.env['DATABASE_URL'] || '';
@@ -45,7 +47,7 @@ async function pingDatabase() {
       console.warn('[KeepAlive] ⚠ Keep-alive returned non-OK status');
     }
   } catch (err) {
-    console.error('[KeepAlive] ✗ Keep-alive failed:', err);
+    logger.error('[KeepAlive] Keep-alive failed', { error: err instanceof Error ? err.message : String(err) });
   }
 }
 

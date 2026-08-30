@@ -26,6 +26,7 @@
  */
 
 import { Redis } from 'ioredis';
+import { logger } from '@/lib/logger';
 
 export interface FeatureFlag {
   /** Unique flag key */
@@ -83,7 +84,7 @@ function getRedisClient(): Redis | null {
   });
 
   redis.on('error', (err) => {
-    console.error('[FeatureFlags] Redis error:', err.message);
+    logger.error('[FeatureFlags] Redis error', { error: err instanceof Error ? err.message : String(err) });
   });
 
   return redis;

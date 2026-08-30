@@ -29,6 +29,7 @@ import {
 import { eq, and, sql, gte, isNull, or, inArray } from 'drizzle-orm';
 import { chat } from '@/lib/ai/gateway';
 import { addJob } from '@/lib/queue';
+import { logger } from '@/lib/logger';
 
 // ── Festival Calendar (System Events) ─────────────────────────────────────
 
@@ -691,7 +692,7 @@ export async function seedSystemEvents(): Promise<number> {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       // Skip duplicates
-      console.error(`[lead-warming] Seed skipped ${festival.name}:`, err.message);
+      logger.error('[lead-warming] Seed skipped', { festival: festival.name, error: err instanceof Error ? err.message : String(err) });
     }
   }
 

@@ -8,6 +8,7 @@ import { cookies } from 'next/headers';
 import { db } from '@/drizzle/db';
 import { portalClients } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
+import { logger } from '@/lib/logger';
 
 export const PORTAL_SESSION_COOKIE = 'nucrm_portal_session';
 
@@ -111,7 +112,7 @@ export async function getPortalSession(): Promise<PortalSessionInfo | null> {
       email: client.email,
     };
   } catch (err) {
-    console.error('[portal-session] validation failed:', err instanceof Error ? err.message : err);
+    logger.error('[portal-session] validation failed', { error: err instanceof Error ? err.message : String(err) });
     return null;
   }
 }
