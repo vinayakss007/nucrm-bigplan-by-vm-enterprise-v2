@@ -7,7 +7,6 @@
 import { useState, useEffect } from 'react';
 import { Plus, Search, Trash2, X, DollarSign, Clock, Package, Building2, User, Users } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
-import { Breadcrumb } from '@/components/shared/breadcrumb';
 import { ListSkeleton } from '@/components/shared/page-skeleton';
 import toast from 'react-hot-toast';
 
@@ -316,7 +315,6 @@ export default function ServicesPage() {
 
   return (
     <div className="space-y-4 sm:space-y-6 animate-fade-in">
-      <Breadcrumb />
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
