@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/errors-server';
 import { apiError } from '@/lib/api-error';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
@@ -82,7 +83,7 @@ export const POST = withApiRoute(async (request: NextRequest, { params }: { para
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[ticket reply POST]', err);
+    void logError({ error: err, context: 'tenant/tickets/[id]/replies POST' });
     return apiError(err);
   }
 });

@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/errors-server';
 import { requireTenantCtx } from '@/lib/tenant/context';
 import { db } from '@/drizzle/db';
 import { contacts, deals, tasks, dealStages } from '@/drizzle/schema';
@@ -143,7 +144,7 @@ export async function GET(_request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('[analytics/overview/GET]', error);
+    void logError({ error, context: 'tenant/analytics/overview GET' });
     return NextResponse.json({ error: 'Failed to fetch analytics data' }, { status: 500 });
   }
 }

@@ -5,6 +5,7 @@
  */
 import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/errors-server';
 import { requireAuth, can } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { dealForecasts } from '@/drizzle/schema';
@@ -42,7 +43,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
-    console.error('[Forecast Analytics] GET error:', error);
+    void logError({ error, context: 'tenant/analytics/forecast GET' });
     return apiError(error);
   }
 });
@@ -83,7 +84,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
-    console.error('[Forecast Calculate] POST error:', error);
+    void logError({ error, context: 'tenant/analytics/forecast calculate POST' });
     return apiError(error);
   }
 });

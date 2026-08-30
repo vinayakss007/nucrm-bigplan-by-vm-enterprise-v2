@@ -5,6 +5,7 @@
  */
 import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/errors-server';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { createWorkflowSchema } from '@/lib/api/schemas';
 import { requireAuth, can } from '@/lib/auth/middleware';
@@ -54,7 +55,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
-    console.error('[Workflows] GET error:', error);
+    void logError({ error, context: 'tenant/workflows GET' });
     return apiError(error);
   }
 });
@@ -137,7 +138,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
-    console.error('[Workflows] POST error:', error);
+    void logError({ error, context: 'tenant/workflows POST' });
     return apiError(error);
   }
 });
