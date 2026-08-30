@@ -293,6 +293,9 @@ export const deals = pgTable('deals', {
   title: text('title').notNull(),
   amount: decimal('amount', { precision: 15, scale: 2 }).default('0'),
   closeDate: timestamp('close_date', { withTimezone: true }),
+  // Set when the deal moves into a winning stage. First-class column (not just
+  // metadata) so reporting/forecasting can filter and aggregate on it (0084).
+  wonAt: timestamp('won_at', { withTimezone: true }),
   assignedTo: uuid('assigned_to').references(() => users.id, { onDelete: 'set null' }),
   
   customFields: jsonb('custom_fields').default({}),
@@ -308,6 +311,7 @@ export const deals = pgTable('deals', {
     assignedIdx: index('idx_deals_assigned').on(table.assignedTo),
     closeDateIdx: index('idx_deals_close_date').on(table.closeDate),
     tenantCreatedIdx: index('idx_deals_tenant_created').on(table.tenantId, table.createdAt),
+    wonAtIdx: index('idx_deals_won_at').on(table.tenantId, table.wonAt),
     activeIdx: utils.activeIdx(table),
     metadataGinIdx: utils.metadataIdx(table),
   };
