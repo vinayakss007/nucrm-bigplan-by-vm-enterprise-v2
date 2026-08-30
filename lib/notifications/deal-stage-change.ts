@@ -11,6 +11,7 @@
  */
 
 import { createNotification, type NotificationType } from '@/lib/notifications';
+import { logger } from '@/lib/logger';
 
 interface StageChangePayload {
   dealId: string;
@@ -61,6 +62,6 @@ export async function notifyDealStageChange(payload: StageChangePayload): Promis
       link: `/tenant/deals/${dealId}`,
     });
   } catch (err) {
-    console.error('[notifications] Deal stage change notification failed:', err);
+    logger.error('[notifications] Deal stage change notification failed', { error: err instanceof Error ? err.message : String(err) });
   }
 }

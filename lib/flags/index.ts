@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { cache } from '@/lib/cache/index';
+import { logger } from '@/lib/logger';
 
 export interface FlagDefinition {
   key: string;
@@ -48,7 +49,7 @@ async function getFlagOverrides(): Promise<Record<string, FlagOverride>> {
     const raw = await cache.get<Record<string, FlagOverride>>('flags:overrides');
     return raw ?? {};
   } catch (e) {
-    console.error('[Flags] Failed to get flag overrides', e);
+    logger.error('[Flags] Failed to get flag overrides', { error: e instanceof Error ? e.message : String(e) });
     return {};
   }
 }

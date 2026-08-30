@@ -16,6 +16,7 @@ import { createHmac, timingSafeEqual } from 'crypto';
 import { db } from '@/drizzle/db';
 import { pluginExecutionLogs } from '@/drizzle/schema';
 import type { WebhookPayload } from './types';
+import { logger } from '@/lib/logger';
 
 /** Maximum age (in ms) for a webhook timestamp to be considered valid (5 minutes). */
 const MAX_WEBHOOK_AGE_MS = 5 * 60 * 1000;
@@ -100,7 +101,7 @@ export async function handleInboundWebhook(
 
     return { acknowledged: true, id: logEntry?.id };
   } catch (err) {
-    console.error('[PluginWebhook] Failed to log webhook:', err);
+    logger.error('[PluginWebhook] Failed to log webhook', { error: err instanceof Error ? err.message : String(err) });
     return { acknowledged: false };
   }
 }
