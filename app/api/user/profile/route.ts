@@ -33,12 +33,35 @@ export const PATCH = withApiRoute(async (request: NextRequest) => {
     
     if (v.first_name !== undefined) updates.fullName = (v.first_name ?? '').trim();
     if (v.last_name !== undefined) updates.lastName = (v.last_name ?? '').trim();
-    if (v.email !== undefined) updates.email = v.email;
     if (v.phone !== undefined) updates.phone = v.phone?.trim() || null;
     if (v.timezone !== undefined) updates.timezone = v.timezone;
     if (v.avatar_url !== undefined) updates.avatarUrl = v.avatar_url;
     if (v.language !== undefined) updates.language = v.language;
-    
+
+    // Email change is auth-sensitive: normalize, enforce uniqueness explicitly
+    // (a UNIQUE-constraint collision would otherwise surface as a generic 500),
+    // and drop emailVerified so the verification gate re-applies to the new
+    // address instead of silently inheriting the old verified state.
+    if (v.email !== undefined) {
+      const newEmail = v.email.trim().toLowerCase();
+      const [current] = await db.select({ email: users.email })
+        .from(users)
+        .where(eq(users.id, ctx.userId))
+        .limit(1);
+
+      if (current && newEmail !== current.email.toLowerCase()) {
+        const [taken] = await db.select({ id: users.id })
+          .from(users)
+          .where(eq(users.email, newEmail))
+          .limit(1);
+        if (taken && taken.id !== ctx.userId) {
+          return NextResponse.json({ error: 'That email is already in use' }, { status: 409 });
+        }
+        updates.email = newEmail;
+        updates.emailVerified = false;
+      }
+    }
+
     if (Object.keys(updates).length <= 1) {
       return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
     }
