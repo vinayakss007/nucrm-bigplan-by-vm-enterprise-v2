@@ -22,17 +22,18 @@ export HOST="${HOST:-127.0.0.1}"
 # Limit Node heap to 2GB to avoid OOM on 4GB machines
 export NODE_OPTIONS="${NODE_OPTIONS:-} --max-old-space-size=2048"
 
-# --- Ensure required env vars ---
-MISSING=0
-for var in DATABASE_URL JWT_SECRET SESSION_SECRET NEXT_PUBLIC_APP_URL; do
-  if [ -z "${!var:-}" ]; then
-    echo "ERROR: $var is not set"
-    MISSING=1
+# --- Preflight: fail fast if anything critical is missing/unreachable ---
+# Validates env + secrets + DB reachability + migrations + TLS + Redis + email
+# + off-site backup storage. Refuses to start on a hard failure so the app
+# never boots half-broken. Set PREFLIGHT_SKIP=true only for emergency overrides.
+if [ "${PREFLIGHT_SKIP:-false}" != "true" ]; then
+  echo "Running startup preflight..."
+  if ! npx tsx scripts/preflight.ts; then
+    echo "Cannot start: preflight failed (see above). Fix the blockers or set PREFLIGHT_SKIP=true to override."
+    exit 1
   fi
-done
-if [ "$MISSING" = "1" ]; then
-  echo "Cannot start: missing required environment variables. Check .env.local"
-  exit 1
+else
+  echo "WARNING: PREFLIGHT_SKIP=true — skipping startup checks."
 fi
 
 # --- Check if build exists ---

@@ -68,6 +68,8 @@
     "db:drift-check": "npx tsx scripts/drift-check.ts",
     "backup:verify": "npx tsx scripts/verify-backup.ts",
     "backup:restore": "npx tsx scripts/restore-db.ts",
+    "preflight": "npx tsx scripts/preflight.ts",
+    "dr": "npx tsx scripts/dr.ts",
     "db:restore": "npx tsx scripts/restore-db.ts",
     "db:reset": "npx tsx scripts/drop-all.ts && npm run db:migrate",
     "setup": "cp -n .env.example .env.local && npm run db:migrate && echo '\n✅ Run: npm run dev\n'",
