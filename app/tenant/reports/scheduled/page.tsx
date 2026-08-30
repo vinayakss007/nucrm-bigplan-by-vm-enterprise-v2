@@ -26,9 +26,18 @@ const REPORT_TYPES = [
   { id: 'summary', label: 'Executive Summary' },
 ];
 
+interface ScheduledReport {
+  id: string;
+  name: string;
+  type: string;
+  frequency: string;
+  recipients?: string[];
+  nextRunAt?: string | null;
+  status: string;
+}
+
 export default function ScheduledReportsPage() {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [reports, setReports] = useState<any[]>([]);
+  const [reports, setReports] = useState<ScheduledReport[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
 
