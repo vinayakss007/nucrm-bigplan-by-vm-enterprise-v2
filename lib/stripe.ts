@@ -24,6 +24,7 @@ import { getAppUrl } from './app-url';
  */
 
 import { webcrypto } from 'crypto';
+import { logger } from '@/lib/logger';
 
 const STRIPE_API = 'https://api.stripe.com/v1';
 
@@ -113,7 +114,7 @@ async function stripeRequest<T = unknown>(
 
   if (!response.ok) {
     const errMsg = data?.error?.message || `Stripe API error: ${response.status}`;
-    console.error('[Stripe] API Error:', data?.error);
+    logger.error('[Stripe] API Error', { error: data?.error });
     throw new StripeError(errMsg, data?.error?.code, response.status);
   }
 

@@ -6,6 +6,7 @@
 import { db } from '@/drizzle/db';
 import { TABLE_REGISTRY, TableName } from '@/drizzle/schema/_registry';
 import { sql } from 'drizzle-orm';
+import { logger } from '@/lib/logger';
 
 /**
  * TenantDataExporter
@@ -231,7 +232,7 @@ export class TenantDataExporter {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
-      console.error('[Export] Critical error during export:', err);
+      logger.error('[Export] Critical error during export', { error: err instanceof Error ? err.message : String(err) });
       throw err;
     }
 

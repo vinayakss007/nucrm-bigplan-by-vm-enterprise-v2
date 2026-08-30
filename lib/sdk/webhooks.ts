@@ -31,6 +31,8 @@ export class WebhookVerifier {
 
       return timingSafeEqual(sigBuffer, expectedBuffer);
     } catch (e) {
+      // Portable SDK code — intentionally uses console (no dependency on the
+      // app's server-only fs-based logger, so the SDK stays bundler-safe).
       console.error('[WebhookVerifier] Signature verification failed', e);
       return false;
     }

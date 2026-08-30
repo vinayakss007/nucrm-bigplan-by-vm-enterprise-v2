@@ -17,6 +17,7 @@ import { webhookDeliveries } from '@/drizzle/schema/automation';
 import { eq, and, sql, gt } from 'drizzle-orm';
 import { devLogger } from '@/lib/dev-logger';
 import { safeFetch } from '@/lib/security/ssrf';
+import { logger } from '@/lib/logger';
 
 export interface WebhookPayload {
   id: string;
@@ -71,7 +72,7 @@ export async function queueWebhook(payload: WebhookPayload): Promise<string> {
   try {
     await processWebhookDelivery(result.id, payload.url, payload.headers);
   } catch {
-    console.error('[webhooks] Initial delivery attempt failed', result.id);
+    logger.error('[webhooks] Initial delivery attempt failed', { deliveryId: result.id });
   }
 
   devLogger.queue('webhook-delivery', 'queued');

@@ -6,6 +6,7 @@
 import { db } from '@/drizzle/db';
 import { sql, type SQL } from 'drizzle-orm';
 import { isValidTableName } from '@/lib/sql-allowlist';
+import { logger } from '@/lib/logger';
 
 /**
  * Parameterized junction table deletes.
@@ -76,7 +77,7 @@ export class TenantDataImporter {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
           } catch (err: any) {
             result.errors.push({ table: tableName, error: err.message });
-            console.error(`[Import] Error importing ${tableName}:`, err.message);
+            logger.error('[Import] Error importing table', { tableName, error: err instanceof Error ? err.message : String(err) });
             // Continue with other tables — don't fail entirely
           }
         }
