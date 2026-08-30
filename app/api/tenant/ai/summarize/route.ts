@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/errors-server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { tenantModules } from '@/drizzle/schema/modules';
@@ -79,7 +80,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
 
     return NextResponse.json(result);
   } catch (err) {
-    console.error('[ai/summarize POST]', err);
+    void logError({ error: err, context: 'tenant/ai/summarize POST' });
     return apiError(err);
   }
 });

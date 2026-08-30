@@ -8,6 +8,7 @@
  * GET  /api/tenant/ai/sentiment — Get recent sentiment analyses
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/errors-server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { apiError } from '@/lib/api-error';
 import { analyzeSentiment, updateDealSentiment } from '@/lib/ai/sentiment';
@@ -38,7 +39,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
 
     return NextResponse.json({ success: true, data: result });
   } catch (err: unknown) {
-    console.error('[api/ai/sentiment] POST error:', (err as Error).message);
+    void logError({ error: err, context: 'tenant/ai/sentiment POST' });
     return apiError(err);
   }
 });

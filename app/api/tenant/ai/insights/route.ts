@@ -5,6 +5,7 @@
  */
 import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/errors-server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { aiInsights } from '@/drizzle/schema';
@@ -212,7 +213,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
-    console.error('[AI Insights] POST error:', error);
+    void logError({ error, context: 'tenant/ai/insights POST' });
     return apiError(error);
   }
 });
@@ -263,7 +264,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
-    console.error('[AI Insights] GET error:', error);
+    void logError({ error, context: 'tenant/ai/insights GET' });
     return apiError(error);
   }
 });

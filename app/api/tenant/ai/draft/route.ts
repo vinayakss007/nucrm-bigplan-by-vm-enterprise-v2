@@ -29,6 +29,7 @@
  * ai_activity row, so this endpoint stays thin.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/errors-server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { aiDraftTemplates } from '@/drizzle/schema/ai';
@@ -173,7 +174,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
       template: templateLabel,
     });
   } catch (err) {
-    console.error('[ai/draft POST]', err);
+    void logError({ error: err, context: 'tenant/ai/draft POST' });
     return apiError(err);
   }
 });
