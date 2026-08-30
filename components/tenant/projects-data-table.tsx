@@ -46,6 +46,21 @@ interface Project {
   created_at: string
 }
 
+/** Raw (camelCase) project row shape returned by GET /api/tenant/projects. */
+interface ApiProjectRow {
+  id: string
+  name: string
+  description: string | null
+  status: string
+  startDate: string | null
+  endDate: string | null
+  ownerId: string | null
+  ownerName: string | null
+  taskCount?: number
+  completedCount?: number
+  createdAt: string
+}
+
 interface Props {
   initialProjects: Project[]
   teamMembers: { user_id: string; full_name: string }[]
@@ -81,8 +96,7 @@ export default function ProjectsDataTable({ initialProjects, teamMembers, permis
     try {
       const res = await fetch(`/api/tenant/projects?${params}`)
       const data = await res.json()
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      setProjects(data.data?.map((p: any) => ({
+      setProjects(data.data?.map((p: ApiProjectRow) => ({
         id: p.id,
         name: p.name,
         description: p.description,

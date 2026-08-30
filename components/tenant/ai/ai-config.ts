@@ -14,12 +14,12 @@ import {
   Sparkles, FileEdit, Target, AlertTriangle, Activity,
   BrainCircuit, MessageSquare, Heart,
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 
 export type AICapability = {
   href: string;
   label: string;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  icon: any;
+  icon: LucideIcon;
   desc: string;
   /** CRM features this capability needs to actually work. */
   depends_on: string[];
