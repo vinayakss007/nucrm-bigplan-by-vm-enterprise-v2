@@ -5,9 +5,9 @@
  */
 'use client';
 import { ThemeProvider as NextThemesProvider } from 'next-themes';
+import type { ComponentProps } from 'react';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function ThemeProvider({ children, ...props }: any) {
+export function ThemeProvider({ children, ...props }: ComponentProps<typeof NextThemesProvider>) {
   return (
     <NextThemesProvider
       attribute="class"

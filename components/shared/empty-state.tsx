@@ -6,7 +6,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Plus, Search, Users, TrendingUp, CheckSquare, Building2, FileText, Mail } from 'lucide-react';
+import { Plus, Search, Users, TrendingUp, CheckSquare, Building2, FileText, Mail, type LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 type EmptyStateType = 'contacts' | 'deals' | 'tasks' | 'companies' | 'invoices' | 'search' | 'generic';
@@ -22,8 +22,7 @@ interface EmptyStateProps {
 }
 
 const ILLUSTRATIONS: Record<EmptyStateType, {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  icon: any;
+  icon: LucideIcon;
   bg: string;
   title: string;
   description: string;
