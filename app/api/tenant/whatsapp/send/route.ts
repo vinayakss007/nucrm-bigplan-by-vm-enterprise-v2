@@ -16,6 +16,7 @@ import { integrations, whatsappConversations, whatsappMessages } from '@/drizzle
 import { eq, and, desc, sql } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { logError } from '@/lib/errors-server';
 
 export const POST = withApiRoute(async (req: NextRequest) => {
   try {
@@ -193,7 +194,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[WhatsApp Send] Error:', err.message);
+    await logError({ error: err, context: 'WhatsApp Send', requestMethod: 'POST' });
     return apiError(err);
   }
 });

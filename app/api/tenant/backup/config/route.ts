@@ -15,6 +15,7 @@ import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from 'crypt
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { concurrencyGuard } from '@/lib/api/concurrency';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { logError } from '@/lib/errors-server';
 
 const ALGORITHM = 'aes-256-gcm';
 const CONFIG_KEY_PREFIX = 'tenant_backup_config:';
@@ -139,7 +140,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       try {
         _decryptedSecret = decrypt(raw.secret_key_encrypted);
       } catch (err) {
-        console.error('[backup] decryption failed', err);
+        await logError({ error: err, context: 'backup config decryption failed', tenantId: ctx.tenantId, userId: ctx.userId, requestMethod: 'GET' });
       }
     }
 
@@ -288,7 +289,7 @@ export const PUT = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[tenant-backup-config] Error:', err);
+    await logError({ error: err, context: 'tenant-backup-config PUT', requestMethod: 'PUT' });
     return apiError(err);
   }
 });

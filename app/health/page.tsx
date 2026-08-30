@@ -6,7 +6,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { CheckCircle, AlertCircle, XCircle, Loader2, Database, Mail, User, Cpu } from 'lucide-react';
+import { CheckCircle, AlertCircle, XCircle, Loader2, Database, Mail, User, Cpu, type LucideIcon } from 'lucide-react';
 import { clientLogError } from '@/lib/client-logger';
 
 interface HealthStatus {
@@ -14,7 +14,7 @@ interface HealthStatus {
   database: { status: 'ok' | 'error'; message?: string; tables?: number };
   queue: { status: 'ok' | 'warning' | 'error'; provider?: string; message?: string };
   email: { status: 'ok' | 'warning' | 'error'; provider?: string; message?: string };
-  auth: { status: 'ok' | 'warning' | 'error'; users?: number; superAdmin?: boolean };
+  auth: { status: 'ok' | 'warning' | 'error'; users?: number; superAdmin?: boolean; message?: string };
   worker: { status: 'ok' | 'warning' | 'error'; running?: boolean; message?: string };
 }
 
@@ -164,8 +164,7 @@ export default function HealthPage() {
             details={[
               health?.auth.users !== undefined ? `${health.auth.users} users` : undefined,
               health?.auth.superAdmin ? 'Super admin configured' : 'No super admin',
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-              (health?.auth as any)?.message,
+              health?.auth?.message,
             ].filter(Boolean).join(' • ')}
           />
         </div>
@@ -214,8 +213,7 @@ function HealthCard({
   status, 
   details 
 }: { 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  icon: any; 
+  icon: LucideIcon; 
   title: string; 
   status: string; 
   details: string;

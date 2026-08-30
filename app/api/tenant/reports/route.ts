@@ -10,6 +10,7 @@
 import { apiError } from '@/lib/api-error';
 
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/errors-server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { 
@@ -272,7 +273,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[reports GET]', err);
+    void logError({ error: err, context: 'tenant/reports GET' });
     return apiError(err);
   }
 });

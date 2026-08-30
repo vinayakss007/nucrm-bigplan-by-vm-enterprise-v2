@@ -10,6 +10,7 @@ import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { z } from 'zod';
 import { createCheckOut, getCheckInById } from '@/lib/field-sales/geo-checkin';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { logError } from '@/lib/errors-server';
 
 const createCheckOutSchema = z.object({
   checkInId: z.string().min(1, 'checkInId is required'),
@@ -59,7 +60,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     return NextResponse.json({ data: checkOut }, { status: 200 });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[field-sales/checkout POST]', err);
+    await logError({ error: err, context: 'field-sales/checkout POST', requestMethod: 'POST' });
     return apiError(err);
   }
 });

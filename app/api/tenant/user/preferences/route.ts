@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/errors-server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { users } from '@/drizzle/schema';
@@ -32,7 +33,7 @@ export const GET = withApiRoute(async (req: NextRequest) => {
     const prefs = (user.metadata as Record<string, unknown>)?.sidebar ?? {};
     return NextResponse.json({ data: prefs });
   } catch (err) {
-    console.error('[user prefs GET]', err);
+    void logError({ error: err, context: 'tenant/user/preferences GET' });
     return NextResponse.json({ error: 'Failed to load preferences' }, { status: 500 });
   }
 });
@@ -84,7 +85,7 @@ export const PUT = withApiRoute(async (req: NextRequest) => {
 
     return NextResponse.json({ ok: true, data: currentSidebar });
   } catch (err) {
-    console.error('[user prefs PUT]', err);
+    void logError({ error: err, context: 'tenant/user/preferences PUT' });
     return NextResponse.json({ error: 'Failed to save preferences' }, { status: 500 });
   }
 });

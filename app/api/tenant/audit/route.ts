@@ -9,6 +9,7 @@ import { db } from '@/drizzle/db';
 import { auditLogs, users, editHistory } from '@/drizzle/schema';
 import { eq, and, desc, sql, gte, lte, isNull } from 'drizzle-orm';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { logError } from '@/lib/errors-server';
 
 export const GET = withApiRoute(async (req: NextRequest) => {
   try {
@@ -131,7 +132,7 @@ export const GET = withApiRoute(async (req: NextRequest) => {
       offset,
     });
   } catch (error) {
-    console.error('[AUDIT_API]', error);
+    await logError({ error, context: 'audit GET', requestMethod: 'GET' });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 });

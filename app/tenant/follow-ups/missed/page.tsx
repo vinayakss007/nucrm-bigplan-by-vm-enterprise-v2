@@ -51,10 +51,19 @@ export default async function MissedFollowUpsPage() {
     .orderBy(asc(followUps.dueDate))
     .limit(100);
 
+  // Serialize Date columns to ISO strings and normalize nullable flags to match
+  // the client's FollowUpItem contract (which renders dueDate via formatDate).
+  const items = followUpItems.map(f => ({
+    ...f,
+    dueDate: f.dueDate ? new Date(f.dueDate).toISOString() : null,
+    completedAt: f.completedAt ? new Date(f.completedAt).toISOString() : null,
+    createdAt: f.createdAt ? new Date(f.createdAt).toISOString() : null,
+    autoAiEnabled: f.autoAiEnabled ?? false,
+  }));
+
   return (
     <MissedFollowUpsClient
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      items={followUpItems as any}
+      items={items}
     />
   );
 

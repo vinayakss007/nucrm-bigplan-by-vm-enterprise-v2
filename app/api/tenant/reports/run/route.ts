@@ -11,6 +11,7 @@ import { contacts, companies, deals, tasks, leads } from '@/drizzle/schema';
 import { eq, and, desc, sql, gt, lt } from 'drizzle-orm';
 import { readJsonBody } from '@/lib/api/validate';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { logError } from '@/lib/errors-server';
 
  
  
@@ -124,7 +125,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[report run POST]', err);
+    await logError({ error: err, context: 'report run POST', requestMethod: 'POST' });
     return apiError(err);
   }
 });

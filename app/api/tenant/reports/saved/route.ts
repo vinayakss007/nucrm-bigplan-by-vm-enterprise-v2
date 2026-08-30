@@ -15,6 +15,7 @@ import { db } from '@/drizzle/db';
 import { savedReports, users } from '@/drizzle/schema';
 import { eq, desc } from 'drizzle-orm';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { logError } from '@/lib/errors-server';
 
 export const GET = withApiRoute(async (request: NextRequest) => {
   try {
@@ -43,7 +44,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
 
     return NextResponse.json({ data: reports });
   } catch (err) {
-    console.error('[reports saved GET]', err);
+    await logError({ error: err, context: 'reports saved GET', requestMethod: 'GET' });
     return apiError(err);
   }
 });

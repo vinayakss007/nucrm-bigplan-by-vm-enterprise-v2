@@ -8,14 +8,14 @@ import { useState, useEffect } from 'react';
 import {
   Plug, Plus, Trash2, CheckCircle, XCircle, ExternalLink,
   Mail, MessageSquare, Brain, Database, Cloud, Power,
+  type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import type { ProviderDefinition, IntegrationInstance } from '@/lib/integrations/types';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const ICON_MAP: Record<string, any> = {
+const ICON_MAP: Record<string, LucideIcon> = {
   Mail, MessageSquare, Brain, Database, Cloud, Plug,
 };
 

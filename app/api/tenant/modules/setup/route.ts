@@ -12,6 +12,7 @@ import { automations } from '@/drizzle/schema';
 import { INDUSTRY_TEMPLATES } from '@/lib/modules/industry-templates';
 import { readJsonBody } from '@/lib/api/validate';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { logError } from '@/lib/errors-server';
 
 export const POST = withApiRoute(async (req: NextRequest) => {
   try {
@@ -81,7 +82,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[IndustrySetup] error:', err);
+    await logError({ error: err, context: 'IndustrySetup POST', requestMethod: 'POST' });
     return apiError(err);
   }
 });

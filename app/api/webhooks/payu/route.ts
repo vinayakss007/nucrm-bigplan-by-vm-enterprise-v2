@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/errors-server';
 import { isPayUConfigured, verifyPayUResponse } from '@/lib/payu';
 import { db } from '@/drizzle/db';
 import { quotes, invoices, invoicePayments } from '@/drizzle/schema';
@@ -82,7 +83,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (!isValid) {
-      console.error(`[PayU Webhook] Hash verification failed for txnid: ${txnid}`);
+      void logError({ error: 'PayU hash verification failed', context: 'webhooks/payu hash-verify', level: 'warning', metadata: { txnid } });
       return NextResponse.json({ error: 'Hash verification failed' }, { status: 400 });
     }
 
@@ -91,7 +92,7 @@ export async function POST(request: NextRequest) {
     const quoteId = txnParts.length >= 3 ? txnParts.slice(1, -1).join('_') : txnid;
 
     if (!UUID_RE.test(quoteId)) {
-      console.error(`[PayU Webhook] Could not derive a valid quote id from txnid: ${txnid}`);
+      void logError({ error: 'PayU could not derive a valid quote id from txnid', context: 'webhooks/payu txnid-parse', level: 'warning', metadata: { txnid } });
       return NextResponse.json({
         received: true,
         txnid,
@@ -145,15 +146,13 @@ export async function POST(request: NextRequest) {
         if (status === 'success') {
           const paidAmount = parseFloat(amount);
           if (!Number.isFinite(paidAmount) || paidAmount <= 0) {
-            console.error(`[PayU Webhook] Invalid amount '${amount}' for txnid: ${txnid}`);
+            void logError({ error: `PayU invalid amount '${amount}'`, context: 'webhooks/payu invalid-amount', level: 'warning', metadata: { txnid, amount } });
             return { processed: false, reason: 'invalid_amount' };
           }
 
           if (invoice) {
             if (invoice.status === 'cancelled' || invoice.status === 'void') {
-              console.error(
-                `[PayU Webhook] Refusing to record payment against ${invoice.status} invoice ${invoice.id} (txnid: ${txnid})`
-              );
+              void logError({ error: `PayU refusing to record payment against ${invoice.status} invoice`, context: 'webhooks/payu invoice-not-payable', level: 'warning', metadata: { txnid, invoiceId: invoice.id, invoiceStatus: invoice.status } });
               return { processed: false, reason: `invoice_${invoice.status}` };
             }
 
@@ -247,7 +246,7 @@ export async function POST(request: NextRequest) {
         return { processed: true };
       });
     } catch (dbErr: unknown) {
-      console.error(`[PayU Webhook] DB update failed for txnid: ${txnid}`, dbErr);
+      void logError({ error: dbErr, context: 'webhooks/payu DB update', metadata: { txnid } });
       // Non-2xx makes PayU retry the callback later.
       throw dbErr;
     }
@@ -263,7 +262,7 @@ export async function POST(request: NextRequest) {
       ...result,
     });
   } catch (err: unknown) {
-    console.error('[PayU Webhook] Error processing callback:', err);
+    void logError({ error: err, context: 'webhooks/payu callback' });
     const message = err instanceof Error ? err.message : 'Internal server error';
     return NextResponse.json({ error: message }, { status: 500 });
   }

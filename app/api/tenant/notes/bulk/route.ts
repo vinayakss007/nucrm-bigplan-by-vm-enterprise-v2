@@ -101,8 +101,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[notes bulk POST]', err);
-    await logError({ error: err, context: 'notes/bulk', tenantId: ctx?.tenantId });
+    await logError({ error: err, context: 'notes/bulk', tenantId: ctx?.tenantId, requestMethod: 'POST' });
     return apiError(err);
   }
 });

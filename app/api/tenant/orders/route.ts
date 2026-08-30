@@ -13,6 +13,7 @@ import { eq, and, desc, sql, count } from 'drizzle-orm';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { logError } from '@/lib/errors-server';
 
 export const GET = withApiRoute(async (request: NextRequest) => {
   try {
@@ -52,7 +53,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       totalPages: Math.ceil(total / limit)
     });
   } catch (error) {
-    console.error('[orders/GET]', error);
+    await logError({ error: error, context: 'orders/GET', requestMethod: 'GET' });
     return NextResponse.json({ error: 'Failed to fetch orders' }, { status: 500 });
   }
 });
@@ -138,7 +139,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
 
     return NextResponse.json({ order }, { status: 201 });
   } catch (error) {
-    console.error('[orders/POST]', error);
+    await logError({ error: error, context: 'orders/POST', requestMethod: 'POST' });
     return NextResponse.json({ error: 'Failed to create order' }, { status: 500 });
   }
 });
