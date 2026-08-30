@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { escapeLike } from '@/lib/api/sanitize-like';
 import { apiError } from '@/lib/api-error';
+import { logError } from '@/lib/errors-server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { contacts, leads, deals, companies } from '@/drizzle/schema';
