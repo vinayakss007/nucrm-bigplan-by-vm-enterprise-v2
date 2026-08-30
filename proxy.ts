@@ -94,18 +94,37 @@ function buildCsp(nonce: string): string {
 }
 
 /**
+ * Pass-through that PROPAGATES the request id onto the FORWARDED request headers
+ * (observability). The proxy owns the canonical x-request-id (read from the
+ * incoming header or freshly generated). requireAuth() reads x-request-id off
+ * the request to seed its AsyncLocalStorage scope, and logError() records that
+ * same id (error_logs.context.requestId + the Sentry tag). Without forwarding it
+ * onto the request here, requireAuth would mint a DIFFERENT id and the proxy's
+ * id (emitted only on the response) could never be correlated with the DB error
+ * row or the Sentry event. Setting it on the request closes that loop so one id
+ * flows: request header → requireAuth ALS → response header → DB/Sentry.
+ */
+function nextWithRequestId(request: NextRequest, requestId: string): NextResponse {
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set('x-request-id', requestId);
+  return NextResponse.next({ request: { headers: requestHeaders } });
+}
+
+/**
  * Layers the per-request nonce CSP onto a page (HTML navigation) request.
  * Sets the CSP on the forwarded REQUEST headers so Next 16 app-render can pick
  * up the nonce, and returns a NextResponse whose response headers carry the
  * same CSP plus x-nonce for browser enforcement. Never called for /api/ paths.
+ * Also forwards x-request-id on the request (see nextWithRequestId).
  */
-function nextWithCsp(request: NextRequest): NextResponse {
+function nextWithCsp(request: NextRequest, requestId: string): NextResponse {
   const nonce = generateCspNonce();
   const csp = buildCsp(nonce);
 
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set('content-security-policy', csp);
   requestHeaders.set('x-nonce', nonce);
+  requestHeaders.set('x-request-id', requestId);
 
   const response = NextResponse.next({ request: { headers: requestHeaders } });
   response.headers.set('content-security-policy', csp);
@@ -235,7 +254,7 @@ export async function proxy(request: NextRequest) {
   if (isApiRequest(pathname) && isPublic(pathname)) {
     if (shouldBypassRateLimit(pathname)) {
       // Bypass rate limiting (webhooks, health, metrics)
-      const response = NextResponse.next();
+      const response = nextWithRequestId(request, requestId);
       response.headers.set('x-request-id', requestId);
       setCORS(response, origin, pathname);
       return response;
@@ -247,7 +266,7 @@ export async function proxy(request: NextRequest) {
       if (!result.allowed) {
         return buildRateLimitResponse(requestId, result, origin);
       }
-      const response = NextResponse.next();
+      const response = nextWithRequestId(request, requestId);
       response.headers.set('x-request-id', requestId);
       setCORS(response, origin, pathname);
       applyRateLimitHeaders(response, result);
@@ -259,7 +278,7 @@ export async function proxy(request: NextRequest) {
     if (!result.allowed) {
       return buildRateLimitResponse(requestId, result, origin);
     }
-    const response = NextResponse.next();
+    const response = nextWithRequestId(request, requestId);
     response.headers.set('x-request-id', requestId);
     setCORS(response, origin, pathname);
     applyRateLimitHeaders(response, result);
@@ -270,7 +289,7 @@ export async function proxy(request: NextRequest) {
   // Layer the per-request nonce CSP onto HTML page navigations (#1070); API
   // paths never reach here so the page CSP never lands on /api/ responses.
   if (!isApiRequest(pathname) && isPublic(pathname)) {
-    const response = nextWithCsp(request);
+    const response = nextWithCsp(request, requestId);
     response.headers.set('x-request-id', requestId);
     setCORS(response, origin, pathname);
     return response;
@@ -296,7 +315,7 @@ export async function proxy(request: NextRequest) {
   // FIX: API keys (ak_*) are not JWTs — skip JWT verification and pass through
   // to route handlers where tryApiKeyAuth() handles them properly.
   if (bearerToken?.startsWith('ak_')) {
-    const response = NextResponse.next();
+    const response = nextWithRequestId(request, requestId);
     response.headers.set('x-request-id', requestId);
     setCORS(response, origin, pathname);
     return response;
@@ -316,7 +335,7 @@ export async function proxy(request: NextRequest) {
   // API key tokens are validated by requireAuth in route handlers, not here.
   // Skip JWT verification and pass through to let the route handler authenticate.
   if (token.startsWith('ak_')) {
-    const response = NextResponse.next();
+    const response = nextWithRequestId(request, requestId);
     response.headers.set('x-request-id', requestId);
     setCORS(response, origin, pathname);
     return response;
@@ -347,7 +366,7 @@ export async function proxy(request: NextRequest) {
         if (!result.allowed) {
           return buildRateLimitResponse(requestId, result, origin);
         }
-        const response = NextResponse.next();
+        const response = nextWithRequestId(request, requestId);
         response.headers.set('x-request-id', requestId);
         setCORS(response, origin, pathname);
         applyRateLimitHeaders(response, result);
@@ -358,7 +377,7 @@ export async function proxy(request: NextRequest) {
     // Authenticated pass-through. For HTML page navigations, layer the
     // per-request nonce CSP (#1070); API responses keep the plain pass-through
     // so the page CSP never lands on /api/.
-    const response = isApiRequest(pathname) ? NextResponse.next() : nextWithCsp(request);
+    const response = isApiRequest(pathname) ? nextWithRequestId(request, requestId) : nextWithCsp(request, requestId);
     response.headers.set('x-request-id', requestId);
     setCORS(response, origin, pathname);
     return response;
