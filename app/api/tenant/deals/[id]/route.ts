@@ -430,7 +430,10 @@ async function handleDealWon(ctx: any, dealId: string, row: any) {
       wonAt,
       metadata: { ...((row.metadata as Record<string, unknown>) || {}), won_at: wonAt.toISOString() }
     })
-    .where(eq(deals.id, dealId))
+    // Scope by tenant too — every other write in this route is tenant-scoped;
+    // this keeps the won_at write consistent with that invariant so the helper
+    // can never touch another tenant's row if reused with an unvalidated id.
+    .where(and(eq(deals.id, dealId), eq(deals.tenantId, ctx.tenantId)))
     .catch(err => { void logError({ error: err, context: 'tenant/deals/[id] deal-won won_at update' }); });
 
   // Trigger Automations
