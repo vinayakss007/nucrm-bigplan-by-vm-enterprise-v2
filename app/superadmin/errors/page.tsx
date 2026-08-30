@@ -37,7 +37,7 @@ interface ErrorsApiData {
 const LEVEL_CFG: Record<string,{badge:string;dot:string;label:string;desc:string}> = {
   fatal: { badge:'bg-red-500/20 text-red-400', dot:'bg-red-500', label:'FATAL', desc:'App crash or unrecoverable error — needs immediate attention' },
   error: { badge:'bg-orange-500/20 text-orange-400', dot:'bg-orange-500', label:'ERROR', desc:'Operation failed — API/db/network error' },
-  warn:  { badge:'bg-amber-500/20 text-amber-400', dot:'bg-amber-400', label:'WARN',  desc:'Unexpected condition — non-critical, auto-recoverable' },
+  warning: { badge:'bg-amber-500/20 text-amber-400', dot:'bg-amber-400', label:'WARN',  desc:'Unexpected condition — non-critical, auto-recoverable' },
   info:  { badge:'bg-blue-500/20 text-blue-400', dot:'bg-blue-400', label:'INFO',  desc:'Diagnostic event — no action needed' },
 };
 
@@ -138,7 +138,7 @@ export default function ErrorsPage() {
         {[
           { label:'Fatal', desc:LEVEL_CFG['fatal']?.desc ?? '', value:s.fatal_unresolved??0, color:'text-red-400', bg:'bg-red-500/10', filter:'fatal' },
           { label:'Error', desc:LEVEL_CFG['error']?.desc ?? '', value:s.error_unresolved??0, color:'text-orange-400', bg:'bg-orange-500/10', filter:'error' },
-          { label:'Warn', desc:LEVEL_CFG['warn']?.desc ?? '', value:s.warn_unresolved??0, color:'text-amber-400', bg:'bg-amber-500/10', filter:'warn' },
+          { label:'Warn', desc:LEVEL_CFG['warning']?.desc ?? '', value:s.warn_unresolved??0, color:'text-amber-400', bg:'bg-amber-500/10', filter:'warning' },
           { label:'Last hour', desc:'Errors in the last 60 minutes', value:s.last_hour??0, color:'text-muted-foreground', bg:'bg-muted/30', filter:'' },
           { label:'Last 24h', desc:'Errors in the last 24 hours', value:s.last_day??0, color:'text-muted-foreground', bg:'bg-muted/30', filter:'' },
         ].map(m => (

@@ -65,7 +65,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
         .select({
           fatal_unresolved: sql<number>`count(*) FILTER (WHERE NOT ${errorLogs.resolved} AND ${errorLogs.level} = 'fatal')::int`,
           error_unresolved: sql<number>`count(*) FILTER (WHERE NOT ${errorLogs.resolved} AND ${errorLogs.level} = 'error')::int`,
-          warn_unresolved: sql<number>`count(*) FILTER (WHERE NOT ${errorLogs.resolved} AND ${errorLogs.level} = 'warn')::int`,
+          warn_unresolved: sql<number>`count(*) FILTER (WHERE NOT ${errorLogs.resolved} AND ${errorLogs.level} = 'warning')::int`,
           last_hour: sql<number>`count(*) FILTER (WHERE ${errorLogs.createdAt} > now() - interval '1 hour')::int`,
           last_day: sql<number>`count(*) FILTER (WHERE ${errorLogs.createdAt} > now() - interval '24 hours')::int`,
         })

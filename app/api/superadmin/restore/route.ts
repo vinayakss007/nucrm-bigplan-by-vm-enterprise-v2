@@ -133,7 +133,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
 
     // Log the restore attempt
     await db.insert(errorLogs).values({
-      level: 'warn',
+      level: 'warning',
       code: 'RESTORE_INITIATED',
       message: `Database restore initiated from backup: ${backup.storagePath} by user ${ctx.userId}`,
     }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
