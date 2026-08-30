@@ -8,6 +8,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   Lock, ShieldCheck, Clock, Globe, KeyRound, AlertTriangle,
   Plus, X, Save, Loader2, ShieldX,
+  type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
@@ -66,8 +67,7 @@ export default function LoginPolicyPage() {
     Promise.all([
       fetch('/api/tenant/admin/login-policy', { signal: controller.signal }).then(r => r.ok ? r.json() : { login_policy: DEFAULTS }),
       fetch('/api/tenant/me', { signal: controller.signal }).then(r => r.ok ? r.json() : {}),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ]).then(([d, me]: any[]) => { if (ignore) return; 
+    ]).then(([d, me]: [{ login_policy?: Policy }, { is_admin?: boolean }]) => { if (ignore) return; 
       const p = d.login_policy ?? DEFAULTS;
       setPol(p); setOriginal(p);
       setIsAdmin(me?.is_admin ?? false);
@@ -322,8 +322,7 @@ export default function LoginPolicyPage() {
 
 const inp = 'w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function Section({ icon: Icon, title, extra, children }: { icon: any; title: string; extra?: React.ReactNode; children: React.ReactNode }) {
+function Section({ icon: Icon, title, extra, children }: { icon: LucideIcon; title: string; extra?: React.ReactNode; children: React.ReactNode }) {
   return (
     <div className="rounded-xl border border-border bg-card p-5 space-y-3">
       <div className="flex items-center justify-between gap-3">

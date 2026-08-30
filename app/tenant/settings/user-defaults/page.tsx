@@ -7,6 +7,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Settings as SettingsIcon, Save, Loader2, RotateCcw, ShieldX, AlertCircle,
   Palette, Calendar, Zap, Mail, Lock,
+  type LucideIcon,
 } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import { cn } from '@/lib/utils';
@@ -23,8 +24,7 @@ const ACCENT_COLORS = [
   { value: 'slate',   hex: '#64748b', label: 'Slate' },
 ];
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Defaults = Record<string, any>;
+type Defaults = Record<string, unknown>;
 
 export default function UserDefaultsPage() {
   const [defaults, setDefaults] = useState<Defaults>({});
@@ -39,8 +39,7 @@ export default function UserDefaultsPage() {
     Promise.all([
       fetch('/api/tenant/admin/user-defaults', { signal: controller.signal }).then(r => r.ok ? r.json() : { user_defaults: {} }),
       fetch('/api/tenant/me', { signal: controller.signal }).then(r => r.ok ? r.json() : {}),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ]).then(([d, me]: any[]) => { if (ignore) return; 
+    ]).then(([d, me]: [{ user_defaults?: Defaults }, { is_admin?: boolean }]) => { if (ignore) return; 
       setDefaults(d.user_defaults ?? { } );
       setOriginal(d.user_defaults ?? {});
       setIsAdmin(me?.is_admin ?? false);
@@ -50,8 +49,7 @@ export default function UserDefaultsPage() {
 }, []);
 
   const dirty = useMemo(() => JSON.stringify(defaults) !== JSON.stringify(original), [defaults, original]);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const setVal = (k: string, v: any) => setDefaults(p => {
+  const setVal = (k: string, v: unknown) => setDefaults(p => {
     const next = { ...p };
     if (v === '' || v === null || v === undefined) delete next[k];
     else next[k] = v;
@@ -239,7 +237,7 @@ export default function UserDefaultsPage() {
           <textarea
             rows={4}
             className={inp}
-            value={defaults['email_signature'] ?? ''}
+            value={typeof defaults['email_signature'] === 'string' ? defaults['email_signature'] : ''}
             onChange={e => setVal('email_signature', e.target.value || undefined)}
             placeholder={`Best regards,\nThe Acme Team`}
             maxLength={5000}
@@ -283,8 +281,7 @@ export default function UserDefaultsPage() {
 
 const inp = 'w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function Section({ icon: Icon, title, children }: { icon: any; title: string; children: React.ReactNode }) {
+function Section({ icon: Icon, title, children }: { icon: LucideIcon; title: string; children: React.ReactNode }) {
   return (
     <div className="rounded-xl border border-border bg-card p-5 space-y-3">
       <div className="flex items-center gap-2 text-sm font-semibold">
@@ -306,9 +303,9 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
   );
 }
 
-function SelectOrUnset({ value, onChange, options }: { value: string | undefined; onChange: (v: string | undefined) => void; options: { value: string; label: string }[] }) {
+function SelectOrUnset({ value, onChange, options }: { value: unknown; onChange: (v: string | undefined) => void; options: { value: string; label: string }[] }) {
   return (
-    <select className={inp} value={value ?? ''} onChange={e => onChange(e.target.value || undefined)}>
+    <select className={inp} value={typeof value === 'string' ? value : ''} onChange={e => onChange(e.target.value || undefined)}>
       <option value="">— Unset (use platform default) —</option>
       {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
     </select>
@@ -316,8 +313,7 @@ function SelectOrUnset({ value, onChange, options }: { value: string | undefined
 }
 
 function BoolDefault({ label, k, defaults, setVal }: {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  label: string; k: string; defaults: Defaults; setVal: (k: string, v: any) => void;
+  label: string; k: string; defaults: Defaults; setVal: (k: string, v: unknown) => void;
 }) {
   const cur = defaults[k];
   const state = cur === true ? 'on' : cur === false ? 'off' : 'unset';

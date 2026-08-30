@@ -5,7 +5,7 @@
  */
 'use client';
 import { useEffect, useMemo, useState } from 'react';
-import { Globe, Clock, DollarSign, Calendar, Briefcase, Plus, X, Save, Loader2, ShieldX } from 'lucide-react';
+import { Globe, Clock, DollarSign, Calendar, Briefcase, Plus, X, Save, Loader2, ShieldX, type LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
@@ -59,8 +59,7 @@ export default function LocalizationPage() {
     Promise.all([
       fetch('/api/tenant/admin/localization', { signal: controller.signal }).then(r => r.ok ? r.json() : { localization: DEFAULTS }),
       fetch('/api/tenant/me', { signal: controller.signal }).then(r => r.ok ? r.json() : {}),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ]).then(([d, me]: any[]) => { if (ignore) return; 
+    ]).then(([d, me]: [{ localization?: Partial<Loc> }, { is_admin?: boolean }]) => { if (ignore) return; 
       const l = { ...DEFAULTS, ...(d.localization ?? { } ) };
       setLoc(l); setOriginal(l);
       setIsAdmin(me?.is_admin ?? false);
@@ -291,8 +290,7 @@ export default function LocalizationPage() {
 
 const inp = 'w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function Section({ icon: Icon, title, children }: { icon: any; title: string; children: React.ReactNode }) {
+function Section({ icon: Icon, title, children }: { icon: LucideIcon; title: string; children: React.ReactNode }) {
   return (
     <div className="rounded-xl border border-border bg-card p-5 space-y-3">
       <div className="flex items-center gap-2 text-sm font-semibold">
