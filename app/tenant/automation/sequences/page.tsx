@@ -16,13 +16,20 @@ const STEP_LABELS: Record<string,string> = {
   create_task:'Create Task', send_notification:'Send Notification', wait:'Wait',
 };
 
+interface Sequence {
+  id: string;
+  name?: string | null;
+  description?: string | null;
+  is_active?: boolean | null;
+  enroll_count?: number | null;
+  steps?: unknown[];
+}
+
 export default function SequencesPage() {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [sequences, setSequences] = useState<any[]>([]);
+  const [sequences, setSequences] = useState<Sequence[]>([]);
   const [loading, setLoading]     = useState(true);
   const [showCreate, setShowCreate] = useState(false);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [_selected, _setSelected]   = useState<any|null>(null);
+  const [_selected, _setSelected]   = useState<Sequence | null>(null);
   const [saving, setSaving]       = useState(false);
   const [form, setForm] = useState({
     name:'', description:'',

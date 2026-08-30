@@ -6,7 +6,8 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { Plus, Zap, ToggleLeft, ToggleRight, Trash2,
-  Mail, Users, Calendar, TrendingUp, X, Loader2, Workflow } from 'lucide-react';
+  Mail, Users, Calendar, TrendingUp, X, Loader2, Workflow,
+  type LucideIcon } from 'lucide-react';
 import { cn, formatRelativeTime } from '@/lib/utils';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import toast from 'react-hot-toast';
@@ -27,15 +28,31 @@ const ACTION_LABELS: Record<string,string> = {
   'assign_contact':'Assign Contact', 'add_tag':'Add Tag', 'remove_tag':'Remove Tag',
   'send_notification':'Send Notification', 'fire_webhook':'Fire Webhook', 'wait':'Wait (delay)',
 };
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const TRIGGER_ICONS: Record<string,any> = {
+const TRIGGER_ICONS: Record<string, LucideIcon> = {
   'contact.created': Users, 'deal.created': TrendingUp, 'deal.won': TrendingUp,
   'task.completed': Calendar, 'schedule.daily': Calendar, 'form.submitted': Mail,
 };
 
+interface AutomationWorkflow {
+  id: string;
+  name?: string | null;
+  description?: string | null;
+  trigger_type?: string | null;
+  category?: string | null;
+  is_prebuilt?: boolean;
+  // prebuilt runtime state
+  enabled?: boolean;
+  run_count?: number;
+  // custom fields
+  is_active?: boolean;
+  success_count?: number | null;
+  last_run_at?: string | null;
+  last_error?: string | null;
+  actions?: { type?: string | null; config?: Record<string, string> }[];
+}
+
 // Prebuilt toggle workflows (existing system)
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const PREBUILT: any[] = [
+const PREBUILT: AutomationWorkflow[] = [
   { id:'welcome-email', name:'Welcome Email', description:'Send welcome email when contact is created',
     trigger_type:'contact.created', category:'Email', is_prebuilt: true },
   { id:'task-due-reminder', name:'Task Due Reminder', description:'Remind when task is due today (runs daily 9AM)',
@@ -52,10 +69,8 @@ type Tab = 'prebuilt' | 'custom';
 
 export default function AutomationPage() {
   const [tab, setTab]               = useState<Tab>('prebuilt');
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [prebuilts, setPrebuilts]   = useState<any[]>([]);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [customs, setCustoms]       = useState<any[]>([]);
+  const [prebuilts, setPrebuilts]   = useState<AutomationWorkflow[]>([]);
+  const [customs, setCustoms]       = useState<AutomationWorkflow[]>([]);
   const [loading, setLoading]       = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [deleting, setDeleting]     = useState<string|null>(null);
@@ -78,8 +93,8 @@ export default function AutomationPage() {
     if (signal?.aborted) return;
     // Merge prebuilts with DB state
     const pbData = PREBUILT.map(p => {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const db = (pb.data||[]).find((d: any) => d.workflow_id === p.id);
+      const db = (pb.data as { workflow_id?: string; enabled?: boolean; run_count?: number; last_run_at?: string }[] || [])
+        .find((d) => d.workflow_id === p.id);
       return { ...p, enabled: db?.enabled ?? false, run_count: db?.run_count ?? 0, last_run_at: db?.last_run_at };
     });
     setPrebuilts(pbData);
@@ -250,7 +265,7 @@ export default function AutomationPage() {
         <div className="space-y-3">
           {loading ? [...Array(5)].map((_,i) => <div key={i} className="h-20 bg-muted rounded-2xl animate-pulse" />) :
           prebuilts.map(w => {
-            const Icon = TRIGGER_ICONS[w.trigger_type] ?? Zap;
+            const Icon = TRIGGER_ICONS[w.trigger_type ?? ''] ?? Zap;
             return (
               <div key={w.id} className={cn('flex items-center gap-4 p-4 rounded-2xl border transition-all',
                 w.enabled ? 'border-violet-200 dark:border-violet-800 bg-violet-50/30 dark:bg-violet-950/10' : 'border-border bg-card')}>
@@ -261,14 +276,14 @@ export default function AutomationPage() {
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-sm">{w.name}</p>
                   <p className="text-xs text-muted-foreground">{w.description}</p>
-                  {w.run_count > 0 && <p className="text-xs text-violet-600 mt-0.5">Ran {w.run_count} times{w.last_run_at ? ` · last ${formatRelativeTime(w.last_run_at)}` : ''}</p>}
+                  {(w.run_count ?? 0) > 0 && <p className="text-xs text-violet-600 mt-0.5">Ran {w.run_count} times{w.last_run_at ? ` · last ${formatRelativeTime(w.last_run_at)}` : ''}</p>}
                 </div>
                 <div className="flex items-center gap-3 shrink-0">
                   <span className={cn('text-[10px] font-bold px-2 py-0.5 rounded-full',
                     w.enabled ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400' : 'bg-muted text-muted-foreground')}>
                     {w.enabled ? 'ON' : 'OFF'}
                   </span>
-                  <button onClick={() => togglePrebuilt(w.id, w.enabled)} disabled={toggling === w.id}
+                  <button onClick={() => togglePrebuilt(w.id, w.enabled ?? false)} disabled={toggling === w.id}
                     className="text-muted-foreground hover:text-violet-600 transition-colors">
                     {toggling === w.id ? <Loader2 className="w-6 h-6 animate-spin" /> :
                       w.enabled ? <ToggleRight className="w-7 h-7 text-violet-600" /> : <ToggleLeft className="w-7 h-7" />}
@@ -294,7 +309,7 @@ export default function AutomationPage() {
               </button>
             </div>
           ) : customs.map(a => {
-            const Icon = TRIGGER_ICONS[a.trigger_type] ?? Zap;
+            const Icon = TRIGGER_ICONS[a.trigger_type ?? ''] ?? Zap;
             return (
               <div key={a.id} className={cn('flex items-center gap-4 p-4 rounded-2xl border transition-all',
                 a.is_active ? 'border-violet-200 dark:border-violet-800 bg-violet-50/30 dark:bg-violet-950/10' : 'border-border bg-card')}>
@@ -304,8 +319,8 @@ export default function AutomationPage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-sm">{a.name}</p>
-                  <p className="text-xs text-muted-foreground">When: <span className="font-medium">{TRIGGER_LABELS[a.trigger_type] ?? a.trigger_type}</span>
-                    {Array.isArray(a.actions) && a.actions.length > 0 && <> → {ACTION_LABELS[a.actions[0]?.type] ?? a.actions[0]?.type}</>}
+                  <p className="text-xs text-muted-foreground">When: <span className="font-medium">{TRIGGER_LABELS[a.trigger_type ?? ''] ?? a.trigger_type}</span>
+                    {Array.isArray(a.actions) && a.actions.length > 0 && <> → {ACTION_LABELS[a.actions[0]?.type ?? ''] ?? a.actions[0]?.type}</>}
                   </p>
                   {(a.success_count ?? 0) > 0 && <p className="text-xs text-violet-600 mt-0.5">Ran {a.success_count} times{a.last_run_at ? ` · last ${formatRelativeTime(a.last_run_at)}` : ''}</p>}
                   {a.last_error && <p className="text-xs text-red-500 mt-0.5">Last error: {a.last_error}</p>}
@@ -315,7 +330,7 @@ export default function AutomationPage() {
                     a.is_active ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400' : 'bg-muted text-muted-foreground')}>
                     {a.is_active ? 'ON' : 'OFF'}
                   </span>
-                  <button onClick={() => toggleCustom(a.id, a.is_active)} disabled={toggling === a.id}
+                  <button onClick={() => toggleCustom(a.id, a.is_active ?? false)} disabled={toggling === a.id}
                     className="text-muted-foreground hover:text-violet-600 transition-colors">
                     {toggling === a.id ? <Loader2 className="w-6 h-6 animate-spin" /> :
                       a.is_active ? <ToggleRight className="w-7 h-7 text-violet-600" /> : <ToggleLeft className="w-7 h-7" />}
