@@ -12,10 +12,14 @@ import toast from 'react-hot-toast';
 import { cn } from '@/lib/utils';
 import { sanitizeHTML } from '@/lib/sanitize';
 
+interface PendingDeletion {
+  total?: number | null;
+  cutoff_date?: string | null;
+}
+
 export default function SecuritySettingsPage() {
   const _router = useRouter();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [_user, setUser] = useState<any>(null);
+  const [_user, setUser] = useState<unknown>(null);
   const [loading, setLoading] = useState(true);
   
   // 2FA states
@@ -40,8 +44,7 @@ export default function SecuritySettingsPage() {
   
   // Trash retention states
   const [retentionDays, setRetentionDays] = useState(30);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [pendingDeletion, setPendingDeletion] = useState<any>(null);
+  const [pendingDeletion, setPendingDeletion] = useState<PendingDeletion | null>(null);
   const [_loadingRetention, setLoadingRetention] = useState(true);
   const [savingRetention, setSavingRetention] = useState(false);
 
@@ -554,14 +557,14 @@ export default function SecuritySettingsPage() {
             </select>
           </div>
 
-          {pendingDeletion && pendingDeletion.total > 0 && (
+          {pendingDeletion && (pendingDeletion.total ?? 0) > 0 && (
             <div className="p-4 rounded-lg bg-orange-50 border border-orange-200">
               <div className="flex items-center gap-2 text-orange-800">
                 <AlertTriangle className="h-4 w-4" />
                 <span className="text-sm font-medium">{pendingDeletion.total} items pending permanent deletion</span>
               </div>
               <p className="text-xs text-orange-600 mt-1">
-                These items will be deleted on {new Date(pendingDeletion.cutoff_date).toLocaleDateString()}
+                These items will be deleted on {pendingDeletion.cutoff_date ? new Date(pendingDeletion.cutoff_date).toLocaleDateString() : 'N/A'}
               </p>
             </div>
           )}

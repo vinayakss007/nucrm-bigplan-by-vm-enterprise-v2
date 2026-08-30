@@ -11,8 +11,7 @@ interface SSOProvider {
   id: string;
   providerType: 'saml' | 'oidc';
   name: string;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  config: Record<string, any>;
+  config: Record<string, unknown>;
   isActive: boolean;
 }
 
@@ -83,8 +82,7 @@ export default function SSOSettingsPage() {
     setSaving(true);
     setMessage(null);
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const config: Record<string, any> = {};
+    const config: Record<string, string> = {};
     if (providerType === 'saml') {
       config['entityId'] = form.entityId;
       config['ssoUrl'] = form.ssoUrl;
