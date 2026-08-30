@@ -23,6 +23,7 @@ import {
   type StripeBillingPortalSession,
 } from '@/lib/stripe';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { logError } from '@/lib/errors-server';
 
 export const POST = withApiRoute(async (request: NextRequest) => {
   try {
@@ -66,7 +67,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[Billing Portal]', err);
+    await logError({ error: err, context: 'Billing Portal POST', requestMethod: 'POST' });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 });
