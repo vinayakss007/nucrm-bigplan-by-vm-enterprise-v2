@@ -7,14 +7,18 @@
 import { useEffect, useState } from 'react';
 import { Download, X } from 'lucide-react';
 
+// The beforeinstallprompt event isn't in the standard DOM lib types.
+interface BeforeInstallPromptEvent extends Event {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
+}
+
 export default function PWAInstallPrompt() {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [showPrompt, setShowPrompt] = useState(false);
 
   useEffect(() => {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const handler = (e: any) => {
+    const handler = (e: BeforeInstallPromptEvent) => {
       e.preventDefault();
       setDeferredPrompt(e);
       const dismissed = sessionStorage.getItem('pwa-install-dismissed');
@@ -22,8 +26,8 @@ export default function PWAInstallPrompt() {
         setShowPrompt(true);
       }
     };
-    window.addEventListener('beforeinstallprompt', handler);
-    return () => window.removeEventListener('beforeinstallprompt', handler);
+    window.addEventListener('beforeinstallprompt', handler as EventListener);
+    return () => window.removeEventListener('beforeinstallprompt', handler as EventListener);
   }, []);
 
   const install = async () => {

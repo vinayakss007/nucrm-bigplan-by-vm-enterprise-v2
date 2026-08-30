@@ -10,27 +10,31 @@ import { cn } from '@/lib/utils';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import toast from 'react-hot-toast';
 import { Button } from '@/components/ui/button';
+import type { LucideIcon } from 'lucide-react';
+
+interface TeamMember {
+  user_id: string;
+  full_name: string;
+}
 
 interface AssignmentRule {
   id: string;
   name: string;
   type: 'round_robin' | 'territory' | 'skill_based' | 'weighted';
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  config: Record<string, any>;
+  config: Record<string, unknown>;
   isActive: boolean;
   priority: number;
   entityType: string;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const TYPE_CONFIG: Record<string, { label: string; icon: any; description: string }> = {
+const TYPE_CONFIG: Record<string, { label: string; icon: LucideIcon; description: string }> = {
   round_robin: { label: 'Round Robin', icon: Users, description: 'Assign to next member in sequence' },
   territory: { label: 'Territory', icon: MapPin, description: 'Assign based on geographic territory' },
   skill_based: { label: 'Skill Based', icon: Brain, description: 'Match skills to requirements' },
   weighted: { label: 'Weighted', icon: Shuffle, description: 'Weighted random distribution' },
 };
 
-export default function AssignmentConfig({ teamMembers = [] }: { teamMembers?: { user_id: string; full_name: string }[] }) {
+export default function AssignmentConfig({ teamMembers = [] }: { teamMembers?: TeamMember[] }) {
   const [rules, setRules] = useState<AssignmentRule[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -136,8 +140,13 @@ export default function AssignmentConfig({ teamMembers = [] }: { teamMembers?: {
   );
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function AssignmentRuleForm({ _teamMembers, onSaved, onClose }: any) {
+interface AssignmentRuleFormProps {
+  teamMembers?: TeamMember[];
+  onSaved: () => void;
+  onClose: () => void;
+}
+
+function AssignmentRuleForm({ onSaved, onClose }: AssignmentRuleFormProps) {
   const [form, setForm] = useState({
     name: '',
     type: 'round_robin',
