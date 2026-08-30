@@ -5,6 +5,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
+import { logError } from '@/lib/errors-server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { activities } from '@/drizzle/schema';
@@ -95,7 +96,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[activities GET]', err);
+    await logError({ error: err, context: 'activities GET', requestMethod: 'GET' });
     return apiError(err, "Internal server error", 200);
   }
 });
@@ -133,7 +134,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[activities POST]', err);
+    await logError({ error: err, context: 'activities POST', requestMethod: 'POST' });
     return apiError(err);
   }
 });
