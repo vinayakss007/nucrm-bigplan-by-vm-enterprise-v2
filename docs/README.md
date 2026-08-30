@@ -46,6 +46,7 @@ security, backups/DR, and incident response. Treat this as internal/confidential
 | [Monitoring & Observability](./admin/monitoring.md) | Sentry, Grafana/Prometheus, PagerDuty, health checks |
 | [Operations Runbooks](./admin/runbooks.md) | Go-live, incident response, migration recovery |
 | [Background Jobs & Realtime](./admin/jobs-and-realtime.md) | Worker, queues, cron, socket.io |
+| [Contributing & Operations Handbook](./admin/contributing-and-operations.md) | PR policy, engineering standards, toolchain, live deploy facts |
 
 ---
 
@@ -73,7 +74,8 @@ docs/
 │   ├── backups-dr.md
 │   ├── monitoring.md
 │   ├── runbooks.md
-│   └── jobs-and-realtime.md
+│   ├── jobs-and-realtime.md
+│   └── contributing-and-operations.md
 ├── adr/                   ← Architecture Decision Records (engineering history)
 ├── runbooks/              ← Original operational runbooks (linked from admin/runbooks.md)
 └── planning/, audits/     ← Internal working notes & point-in-time audits (historical)
