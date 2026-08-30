@@ -9,8 +9,7 @@ import { Mail, Loader2, CheckCircle, AlertTriangle, Send } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export default function EmailSettingsPage() {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [_templates, _setTemplates] = useState<any[]>([]);
+  const [_templates, _setTemplates] = useState<unknown[]>([]);
   const [_loading, setLoading] = useState(true);
   const [testEmail, setTestEmail] = useState('');
   const [testing, setTesting] = useState(false);
