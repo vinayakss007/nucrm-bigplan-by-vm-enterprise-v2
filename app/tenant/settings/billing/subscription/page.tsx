@@ -14,9 +14,39 @@ import {
 import { formatCurrency } from '@/lib/utils';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
+import type { LucideIcon } from 'lucide-react';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function UsageBar({ label, used, max, icon: Icon }: { label: string; used: number; max: number; icon: any }) {
+interface SubscriptionInfo {
+  planId?: string | null;
+  planName?: string | null;
+  status?: string | null;
+  cancelAtPeriodEnd?: boolean | null;
+  currentPeriodStart?: string | null;
+  currentPeriodEnd?: string | null;
+}
+
+interface SubscriptionPlan {
+  id: string;
+  name?: string | null;
+  description?: string | null;
+  priceMonthly?: number | null;
+  maxUsers?: number | null;
+  maxContacts?: number | null;
+  maxDeals?: number | null;
+  maxAutomations?: number | null;
+  maxStorageGb?: number | null;
+  features?: unknown[] | null;
+}
+
+interface SubscriptionWorkspace {
+  plan_id?: string | null;
+  status?: string | null;
+  stripe_customer_id?: string | null;
+  current_contacts?: number | null;
+  current_users?: number | null;
+}
+
+function UsageBar({ label, used, max, icon: Icon }: { label: string; used: number; max: number; icon: LucideIcon }) {
   const pct = max > 0 ? Math.min(100, Math.round((used / max) * 100)) : 0;
   const unlimited = max <= 0;
   return (
@@ -45,12 +75,9 @@ function UsageBar({ label, used, max, icon: Icon }: { label: string; used: numbe
 }
 
 export default function SubscriptionPage() {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [subscription, setSubscription] = useState<any>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [plans, setPlans] = useState<any[]>([]);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [workspace, setWorkspace] = useState<any>(null);
+  const [subscription, setSubscription] = useState<SubscriptionInfo | null>(null);
+  const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
+  const [workspace, setWorkspace] = useState<SubscriptionWorkspace | null>(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [showPlanComparison, setShowPlanComparison] = useState(false);
@@ -263,7 +290,7 @@ export default function SubscriptionPage() {
           <UsageBar label="Contacts" used={workspace.current_contacts || 0} max={currentPlan?.maxContacts || 500} icon={Database}/>
           <UsageBar label="Team Members" used={workspace.current_users || 0} max={currentPlan?.maxUsers || 1} icon={Users}/>
           {(currentPlan?.maxAutomations || 0) > 0 && (
-            <UsageBar label="Automations" used={0} max={currentPlan.maxAutomations} icon={Zap}/>
+            <UsageBar label="Automations" used={0} max={currentPlan?.maxAutomations ?? 0} icon={Zap}/>
           )}
         </div>
       </div>
@@ -398,7 +425,7 @@ export default function SubscriptionPage() {
                         <div>
                           <p className="font-semibold capitalize">{plan.name}</p>
                           <p className="text-2xl font-bold text-violet-600">
-                            {formatCurrency(plan.priceMonthly)}
+                            {formatCurrency(plan.priceMonthly ?? 0)}
                             <span className="text-xs font-normal text-muted-foreground">/mo</span>
                           </p>
                         </div>
@@ -419,17 +446,17 @@ export default function SubscriptionPage() {
                       <div className="space-y-2 mb-4">
                         <div className="flex items-center gap-2 text-xs">
                           <Check className="w-3.5 h-3.5 text-emerald-500" />
-                          <span>{plan.maxContacts < 0 ? 'Unlimited' : plan.maxContacts?.toLocaleString()} contacts</span>
+                          <span>{(plan.maxContacts ?? 0) < 0 ? 'Unlimited' : plan.maxContacts?.toLocaleString()} contacts</span>
                         </div>
                         <div className="flex items-center gap-2 text-xs">
                           <Check className="w-3.5 h-3.5 text-emerald-500" />
-                          <span>{plan.maxUsers < 0 ? 'Unlimited' : plan.maxUsers} team members</span>
+                          <span>{(plan.maxUsers ?? 0) < 0 ? 'Unlimited' : plan.maxUsers} team members</span>
                         </div>
                         <div className="flex items-center gap-2 text-xs">
                           <Check className="w-3.5 h-3.5 text-emerald-500" />
-                          <span>{plan.maxDeals < 0 ? 'Unlimited' : plan.maxDeals?.toLocaleString()} deals</span>
+                          <span>{(plan.maxDeals ?? 0) < 0 ? 'Unlimited' : plan.maxDeals?.toLocaleString()} deals</span>
                         </div>
-                        {plan.maxAutomations > 0 && (
+                        {(plan.maxAutomations ?? 0) > 0 && (
                           <div className="flex items-center gap-2 text-xs">
                             <Check className="w-3.5 h-3.5 text-emerald-500" />
                             <span>{plan.maxAutomations} automations</span>

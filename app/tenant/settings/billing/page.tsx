@@ -6,13 +6,30 @@
 'use client';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Crown, ArrowUpRight, Users, Database, Zap, Loader2, CreditCard, FileText } from 'lucide-react';
+import { Crown, ArrowUpRight, Users, Database, Zap, Loader2, CreditCard, FileText, type LucideIcon } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function UsageBar({ label, used, max, icon: Icon }: { label: string; used: number; max: number; icon: any }) {
+interface BillingPlan {
+  id: string;
+  name?: string | null;
+  price_monthly: number;
+  max_contacts: number;
+  max_users: number;
+  max_automations?: number | null;
+}
+
+interface BillingWorkspace {
+  plan_id?: string | null;
+  status?: string | null;
+  stripe_customer_id?: string | null;
+  current_contacts?: number | null;
+  current_users?: number | null;
+  trial_ends_at?: string | null;
+}
+
+function UsageBar({ label, used, max, icon: Icon }: { label: string; used: number; max: number; icon: LucideIcon }) {
   const pct = max > 0 ? Math.min(100, Math.round((used / max) * 100)) : 0;
   const unlimited = max <= 0;
   return (
@@ -41,10 +58,8 @@ function UsageBar({ label, used, max, icon: Icon }: { label: string; used: numbe
 }
 
 export default function BillingPage() {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [workspace, setWorkspace] = useState<any>(null);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [plans, setPlans]         = useState<any[]>([]);
+  const [workspace, setWorkspace] = useState<BillingWorkspace | null>(null);
+  const [plans, setPlans]         = useState<BillingPlan[]>([]);
   const [loading, setLoading]     = useState(true);
   const [upgrading, setUpgrading] = useState<string|null>(null);
   const [openingPortal, setOpeningPortal] = useState(false);
@@ -142,7 +157,7 @@ export default function BillingPage() {
         <div className="space-y-2.5">
           <UsageBar label="Contacts" used={workspace.current_contacts??0} max={currentPlan?.max_contacts??500} icon={Database}/>
           <UsageBar label="Team Members" used={workspace.current_users??0} max={currentPlan?.max_users??1} icon={Users}/>
-          {(currentPlan?.max_automations??0)>0 && <UsageBar label="Automations" used={0} max={currentPlan.max_automations} icon={Zap}/>}
+          {(currentPlan?.max_automations??0)>0 && <UsageBar label="Automations" used={0} max={currentPlan?.max_automations ?? 0} icon={Zap}/>}
         </div>
       </div>
 
