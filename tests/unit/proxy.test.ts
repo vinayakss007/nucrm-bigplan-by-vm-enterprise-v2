@@ -36,7 +36,11 @@ function NextResponse(this: any, body: any, init?: { status?: number; headers?: 
   this._isResponse = true;
 }
 
-NextResponse.next = () => makeResponse({ _isNext: true });
+// Capture the forwarded request headers (init.request.headers) so tests can
+// assert the proxy propagates x-request-id onto the request (observability).
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+NextResponse.next = (init?: { request?: { headers?: any } }) =>
+  makeResponse({ _isNext: true, _requestHeaders: init?.request?.headers });
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 NextResponse.json = (body: any, init?: any) => makeResponse({ ...init, body, _isJson: true });
 NextResponse.redirect = (url: string) => ({ url, _isRedirect: true, headers: makeHeaders() });
@@ -199,6 +203,33 @@ describe('proxy middleware', () => {
       const { proxy } = await import('@/proxy');
       const res = await proxy(makeReq('/api/health'));
       expect(res.headers.get('x-request-id')).toBeTruthy();
+    });
+
+    // Observability: the id the proxy owns must also be forwarded onto the
+    // REQUEST so requireAuth seeds its ALS with it and logError can correlate
+    // the DB error row / Sentry event with the request.
+    it('propagates x-request-id onto the forwarded request (public pass-through)', async () => {
+      const { proxy } = await import('@/proxy');
+      const res = await proxy(makeReq('/api/leads/public'));
+      const fwd = res._requestHeaders?.get('x-request-id');
+      expect(fwd).toBeTruthy();
+      expect(fwd).toBe(res.headers.get('x-request-id'));
+    });
+
+    it('reuses an incoming x-request-id instead of minting a new one', async () => {
+      const { proxy } = await import('@/proxy');
+      const res = await proxy(makeReq('/api/leads/public', { headers: { 'x-request-id': 'incoming-123' } }));
+      expect(res.headers.get('x-request-id')).toBe('incoming-123');
+      expect(res._requestHeaders?.get('x-request-id')).toBe('incoming-123');
+    });
+
+    it('propagates x-request-id onto authenticated API pass-through', async () => {
+      mockJwtVerify.mockResolvedValue({ payload: { sub: 'user-123' } });
+      const { proxy } = await import('@/proxy');
+      const res = await proxy(makeReq('/api/tenant/contacts', { cookies: { nucrm_session: 'valid-token' } }));
+      const fwd = res._requestHeaders?.get('x-request-id');
+      expect(fwd).toBeTruthy();
+      expect(fwd).toBe(res.headers.get('x-request-id'));
     });
   });
 });
