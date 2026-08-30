@@ -568,6 +568,13 @@
       "when": 1788523200000,
       "tag": "0081_fix_usage_snapshot_function",
       "breakpoints": true
+    },
+    {
+      "idx": 82,
+      "version": "7",
+      "when": 1788696000000,
+      "tag": "0083_approval_chain_steps",
+      "breakpoints": true
     }
   ]
 }

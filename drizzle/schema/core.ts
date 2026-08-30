@@ -245,6 +245,13 @@ export const approvalRequests = pgTable('approval_requests', {
   approvedBy: uuid('approved_by').references(() => users.id, { onDelete: 'set null' }),
   rejectedBy: uuid('rejected_by').references(() => users.id, { onDelete: 'set null' }),
   reason: text('reason'),
+  // #1632 multi-step approval chains. `steps` is an ordered list of
+  // { order, approverRole?, status: 'pending'|'approved'|'rejected', actedBy?,
+  //   actedAt?, reason? }. `currentStep` is the 1-based index of the step
+  // awaiting action. A request with an empty `steps` array behaves as a legacy
+  // single-stage approval (one approve finalizes it) for backward compatibility.
+  steps: jsonb('steps').notNull().default([]),
+  currentStep: integer('current_step').notNull().default(1),
   ...utils.lifecycle(),
 }, (table) => {
   return {
