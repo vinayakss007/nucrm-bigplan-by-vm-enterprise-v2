@@ -49,7 +49,9 @@ export const GET = withApiRoute(async (request: NextRequest) => {
         .catch((err) => { void logError({ error: err, context: 'superadmin/revenue events query' }); return []; }),
     ]);
 
-    return NextResponse.json({ mrr: mrrRes, events });
+    // #1093: emit the standard `data` key (AGENTS.md { data, meta?, error? })
+    // additively — legacy top-level keys are kept so existing consumers work.
+    return NextResponse.json({ data: { mrr: mrrRes, events }, mrr: mrrRes, events });
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

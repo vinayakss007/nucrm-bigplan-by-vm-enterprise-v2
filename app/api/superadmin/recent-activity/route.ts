@@ -73,11 +73,13 @@ export const GET = withApiRoute(async (req: NextRequest) => {
       LIMIT ${limit}
     `);
 
-    return NextResponse.json({
+    // #1093: add the standard `data` key additively; keep legacy top-level keys.
+    const payload = {
       bulk_ops:          bulkOps.rows         ?? [],
       settings_changes:  settingsChanges.rows ?? [],
       critical:          critical.rows        ?? [],
-    });
+    };
+    return NextResponse.json({ data: payload, ...payload });
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

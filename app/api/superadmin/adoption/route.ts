@@ -79,7 +79,8 @@ export const GET = withApiRoute(async (req: NextRequest) => {
 
     const row = (result.rows?.[0] ?? {}) as Record<string, unknown>;
 
-    return NextResponse.json({
+    // #1093: add the standard `data` key additively; keep legacy top-level keys.
+    const payload = {
       total_tenants: Number(row['total_tenants']) || 0,
       adoption: {
         localization:  Number(row['adoption_localization'])  || 0,
@@ -99,7 +100,8 @@ export const GET = withApiRoute(async (req: NextRequest) => {
         with_prefs:        Number(row['users_with_prefs']) || 0,
         out_of_office_now: Number(row['users_ooo'])        || 0,
       },
-    });
+    };
+    return NextResponse.json({ data: payload, ...payload });
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
