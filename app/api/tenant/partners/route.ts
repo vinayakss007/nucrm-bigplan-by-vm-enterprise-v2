@@ -13,6 +13,7 @@ import {
   getPartnersByTenant,
 } from '@/lib/partners';
 import type { PartnerStatus } from '@/lib/partners';
+import { logError } from '@/lib/errors-server';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 // Mirrors the fields the POST handler consumes and its previous manual checks:
@@ -42,7 +43,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[tenant partners GET]', err);
+    await logError({ error: err, context: 'tenant partners GET', requestMethod: 'GET' });
     return apiError(err);
   }
 });
@@ -79,7 +80,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[tenant partners POST]', err);
+    await logError({ error: err, context: 'tenant partners POST', requestMethod: 'POST' });
     return apiError(err);
   }
 });

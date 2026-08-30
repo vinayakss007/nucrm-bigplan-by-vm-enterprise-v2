@@ -13,6 +13,7 @@ import { db } from '@/drizzle/db';
 import { projects, users } from '@/drizzle/schema';
 import { eq, and, sql, desc, isNull } from 'drizzle-orm';
 import { ModuleRegistry } from '@/lib/modules/registry';
+import { logError } from '@/lib/errors-server';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 export const GET = withApiRoute(async (request: NextRequest) => {
@@ -67,7 +68,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[projects GET]', err);
+    await logError({ error: err, context: 'projects GET', requestMethod: 'GET' });
     return apiError(err);
   }
 });
@@ -112,7 +113,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[projects POST]', err);
+    await logError({ error: err, context: 'projects POST', requestMethod: 'POST' });
     return apiError(err);
   }
 });

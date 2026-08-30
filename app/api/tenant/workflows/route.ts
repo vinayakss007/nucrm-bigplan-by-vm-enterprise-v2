@@ -12,6 +12,7 @@ import { db } from '@/drizzle/db';
 import { workflows, workflowActions } from '@/drizzle/schema';
 import { eq, and, sql, desc, isNull } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { logError } from '@/lib/errors-server';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 /**
@@ -54,7 +55,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
-    console.error('[Workflows] GET error:', error);
+    await logError({ error, context: 'Workflows GET error', requestMethod: 'GET' });
     return apiError(error);
   }
 });
@@ -137,7 +138,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
-    console.error('[Workflows] POST error:', error);
+    await logError({ error, context: 'Workflows POST error', requestMethod: 'POST' });
     return apiError(error);
   }
 });

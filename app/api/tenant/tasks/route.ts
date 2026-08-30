@@ -82,7 +82,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[tasks GET]', err);
+    await logError({ error: err, context: 'tasks GET', requestMethod: 'GET' });
     return apiError(err);
   }
 });
@@ -187,7 +187,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[tasks POST]', err);
+    await logError({ error: err, context: 'tasks POST', requestMethod: 'POST' });
     return apiError(err);
   }
 });

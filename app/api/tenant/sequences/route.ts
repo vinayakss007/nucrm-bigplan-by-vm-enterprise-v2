@@ -12,6 +12,7 @@ import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { db } from '@/drizzle/db';
 import { sequences, sequenceSteps } from '@/drizzle/schema';
 import { eq, and, desc, isNull } from 'drizzle-orm';
+import { logError } from '@/lib/errors-server';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 /**
@@ -51,7 +52,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
-    console.error('[sequences GET]', error);
+    await logError({ error, context: 'sequences GET', requestMethod: 'GET' });
     return apiError(error);
   }
 });
@@ -124,7 +125,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
-    console.error('[sequences POST]', error);
+    await logError({ error, context: 'sequences POST', requestMethod: 'POST' });
     return apiError(error);
   }
 });

@@ -11,6 +11,7 @@ import { eq, and } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { readJsonBody } from '@/lib/api/validate';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { logError } from '@/lib/errors-server';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 /**
@@ -67,7 +68,7 @@ export const GET = withApiRoute(async (req: NextRequest) => {
 
     return NextResponse.json({ data });
   } catch (err) {
-    console.error('[segments GET]', err);
+    await logError({ error: err, context: 'segments GET', requestMethod: 'GET' });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 });
@@ -148,7 +149,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
       { status: 201 },
     );
   } catch (err) {
-    console.error('[segments POST]', err);
+    await logError({ error: err, context: 'segments POST', requestMethod: 'POST' });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 });

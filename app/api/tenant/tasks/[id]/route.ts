@@ -125,7 +125,7 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: any) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) { 
-    console.error('[task PATCH]', err);
+    await logError({ error: err, context: 'task PATCH', requestMethod: 'PATCH' });
     return apiError(err); 
   }
 });
@@ -181,7 +181,7 @@ export const DELETE = withApiRoute(async (req: NextRequest, { params }: any) => 
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) { 
-    console.error('[task DELETE]', err);
+    await logError({ error: err, context: 'task DELETE', requestMethod: 'DELETE' });
     return apiError(err); 
   }
 });
