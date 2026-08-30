@@ -27,6 +27,7 @@ import { readSsoState, clearSsoState, sanitizeRedirectTo } from '@/lib/auth/sso/
 import { createToken, hashToken, setSessionCookie } from '@/lib/auth/session';
 import { selectLeastPrivilegeRole } from '@/lib/auth/default-role';
 import { decrypt } from '@/lib/crypto';
+import { logError } from '@/lib/errors-server';
 
 const SESSION_TTL_DAYS = 30;
 
@@ -74,8 +75,7 @@ export async function GET(request: NextRequest) {
   try {
     cfg = loadProviderConfig(provider.config, decrypt);
   } catch (err) {
-    const msg = err instanceof Error ? err.message : 'Provider config could not be decrypted';
-    console.error('[sso/callback] decrypt failed', msg);
+    void logError({ error: err, context: 'auth/sso/callback decrypt provider config', requestUrl: request.url, requestMethod: request.method });
     await clearSsoState();
     return redirectToLogin('SSO provider configuration is invalid');
   }
@@ -92,8 +92,7 @@ export async function GET(request: NextRequest) {
       expectedNonce: stateCookie.nonce,
     });
   } catch (err) {
-    const msg = err instanceof Error ? err.message : 'Token verification failed';
-    console.error('[sso/callback] token exchange/verify failed', msg);
+    void logError({ error: err, context: 'auth/sso/callback token exchange/verify', requestUrl: request.url, requestMethod: request.method });
     await clearSsoState();
     return redirectToLogin('Could not verify your SSO login');
   }

@@ -13,6 +13,7 @@ import { randomBytes, createHash } from 'crypto';
 import { sendEmail } from '@/lib/email/service';
 import { checkRateLimit, limiters, getRateLimitHeaders } from '@/lib/rate-limit';
 import { getClientIp } from '@/lib/client-ip';
+import { logError } from '@/lib/errors-server';
 
 const schema = z.object({ email: z.string().email() });
 
@@ -96,7 +97,7 @@ export async function POST(request: NextRequest) {
           text: `Reset your NuCRM password: ${resetUrl} (expires in 1 hour)`,
         });
       } catch (bgErr) {
-        console.error('[forgot-password] background token/email failed:', bgErr instanceof Error ? bgErr.message : bgErr);
+        void logError({ error: bgErr, context: 'auth/forgot-password background token/email', requestUrl: request.url, requestMethod: request.method });
       }
     })();
 
@@ -106,7 +107,7 @@ export async function POST(request: NextRequest) {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[forgot-password]', err);
+    void logError({ error: err, context: 'auth/forgot-password POST', requestUrl: request.url, requestMethod: request.method });
     await normalizeTiming(startedAt);
     return NextResponse.json({ ok: true }); // Don't reveal errors
   }

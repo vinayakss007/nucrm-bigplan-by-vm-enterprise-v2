@@ -26,6 +26,7 @@ import {
 import { setSsoState, sanitizeRedirectTo } from '@/lib/auth/sso/state';
 import { decrypt } from '@/lib/crypto';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { logError } from '@/lib/errors-server';
 
 export async function GET(request: NextRequest) {
   const limited = await checkRateLimit(request, { action: 'sso-start', max: 20, windowMinutes: 1 });
@@ -77,8 +78,7 @@ export async function GET(request: NextRequest) {
   try {
     cfg = loadProviderConfig(row.config, decrypt);
   } catch (err) {
-    const msg = err instanceof Error ? err.message : 'Provider config could not be decrypted';
-    console.error('[sso/start] decrypt failed', msg);
+    void logError({ error: err, context: 'auth/sso/start decrypt provider config', requestUrl: request.url, requestMethod: request.method });
     // Never expose the internal error — it may contain cipher details or the encrypted blob.
     return NextResponse.json({ error: 'SSO provider configuration error. Contact your administrator.' }, { status: 500 });
   }
@@ -116,8 +116,7 @@ export async function GET(request: NextRequest) {
       loginHint: email,
     });
   } catch (err) {
-    const msg = err instanceof Error ? err.message : 'Could not build authorize URL';
-    console.error('[sso/start] discovery/authorize failed', msg);
+    void logError({ error: err, context: 'auth/sso/start discovery/authorize', requestUrl: request.url, requestMethod: request.method });
     // Never expose the identity provider's error details to the client.
     return NextResponse.json({ error: 'SSO login could not be initiated. Please try again or contact support.' }, { status: 502 });
   }

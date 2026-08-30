@@ -10,6 +10,7 @@ import { eq, and, gt } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { timingSafeEqual } from 'crypto';
+import { logError } from '@/lib/errors-server';
 
 export async function POST(request: NextRequest) {
   try {
@@ -174,8 +175,7 @@ export async function POST(request: NextRequest) {
  
  
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Unknown error';
-    console.error('[oauth/token POST]', msg);
+    void logError({ error: err, context: 'auth/oauth/token POST', requestUrl: request.url, requestMethod: request.method });
     return NextResponse.json(
       { error: 'server_error', error_description: 'Token exchange failed' },
       { status: 500 }
