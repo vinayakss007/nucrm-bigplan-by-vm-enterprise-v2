@@ -20,6 +20,7 @@
  * the link immediately.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/errors-server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { quotes, contacts, activities } from '@/drizzle/schema';
@@ -177,7 +178,7 @@ export const POST = withApiRoute(async (req: NextRequest, { params }: { params: 
       email: emailResult,
     });
   } catch (err) {
-    console.error('[offers/send POST]', err);
+    void logError({ error: err, context: 'tenant/offers/[quoteId]/send POST' });
     return apiError(err);
   }
 });

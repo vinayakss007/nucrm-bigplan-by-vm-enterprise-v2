@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/errors-server';
 import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
 import { requireModule } from '@/lib/modules/gate';
@@ -115,7 +116,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
  
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Unknown error';
-      console.error('[compliance/gdpr]', msg);
+      void logError({ error: err, context: 'tenant/compliance/gdpr' });
       await db.update(complianceRequests)
         .set({
           status: 'failed',

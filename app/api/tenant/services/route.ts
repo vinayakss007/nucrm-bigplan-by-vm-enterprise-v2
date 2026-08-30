@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/errors-server';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { createServiceSchema } from '@/lib/api/schemas';
 import { db } from '@/drizzle/db';
@@ -49,7 +50,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
-    console.error('[services/GET]', error);
+    void logError({ error, context: 'tenant/services GET' });
     return NextResponse.json({ 
       error: 'Failed to fetch services', 
       detail: error?.message || 'Unknown error'
@@ -99,7 +100,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
 
     return NextResponse.json({ service }, { status: 201 });
   } catch (error) {
-    console.error('[services/POST]', error);
+    void logError({ error, context: 'tenant/services POST' });
     return NextResponse.json({ error: 'Failed to create service' }, { status: 500 });
   }
 });
