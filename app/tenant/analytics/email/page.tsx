@@ -4,9 +4,14 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect } from 'react';
+import { useApiQuery } from '@/lib/query/client';
 import { Mail, Eye, MousePointerClick, TrendingUp, BarChart3 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+
+interface EmailTrackingRaw {
+  totalTracked?: number; total?: number; opens?: number; clicks?: number;
+  openRate?: number; clickRate?: number; events?: EmailEvent[];
+}
 
 interface EmailTrackingData {
   totalTracked: number;
@@ -27,40 +32,21 @@ interface EmailEvent {
 }
 
 export default function EmailAnalyticsPage() {
-  const [data, setData] = useState<EmailTrackingData | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  const load = async (signal?: AbortSignal) => {
-    setLoading(true);
-    try {
-      const res = await fetch('/api/tenant/email/analytics', { signal });
-      if (res.ok) {
-        const d = await res.json();
-        if (signal?.aborted) return;
-        const raw = d.data ?? d;
-        setData({
-          totalTracked: raw.totalTracked ?? raw.total ?? 0,
-          opens: raw.opens ?? 0,
-          clicks: raw.clicks ?? 0,
-          openRate: raw.openRate ?? (raw.totalTracked ? Math.round((raw.opens / raw.totalTracked) * 100) : 0),
-          clickRate: raw.clickRate ?? (raw.totalTracked ? Math.round((raw.clicks / raw.totalTracked) * 100) : 0),
-          events: raw.events ?? [],
-        });
-      }
-    } catch (e) {
-      if ((e as Error)?.name === 'AbortError') return;
-      throw e;
-    } finally {
-      if (signal?.aborted) return;
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    const controller = new AbortController();
-    load(controller.signal);
-    return () => controller.abort();
-  }, []);
+  // #1328: TanStack Query replaces fetch + useEffect + useState. The response
+  // may be wrapped in { data } or flat; normalize into EmailTrackingData.
+  const { data: resp, isLoading: loading } = useApiQuery<{ data?: EmailTrackingRaw } & EmailTrackingRaw>(
+    ['tenant', 'email', 'analytics'],
+    '/api/tenant/email/analytics',
+  );
+  const raw: EmailTrackingRaw = resp?.data ?? resp ?? {};
+  const data: EmailTrackingData | null = resp ? {
+    totalTracked: raw.totalTracked ?? raw.total ?? 0,
+    opens: raw.opens ?? 0,
+    clicks: raw.clicks ?? 0,
+    openRate: raw.openRate ?? (raw.totalTracked ? Math.round(((raw.opens ?? 0) / raw.totalTracked) * 100) : 0),
+    clickRate: raw.clickRate ?? (raw.totalTracked ? Math.round(((raw.clicks ?? 0) / raw.totalTracked) * 100) : 0),
+    events: raw.events ?? [],
+  } : null;
 
   if (loading) {
     return (
