@@ -4,7 +4,9 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import { Tag, Search, Pencil, GitMerge, Trash2, RefreshCw, Loader2, ShieldX, X, AlertCircle, Check, type LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
@@ -12,11 +14,10 @@ import { confirmThen } from '@/components/ui/confirm-dialog';
 
 type TagRow = { tag: string; leads: number; contacts: number; companies: number; total: number };
 
+const TAGS_QUERY = ['tenant', 'admin', 'tags'] as const;
+
 export default function TagsManagerPage() {
-  const [tags, setTags] = useState<TagRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(true);
+  const queryClient = useQueryClient();
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [renameTarget, setRenameTarget] = useState<TagRow | null>(null);
@@ -25,30 +26,17 @@ export default function TagsManagerPage() {
   const [mergeTarget, setMergeTarget] = useState('');
   const [mergeOpen, setMergeOpen] = useState(false);
 
-  const reload = async (signal?: AbortSignal) => {
-    setLoading(true);
-    try {
-      const res = await fetch('/api/tenant/admin/tags', { signal });
-      if (res.ok) {
-        const d = await res.json();
-        if (signal?.aborted) return;
-        setTags(d.tags ?? []);
-      }
-      setLoading(false);
-    } catch (e) {
-      if ((e as Error)?.name === 'AbortError') return;
-      throw e;
-    }
-  };
+  // #1328: reads via TanStack Query (were raw fetch + useEffect).
+  const { data: meData } = useApiQuery<{ is_admin?: boolean }>(['tenant', 'me'], '/api/tenant/me');
+  const isAdmin = meData?.is_admin ?? true;
 
-  useEffect(() => {
-    const controller = new AbortController();
-    fetch('/api/tenant/me', { signal: controller.signal }).then(r => r.json())
-      .then(d => { if (controller.signal.aborted) return; setIsAdmin(d?.is_admin ?? false); })
-      .catch(e => { if ((e as Error)?.name === 'AbortError') return; throw e; });
-    reload(controller.signal);
-    return () => controller.abort();
-  }, []);
+  const { data: tagsData, isLoading: loading, isFetching, refetch } = useApiQuery<{ tags?: TagRow[] }>(
+    TAGS_QUERY,
+    '/api/tenant/admin/tags',
+  );
+  const tags: TagRow[] = useMemo(() => tagsData?.tags ?? [], [tagsData]);
+
+  const reload = () => queryClient.invalidateQueries({ queryKey: TAGS_QUERY });
 
   const q = query.trim().toLowerCase();
   const filtered = useMemo(() =>
@@ -68,63 +56,81 @@ export default function TagsManagerPage() {
 
   const allSelected = filtered.length > 0 && selected.size === filtered.length;
 
-  const doRename = async () => {
+  const renameMutation = useMutation({
+    mutationFn: async ({ tag, new_tag }: { tag: string; new_tag: string }) => {
+      const res = await fetch('/api/tenant/admin/tags', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'rename', tag, new_tag }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error ?? 'Failed');
+      return d.total as number;
+    },
+    onSuccess: (total) => {
+      toast.success(`Renamed across ${total} record(s)`);
+      setRenameTarget(null); setRenameValue('');
+      reload();
+    },
+    onError: (e: Error) => toast.error(e.message || 'Failed'),
+  });
+
+  const doRename = () => {
     if (!renameTarget) return;
     const value = renameValue.trim();
     if (!value || value === renameTarget.tag) return;
-    setBusy(true);
-    const res = await fetch('/api/tenant/admin/tags', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'rename', tag: renameTarget.tag, new_tag: value }),
-    });
-    const d = await res.json();
-    setBusy(false);
-    if (res.ok) {
-      toast.success(`Renamed across ${d.total} record(s)`);
-      setRenameTarget(null); setRenameValue('');
-      reload();
-    } else {
-      toast.error(d.error ?? 'Failed');
-    }
+    renameMutation.mutate({ tag: renameTarget.tag, new_tag: value });
   };
 
-  const doDelete = async () => {
-    if (!deleteTarget) return;
-    setBusy(true);
-    const res = await fetch('/api/tenant/admin/tags', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'delete', tag: deleteTarget.tag }),
-    });
-    const d = await res.json();
-    setBusy(false);
-    if (res.ok) {
-      toast.success(`Removed from ${d.total} record(s)`);
+  const deleteMutation = useMutation({
+    mutationFn: async (tag: string) => {
+      const res = await fetch('/api/tenant/admin/tags', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'delete', tag }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error ?? 'Failed');
+      return d.total as number;
+    },
+    onSuccess: (total) => {
+      toast.success(`Removed from ${total} record(s)`);
       setDeleteTarget(null);
       reload();
-    } else {
-      toast.error(d.error ?? 'Failed');
-    }
+    },
+    onError: (e: Error) => toast.error(e.message || 'Failed'),
+  });
+
+  const doDelete = () => {
+    if (!deleteTarget) return;
+    deleteMutation.mutate(deleteTarget.tag);
   };
+
+  const mergeMutation = useMutation({
+    mutationFn: async ({ tags: toMerge, new_tag }: { tags: string[]; new_tag: string }) => {
+      const res = await fetch('/api/tenant/admin/tags', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'merge', tags: toMerge, new_tag }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error ?? 'Failed');
+      return { total: d.total as number, count: toMerge.length, target: new_tag };
+    },
+    onSuccess: ({ total, count, target }) => {
+      toast.success(`Merged ${count} tag(s) → "${target}" across ${total} record(s)`);
+      setSelected(new Set()); setMergeTarget(''); setMergeOpen(false);
+      reload();
+    },
+    onError: (e: Error) => toast.error(e.message || 'Failed'),
+  });
 
   const doMerge = async () => {
     if (selected.size < 2 || !mergeTarget.trim()) return;
-    await confirmThen(`Merge ${selected.size} tag(s) into "${mergeTarget.trim()}"?`, async () => {
-      setBusy(true);
-      const res = await fetch('/api/tenant/admin/tags', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'merge', tags: Array.from(selected), new_tag: mergeTarget.trim() }),
-      });
-      const d = await res.json();
-      setBusy(false);
-      if (res.ok) {
-        toast.success(`Merged ${selected.size} tag(s) → "${mergeTarget.trim()}" across ${d.total} record(s)`);
-        setSelected(new Set()); setMergeTarget(''); setMergeOpen(false);
-        reload();
-      } else {
-        toast.error(d.error ?? 'Failed');
-      }
+    const target = mergeTarget.trim();
+    await confirmThen(`Merge ${selected.size} tag(s) into "${target}"?`, async () => {
+      mergeMutation.mutate({ tags: Array.from(selected), new_tag: target });
     });
   };
+
+  const busy = renameMutation.isPending || deleteMutation.isPending || mergeMutation.isPending;
 
   if (!isAdmin) return (
     <div className="rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-950/20 p-5 flex items-start gap-3">
@@ -156,9 +162,9 @@ export default function TagsManagerPage() {
           />
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={() => reload()} disabled={loading}
+          <button onClick={() => refetch()} disabled={isFetching}
             className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-border text-xs hover:bg-accent transition-colors disabled:opacity-50">
-            <RefreshCw className={cn('w-3.5 h-3.5', loading && 'animate-spin')} />
+            <RefreshCw className={cn('w-3.5 h-3.5', isFetching && 'animate-spin')} />
             Refresh
           </button>
           {selected.size >= 2 && (

@@ -4,7 +4,9 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useEffect, useState } from 'react';
+import { useState, useMemo } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import {
   AlertTriangle, Plus, Save, AlertCircle, Loader2, Trash2, Edit2, 
   Clock, Zap, MessageSquare, Info
@@ -34,45 +36,31 @@ type Pipeline = {
   stages: Stage[];
 };
 
+const AT_RISK_QUERY = ['tenant', 'admin', 'at-risk'] as const;
+
 export default function AtRiskRulesPage() {
-  const [rules, setRules] = useState<AtRiskRule[]>([]);
-  const [pipelines, setPipelines] = useState<Pipeline[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<Partial<AtRiskRule> | null>(null);
-  const [busy, setBusy] = useState<string | null>(null);
 
-  function load(signal?: AbortSignal) {
-    setLoading(true);
-    setError(null);
-    
-    Promise.all([
-      fetch('/api/tenant/admin/at-risk', { cache: 'no-store', signal }).then(r => r.json()),
-      fetch('/api/tenant/pipelines', { cache: 'no-store', signal }).then(r => r.json())
-    ])
-    .then(([rulesData, pipelinesData]) => {
-      setRules(rulesData);
-      setPipelines(pipelinesData.data || []);
-    })
-    .catch(e => {
-      if (e?.name === 'AbortError') return;
-      setError(e.message);
-    })
-    .finally(() => {
-      if (!signal?.aborted) setLoading(false);
-    });
-  }
+  // #1328: reads via TanStack Query (were parallel raw fetch + useEffect).
+  const { data: rulesData, isLoading: rulesLoading, error: rulesError } = useApiQuery<AtRiskRule[]>(
+    AT_RISK_QUERY,
+    '/api/tenant/admin/at-risk',
+  );
+  const { data: pipelinesData, isLoading: pipelinesLoading } = useApiQuery<{ data?: Pipeline[] }>(
+    ['tenant', 'pipelines'],
+    '/api/tenant/pipelines',
+  );
+  const rules: AtRiskRule[] = useMemo(() => rulesData ?? [], [rulesData]);
+  const pipelines: Pipeline[] = pipelinesData?.data ?? [];
+  const loading = rulesLoading || pipelinesLoading;
+  const queryErrorMsg = rulesError ? (rulesError.message || 'Failed to load rules') : null;
 
-  useEffect(() => {
-    const controller = new AbortController();
-    load(controller.signal);
-    return () => controller.abort();
-  }, []);
+  const load = () => queryClient.invalidateQueries({ queryKey: AT_RISK_QUERY });
 
-  async function save(r: Partial<AtRiskRule>) {
-    setBusy('save');
-    setError(null);
-    try {
+  const saveMutation = useMutation({
+    mutationFn: async (r: Partial<AtRiskRule>) => {
       const url = r.id
         ? `/api/tenant/admin/at-risk/${r.id}`
         : '/api/tenant/admin/at-risk';
@@ -89,25 +77,34 @@ export default function AtRiskRulesPage() {
           active: r.active
         }),
       });
-      const body = await res.json();
+      const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`);
-      setEditing(null);
-      load();
-    } catch (e) { setError((e as Error).message); }
-    finally { setBusy(null); }
-  }
+    },
+    onMutate: () => setError(null),
+    onSuccess: () => { setEditing(null); load(); },
+    onError: (e: Error) => setError(e.message),
+  });
+  const save = (r: Partial<AtRiskRule>) => saveMutation.mutate(r);
 
+  const removeMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const r = await fetch(`/api/tenant/admin/at-risk/${id}`, { method: 'DELETE' });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? `HTTP ${r.status}`);
+    },
+    onSuccess: () => load(),
+    onError: (e: Error) => setError(e.message),
+  });
   async function remove(id: string) {
     await confirmThen('Delete this rule?', async () => {
-      setBusy('delete:' + id);
-      try {
-        const r = await fetch(`/api/tenant/admin/at-risk/${id}`, { method: 'DELETE' });
-        if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? `HTTP ${r.status}`);
-        load();
-      } catch (e) { setError((e as Error).message); }
-      finally { setBusy(null); }
+      removeMutation.mutate(id);
     });
   }
+
+  // Preserve the original single `busy` token used for per-action spinners.
+  const busy: string | null =
+    saveMutation.isPending ? 'save'
+    : removeMutation.isPending ? 'delete:' + removeMutation.variables
+    : null;
 
   const allStages = pipelines.flatMap(p => p.stages.map(s => ({ ...s, pipelineName: p.name })));
 
@@ -134,10 +131,10 @@ export default function AtRiskRulesPage() {
         </div>
       </div>
 
-      {error && (
+      {(error || queryErrorMsg) && (
         <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg flex items-start gap-3 text-destructive">
           <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
-          <div className="text-sm font-medium">{error}</div>
+          <div className="text-sm font-medium">{error || queryErrorMsg}</div>
         </div>
       )}
 

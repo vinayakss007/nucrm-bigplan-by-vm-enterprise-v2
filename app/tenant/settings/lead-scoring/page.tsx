@@ -4,7 +4,9 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import {
   Target, Plus, Save, X, AlertCircle, Loader2, Trash2, Edit2, RefreshCw, Play,
   CheckCircle2, HelpCircle, Sparkles
@@ -30,41 +32,25 @@ const STARTER_RULES: Omit<Rule, 'id'>[] = [
   { factor: 'Stale lead (no touch > 30 days)', weight: -40, condition: 'last_engagement_days > 30', sortOrder: 6, active: true },
 ];
 
+const LEAD_SCORING_QUERY = ['tenant', 'admin', 'lead-scoring'] as const;
+
 export default function LeadScoringRulesPage() {
-  const [rules, setRules] = useState<Rule[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<Partial<Rule> | null>(null);
-  const [busy, setBusy] = useState<string | null>(null);
   const [recomputeResult, setRecomputeResult] = useState<{ count: number } | null>(null);
 
-  function load(signal?: AbortSignal) {
-    setLoading(true);
-    setError(null);
-    fetch('/api/tenant/admin/lead-scoring', { cache: 'no-store', signal })
-      .then(async r => {
-        if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? `HTTP ${r.status}`);
-        return r.json();
-      })
-      .then(d => setRules(d.rules))
-      .catch(e => {
-        if (e?.name === 'AbortError') return;
-        setError(e.message);
-      })
-      .finally(() => {
-        if (!signal?.aborted) setLoading(false);
-      });
-  }
-  useEffect(() => {
-    const controller = new AbortController();
-    load(controller.signal);
-    return () => controller.abort();
-  }, []);
+  // #1328: rules via TanStack Query (was raw fetch + useEffect).
+  const { data, isLoading: loading, isFetching, error: queryError, refetch } = useApiQuery<{ rules?: Rule[] }>(
+    LEAD_SCORING_QUERY,
+    '/api/tenant/admin/lead-scoring',
+  );
+  const rules: Rule[] = data?.rules ?? [];
+  const queryErrorMsg = queryError ? (queryError.message || 'Failed to load rules') : null;
+  const load = () => queryClient.invalidateQueries({ queryKey: LEAD_SCORING_QUERY });
 
-  async function save(r: Partial<Rule>) {
-    setBusy('save');
-    setError(null);
-    try {
+  const saveMutation = useMutation({
+    mutationFn: async (r: Partial<Rule>) => {
       const url = r.id
         ? `/api/tenant/admin/lead-scoring/${r.id}`
         : '/api/tenant/admin/lead-scoring';
@@ -74,29 +60,31 @@ export default function LeadScoringRulesPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(r),
       });
-      const body = await res.json();
+      const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`);
-      setEditing(null);
-      load();
-    } catch (e) { setError((e as Error).message); }
-    finally { setBusy(null); }
-  }
+    },
+    onMutate: () => setError(null),
+    onSuccess: () => { setEditing(null); load(); },
+    onError: (e: Error) => setError(e.message),
+  });
+  const save = (r: Partial<Rule>) => saveMutation.mutate(r);
 
+  const removeMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const r = await fetch(`/api/tenant/admin/lead-scoring/${id}`, { method: 'DELETE' });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? `HTTP ${r.status}`);
+    },
+    onSuccess: () => load(),
+    onError: (e: Error) => setError(e.message),
+  });
   async function remove(id: string) {
     await confirmThen('Delete this rule?', async () => {
-      setBusy('delete:' + id);
-      try {
-        const r = await fetch(`/api/tenant/admin/lead-scoring/${id}`, { method: 'DELETE' });
-        if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? `HTTP ${r.status}`);
-        load();
-      } catch (e) { setError((e as Error).message); }
-      finally { setBusy(null); }
+      removeMutation.mutate(id);
     });
   }
 
-  async function installStarters() {
-    setBusy('starters');
-    try {
+  const startersMutation = useMutation({
+    mutationFn: async () => {
       for (const s of STARTER_RULES) {
         await fetch('/api/tenant/admin/lead-scoring', {
           method: 'POST',
@@ -104,24 +92,32 @@ export default function LeadScoringRulesPage() {
           body: JSON.stringify(s),
         });
       }
-      load();
-    } catch { setError('Failed to install some starters'); }
-    finally { setBusy(null); }
-  }
+    },
+    onSuccess: () => load(),
+    onError: () => setError('Failed to install some starters'),
+  });
+  const installStarters = () => startersMutation.mutate();
 
-  async function recompute() {
-    setBusy('recompute');
-    setError(null);
-    setRecomputeResult(null);
-    try {
+  const recomputeMutation = useMutation({
+    mutationFn: async () => {
       const r = await fetch('/api/tenant/admin/lead-scoring/recompute', { method: 'POST' });
-      const body = await r.json();
+      const body = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(body.error ?? `HTTP ${r.status}`);
-      setRecomputeResult(body);
-      setTimeout(() => setRecomputeResult(null), 5000);
-    } catch (e) { setError((e as Error).message); }
-    finally { setBusy(null); }
-  }
+      return body as { count: number };
+    },
+    onMutate: () => { setError(null); setRecomputeResult(null); },
+    onSuccess: (body) => { setRecomputeResult(body); setTimeout(() => setRecomputeResult(null), 5000); },
+    onError: (e: Error) => setError(e.message),
+  });
+  const recompute = () => recomputeMutation.mutate();
+
+  // Preserve the original single `busy` token used for per-action spinners.
+  const busy: string | null =
+    saveMutation.isPending ? 'save'
+    : removeMutation.isPending ? 'delete:' + removeMutation.variables
+    : startersMutation.isPending ? 'starters'
+    : recomputeMutation.isPending ? 'recompute'
+    : null;
 
   return (
     <div className="space-y-6 animate-fade-in pb-12">
@@ -136,8 +132,8 @@ export default function LeadScoringRulesPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={() => load()} className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border bg-card hover:bg-accent text-sm">
-            <RefreshCw className={cn('w-3.5 h-3.5', loading && 'animate-spin')} /> Refresh
+          <button onClick={() => refetch()} className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border bg-card hover:bg-accent text-sm">
+            <RefreshCw className={cn('w-3.5 h-3.5', isFetching && 'animate-spin')} /> Refresh
           </button>
           <button
             onClick={recompute}
@@ -163,10 +159,10 @@ export default function LeadScoringRulesPage() {
         </div>
       )}
 
-      {error && (
+      {(error || queryErrorMsg) && (
         <div className="rounded-xl border border-red-300 bg-red-50 dark:border-red-800/50 dark:bg-red-950/20 px-4 py-3 text-sm text-red-700 dark:text-red-300 flex items-start gap-2">
           <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-          <span className="flex-1">{error}</span>
+          <span className="flex-1">{error || queryErrorMsg}</span>
         </div>
       )}
 

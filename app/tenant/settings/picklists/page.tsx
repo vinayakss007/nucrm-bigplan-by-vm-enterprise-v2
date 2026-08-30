@@ -5,6 +5,8 @@
  */
 'use client';
 import { useEffect, useState } from 'react';
+import { useMutation } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import {
   ListChecks, Save, Loader2, Plus, X, ShieldX, RotateCcw,
   UserCheck, ThumbsDown, Trophy, ListTodo, Layers, Briefcase,
@@ -32,25 +34,31 @@ const COLOR_PALETTE = ['#7c3aed','#2563eb','#0891b2','#059669','#65a30d','#d9770
 export default function PicklistsPage() {
   const [data, setData] = useState<Record<Category, Entry[]> | null>(null);
   const [original, setOriginal] = useState<Record<Category, Entry[]> | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(true);
   const [activeCat, setActiveCat] = useState<Category>('lead_sources');
 
+  // #1328: reads via TanStack Query (were parallel raw fetch + useEffect). The
+  // editable copy (data/original) is seeded from the query once loaded so the
+  // existing dirty-tracking + discard flow is preserved.
+  const { data: picklistsData, isLoading: picklistsLoading } = useApiQuery<{ picklists?: Record<Category, Entry[]> | null }>(
+    ['tenant', 'admin', 'picklists'],
+    '/api/tenant/admin/picklists',
+  );
+  const { data: meData, isLoading: meLoading } = useApiQuery<{ is_admin?: boolean }>(
+    ['tenant', 'me'],
+    '/api/tenant/me',
+  );
+  const loading = picklistsLoading || meLoading;
+  const isAdmin = meData?.is_admin ?? true;
+
+  const fetchedPicklists = picklistsData?.picklists ?? null;
+  // Seed the editable copy once the picklists load (only when not already
+  // holding local edits).
   useEffect(() => {
-  const controller = new AbortController();
-  let ignore = false;
-    Promise.all([
-      fetch('/api/tenant/admin/picklists', { signal: controller.signal }).then(r => r.ok ? r.json() : { picklists: null }),
-      fetch('/api/tenant/me', { signal: controller.signal }).then(r => r.ok ? r.json() : {}),
-    ]).then(([d, me]: [{ picklists?: Record<Category, Entry[]> | null }, { is_admin?: boolean }]) => { if (ignore) return; 
-      setData(d.picklists ?? null);
-      setOriginal(d.picklists ?? null);
-      setIsAdmin(me?.is_admin ?? false);
-     } ).catch(e => { if ((e as Error)?.name === 'AbortError') return; throw e; })
-      .finally(() => { if (!ignore) setLoading(false); });
-    return () => { ignore = true; controller.abort(); };
-}, []);
+    if (fetchedPicklists && original === null) {
+      setData(fetchedPicklists);
+      setOriginal(fetchedPicklists);
+    }
+  }, [fetchedPicklists, original]);
 
   const dirty = data && original && JSON.stringify(data) !== JSON.stringify(original);
 
@@ -91,7 +99,27 @@ export default function PicklistsPage() {
     });
   };
 
-  const save = async () => {
+  const saveMutation = useMutation({
+    mutationFn: async (cleaned: Record<Category, Entry[]>) => {
+      const res = await fetch('/api/tenant/admin/picklists', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ picklists: cleaned }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || 'Failed');
+      return cleaned;
+    },
+    onSuccess: (cleaned) => {
+      toast.success('Picklists saved');
+      setData(cleaned);
+      setOriginal(cleaned);
+    },
+    onError: (e: Error) => toast.error(e.message || 'Failed'),
+  });
+  const saving = saveMutation.isPending;
+
+  const save = () => {
     if (!data) return;
     // Auto-derive value from label when the user left it blank
     const cleaned = {} as Record<Category, Entry[]>;
@@ -104,21 +132,7 @@ export default function PicklistsPage() {
         }))
         .filter(e => e.value && e.label);
     }
-    setSaving(true);
-    const res = await fetch('/api/tenant/admin/picklists', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ picklists: cleaned }),
-    });
-    const d = await res.json();
-    if (res.ok) {
-      toast.success('Picklists saved');
-      setData(cleaned);
-      setOriginal(cleaned);
-    } else {
-      toast.error(d.error || 'Failed');
-    }
-    setSaving(false);
+    saveMutation.mutate(cleaned);
   };
 
   if (loading) return <div className="flex items-center justify-center h-48 text-muted-foreground"><Loader2 className="w-5 h-5 animate-spin" /></div>;
