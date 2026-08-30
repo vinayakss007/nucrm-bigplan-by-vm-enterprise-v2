@@ -5,6 +5,7 @@
  */
 import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/errors-server';
 import { requireAuth, can } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { savedReports, reportExecutions, users } from '@/drizzle/schema';
@@ -72,7 +73,7 @@ export const GET = withApiRoute(async (request: NextRequest,
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
-    console.error('[Report] GET error:', error);
+    void logError({ error, context: 'tenant/reports/[id] GET' });
     return apiError(error);
   }
 });
@@ -137,7 +138,7 @@ export const PATCH = withApiRoute(async (request: NextRequest,
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
-    console.error('[Report] PATCH error:', error);
+    void logError({ error, context: 'tenant/reports/[id] PATCH' });
     return apiError(error);
   }
 });
@@ -176,7 +177,7 @@ export const DELETE = withApiRoute(async (request: NextRequest,
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
-    console.error('[Report] DELETE error:', error);
+    void logError({ error, context: 'tenant/reports/[id] DELETE' });
     return apiError(error);
   }
 });
@@ -210,7 +211,7 @@ export const POST = withApiRoute(async (request: NextRequest,
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
-    console.error('[Report Run] POST error:', error);
+    void logError({ error, context: 'tenant/reports/[id] run POST' });
     return apiError(error);
   }
 });

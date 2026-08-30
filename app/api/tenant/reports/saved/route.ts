@@ -10,6 +10,7 @@
  */
 import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/errors-server';
 import { requireAuth, can } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { savedReports, users } from '@/drizzle/schema';
@@ -43,7 +44,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
 
     return NextResponse.json({ data: reports });
   } catch (err) {
-    console.error('[reports saved GET]', err);
+    void logError({ error: err, context: 'tenant/reports/saved GET' });
     return apiError(err);
   }
 });
