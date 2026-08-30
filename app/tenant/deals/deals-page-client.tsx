@@ -8,20 +8,22 @@ import { useState } from 'react';
 import DealsDataTable from '@/components/tenant/deals-data-table';
 import DealsKanban from '@/components/tenant/deals-kanban';
 import { cn } from '@/lib/utils';
+import type {
+  DealRow,
+  DealStageOption,
+  DealContactOption,
+  DealCompanyOption,
+  DealTeamMemberOption,
+  DealPermissions,
+} from './types';
 
 interface Props {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  initialDeals: any[];
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  stages: any[];
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  contacts: any[];
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  companies: any[];
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  teamMembers: any[];
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  permissions: any;
+  initialDeals: DealRow[];
+  stages: DealStageOption[];
+  contacts: DealContactOption[];
+  companies: DealCompanyOption[];
+  teamMembers: DealTeamMemberOption[];
+  permissions: DealPermissions;
   defaultView?: string;
 }
 

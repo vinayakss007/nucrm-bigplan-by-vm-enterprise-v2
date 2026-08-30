@@ -11,9 +11,9 @@ import { getContacts } from '@/lib/db/services/contacts';
 import { Suspense } from 'react';
 import dynamic from 'next/dynamic';
 import { getUserDefaultView } from '@/lib/user-defaults';
-import { toSnakeCase } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { withTenantScope } from '@/lib/api/with-api-route';
+import type { ContactInput, TeamMemberOpt } from '@/components/tenant/contacts-client';
 
 const ContactsClient = dynamic(() => import('@/components/tenant/contacts-client'));
 
@@ -89,15 +89,43 @@ export default async function ContactsPage({ searchParams }: { searchParams: Pro
     getUserDefaultView(tid, ctx.userId),
   ]);
 
+  // Map the typed Drizzle rows into the snake_case, JSON-serializable shape the
+  // client component expects. Doing it explicitly here keeps the server →
+  // client handoff fully typed instead of round-tripping through `any` (#1341).
+  const initialContacts: ContactInput[] = contactsResult.map((c) => ({
+    id: c.id,
+    first_name: c.firstName,
+    last_name: c.lastName ?? '',
+    email: c.email ?? undefined,
+    phone: c.phone ?? undefined,
+    company_name: c.companyName ?? undefined,
+    lead_status: c.leadStatus ?? undefined,
+    lead_source: c.leadSource ?? undefined,
+    assigned_name: c.assignedName ?? undefined,
+    assigned_to: c.assignedTo ?? undefined,
+    score: c.score ?? undefined,
+    tags: c.tags ?? undefined,
+    city: c.city ?? undefined,
+    country: c.country ?? undefined,
+    lifecycle_stage: c.lifecycleStage ?? undefined,
+    do_not_contact: c.doNotContact ?? undefined,
+    last_activity_at: c.lastActivityAt ? c.lastActivityAt.toISOString() : undefined,
+    created_at: c.createdAt ? c.createdAt.toISOString() : undefined,
+  }));
+
+  const teamMemberOptions: TeamMemberOpt[] = teamMembers.map((m) => ({
+    user_id: m.user_id,
+    full_name: m.full_name ?? '',
+    avatar_url: m.avatar_url,
+  }));
+
   return (
     <div className="space-y-6">
       <Suspense fallback={<LoadingSkeleton />}>
         <ContactsClient
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-          initialContacts={toSnakeCase(contactsResult as any) as any}
+          initialContacts={initialContacts}
           companies={companiesList}
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-          teamMembers={teamMembers as any}
+          teamMembers={teamMemberOptions}
           permissions={permissions}
           totalCount={totalCount}
           tenantId={tid}
