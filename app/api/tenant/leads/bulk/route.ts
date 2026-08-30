@@ -53,7 +53,10 @@ export const POST = withApiRoute(async (req: NextRequest) => {
       );
     
     const validIds = validLeads.map(r => r.id);
-    if (!validIds.length)
+    // `restore` operates on soft-deleted rows, which the live-only validation
+    // above (deletedAt IS NULL) never matches — it resolves its own set of
+    // restorable ids, so don't bail out here for that action.
+    if (!validIds.length && action !== 'restore')
       return NextResponse.json({ error: 'No valid leads found' }, { status: 404 });
 
     let affected = 0;
@@ -262,6 +265,24 @@ export const POST = withApiRoute(async (req: NextRequest) => {
         const deny = requirePerm(ctx, 'leads.edit');
         if (deny) return deny;
 
+        // Restore targets SOFT-DELETED/archived rows. The `validIds` set above is
+        // built with `deletedAt IS NULL`, so it never contains an archived lead —
+        // reusing it made bulk restore a no-op. Re-resolve against the trashed set.
+        const restorable = await db
+          .select({ id: leads.id })
+          .from(leads)
+          .where(
+            and(
+              inArray(leads.id, lead_ids),
+              eq(leads.tenantId, ctx.tenantId),
+              sql`${leads.deletedAt} IS NOT NULL`
+            )
+          );
+        const restorableIds = restorable.map(r => r.id);
+        if (!restorableIds.length) {
+          return NextResponse.json({ error: 'No deleted leads found to restore' }, { status: 404 });
+        }
+
         // Plan limit check: restoring leads could push count over limit (leads share contacts pool)
         const [tenantWithPlan] = await db
           .select({
@@ -272,7 +293,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
           .innerJoin(plans, eq(plans.id, tenants.planId))
           .where(eq(tenants.id, ctx.tenantId));
 
-        if (tenantWithPlan && tenantWithPlan.maxContacts != null && ((tenantWithPlan.currentContacts ?? 0) + validIds.length) > tenantWithPlan.maxContacts) {
+        if (tenantWithPlan && tenantWithPlan.maxContacts != null && ((tenantWithPlan.currentContacts ?? 0) + restorableIds.length) > tenantWithPlan.maxContacts) {
           return NextResponse.json({ error: `Restore would exceed plan limit of ${tenantWithPlan.maxContacts} contacts (leads share the contacts pool).` }, { status: 403 });
         }
 
@@ -286,8 +307,9 @@ export const POST = withApiRoute(async (req: NextRequest) => {
           })
           .where(
             and(
-              inArray(leads.id, validIds),
-              eq(leads.tenantId, ctx.tenantId)
+              inArray(leads.id, restorableIds),
+              eq(leads.tenantId, ctx.tenantId),
+              sql`${leads.deletedAt} IS NOT NULL`
             )
           );
         affected = res.rowCount ?? 0;
