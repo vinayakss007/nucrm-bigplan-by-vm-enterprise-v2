@@ -9,6 +9,7 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { getEntityHistory, getEntitySnapshots, type EntityType } from '@/lib/history';
 import { parseLimitOffset } from '@/lib/api/query-params';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { logError } from '@/lib/errors-server';
 
 const VALID_ENTITIES = ['contact', 'company', 'deal', 'lead', 'task'];
 
@@ -58,7 +59,7 @@ export const GET = withApiRoute(async (request: NextRequest,
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[history GET]', err);
+    await logError({ error: err, context: 'history GET', requestMethod: 'GET' });
     return apiError(err);
   }
 });
