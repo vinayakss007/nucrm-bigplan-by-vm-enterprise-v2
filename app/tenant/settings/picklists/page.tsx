@@ -8,6 +8,7 @@ import { useEffect, useState } from 'react';
 import {
   ListChecks, Save, Loader2, Plus, X, ShieldX, RotateCcw,
   UserCheck, ThumbsDown, Trophy, ListTodo, Layers, Briefcase,
+  type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
@@ -16,8 +17,7 @@ type Entry = { value: string; label: string; color?: string };
 type Category = 'lead_sources' | 'loss_reasons' | 'win_reasons' | 'activity_types' | 'deal_types' | 'industries';
 
 const CATEGORY_META: Array<{
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  id: Category; label: string; desc: string; icon: any;
+  id: Category; label: string; desc: string; icon: LucideIcon;
 }> = [
   { id: 'lead_sources',   label: 'Lead Sources',     desc: 'Where leads come from',                 icon: UserCheck },
   { id: 'loss_reasons',   label: 'Loss Reasons',     desc: 'Why deals are lost',                    icon: ThumbsDown },
@@ -43,8 +43,7 @@ export default function PicklistsPage() {
     Promise.all([
       fetch('/api/tenant/admin/picklists', { signal: controller.signal }).then(r => r.ok ? r.json() : { picklists: null }),
       fetch('/api/tenant/me', { signal: controller.signal }).then(r => r.ok ? r.json() : {}),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ]).then(([d, me]: any[]) => { if (ignore) return; 
+    ]).then(([d, me]: [{ picklists?: Record<Category, Entry[]> | null }, { is_admin?: boolean }]) => { if (ignore) return; 
       setData(d.picklists ?? null);
       setOriginal(d.picklists ?? null);
       setIsAdmin(me?.is_admin ?? false);
@@ -95,8 +94,7 @@ export default function PicklistsPage() {
   const save = async () => {
     if (!data) return;
     // Auto-derive value from label when the user left it blank
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const cleaned: Record<Category, Entry[]> = {} as any;
+    const cleaned = {} as Record<Category, Entry[]>;
     for (const cat of Object.keys(data) as Category[]) {
       cleaned[cat] = data[cat]
         .map(e => ({

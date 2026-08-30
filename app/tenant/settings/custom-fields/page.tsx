@@ -111,8 +111,7 @@ export default function TenantCustomFields() {
     return () => controller.abort();
   }, [entityType, loadFields, loadFeatures]);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const handleCreate = async (fieldData: any) => {
+  const handleCreate = async (fieldData: FieldFormData) => {
     try {
       const res = await fetch('/api/tenant/custom-fields', {
         method: 'POST',
