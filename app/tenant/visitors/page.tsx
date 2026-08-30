@@ -4,7 +4,8 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
+import { useApiQuery } from '@/lib/query/client';
 import { Users, Eye, UserCheck, UserX, BarChart3, ArrowUpDown } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
 import toast from 'react-hot-toast';
@@ -23,41 +24,24 @@ type SortField = 'score' | 'lastSeenAt';
 type FilterType = 'all' | 'identified' | 'anonymous';
 
 export default function VisitorsPage() {
-  const [visitors, setVisitors] = useState<Visitor[]>([]);
-  const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<FilterType>('all');
   const [minScore, setMinScore] = useState('');
   const [maxScore, setMaxScore] = useState('');
   const [sortBy, setSortBy] = useState<SortField>('lastSeenAt');
   const [sortDesc, setSortDesc] = useState(true);
 
-  const load = useCallback(async (signal?: AbortSignal) => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams();
-      if (filter !== 'all') params.set('filter', filter);
-      if (minScore) params.set('min_score', minScore);
-      if (maxScore) params.set('max_score', maxScore);
-      const res = await fetch(`/api/tenant/visitors?${params}`, { signal });
-      if (res.ok) {
-        const d = await res.json();
-        if (signal?.aborted) return;
-        setVisitors(d.data ?? []);
-      }
-    } catch (e) {
-      if ((e as Error)?.name === 'AbortError') return;
-      toast.error('Failed to load visitors');
-    } finally {
-      if (signal?.aborted) return;
-      setLoading(false);
-    }
-  }, [filter, minScore, maxScore]);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    load(controller.signal);
-    return () => controller.abort();
-  }, [filter, minScore, maxScore, load]);
+  // #1328: list via TanStack Query (was raw fetch + useEffect). Server-side
+  // filter/score params are part of the key so each view refetches and caches.
+  const params = new URLSearchParams();
+  if (filter !== 'all') params.set('filter', filter);
+  if (minScore) params.set('min_score', minScore);
+  if (maxScore) params.set('max_score', maxScore);
+  const { data, isLoading: loading, error } = useApiQuery<{ data?: Visitor[] }>(
+    ['tenant', 'visitors', { filter, minScore, maxScore }],
+    `/api/tenant/visitors?${params}`,
+  );
+  const visitors: Visitor[] = data?.data ?? [];
+  if (error) toast.error('Failed to load visitors');
 
   const sorted = [...visitors].sort((a, b) => {
     if (sortBy === 'score') return sortDesc ? b.score - a.score : a.score - b.score;

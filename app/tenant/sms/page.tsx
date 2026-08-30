@@ -4,11 +4,12 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import { MessageSquare, Plus, X, Loader2, Send, ArrowUpRight, ArrowDownLeft, FileText } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
 import toast from 'react-hot-toast';
-import { logError } from '@/lib/errors-client';
 import { smsComposeSchema, validateForm } from '@/lib/validation/forms';
 
 interface SmsMessage {
@@ -39,12 +40,9 @@ const statusColors: Record<string, string> = {
 };
 
 export default function SmsPage() {
-  const [messages, setMessages] = useState<SmsMessage[]>([]);
-  const [templates, setTemplates] = useState<SmsTemplate[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [filter, setFilter] = useState<string>('all');
   const [showCompose, setShowCompose] = useState(false);
-  const [sending, setSending] = useState(false);
   const [useTemplate, setUseTemplate] = useState(false);
   const [form, setForm] = useState({
     to: '',
@@ -54,50 +52,22 @@ export default function SmsPage() {
 
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
 
-  const load = useCallback(async (signal?: AbortSignal) => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams();
-      if (filter !== 'all') params.set('status', filter);
-      const res = await fetch(`/api/tenant/sms?${params}`, { signal });
-      if (res.ok) {
-        const d = await res.json();
-        if (signal?.aborted) return;
-        setMessages(d.data ?? []);
-      }
-    } catch (e) {
-      if ((e as Error)?.name === 'AbortError') return;
-      throw e;
-    } finally {
-      if (signal?.aborted) return;
-      setLoading(false);
-    }
-  }, [filter]);
+  // #1328: reads via TanStack Query (were raw fetch + useEffect). status filter
+  // is part of the messages key so each view refetches and caches.
+  const params = new URLSearchParams();
+  if (filter !== 'all') params.set('status', filter);
+  const { data: messagesData, isLoading: loading, error: messagesError } = useApiQuery<{ data?: SmsMessage[] }>(
+    ['tenant', 'sms', { filter }],
+    `/api/tenant/sms?${params}`,
+  );
+  const messages: SmsMessage[] = messagesData?.data ?? [];
+  if (messagesError) toast.error('Failed to load messages');
 
-  const loadTemplates = async (signal?: AbortSignal) => {
-    try {
-      const res = await fetch('/api/tenant/sms/templates', { signal });
-      if (res.ok) {
-        const d = await res.json();
-        if (signal?.aborted) return;
-        setTemplates(d.data ?? []);
-      }
-    } catch (err) {
-      if ((err as Error)?.name === 'AbortError') return;
-      logError({ error: err, context: "catch:[context]" });
-    }
-  };
-
-  useEffect(() => {
-    const controller = new AbortController();
-    load(controller.signal);
-    return () => controller.abort();
-  }, [filter, load]);
-  useEffect(() => {
-    const controller = new AbortController();
-    loadTemplates(controller.signal);
-    return () => controller.abort();
-  }, []);
+  const { data: templatesData } = useApiQuery<{ data?: SmsTemplate[] }>(
+    ['tenant', 'sms', 'templates'],
+    '/api/tenant/sms/templates',
+  );
+  const templates: SmsTemplate[] = templatesData?.data ?? [];
 
   const openCompose = () => {
     setForm({ to: '', body: '', templateId: '' });
@@ -105,7 +75,37 @@ export default function SmsPage() {
     setShowCompose(true);
   };
 
-  const submit = async (e: React.FormEvent) => {
+  const sendSms = useMutation({
+    mutationFn: async () => {
+      // Preserve the #1342 behavior: strip spaces/parens/dashes and send the
+      // normalized value to the API. The SMS API stores and forwards `to`
+      // verbatim to the provider, so raw form input would otherwise reach
+      // Twilio unchanged.
+      const normalizedTo = form.to.replace(/[\s()-]/g, '');
+      const payload: { to: string; templateId?: string; body?: string } = { to: normalizedTo };
+      if (useTemplate && form.templateId) {
+        payload.templateId = form.templateId;
+      } else {
+        payload.body = form.body;
+      }
+      const res = await fetch('/api/tenant/sms', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || 'Failed to send SMS');
+    },
+    onSuccess: () => {
+      toast.success('SMS sent successfully');
+      setShowCompose(false);
+      queryClient.invalidateQueries({ queryKey: ['tenant', 'sms'] });
+    },
+    onError: (e: Error) => toast.error(e.message || 'Failed to send SMS'),
+  });
+  const sending = sendSms.isPending;
+
+  const submit = (e: React.FormEvent) => {
     e.preventDefault();
     // Client-side validation via the shared zod schema. The schema applies the
     // same E.164-style phone rule (optional leading +, 7-15 digits) and the
@@ -123,37 +123,7 @@ export default function SmsPage() {
       toast.error(firstError);
       return;
     }
-    // Preserve the #1342 behavior: strip spaces/parens/dashes and send the
-    // normalized value to the API.
-    const normalizedTo = form.to.replace(/[\s()-]/g, '');
-    setSending(true);
-    try {
-      // Send the same normalized value we validated above; the SMS API stores
-      // and forwards `to` verbatim to the provider, so raw form input (spaces,
-      // parens, dashes) would otherwise reach Twilio unchanged (#1342).
-      const payload: { to: string; templateId?: string; body?: string } = { to: normalizedTo };
-      if (useTemplate && form.templateId) {
-        payload.templateId = form.templateId;
-      } else {
-        payload.body = form.body;
-      }
-
-      const res = await fetch('/api/tenant/sms', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      const d = await res.json();
-      if (res.ok) {
-        toast.success('SMS sent successfully');
-        setShowCompose(false);
-        load();
-      } else {
-        toast.error(d.error || 'Failed to send SMS');
-      }
-    } finally {
-      setSending(false);
-    }
+    sendSms.mutate();
   };
 
   const stats = {

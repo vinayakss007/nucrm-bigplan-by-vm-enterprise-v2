@@ -4,7 +4,9 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useMemo } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import { Bell, BellOff, CheckCheck, Trash2, CheckCircle, TrendingUp,
   AtSign, AlertTriangle, Zap, Clock, Users, type LucideIcon } from 'lucide-react';
 import { cn, formatRelativeTime, toSnakeCase } from '@/lib/utils';
@@ -39,67 +41,77 @@ const TYPE_CFG: Record<string, { icon: LucideIcon; color: string; bg: string; la
   system:          { icon: Bell,         color:'text-slate-600',  bg:'bg-slate-100 dark:bg-slate-800',     label:'System' },
 };
 
+interface NotificationsResponse { data?: Record<string, unknown>[]; total?: number }
+
 export default function NotificationsPage() {
-  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [filter, setFilter] = useState<'all'|'unread'>('all');
-  const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
   const limit = 20;
   const router = useRouter();
 
-  const load = useCallback(async (signal?: AbortSignal) => {
-    try {
-      const res = await fetch(`/api/tenant/notifications?limit=${limit}&offset=${offset}`, { signal });
-      const d = await res.json();
-      setNotifications((d.data ?? []).map((n: Record<string, unknown>) => toSnakeCase(n) as NotificationItem));
-      setTotal(d.total ?? 0);
-    } catch (err) {
-      if (err instanceof DOMException && err.name === 'AbortError') return;
-      toast.error('Failed to load notifications');
-    } finally {
-      // Only clear the spinner if this request was not superseded by a newer
-      // one; clearing it for an aborted request causes a loading flicker.
-      if (!signal?.aborted) setLoading(false);
-    }
-  }, [offset]);
-  useEffect(() => {
-    const controller = new AbortController();
-    load(controller.signal);
-    return () => controller.abort();
-  }, [load]);
+  // #1328: list via TanStack Query (was raw fetch + useEffect). offset is part
+  // of the key; the API rows are normalized to snake_case for the UI.
+  const NOTIFICATIONS_KEY = ['tenant', 'notifications', { offset }] as const;
+  const { data, isLoading: loading, error } = useApiQuery<NotificationsResponse>(
+    NOTIFICATIONS_KEY,
+    `/api/tenant/notifications?limit=${limit}&offset=${offset}`,
+  );
+  const notifications: NotificationItem[] = useMemo(
+    () => (data?.data ?? []).map((n) => toSnakeCase(n) as NotificationItem),
+    [data],
+  );
+  const total = data?.total ?? 0;
+  if (error) toast.error('Failed to load notifications');
+
+  // Invalidate every notifications view (any offset) after a mutation.
+  const reload = () => queryClient.invalidateQueries({ queryKey: ['tenant', 'notifications'] });
 
   const isUnread = (n: NotificationItem) => !n.read_at && !n.is_read;
 
-  const markRead = async (id: string) => {
-    await fetch('/api/tenant/notifications', {
-      method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ id }),
-    });
-    setNotifications(prev => prev.map(n => n.id===id ? {...n, read_at: new Date().toISOString(), is_read: true} : n));
-  };
+  const markReadMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await fetch('/api/tenant/notifications', {
+        method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ id }),
+      });
+    },
+    onSuccess: () => reload(),
+  });
+  const markRead = (id: string) => markReadMutation.mutateAsync(id);
 
-  const markAllRead = async () => {
-    await fetch('/api/tenant/notifications', {
-      method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ markAllRead:true }),
-    });
-    setNotifications(prev => prev.map(n => ({...n, read_at: new Date().toISOString(), is_read: true})));
-    toast.success('All marked as read');
-  };
+  const markAllReadMutation = useMutation({
+    mutationFn: async () => {
+      await fetch('/api/tenant/notifications', {
+        method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ markAllRead:true }),
+      });
+    },
+    onSuccess: () => { toast.success('All marked as read'); reload(); },
+  });
+  const markAllRead = () => markAllReadMutation.mutate();
 
-  const del = async (id: string) => {
-    await confirmThen('Delete this notification?', async () => {
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
       await fetch('/api/tenant/notifications', {
         method:'DELETE', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ id }),
       });
-      setNotifications(prev => prev.filter(n => n.id!==id));
+    },
+    onSuccess: () => reload(),
+  });
+  const del = async (id: string) => {
+    await confirmThen('Delete this notification?', async () => {
+      deleteMutation.mutate(id);
     });
   };
 
+  const clearAllMutation = useMutation({
+    mutationFn: async () => {
+      await fetch('/api/tenant/notifications', { method:'DELETE' });
+    },
+    onSuccess: () => { toast.success('Cleared'); reload(); },
+  });
   const clearAll = async () => {
     await confirmThen('Clear all notifications?', async () => {
-      await fetch('/api/tenant/notifications', { method:'DELETE' });
-      setNotifications([]);
-      toast.success('Cleared');
+      clearAllMutation.mutate();
     });
   };
 
