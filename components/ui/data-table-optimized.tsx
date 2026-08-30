@@ -34,8 +34,7 @@ interface DataTableProps<T> {
   className?: string;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function DataTableInner<T extends Record<string, any>>({
+function DataTableInner<T extends Record<string, unknown>>({
   data,
   columns,
   keyField,
@@ -66,8 +65,8 @@ function DataTableInner<T extends Record<string, any>>({
   const sorted = useMemo(() => {
     if (!sortKey) return filtered;
     return [...filtered].sort((a, b) => {
-      const aVal = a[sortKey];
-      const bVal = b[sortKey];
+      const aVal = a[sortKey] as string | number;
+      const bVal = b[sortKey] as string | number;
       if (aVal === bVal) return 0;
       const cmp = aVal < bVal ? -1 : 1;
       return sortDir === 'asc' ? cmp : -cmp;
@@ -166,7 +165,7 @@ function DataTableInner<T extends Record<string, any>>({
                   >
                     {columns.map(col => (
                       <td key={col.key} className="px-4 py-3 text-sm">
-                        {col.render ? col.render(item) : item[col.key]}
+                        {col.render ? col.render(item) : (item[col.key] as React.ReactNode)}
                       </td>
                     ))}
                   </tr>
