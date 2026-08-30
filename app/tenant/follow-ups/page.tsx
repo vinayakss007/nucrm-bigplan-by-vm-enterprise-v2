@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { RecordPicker } from '@/components/tenant/record-picker';
 
 interface FollowUp {
   id: string;
@@ -340,30 +341,30 @@ export default function FollowUpsPage() {
               />
             </div>
             <div>
-              <label className="text-sm font-medium text-foreground block mb-1">Contact ID (optional)</label>
-              <input
+              <label className="text-sm font-medium text-foreground block mb-1">Link to Contact (optional)</label>
+              <RecordPicker
+                kind="contact"
                 value={createForm.contact_id}
-                onChange={(e) => setCreateForm(f => ({ ...f, contact_id: e.target.value }))}
-                placeholder="Contact UUID"
-                className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm"
+                onChange={(id) => setCreateForm(f => ({ ...f, contact_id: id }))}
+                placeholder="Search contacts…"
               />
             </div>
             <div>
-              <label className="text-sm font-medium text-foreground block mb-1">Lead ID (optional)</label>
-              <input
+              <label className="text-sm font-medium text-foreground block mb-1">Link to Lead (optional)</label>
+              <RecordPicker
+                kind="lead"
                 value={createForm.lead_id}
-                onChange={(e) => setCreateForm(f => ({ ...f, lead_id: e.target.value }))}
-                placeholder="Lead UUID"
-                className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm"
+                onChange={(id) => setCreateForm(f => ({ ...f, lead_id: id }))}
+                placeholder="Search leads…"
               />
             </div>
             <div>
-              <label className="text-sm font-medium text-foreground block mb-1">Deal ID (optional)</label>
-              <input
+              <label className="text-sm font-medium text-foreground block mb-1">Link to Deal (optional)</label>
+              <RecordPicker
+                kind="deal"
                 value={createForm.deal_id}
-                onChange={(e) => setCreateForm(f => ({ ...f, deal_id: e.target.value }))}
-                placeholder="Deal UUID"
-                className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm"
+                onChange={(id) => setCreateForm(f => ({ ...f, deal_id: id }))}
+                placeholder="Search deals…"
               />
             </div>
           </div>
