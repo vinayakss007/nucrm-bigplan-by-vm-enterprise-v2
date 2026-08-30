@@ -22,7 +22,7 @@ import { db } from '@/drizzle/db';
 import { deadLetterQueue, webhookDeliveries } from '@/drizzle/schema/automation';
 import { eq, and, sql, desc, lt } from 'drizzle-orm';
 import { devLogger } from '@/lib/dev-logger';
-import { logError } from '@/lib/errors-server';
+import { logger } from '@/lib/logger';
 
 export interface DLQEntry {
   id: string;
@@ -161,7 +161,7 @@ export async function retryFromDLQ(dlqEntryId: string, tenantId?: string): Promi
     await processWebhookDelivery(payload.deliveryId, payload.url);
     return true;
   } catch (e) {
-    await logError({ error: e, context: 'DLQ retry delivery failed' });
+    logger.error('[DLQ] Retry delivery failed', { error: e instanceof Error ? e.message : String(e) });
     return false;
   }
 }
@@ -206,7 +206,7 @@ export async function bulkRetryDLQ(ids: string[], tenantId?: string): Promise<{ 
       if (result) succeeded++;
       else failed++;
     } catch (e) {
-      await logError({ error: e, context: 'DLQ bulk retry failed for entry', tenantId, metadata: { entryId: id } });
+      logger.error('[DLQ] Bulk retry failed for entry', { entryId: id, tenantId, error: e instanceof Error ? e.message : String(e) });
       failed++;
     }
   }
