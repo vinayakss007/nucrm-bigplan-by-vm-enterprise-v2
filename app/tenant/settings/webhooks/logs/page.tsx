@@ -4,7 +4,8 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
+import { useApiQuery } from '@/lib/query/client';
 import { Webhook, ChevronLeft, ChevronRight, AlertCircle, CheckCircle2, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -33,45 +34,34 @@ function getStatusConfig(status: string) {
   }
 }
 
+const limit = 20;
+
 export default function WebhookLogsPage() {
-  const [logs, setLogs] = useState<WebhookLog[]>([]);
-  const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
-  const [total, setTotal] = useState(0);
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [eventFilter, setEventFilter] = useState<string>('');
+  // Remembers event types seen across pages so the dropdown doesn't lose
+  // options when a filtered page returns a narrower set.
   const [eventTypes, setEventTypes] = useState<string[]>([]);
-  const limit = 20;
 
-  const load = useCallback(async (signal?: AbortSignal) => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams({ page: String(page), limit: String(limit) });
-      if (statusFilter !== 'all') params.set('status', statusFilter);
-      if (eventFilter) params.set('event', eventFilter);
-      const res = await fetch(`/api/tenant/webhooks/logs?${params}`, { signal });
-      if (res.ok) {
-        const d = await res.json();
-        if (signal?.aborted) return;
-        setLogs(d.data ?? []);
-        setTotal(d.total ?? 0);
-        // Extract unique event types for filter dropdown
-        const events = [...new Set((d.data ?? []).map((l: WebhookLog) => l.eventType).filter(Boolean))] as string[];
-        if (events.length) setEventTypes(events);
-      }
-    } catch (e) {
-      if ((e as Error)?.name === 'AbortError') return;
-      throw e;
-    } finally {
-      if (!signal?.aborted) setLoading(false);
-    }
-  }, [page, statusFilter, eventFilter]);
+  // #1328: logs via TanStack Query (was raw fetch + useEffect). page/status/
+  // event are part of the key so each view refetches and caches independently.
+  const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+  if (statusFilter !== 'all') params.set('status', statusFilter);
+  if (eventFilter) params.set('event', eventFilter);
+  const { data, isLoading: loading } = useApiQuery<{ data?: WebhookLog[]; total?: number }>(
+    ['tenant', 'webhooks', 'logs', { page, statusFilter, eventFilter }],
+    `/api/tenant/webhooks/logs?${params}`,
+  );
+  const logs: WebhookLog[] = data?.data ?? [];
+  const total = data?.total ?? 0;
 
+  // Preserve the original behavior: accumulate discovered event types for the
+  // filter dropdown as pages load.
   useEffect(() => {
-    const controller = new AbortController();
-    load(controller.signal);
-    return () => controller.abort();
-  }, [page, statusFilter, eventFilter, load]);
+    const events = [...new Set((data?.data ?? []).map((l) => l.eventType).filter(Boolean))] as string[];
+    if (events.length) setEventTypes((prev) => [...new Set([...prev, ...events])]);
+  }, [data]);
 
   const totalPages = Math.max(1, Math.ceil(total / limit));
 

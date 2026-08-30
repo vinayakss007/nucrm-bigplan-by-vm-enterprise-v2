@@ -4,7 +4,9 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import { Plus, Trash2, GripVertical, Save, Loader2, X, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { confirmThen } from '@/components/ui/confirm-dialog';
@@ -33,60 +35,78 @@ interface Pipeline {
   stages: Stage[];
 }
 
+const PIPELINES_QUERY = ['tenant', 'pipelines'] as const;
+
 export default function PipelinesSettingsPage() {
-  const [pipelines, setPipelines] = useState<Pipeline[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [selected, setSelected] = useState<Pipeline|null>(null);
-  const [saving, setSaving] = useState(false);
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState('');
 
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
 
-  const load = useCallback(async (signal?: AbortSignal) => {
-    try {
-      const r = await fetch('/api/tenant/pipelines', { signal });
-      if (signal?.aborted) return;
-      if (r.ok) { const d = await r.json(); if (signal?.aborted) return; setPipelines(d.data??[]); if (!selected && d.data?.length) setSelected(d.data[0]); }
-      setLoading(false);
-    } catch (e) {
-      if ((e as Error)?.name === 'AbortError') return;
-      throw e;
-    }
-  }, [selected]);
-  useEffect(() => {
-    const controller = new AbortController();
-    load(controller.signal);
-    return () => controller.abort();
-  }, [load]);
+  // #1328: list via TanStack Query (was raw fetch + useEffect).
+  const { data, isLoading: loading, error } = useApiQuery<{ data?: Pipeline[] }>(
+    PIPELINES_QUERY,
+    '/api/tenant/pipelines',
+  );
+  const pipelines: Pipeline[] = useMemo(() => data?.data ?? [], [data]);
+  if (error) toast.error('Failed to load pipelines');
 
-  const createPipeline = async () => {
+  // Auto-select the first pipeline once loaded (preserves original behavior).
+  useEffect(() => {
+    if (!selected && pipelines.length) setSelected(pipelines[0] ?? null);
+  }, [pipelines, selected]);
+
+  const load = () => queryClient.invalidateQueries({ queryKey: PIPELINES_QUERY });
+
+  const createMutation = useMutation({
+    mutationFn: async () => {
+      const r = await fetch('/api/tenant/pipelines', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name: newName }) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || 'Failed to create pipeline');
+    },
+    onSuccess: () => { toast.success('Pipeline created'); setCreating(false); setNewName(''); load(); },
+    onError: (e: Error) => toast.error(e.message || 'Failed to create pipeline'),
+  });
+
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      if (!selected) return;
+      const r = await fetch(`/api/tenant/pipelines/${selected.id}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name: selected.name, stages: selected.stages }) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || 'Failed to save pipeline');
+    },
+    onSuccess: () => { toast.success('Pipeline saved'); load(); },
+    onError: (e: Error) => toast.error(e.message || 'Failed to save pipeline'),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const r = await fetch(`/api/tenant/pipelines/${id}`, { method:'DELETE' });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || 'Failed to delete pipeline');
+    },
+    onSuccess: () => { toast.success('Deleted'); load(); },
+    onError: (e: Error) => toast.error(e.message || 'Failed to delete pipeline'),
+  });
+
+  const saving = createMutation.isPending || saveMutation.isPending;
+
+  const createPipeline = () => {
     if (!newName.trim()) return;
-    setSaving(true);
-    const r = await fetch('/api/tenant/pipelines', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name: newName }) });
-    const d = await r.json();
-    if (r.ok) { toast.success('Pipeline created'); setCreating(false); setNewName(''); load(); }
-    else toast.error(d.error);
-    setSaving(false);
+    createMutation.mutate();
   };
 
-  const savePipeline = async () => {
+  const savePipeline = () => {
     if (!selected) return;
-    setSaving(true);
-    const r = await fetch(`/api/tenant/pipelines/${selected.id}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name: selected.name, stages: selected.stages }) });
-    const d = await r.json();
-    if (r.ok) { toast.success('Pipeline saved'); load(); }
-    else toast.error(d.error);
-    setSaving(false);
+    saveMutation.mutate();
   };
 
   const deletePipeline = async (id: string) => {
     const pipeline = selected?.id === id ? selected : pipelines?.find(p => p.id === id);
     await confirmThen(`Delete pipeline "${pipeline?.name || 'this pipeline'}"?`, async () => {
-      const r = await fetch(`/api/tenant/pipelines/${id}`, { method:'DELETE' });
-      const d = await r.json();
-      if (r.ok) { toast.success('Deleted'); load(); }
-      else toast.error(d.error);
+      deleteMutation.mutate(id);
     });
   };
 

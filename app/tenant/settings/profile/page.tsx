@@ -5,6 +5,8 @@
  */
 'use client';
 import { useState, useEffect } from 'react';
+import { useMutation } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import { Save, User, Lock, Loader2, Eye, EyeOff, Bell, Clock } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { cn } from '@/lib/utils';
@@ -21,42 +23,64 @@ interface UserProfile {
 }
 
 export default function ProfileSettingsPage() {
-  const [user, setUser] = useState<UserProfile | null>(null);
+  const [userOverride, setUserOverride] = useState<UserProfile | null>(null);
   const [profile, setProfile] = useState({ full_name:'', phone:'', timezone:'UTC', avatar_url:'' });
   const [password, setPassword] = useState({ current:'', newPass:'', confirm:'' });
   const [prefs, setPrefs] = useState({ email_task_reminders:true, email_deal_updates:true, email_mentions:true, browser_notifications:false });
-  const [saving, setSaving] = useState<string|null>(null);
   const [showPass, setShowPass] = useState(false);
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
 
-  useEffect(() => {
-  const controller = new AbortController();
-  let ignore = false;
-    fetch('/api/tenant/me', { signal: controller.signal }).then(r=>r.json()).then(d=>{ if (ignore) return;
-      if(d.user){ setUser(d.user); setProfile({ full_name:d.user.full_name||'', phone:d.user.phone||'', timezone:d.user.timezone||'UTC', avatar_url:d.user.avatar_url||'' }); }
-    }).catch(e => { if ((e as Error)?.name === 'AbortError') return; throw e; });
-    return () => { ignore = true; controller.abort(); };
-}, []);
+  // #1328: load current user via TanStack Query (was raw fetch + useEffect).
+  const { data } = useApiQuery<{ user?: UserProfile }>(['tenant', 'me'], '/api/tenant/me');
+  const fetchedUser = data?.user ?? null;
+  // Merge local edits saved via the profile mutation on top of the fetched user.
+  const user: UserProfile | null = fetchedUser ? { ...fetchedUser, ...userOverride } : userOverride;
 
-  const saveProfile = async (e: React.FormEvent) => {
-    e.preventDefault(); setSaving('profile');
-    const res = await fetch('/api/user/profile',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(profile)});
-    const d = await res.json();
-    if(res.ok){toast.success('Profile updated');setUser((u)=>({...u,...d.user}));}
-    else toast.error(d.error||'Failed');
-    setSaving(null);
+  // Seed the editable form once the user is loaded.
+  useEffect(() => {
+    if (fetchedUser) {
+      setProfile({
+        full_name: fetchedUser.full_name || '',
+        phone: fetchedUser.phone || '',
+        timezone: fetchedUser.timezone || 'UTC',
+        avatar_url: fetchedUser.avatar_url || '',
+      });
+    }
+  }, [fetchedUser]);
+
+  const saveProfileMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch('/api/user/profile',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(profile)});
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || 'Failed');
+      return d.user as UserProfile;
+    },
+    onSuccess: (u) => { toast.success('Profile updated'); setUserOverride(prev => ({ ...prev, ...u })); },
+    onError: (e: Error) => toast.error(e.message || 'Failed'),
+  });
+
+  const savePasswordMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch('/api/user/password',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({current_password:password.current,new_password:password.newPass})});
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || 'Failed');
+    },
+    onSuccess: () => { toast.success('Password updated'); setPassword({current:'',newPass:'',confirm:''}); },
+    onError: (e: Error) => toast.error(e.message || 'Failed'),
+  });
+
+  const saving = saveProfileMutation.isPending ? 'profile' : savePasswordMutation.isPending ? 'password' : null;
+
+  const saveProfile = (e: React.FormEvent) => {
+    e.preventDefault();
+    saveProfileMutation.mutate();
   };
 
-  const savePassword = async (e: React.FormEvent) => {
+  const savePassword = (e: React.FormEvent) => {
     e.preventDefault();
     if(password.newPass!==password.confirm){toast.error('Passwords do not match');return;}
     if(password.newPass.length<12||!/[A-Z]/.test(password.newPass)||!/[0-9]/.test(password.newPass)||!/[!@#$%^&*(),.?":{}|<>]/.test(password.newPass)){toast.error('Password must be 12+ chars with uppercase, number & special char');return;}
-    setSaving('password');
-    const res = await fetch('/api/user/password',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({current_password:password.current,new_password:password.newPass})});
-    const d = await res.json();
-    if(res.ok){toast.success('Password updated');setPassword({current:'',newPass:'',confirm:''});}
-    else toast.error(d.error||'Failed');
-    setSaving(null);
+    savePasswordMutation.mutate();
   };
 
   if(!user) return <div className="animate-pulse space-y-4"><div className="h-8 w-40 bg-muted rounded"/><div className="admin-card h-48"/></div>;
