@@ -23,6 +23,12 @@ const mocks = vi.hoisted(() => ({
   insertValuesReturning: vi.fn(),
   findFirstTenant: vi.fn(),
   findFirstSnapshot: vi.fn(),
+  logError: vi.fn(),
+}));
+
+// Row/table failures are now reported via structured logError (not console.error).
+vi.mock('@/lib/errors-server', () => ({
+  logError: mocks.logError,
 }));
 
 vi.mock('@/drizzle/db', () => ({
@@ -399,7 +405,7 @@ describe('executeSelectiveRestore', () => {
   });
 
   it('keeps going and logs when a single row fails to insert', async () => {
-    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mocks.logError.mockClear();
     mocks.txExecute
       .mockRejectedValueOnce(new Error('duplicate key value'))
       .mockResolvedValueOnce({ rows: [], rowCount: 1 });
@@ -408,8 +414,8 @@ describe('executeSelectiveRestore', () => {
     expect(result.success).toBe(true);
     // The failed row is counted neither as new nor as skipped.
     expect(result.recordsPerTable.contacts).toEqual({ new: 1, updated: 0, skipped: 0 });
-    expect(errSpy).toHaveBeenCalled();
-    errSpy.mockRestore();
+    // The failure is reported via structured logError (previously console.error).
+    expect(mocks.logError).toHaveBeenCalled();
   });
 
   it('reports failure (without throwing) when the transaction itself fails', async () => {
