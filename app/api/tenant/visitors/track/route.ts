@@ -14,6 +14,17 @@ import { checkPublicRateLimit } from '@/lib/rate-limit-simple';
 import { readJsonBody } from '@/lib/api/validate';
 
 /**
+ * #1074 (defense-in-depth): visitor-supplied url/title/referrer are stored raw
+ * and later rendered in dashboards/activity feeds. Strip tag characters and cap
+ * length before persisting so a page view cannot carry a stored-XSS payload.
+ * Mirrors sanitizeTrackingField() in lib/visitor-tracking.ts.
+ */
+function sanitizeTrackingField(value: unknown, maxLen = 2048): string {
+  if (!value) return '';
+  return String(value).replace(/[<>]/g, '').slice(0, maxLen);
+}
+
+/**
  * Public endpoint for visitor tracking.
  * No auth required - uses x-api-key header to resolve tenant.
  * The API key is looked up in the api_keys table to determine the tenant.
@@ -51,14 +62,20 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'visitorId and url are required' }, { status: 400 });
     }
 
+    // Sanitize visitor-supplied fields before persisting (see note above).
+    const safeUrl = sanitizeTrackingField(url);
+    const safeTitle = sanitizeTrackingField(title, 512);
+    const safeReferrer = sanitizeTrackingField(referrer);
+    const safeDuration = Number.isFinite(Number(duration)) ? Math.max(0, Math.trunc(Number(duration))) : 0;
+
     await db.transaction(async (tx) => {
       await tx.insert(pageViews).values({
         tenantId,
         visitorId,
-        url,
-        title: title || '',
-        referrer: referrer || '',
-        durationSeconds: duration || 0,
+        url: safeUrl,
+        title: safeTitle,
+        referrer: safeReferrer,
+        durationSeconds: safeDuration,
       });
 
       const existing = await tx
@@ -74,10 +91,10 @@ export async function POST(req: NextRequest) {
           firstSeenAt: new Date(),
           lastSeenAt: new Date(),
           totalPageViews: 1,
-          score: scorePageUrl(url),
+          score: scorePageUrl(safeUrl),
         });
       } else {
-        const points = scorePageUrl(url);
+        const points = scorePageUrl(safeUrl);
         await tx
           .update(visitors)
           .set({

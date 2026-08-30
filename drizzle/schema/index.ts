@@ -42,6 +42,7 @@ export * from './projects';
 export * from './dashboard';
 export * from './super-admin-audit';
 export * from './analytics-views';
+export * from './analytics';
 export * from './record-links';
 export * from './teams';
 export * from './custom-entities';

@@ -60,8 +60,28 @@ import {
   visitors,
   pageViews,
 } from '../visitors';
+import {
+  analyticsEvents,
+} from '../analytics';
 
 export const CRM_TABLES = {
+
+  // Product analytics event stream (isolated, append-only, no CRM FKs)
+  analyticsEvents: {
+    table: analyticsEvents,
+    metadata: {
+      name: 'analytics_events',
+      schemaGroup: 'crm',
+      hasTenantId: false,
+      hasSoftDelete: false,
+      hasAudit: false,
+      hasMetadata: false,
+      dependencies: [],
+      description: 'Product analytics event stream (app usage)',
+      isCore: false,
+      indexes: ['idx_analytics_events_tenant_time', 'idx_analytics_events_event_time', 'idx_analytics_events_anon'],
+    },
+  },
 
   // CRM tables
   companies: {
