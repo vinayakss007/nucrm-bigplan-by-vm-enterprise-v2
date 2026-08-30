@@ -12,6 +12,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { readJsonBody } from '@/lib/api/validate';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { logError } from '@/lib/errors-server';
 
 export const POST = withApiRoute(async (req: NextRequest) => {
   try {
@@ -50,8 +51,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
  
  
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Unknown error';
-    console.error('[telegram/test]', msg);
+    await logError({ error: err, context: 'telegram/test', requestMethod: 'POST' });
     return NextResponse.json({ error: 'Failed to send test message' }, { status: 500 });
   }
 });

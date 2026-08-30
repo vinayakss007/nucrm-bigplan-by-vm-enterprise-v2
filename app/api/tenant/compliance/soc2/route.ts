@@ -13,6 +13,7 @@ import { eq, and, desc } from 'drizzle-orm';
 import { generateSOC2Report } from '@/lib/compliance/soc2';
 import { readJsonBody } from '@/lib/api/validate';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { logError } from '@/lib/errors-server';
 
 export const GET = withApiRoute(async (req: NextRequest) => {
   try {
@@ -81,7 +82,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
  
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Unknown error';
-      console.error('[compliance/soc2]', msg);
+      await logError({ error: err, context: 'compliance/soc2' });
       await db.update(complianceRequests)
         .set({
           status: 'failed',
