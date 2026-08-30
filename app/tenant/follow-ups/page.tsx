@@ -4,7 +4,9 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import Link from 'next/link';
 import { ListChecks, Calendar, AlertCircle, Plus, CheckCircle, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -27,56 +29,43 @@ interface FollowUp {
   assigneeName: string | null;
 }
 
+interface FollowUpsResponse { data?: FollowUp[]; total?: number }
+
+const limit = 20;
+
 export default function FollowUpsPage() {
-  const [data, setData] = useState<FollowUp[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [offset, setOffset] = useState(0);
-  const [total, setTotal] = useState(0);
   const [showCreate, setShowCreate] = useState(false);
   const [createForm, setCreateForm] = useState({ title: '', description: '', dueDate: '', contact_id: '', lead_id: '', deal_id: '' });
-  const [saving, setSaving] = useState(false);
-  const limit = 20;
 
-  const fetchData = useCallback(async (signal?: AbortSignal) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
-      if (statusFilter) params.set('status', statusFilter);
-      const res = await fetch(`/api/tenant/follow-ups?${params}`, { signal });
-      if (!res.ok) throw new Error('Failed to fetch follow-ups');
-      const json = await res.json();
-      setData(json.data ?? []);
-      setTotal(json.total ?? 0);
-    } catch (err) {
-      if (err instanceof DOMException && err.name === 'AbortError') return;
-      const message = err instanceof Error ? err.message : 'Failed to load follow-ups';
-      setError(message);
-      toast.error('Failed to load follow-ups');
-    } finally {
-      // Only clear the spinner if this request was not superseded by a newer
-      // one; clearing it for an aborted request causes a loading flicker.
-      if (!signal?.aborted) setLoading(false);
-    }
-  }, [statusFilter, offset]);
+  const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+  if (statusFilter) params.set('status', statusFilter);
 
-  useEffect(() => {
-    const controller = new AbortController();
-    fetchData(controller.signal);
-    return () => controller.abort();
-  }, [fetchData]);
+  // #1328: list via TanStack Query (was raw fetch + useEffect + AbortController).
+  // The query key includes the filter/offset so changing either refetches and
+  // caches per-view automatically.
+  const FOLLOWUPS_QUERY = ['tenant', 'follow-ups', { statusFilter, offset }] as const;
+  const { data: json, isLoading: loading, error: queryError } = useApiQuery<FollowUpsResponse>(
+    FOLLOWUPS_QUERY,
+    `/api/tenant/follow-ups?${params}`,
+  );
+  const data: FollowUp[] = json?.data ?? [];
+  const total = json?.total ?? 0;
+  const error = queryError ? 'Failed to load follow-ups' : null;
+  useEffect(() => { if (queryError) toast.error('Failed to load follow-ups'); }, [queryError]);
 
   useEffect(() => { setOffset(0); }, [statusFilter]);
 
   const totalPages = Math.ceil(total / limit);
   const currentPage = Math.floor(offset / limit) + 1;
 
-  async function handleCreate() {
-    if (!createForm.title.trim()) return;
-    setSaving(true);
-    try {
+  // Invalidate every follow-ups view (any filter/offset) after a mutation.
+  const reload = () => queryClient.invalidateQueries({ queryKey: ['tenant', 'follow-ups'] });
+
+  const createFollowUp = useMutation({
+    mutationFn: async () => {
       const res = await fetch('/api/tenant/follow-ups', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -90,43 +79,52 @@ export default function FollowUpsPage() {
         }),
       });
       if (!res.ok) throw new Error('Failed to create');
+    },
+    onSuccess: () => {
       toast.success('Follow-up created');
       setShowCreate(false);
       setCreateForm({ title: '', description: '', dueDate: '', contact_id: '', lead_id: '', deal_id: '' });
       setOffset(0);
-      fetchData();
-    } catch {
-      toast.error('Failed to create follow-up');
-    } finally {
-      setSaving(false);
-    }
+      reload();
+    },
+    onError: () => toast.error('Failed to create follow-up'),
+  });
+  const saving = createFollowUp.isPending;
+
+  function handleCreate() {
+    if (!createForm.title.trim()) return;
+    createFollowUp.mutate();
   }
 
-  async function handleComplete(id: string) {
-    try {
+  const completeFollowUp = useMutation({
+    mutationFn: async (id: string) => {
       const res = await fetch(`/api/tenant/follow-ups/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'completed' }),
       });
       if (!res.ok) throw new Error('Failed');
-      toast.success('Marked as complete');
-      fetchData();
-    } catch {
-      toast.error('Failed to complete follow-up');
-    }
+    },
+    onSuccess: () => { toast.success('Marked as complete'); reload(); },
+    onError: () => toast.error('Failed to complete follow-up'),
+  });
+
+  function handleComplete(id: string) {
+    completeFollowUp.mutate(id);
   }
+
+  const deleteFollowUp = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/tenant/follow-ups/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed');
+    },
+    onSuccess: () => { toast.success('Follow-up deleted'); reload(); },
+    onError: () => toast.error('Failed to delete follow-up'),
+  });
 
   async function handleDelete(id: string) {
     await confirmThen('Delete this follow-up?', async () => {
-    try {
-      const res = await fetch(`/api/tenant/follow-ups/${id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Failed');
-      toast.success('Follow-up deleted');
-      fetchData();
-    } catch {
-      toast.error('Failed to delete follow-up');
-    }
+      deleteFollowUp.mutate(id);
     });
   }
 

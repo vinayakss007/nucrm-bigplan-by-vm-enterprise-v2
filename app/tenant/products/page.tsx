@@ -4,7 +4,9 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import {
   Plus, Search, Trash2, X, Package, Edit2, ChevronDown,
   FileText, Brain, MessageCircle, LifeBuoy, Users, Home, ShoppingCart, Receipt,
@@ -36,34 +38,25 @@ interface Product {
   updated_at: string;
 }
 
+interface ProductsResponse { data?: Product[] }
+
+const PRODUCTS_QUERY = ['tenant', 'products'] as const;
+
 export default function ProductsPage() {
-  const [products, setProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [form, setForm] = useState({ name: '', description: '', sku: '', base_price: '' });
 
-  useEffect(() => {
-    const controller = new AbortController();
-    fetchProducts(controller.signal);
-    return () => controller.abort();
-  }, []);
+  // #1328: list via TanStack Query (was raw fetch + useEffect).
+  const { data, isLoading: loading } = useApiQuery<ProductsResponse | Product[]>(
+    PRODUCTS_QUERY,
+    '/api/tenant/products?limit=200',
+  );
+  const products: Product[] = Array.isArray(data) ? data : data?.data ?? [];
 
-  const fetchProducts = async (signal?: AbortSignal) => {
-    try {
-      const res = await fetch('/api/tenant/products?limit=200', { signal });
-      const data = await res.json();
-      if (signal?.aborted) return;
-      setProducts(data.data || []);
-    } catch (e) {
-      if ((e as Error)?.name === 'AbortError') return;
-      // Failed to load products
-    } finally {
-      if (signal?.aborted) return;
-      setLoading(false);
-    }
-  };
+  const reload = () => queryClient.invalidateQueries({ queryKey: PRODUCTS_QUERY });
 
   const resetForm = () => {
     setForm({ name: '', description: '', sku: '', base_price: '' });
@@ -81,9 +74,8 @@ export default function ProductsPage() {
     setShowModal(true);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
+  const saveProduct = useMutation({
+    mutationFn: async () => {
       const url = editingProduct
         ? `/api/tenant/products/${editingProduct.id}`
         : '/api/tenant/products';
@@ -99,28 +91,36 @@ export default function ProductsPage() {
         }),
       });
       if (!res.ok) {
-        const err = await res.json();
+        const err = await res.json().catch(() => ({}));
         throw new Error(err.error || 'Failed to save product');
       }
+    },
+    onSuccess: () => {
       toast.success(editingProduct ? 'Product updated' : 'Product created');
       setShowModal(false);
       resetForm();
-      fetchProducts();
-    } catch (error: unknown) {
-      toast.error(error instanceof Error ? error.message : 'Failed to save product');
-    }
+      reload();
+    },
+    onError: (error: Error) => toast.error(error.message || 'Failed to save product'),
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    saveProduct.mutate();
   };
+
+  const removeProduct = useMutation({
+    mutationFn: async (product: Product) => {
+      const res = await fetch(`/api/tenant/products/${product.id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete');
+    },
+    onSuccess: () => { toast.success('Product deleted'); reload(); },
+    onError: () => toast.error('Failed to delete product'),
+  });
 
   const deleteProduct = async (product: Product) => {
     await confirmThen(`Delete product "${product.name}"?`, async () => {
-      try {
-        const res = await fetch(`/api/tenant/products/${product.id}`, { method: 'DELETE' });
-        if (!res.ok) throw new Error('Failed to delete');
-        toast.success('Product deleted');
-        fetchProducts();
-      } catch {
-        toast.error('Failed to delete product');
-      }
+      removeProduct.mutate(product);
     });
   };
 
