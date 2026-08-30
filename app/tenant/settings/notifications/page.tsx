@@ -8,6 +8,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   Bell, Mail, MessageSquare, UserCheck, TrendingUp, CheckSquare, LifeBuoy,
   AtSign, Users, ShieldCheck, Receipt, Save, Loader2, RotateCcw, Search,
+  type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
@@ -15,16 +16,14 @@ import toast from 'react-hot-toast';
 type Channel = 'in_app' | 'email' | 'telegram';
 type Matrix = Record<string, Record<Channel, boolean>>;
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CHANNEL_META: Record<Channel, { label: string; icon: any }> = {
+const CHANNEL_META: Record<Channel, { label: string; icon: LucideIcon }> = {
   in_app:   { label: 'In-app',   icon: Bell },
   email:    { label: 'Email',    icon: Mail },
   telegram: { label: 'Telegram', icon: MessageSquare },
 };
 
 type EventDef = { key: string; label: string; desc: string };
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Group = { label: string; icon: any; events: EventDef[] };
+type Group = { label: string; icon: LucideIcon; events: EventDef[] };
 
 const GROUPS: Group[] = [
   {
@@ -103,8 +102,7 @@ export default function NotificationsPage() {
   const controller = new AbortController();
     fetch('/api/tenant/notifications/matrix', { signal: controller.signal })
       .then(r => r.ok ? r.json() : { matrix: {} })
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .then((d: any) => {
+      .then((d: { matrix?: Matrix }) => {
         if (controller.signal.aborted) return;
         setMatrix(d.matrix ?? {});
         setOriginal(d.matrix ?? {});
