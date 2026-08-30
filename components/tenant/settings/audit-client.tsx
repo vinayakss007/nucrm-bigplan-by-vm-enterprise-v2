@@ -44,10 +44,8 @@ interface AuditLogEntry {
   resource_id: string | null;
   created_at: string;
   ip_address: string | null;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  old_data: any;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  new_data: any;
+  old_data: Record<string, unknown> | null;
+  new_data: Record<string, unknown> | null;
   full_name: string | null;
   email: string | null;
   user_id: string | null;
