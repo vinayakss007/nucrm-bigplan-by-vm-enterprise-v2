@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import crypto from 'crypto';
+import { logger } from '@/lib/logger';
 import { escapeHtml } from '@/lib/email/escape-html';
 import { generateUnsubscribeToken } from '@/lib/email/unsubscribe-token';
 
@@ -278,7 +279,7 @@ export async function sendEmail(payload: EmailPayload): Promise<SendResult> {
 
 /** Record an email failure to the structured error log (best-effort, never throws). */
 async function reportEmailFailure(reason: string, subject: string, recipients: string): Promise<void> {
-  console.error(`[email] ${reason} | subject="${subject}"`);
+  logger.error('[email] send failure', { reason, subject });
   try {
     const { logError } = await import('@/lib/errors-server');
     const { redactEmail } = await import('@/lib/logger/pii');
@@ -320,7 +321,7 @@ export async function alertSuperAdmin(subject: string, message: string) {
       <p style="color:#9ca3af;font-size:12px;margin-top:16px">Sent from NuCRM monitoring</p>
     </div>`,
     text: `${subject}\n\n${message}`,
-  }).catch((e) => console.error('[Email] Failed to send admin alert:', e));
+  }).catch((e) => logger.error('[Email] Failed to send admin alert', { error: e instanceof Error ? e.message : String(e) }));
 }
 
 /**
@@ -356,7 +357,7 @@ export async function sendWebhookNotification(opts: {
         signal: AbortSignal.timeout(15_000),
       });
     } catch (err) {
-      console.error('[webhook] Discord failed:', err);
+      logger.error('[webhook] Discord failed', { error: err instanceof Error ? err.message : String(err) });
     }
   }
 
@@ -379,7 +380,7 @@ export async function sendWebhookNotification(opts: {
         signal: AbortSignal.timeout(15_000),
       });
     } catch (err) {
-      console.error('[webhook] Slack failed:', err);
+      logger.error('[webhook] Slack failed', { error: err instanceof Error ? err.message : String(err) });
     }
   }
 }
@@ -416,10 +417,10 @@ export async function sendTelegram(opts: {
 
     if (!res.ok) {
       const data = await res.json().catch(() => ({ description: `HTTP ${res.status}` }));
-      console.error('[telegram] Failed:', data.description || res.status);
+      logger.error('[telegram] Failed', { reason: data.description || res.status });
     }
   } catch (err) {
-    console.error('[telegram] Error:', err);
+    logger.error('[telegram] Error', { error: err instanceof Error ? err.message : String(err) });
   }
 }
 
@@ -478,7 +479,7 @@ export async function sendTelegramToUser(opts: {
       url: opts.url,
     });
   } catch (err) {
-    console.error('[telegram] Failed to send to user:', err);
+    logger.error('[telegram] Failed to send to user', { error: err instanceof Error ? err.message : String(err) });
   }
 }
 
@@ -510,13 +511,13 @@ export async function createEmailTracking(data: {
     if (textToAnalyze.trim()) {
       const { analyzeSentimentForContact } = await import('@/lib/ai/sentiment');
       analyzeSentimentForContact(data.contactId, data.tenantId, textToAnalyze.slice(0, 2000)).catch((err: unknown) => {
-        console.error('[email] Sentiment analysis failed:', err);
+        logger.error('[email] Sentiment analysis failed', { error: err instanceof Error ? err.message : String(err) });
       });
     }
     
     return trackingId;
   } catch (err) {
-    console.error('[email] Failed to create tracking:', err);
+    logger.error('[email] Failed to create tracking', { error: err instanceof Error ? err.message : String(err) });
     return null;
   }
 }

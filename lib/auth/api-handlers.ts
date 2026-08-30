@@ -84,7 +84,7 @@ export async function POST_login(request: NextRequest) {
         icon: '🛡️',
         title: 'IP Blocked — Brute Force',
         message: `IP: \`${ip}\`\nBlocked until: ${ipBlockCheck.blockedUntil?.toISOString() ?? 'N/A'}\nUser-Agent: ${userAgent ?? 'N/A'}`,
-      }).catch((e) => console.error('[api-handlers] Error:', e));
+      }).catch((e) => logger.error('[api-handlers] admin alert failed', { error: e instanceof Error ? e.message : String(e) }));
       return loginRespond(request, isForm, { 
         error: 'Too many login attempts. Please try again later.',
         blocked_until: ipBlockCheck.blockedUntil?.toISOString(),
@@ -103,7 +103,7 @@ export async function POST_login(request: NextRequest) {
         title: 'Account Blocked — Brute Force',
         // #1297: redact email before sending to Telegram (may be logged upstream).
         message: `Email: \`${redactEmail(email)}\`\nIP: \`${ip}\`\nBlocked until: ${emailBlockCheck.blockedUntil?.toISOString() ?? 'N/A'}`,
-      }).catch((e) => console.error('[api-handlers] Error:', e));
+      }).catch((e) => logger.error('[api-handlers] admin alert failed', { error: e instanceof Error ? e.message : String(e) }));
       return loginRespond(request, isForm, { 
         error: 'Too many login attempts for this account. Please try again later.',
         blocked_until: emailBlockCheck.blockedUntil?.toISOString(),
@@ -407,7 +407,7 @@ export async function POST_signup(request: NextRequest) {
       message: `**${user.fullName}** (${user.email}) joined\nWorkspace: **${tenant.name}** (\`${tenant.slug}\`)`,
       color: '#10b981',
       url: `${process.env.NEXT_PUBLIC_APP_URL}/tenant`,
-    }).catch((e) => { console.error('[auth/signup] Webhook notification failed', e); });
+    }).catch((e) => { logger.error('[auth/signup] Webhook notification failed', { error: e instanceof Error ? e.message : String(e) }); });
 
     // Send Telegram notification if user configured it (fire-and-forget)
     sendTelegram({
@@ -419,7 +419,7 @@ export async function POST_signup(request: NextRequest) {
       message: `${user.fullName} (${redactEmail(user.email)}) joined\nWorkspace: ${tenant.name} (${tenant.slug})`,
       icon: '🟢',
       url: `${process.env.NEXT_PUBLIC_APP_URL}/tenant`,
-    }).catch((e) => { console.error('[auth/signup] Telegram notification failed', e); });
+    }).catch((e) => { logger.error('[auth/signup] Telegram notification failed', { error: e instanceof Error ? e.message : String(e) }); });
 
     return signupResponse;
  
@@ -437,14 +437,14 @@ export async function POST_logout(request: NextRequest) {
     const token = request.cookies.get('nucrm_session')?.value;
     if (token) {
       const tokenHash = await hashToken(token);
-      await db.delete(sessions).where(eq(sessions.tokenHash, tokenHash)).catch((e) => { console.error('[auth/logout] Failed to delete session', e); });
+      await db.delete(sessions).where(eq(sessions.tokenHash, tokenHash)).catch((e) => { logger.error('[auth/logout] Failed to delete session', { error: e instanceof Error ? e.message : String(e) }); });
     }
     await clearSessionCookie();
     const logoutResponse = NextResponse.json({ ok:true });
     logoutResponse.headers.set('Set-Cookie', 'nucrm_csrf_token=; Path=/; SameSite=Strict; Max-Age=0');
     return logoutResponse;
   } catch (e) {
-    console.error('[auth/logout] Logout error, clearing cookies anyway', e);
+    logger.error('[auth/logout] Logout error, clearing cookies anyway', { error: e instanceof Error ? e.message : String(e) });
     await clearSessionCookie();
     const logoutResponse = NextResponse.json({ ok:true });
     logoutResponse.headers.set('Set-Cookie', 'nucrm_csrf_token=; Path=/; SameSite=Strict; Max-Age=0');
