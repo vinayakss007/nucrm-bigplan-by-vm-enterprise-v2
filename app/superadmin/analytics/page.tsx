@@ -4,7 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect } from 'react';
+import { useApiQuery } from '@/lib/query/client';
 import { BarChart3, RefreshCw } from 'lucide-react';
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 import { formatCurrency } from '@/lib/utils';
@@ -17,24 +17,14 @@ interface TenantRow { id?: string; name?: string; plan_id?: string; status?: str
 interface MonitoringData { tenantGrowth?: { day?: string; count?: number }[] }
 
 export default function SuperAdminAnalyticsPage() {
-  const [tenants, setTenants]   = useState<TenantRow[]>([]);
-  const [monitoring, setMonitoring] = useState<MonitoringData | null>(null);
-  const [loading, setLoading]   = useState(true);
-  const [fetchError, setFetchError] = useState<string | null>(null);
+  // #1328: TanStack Query replaces fetch + useEffect + useState.
+  const tenantsQuery = useApiQuery<{ data?: TenantRow[] }>(['superadmin', 'tenants'], '/api/superadmin/tenants');
+  const monitoringQuery = useApiQuery<MonitoringData>(['superadmin', 'monitoring'], '/api/superadmin/monitoring');
 
-  useEffect(() => {
-  const controller = new AbortController();
-  let ignore = false;
-    Promise.all([
-      fetch('/api/superadmin/tenants', { signal: controller.signal }).then(r => r.ok ? r.json() : { data: [] }),
-      fetch('/api/superadmin/monitoring', { signal: controller.signal }).then(r => r.ok ? r.json() : null),
-    ]).then(([t, m]) => { if (ignore) return;  setTenants(t.data||[]); setMonitoring(m); setLoading(false);  } )
-    .catch(err => {
-      if ((err as Error)?.name === 'AbortError') return;
-      setFetchError(err.message); setLoading(false);
-    });
-    return () => { ignore = true; controller.abort(); };
-}, []);
+  const tenants: TenantRow[] = tenantsQuery.data?.data ?? [];
+  const monitoring: MonitoringData | null = monitoringQuery.data ?? null;
+  const loading = tenantsQuery.isLoading || monitoringQuery.isLoading;
+  const fetchError = tenantsQuery.error?.message ?? monitoringQuery.error?.message ?? null;
 
   // Compute metrics
   const PLAN_PRICES: Record<string,number> = { free:0, starter:29, pro:79, enterprise:199 };

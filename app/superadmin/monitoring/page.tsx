@@ -4,7 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect } from 'react';
+import { useApiQuery } from '@/lib/query/client';
 import {
   Activity, AlertTriangle, CheckCircle, RefreshCw, Building2, Users,
   DollarSign, Database, Server, Book,
@@ -42,27 +42,21 @@ const TICK_STYLE  = { fill:'rgba(255,255,255,0.3)', fontSize:10 };
 const TIP_STYLE   = { background:'hsl(222,32%,9%)', border:'1px solid rgba(255,255,255,0.1)', borderRadius:8, fontSize:11 };
 
 export default function MonitoringPage() {
-  const [data, setData]         = useState<MonitoringData | null>(null);
-  const [health, setHealth]     = useState<HealthData | null>(null);
-  const [loading, setLoading]   = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [lastRefresh, setLastRefresh] = useState(new Date());
+  // #1328: TanStack Query replaces fetch + useEffect + useState. The 30s
+  // auto-refresh becomes refetchInterval; the manual button calls refetch().
+  const monitoringQuery = useApiQuery<MonitoringData>(
+    ['superadmin', 'monitoring'], '/api/superadmin/monitoring', { refetchInterval: 30_000 },
+  );
+  const healthQuery = useApiQuery<HealthData>(
+    ['superadmin', 'health'], '/api/health', { refetchInterval: 30_000 },
+  );
 
-  const load = async (abortSignal?: AbortSignal) => {
-    const [mon, hlt] = await Promise.all([
-      fetch('/api/superadmin/monitoring', { signal: abortSignal }).then(r => r.ok ? r.json() : {}),
-      fetch('/api/health', { signal: abortSignal }).then(r=>r.json()),
-    ]);
-    setData(mon); setHealth(hlt);
-    setLastRefresh(new Date()); setLoading(false); setRefreshing(false);
-  };
-
-  useEffect(() => {
-    const abort = new AbortController();
-    load(abort.signal);
-    const iv = setInterval(() => load(abort.signal), 30_000);
-    return () => { abort.abort(); clearInterval(iv); };
-  }, []);
+  const data: MonitoringData | null = monitoringQuery.data ?? null;
+  const health: HealthData | null = healthQuery.data ?? null;
+  const loading = monitoringQuery.isLoading || healthQuery.isLoading;
+  const refreshing = monitoringQuery.isFetching || healthQuery.isFetching;
+  const lastRefresh = new Date(Math.max(monitoringQuery.dataUpdatedAt, healthQuery.dataUpdatedAt) || Date.now());
+  const load = () => { monitoringQuery.refetch(); healthQuery.refetch(); };
 
   const s  = data?.stats ?? {};
   const hs = health ?? {};
@@ -121,7 +115,7 @@ export default function MonitoringPage() {
             {allUp?<CheckCircle className="w-3.5 h-3.5"/>:<AlertTriangle className="w-3.5 h-3.5"/>}
             {allUp?'All Systems Operational':'Issues Detected'}
           </div>
-          <button onClick={()=>{setRefreshing(true);load();}} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-white/10 text-xs text-white/40 hover:text-white transition-colors">
+          <button onClick={()=>load()} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-white/10 text-xs text-white/40 hover:text-white transition-colors">
             <RefreshCw className={cn('w-3.5 h-3.5',refreshing&&'animate-spin')}/>Refresh
           </button>
         </div>
