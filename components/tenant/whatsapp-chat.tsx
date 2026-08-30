@@ -35,8 +35,7 @@ export default function WhatsAppChat({ contactId, contactName, contactPhone }: P
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
   const [sendingTemplate, setSendingTemplate] = useState(false)
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [templates, setTemplates] = useState<any[]>([])
+  const [templates, setTemplates] = useState<{ id: string; name: string }[]>([])
   const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null)
   const [showTemplates, setShowTemplates] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -98,9 +97,8 @@ export default function WhatsAppChat({ contactId, contactName, contactPhone }: P
       setNewMessage('')
       toast.success('Message sent')
       loadMessages()
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (err: any) {
-      toast.error(err.message)
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed')
     } finally {
       setSending(false)
     }
@@ -125,9 +123,8 @@ export default function WhatsAppChat({ contactId, contactName, contactPhone }: P
       setSelectedTemplate(null)
       toast.success('Template sent')
       loadMessages()
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (err: any) {
-      toast.error(err.message)
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed')
     } finally {
       setSendingTemplate(false)
     }
