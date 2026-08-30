@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/errors-server';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { contacts, emailTemplates } from '@/drizzle/schema';
@@ -112,7 +113,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
       skipped_unsubscribed: skippedUnsubscribed,
     });
   } catch (err) {
-    console.error('[email bulk]', err);
+    void logError({ error: err, context: 'tenant/email/bulk' });
     return NextResponse.json({ error: 'Failed to queue emails' }, { status: 500 });
   }
 });

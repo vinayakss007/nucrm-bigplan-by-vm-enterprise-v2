@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/errors-server';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { syncCalendarEvents } from '@/lib/calendar-sync/service';
 import { readJsonBody } from '@/lib/api/validate';
@@ -35,7 +36,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
 
     return NextResponse.json({ ok: true, result });
   } catch (err: unknown) {
-    console.error('[calendar-sync POST]', err);
+    void logError({ error: err, context: 'tenant/calendar-sync/sync POST' });
     return NextResponse.json({ error: 'Sync failed' }, { status: 500 });
   }
 });
