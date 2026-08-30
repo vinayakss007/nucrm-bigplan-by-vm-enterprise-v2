@@ -170,11 +170,12 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       `);
     }, [{ size: '0 B' }]);
 
-    return NextResponse.json({ 
-      stats, 
-      tenantGrowth, 
-      planDist, 
-      recentErrors, 
+    // #1093: add the standard `data` key additively; keep legacy top-level keys.
+    const payload = {
+      stats,
+      tenantGrowth,
+      planDist,
+      recentErrors,
       latestHealth,
       backupStatus,
       restoreStatus,
@@ -182,7 +183,8 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       apiStats,
       activeTenants: activeTenants[0]?.count || 0,
       dbSize: dbSize[0]?.size || '0 B',
-    });
+    };
+    return NextResponse.json({ data: payload, ...payload });
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
