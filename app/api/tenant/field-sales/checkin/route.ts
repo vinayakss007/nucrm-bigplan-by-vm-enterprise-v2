@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
+import { logError } from '@/lib/errors-server';
 import { z } from 'zod';
 import {
   createCheckIn,
@@ -43,7 +44,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     return NextResponse.json({ data: checkIn }, { status: 201 });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[field-sales/checkin POST]', err);
+    await logError({ error: err, context: 'field-sales/checkin POST', requestMethod: 'POST' });
     return apiError(err);
   }
 });
@@ -86,7 +87,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[field-sales/checkin GET]', err);
+    await logError({ error: err, context: 'field-sales/checkin GET', requestMethod: 'GET' });
     return apiError(err);
   }
 });

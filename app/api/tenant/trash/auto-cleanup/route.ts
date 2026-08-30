@@ -10,6 +10,7 @@ import { db } from '@/drizzle/db';
 import { contacts, companies, deals, tasks, leads, platformSettings } from '@/drizzle/schema';
 import { eq, and, isNotNull, lt, sql } from 'drizzle-orm';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { logError } from '@/lib/errors-server';
 
 const TRASH_RETENTION_KEY = 'trash_retention_days';
 
@@ -113,7 +114,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[trash-auto-cleanup]', err);
+    await logError({ error: err, context: 'trash-auto-cleanup', requestMethod: 'POST' });
     return apiError(err);
   }
 });
@@ -168,7 +169,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[trash-cleanup-status]', err);
+    await logError({ error: err, context: 'trash-cleanup-status', requestMethod: 'GET' });
     return apiError(err);
   }
 });

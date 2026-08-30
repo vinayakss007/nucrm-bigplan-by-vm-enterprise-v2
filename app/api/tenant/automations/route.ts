@@ -14,6 +14,7 @@ import { automations, automationRuns, users } from '@/drizzle/schema';
 import { eq, and, sql, desc, isNull } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { logError } from '@/lib/errors-server';
 
 export const GET = withApiRoute(async (req: NextRequest) => {
   try {
@@ -61,7 +62,7 @@ export const GET = withApiRoute(async (req: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[automations GET]', err);
+    await logError({ error: err, context: 'automations GET', requestMethod: 'GET' });
     return apiError(err);
   }
 });
@@ -109,7 +110,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[automations POST]', err);
+    await logError({ error: err, context: 'automations POST', requestMethod: 'POST' });
     return apiError(err);
   }
 });

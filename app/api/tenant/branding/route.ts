@@ -14,6 +14,7 @@ import { z } from 'zod';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { concurrencyGuard } from '@/lib/api/concurrency';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { logError } from '@/lib/errors-server';
 
 const brandingUpdateSchema = z.object({
   logoUrl: z.string().trim().max(500).nullable().optional(),
@@ -37,7 +38,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     return NextResponse.json({ data: branding });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Internal server error';
-    console.error('[Branding] GET error:', error);
+    await logError({ error, context: 'Branding GET', requestMethod: 'GET' });
     return NextResponse.json({ error: message }, { status: 500 });
   }
 });
@@ -134,7 +135,7 @@ export const PUT = withApiRoute(async (request: NextRequest) => {
       if (error.message === 'CONFLICT') return NextResponse.json({ error: 'Conflicts with another update' }, { status: 409 });
     }
     const message = error instanceof Error ? error.message : 'Internal server error';
-    console.error('[Branding] PUT error:', error);
+    await logError({ error, context: 'Branding PUT', requestMethod: 'PUT' });
     return NextResponse.json({ error: message }, { status: 500 });
   }
 });
