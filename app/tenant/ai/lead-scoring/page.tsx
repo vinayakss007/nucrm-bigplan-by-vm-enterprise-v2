@@ -8,7 +8,8 @@ import { useEffect, useState } from 'react';
 import {
   Target, RefreshCw, Sparkles, AlertCircle, Loader2, TrendingUp,
   History, Play, TrendingDown, Minus,
-  Building2, Mail, ExternalLink, Wand2
+  Building2, Mail, ExternalLink, Wand2,
+  type LucideIcon,
 } from 'lucide-react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
@@ -171,8 +172,7 @@ export default function AILeadScoringPage() {
   );
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function StatCard({ icon: Icon, label, value, sub }: { icon: any, label: string, value: string | number, sub: string }) {
+function StatCard({ icon: Icon, label, value, sub }: { icon: LucideIcon, label: string, value: string | number, sub: string }) {
   return (
     <div className="rounded-xl border border-border bg-card p-4">
       <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">

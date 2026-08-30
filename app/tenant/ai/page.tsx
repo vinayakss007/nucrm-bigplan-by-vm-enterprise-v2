@@ -9,6 +9,7 @@ import Link from 'next/link';
 import {
   Sparkles, BrainCircuit, FileEdit, Target, AlertTriangle, Activity,
   ArrowRight, Loader2, MessageSquare, CheckCircle2, AlertCircle, Lock,
+  type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { AI_CAPABILITIES, AI_PROVIDER_PRESETS, getProviderLabel } from '@/components/tenant/ai/ai-config';
@@ -214,8 +215,7 @@ export default function AIHubPage() {
   );
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function Stat({ icon: Icon, label, value, sub, accent }: { icon: any; label: string; value: number | string; sub?: string; accent?: 'amber' }) {
+function Stat({ icon: Icon, label, value, sub, accent }: { icon: LucideIcon; label: string; value: number | string; sub?: string; accent?: 'amber' }) {
   return (
     <div className={cn(
       'rounded-xl border-2 p-3 shadow-sm hover:shadow-md transition-shadow',
@@ -231,8 +231,7 @@ function Stat({ icon: Icon, label, value, sub, accent }: { icon: any; label: str
 }
 
 function ActionCard({ href, icon: Icon, title, desc, tone }: {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  href: string; icon: any; title: string; desc: string; tone: 'violet' | 'blue' | 'amber' | 'emerald';
+  href: string; icon: LucideIcon; title: string; desc: string; tone: 'violet' | 'blue' | 'amber' | 'emerald';
 }) {
   const tones = {
     violet:  { ring: 'hover:border-violet-400 dark:hover:border-violet-600',   bg: 'bg-violet-100/60 dark:bg-violet-950/30',  ic: 'text-violet-600 dark:text-violet-400' },
