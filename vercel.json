@@ -53,6 +53,10 @@
       "schedule": "0 7 * * *"
     },
     {
+      "path": "/api/cron/recurring-invoice-generator",
+      "schedule": "0 6 * * *"
+    },
+    {
       "path": "/api/cron/scheduled-report-delivery",
       "schedule": "0 8 * * *"
     },
