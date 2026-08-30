@@ -5,7 +5,7 @@
  */
 'use client';
 import { useEffect, useMemo, useState } from 'react';
-import { Tag, Search, Pencil, GitMerge, Trash2, RefreshCw, Loader2, ShieldX, X, AlertCircle, Check } from 'lucide-react';
+import { Tag, Search, Pencil, GitMerge, Trash2, RefreshCw, Loader2, ShieldX, X, AlertCircle, Check, type LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import { confirmThen } from '@/components/ui/confirm-dialog';
@@ -348,8 +348,7 @@ export default function TagsManagerPage() {
 const inp = 'w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500';
 
 function Modal({ title, onClose, icon: Icon, variant, children }: {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  title: string; onClose: () => void; icon: any; variant?: 'danger'; children: React.ReactNode;
+  title: string; onClose: () => void; icon: LucideIcon; variant?: 'danger'; children: React.ReactNode;
 }) {
   return (
     <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 animate-in fade-in" onClick={onClose}>
