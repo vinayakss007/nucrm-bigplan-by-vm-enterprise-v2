@@ -5,6 +5,8 @@
  */
 'use client';
 import { useState, useEffect, useMemo, Suspense } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Plus, Search, Eye, Download, FileText, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -35,13 +37,14 @@ const statusColors: Record<string, string> = {
   cancelled: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300',
 };
 
+const INVOICES_QUERY = ['tenant', 'invoices'] as const;
+const INVOICE_CONTACTS_QUERY = ['tenant', 'contacts', 'for-invoices'] as const;
+
 function InvoicesPageInner() {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const initialContactId = searchParams.get('contactId') || '';
-  const [invoices, setInvoices] = useState<Invoice[]>([]);
-  const [contacts, setContacts] = useState<Contact[]>([]);
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [contactFilter, setContactFilter] = useState(initialContactId);
@@ -62,56 +65,42 @@ function InvoicesPageInner() {
     taxRate: '0',
   });
 
-  useEffect(() => {
-    const controller = new AbortController();
-    fetchInvoices(controller.signal);
-    fetchContacts(controller.signal);
-    return () => controller.abort();
-  }, []);
+  // #1328: reads via TanStack Query (were raw fetch + useEffect).
+  const { data: invoicesData, isLoading: loading, error: invoicesError } = useApiQuery<{ data?: Invoice[] }>(
+    INVOICES_QUERY,
+    '/api/tenant/invoices',
+  );
+  const invoices: Invoice[] = useMemo(() => invoicesData?.data ?? [], [invoicesData]);
+  useEffect(() => { if (invoicesError) toast.error('Failed to load invoices'); }, [invoicesError]);
 
-  const fetchContacts = async (signal?: AbortSignal) => {
-    try {
-      const res = await fetch('/api/tenant/contacts', { signal });
-      const data = await res.json();
-      if (signal?.aborted) return;
-      setContacts(data.contacts || []);
-    } catch (e) {
-      if ((e as Error)?.name === 'AbortError') return;
-      toast.error('Failed to load contacts');
-    }
-  };
+  const { data: contactsData, error: contactsError } = useApiQuery<{ contacts?: Contact[] }>(
+    INVOICE_CONTACTS_QUERY,
+    '/api/tenant/contacts',
+  );
+  const contacts: Contact[] = useMemo(() => contactsData?.contacts ?? [], [contactsData]);
+  useEffect(() => { if (contactsError) toast.error('Failed to load contacts'); }, [contactsError]);
 
-  const fetchInvoices = async (signal?: AbortSignal) => {
-    try {
-      const res = await fetch('/api/tenant/invoices', { signal });
-      const data = await res.json();
-      if (signal?.aborted) return;
-      setInvoices(data.data || []);
-    } catch (e) {
-      if ((e as Error)?.name === 'AbortError') return;
-      toast.error('Failed to load invoices');
-    } finally {
-      if (signal?.aborted) return;
-      setLoading(false);
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
+  const createInvoice = useMutation({
+    mutationFn: async () => {
       const res = await fetch('/api/tenant/invoices', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),
       });
       if (!res.ok) throw new Error('Failed to create invoice');
+    },
+    onSuccess: () => {
       toast.success('Invoice created successfully');
       setShowModal(false);
       setForm({ title: '', contactId: '', issueDate: new Date().toISOString().split('T')[0], dueDate: '', notes: '', items: [{ description: '', quantity: '1', unitPrice: '0' }], discountType: 'percentage', discountValue: '0', taxRate: '0' });
-      fetchInvoices();
-    } catch {
-      toast.error('Failed to create invoice');
-    }
+      queryClient.invalidateQueries({ queryKey: INVOICES_QUERY });
+    },
+    onError: () => toast.error('Failed to create invoice'),
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    createInvoice.mutate();
   };
 
   const addItem = () => setForm({ ...form, items: [...form.items, { description: '', quantity: '1', unitPrice: '0' } as { description: string; quantity: string; unitPrice: string }] });
