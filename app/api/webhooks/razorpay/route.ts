@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/errors-server';
 import {
   isRazorpayConfigured,
   verifyWebhookSignature,
@@ -50,7 +51,7 @@ export async function POST(request: NextRequest) {
     await verifyWebhookSignature(body, signature);
     event = JSON.parse(body);
   } catch (err) {
-    console.error('[Razorpay Webhook] Verification failed:', err);
+    void logError({ error: err, context: 'webhooks/razorpay signature verification', level: 'warning' });
     if (err instanceof RazorpaySignatureError) {
       return NextResponse.json({ error: 'Invalid signature' }, { status: 400 });
     }
@@ -110,7 +111,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ received: true });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error(`[Razorpay Webhook] Error processing ${eventType}:`, err.message);
+    void logError({ error: err, context: 'webhooks/razorpay event processing', metadata: { eventType } });
     // Return 200 to prevent Razorpay from retrying (we logged the error)
     return NextResponse.json({ received: true });
   }
