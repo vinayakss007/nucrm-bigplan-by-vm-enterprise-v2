@@ -138,7 +138,8 @@ export default function SuperAdminUsersPage() {
     const d = await res.json();
     const m = await meRes.json();
     setUsers(d.data||[]);
-    setMe(m);
+    // #1093 — read the standardized `data` envelope (falls back to the flat body).
+    setMe(m.data ?? m);
     setLoading(false);
   }, [search]);
   useEffect(() => {
