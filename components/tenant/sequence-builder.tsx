@@ -56,7 +56,7 @@ const STEP_TYPES = [
   { value: 'wait', label: 'Wait', icon: Clock, color: 'text-amber-600' },
   { value: 'call', label: 'Call', icon: Phone, color: 'text-green-600' },
   { value: 'ab_test', label: 'A/B Test', icon: Split, color: 'text-rose-600' },
-]
+] as const
 
 export function SequenceBuilder({ sequence, onSave, onCancel }: SequenceBuilderProps) {
   const [name, setName] = useState(sequence?.name || '')
@@ -136,9 +136,8 @@ export function SequenceBuilder({ sequence, onSave, onCancel }: SequenceBuilderP
         ),
       })
       toast.success('Sequence saved!')
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to save sequence')
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : 'Failed to save sequence')
     }
     setSaving(false)
   }
@@ -217,8 +216,7 @@ export function SequenceBuilder({ sequence, onSave, onCancel }: SequenceBuilderP
                 key={value}
                 variant="outline"
                 size="sm"
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-                onClick={() => addStep(value as any)}
+                onClick={() => addStep(value)}
                 className="text-xs"
               >
                 <Icon className={cn('w-3.5 h-3.5 mr-1.5', color)} />
@@ -243,8 +241,7 @@ export function SequenceBuilder({ sequence, onSave, onCancel }: SequenceBuilderP
                   key={value}
                   variant="outline"
                   size="sm"
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-                  onClick={() => addStep(value as any)}
+                  onClick={() => addStep(value)}
                   className="text-xs"
                 >
                   <Icon className={cn('w-3.5 h-3.5 mr-1.5', color)} />

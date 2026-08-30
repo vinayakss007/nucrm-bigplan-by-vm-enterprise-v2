@@ -22,16 +22,21 @@ Alice,Chen,alice@initech.com,,Initech,qualified,cold_outreach,San Francisco,USA,
 
 type Step = 'upload' | 'preview' | 'result';
 
+interface ImportResult {
+  imported: number;
+  updated: number;
+  skipped: number;
+  errors: string[];
+}
+
 export default function ImportModal({ onDone, onClose }: Props) {
   const [step, setStep] = useState<Step>('upload');
   const [csvText, setCsvText] = useState('');
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [preview, setPreview] = useState<any[]>([]);
+  const [preview, setPreview] = useState<Record<string, string>[]>([]);
   const [headers, setHeaders] = useState<string[]>([]);
   const [opts, setOpts] = useState({ skipDuplicates: true, updateExisting: false });
   const [importing, setImporting] = useState(false);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [result, setResult] = useState<any>(null);
+  const [result, setResult] = useState<ImportResult | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -91,9 +96,8 @@ export default function ImportModal({ onDone, onClose }: Props) {
       if (!res.ok) { toast.error(data.error || 'Import failed'); setImporting(false); return; }
       setResult(data.results);
       setStep('result');
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (err: any) {
-      toast.error(err.message);
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Import failed');
     }
     setImporting(false);
   };
