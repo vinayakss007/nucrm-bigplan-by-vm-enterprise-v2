@@ -12,6 +12,8 @@ import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { SequenceBuilder, type Sequence } from './sequence-builder'
+import { AppErrorBoundary } from '@/components/shared/error-boundary'
+import { AlertTriangle } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 interface SequenceListItem {
@@ -120,22 +122,42 @@ export default function SequencesClient({ sequences, permissions, _tenantId, _us
   }
 
   if (showBuilder || editingSequence) {
+    const closeBuilder = () => {
+      setShowBuilder(false)
+      setEditingSequence(null)
+    }
+    // #1075: isolate the complex sequence builder (DnD, dynamic steps). If it
+    // throws, degrade to an in-place message with a way back to the list
+    // instead of letting the crash bubble up to the route error.tsx and blank
+    // the whole sequences page.
     return (
-      <SequenceBuilder
-        sequence={editingSequence ? {
-          id: editingSequence.id,
-          name: editingSequence.name,
-          description: editingSequence.description ?? '',
-          status: (editingSequence.status as Sequence['status']),
-          total_steps: editingSequence.total_steps ?? 0,
-          total_duration_days: editingSequence.total_duration_days ?? 0,
-        } : undefined}
-        onSave={handleSaveSequence}
-        onCancel={() => {
-          setShowBuilder(false)
-          setEditingSequence(null)
-        }}
-      />
+      <AppErrorBoundary
+        fallback={
+          <div className="flex flex-col items-center justify-center min-h-[400px] p-8 text-center">
+            <div className="w-14 h-14 rounded-full bg-red-100 dark:bg-red-900/20 flex items-center justify-center mb-4">
+              <AlertTriangle className="w-7 h-7 text-red-600" />
+            </div>
+            <h2 className="text-lg font-bold mb-1">The sequence builder hit a problem</h2>
+            <p className="text-sm text-muted-foreground max-w-sm mb-4">
+              Your other sequences are unaffected. Go back to the list and try again.
+            </p>
+            <Button onClick={closeBuilder}>Back to sequences</Button>
+          </div>
+        }
+      >
+        <SequenceBuilder
+          sequence={editingSequence ? {
+            id: editingSequence.id,
+            name: editingSequence.name,
+            description: editingSequence.description ?? '',
+            status: (editingSequence.status as Sequence['status']),
+            total_steps: editingSequence.total_steps ?? 0,
+            total_duration_days: editingSequence.total_duration_days ?? 0,
+          } : undefined}
+          onSave={handleSaveSequence}
+          onCancel={closeBuilder}
+        />
+      </AppErrorBoundary>
     )
   }
 
