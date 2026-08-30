@@ -31,7 +31,7 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
   const ctx = await requireTenantCtx();
   const { id: contactId } = await params;
 
-  const [contactResult, activities, deals, tasks, _notes, companies, teamMembers, billingData, callLogsList] = await Promise.all([
+  const [contactResult, activities, deals, tasks, companies, teamMembers, billingData, callLogsList] = await Promise.all([
     db.select({
       contact: contactsTable,
       company_name: companiesTable.name,
@@ -101,25 +101,6 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
       sql`${tasksTable.deletedAt} IS NULL`
     ))
     .orderBy(tasksTable.completed, tasksTable.dueDate),
-
-    db.select({
-      id: activitiesTable.id,
-      entityType: activitiesTable.entityType,
-      entityId: activitiesTable.entityId,
-      eventType: activitiesTable.eventType,
-      metadata: activitiesTable.metadata,
-      createdAt: activitiesTable.createdAt,
-      author_name: usersTable.fullName
-    })
-    .from(activitiesTable)
-    .leftJoin(usersTable, eq(usersTable.id, activitiesTable.userId))
-    .where(and(
-      eq(activitiesTable.contactId, contactId),
-      eq(activitiesTable.tenantId, ctx.tenantId),
-      eq(activitiesTable.eventType, 'note') // The old code used n.type = 'note'
-    ))
-    .orderBy(desc(activitiesTable.createdAt))
-    .limit(50),
 
     db.select({
       id: companiesTable.id,
