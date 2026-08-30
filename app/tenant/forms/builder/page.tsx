@@ -39,11 +39,20 @@ export default function FormBuilderPage() {
   );
 }
 
+interface FormField {
+  id: string;
+  key: string;
+  label: string;
+  type: string;
+  required: boolean;
+  placeholder?: string;
+  options?: string[];
+}
+
 function FormBuilderInner() {
   const router = useRouter();
   const [name, setName] = useState('New Lead Form');
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [fields, setFields] = useState<any[]>([
+  const [fields, setFields] = useState<FormField[]>([
     { id: '1', key: 'first_name', label: 'First Name', type: 'text', required: true, placeholder: 'John' },
     { id: '2', key: 'last_name', label: 'Last Name', type: 'text', required: true, placeholder: 'Doe' },
     { id: '3', key: 'email', label: 'Email', type: 'email', required: true, placeholder: 'john@example.com' },
@@ -57,8 +66,7 @@ function FormBuilderInner() {
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState<'fields' | 'settings' | 'preview'>('fields');
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const addField = (template: any) => {
+  const addField = (template: { type: string; label: string }) => {
     const id = crypto.randomUUID();
     const newField = {
       id,
@@ -76,8 +84,7 @@ function FormBuilderInner() {
     setFields(fields.filter(f => f.id !== id));
   };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const updateField = (id: string, updates: any) => {
+  const updateField = (id: string, updates: Partial<FormField>) => {
     setFields(fields.map(f => f.id === id ? { ...f, ...updates } : f));
   };
 
@@ -241,7 +248,7 @@ function FormBuilderInner() {
               ))}
               
               <button 
-                onClick={() => addField(FIELD_TEMPLATES[0])}
+                onClick={() => { if (FIELD_TEMPLATES[0]) addField(FIELD_TEMPLATES[0]); }}
                 className="w-full py-4 border-2 border-dashed border-border rounded-2xl flex items-center justify-center gap-2 text-muted-foreground hover:border-violet-500 hover:text-violet-600 hover:bg-violet-50/50 transition-all"
               >
                 <Plus className="w-5 h-5" />

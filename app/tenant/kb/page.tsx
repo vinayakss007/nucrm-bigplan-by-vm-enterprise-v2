@@ -11,11 +11,25 @@ import { cn, formatDate } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import { ListSkeleton } from '@/components/shared/page-skeleton';
 
+interface KBArticle {
+  id: string;
+  title: string;
+  excerpt?: string | null;
+  categoryId?: string | null;
+  categoryName?: string | null;
+  createdAt: string;
+  views?: number | null;
+  helpful?: number | null;
+}
+
+interface KBCategory {
+  id: string;
+  name: string;
+}
+
 export default function KBPage() {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [articles, setArticles] = useState<any[]>([]);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [categories, setCategories] = useState<any[]>([]);
+  const [articles, setArticles] = useState<KBArticle[]>([]);
+  const [categories, setCategories] = useState<KBCategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState('all');
@@ -118,7 +132,7 @@ export default function KBPage() {
                 <div className="flex items-center gap-3 mt-2 text-[10px] text-muted-foreground">
                   <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{formatDate(a.createdAt)}</span>
                   <span className="flex items-center gap-1"><Eye className="w-3 h-3" />{a.views || 0}</span>
-                  {a.helpful > 0 && <span className="flex items-center gap-1"><ThumbsUp className="w-3 h-3" />{a.helpful}%</span>}
+                  {(a.helpful ?? 0) > 0 && <span className="flex items-center gap-1"><ThumbsUp className="w-3 h-3" />{a.helpful}%</span>}
                 </div>
               </div>
               <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-violet-600 transition-colors shrink-0 mt-1" />
@@ -133,8 +147,7 @@ export default function KBPage() {
   );
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function CreateArticleModal({ categories, onClose, onCreated }: { categories: any[]; onClose: () => void; onCreated: () => void }) {
+function CreateArticleModal({ categories, onClose, onCreated }: { categories: KBCategory[]; onClose: () => void; onCreated: () => void }) {
   const [form, setForm] = useState({ title: '', content: '', excerpt: '', category_id: '', status: 'draft' });
   const [saving, setSaving] = useState(false);
 

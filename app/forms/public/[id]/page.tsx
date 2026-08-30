@@ -10,8 +10,7 @@ import { eq, and } from 'drizzle-orm';
 import { notFound } from 'next/navigation';
 import PublicFormClient from './public-form-client';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export default async function PublicFormPage({ params }: any) {
+export default async function PublicFormPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
   // Fetch form with basic tenant branding

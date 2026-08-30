@@ -9,12 +9,18 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { CheckCircle, AlertTriangle, Loader2, Mail } from 'lucide-react';
 import toast from 'react-hot-toast';
 
+interface Invitation {
+  email: string;
+  tenant_name?: string;
+  primary_color?: string;
+  role_slug?: string;
+}
+
 function AcceptInviteContent() {
   const params = useSearchParams();
   const token = params.get('token');
   const router = useRouter();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [invitation, setInvitation] = useState<any>(null);
+  const [invitation, setInvitation] = useState<Invitation | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [accepting, setAccepting] = useState(false);
@@ -43,6 +49,7 @@ function AcceptInviteContent() {
 
   const accept = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!invitation) return;
     setAccepting(true);
 
     // If not logged in, create account first
