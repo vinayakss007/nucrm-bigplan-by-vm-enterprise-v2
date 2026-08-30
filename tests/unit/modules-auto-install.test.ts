@@ -50,6 +50,12 @@ vi.mock('@/lib/modules/industry-templates', () => ({
   },
 }));
 
+// auto-install now logs failures via the structured logger (not console.error).
+const mockLoggerError = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/logger', () => ({
+  logger: { error: mockLoggerError, warn: vi.fn(), info: vi.fn(), debug: vi.fn() },
+}));
+
 describe('auto-install', () => {
   beforeEach(async () => {
     vi.resetModules();
@@ -272,7 +278,7 @@ describe('auto-install', () => {
       }));
 
       await expect(installTemplateModules('tenant-1', 'real_estate')).resolves.toBeUndefined();
-      expect(console.error).toHaveBeenCalledWith('[auto-install] Failed to install template modules:', error);
+      expect(mockLoggerError).toHaveBeenCalledWith('[auto-install] Failed to install template modules', { error: error.message });
     });
 
     it('installs saas template modules (including analytics-pro that gets skipped)', async () => {
@@ -446,7 +452,7 @@ describe('auto-install', () => {
       }));
 
       await expect(installDefaultModules('tenant-1', 'free')).resolves.toBeUndefined();
-      expect(console.error).toHaveBeenCalledWith('[auto-install] Failed to install default modules:', error);
+      expect(mockLoggerError).toHaveBeenCalledWith('[auto-install] Failed to install default modules', { error: error.message });
     });
   });
 });

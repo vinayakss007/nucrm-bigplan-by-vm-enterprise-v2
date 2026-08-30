@@ -24,6 +24,7 @@
 import { db } from '@/drizzle/db';
 import { leads } from '@/drizzle/schema';
 import { eq, and, sql } from 'drizzle-orm';
+import { logError } from '@/lib/errors-server';
 
 export type ScoreEvent =
   | 'email_opened'
@@ -74,7 +75,7 @@ export async function adjustLeadScore(
       })
       .where(and(eq(leads.id, leadId), eq(leads.tenantId, tenantId)));
   } catch (err) {
-    console.error('[lead-scoring] Failed to adjust score:', err);
+    await logError({ error: err, context: 'lead-scoring failed to adjust score', tenantId, metadata: { leadId } });
   }
 }
 
@@ -112,7 +113,7 @@ export async function recalculateLeadScore(
       .set({ score, updatedAt: new Date() })
       .where(and(eq(leads.id, leadId), eq(leads.tenantId, tenantId)));
   } catch (err) {
-    console.error('[lead-scoring] Recalculate failed:', err);
+    await logError({ error: err, context: 'lead-scoring recalculate failed', tenantId, metadata: { leadId } });
   }
 
   return score;
