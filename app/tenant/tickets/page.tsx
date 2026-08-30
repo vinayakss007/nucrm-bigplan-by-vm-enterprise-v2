@@ -16,6 +16,7 @@ import toast from 'react-hot-toast';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import Pagination from '@/components/tenant/pagination';
+import { ListSkeleton } from '@/components/shared/page-skeleton';
 import { BulkActionBar } from '@/components/ui/bulk-action-bar';
 import { PromptDialog } from '@/components/ui/prompt-dialog';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
@@ -215,9 +216,8 @@ export default function TicketsPage() {
       {/* Tickets List */}
       <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm">
         {loading ? (
-          <div className="p-12 text-center">
-            <div className="w-8 h-8 border-4 border-violet-600 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-            <p className="text-muted-foreground">Loading tickets...</p>
+          <div className="p-4">
+            <ListSkeleton />
           </div>
         ) : filtered.length === 0 ? (
           <div className="p-16 text-center">
