@@ -13,6 +13,7 @@
  * tenant and system keys when resolving which key to use for AI calls.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/errors-server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { apiError } from '@/lib/api-error';
 import { logAudit } from '@/lib/audit';
@@ -86,7 +87,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
 
     return NextResponse.json({ ok: true, provider, keyPrefix: result.keyPrefix });
   } catch (err) {
-    console.error('[ai-keys POST]', err);
+    void logError({ error: err, context: 'tenant/ai-keys POST' });
     return apiError(err);
   }
 });

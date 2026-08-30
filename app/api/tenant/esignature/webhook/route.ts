@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/errors-server';
 import { handleSigningWebhook, getProviderAdapter } from '@/lib/esignature';
 import type { SigningProvider, SigningEventType } from '@/lib/esignature';
 import { checkPublicRateLimit } from '@/lib/rate-limit-simple';
@@ -86,7 +87,7 @@ export async function POST(req: NextRequest) {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[esignature-webhook] Error:', err);
+    void logError({ error: err, context: 'tenant/esignature/webhook' });
     return NextResponse.json(
       { error: 'Webhook processing failed' },
       { status: 500 }
