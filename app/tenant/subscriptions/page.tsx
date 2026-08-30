@@ -4,7 +4,9 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import { Plus, Search, RefreshCw, X, Calendar, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
@@ -29,9 +31,10 @@ const statusColors: Record<string, string> = {
   past_due: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
 };
 
+const SUBSCRIPTIONS_QUERY = ['tenant', 'subscriptions'] as const;
+
 export default function SubscriptionsPage() {
-  const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({
@@ -40,29 +43,32 @@ export default function SubscriptionsPage() {
     autoRenew: true, paymentMethod: '', last4: '',
   });
 
-  useEffect(() => {
-    const controller = new AbortController();
-    fetchSubscriptions(controller.signal);
-    return () => controller.abort();
-  }, []);
+  // #1328: list via TanStack Query (was raw fetch + useEffect).
+  const { data, isLoading: loading, error } = useApiQuery<{ data?: Subscription[] }>(
+    SUBSCRIPTIONS_QUERY,
+    '/api/tenant/subscriptions',
+  );
+  const subscriptions: Subscription[] = data?.data ?? [];
+  if (error) toast.error('Failed to load subscriptions');
 
-  const fetchSubscriptions = async (signal?: AbortSignal) => {
-    try {
-      const res = await fetch('/api/tenant/subscriptions', { signal });
-      const data = await res.json();
-      if (signal?.aborted) return;
-      setSubscriptions(data.data || []);
-    } catch (e) {
-      if ((e as Error)?.name === 'AbortError') return;
-      toast.error('Failed to load subscriptions');
-    }
-    finally {
-      if (signal?.aborted) return;
-      setLoading(false);
-    }
-  };
+  const createSubscription = useMutation({
+    mutationFn: async () => {
+      const res = await fetch('/api/tenant/subscriptions', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      });
+      if (!res.ok) throw new Error('Failed');
+    },
+    onSuccess: () => {
+      toast.success('Subscription created');
+      setShowModal(false);
+      setForm({ name: '', planName: '', startDate: new Date().toISOString().split('T')[0], currentPeriodEnd: '', amount: '', billingFrequency: 'monthly', autoRenew: true, paymentMethod: '', last4: '' });
+      queryClient.invalidateQueries({ queryKey: SUBSCRIPTIONS_QUERY });
+    },
+    onError: () => toast.error('Failed to create subscription'),
+  });
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     // #1342: reject non-positive / non-numeric amounts before hitting the API.
     const amountNum = Number(form.amount);
@@ -70,17 +76,7 @@ export default function SubscriptionsPage() {
       toast.error('Amount must be a positive number');
       return;
     }
-    try {
-      const res = await fetch('/api/tenant/subscriptions', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
-      });
-      if (!res.ok) throw new Error('Failed');
-      toast.success('Subscription created');
-      setShowModal(false);
-      setForm({ name: '', planName: '', startDate: new Date().toISOString().split('T')[0], currentPeriodEnd: '', amount: '', billingFrequency: 'monthly', autoRenew: true, paymentMethod: '', last4: '' });
-      fetchSubscriptions();
-    } catch { toast.error('Failed to create subscription'); }
+    createSubscription.mutate();
   };
 
   const filtered = subscriptions.filter(s => s.name.toLowerCase().includes(search.toLowerCase()));

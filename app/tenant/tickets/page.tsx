@@ -4,7 +4,9 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import {
   LifeBuoy, Plus, Search,
   Clock, CheckCircle2, AlertCircle,
@@ -34,47 +36,39 @@ interface Ticket {
   assigned_name: string | null;
 }
 
+const limit = 50;
+
 export default function TicketsPage() {
   const router = useRouter();
-  const [tickets, setTickets] = useState<Ticket[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
   const [showCreate, setShowCreate] = useState(false);
-  const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showPriorityDialog, setShowPriorityDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const limit = 50;
 
-  const loadTickets = useCallback(async (signal?: AbortSignal) => {
-    try {
-      setLoading(true);
-      const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
-      if (filter !== 'all') params.set('status', filter);
-      if (search) params.set('q', search);
-      const res = await fetch(`/api/tenant/tickets?${params}`, { signal });
-      const d = await res.json();
-      if (signal?.aborted) return;
-      if (res.ok) { setTickets(d.data || []); setTotal(d.total ?? 0); }
-      else if (res.status === 403) {
-        setTickets([]);
-      }
-    } catch (e) {
-      if ((e as Error)?.name === 'AbortError') return;
-      toast.error('Failed to load tickets');
-    } finally {
-      if (signal?.aborted) return;
-      setLoading(false);
-    }
-  }, [offset, filter, search]);
+  // #1328: list via TanStack Query (was raw fetch + useEffect + AbortController).
+  // filter/search/offset are part of the key so each view caches independently.
+  const ticketsParams = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+  if (filter !== 'all') ticketsParams.set('status', filter);
+  if (search) ticketsParams.set('q', search);
+  const TICKETS_QUERY = ['tenant', 'tickets', { filter, search, offset }] as const;
+  const { data: ticketsResp, isLoading: loading, error: ticketsError } = useApiQuery<{ data?: Ticket[]; total?: number }>(
+    TICKETS_QUERY,
+    `/api/tenant/tickets?${ticketsParams}`,
+  );
+  const tickets: Ticket[] = useMemo(() => ticketsResp?.data ?? [], [ticketsResp]);
+  const total = ticketsResp?.total ?? 0;
+  useEffect(() => { if (ticketsError) toast.error('Failed to load tickets'); }, [ticketsError]);
 
-  useEffect(() => {
-    const controller = new AbortController();
-    loadTickets(controller.signal);
-    return () => controller.abort();
-  }, [loadTickets]);
+  // Invalidate every tickets view (any filter/search/offset) after a mutation.
+  const loadTickets = useCallback(
+    () => queryClient.invalidateQueries({ queryKey: ['tenant', 'tickets'] }),
+    [queryClient],
+  );
+
   useEffect(() => { setSelectedIds(new Set()); }, [filter, search]);
 
   const toggleOne = useCallback((id: string) => {
@@ -95,10 +89,9 @@ export default function TicketsPage() {
 
   const allOnPageSelected = tickets.length > 0 && tickets.every(t => selectedIds.has(t.id));
 
-  const bulkAction = useCallback(async (action: string, payload?: Record<string, unknown>) => {
-    const ids = Array.from(selectedIds);
-    if (!ids.length) return;
-    try {
+  const bulkActionMutation = useMutation({
+    mutationFn: async ({ action, payload }: { action: string; payload?: Record<string, unknown> }) => {
+      const ids = Array.from(selectedIds);
       const res = await fetch('/api/tenant/tickets/bulk', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -106,13 +99,20 @@ export default function TicketsPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Bulk action failed');
-      toast.success(`${data.affected || ids.length} ticket(s) updated`);
+      return { affected: data.affected as number | undefined, count: ids.length };
+    },
+    onSuccess: ({ affected, count }) => {
+      toast.success(`${affected || count} ticket(s) updated`);
       setSelectedIds(new Set());
       loadTickets();
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Bulk action failed');
-    }
-  }, [selectedIds, loadTickets]);
+    },
+    onError: (err: Error) => toast.error(err.message || 'Bulk action failed'),
+  });
+
+  const bulkAction = useCallback((action: string, payload?: Record<string, unknown>) => {
+    if (!selectedIds.size) return;
+    bulkActionMutation.mutate({ action, payload });
+  }, [selectedIds, bulkActionMutation]);
 
   const filtered = tickets;
 

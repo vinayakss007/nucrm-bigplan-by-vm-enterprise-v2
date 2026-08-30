@@ -4,7 +4,8 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useEffect, useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
+import { useApiQuery } from '@/lib/query/client';
 import Link from 'next/link';
 import {
   FileText, Send, Eye, CheckCircle2, XCircle, Clock, AlertCircle, Search,
@@ -63,12 +64,9 @@ function fmtRelative(iso: string | null): string {
 }
 
 export default function OffersListPage() {
-  const [data, setData] = useState<Resp | null>(null);
-  const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState('');
   const [search, setSearch] = useState('');
-  const [error, setError] = useState<string | null>(null);
 
   const qs = useMemo(() => {
     const p = new URLSearchParams();
@@ -78,27 +76,15 @@ export default function OffersListPage() {
     return p.toString();
   }, [page, statusFilter]);
 
-  function load(signal?: AbortSignal) {
-    setLoading(true);
-    setError(null);
-    fetch(`/api/tenant/offers?${qs}`, { cache: 'no-store', signal })
-      .then(async r => {
-        if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? `HTTP ${r.status}`);
-        return r.json();
-      })
-      .then(d => { if (signal?.aborted) return; setData(d); })
-      .catch(e => {
-        if ((e as Error)?.name === 'AbortError') return;
-        setError(e.message || 'Failed to load');
-      })
-      .finally(() => { if (signal?.aborted) return; setLoading(false); });
-  }
-  useEffect(() => {
-    const controller = new AbortController();
-    load(controller.signal);
-    return () => controller.abort();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [qs]);
+  // #1328: list via TanStack Query (was raw fetch + useEffect). page/status are
+  // part of the key so paging/filtering refetch and cache per view. The Refresh
+  // button reuses the query's refetch().
+  const { data, isLoading: loading, error: queryError, refetch, isFetching } = useApiQuery<Resp>(
+    ['tenant', 'offers', qs],
+    `/api/tenant/offers?${qs}`,
+  );
+  const error = queryError ? (queryError.message || 'Failed to load') : null;
+  const load = () => refetch();
 
   const filteredOffers = useMemo(() => {
     if (!data) return [];
@@ -132,7 +118,7 @@ export default function OffersListPage() {
           onClick={() => load()}
           className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border bg-card hover:bg-accent text-sm transition-colors"
         >
-          <RefreshCw className={cn('w-3.5 h-3.5', loading && 'animate-spin')} />
+          <RefreshCw className={cn('w-3.5 h-3.5', isFetching && 'animate-spin')} />
           Refresh
         </button>
         <Link

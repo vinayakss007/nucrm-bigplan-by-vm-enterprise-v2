@@ -5,6 +5,8 @@
  */
 'use client';
 import { useState, useEffect, useMemo, Suspense } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Plus, Search, FileText, X, Send, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -41,13 +43,14 @@ export default function QuotesPage() {
   );
 }
 
+const QUOTES_QUERY = ['tenant', 'quotes'] as const;
+const QUOTE_CONTACTS_QUERY = ['tenant', 'contacts', 'for-quotes'] as const;
+
 function QuotesPageInner() {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const initialContactId = searchParams.get('contactId') || '';
-  const [quotes, setQuotes] = useState<Quote[]>([]);
-  const [contacts, setContacts] = useState<Contact[]>([]);
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [showModal, setShowModal] = useState(false);
@@ -62,54 +65,41 @@ function QuotesPageInner() {
     discount: '0', tax: '0',
   });
 
-  useEffect(() => {
-    const controller = new AbortController();
-    fetchQuotes(controller.signal);
-    fetchContacts(controller.signal);
-    return () => controller.abort();
-  }, []);
+  // #1328: reads via TanStack Query (were raw fetch + useEffect).
+  const { data: quotesData, isLoading: loading, error: quotesError } = useApiQuery<{ quotes?: Quote[] }>(
+    QUOTES_QUERY,
+    '/api/tenant/quotes',
+  );
+  const quotes: Quote[] = useMemo(() => quotesData?.quotes ?? [], [quotesData]);
+  useEffect(() => { if (quotesError) toast.error('Failed to load quotes'); }, [quotesError]);
 
-  const fetchContacts = async (signal?: AbortSignal) => {
-    try {
-      const res = await fetch('/api/tenant/contacts', { signal });
-      const data = await res.json();
-      if (signal?.aborted) return;
-      setContacts(data.contacts || []);
-    } catch (e) {
-      if ((e as Error)?.name === 'AbortError') return;
-      toast.error('Failed to load contacts');
-    }
-  };
+  const { data: contactsData, error: contactsError } = useApiQuery<{ contacts?: Contact[] }>(
+    QUOTE_CONTACTS_QUERY,
+    '/api/tenant/contacts',
+  );
+  const contacts: Contact[] = useMemo(() => contactsData?.contacts ?? [], [contactsData]);
+  useEffect(() => { if (contactsError) toast.error('Failed to load contacts'); }, [contactsError]);
 
-  const fetchQuotes = async (signal?: AbortSignal) => {
-    try {
-      const res = await fetch('/api/tenant/quotes', { signal });
-      const data = await res.json();
-      if (signal?.aborted) return;
-      setQuotes(data.quotes || []);
-    } catch (e) {
-      if ((e as Error)?.name === 'AbortError') return;
-      toast.error('Failed to load quotes');
-    }
-    finally {
-      if (signal?.aborted) return;
-      setLoading(false);
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
+  const createQuote = useMutation({
+    mutationFn: async () => {
       const res = await fetch('/api/tenant/quotes', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),
       });
       if (!res.ok) throw new Error('Failed');
+    },
+    onSuccess: () => {
       toast.success('Quote created');
       setShowModal(false);
       setForm({ title: '', contactId: '', dealId: '', expiresAt: '', notes: '', terms: '', items: [{ description: '', quantity: '1', unitPrice: '0' }], discount: '0', tax: '0' });
-      fetchQuotes();
-    } catch { toast.error('Failed to create quote'); }
+      queryClient.invalidateQueries({ queryKey: QUOTES_QUERY });
+    },
+    onError: () => toast.error('Failed to create quote'),
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    createQuote.mutate();
   };
 
   const addItem = () => setForm({ ...form, items: [...form.items, { description: '', quantity: '1', unitPrice: '0' } as { description: string; quantity: string; unitPrice: string }] });
