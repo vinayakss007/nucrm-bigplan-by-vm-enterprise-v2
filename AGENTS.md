@@ -1,5 +1,12 @@
 # Project Agent Rules
 
+> **New here? Start with the agent onboarding hub:**
+> [`docs/agent-plans/README.md`](./docs/agent-plans/README.md) — it links the
+> **Project Map**, **Maintenance Plan**, and **Feature Addition Plan** so any
+> agent gets the full picture before touching code. This file (`AGENTS.md`)
+> remains the source of truth for the **mandatory PR policy and live deploy
+> facts** below.
+
 ## PR Policy (MANDATORY)
 
 1. **NEVER commit or push directly to `main`** — always create a feature branch and PR
