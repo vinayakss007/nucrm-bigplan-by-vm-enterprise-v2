@@ -4,7 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -194,26 +194,47 @@ export default function TenantContactsClient({ initialContacts, companies, teamM
   const [_exporting, setExporting] = useState(false);
   const router = useRouter();
 
+  const searchAbort = useRef<AbortController | null>(null);
   const load = useCallback(async (newOffset=0, q=search, status=statusFilter) => {
     setLoading(true);
+    // Cancel any in-flight request so out-of-order responses can't clobber
+    // the latest results (e.g. rapid typing/pagination).
+    searchAbort.current?.abort();
+    const controller = new AbortController();
+    searchAbort.current = controller;
     try {
       const params = new URLSearchParams({ offset:String(newOffset), limit: String(limit) });
       if (q) params.set('q', q);
       if (status !== 'all') params.set('lead_status', status);
-      router.push(`/tenant/contacts?${params.toString()}`, { scroll: false });
-      const res = await fetch('/api/tenant/contacts?'+params.toString());
+      // Sync the URL for shareable/back-button state without triggering a
+      // second server-side data fetch. #665: previously this page did BOTH
+      // router.push (server refetch) AND the client fetch below on every
+      // keystroke — a double-load. replaceState keeps the URL in sync cheaply.
+      window.history.replaceState(null, '', `/tenant/contacts?${params.toString()}`);
+      const res = await fetch('/api/tenant/contacts?'+params.toString(), { signal: controller.signal });
       const data = await res.json();
       setContacts(normalize(data.data));
       setTotal(data.total ?? 0);
       setOffset(newOffset);
     } catch (error) {
+      if ((error as Error)?.name === 'AbortError') return;
       console.error('Failed to load contacts:', error);
       toast.error('Failed to load contacts');
     }
     setLoading(false);
-  }, [search, statusFilter, router]);
+  }, [search, statusFilter]);
 
-  const handleSearch = (q:string) => { setSelectedIds(new Set()); setSearch(q); load(0, q, statusFilter); };
+  // #665: debounce search so we fetch once the user pauses typing, not on
+  // every keystroke. The input updates `search` immediately (responsive),
+  // while the actual load is deferred 350ms.
+  const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handleSearch = (q:string) => {
+    setSelectedIds(new Set());
+    setSearch(q);
+    if (searchDebounce.current) clearTimeout(searchDebounce.current);
+    searchDebounce.current = setTimeout(() => { load(0, q, statusFilter); }, 350);
+  };
+  useEffect(() => () => { if (searchDebounce.current) clearTimeout(searchDebounce.current); }, []);
   const handleStatus = (s:string) => { setSelectedIds(new Set()); setStatusFilter(s); load(0, search, s); };
 
   const deleteContact = async (id:string, name:string) => {
