@@ -37,6 +37,7 @@ import {
 } from '@/lib/offers';
 import { readJsonBody } from '@/lib/api/validate';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { logError } from '@/lib/errors-server';
 
 interface SendBody {
   to_email?: string;
@@ -177,7 +178,7 @@ export const POST = withApiRoute(async (req: NextRequest, { params }: { params: 
       email: emailResult,
     });
   } catch (err) {
-    console.error('[offers/send POST]', err);
+    await logError({ error: err, context: 'offers/send POST', requestMethod: 'POST' });
     return apiError(err);
   }
 });
