@@ -9,7 +9,8 @@ import { useState, useEffect } from 'react';
 import { useApiQuery } from '@/lib/query/client';
 import { Button } from '@/components/ui/button';
 import toast from 'react-hot-toast';
-import { Activity, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { EmptyState } from '@/components/shared/empty-state';
 
 interface ActivityItem {
   id: string;
@@ -71,10 +72,11 @@ export default function ActivitiesPage() {
       </div>
 
       {activities.length === 0 ? (
-        <div className="text-center py-12 text-muted-foreground">
-          <Activity className="w-12 h-12 mx-auto mb-4 opacity-50" />
-          <p>No activities recorded yet.</p>
-        </div>
+        <EmptyState
+          type="generic"
+          title="No activity yet"
+          description="Actions across your workspace — created deals, updated contacts, sent emails — will appear here as your team works."
+        />
       ) : (
         <div className="space-y-1">
           {activities.map(a => (
