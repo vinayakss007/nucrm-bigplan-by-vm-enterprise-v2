@@ -24,6 +24,7 @@ import {
 } from '@/drizzle/schema';
 import { eq, and, isNull, gte, desc, sql, count, sum } from 'drizzle-orm';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { logError } from '@/lib/errors-server';
 
 export const GET = withApiRoute(async (request: NextRequest) => {
   try {
@@ -272,7 +273,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[reports GET]', err);
+    await logError({ error: err, context: 'reports GET', requestMethod: 'GET' });
     return apiError(err);
   }
 });

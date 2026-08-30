@@ -12,6 +12,7 @@ import { eq, and } from 'drizzle-orm';
 import { readJsonBody } from '@/lib/api/validate';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { logError } from '@/lib/errors-server';
 
 const TRASH_RETENTION_KEY = 'trash_retention_days';
 
@@ -49,7 +50,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[trash-settings GET]', err);
+    await logError({ error: err, context: 'trash/settings GET', requestMethod: 'GET' });
     return apiError(err);
   }
 });
@@ -87,7 +88,7 @@ export const PUT = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[trash-settings PUT]', err);
+    await logError({ error: err, context: 'trash/settings PUT', requestMethod: 'PUT' });
     return apiError(err);
   }
 });

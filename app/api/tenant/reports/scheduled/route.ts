@@ -14,6 +14,7 @@ import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody, validateBody } from '@/lib/api/validate';
 import { z } from 'zod';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { logError } from '@/lib/errors-server';
 
 const FREQUENCIES = ['hourly', 'daily', 'weekly', 'monthly'] as const;
 
@@ -59,7 +60,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[scheduled reports GET]', err);
+    await logError({ error: err, context: 'reports/scheduled GET', requestMethod: 'GET' });
     return apiError(err);
   }
 });
@@ -95,7 +96,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[scheduled reports POST]', err);
+    await logError({ error: err, context: 'reports/scheduled POST', requestMethod: 'POST' });
     return apiError(err);
   }
 });

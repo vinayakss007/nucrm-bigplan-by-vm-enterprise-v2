@@ -8,6 +8,7 @@ import { handleSigningWebhook, getProviderAdapter } from '@/lib/esignature';
 import type { SigningProvider, SigningEventType } from '@/lib/esignature';
 import { checkPublicRateLimit } from '@/lib/rate-limit-simple';
 import { readJsonBody } from '@/lib/api/validate';
+import { logError } from '@/lib/errors-server';
 
 /**
  * POST /api/tenant/esignature/webhook
@@ -86,7 +87,7 @@ export async function POST(req: NextRequest) {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[esignature-webhook] Error:', err);
+    await logError({ error: err, context: 'esignature/webhook', requestMethod: 'POST' });
     return NextResponse.json(
       { error: 'Webhook processing failed' },
       { status: 500 }
