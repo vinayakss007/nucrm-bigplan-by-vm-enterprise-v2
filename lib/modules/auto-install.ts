@@ -19,6 +19,7 @@ import { db } from '@/drizzle/db';
 import { modules, tenantModules } from '@/drizzle/schema/modules';
 import { BUILTIN_MODULES } from '@/lib/modules/registry';
 import { INDUSTRY_TEMPLATES } from '@/lib/modules/industry-templates';
+import { logger } from '@/lib/logger';
 
 /**
  * Plan-to-default-modules mapping.
@@ -149,7 +150,7 @@ export async function installTemplateModules(
         .onConflictDoNothing();
     }
   } catch (error) {
-    console.error('[auto-install] Failed to install template modules:', error);
+    logger.error('[auto-install] Failed to install template modules', { error: error instanceof Error ? error.message : String(error) });
   }
 }
 
@@ -200,7 +201,7 @@ export async function installDefaultModules(
         .onConflictDoNothing();
     }
   } catch (error) {
-    console.error('[auto-install] Failed to install default modules:', error);
+    logger.error('[auto-install] Failed to install default modules', { error: error instanceof Error ? error.message : String(error) });
     // Non-fatal: tenant can still use the platform, modules can be installed later
   }
 }

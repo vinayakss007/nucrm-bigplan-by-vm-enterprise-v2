@@ -27,6 +27,8 @@
  * });
  */
 
+import { logger } from '@/lib/logger';
+
 /**
  * A single file attachment. `content` may be a Node Buffer (raw bytes) or a
  * base64-encoded string; each provider adapter serializes it to that provider's
@@ -331,7 +333,7 @@ export async function sendSmartEmail(options: SendOptions) {
   
   if (!providerKey) {
     const error = 'No email providers available (all at limit or unhealthy)';
-    console.error('[EmailRouter]', error);
+    logger.error('[EmailRouter] No provider available', { reason: error });
     
     // Fallback: Log email for later sending
     console.log('[EmailRouter] Queuing email for later delivery...');
@@ -365,7 +367,7 @@ export async function sendSmartEmail(options: SendOptions) {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error(`[EmailRouter] ✗ ${provider.name} failed:`, err.message);
+    logger.error('[EmailRouter] provider failed', { provider: provider.name, error: err instanceof Error ? err.message : String(err) });
     updateUsage(providerKey, false, err.message);
 
     // Try fallback providers for critical emails

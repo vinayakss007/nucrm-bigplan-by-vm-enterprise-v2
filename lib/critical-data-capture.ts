@@ -7,6 +7,7 @@ import { db } from '@/drizzle/db';
 import { criticalDataBackups } from '@/drizzle/schema';
 import { eq, and, gte, lte, sql, desc, count } from 'drizzle-orm';
 import { isValidTableName, validateTableName } from '@/lib/sql-allowlist';
+import { logger } from '@/lib/logger';
 
 const CRITICAL_TABLES = [
   'contacts', 'leads', 'deals', 'companies',
@@ -65,7 +66,7 @@ export class CriticalDataCapture {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } catch (err: any) {
-        console.error(`[CriticalDataCapture] Failed to capture ${tableName}:${recordId}:`, err.message);
+        logger.error('[CriticalDataCapture] Failed to capture record', { tableName, recordId, error: err instanceof Error ? err.message : String(err) });
       }
     }
 
@@ -109,7 +110,7 @@ export class CriticalDataCapture {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
-      console.error(`[CriticalDataCapture] Failed to capture update for ${tableName}:${recordId}:`, err.message);
+      logger.error('[CriticalDataCapture] Failed to capture update', { tableName, recordId, error: err instanceof Error ? err.message : String(err) });
     }
   }
 

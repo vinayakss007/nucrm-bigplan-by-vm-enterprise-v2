@@ -39,6 +39,12 @@ vi.mock('@/lib/modules/industry-templates', () => ({
   },
 }));
 
+// auto-install now logs failures via the structured logger (not console.error).
+const mockLoggerError = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/logger', () => ({
+  logger: { error: mockLoggerError, warn: vi.fn(), info: vi.fn(), debug: vi.fn() },
+}));
+
 describe('getDefaultModulesForPlan', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -170,12 +176,11 @@ describe('installDefaultModules', () => {
 
   it('catches and logs errors during install', async () => {
     mockOnConflictDoNothing.mockRejectedValueOnce(new Error('DB error'));
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mockLoggerError.mockClear();
     const { installDefaultModules } = await import('@/lib/modules/auto-install');
     // Should not throw
     await expect(installDefaultModules('tenant-1', 'free')).resolves.toBeUndefined();
-    expect(consoleSpy).toHaveBeenCalled();
-    consoleSpy.mockRestore();
+    expect(mockLoggerError).toHaveBeenCalled();
   });
 });
 
@@ -200,10 +205,9 @@ describe('installTemplateModules', () => {
 
   it('catches and logs errors during install', async () => {
     mockOnConflictDoNothing.mockRejectedValueOnce(new Error('DB failure'));
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mockLoggerError.mockClear();
     const { installTemplateModules } = await import('@/lib/modules/auto-install');
     await expect(installTemplateModules('tenant-1', 'real_estate')).resolves.toBeUndefined();
-    expect(consoleSpy).toHaveBeenCalled();
-    consoleSpy.mockRestore();
+    expect(mockLoggerError).toHaveBeenCalled();
   });
 });
