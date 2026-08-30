@@ -3,7 +3,6 @@
  * Copyright (c) 2026 abetworks.in. All Rights Reserved.
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import type { Meta, StoryObj } from '@storybook/react';
 import { Button } from './button';
 import { Plus, Trash2, Save } from 'lucide-react';

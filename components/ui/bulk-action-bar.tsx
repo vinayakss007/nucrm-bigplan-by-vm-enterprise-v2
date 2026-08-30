@@ -5,12 +5,12 @@
  */
 'use client';
 import { X, CheckSquare } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface BulkAction {
   label: string;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  icon: any;
+  icon: LucideIcon;
   variant?: 'default' | 'danger';
   onClick: () => void;
 }
