@@ -80,7 +80,10 @@ export const POST = withApiRoute(async (req: NextRequest) => {
       );
 
     const validIds = valid.map(r => r.id);
-    if (!validIds.length)
+    // `restore` operates on soft-deleted rows, which the live-only validation
+    // above (deletedAt IS NULL) never matches — it resolves its own set of
+    // restorable ids, so don't bail out here for that action.
+    if (!validIds.length && action !== 'restore')
       return NextResponse.json({ error: 'No valid deals found' }, { status: 404 });
 
     let affected = 0;
@@ -363,6 +366,25 @@ export const POST = withApiRoute(async (req: NextRequest) => {
         const deny = requirePerm(ctx, 'deals.edit');
         if (deny) return deny;
 
+        // Restore targets SOFT-DELETED rows. The `validIds` set above is built
+        // with `deletedAt IS NULL`, so it never contains a trashed deal — reusing
+        // it made bulk restore a no-op (and, when it did match live rows, wrongly
+        // re-incremented currentDeals). Re-resolve against deletedAt IS NOT NULL.
+        const restorable = await db
+          .select({ id: deals.id })
+          .from(deals)
+          .where(
+            and(
+              inArray(deals.id, deal_ids),
+              eq(deals.tenantId, ctx.tenantId),
+              sql`${deals.deletedAt} IS NOT NULL`
+            )
+          );
+        const restorableIds = restorable.map(r => r.id);
+        if (!restorableIds.length) {
+          return NextResponse.json({ error: 'No deleted deals found to restore' }, { status: 404 });
+        }
+
         // Plan limit check: restoring deals could push count over limit
         const [tenantWithPlan] = await db
           .select({
@@ -373,7 +395,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
           .innerJoin(plans, eq(plans.id, tenants.planId))
           .where(eq(tenants.id, ctx.tenantId));
 
-        if (tenantWithPlan && tenantWithPlan.maxDeals != null && ((tenantWithPlan.currentDeals ?? 0) + validIds.length) > tenantWithPlan.maxDeals) {
+        if (tenantWithPlan && tenantWithPlan.maxDeals != null && ((tenantWithPlan.currentDeals ?? 0) + restorableIds.length) > tenantWithPlan.maxDeals) {
           return NextResponse.json({ error: `Restore would exceed plan limit of ${tenantWithPlan.maxDeals} deals.` }, { status: 403 });
         }
 
@@ -386,13 +408,15 @@ export const POST = withApiRoute(async (req: NextRequest) => {
           })
           .where(
             and(
-              inArray(deals.id, validIds),
-              eq(deals.tenantId, ctx.tenantId)
+              inArray(deals.id, restorableIds),
+              eq(deals.tenantId, ctx.tenantId),
+              sql`${deals.deletedAt} IS NOT NULL`
             )
           );
         affected = res.rowCount ?? 0;
 
-        // Re-increment the tenant's usage counter (mirrors single restore in trash route)
+        // Re-increment the tenant's usage counter only for rows actually
+        // restored (mirrors single restore in trash route).
         if (affected > 0) {
           await db
             .update(tenants)
