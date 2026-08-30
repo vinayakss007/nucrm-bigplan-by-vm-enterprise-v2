@@ -8,6 +8,7 @@
 import { useState, useCallback, useMemo, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { useOpenCreateParam } from '@/hooks/use-open-create-param'
 import { Plus, MoreHorizontal, Edit, Trash2, Building2, Globe, Tag, UserPlus, Archive, RotateCcw } from 'lucide-react'
 
 import { useDeleteWithUndo } from '@/lib/use-delete-with-undo'
@@ -53,6 +54,8 @@ export default function CompaniesDataTable({ initialCompanies, permissions, _ten
   const [total, setTotal] = useState(initialCompanies.length)
   const [loading, setLoading] = useState(false)
   const [showForm, setShowForm] = useState(false)
+  // Open the create form when arriving via ⌘K "New Company" (?action=create).
+  useOpenCreateParam(() => setShowForm(true))
   const [globalFilter, setGlobalFilter] = useState('')
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 20 })
   const [form, setForm] = useState({

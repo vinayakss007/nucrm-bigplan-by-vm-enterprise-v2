@@ -7,6 +7,7 @@
 
 import { useState, useCallback, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
+import { useOpenCreateParam } from '@/hooks/use-open-create-param'
 import { Plus, MoreHorizontal, Edit, User, Building, Calendar, GripVertical, Trash2 } from 'lucide-react'
 import { cn, formatCurrency, formatDate, toSnakeCase } from '@/lib/utils'
 import { confirmThen } from '@/components/ui/confirm-dialog'
@@ -86,6 +87,8 @@ export default function DealsKanban({ initialDeals, stages, contacts: initialCon
   const [contactList, setContactList] = useState(initialContacts)
   const [companyList, setCompanyList] = useState(initialCompanies)
   const [showAdd, setShowAdd] = useState(false)
+  // Open the create form when arriving via ⌘K "New Deal" (?action=create).
+  useOpenCreateParam(() => setShowAdd(true))
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [dragOverStage, setDragOverStage] = useState<string | null>(null)
   const [form, setForm] = useState({

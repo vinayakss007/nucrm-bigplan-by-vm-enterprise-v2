@@ -6,6 +6,7 @@
 "use client"
 
 import { useState, useCallback, useMemo, useEffect } from 'react'
+import { useOpenCreateParam } from '@/hooks/use-open-create-param'
 import { Plus, MoreHorizontal, Edit, Trash2, CheckCircle, AlertTriangle, Columns, UserPlus, Flag, Calendar as CalendarIcon, RotateCcw, Archive } from 'lucide-react'
 import { cn, formatDate, formatRelativeTime } from '@/lib/utils'
 import { clientLogWarn } from '@/lib/client-logger'
@@ -62,6 +63,8 @@ export default function TasksDataTable({ initialTasks, contacts, deals, teamMemb
   const [total, setTotal] = useState(initialTasks.length)
   const [loading, setLoading] = useState(false)
   const [showAdd, setShowAdd] = useState(false)
+  // Open the create form when arriving via ⌘K "New Task" (?action=create).
+  useOpenCreateParam(() => setShowAdd(true))
   const [globalFilter, setGlobalFilter] = useState('')
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 20 })
   const [form, setForm] = useState({

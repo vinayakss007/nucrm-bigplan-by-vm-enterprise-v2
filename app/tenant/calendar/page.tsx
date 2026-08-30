@@ -7,6 +7,7 @@
 import { useState, useEffect, type ComponentType } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useOpenCreateParam } from '@/hooks/use-open-create-param';
 import {
   ChevronLeft, ChevronRight, Plus, Calendar, Clock, CheckSquare,
   Users, TrendingUp, ExternalLink
@@ -48,6 +49,8 @@ function CalendarInner() {
   const [selectedDay, setSelectedDay] = useState(new Date());
   const [showMeetingForm, setShowMeetingForm] = useState(false);
   const [editingEvent, setEditingEvent] = useState<Record<string, unknown> | null>(null);
+  // Open the meeting form when arriving via ⌘K "New Meeting" (?action=create).
+  useOpenCreateParam(() => setShowMeetingForm(true));
   const [contacts, setContacts] = useState<{ id: string; first_name?: string; last_name?: string }[]>([]);
   const [loading, setLoading] = useState(true);
 

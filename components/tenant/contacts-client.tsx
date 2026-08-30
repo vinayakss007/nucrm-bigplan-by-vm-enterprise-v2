@@ -7,6 +7,7 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useOpenCreateParam } from '@/hooks/use-open-create-param';
 import {
   Plus, Search, Grid, List, Trash2, ChevronRight, Download, Upload,
   Users, AlertCircle, X, Mail, Phone, Building2, User, Tag, Star, Zap, Activity,
@@ -193,6 +194,9 @@ export default function TenantContactsClient({ initialContacts, companies, teamM
   const [loading, setLoading]   = useState(false);
   const [_exporting, setExporting] = useState(false);
   const router = useRouter();
+
+  // Open the create form when arriving via ⌘K "New Contact" (?action=create).
+  useOpenCreateParam(() => setShowAdd(true));
 
   const searchAbort = useRef<AbortController | null>(null);
   const load = useCallback(async (newOffset=0, q=search, status=statusFilter) => {
