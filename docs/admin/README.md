@@ -22,6 +22,7 @@ or workspace admin, use the [Public Docs](../public/README.md) instead.
 | [Monitoring & Observability](./monitoring.md) | Watch health, metrics, errors, and alerts |
 | [Operations Runbooks](./runbooks.md) | Execute go-live, incident, and recovery procedures |
 | [Background Jobs & Realtime](./jobs-and-realtime.md) | Understand the worker, queues, cron, and realtime |
+| [Contributing & Operations Handbook](./contributing-and-operations.md) | Follow the PR policy, engineering standards, toolchain, and live deploy facts |
 
 ---
 
