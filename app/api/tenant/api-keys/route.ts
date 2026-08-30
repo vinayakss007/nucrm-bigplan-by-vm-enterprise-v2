@@ -14,6 +14,7 @@ import { apiKeys } from '@/drizzle/schema';
 import { eq, desc } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { logError } from '@/lib/errors-server';
 
 /**
  * GET /api/tenant/api-keys
@@ -52,7 +53,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
-    console.error('[API Keys] GET error:', error);
+    await logError({ error, context: 'api-keys GET', requestMethod: 'GET' });
     return apiError(error);
   }
 });
@@ -104,7 +105,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
-    console.error('[API Keys] POST error:', error);
+    await logError({ error, context: 'api-keys POST', requestMethod: 'POST' });
     return apiError(error);
   }
 });

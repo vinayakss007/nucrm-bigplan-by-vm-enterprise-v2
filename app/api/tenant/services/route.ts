@@ -12,6 +12,7 @@ import { eq, and, desc, like } from 'drizzle-orm';
 import { requireAuth } from '@/lib/auth/middleware';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { logError } from '@/lib/errors-server';
 
 export const GET = withApiRoute(async (request: NextRequest) => {
   try {
@@ -49,7 +50,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
-    console.error('[services/GET]', error);
+    await logError({ error, context: 'services GET', requestMethod: 'GET' });
     return NextResponse.json({ 
       error: 'Failed to fetch services', 
       detail: error?.message || 'Unknown error'
@@ -99,7 +100,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
 
     return NextResponse.json({ service }, { status: 201 });
   } catch (error) {
-    console.error('[services/POST]', error);
+    await logError({ error, context: 'services POST', requestMethod: 'POST' });
     return NextResponse.json({ error: 'Failed to create service' }, { status: 500 });
   }
 });
