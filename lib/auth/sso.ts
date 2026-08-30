@@ -9,6 +9,7 @@ import { users, sessions } from '@/drizzle/schema/core';
 import { eq, and } from 'drizzle-orm';
 import { randomUUID } from 'crypto';
 import { createToken, hashToken } from '@/lib/auth/session';
+import { logger } from '@/lib/logger';
 
 export interface SSOProviderConfig {
   id: string;
@@ -338,7 +339,7 @@ export async function validateOIDCToken(
     
     return { valid: true, payload };
   } catch (verifyError) {
-    console.error('[SSO] OIDC token verification failed:', verifyError);
+    logger.error('[SSO] OIDC token verification failed', { error: verifyError instanceof Error ? verifyError.message : String(verifyError) });
     return { valid: false, error: 'Token signature verification failed' };
   }
 }
@@ -422,7 +423,7 @@ async function verifySAMLAndGetProfile(
   cfg: SAMLConfig,
 ): Promise<VerifiedSamlProfile | null> {
   if (!cfg.certificate) {
-    console.error('[SAML] Missing IdP certificate — cannot verify signature');
+    logger.error('[SAML] Missing IdP certificate — cannot verify signature');
     return null;
   }
   try {
@@ -466,10 +467,10 @@ async function verifySAMLAndGetProfile(
     if (validateResult?.profile) {
       return validateResult.profile;
     }
-    console.error('[SAML] Validation failed: no profile returned');
+    logger.error('[SAML] Validation failed: no profile returned');
     return null;
   } catch (error) {
-    console.error('[SAML] Signature verification error:', error);
+    logger.error('[SAML] Signature verification error', { error: error instanceof Error ? error.message : String(error) });
     // Reject — do NOT fall back to structure-only checks which are trivially forgeable
     return null;
   }

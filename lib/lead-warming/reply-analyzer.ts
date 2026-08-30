@@ -22,6 +22,7 @@ import { contacts, tasks } from '@/drizzle/schema';
 import { eq, and, sql } from 'drizzle-orm';
 import { createNotification } from '@/lib/notifications';
 import { updateContactDealsSentiment } from '@/lib/ai/sentiment';
+import { logger } from '@/lib/logger';
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -125,7 +126,7 @@ export async function analyzeReply(input: AnalyzeReplyInput): Promise<ReplyAnaly
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[lead-warming] AI reply analysis failed:', err.message);
+    logger.error('[lead-warming] AI reply analysis failed', { error: err instanceof Error ? err.message : String(err) });
     // Fallback: rule-based analysis
     return fallbackAnalysis(input.replyContent);
   }
@@ -169,7 +170,7 @@ function parseAIResponse(raw: string): ReplyAnalysis {
       requiresFollowUp: Boolean(parsed.requires_follow_up),
     };
   } catch {
-    console.error('[lead-warming] Failed to parse AI response:', raw.slice(0, 200));
+    logger.error('[lead-warming] Failed to parse AI response', { raw: raw.slice(0, 200) });
     return fallbackAnalysis(raw);
   }
 }
@@ -305,7 +306,7 @@ export async function processIncomingReply(input: ProcessReplyInput): Promise<Re
       .limit(1);
 
     if (!originalMessage) {
-      console.error(`[lead-warming] Message not found: ${input.messageId}`);
+      logger.error('[lead-warming] Message not found', { messageId: input.messageId });
       return null;
     }
 
@@ -394,7 +395,7 @@ export async function processIncomingReply(input: ProcessReplyInput): Promise<Re
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
-      console.error('[lead-warming] Failed to update deal sentiment:', err.message);
+      logger.error('[lead-warming] Failed to update deal sentiment', { error: err instanceof Error ? err.message : String(err) });
     }
 
     return analysis;
@@ -402,7 +403,7 @@ export async function processIncomingReply(input: ProcessReplyInput): Promise<Re
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[lead-warming] processIncomingReply error:', err.message);
+    logger.error('[lead-warming] processIncomingReply error', { error: err instanceof Error ? err.message : String(err) });
     return null;
   }
 }
@@ -519,7 +520,7 @@ export async function analyzeUnprocessedReplies(limit: number = 50): Promise<{ p
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
-      console.error(`[lead-warming] Failed to analyze reply ${reply.id}:`, err.message);
+      logger.error('[lead-warming] Failed to analyze reply', { replyId: reply.id, error: err instanceof Error ? err.message : String(err) });
       errors++;
     }
   }
