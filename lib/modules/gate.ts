@@ -19,6 +19,7 @@ import { NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { modules, tenantModules } from '@/drizzle/schema/modules';
 import { eq, and } from 'drizzle-orm';
+import { logError } from '@/lib/errors-server';
 
 /**
  * Check if a tenant has access to a module.
@@ -68,7 +69,7 @@ export async function requireModule(
 
     return null;
   } catch (error) {
-    console.error('[gate.requireModule] Error checking module access:', error);
+    await logError({ error, context: 'gate.requireModule error checking module access' });
     return NextResponse.json(
       { error: 'Failed to verify module access' },
       { status: 500 }
@@ -126,7 +127,7 @@ export async function requireFeature(
 
     return null;
   } catch (error) {
-    console.error('[gate.requireFeature] Error checking feature access:', error);
+    await logError({ error, context: 'gate.requireFeature error checking feature access' });
     return NextResponse.json(
       { error: 'Failed to verify feature access' },
       { status: 500 }

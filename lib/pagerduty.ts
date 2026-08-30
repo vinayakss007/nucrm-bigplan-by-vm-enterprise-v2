@@ -14,6 +14,8 @@
  * https://developer.pagerduty.com/docs/events-api-v2/overview/
  */
 
+import { logger } from '@/lib/logger';
+
 const PAGERDUTY_EVENTS_URL = 'https://events.pagerduty.com/v2/enqueue';
 
 export type PagerDutySeverity = 'critical' | 'error' | 'warning' | 'info';
@@ -93,14 +95,15 @@ export async function sendPagerDutyAlert(
     });
 
     if (!res.ok) {
-      console.error(
-        `[pagerduty] API returned ${res.status}: ${await res.text().catch(() => 'unknown')}`,
-      );
+      logger.error('[pagerduty] API returned non-OK status', {
+        status: res.status,
+        body: await res.text().catch(() => 'unknown'),
+      });
       return false;
     }
     return true;
   } catch (err) {
-    console.error('[pagerduty] Failed to send alert:', err);
+    logger.error('[pagerduty] Failed to send alert', { error: err instanceof Error ? err.message : String(err) });
     return false;
   }
 }
