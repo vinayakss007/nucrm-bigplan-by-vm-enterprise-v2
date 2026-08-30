@@ -7,6 +7,10 @@ Follow these steps in order during an incident.
 
 **Contacts:** On-call engineer via PagerDuty | Slack #incidents | Database admin
 
+> **Just need to restore ONE organization's data (not the whole DB)?**
+> Don't use the full-database steps below — use the safe, UI-driven per-tenant
+> tool instead. See [restore-one-organization.md](./restore-one-organization.md).
+
 ---
 
 ## 0. Operator tooling — day-to-day + break-glass
