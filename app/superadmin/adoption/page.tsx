@@ -4,7 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useEffect, useState } from 'react';
+import { useApiQuery } from '@/lib/query/client';
 import Link from 'next/link';
 import {
   Crown, Loader2, Globe, Lock, ListChecks, Settings as SettingsIcon,
@@ -13,7 +13,6 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { clientLogError } from '@/lib/client-logger';
 
 type Adoption = {
   total_tenants: number;
@@ -36,28 +35,15 @@ type Activity = {
 };
 
 export default function AdoptionMonitoringPage() {
-  const [data, setData] = useState<Adoption | null>(null);
-  const [activity, setActivity] = useState<Activity | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  // #1328: TanStack Query replaces fetch + useEffect + useState.
+  const adoptionQuery = useApiQuery<Adoption>(['superadmin', 'adoption'], '/api/superadmin/adoption');
+  const activityQuery = useApiQuery<Activity>(['superadmin', 'recent-activity'], '/api/superadmin/recent-activity?limit=20');
 
-  const load = async (abortSignal?: AbortSignal) => {
-    setRefreshing(true);
-    const [adoptionRes, activityRes] = await Promise.all([
-      fetch('/api/superadmin/adoption', { signal: abortSignal }).then(r => r.ok ? r.json() : null).catch((err) => { clientLogError('adoption:fetch', err); return null; }),
-      fetch('/api/superadmin/recent-activity?limit=20', { signal: abortSignal }).then(r => r.ok ? r.json() : null).catch((err) => { clientLogError('adoption:activity-fetch', err); return null; }),
-    ]);
-    setData(adoptionRes);
-    setActivity(activityRes);
-    setLoading(false);
-    setRefreshing(false);
-  };
-
-  useEffect(() => {
-    const abort = new AbortController();
-    load(abort.signal);
-    return () => abort.abort();
-  }, []);
+  const data: Adoption | null = adoptionQuery.data ?? null;
+  const activity: Activity | null = activityQuery.data ?? null;
+  const loading = adoptionQuery.isLoading || activityQuery.isLoading;
+  const refreshing = adoptionQuery.isFetching || activityQuery.isFetching;
+  const load = () => { adoptionQuery.refetch(); activityQuery.refetch(); };
 
   if (loading) return <div className="flex items-center justify-center h-64"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>;
   if (!data) return <div className="text-sm text-muted-foreground">Failed to load adoption metrics.</div>;

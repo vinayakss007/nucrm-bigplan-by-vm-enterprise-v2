@@ -4,7 +4,8 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect, type ComponentProps } from 'react';
+import { type ComponentProps } from 'react';
+import { useApiQuery } from '@/lib/query/client';
 import { DollarSign, TrendingUp, Users, Building2, Zap } from 'lucide-react';
 import { cn, formatCurrency, formatRelativeTime } from '@/lib/utils';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
@@ -34,24 +35,13 @@ interface Tenant {
 }
 
 export default function RevenuePage() {
-  const [data, setData]     = useState<RevenueData | null>(null);
-  const [tenants, setTenants] = useState<Tenant[]>([]);
-  const [loading, setLoading] = useState(true);
+  // #1328: TanStack Query replaces fetch + useEffect + useState.
+  const revenueQuery = useApiQuery<RevenueData>(['superadmin', 'revenue'], '/api/superadmin/revenue');
+  const tenantsQuery = useApiQuery<{ data?: Tenant[] }>(['superadmin', 'tenants'], '/api/superadmin/tenants');
 
-  useEffect(() => {
-  const controller = new AbortController();
-  let ignore = false;
-    Promise.all([
-      fetch('/api/superadmin/revenue', { signal: controller.signal }).then(r=>r.json()),
-      fetch('/api/superadmin/tenants', { signal: controller.signal }).then(r=>r.json()),
-    ]).then(([rev, ten]) => { if (ignore) return; 
-      setData(rev as RevenueData); setTenants(ten.data||[]); setLoading(false);
-     } ).catch((e) => {
-      if ((e as Error)?.name === 'AbortError') return;
-      throw e;
-     });
-    return () => { ignore = true; controller.abort(); };
-}, []);
+  const data: RevenueData | null = revenueQuery.data ?? null;
+  const tenants: Tenant[] = tenantsQuery.data?.data ?? [];
+  const loading = revenueQuery.isLoading || tenantsQuery.isLoading;
 
   const m = data?.mrr ?? {};
   const mrr = Number(m.mrr ?? 0);
