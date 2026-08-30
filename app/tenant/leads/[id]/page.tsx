@@ -16,8 +16,7 @@ interface PageProps {
   params: Promise<{ id: string }>;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const stripNulls = (obj: Record<string, any>): Record<string, any> =>
+const stripNulls = (obj: Record<string, unknown>): Record<string, unknown> =>
   Object.fromEntries(Object.entries(obj).map(([k, v]) => [k, v ?? undefined]));
 
 export default async function LeadDetailPage({ params }: PageProps) {
