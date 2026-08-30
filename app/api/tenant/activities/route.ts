@@ -15,7 +15,6 @@ import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
-import { logError } from '@/lib/errors-server';
 
 const createActivitySchema = z.object({
   type: z.string().min(1, 'type is required'),
