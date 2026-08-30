@@ -208,7 +208,7 @@ export async function POST(request: NextRequest) {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[setup/create-admin]', err);
+    void logError({ error: err, context: 'setup/create-admin' });
     return apiError(err);
   }
 }

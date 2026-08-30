@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/errors-server';
 import { db } from '@/drizzle/db';
 import { users, sessions } from '@/drizzle/schema';
 import { eq, sql } from 'drizzle-orm';
@@ -69,13 +70,13 @@ export async function POST(request: NextRequest) {
   const ip = getClientIp(request);
   const timestamp = new Date().toISOString();
 
-  // Always log attempts
-  console.error(`[EMERGENCY RECOVERY] Attempt from IP: ${ip} at ${timestamp}`);
+  // Always log attempts (security audit trail → persisted + Sentry via logError)
+  void logError({ error: new Error('Emergency recovery attempt'), context: 'emergency/recover attempt', level: 'warning', metadata: { ip, timestamp } });
 
   // 1. Check if emergency recovery is configured
   const emergencyKey = process.env['EMERGENCY_RECOVERY_KEY'];
   if (!emergencyKey || emergencyKey.length < 32) {
-    console.error(`[EMERGENCY RECOVERY] REJECTED — EMERGENCY_RECOVERY_KEY not configured or too short`);
+    void logError({ error: new Error('Emergency recovery rejected: EMERGENCY_RECOVERY_KEY not configured or too short'), context: 'emergency/recover not-configured', level: 'warning', metadata: { ip } });
     return NextResponse.json(
       { error: 'Emergency recovery is not configured on this server.' },
       { status: 503 }
@@ -84,7 +85,7 @@ export async function POST(request: NextRequest) {
 
   // 2. Rate limit (distributed, shared across instances)
   if (!(await checkEmergencyRateLimit(ip))) {
-    console.error(`[EMERGENCY RECOVERY] RATE LIMITED — IP: ${ip}`);
+    void logError({ error: new Error('Emergency recovery rate limited'), context: 'emergency/recover rate-limited', level: 'warning', metadata: { ip } });
     return NextResponse.json(
       { error: 'Too many attempts. Wait 5 minutes.' },
       { status: 429 }
@@ -118,7 +119,7 @@ export async function POST(request: NextRequest) {
     timingSafeEqual(keyBuffer, expectedBuffer);
 
   if (!keyValid) {
-    console.error(`[EMERGENCY RECOVERY] INVALID KEY — IP: ${ip}, email: ${email}`);
+    void logError({ error: new Error('Emergency recovery invalid key'), context: 'emergency/recover invalid-key', level: 'warning', metadata: { ip, email } });
     // #1253: identical generic response — never reveal which branch failed
     return NextResponse.json({
       message: 'If the account exists, recovery instructions were sent',
@@ -127,7 +128,7 @@ export async function POST(request: NextRequest) {
 
   // 5. Validate new password strength
   if (new_password.length < 12) {
-    console.error(`[EMERGENCY RECOVERY] WEAK PASSWORD — IP: ${ip}`);
+    void logError({ error: new Error('Emergency recovery weak password'), context: 'emergency/recover weak-password', level: 'warning', metadata: { ip } });
     return NextResponse.json({
       message: 'If the account exists, recovery instructions were sent',
     });
@@ -140,7 +141,7 @@ export async function POST(request: NextRequest) {
   });
 
   if (!user) {
-    console.error(`[EMERGENCY RECOVERY] USER NOT FOUND — email: ${email}`);
+    void logError({ error: new Error('Emergency recovery user not found'), context: 'emergency/recover user-not-found', level: 'warning', metadata: { ip, email } });
     // #1253: identical generic response — never reveal user existence
     return NextResponse.json({
       message: 'If the account exists, recovery instructions were sent',
@@ -148,7 +149,7 @@ export async function POST(request: NextRequest) {
   }
 
   if (!user.isSuperAdmin) {
-    console.error(`[EMERGENCY RECOVERY] NOT SUPER ADMIN — email: ${email}`);
+    void logError({ error: new Error('Emergency recovery not super admin'), context: 'emergency/recover not-super-admin', level: 'warning', metadata: { ip, email } });
     return NextResponse.json({
       message: 'If the account exists, recovery instructions were sent',
     });
@@ -180,7 +181,7 @@ export async function POST(request: NextRequest) {
   await db.delete(sessions).where(eq(sessions.userId, user.id));
   await deleteUserSessions(user.id);
 
-  console.error(`[EMERGENCY RECOVERY] SUCCESS — email: ${email}, 2FA disabled: ${disable_2fa}, IP: ${ip}`);
+  void logError({ error: new Error('Emergency recovery SUCCESS — super-admin password reset'), context: 'emergency/recover success', level: 'error', userId: user.id, metadata: { ip, email, disable_2fa } });
 
   return NextResponse.json({
     success: true,

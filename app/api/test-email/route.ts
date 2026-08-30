@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/errors-server';
 import { sendEmail } from '@/lib/email/service';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
@@ -122,8 +123,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
  
  
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Unknown error';
-    console.error('[TestEmail] Error:', msg);
+    void logError({ error: err, context: 'test-email' });
     return NextResponse.json({
       error: 'Email test failed',
     }, { status: 500 });

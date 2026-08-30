@@ -158,7 +158,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, message: (form.settings as Record<string, unknown>)?.success_message as string ?? 'Thank you! We will be in touch.' });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[forms] Submission error:', err);
+    void logError({ error: err, context: 'forms submission' });
     return NextResponse.json({ ok: true, message: 'Thank you! Your submission has been received.' });
   }
 }

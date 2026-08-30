@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/errors-server';
 import { db } from '@/drizzle/db';
 import { forms, tenants, contacts, formSubmissions, activities } from '@/drizzle/schema';
 import { eq, and, isNull, sql } from 'drizzle-orm';
@@ -229,7 +230,7 @@ export async function POST(req: NextRequest) {
           entityId: contactId,
           action: 'form_message',
           description: `Sent message via form "${form.name}"`
-        }).catch(err => console.error('[FormsSubmit] failed to save note:', err));
+        }).catch(err => void logError({ error: err, context: 'forms/submit save-note', tenantId: form.tenantId, level: 'warning' }));
       }
 
       // 4. Record the submission
@@ -267,7 +268,7 @@ export async function POST(req: NextRequest) {
         form_name: form.name,
         contact_id: contactId,
         ...formData 
-      }).catch(console.error);
+      }).catch(err => void logError({ error: err, context: 'forms/submit fire-webhooks', tenantId: form.tenantId, level: 'warning' }));
 
       // Notify owner
       if (form.owner_id) {
@@ -278,7 +279,7 @@ export async function POST(req: NextRequest) {
           title: `New Lead: ${form.name}`,
           body: `A new response was submitted by ${email || 'anonymous user'}.`,
           link: `/tenant/contacts/${contactId}`
-        }).catch(console.error);
+        }).catch(err => void logError({ error: err, context: 'forms/submit owner-notification', tenantId: form.tenantId, level: 'warning' }));
       }
     }
 
@@ -291,7 +292,7 @@ export async function POST(req: NextRequest) {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[FormsSubmit] error:', err);
+    void logError({ error: err, context: 'forms/submit' });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

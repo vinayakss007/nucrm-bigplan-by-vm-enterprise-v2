@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/errors-server';
 import { db } from '@/drizzle/db';
 import { users } from '@/drizzle/schema';
 import { eq, count } from 'drizzle-orm';
@@ -29,7 +30,7 @@ export async function GET(request: NextRequest) {
     // install look fresh. Surface a 503 so the client does not proceed as if
     // setup were open. (create-admin independently rejects when an admin
     // already exists, so this is defence-in-depth.)
-    console.error('[SetupCheck] Error:', err);
+    void logError({ error: err, context: 'setup/check' });
     return NextResponse.json({ error: 'Service unavailable' }, { status: 503 });
   }
 }

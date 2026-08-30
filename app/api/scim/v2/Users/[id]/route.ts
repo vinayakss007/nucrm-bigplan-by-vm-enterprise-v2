@@ -14,6 +14,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/errors-server';
 import { z } from 'zod';
 import { db } from '@/drizzle/db';
 import { users, tenantMembers, sessions } from '@/drizzle/schema';
@@ -149,7 +150,7 @@ export async function GET(
       headers: { 'Content-Type': 'application/scim+json' },
     });
   } catch (error) {
-    console.error('[SCIM] GET /Users/:id error:', error);
+    void logError({ error, context: 'scim/Users/:id GET' });
     return NextResponse.json(
       generateSCIMError('Internal server error', 500),
       { status: 500, headers: { 'Content-Type': 'application/scim+json' } }
@@ -422,7 +423,7 @@ export async function PATCH(
       headers: { 'Content-Type': 'application/scim+json' },
     });
   } catch (error) {
-    console.error('[SCIM] PATCH /Users/:id error:', error);
+    void logError({ error, context: 'scim/Users/:id PATCH' });
     return NextResponse.json(
       generateSCIMError('Internal server error', 500),
       { status: 500, headers: { 'Content-Type': 'application/scim+json' } }
@@ -474,7 +475,7 @@ export async function DELETE(
 
     return new NextResponse(null, { status: 204 });
   } catch (error) {
-    console.error('[SCIM] DELETE /Users/:id error:', error);
+    void logError({ error, context: 'scim/Users/:id DELETE' });
     return NextResponse.json(
       generateSCIMError('Internal server error', 500),
       { status: 500, headers: { 'Content-Type': 'application/scim+json' } }

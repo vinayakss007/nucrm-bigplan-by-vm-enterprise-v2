@@ -10,6 +10,7 @@ import { apiError } from '@/lib/api-error';
  * Required by GDPR Article 20 (right to data portability).
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/errors-server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { users, sessions, activities, notifications, tenantMembers, tenants } from '@/drizzle/schema';
@@ -110,7 +111,7 @@ export const GET = withApiRoute(async (req: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[UserExport] Error:', err);
+    void logError({ error: err, context: 'user/export' });
     return apiError(err);
   }
 });
