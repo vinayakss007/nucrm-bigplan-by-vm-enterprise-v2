@@ -37,11 +37,12 @@ const STAGE_COLORS: Record<string, { border: string; bg: string; text: string }>
 interface Deal {
   id: string
   title: string
-  amount: string | number
+  amount: number
   stageId: string
   stage_name: string | null
   close_date: string | null
   contact_id: string | null
+  company_id?: string | null
   first_name: string | null
   last_name: string | null
   company_name: string | null

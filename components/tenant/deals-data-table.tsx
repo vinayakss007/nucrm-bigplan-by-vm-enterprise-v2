@@ -42,8 +42,11 @@ interface Deal {
   id: string
   title: string
   amount: number
-  stage_name: string
+  stageId?: string
+  stage_name: string | null
   close_date: string | null
+  contact_id?: string | null
+  company_id?: string | null
   first_name: string | null
   last_name: string | null
   company_name: string | null

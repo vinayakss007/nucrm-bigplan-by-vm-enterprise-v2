@@ -51,9 +51,9 @@ const SOURCE_LABELS: Record<string,string> = {
   social_media:'Social', event:'Event', inbound:'Inbound', advertisement:'Ad', other:'Other',
 };
 
-interface CompanyOpt { id: string; name: string }
-interface TeamMemberOpt { user_id: string; full_name: string }
-interface ContactInput { id: string; first_name?: string; last_name?: string; email?: string; phone?: string; company_name?: string; lead_status?: string; lead_source?: string; assigned_name?: string; created_at?: string; score?: number; [key: string]: unknown }
+export interface CompanyOpt { id: string; name: string }
+export interface TeamMemberOpt { user_id: string; full_name: string; avatar_url?: string | null }
+export interface ContactInput { id: string; first_name?: string; last_name?: string; email?: string; phone?: string; company_name?: string; lead_status?: string; lead_source?: string; assigned_name?: string; created_at?: string; score?: number; [key: string]: unknown }
 
 interface Props {
   initialContacts: ContactInput[];
