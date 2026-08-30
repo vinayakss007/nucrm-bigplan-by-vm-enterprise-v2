@@ -29,6 +29,10 @@
       "schedule": "0 3 * * 0"
     },
     {
+      "path": "/api/cron/backup-verify",
+      "schedule": "0 4 * * *"
+    },
+    {
       "path": "/api/cron/cleanup",
       "schedule": "0 4 * * 0"
     },
