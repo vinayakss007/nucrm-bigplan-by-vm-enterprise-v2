@@ -8,6 +8,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   ArrowRightLeft, AlertCircle, ArrowRight, Loader2, RefreshCw,
   UserCheck, Users, TrendingUp, CheckSquare, LifeBuoy, ShieldX,
+  type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
@@ -15,8 +16,12 @@ import toast from 'react-hot-toast';
 type Member = { user_id: string; full_name: string; email: string; role_slug: string };
 type Counts = { leads: number; contacts: number; deals: number; tasks: number; tickets: number };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const RESOURCE_META: { key: keyof Counts; label: string; icon: any }[] = [
+type MemberRow = { userId: string; fullName: string | null; email: string; roleSlug?: string | null };
+type MembersResponse = { data?: MemberRow[] };
+type MeResponse = { user?: { id?: string | null }; is_admin?: boolean };
+type TeamsResponse = { data?: { id: string; name: string }[] };
+
+const RESOURCE_META: { key: keyof Counts; label: string; icon: LucideIcon }[] = [
   { key: 'leads',    label: 'Leads',    icon: UserCheck },
   { key: 'contacts', label: 'Contacts', icon: Users },
   { key: 'deals',    label: 'Deals',    icon: TrendingUp },
@@ -48,13 +53,11 @@ export default function BulkTransferPage() {
   const controller = new AbortController();
   let ignore = false;
     Promise.all([
-      fetch('/api/tenant/members', { signal: controller.signal }).then(r => r.ok ? r.json() : { data: [] }),
-      fetch('/api/tenant/me', { signal: controller.signal }).then(r => r.ok ? r.json() : {}),
-      fetch('/api/tenant/teams', { signal: controller.signal }).then(r => r.ok ? r.json() : { data: [] }),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ]).then(([mem, me, tms]: any[]) => { if (ignore) return; 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      setMembers((mem.data ?? []).map((m: any) => ({
+      fetch('/api/tenant/members', { signal: controller.signal }).then(r => r.ok ? r.json() as Promise<MembersResponse> : { data: [] }),
+      fetch('/api/tenant/me', { signal: controller.signal }).then(r => r.ok ? r.json() as Promise<MeResponse> : {} as MeResponse),
+      fetch('/api/tenant/teams', { signal: controller.signal }).then(r => r.ok ? r.json() as Promise<TeamsResponse> : { data: [] }),
+    ]).then(([mem, me, tms]) => { if (ignore) return;
+      setMembers((mem.data ?? []).map((m) => ({
         user_id: m.userId, full_name: m.fullName ?? m.email, email: m.email, role_slug: m.roleSlug ?? '',
        } )));
       setMe({ id: me?.user?.id ?? '', is_admin: me?.is_admin ?? false });
