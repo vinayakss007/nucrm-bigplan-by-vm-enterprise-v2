@@ -9,6 +9,7 @@ import { db } from '@/drizzle/db';
 import { customPlugins } from '@/drizzle/schema';
 import { eq, and, isNull } from 'drizzle-orm';
 import { verifyWebhookSignature, isWebhookTimestampValid, handleInboundWebhook } from '@/lib/plugins/webhook-handler';
+import { logError } from '@/lib/errors-server';
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -101,7 +102,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     try {
       body = JSON.parse(rawBody);
     } catch (err) {
-      console.error('[plugins] webhook parse error', err);
+      await logError({ error: err, context: 'plugins webhook parse error', requestMethod: 'POST' });
     }
 
     // Extract relevant headers

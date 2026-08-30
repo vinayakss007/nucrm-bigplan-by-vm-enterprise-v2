@@ -12,6 +12,7 @@ import { scorePageUrl } from '@/lib/visitor-tracking';
 import { createHash } from 'crypto';
 import { checkPublicRateLimit } from '@/lib/rate-limit-simple';
 import { readJsonBody } from '@/lib/api/validate';
+import { logError } from '@/lib/errors-server';
 
 /**
  * #1074 (defense-in-depth): visitor-supplied url/title/referrer are stored raw
@@ -113,7 +114,7 @@ export async function POST(req: NextRequest) {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     // Still return 200 to not block client-side tracking
-    console.error('[visitor-track] Error:', err);
+    await logError({ error: err, context: 'visitor-track POST', requestMethod: 'POST' });
     return NextResponse.json({ ok: true }, { status: 200 });
   }
 }

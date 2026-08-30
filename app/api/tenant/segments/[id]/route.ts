@@ -11,6 +11,7 @@ import { eq, and } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { logError } from '@/lib/errors-server';
 
 export const DELETE = withApiRoute(
   async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
@@ -45,7 +46,7 @@ export const DELETE = withApiRoute(
 
       return NextResponse.json({ ok: true, message: 'Segment deleted' });
     } catch (err) {
-      console.error('[segments/[id] DELETE]', err);
+      await logError({ error: err, context: 'segments/[id] DELETE', requestMethod: 'DELETE' });
       return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     }
   },

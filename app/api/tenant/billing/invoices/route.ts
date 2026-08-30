@@ -10,6 +10,7 @@ import { db } from '@/drizzle/db';
 import { billingEvents } from '@/drizzle/schema';
 import { eq, and, desc, isNull } from 'drizzle-orm';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { logError } from '@/lib/errors-server';
 
 export const GET = withApiRoute(async (request: NextRequest) => {
   try {
@@ -53,7 +54,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[billing invoices GET]', err);
+    await logError({ error: err, context: 'billing invoices GET', requestMethod: 'GET' });
     return apiError(err);
   }
 });

@@ -132,7 +132,8 @@ export const GET = withApiRoute(async (req: NextRequest) => {
       },
     });
   } catch (err) {
-    console.error('[conversion-funnel GET]', err);
+    const { logError } = await import('@/lib/errors-server');
+    await logError({ error: err, context: 'conversion-funnel GET', requestMethod: 'GET' });
     return apiError(err);
   }
 });

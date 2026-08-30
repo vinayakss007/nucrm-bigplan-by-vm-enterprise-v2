@@ -9,6 +9,7 @@ import { validateTwilioSignature, handleIncomingSMS, updateDeliveryStatus } from
 import type { IncomingSMSPayload, DeliveryStatusPayload } from '@/lib/sms';
 import { checkPublicRateLimit } from '@/lib/rate-limit-simple';
 import { readJsonBody } from '@/lib/api/validate';
+import { logError } from '@/lib/errors-server';
 
 /**
  * Twilio SMS Webhook Handler
@@ -43,7 +44,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Invalid signature' }, { status: 403 });
       }
     } else if (process.env['NODE_ENV'] === 'production') {
-      console.error('[sms-webhook] TWILIO_AUTH_TOKEN is not set. Rejecting webhook request.');
+      await logError({ error: new Error('TWILIO_AUTH_TOKEN is not set. Rejecting webhook request.'), context: 'sms-webhook config', requestMethod: 'POST' });
       return NextResponse.json({ error: 'SMS webhook secret not configured' }, { status: 403 });
     } else {
       console.warn('[sms-webhook] TWILIO_AUTH_TOKEN is not set — skipping signature validation (dev only)');
