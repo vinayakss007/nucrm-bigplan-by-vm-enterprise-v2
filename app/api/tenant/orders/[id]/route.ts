@@ -14,6 +14,7 @@ import { logAudit } from '@/lib/audit';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { logError } from '@/lib/errors-server';
 
 // Order status state machine - defines valid transitions
 const VALID_TRANSITIONS: Record<string, string[]> = {
@@ -53,7 +54,7 @@ export const GET = withApiRoute(async (req: NextRequest, { params }: { params: P
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[orders [id] GET]', err);
+    await logError({ error: err, context: 'orders [id] GET', requestMethod: 'GET' });
     return apiError(err);
   }
 });
@@ -181,7 +182,7 @@ export const PUT = withApiRoute(async (req: NextRequest, { params }: { params: P
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[orders [id] PUT]', err);
+    await logError({ error: err, context: 'orders [id] PUT', requestMethod: 'PUT' });
     return apiError(err);
   }
 });
@@ -228,7 +229,7 @@ export const DELETE = withApiRoute(async (req: NextRequest, { params }: { params
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[orders [id] DELETE]', err);
+    await logError({ error: err, context: 'orders [id] DELETE', requestMethod: 'DELETE' });
     return apiError(err);
   }
 });

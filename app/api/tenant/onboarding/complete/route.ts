@@ -11,6 +11,7 @@ import { ModuleRegistry } from '@/lib/modules/registry';
 import { readJsonBody } from '@/lib/api/validate';
 import { db } from '@/drizzle/db';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { logError } from '@/lib/errors-server';
 
 /**
  * POST /api/tenant/onboarding/complete
@@ -44,10 +45,10 @@ export const POST = withApiRoute(async (request: NextRequest) => {
         if (result.ok) {
           modulesInstalled++;
         } else {
-          console.error(`[Onboarding] Failed to install module ${moduleId}: ${result.error}`);
+          await logError({ error: result.error, context: 'Onboarding module install', requestMethod: 'POST', tenantId: ctx.tenantId, userId: ctx.userId, metadata: { moduleId } });
         }
       } catch (err) {
-        console.error(`[Onboarding] Failed to install module ${moduleId}:`, err);
+        await logError({ error: err, context: 'Onboarding module install', requestMethod: 'POST', tenantId: ctx.tenantId, userId: ctx.userId, metadata: { moduleId } });
         // Don't fail the whole onboarding for one module
       }
     }
@@ -84,7 +85,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[Onboarding Complete] Error:', err);
+    await logError({ error: err, context: 'Onboarding Complete', requestMethod: 'POST' });
     return apiError(err);
   }
 });
