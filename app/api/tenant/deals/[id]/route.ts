@@ -420,19 +420,18 @@ async function handleDealWon(ctx: any, dealId: string, row: any) {
     }
   }
 
-  // Record won_at timestamp in metadata or specific field if exists
-  // The original schema didn't have won_at in Drizzle yet, but raw SQL update tried to set it.
-  // If it's not in Drizzle, we might need to add it or use metadata.
-  // Looking at drizzle/schema/crm.ts, deals doesn't have wonAt.
-  // Let's check if it's in the legacy SQL. Yes: `UPDATE public.deals SET won_at = now()`
-  // I should probably add wonAt to the schema or use metadata.
-  // For now, let's use metadata to be safe and compatible.
+  // Record the win time. `won_at` is now a first-class, indexable column
+  // (migration 0084) so reporting/forecasting can query it; we also keep the
+  // metadata copy for backward compatibility with any consumer still reading
+  // metadata.won_at.
+  const wonAt = new Date();
   await db.update(deals)
     .set({
-      metadata: { ...((row.metadata as Record<string, unknown>) || {}), won_at: new Date().toISOString() }
+      wonAt,
+      metadata: { ...((row.metadata as Record<string, unknown>) || {}), won_at: wonAt.toISOString() }
     })
     .where(eq(deals.id, dealId))
-    .catch(err => { void logError({ error: err, context: 'tenant/deals/[id] deal-won metadata update' }); });
+    .catch(err => { void logError({ error: err, context: 'tenant/deals/[id] deal-won won_at update' }); });
 
   // Trigger Automations
   try {
