@@ -38,6 +38,8 @@
   "scripts": {
     "dev": "next dev",
     "dev:nosync": "next dev",
+    "dev:up": "bash scripts/dev-up.sh",
+    "dev:up:dev": "MODE=dev bash scripts/dev-up.sh",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",

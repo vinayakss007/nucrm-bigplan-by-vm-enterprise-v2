@@ -62,7 +62,10 @@ fi
 echo "[dev-up] Using Postgres binaries in: $PGBIN"
 
 # ---- Load Node --------------------------------------------------------------
-if [[ -s "${NVM_DIR:-$HOME/.nvm}/nvm.sh" ]]; then
+# When invoked via `npm run`, npm sets npm_config_prefix, which is incompatible
+# with nvm and makes `nvm use` fail (leaving node off PATH). Unset it first.
+unset npm_config_prefix 2>/dev/null || true
+if ! command -v node >/dev/null 2>&1 && [[ -s "${NVM_DIR:-$HOME/.nvm}/nvm.sh" ]]; then
   export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
   # shellcheck disable=SC1091
   . "$NVM_DIR/nvm.sh"
