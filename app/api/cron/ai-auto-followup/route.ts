@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { acquireLock } from '@/lib/cache';
 import { verifySecret } from '@/lib/crypto';
+import { logError } from '@/lib/errors-server';
 import { db } from '@/drizzle/db';
 import { tenants } from '@/drizzle/schema/core';
 import { and, isNull, sql } from 'drizzle-orm';
@@ -58,7 +59,7 @@ export async function POST(req: NextRequest) {
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Internal error';
-    console.error('[ai-auto-followup]', err);
+    void logError({ error: err, context: 'cron/ai-auto-followup' });
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

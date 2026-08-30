@@ -12,6 +12,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { tenants } from '@/drizzle/schema/core';
+import { logError } from '@/lib/errors-server';
 import { eq } from 'drizzle-orm';
 import { bulkScoreLeads } from '@/lib/ai/scoring';
 import { verifyCronSecret } from '@/lib/auth/cron';
@@ -45,7 +46,7 @@ export async function POST(req: NextRequest) {
         const scored = await bulkScoreLeads(tenant.id, tenant.ownerId, 20);
         results.push({ tenantId: tenant.id, scoredCount: scored.length });
       } catch (err) {
-        console.error(`[LeadScoring:${tenant.id}]`, err);
+        void logError({ error: err, context: 'cron/process-lead-scoring per-tenant', tenantId: tenant.id, userId: tenant.ownerId });
       }
     }
 
@@ -55,7 +56,7 @@ export async function POST(req: NextRequest) {
       results,
     });
   } catch (err) {
-    console.error('[LeadScoring] Error:', err);
+    void logError({ error: err, context: 'cron/process-lead-scoring' });
     return NextResponse.json({ error: 'Failed to process lead scoring' }, { status: 500 });
   }
 }

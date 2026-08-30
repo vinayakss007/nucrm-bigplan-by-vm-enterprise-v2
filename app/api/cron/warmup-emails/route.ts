@@ -6,6 +6,7 @@
 import { verifySecret } from '@/lib/crypto';
 import { acquireLock } from '@/lib/cache';
 import { processWarmUp } from '@/lib/email/warmup';
+import { logError } from '@/lib/errors-server';
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(req: NextRequest) {
@@ -23,7 +24,7 @@ export async function POST(req: NextRequest) {
     const result = await processWarmUp();
     return NextResponse.json({ ok: true, ...result });
   } catch (err) {
-    console.error('[WarmupEmails] Error:', err);
+    void logError({ error: err, context: 'cron/warmup-emails' });
     return NextResponse.json({ error: 'Failed to process warmup' }, { status: 500 });
   }
 }

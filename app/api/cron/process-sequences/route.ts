@@ -296,7 +296,7 @@ export async function POST(req: NextRequest) {
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } catch (err: any) {
-        console.error(`[Sequence Processor] Error processing enrollment ${enrollment.id}:`, err.message);
+        void logError({ error: err, context: 'cron/process-sequences per-enrollment', metadata: { enrollmentId: enrollment.id } });
         // Reschedule for 1 hour later in a separate statement (outside the failed tx)
         await db.update(sequenceEnrollments)
           .set({ nextStepAt: new Date(Date.now() + 3600000), updatedAt: new Date() })
@@ -309,7 +309,7 @@ export async function POST(req: NextRequest) {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[Sequence Processor] Fatal error:', err.message);
+    void logError({ error: err, context: 'cron/process-sequences', level: 'fatal' });
     return apiError(err);
   } finally {
     await releaseLock(SEQUENCE_LOCK_KEY, lock.value);

@@ -154,7 +154,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ ok: true, remindersSent, pastDue: pastDue.length });
   } catch (err) {
-    console.error('[subscription-renewal-check]', err);
+    void logError({ error: err, context: 'cron/subscription-renewal-check' });
     return apiError(err);
   }
 }

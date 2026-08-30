@@ -156,7 +156,7 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (err: unknown) {
-    console.error('[SLA Check] Error:', err);
+    void logError({ error: err, context: 'cron/sla-check' });
     return apiError(err);
   }
 }

@@ -6,6 +6,7 @@
 import { apiError } from '@/lib/api-error';
 import { verifySecret } from '@/lib/crypto';
 import { acquireLock } from '@/lib/cache';
+import { logError } from '@/lib/errors-server';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { sql } from 'drizzle-orm';
@@ -27,7 +28,7 @@ export async function POST(request: NextRequest) {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) { 
-    console.error('[UsageSnapshot] Error:', err);
+    void logError({ error: err, context: 'cron/usage-snapshot' });
     return apiError(err); 
   }
 }

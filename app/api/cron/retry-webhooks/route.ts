@@ -6,6 +6,7 @@
 import { verifySecret } from '@/lib/crypto';
 import { acquireLock } from '@/lib/cache';
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/errors-server';
 import { retryFailedWebhooks } from '@/lib/webhooks';
 import { purgeOldDLQEntries } from '@/lib/webhooks/dlq';
 
@@ -28,12 +29,12 @@ export async function POST(req: NextRequest) {
     try {
       purged = await purgeOldDLQEntries(30);
     } catch (purgeErr) {
-      console.error('[RetryWebhooks] DLQ purge error:', purgeErr);
+      void logError({ error: purgeErr, context: 'cron/retry-webhooks DLQ purge' });
     }
 
     return NextResponse.json({ ok: true, retried, dlqPurged: purged });
   } catch (err) {
-    console.error('[RetryWebhooks] Error:', err);
+    void logError({ error: err, context: 'cron/retry-webhooks' });
     return NextResponse.json({ error: 'Failed to retry webhooks' }, { status: 500 });
   }
 }

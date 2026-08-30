@@ -175,7 +175,7 @@ export async function POST(request: NextRequest) {
         }
       } catch (uploadErr) {
         offsiteError = uploadErr instanceof Error ? uploadErr.message : String(uploadErr);
-        console.error('[backup] S3 upload failed, keeping local copy:', offsiteError);
+        void logError({ error: uploadErr, context: 'cron/backup S3 upload failed, keeping local copy', level: 'warning' });
         storageType = 'local';
         storagePath = localPath;
       }
@@ -261,7 +261,7 @@ export async function POST(request: NextRequest) {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     const durationMs = Date.now() - t0;
-    console.error('[backup] FAILED:', err.message);
+    void logError({ error: err, context: 'cron/backup', level: 'fatal' });
 
     await db.transaction(async (tx) => {
       await tx.update(backupRecords)
