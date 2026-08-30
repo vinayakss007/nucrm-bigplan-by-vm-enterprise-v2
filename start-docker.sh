@@ -82,14 +82,30 @@ fi
 
 ok "All services healthy (${ELAPSED}s)"
 
-# ── 6. Run database migrations ──────────────────────────────────────────────
+# ── 6. Run database migrations (safe, versioned) ────────────────────────────
+# Uses scripts/migrate.ts, NOT scripts/push-db.mts (drizzle-kit push). push
+# force-syncs the schema and can DROP columns/tables (data loss) on every run.
+# migrate.ts only applies genuinely pending migrations from the journal — if
+# nothing is pending it is a no-op, so this is safe to run on every restart.
 log "Running database migrations…"
-MIG_RESULT=$(docker exec nucrm-app npx tsx scripts/push-db.mts 2>&1) || true
-if echo "$MIG_RESULT" | grep -qi "error\|fail"; then
-    warn "Migration output (may already be up-to-date):"
-    echo "$MIG_RESULT" | head -20
+if docker exec nucrm-app npx tsx scripts/migrate.ts --yes; then
+    ok "Migrations complete (or none pending)"
 else
-    ok "Migrations complete"
+    err "Migrations failed — refusing to continue. Run: docker compose logs app"
+fi
+
+# ── 6b. Preflight gate ──────────────────────────────────────────────────────
+# Validate env + secrets + DB + migrations + TLS + Redis + email + backups
+# before declaring the app ready. Refuses on hard failures so it never reports
+# healthy while half-broken. Set PREFLIGHT_SKIP=true for emergency override.
+if [[ "${PREFLIGHT_SKIP:-false}" != "true" ]]; then
+    log "Running startup preflight…"
+    if ! docker exec nucrm-app npx tsx scripts/preflight.ts; then
+        err "Preflight failed (see above). Fix the blockers, then run again — or set PREFLIGHT_SKIP=true to override."
+    fi
+    ok "Preflight passed"
+else
+    warn "PREFLIGHT_SKIP=true — skipping startup checks."
 fi
 
 # ── 7. Done! ────────────────────────────────────────────────────────────────

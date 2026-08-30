@@ -238,12 +238,16 @@ install_deps() {
 }
 
 # ── Migrations ──────────────────────────────────────────────────────────────
+# Uses scripts/migrate.ts, NOT scripts/push-db.mts (drizzle-kit push). push
+# force-syncs the schema and can DROP columns/tables (data loss) on every run.
+# migrate.ts only applies genuinely pending migrations from the journal — if
+# nothing is pending it is a no-op, so this is safe to run on every restart.
 run_migrations() {
     log "Running database migrations…"
-    if npx tsx scripts/push-db.mts 2>&1; then
-        ok "Migrations complete"
+    if npx tsx scripts/migrate.ts --yes; then
+        ok "Migrations complete (or none pending)"
     else
-        warn "Migration finished with warnings (schema may already be up-to-date)"
+        err "Migrations failed. Fix the errors above and retry."
     fi
 }
 
