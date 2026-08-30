@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/errors-server';
 import { acquireLock } from '@/lib/cache';
 import { apiError } from '@/lib/api-error';
 import { verifySecret } from '@/lib/crypto';
@@ -65,7 +66,7 @@ export async function POST(req: NextRequest) {
         body: `${info.count} follow-up${info.count > 1 ? 's' : ''} passed their due date and ${info.count > 1 ? 'were' : 'was'} marked as missed.`,
         entity_type: info.entityType as 'deal' | 'contact' | 'lead' | 'task',
         entity_id: info.entityId,
-      }).catch(err => console.error(`[detect-missed-followups] notification failed for user ${userId}:`, err));
+      }).catch(err => void logError({ error: err, context: 'cron/detect-missed-followups notification', level: 'warning', metadata: { userId } }));
     }
 
     return NextResponse.json({
@@ -76,7 +77,7 @@ export async function POST(req: NextRequest) {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[detect-missed-followups]', err);
+    void logError({ error: err, context: 'cron/detect-missed-followups' });
     return apiError(err);
   }
 }

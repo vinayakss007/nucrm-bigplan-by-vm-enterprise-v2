@@ -155,7 +155,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ ok: true, remindersSent, expired: expired.length });
   } catch (err) {
-    console.error('[contract-renewal-check]', err);
+    void logError({ error: err, context: 'cron/contract-renewal-check' });
     return apiError(err);
   }
 }

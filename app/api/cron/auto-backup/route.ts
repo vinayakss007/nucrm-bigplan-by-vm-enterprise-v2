@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/errors-server';
 import { acquireLock } from '@/lib/cache';
 import { Pool } from 'pg';
 import { pgSslConfig } from '@/lib/db/ssl-config';
@@ -133,7 +134,7 @@ async function runScheduledBackups(pool: Pool) {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
-      console.error(`[Auto Backup] Schedule ${schedule.id} failed:`, err);
+      void logError({ error: err, context: 'cron/auto-backup schedule', metadata: { scheduleId: schedule.id } });
       errors++;
     }
   }
@@ -200,7 +201,7 @@ async function backupSingleTenant(
         `Backup failed for tenant ${tenantName}: ${err.message}`,
       );
     } catch (err) {
-      console.error('[AutoBackup:EmailAlert]', err);
+      void logError({ error: err, context: 'cron/auto-backup email alert', level: 'warning' });
     }
 
     throw err;

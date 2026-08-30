@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { verifySecret } from '@/lib/crypto';
+import { logError } from '@/lib/errors-server';
 import { acquireLock } from '@/lib/cache';
 import { NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
@@ -117,7 +118,7 @@ export async function POST(request: Request) {
  
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-        console.error(`[subscription-check:${sub.tenantId}]`, err);
+        void logError({ error: err, context: 'cron/subscription-check tenant', tenantId: sub.tenantId });
       }
     }
 
@@ -131,7 +132,7 @@ export async function POST(request: Request) {
     });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[subscription-check:cron]', err);
+    void logError({ error: err, context: 'cron/subscription-check' });
     return NextResponse.json(
       { error: 'Internal error' },
       { status: 500 }
