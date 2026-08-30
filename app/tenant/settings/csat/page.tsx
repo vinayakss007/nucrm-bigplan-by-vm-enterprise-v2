@@ -4,7 +4,8 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
+import { useApiQuery } from '@/lib/query/client';
 import { BarChart3, Star, TrendingUp, MessageSquare } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -28,32 +29,15 @@ interface CSATStats {
 }
 
 export default function CSATDashboardPage() {
-  const [stats, setStats] = useState<CSATStats | null>(null);
-  const [loading, setLoading] = useState(true);
   const [days, setDays] = useState(30);
 
-  const load = useCallback(async (signal?: AbortSignal) => {
-    setLoading(true);
-    try {
-      const res = await fetch(`/api/tenant/csat/stats?days=${days}`, { signal });
-      if (res.ok) {
-        const d = await res.json();
-        if (signal?.aborted) return;
-        setStats(d.data);
-      }
-    } catch (e) {
-      if ((e as Error)?.name === 'AbortError') return;
-      throw e;
-    } finally {
-      if (!signal?.aborted) setLoading(false);
-    }
-  }, [days]);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    load(controller.signal);
-    return () => controller.abort();
-  }, [load]);
+  // #1328: stats via TanStack Query (was raw fetch + useEffect). days is part of
+  // the key so switching the range refetches and caches per window.
+  const { data, isLoading: loading } = useApiQuery<{ data?: CSATStats }>(
+    ['tenant', 'csat', 'stats', { days }],
+    `/api/tenant/csat/stats?days=${days}`,
+  );
+  const stats: CSATStats | null = data?.data ?? null;
 
   const emojis = ['😞', '😕', '😐', '😊', '😄'];
 

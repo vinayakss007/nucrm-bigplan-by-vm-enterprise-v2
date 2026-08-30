@@ -4,7 +4,9 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import { Shield, Plus, Edit, Trash2, Save, Lock, ChevronDown, Check, Crown } from 'lucide-react';
 import { PERMISSIONS, PERMISSION_CATEGORIES } from '@/lib/permissions/definitions';
 import { confirmThen } from '@/components/ui/confirm-dialog';
@@ -102,35 +104,35 @@ function RoleEditor({ role, onSave, onClose }: {
   );
 }
 
+const ROLES_QUERY = ['tenant', 'roles'] as const;
+
 export default function RolesPermissionsPage() {
-  const [roles, setRoles] = useState<Role[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [editRole, setEditRole] = useState<Role | null>(null);
   const [showEditor, setShowEditor] = useState(false);
 
-  const load = async (signal?: AbortSignal) => {
-    try {
-      const res = await fetch('/api/tenant/roles', { signal });
-      const data = await res.json();
-      if (signal?.aborted) return;
-      setRoles(data.data||[]);
-      setLoading(false);
-    } catch (e) {
-      if ((e as Error)?.name === 'AbortError') return;
-      throw e;
-    }
-  };
-  useEffect(() => {
-    const controller = new AbortController();
-    load(controller.signal);
-    return () => controller.abort();
-  }, []);
+  // #1328: list via TanStack Query (was raw fetch + useEffect).
+  const { data, isLoading: loading, error } = useApiQuery<{ data?: Role[] }>(
+    ROLES_QUERY,
+    '/api/tenant/roles',
+  );
+  const roles: Role[] = data?.data ?? [];
+  if (error) toast.error('Failed to load roles');
+
+  const load = () => queryClient.invalidateQueries({ queryKey: ROLES_QUERY });
+
+  const deleteRole = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/tenant/roles/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete');
+    },
+    onSuccess: () => { toast.success('Deleted'); load(); },
+    onError: () => toast.error('Failed to delete'),
+  });
 
   const del = async (id: string) => {
     await confirmThen('Delete this role? Users assigned this role will lose their permissions.', async () => {
-      await fetch(`/api/tenant/roles/${id}`, { method: 'DELETE' });
-      setRoles(prev => prev.filter(r => r.id!==id));
-      toast.success('Deleted');
+      deleteRole.mutate(id);
     });
   };
 

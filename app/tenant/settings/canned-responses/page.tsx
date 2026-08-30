@@ -4,7 +4,9 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import { Plus, Edit2, Trash2, X, Loader2, MessageSquare, Search } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import toast from 'react-hot-toast';
@@ -21,41 +23,27 @@ interface CannedResponse {
 const CATEGORIES = ['general', 'billing', 'technical', 'onboarding', 'sales', 'other'];
 
 export default function CannedResponsesPage() {
-  const [responses, setResponses] = useState<CannedResponse[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<CannedResponse | null>(null);
-  const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [form, setForm] = useState({ category: 'general', title: '', content: '', shortcut: '' });
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
 
-  const load = useCallback(async (signal?: AbortSignal) => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams();
-      if (categoryFilter) params.set('category', categoryFilter);
-      if (search) params.set('search', search);
-      const res = await fetch(`/api/tenant/canned-responses?${params}`, { signal });
-      if (res.ok) {
-        const d = await res.json();
-        if (signal?.aborted) return;
-        setResponses(d.data ?? []);
-      }
-    } catch (e) {
-      if ((e as Error)?.name === 'AbortError') return;
-      throw e;
-    } finally {
-      if (!signal?.aborted) setLoading(false);
-    }
-  }, [categoryFilter, search]);
+  // #1328: list via TanStack Query (was raw fetch + useEffect). category/search
+  // are part of the key so each view refetches and caches independently.
+  const params = new URLSearchParams();
+  if (categoryFilter) params.set('category', categoryFilter);
+  if (search) params.set('search', search);
+  const { data, isLoading: loading, error } = useApiQuery<{ data?: CannedResponse[] }>(
+    ['tenant', 'canned-responses', { categoryFilter, search }],
+    `/api/tenant/canned-responses?${params}`,
+  );
+  const responses: CannedResponse[] = data?.data ?? [];
+  if (error) toast.error('Failed to load canned responses');
 
-  useEffect(() => {
-    const controller = new AbortController();
-    load(controller.signal);
-    return () => controller.abort();
-  }, [load]);
+  const reload = () => queryClient.invalidateQueries({ queryKey: ['tenant', 'canned-responses'] });
 
   const startEdit = (r: CannedResponse) => {
     setEditing(r);
@@ -63,33 +51,46 @@ export default function CannedResponsesPage() {
     setShowForm(true);
   };
 
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSaving(true);
-    const url = editing ? `/api/tenant/canned-responses/${editing.id}` : '/api/tenant/canned-responses';
-    const method = editing ? 'PATCH' : 'POST';
-    const res = await fetch(url, {
-      method,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(form),
-    });
-    const d = await res.json();
-    if (res.ok) {
-      toast.success(editing ? 'Updated' : 'Created');
+  const saveResponse = useMutation({
+    mutationFn: async () => {
+      const url = editing ? `/api/tenant/canned-responses/${editing.id}` : '/api/tenant/canned-responses';
+      const method = editing ? 'PATCH' : 'POST';
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(typeof d.error === 'string' ? d.error : 'Validation error');
+      return Boolean(editing);
+    },
+    onSuccess: (wasEditing) => {
+      toast.success(wasEditing ? 'Updated' : 'Created');
       setShowForm(false); setEditing(null);
       setForm({ category: 'general', title: '', content: '', shortcut: '' });
-      load();
-    } else {
-      toast.error(typeof d.error === 'string' ? d.error : 'Validation error');
-    }
-    setSaving(false);
+      reload();
+    },
+    onError: (e: Error) => toast.error(e.message || 'Validation error'),
+  });
+  const saving = saveResponse.isPending;
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    saveResponse.mutate();
   };
+
+  const deleteResponse = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/tenant/canned-responses/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete');
+    },
+    onSuccess: () => { toast.success('Deleted'); reload(); },
+    onError: () => toast.error('Failed to delete'),
+  });
 
   const del = async (id: string) => {
     await confirmThen('Delete this canned response?', async () => {
-      await fetch(`/api/tenant/canned-responses/${id}`, { method: 'DELETE' });
-      setResponses(r => r.filter(x => x.id !== id));
-      toast.success('Deleted');
+      deleteResponse.mutate(id);
     });
   };
 
