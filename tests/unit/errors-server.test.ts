@@ -22,6 +22,10 @@ vi.mock('@/lib/critical-error-alert', () => ({
   sendCriticalErrorAlert: (...args: unknown[]) => sendCriticalErrorAlertMock(...args),
 }));
 
+// Grafana/Loki forward is best-effort and gated on GRAFANA_ENABLED.
+const grafanaLogMock = vi.fn();
+vi.mock('@/lib/grafana', () => ({ metrics: { log: (...a: unknown[]) => grafanaLogMock(...a) } }));
+
 // Grab the row object from the most recent db.insert(...).values(row) call.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function lastInsertedRow(): any {
@@ -32,6 +36,7 @@ describe('logError (server)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     getCurrentRequestIdMock.mockReturnValue(undefined);
+    delete process.env.GRAFANA_ENABLED;
   });
 
   it('handles Error instances', async () => {
@@ -108,6 +113,51 @@ describe('logError (server)', () => {
 
   it('still writes the DB even if the Sentry forward throws', async () => {
     captureExceptionMock.mockImplementationOnce(() => { throw new Error('sentry down'); });
+    const { logError } = await import('@/lib/errors-server');
+    const { db } = await import('@/drizzle/db');
+    await expect(logError({ error: 'e', context: 'ctx' })).resolves.toBeUndefined();
+    expect(db.insert).toHaveBeenCalled();
+  });
+
+  // ── Observability: Grafana/Loki forward (gated on GRAFANA_ENABLED) ────────
+  it('does NOT forward to Loki when GRAFANA_ENABLED is unset (true no-op)', async () => {
+    const { logError } = await import('@/lib/errors-server');
+    await logError({ error: new Error('x'), context: 'ctx' });
+    expect(grafanaLogMock).not.toHaveBeenCalled();
+  });
+
+  it('forwards to Loki when GRAFANA_ENABLED=true, mapping level and carrying correlation', async () => {
+    process.env.GRAFANA_ENABLED = 'true';
+    getCurrentRequestIdMock.mockReturnValue('req-loki');
+    const { logError } = await import('@/lib/errors-server');
+    await logError({ error: new Error('kaput'), context: 'jobs', tenantId: 't1', userId: 'u1', level: 'warning' });
+    expect(grafanaLogMock).toHaveBeenCalledTimes(1);
+    const [lvl, message, ctx] = grafanaLogMock.mock.calls[0];
+    expect(lvl).toBe('warn'); // 'warning' maps to Loki 'warn'
+    expect(message).toBe('kaput');
+    expect(ctx).toMatchObject({ context: 'jobs', requestId: 'req-loki', tenantId: 't1', userId: 'u1' });
+  });
+
+  it('maps fatal to Loki error level', async () => {
+    process.env.GRAFANA_ENABLED = 'true';
+    const { logError } = await import('@/lib/errors-server');
+    await logError({ error: new Error('dead'), level: 'fatal', context: 'ctx' });
+    expect(grafanaLogMock.mock.calls[0][0]).toBe('error');
+  });
+
+  it('captureToSentry:false skips BOTH Sentry and Loki, but still writes the DB', async () => {
+    process.env.GRAFANA_ENABLED = 'true';
+    const { logError } = await import('@/lib/errors-server');
+    const { db } = await import('@/drizzle/db');
+    await logError({ error: 'quiet', context: 'ctx', captureToSentry: false });
+    expect(db.insert).toHaveBeenCalled();
+    expect(captureExceptionMock).not.toHaveBeenCalled();
+    expect(grafanaLogMock).not.toHaveBeenCalled();
+  });
+
+  it('still writes the DB even if the Loki forward throws', async () => {
+    process.env.GRAFANA_ENABLED = 'true';
+    grafanaLogMock.mockImplementationOnce(() => { throw new Error('loki down'); });
     const { logError } = await import('@/lib/errors-server');
     const { db } = await import('@/drizzle/db');
     await expect(logError({ error: 'e', context: 'ctx' })).resolves.toBeUndefined();
