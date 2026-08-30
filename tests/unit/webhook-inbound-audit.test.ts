@@ -424,9 +424,12 @@ describe('logWebhookDelivery resilience', () => {
   it('does not propagate a db failure', async () => {
     h.failInsertTable = webhookInboundLogs;
     const { logWebhookDelivery } = await route();
+    const { logError } = await import('@/lib/errors-server');
 
     await expect(logWebhookDelivery(baseInput())).resolves.toBeUndefined();
-    expect(consoleErrorSpy).toHaveBeenCalled();
+    // The failure must still be recorded — now via structured logError (#1063),
+    // not raw console.error.
+    expect(logError).toHaveBeenCalled();
   });
 
   it('lets the webhook request succeed even when the audit insert fails', async () => {

@@ -76,7 +76,7 @@ export async function POST(req: NextRequest) {
   // X-Telegram-Bot-Api-Secret-Token header (set via setWebhook secret_token).
   const webhookSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
   if (!webhookSecret) {
-    console.error('[telegram bot] TELEGRAM_WEBHOOK_SECRET is not set. Rejecting webhook request.');
+    void logError({ error: 'TELEGRAM_WEBHOOK_SECRET is not set; rejecting webhook request', context: 'webhooks/telegram/bot misconfig', level: 'warning' });
     return NextResponse.json({ error: 'telegram secret not configured' }, { status: 403 });
   }
 
