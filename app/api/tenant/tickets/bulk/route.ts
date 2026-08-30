@@ -13,6 +13,7 @@
 import { apiError } from '@/lib/api-error';
 import { escapeLike } from '@/lib/api/sanitize-like';
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/errors-server';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db, type DbClient } from '@/drizzle/db';
 import { supportTickets } from '@/drizzle/schema';
@@ -150,7 +151,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
   
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[tickets bulk]', err);
+    void logError({ error: err, context: 'tenant/tickets/bulk' });
     return apiError(err);
   }
 });

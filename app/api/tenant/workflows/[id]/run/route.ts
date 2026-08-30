@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/errors-server';
 import { apiError } from '@/lib/api-error';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { triggerWorkflowSchema } from '@/lib/api/schemas';
@@ -62,7 +63,7 @@ export const POST = withApiRoute(async (request: NextRequest,
       message: 'Workflow execution completed',
     });
   } catch (err: unknown) {
-    console.error('[Workflow Run] POST error:', err);
+    void logError({ error: err, context: 'tenant/workflows/[id]/run POST' });
     return apiError(err);
   }
 });

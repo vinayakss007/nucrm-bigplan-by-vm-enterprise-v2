@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/errors-server';
 import { requireTenantCtx } from '@/lib/tenant/context';
 import { db } from '@/drizzle/db';
 import { scheduledReports } from '@/drizzle/schema';
@@ -22,7 +23,7 @@ export async function GET(_request: NextRequest) {
 
     return NextResponse.json({ data: reports });
   } catch (error) {
-    console.error('[scheduled-reports/GET]', error);
+    void logError({ error, context: 'tenant/analytics/scheduled-reports GET' });
     return NextResponse.json({ error: 'Failed to fetch reports' }, { status: 500 });
   }
 }
@@ -55,7 +56,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ data: report }, { status: 201 });
   } catch (error) {
-    console.error('[scheduled-reports/POST]', error);
+    void logError({ error, context: 'tenant/analytics/scheduled-reports POST' });
     return NextResponse.json({ error: 'Failed to create report' }, { status: 500 });
   }
 }

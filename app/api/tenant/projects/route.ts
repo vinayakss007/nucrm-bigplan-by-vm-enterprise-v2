@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/errors-server';
 import { apiError } from '@/lib/api-error';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { createProjectSchema } from '@/lib/api/schemas';
@@ -67,7 +68,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[projects GET]', err);
+    void logError({ error: err, context: 'tenant/projects GET' });
     return apiError(err);
   }
 });
@@ -112,7 +113,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[projects POST]', err);
+    void logError({ error: err, context: 'tenant/projects POST' });
     return apiError(err);
   }
 });

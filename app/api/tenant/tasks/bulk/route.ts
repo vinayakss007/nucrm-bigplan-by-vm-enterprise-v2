@@ -332,7 +332,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[tasks bulk POST]', err);
+    void logError({ error: err, context: 'tenant/tasks/bulk POST' });
     await logError({ error: err, context: 'tasks/bulk', tenantId: ctx?.tenantId });
     return apiError(err);
   }
