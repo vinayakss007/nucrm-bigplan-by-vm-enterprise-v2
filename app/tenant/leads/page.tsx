@@ -82,8 +82,7 @@ export default async function LeadsPage() {
       orderBy: [asc(companies.name)],
       limit: 100,
       columns: { id: true, name: true, industry: true, website: true }
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    }).then(c => c.map((company: any) => ({
+    }).then(c => c.map((company) => ({
       id: company.id,
       name: company.name,
       industry: company.industry,
@@ -130,16 +129,11 @@ export default async function LeadsPage() {
     <Suspense fallback={<LoadingSkeleton />}>
       <LeadsClient
         permissions={permissions}
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-        teamMembers={teamMembers as any}
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-        companies={companiesList as any}
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-        contacts={contactsList as any}
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-        stats={stats as any}
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-        sources={sources as any}
+        teamMembers={teamMembers}
+        companies={companiesList}
+        contacts={contactsList}
+        stats={stats}
+        sources={sources}
         tenantId={tid}
         userId={ctx.userId}
         defaultView={defaultView}

@@ -5,7 +5,7 @@
  */
 'use client';
 import { useEffect, useState } from 'react';
-import { Plane, Save, Loader2, Calendar, User, MessageSquare, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Plane, Save, Loader2, Calendar, User, MessageSquare, AlertCircle, CheckCircle2, type LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
@@ -27,6 +27,11 @@ const DEFAULT: OOO = {
   auto_reassign: false,
 };
 
+type OooResponse = { out_of_office?: OOO };
+type MemberRow = { userId: string; fullName: string | null; email: string };
+type MembersResponse = { data?: MemberRow[] };
+type MeResponse = { user?: { id?: string | null } };
+
 export default function OutOfOfficePage() {
   const [ooo, setOoo] = useState<OOO>(DEFAULT);
   const [original, setOriginal] = useState<OOO>(DEFAULT);
@@ -39,15 +44,13 @@ export default function OutOfOfficePage() {
   const controller = new AbortController();
   let ignore = false;
     Promise.all([
-      fetch('/api/user/out-of-office', { signal: controller.signal }).then(r => r.ok ? r.json() : { out_of_office: DEFAULT }),
-      fetch('/api/tenant/members', { signal: controller.signal }).then(r => r.ok ? r.json() : { data: [] }),
-      fetch('/api/tenant/me', { signal: controller.signal }).then(r => r.ok ? r.json() : {}),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ]).then(([oooRes, members, me]: any[]) => { if (ignore) return; 
+      fetch('/api/user/out-of-office', { signal: controller.signal }).then(r => r.ok ? r.json() as Promise<OooResponse> : { out_of_office: DEFAULT }),
+      fetch('/api/tenant/members', { signal: controller.signal }).then(r => r.ok ? r.json() as Promise<MembersResponse> : { data: [] }),
+      fetch('/api/tenant/me', { signal: controller.signal }).then(r => r.ok ? r.json() as Promise<MeResponse> : {} as MeResponse),
+    ]).then(([oooRes, members, me]) => { if (ignore) return;
       setOoo(oooRes.out_of_office ?? DEFAULT);
       setOriginal(oooRes.out_of_office ?? DEFAULT);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const mapped = (members.data ?? []).map((m: any) => ({
+      const mapped = (members.data ?? []).map((m) => ({
         user_id: m.userId, full_name: m.fullName ?? m.email, email: m.email,
        } ));
       setMembers(mapped);
@@ -70,11 +73,10 @@ export default function OutOfOfficePage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ out_of_office: ooo }),
     });
-    const d = await res.json();
+    const d: { reassigned?: Record<string, unknown>; error?: string } = await res.json();
     if (res.ok) {
       const total = ooo.auto_reassign && d.reassigned
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-        ? Object.values(d.reassigned).reduce((a: number, b: any) => a + Number(b ?? 0), 0)
+        ? Object.values(d.reassigned).reduce((a: number, b) => a + Number(b ?? 0), 0)
         : 0;
       toast.success(total > 0 ? `Saved. Reassigned ${total} record(s).` : 'Out-of-office saved');
       setOriginal(ooo);
@@ -242,8 +244,7 @@ export default function OutOfOfficePage() {
 
 const inp = 'w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function Section({ icon: Icon, title, children }: { icon: any; title: string; children: React.ReactNode }) {
+function Section({ icon: Icon, title, children }: { icon: LucideIcon; title: string; children: React.ReactNode }) {
   return (
     <div className="rounded-xl border border-border bg-card p-5 space-y-3">
       <div className="flex items-center gap-2 text-sm font-semibold">
