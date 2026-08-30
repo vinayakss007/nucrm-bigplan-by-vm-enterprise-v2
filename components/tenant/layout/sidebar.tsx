@@ -15,15 +15,16 @@ import {
   Trophy, Wrench, Boxes, Sparkles, ListChecks, ArrowRightLeft, Tag, Filter, Send, ShieldCheck, FolderKanban,
   Video, Activity, PieChart,
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useModules } from '@/lib/modules/client-gate';
+import type { TenantInfo, ProfileInfo } from './types';
 
 type NavItem = {
   href: string;
   label: string;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  icon: any;
+  icon: LucideIcon;
   shortcut?: string;
   exact?: boolean;
   perm?: string;
@@ -149,12 +150,10 @@ const SETTINGS_QUICK = [
 ];
 
 interface Props {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  tenant:any; profile:any; roleSlug:string;
+  tenant:TenantInfo; profile:ProfileInfo; roleSlug:string;
   permissions:Record<string,boolean>; isAdmin:boolean; isSuperAdmin:boolean;
   collapsed?: boolean; onToggle?: () => void; onMobileClose?: () => void;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  _profile?: any;
+  _profile?: ProfileInfo;
   _roleSlug?: string;
 }
 
