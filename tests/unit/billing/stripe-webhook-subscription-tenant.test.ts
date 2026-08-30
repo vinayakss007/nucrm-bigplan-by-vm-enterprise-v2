@@ -72,8 +72,10 @@ vi.mock('@/lib/stripe', () => ({
   verifyWebhookSignature: (...args: unknown[]) => verifyWebhookSignature(args[0] as string),
   StripeError: class StripeError extends Error {},
 }));
+const releaseLock = vi.fn(async () => undefined);
 vi.mock('@/lib/cache/index', () => ({
-  acquireLock: vi.fn(async () => ({ acquired: true })),
+  acquireLock: vi.fn(async () => ({ acquired: true, value: 'lock-val' })),
+  releaseLock: (...args: unknown[]) => releaseLock(...args),
 }));
 vi.mock('@/lib/api-error', () => ({
   apiError: (_e: unknown, msg: string, status: number) =>
@@ -171,6 +173,29 @@ describe('#1640 subscription.updated tenant resolution', () => {
 
     expect(res.status).toBe(200);
     expect(m.db.update).not.toHaveBeenCalled();
+  });
+});
+
+describe('idempotency lock is released when processing fails (retry-safe)', () => {
+  it('releases the lock and returns 500 so Stripe retries the failed event', async () => {
+    // Force the update path to throw for this event.
+    m.db.update.mockImplementationOnce(() => { throw new Error('transient DB error'); });
+
+    const res = await POST(makeRequest(updatedEvent({ metadata: { tenant_id: METADATA_TENANT } })));
+
+    expect(res.status).toBe(500);
+    // The lock must be released so the retry isn't dropped as a duplicate.
+    expect(releaseLock).toHaveBeenCalledTimes(1);
+    const [key, value] = releaseLock.mock.calls[0]!;
+    expect(String(key)).toMatch(/^stripe:evt:/);
+    expect(value).toBe('lock-val');
+  });
+
+  it('does NOT release the lock on success (dedup holds for real redeliveries)', async () => {
+    const res = await POST(makeRequest(updatedEvent({ metadata: { tenant_id: METADATA_TENANT } })));
+
+    expect(res.status).toBe(200);
+    expect(releaseLock).not.toHaveBeenCalled();
   });
 });
 

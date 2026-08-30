@@ -10,7 +10,7 @@ import { tenants } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { sendAdminTelegram } from '@/lib/telegram-admin';
-import { acquireLock } from '@/lib/cache/index';
+import { acquireLock, releaseLock } from '@/lib/cache/index';
 import { fireWebhooks } from '@/lib/webhooks';
 import { logError } from '@/lib/errors-server';
 
@@ -59,9 +59,16 @@ export async function POST(request: NextRequest) {
   const eventId = event.id;
 
   // ── Idempotency check ──────────────────────────────────────────────────────
-  // Stripe guarantees at-least-once delivery; prevent duplicate processing
+  // Stripe guarantees at-least-once delivery; prevent duplicate processing.
+  // The lock is held for its full TTL only when processing SUCCEEDS. If
+  // processing throws we release it before returning 500 — otherwise the very
+  // retry the 500 is meant to trigger would hit the still-held lock and be
+  // discarded as a "duplicate", permanently losing e.g. a subscription
+  // activation. (Redis is optional here; acquireLock fails open without it,
+  // trading dedup for never dropping a real event — the safer default for
+  // money-affecting webhooks.)
   const lockKey = `stripe:evt:${eventId}`;
-  const { acquired } = await acquireLock(lockKey, IDEMPOTENCY_TTL);
+  const { acquired, value: lockValue } = await acquireLock(lockKey, IDEMPOTENCY_TTL);
   if (!acquired) {
     console.log(`[Stripe Webhook] Duplicate event ${eventId} — skipping`);
     return NextResponse.json({ received: true, duplicate: true });
@@ -106,7 +113,10 @@ export async function POST(request: NextRequest) {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     void logError({ error: err, context: 'webhooks/stripe event processing', metadata: { eventType } });
-    // Return 500 so Stripe retries — critical for subscription activations
+    // Release the idempotency lock so Stripe's retry of THIS failed event is
+    // processed instead of being dropped as a duplicate. Then return 500 so
+    // Stripe retries — critical for subscription activations.
+    await releaseLock(lockKey, lockValue);
     return NextResponse.json({ error: 'Processing failed' }, { status: 500 });
   }
 }
