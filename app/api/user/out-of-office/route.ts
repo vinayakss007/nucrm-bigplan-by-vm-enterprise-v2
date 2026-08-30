@@ -26,6 +26,7 @@
  * routes downstream); a scheduled job would be a separate enhancement.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/errors-server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { tenantMembers, leads, contacts, deals, tasks } from '@/drizzle/schema';
@@ -185,7 +186,7 @@ export const PATCH = withApiRoute(async (req: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[user/out-of-office PATCH]', err);
+    void logError({ error: err, context: 'user/out-of-office PATCH' });
     return apiError(err);
   }
 });

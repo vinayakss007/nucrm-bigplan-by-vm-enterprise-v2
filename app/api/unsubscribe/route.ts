@@ -13,6 +13,7 @@
  * GET serves an HTML confirmation page; POST implements RFC 8058 one-click.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/errors-server';
 import { db } from '@/drizzle/db';
 import { contacts, sequenceEnrollments, activities } from '@/drizzle/schema';
 import { eq, and, isNull } from 'drizzle-orm';
@@ -115,7 +116,7 @@ async function handleUnsubscribe(req: NextRequest, htmlResponse: boolean) {
     });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[Unsubscribe] Error:', err);
+    void logError({ error: err, context: 'unsubscribe' });
     return new NextResponse('Something went wrong. Please contact support.', { status: 500 });
   }
 }

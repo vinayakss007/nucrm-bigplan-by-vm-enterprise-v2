@@ -13,6 +13,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/errors-server';
 import { escapeLike } from '@/lib/api/sanitize-like';
 import { selectLeastPrivilegeRole } from '@/lib/auth/default-role';
 import { db } from '@/drizzle/db';
@@ -143,7 +144,7 @@ export async function GET(request: NextRequest) {
       headers: { 'Content-Type': 'application/scim+json' },
     });
   } catch (error) {
-    console.error('[SCIM] GET /Users error:', error);
+    void logError({ error, context: 'scim/Users GET' });
     return NextResponse.json(
       generateSCIMError('Internal server error', 500),
       { status: 500, headers: { 'Content-Type': 'application/scim+json' } }
@@ -314,7 +315,7 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('[SCIM] POST /Users error:', error);
+    void logError({ error, context: 'scim/Users POST' });
     return NextResponse.json(
       generateSCIMError('Internal server error', 500),
       { status: 500, headers: { 'Content-Type': 'application/scim+json' } }

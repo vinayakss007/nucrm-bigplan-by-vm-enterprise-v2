@@ -21,6 +21,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { concurrencyGuard } from '@/lib/api/concurrency';
+import { logError } from '@/lib/errors-server';
 import { users, tenants } from '@/drizzle/schema';
 import { eq, sql } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
@@ -159,7 +160,7 @@ export const PATCH = withApiRoute(async (req: NextRequest) => {
     if (ctx instanceof NextResponse) return ctx;
 
     let body;
-    try { body = await readJsonBody(req); } catch (err) { console.error('[preferences] JSON parse failed', err); return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
+    try { body = await readJsonBody(req); } catch (err) { void logError({ error: err, context: 'user/preferences JSON parse', level: 'warning' }); return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
 
     // Validate strings
     for (const k of STRING_VALIDATED) {

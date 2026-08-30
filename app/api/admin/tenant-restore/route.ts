@@ -5,6 +5,7 @@
  */
 import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/errors-server';
 import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { requireAuth } from '@/lib/auth/middleware';
@@ -108,7 +109,7 @@ export const GET = withApiRoute(async (req: NextRequest) => {
 
     return NextResponse.json({ error: 'Missing tenantId or listBackups parameter' }, { status: 400 });
   } catch (err: unknown) {
-    console.error('[Tenant Restore GET] Error:', err);
+    void logError({ error: err, context: 'admin/tenant-restore GET' });
     return apiError(err instanceof Error ? err : new Error(String(err)));
   }
 });
@@ -152,7 +153,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
 
     // Start async backup
     performTenantBackup(backupRecord.id, tenantId, includeTables).catch((err) => {
-      console.error(`[Tenant Backup ${backupRecord.id}] Failed:`, err);
+      void logError({ error: err, context: 'admin/tenant-restore backup task', tenantId, metadata: { backupId: backupRecord.id } });
     });
 
     return NextResponse.json({
@@ -161,7 +162,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
       tenant: { id: tenant.id, name: tenant.name, slug: tenant.slug },
     });
   } catch (err: unknown) {
-    console.error('[Tenant Restore POST] Error:', err);
+    void logError({ error: err, context: 'admin/tenant-restore POST' });
     return apiError(err instanceof Error ? err : new Error(String(err)));
   }
 });
@@ -254,7 +255,7 @@ export const PUT = withApiRoute(async (req: NextRequest) => {
 
     return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
   } catch (err: unknown) {
-    console.error('[Tenant Restore PUT] Error:', err);
+    void logError({ error: err, context: 'admin/tenant-restore PUT' });
     return apiError(err instanceof Error ? err : new Error(String(err)));
   }
 });
@@ -284,7 +285,7 @@ export const DELETE = withApiRoute(async (req: NextRequest) => {
 
     return NextResponse.json({ message: 'Backup deleted', backupId });
   } catch (err: unknown) {
-    console.error('[Tenant Restore DELETE] Error:', err);
+    void logError({ error: err, context: 'admin/tenant-restore DELETE' });
     return apiError(err instanceof Error ? err : new Error(String(err)));
   }
 });
@@ -348,7 +349,7 @@ async function performTenantRestore(backupId: string, tenantId: string, options:
 
   // Run restore in background
   runTenantRestore(restoreRecord.id, backupId, tenantId, options).catch((err) => {
-    console.error(`[Tenant Restore ${restoreRecord.id}] Failed:`, err);
+    void logError({ error: err, context: 'admin/tenant-restore restore task', tenantId, metadata: { restoreId: restoreRecord.id } });
   });
 
   return restoreRecord;

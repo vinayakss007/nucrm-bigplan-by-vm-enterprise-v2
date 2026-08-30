@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { concurrencyGuard } from '@/lib/api/concurrency';
+import { logError } from '@/lib/errors-server';
 import { users } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
@@ -100,7 +101,7 @@ export const PATCH = withApiRoute(async (request: NextRequest) => {
         });
 
         if (!res.ok) {
-          const data = await res.json().catch((err) => { console.error('[telegram] response parse failed', err); return { description: `HTTP ${res.status}` }; });
+          const data = await res.json().catch((err) => { void logError({ error: err, context: 'user/telegram response parse', level: 'warning' }); return { description: `HTTP ${res.status}` }; });
           return NextResponse.json({
             error: `Telegram error: ${data.description || res.status}`,
           }, { status: 400 });

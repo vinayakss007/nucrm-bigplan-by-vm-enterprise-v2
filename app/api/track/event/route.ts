@@ -21,6 +21,7 @@
  * so client tracking never surfaces errors to end users.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/errors-server';
 import { z } from 'zod';
 import { validateBody } from '@/lib/api/validate';
 import { safeJson } from '@/lib/api/validate';
@@ -78,7 +79,7 @@ async function resolveIdentity(): Promise<{ userId: string | null; tenantId: str
       tenantId: row.lastTenantId ?? row.memberTenantId ?? null,
     };
   } catch (err) {
-    console.error('[track/event] identity resolution failed:', err);
+    void logError({ error: err, context: 'track/event identity-resolution', level: 'warning' });
     return { userId: null, tenantId: null };
   }
 }

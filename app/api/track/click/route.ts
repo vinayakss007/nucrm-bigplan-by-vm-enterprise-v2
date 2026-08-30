@@ -11,6 +11,7 @@
  * Wrap links in emails: <a href="APP_URL/api/track/click?t=TRACKING_ID&url=ENCODED_URL">
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/errors-server';
 import { db } from '@/drizzle/db';
 import { emailTracking, activities } from '@/drizzle/schema';
 import { eq, and, isNull, sql } from 'drizzle-orm';
@@ -37,7 +38,7 @@ export async function GET(req: NextRequest) {
         }
       }
   } catch (err) {
-    console.error('[track] click error', err);
+    void logError({ error: err, context: 'track/click', level: 'warning' });
   }
   }
 
@@ -86,7 +87,7 @@ export async function GET(req: NextRequest) {
           }
         });
       } catch (err) { 
-        console.error('[TrackClick] Error:', err);
+        void logError({ error: err, context: 'track/click open-tracking', level: 'warning' });
         /* never fail on tracking */ 
       }
     });

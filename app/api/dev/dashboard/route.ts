@@ -21,6 +21,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/errors-server';
 import { devLogger } from '@/lib/dev-logger';
 import { db } from '@/drizzle/db';
 import { sql } from 'drizzle-orm';
@@ -105,7 +106,7 @@ export async function GET(request: NextRequest) {
       activeConnections: parseInt(((connectionCount.rows[0] as Record<string, unknown>)?.count as string) || '0'),
     };
   } catch (error) {
-    console.error('Failed to get DB stats:', error);
+    void logError({ error, context: 'dev/dashboard db-stats', level: 'warning' });
   }
 
   return NextResponse.json({

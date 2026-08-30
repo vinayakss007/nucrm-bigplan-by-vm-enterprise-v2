@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextResponse } from 'next/server';
+import { logError } from '@/lib/errors-server';
 import IORedis from 'ioredis';
 
 const REDIS_URL = process.env['REDIS_URL'] || 'redis://localhost:6379';
@@ -42,8 +43,7 @@ export async function GET() {
  
  
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Unknown error';
-    console.error('[health/worker]', msg);
+    void logError({ error: err, context: 'health/worker', level: 'warning' });
     return NextResponse.json({
       status: 'error',
       timestamp: new Date().toISOString(),

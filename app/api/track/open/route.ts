@@ -15,6 +15,7 @@
  *   Include in HTML: `<img src="${APP_URL}/api/track/open?t=${trackId}" ... />`
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/errors-server';
 import { db } from '@/drizzle/db';
 import { emailTracking, activities } from '@/drizzle/schema';
 import { eq, and, isNull, sql } from 'drizzle-orm';
@@ -74,10 +75,10 @@ export async function GET(req: NextRequest) {
           }
         });
       } catch (err) { 
-        console.error('[TrackOpen] Error:', err);
+        void logError({ error: err, context: 'track/open', level: 'warning' });
         /* never fail on tracking */ 
       }
-    }).catch((err) => { console.error('[TrackOpen] Unhandled:', err); });
+    }).catch((err) => { void logError({ error: err, context: 'track/open unhandled', level: 'warning' }); });
   }
 
   return new NextResponse(PIXEL, {
