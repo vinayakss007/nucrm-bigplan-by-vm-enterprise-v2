@@ -9,6 +9,7 @@ import { oauthTokens, oauthClients } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { timingSafeEqual } from 'crypto';
+import { logError } from '@/lib/errors-server';
 
 export async function POST(request: NextRequest) {
   try {
@@ -105,8 +106,7 @@ export async function POST(request: NextRequest) {
  
  
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Unknown error';
-    console.error('[oauth/revoke POST]', msg);
+    void logError({ error: err, context: 'auth/oauth/revoke POST', requestUrl: request.url, requestMethod: request.method });
     return NextResponse.json(
       { error: 'server_error', error_description: 'Token revocation failed' },
       { status: 500 }

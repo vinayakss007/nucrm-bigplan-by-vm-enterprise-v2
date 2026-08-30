@@ -11,6 +11,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { requireAuth } from '@/lib/auth/middleware';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { logError } from '@/lib/errors-server';
 
 export const GET = withApiRoute(async (request: NextRequest) => {
   try {
@@ -82,8 +83,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
  
  
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Unknown error';
-    console.error('[oauth/authorize GET]', msg);
+    void logError({ error: err, context: 'auth/oauth/authorize GET', requestUrl: request.url, requestMethod: request.method });
     return NextResponse.json(
       { error: 'server_error', error_description: 'Authorization failed' },
       { status: 500 }

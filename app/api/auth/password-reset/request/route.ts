@@ -13,6 +13,7 @@ import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { requestPasswordReset } from '@/lib/auth/password-reset';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { logError } from '@/lib/errors-server';
 
 const schema = z.object({ email: z.string().email() });
 
@@ -43,7 +44,7 @@ export async function POST(request: NextRequest) {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[password-reset-request]', err);
+    void logError({ error: err, context: 'auth/password-reset/request POST', requestUrl: request.url, requestMethod: request.method });
     return NextResponse.json({ error: 'Failed to process request' }, { status: 500 });
   }
 }
