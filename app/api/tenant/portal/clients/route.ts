@@ -13,6 +13,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { logError } from '@/lib/errors-server';
 
 const PORTAL_CONFIG_KEY = 'portal_config';
 
@@ -35,7 +36,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[portal clients GET]', err);
+    await logError({ error: err, context: 'portal clients GET', requestMethod: 'GET' });
     return apiError(err);
   }
 });
@@ -95,7 +96,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[portal clients POST]', err);
+    await logError({ error: err, context: 'portal clients POST', requestMethod: 'POST' });
     return apiError(err);
   }
 });
@@ -121,7 +122,7 @@ export const DELETE = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[portal clients DELETE]', err);
+    await logError({ error: err, context: 'portal clients DELETE', requestMethod: 'DELETE' });
     return apiError(err);
   }
 });
