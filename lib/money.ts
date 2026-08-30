@@ -48,7 +48,12 @@ export function sumLineItems(
   return subtotal;
 }
 
-/** Compute a document total = subtotal - discount + tax, rounded to cents. */
+/**
+ * Compute a document total = subtotal - discount + tax, rounded to cents and
+ * clamped at 0. A discount larger than (subtotal + tax) must not produce a
+ * negative total — negative totals corrupt AR/reporting and are treated as
+ * fully "paid" downstream (balance_due <= 0). (#1497 follow-up)
+ */
 export function documentTotal(subtotal: unknown, discount: unknown, tax: unknown): number {
-  return round2(money(subtotal) - money(discount) + money(tax));
+  return round2(Math.max(0, money(subtotal) - money(discount) + money(tax)));
 }

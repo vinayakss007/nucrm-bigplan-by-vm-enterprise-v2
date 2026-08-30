@@ -103,10 +103,16 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       discountAmount = round2(rawDiscount);
     }
 
-    const taxableAmount = round2(subtotal - discountAmount);
+    // Clamp the discount so it can never exceed the subtotal — a fixed discount
+    // larger than the subtotal would otherwise produce a negative taxable
+    // amount and a negative total/balance_due, which recalculateInvoicePayments
+    // then treats as fully "paid". (#1497 follow-up)
+    discountAmount = Math.min(discountAmount, subtotal);
+
+    const taxableAmount = round2(Math.max(0, subtotal - discountAmount));
     const resolvedTaxRate = money(taxRate ?? 0);
     const taxAmount = round2(resolvedTaxRate / 100 * taxableAmount);
-    const totalAmount = round2(taxableAmount + taxAmount);
+    const totalAmount = round2(Math.max(0, taxableAmount + taxAmount));
 
     // #1462: Generate the invoice number inside the transaction while holding a
     // row lock on the tenant, deriving it from MAX(sequence) (not COUNT(*)). The
