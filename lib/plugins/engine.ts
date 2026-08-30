@@ -23,6 +23,7 @@ import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { pluginExecutionLogs, customPlugins } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
 import { safeFetch, SsrfBlockedError } from '@/lib/security/ssrf';
+import { logError } from '@/lib/errors-server';
 import type {
   PluginDefinition,
   PluginAction,
@@ -116,10 +117,10 @@ async function fetchOAuth2Token(
     return (data['access_token'] as string) || null;
   } catch (e) {
     if (e instanceof SsrfBlockedError) {
-      console.error(`[PluginEngine] OAuth2 token URL blocked by SSRF protection: ${e.reason}`);
+      await logError({ error: e, context: `PluginEngine OAuth2 token URL blocked by SSRF protection: ${e.reason}` });
       return null;
     }
-    console.error('[PluginEngine] OAuth2 token fetch failed', e);
+    await logError({ error: e, context: 'PluginEngine OAuth2 token fetch failed' });
     return null;
   }
 }
@@ -298,7 +299,7 @@ export async function testPluginConnection(plugin: PluginDefinition): Promise<Pl
     const message = err instanceof SsrfBlockedError
       ? `Blocked by SSRF protection: ${err.reason}`
       : err instanceof Error ? err.message : 'Connection failed';
-    console.error('[PluginEngine] Connection test failed', err);
+    await logError({ error: err, context: 'PluginEngine connection test failed' });
     return { success: false, latencyMs, message };
   }
 }
@@ -357,6 +358,6 @@ async function logExecution(
     });
   } catch (e) {
     // Don't fail the action if logging fails
-    console.error('[PluginEngine] Failed to log execution', e);
+    await logError({ error: e, context: 'PluginEngine failed to log execution' });
   }
 }
