@@ -15,7 +15,11 @@ import toast from 'react-hot-toast';
 
 type Member = { user_id: string; full_name: string; email: string; role_slug: string };
 type Counts = { leads: number; contacts: number; deals: number; tasks: number; tickets: number };
-type MemberApiRow = { userId: string; fullName?: string | null; email: string; roleSlug?: string | null };
+
+type MemberRow = { userId: string; fullName: string | null; email: string; roleSlug?: string | null };
+type MembersResponse = { data?: MemberRow[] };
+type MeResponse = { user?: { id?: string | null }; is_admin?: boolean };
+type TeamsResponse = { data?: { id: string; name: string }[] };
 
 const RESOURCE_META: { key: keyof Counts; label: string; icon: LucideIcon }[] = [
   { key: 'leads',    label: 'Leads',    icon: UserCheck },
@@ -49,14 +53,10 @@ export default function BulkTransferPage() {
   const controller = new AbortController();
   let ignore = false;
     Promise.all([
-      fetch('/api/tenant/members', { signal: controller.signal }).then(r => r.ok ? r.json() : { data: [] }),
-      fetch('/api/tenant/me', { signal: controller.signal }).then(r => r.ok ? r.json() : {}),
-      fetch('/api/tenant/teams', { signal: controller.signal }).then(r => r.ok ? r.json() : { data: [] }),
-    ]).then(([mem, me, tms]: [
-      { data?: MemberApiRow[] },
-      { user?: { id?: string | null }; is_admin?: boolean },
-      { data?: { id: string; name: string }[] },
-    ]) => { if (ignore) return; 
+      fetch('/api/tenant/members', { signal: controller.signal }).then(r => r.ok ? r.json() as Promise<MembersResponse> : { data: [] }),
+      fetch('/api/tenant/me', { signal: controller.signal }).then(r => r.ok ? r.json() as Promise<MeResponse> : {} as MeResponse),
+      fetch('/api/tenant/teams', { signal: controller.signal }).then(r => r.ok ? r.json() as Promise<TeamsResponse> : { data: [] }),
+    ]).then(([mem, me, tms]) => { if (ignore) return;
       setMembers((mem.data ?? []).map((m) => ({
         user_id: m.userId, full_name: m.fullName ?? m.email, email: m.email, role_slug: m.roleSlug ?? '',
        } )));

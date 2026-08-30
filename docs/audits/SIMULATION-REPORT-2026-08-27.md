@@ -18,15 +18,15 @@ app's in-memory fallback was used). `NODE_ENV=development`, `DATABASE_SSL=false`
 ✅ Environment validated successfully (NODE_ENV=development, Pool Size 5, SSL false)
 ```
 
-| Request | Result | Notes |
-|---|---|---|
-| `GET /api/health` | **200** | returns `status:ok` (see LOW-1 re: first-hit `db`) |
-| `GET /` (home) | **200** | full HTML render (~6.5s first compile, then fast) |
-| `GET /pricing` | **200** | marketing page renders |
-| `GET /login` | **307 → /auth/login** | auth redirect works |
-| `GET /signup` | **307 → /auth/login** | auth redirect works |
+| Request                              | Result                                        | Notes                                               |
+| ------------------------------------ | --------------------------------------------- | --------------------------------------------------- |
+| `GET /api/health`                    | **200**                                       | returns `status:ok` (see LOW-1 re: first-hit `db`)  |
+| `GET /` (home)                       | **200**                                       | full HTML render (~6.5s first compile, then fast)   |
+| `GET /pricing`                       | **200**                                       | marketing page renders                              |
+| `GET /login`                         | **307 → /auth/login**                         | auth redirect works                                 |
+| `GET /signup`                        | **307 → /auth/login**                         | auth redirect works                                 |
 | `GET /api/tenant/contacts` (no auth) | **401** `{"error":"Authentication required"}` | tenant API correctly rejects unauthenticated access |
-| `GET /api/auth/csrf-token` | **200** | issues a CSRF token |
+| `GET /api/auth/csrf-token`           | **200**                                       | issues a CSRF token                                 |
 
 Auth gating, CSRF, health, SSR, and the marketing site all work. The core request path
 is healthy.
@@ -47,7 +47,7 @@ is healthy.
   `gen_random_bytes()` comes from the **`pgcrypto`** extension. **No migration ever runs
   `CREATE EXTENSION pgcrypto`.** The extensions (`pgcrypto`, `uuid-ossp`, `pg_trgm`) are
   created **only** in `deploy/postgres/init.sql`, which runs solely as the Docker Postgres
-  entrypoint hook — it is *not* part of `npm run db:migrate`.
+  entrypoint hook — it is _not_ part of `npm run db:migrate`.
 - **Blast radius:**
   - Any managed Postgres (RDS, Cloud SQL, Neon, Supabase) or bare Postgres provisioned
     without that init script fails migration 0067 on a fresh DB.
@@ -76,10 +76,12 @@ is healthy.
 ## 🟠 MED-1 — `instrumentation.ts` uses `process.exit()` in Edge Runtime
 
 At startup Next.js emits:
+
 ```
 ⚠ ./instrumentation.ts:25:9  A Node.js API is used (process.exit at line: 25)
   which is not supported in the Edge Runtime.   Ecmascript file had an error
 ```
+
 `process.exit(0)` inside the graceful-shutdown handler is being pulled into an Edge bundle.
 It didn't stop the dev server from booting, but "Ecmascript file had an error" on the
 instrumentation file is the kind of thing that can bite in a production/edge build. Guard the
@@ -97,6 +99,7 @@ first-query hiccup to `db:"error"`), since an orchestrator hitting `/api/health`
 misread the container as unhealthy.
 
 ## 🟡 LOW-2 — `seed-dev.ts` localhost guard is too literal
+
 The dev seed refuses to run unless `DATABASE_URL` contains `localhost`/`127.0.0.1` (or
 `SEED_ALLOW_REMOTE=true`). Socket-based or otherwise-named local URLs are rejected even though
 they're local. Minor DX; not a production concern.
@@ -104,12 +107,12 @@ they're local. Minor DX; not a production concern.
 ---
 
 ## Bottom line
+
 The application itself is in good shape — it boots fast, validates its env, gates auth, and
 serves pages and APIs correctly. **BLOCKER-1 is the one true "before production" item from
 this run:** fresh-DB provisioning is broken for any non-Docker Postgres because the required
 extensions live outside the migration chain. Fold the `CREATE EXTENSION` statements into
 migrations and the first-deploy path is clean.
-
 
 ---
 
@@ -119,11 +122,13 @@ After the initial simulation I fixed the blocker and, in doing so, the simulatio
 second, larger issue. Both are fixed and verified against a clean fresh install.
 
 ### Fix 1 — BLOCKER-1: extensions now provisioned by `db:migrate`
+
 `scripts/migrate.ts` now runs `CREATE EXTENSION IF NOT EXISTS` for `pgcrypto`, `uuid-ossp`,
 and `pg_trgm` before applying migrations (with a clear, early error if the role lacks
 `CREATE EXTENSION` privilege). Migration 0067 no longer fails on a fresh non-Docker database.
 
 ### Fix 2 — NEW: systemic schema drift (schema declares columns/tables no migration creates)
+
 Fixing Fix 1 let the seed run far enough to reveal `column "sla_policy_id" … does not exist`,
 then `first_response_at`, then `modules.is_available`. A full column-level audit (comparing
 Drizzle's `getTableColumns()` for all 224 schema tables against `information_schema`) found:
@@ -138,11 +143,13 @@ Drizzle's `getTableColumns()` for all 224 schema tables against `information_sch
 
 Every one of these is a latent runtime `42703`/`42P01` for the feature that touches it — the
 app builds all queries from the Drizzle schema. Added two migrations:
+
 - `0070_support_tickets_sla_policy_id` — the two SLA columns on support_tickets.
 - `0071_schema_drift_backfill` — the remaining 24 columns + 2 tables (all `IF NOT EXISTS`,
   defaults/nullability/FKs matched to the schema; no-op on already-current DBs).
 
 ### Verification (fresh DB, no pre-created extensions)
+
 - `db:migrate` → exit 0, extensions ensured, 228 tables.
 - Full column drift audit → **0 missing columns, 0 missing tables** across 224 schema tables.
 - `seed-dev` → **`Seed Complete!`**, exit 0 (previously died at the first drift).
@@ -151,6 +158,7 @@ app builds all queries from the Drizzle schema. Added two migrations:
 - `npx tsc --noEmit` → 0 errors; 130 migration/schema/journal unit tests → all pass.
 
 ### Note (test artifact, not a bug)
+
 During simulation `/api/health` reported `db:"error"` — traced to `lib/db/pool.ts` rejecting a
 **Unix-socket** DATABASE_URL (`new URL()` sees an empty username). Normal TCP prod URLs
 (`postgresql://user:pass@host:5432/db`) validate fine, so health reports `connected` in

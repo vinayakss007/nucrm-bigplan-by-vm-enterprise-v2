@@ -10,6 +10,7 @@
  * that haven't been scored in 24 hours.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/errors-server';
 import { db } from '@/drizzle/db';
 import { tenants } from '@/drizzle/schema/core';
 import { eq } from 'drizzle-orm';
@@ -45,7 +46,7 @@ export async function POST(req: NextRequest) {
         const scored = await bulkScoreLeads(tenant.id, tenant.ownerId, 20);
         results.push({ tenantId: tenant.id, scoredCount: scored.length });
       } catch (err) {
-        console.error(`[LeadScoring:${tenant.id}]`, err);
+        void logError({ error: err, context: 'cron/process-lead-scoring tenant', tenantId: tenant.id });
       }
     }
 
@@ -55,7 +56,7 @@ export async function POST(req: NextRequest) {
       results,
     });
   } catch (err) {
-    console.error('[LeadScoring] Error:', err);
+    void logError({ error: err, context: 'cron/process-lead-scoring' });
     return NextResponse.json({ error: 'Failed to process lead scoring' }, { status: 500 });
   }
 }

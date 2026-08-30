@@ -16,19 +16,23 @@ import { concurrencyGuard } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
-const createTaxRateSchema = z.object({
+export const createTaxRateSchema = z.object({
   name: z.string().min(1, 'name is required'),
-  rate: z.number().min(0, 'rate is required'),
+  // #658 BUG-12: rate is stored/returned as a string (DB text/decimal), so the
+  // edit round-trip sends a numeric string back. Coerce accepts both a number
+  // and a numeric string; a non-numeric string still fails validation.
+  rate: z.coerce.number().min(0, 'rate is required'),
   type: z.enum(['percentage', 'fixed']).optional().default('percentage'),
   country: z.string().max(100).optional().nullable(),
   state: z.string().max(100).optional().nullable(),
   isDefault: z.boolean().optional().default(false),
 });
 
-const updateTaxRateSchema = z.object({
+export const updateTaxRateSchema = z.object({
   id: z.string().uuid('Tax rate ID is required'),
   name: z.string().optional(),
-  rate: z.number().min(0).optional(),
+  // #658 BUG-12: accept the numeric-string round-trip (see create schema note).
+  rate: z.coerce.number().min(0).optional(),
   type: z.enum(['percentage', 'fixed']).optional(),
   country: z.string().max(100).optional().nullable(),
   state: z.string().max(100).optional().nullable(),

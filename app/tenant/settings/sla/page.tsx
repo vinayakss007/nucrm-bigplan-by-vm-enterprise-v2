@@ -24,8 +24,7 @@ interface SlaPolicy {
   priority: string;
   responseTimeMinutes: number;
   resolutionTimeMinutes: number;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  escalationRules: any[];
+  escalationRules: unknown[];
   isActive: boolean;
   createdAt: string;
   breachCount: number;
@@ -92,8 +91,7 @@ export default function SlaPage() {
     e.preventDefault();
     setSaving(true);
     try {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let escalationRules: any[];
+      let escalationRules: unknown[];
       try {
         escalationRules = JSON.parse(form.escalationRules);
       } catch {

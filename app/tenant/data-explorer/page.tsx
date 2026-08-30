@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
+import { ErrorBoundary } from '@/components/ui/error-boundary';
 
 const ENTITIES = [
   { id: 'contacts', label: 'Contacts', icon: '👤' },
@@ -78,7 +79,18 @@ const COLUMNS: Record<EntityType, { key: string; label: string; sortable?: boole
   ],
 };
 
+// #1075: cross-entity searchable/sortable/inline-editable data table with CSV
+// export and per-cell value formatting. Isolate in an error boundary so a
+// render fault shows an inline fallback with retry instead of blanking the page.
 export default function DataExplorerPage() {
+  return (
+    <ErrorBoundary>
+      <DataExplorerInner />
+    </ErrorBoundary>
+  );
+}
+
+function DataExplorerInner() {
   const [query, setQuery] = useState('');
   const [entityType, setEntityType] = useState<EntityType>('contacts');
   const [results, setResults] = useState<SearchResult | null>(null);

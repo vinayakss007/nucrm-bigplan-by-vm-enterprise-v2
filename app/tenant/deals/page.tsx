@@ -10,13 +10,12 @@ import { eq, and, or, isNull, desc, asc } from 'drizzle-orm';
 import { getUserDefaultView } from '@/lib/user-defaults';
 import dynamic from 'next/dynamic';
 import { withTenantScope } from '@/lib/api/with-api-route';
+import { ListSkeleton } from '@/components/shared/page-skeleton';
 
+// #1117 — use the shared ListSkeleton so the deals loading state matches
+// the rest of the app instead of a bespoke spinner.
 const DealsPageClient = dynamic(() => import('./deals-page-client'), {
-  loading: () => (
-    <div className="flex items-center justify-center min-h-[400px]">
-      <div className="w-8 h-8 border-2 border-violet-600 border-t-transparent rounded-full animate-spin" />
-    </div>
-  ),
+  loading: () => <ListSkeleton />,
 });
 
 export default async function DealsPage() {
