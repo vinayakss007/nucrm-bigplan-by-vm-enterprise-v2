@@ -8,8 +8,10 @@ import { useState, useEffect } from 'react';
 import SuperAdminSidebar from './sidebar';
 import SuperAdminHeader from './header';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export default function SuperAdminShell({ user, stats, children }: { user: any; stats: any; children: React.ReactNode }) {
+interface ShellUser { full_name?: string | null; email?: string | null }
+interface ShellStats { open_errors?: number; active_tenants?: number; total_tenants?: number }
+
+export default function SuperAdminShell({ user, stats, children }: { user: ShellUser | null; stats: ShellStats | null; children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   

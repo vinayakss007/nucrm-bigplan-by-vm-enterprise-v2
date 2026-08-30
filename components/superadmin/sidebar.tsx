@@ -12,12 +12,12 @@ import {
   Settings, LogOut, Crown, Activity, Heart,
   Database, AlertTriangle, MessageSquare, Megaphone, TrendingUp, Gauge, Zap,
   X, Menu, RotateCcw, ChevronDown, Search, Book, Shield, Terminal,
+  type LucideIcon,
 } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import { cn } from '@/lib/utils';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type NavItem = { href: string; label: string; icon: any; keywords?: string };
+type NavItem = { href: string; label: string; icon: LucideIcon; keywords?: string };
 type NavSection = { id: string; label: string; defaultOpen?: boolean; items: NavItem[] };
 
 const SECTIONS: NavSection[] = [
@@ -60,9 +60,13 @@ const SECTIONS: NavSection[] = [
   },
 ];
 
+interface AdminProfile {
+  full_name?: string | null;
+  email?: string | null;
+}
+
 interface Props {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  profile: any;
+  profile: AdminProfile | null;
   collapsed?: boolean;
   onToggle?: () => void;
 }

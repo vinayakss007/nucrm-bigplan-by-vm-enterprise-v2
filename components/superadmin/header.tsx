@@ -12,8 +12,10 @@ import { confirmThen } from '@/components/ui/confirm-dialog';
 import { cn, getInitials } from '@/lib/utils';
 import Link from 'next/link';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export default function SuperAdminHeader({ profile, stats, onToggleSidebar }: { profile: any; stats: any; onToggleSidebar?: () => void }) {
+interface AdminProfile { full_name?: string | null; email?: string | null }
+interface AdminStats { open_errors?: number; active_tenants?: number; total_tenants?: number }
+
+export default function SuperAdminHeader({ profile, stats, onToggleSidebar }: { profile: AdminProfile | null; stats: AdminStats | null; onToggleSidebar?: () => void }) {
   const [showProfile, setShowProfile] = useState(false);
   const [health, setHealth] = useState<'ok'|'warn'|'error'>('ok');
   const profileRef = useRef<HTMLDivElement>(null);
@@ -66,7 +68,7 @@ export default function SuperAdminHeader({ profile, stats, onToggleSidebar }: { 
             'border-red-300/20 dark:border-red-500/20 bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400')}>
           <div className={cn('w-1.5 h-1.5 rounded-full',
             health==='ok'?'bg-emerald-500': health==='warn'?'bg-amber-500 animate-pulse':'bg-red-500 animate-pulse')} />
-          {health==='ok'?'All Systems OK': `${stats?.open_errors} Open Error${stats?.open_errors > 1 ? 's' : ''}`}
+          {health==='ok'?'All Systems OK': `${stats?.open_errors ?? 0} Open Error${(stats?.open_errors ?? 0) > 1 ? 's' : ''}`}
         </Link>
 
         {(stats?.open_errors ?? 0) > 0 && (

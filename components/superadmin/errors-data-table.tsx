@@ -42,11 +42,19 @@ interface ErrorLog {
   created_at: string
 }
 
+interface ErrorSummary {
+  total?: number
+  unresolved?: number
+  resolved?: number
+  fatal?: number
+  error?: number
+  warning?: number
+  info?: number
+}
+
 interface Props {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  initialErrors: any[]
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  summary: any
+  initialErrors: ErrorLog[]
+  summary: ErrorSummary
 }
 
 export default function ErrorsDataTable({ initialErrors, summary }: Props) {
