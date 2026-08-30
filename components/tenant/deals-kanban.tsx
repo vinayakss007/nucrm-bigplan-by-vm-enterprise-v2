@@ -156,23 +156,41 @@ export default function DealsKanban({ initialDeals, stages, contacts: initialCon
     setSaving(false)
   }
 
-  const updateDealStage = useCallback(async (dealId: string, newStageName: string) => {
+  const updateDealStage = useCallback(async (dealId: string, newStageId: string) => {
+    const newStage = stages.find(s => s.id === newStageId)
+    if (!newStage) {
+      toast.error('Unknown stage')
+      return
+    }
+    type StageSnapshot = { stageId: string; stage_name: string | null }
+    const rollback = (prev: StageSnapshot) =>
+      setDeals((cur) => cur.map((d) => d.id === dealId ? { ...d, stageId: prev.stageId, stage_name: prev.stage_name } : d))
+
+    // Optimistic move first so the card jumps immediately; capture the
+    // previous stage (from the functional update) for a possible rollback.
+    let prevStage: StageSnapshot | undefined
+    setDeals((prev) => prev.map((d) => {
+      if (d.id !== dealId) return d
+      prevStage = { stageId: d.stageId, stage_name: d.stage_name }
+      return { ...d, stageId: newStage.id, stage_name: newStage.name }
+    }))
     try {
+      // Send the resolved stage_id directly instead of round-tripping by name,
+      // which was fragile when two stages share a name or span pipelines. (#1457)
       const res = await fetch(`/api/tenant/deals/${dealId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ stage: newStageName }),
+        body: JSON.stringify({ stage_id: newStageId }),
       })
       const data = await res.json()
       if (!res.ok) {
+        if (prevStage) rollback(prevStage)
         toast.error(data.error || 'Failed to update deal stage')
         return
       }
-      // Optimistic update - update stageId to match the new stage
-      const newStage = stages.find(s => s.name.toLowerCase() === newStageName.toLowerCase())
-      setDeals((prev) => prev.map((d) => d.id === dealId ? { ...d, stageId: newStage?.id ?? '', stage_name: newStage?.name ?? null } : d))
-      toast.success(`Deal moved to ${newStageName}`)
+      toast.success(`Deal moved to ${newStage.name}`)
     } catch {
+      if (prevStage) rollback(prevStage)
       toast.error('Failed to update deal stage')
     }
   }, [stages])
@@ -215,13 +233,9 @@ export default function DealsKanban({ initialDeals, stages, contacts: initialCon
     e.preventDefault()
     setDragOverStage(null)
     if (draggingId) {
-      // #1457: columns now pass stage.id (so the drag-over highlight, which
-      // compares dragOverStage === stage.id, actually matches). updateDealStage
-      // expects a lowercased stage NAME, so resolve it from the id here.
-      const targetStage = stages.find(s => s.id === stageId)
-      if (targetStage) {
-        await updateDealStage(draggingId, targetStage.name.toLowerCase())
-      }
+      // #1457: columns pass stage.id; updateDealStage now takes the stage id
+      // directly (no name round-trip).
+      await updateDealStage(draggingId, stageId)
       setDraggingId(null)
     }
   }
@@ -252,10 +266,7 @@ export default function DealsKanban({ initialDeals, stages, contacts: initialCon
 
   const handleTouchDealEnd = () => {
     if (touchDragging && touchOverStage) {
-      const targetStage = stages.find(s => s.id === touchOverStage)
-      if (targetStage) {
-        updateDealStage(touchDragging, targetStage.name.toLowerCase())
-      }
+      updateDealStage(touchDragging, touchOverStage)
     }
     setTouchDragging(null)
     setTouchDragPos(null)
