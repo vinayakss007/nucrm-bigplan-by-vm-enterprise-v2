@@ -5,6 +5,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { escapeLike } from '@/lib/api/sanitize-like';
+import { isWonStageName } from '@/lib/deals/won-stage';
 import { apiError } from '@/lib/api-error';
 import { requireAuth, requirePerm, can } from '@/lib/auth/middleware';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
@@ -115,6 +116,10 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params:
 
     // Map legacy 'stage' or 'stage_name' (string like "won") to stageId (UUID)
     let resolvedStageId = v.stage_id;
+    // Human-readable name of the destination stage, resolved once so the
+    // notification/audit show the stage NAME (not a raw UUID) and so the
+    // won-stage side-effects can match by name reliably.
+    let resolvedStageName: string | null = null;
     const stageName = v.stage || v.stage_name;
     if (!resolvedStageId && stageName) {
       const stageConds = [
@@ -133,6 +138,7 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params:
       
       if (stageRecord) {
         resolvedStageId = stageRecord.id;
+        resolvedStageName = stageRecord.name;
       }
     }
 
@@ -212,12 +218,24 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params:
     });
 
     if (updateData.stageId && prev.stageId !== updateData.stageId) {
+      // Resolve the destination stage NAME once. When the stage was supplied
+      // by name we already have it; otherwise (stage_id path) look it up.
+      if (resolvedStageName === null) {
+        const [stageInfo] = await db
+          .select({ name: dealStages.name })
+          .from(dealStages)
+          .where(eq(dealStages.id, updateData.stageId))
+          .limit(1);
+        resolvedStageName = stageInfo?.name ?? null;
+      }
+      const stageLabel = resolvedStageName ?? 'a new stage';
+
       // Logic for stage change
       await notifyTenantMembers({
         tenantId: ctx.tenantId,
         excludeUserId: ctx.userId,
         type: 'deal_stage',
-        title: `Deal moved to ${updateData.stageId}: ${row!.title}`.trim(),
+        title: `Deal moved to ${stageLabel}: ${row!.title}`.trim(),
         entity_type: 'deal',
         entity_id: dealId,
         link: `/tenant/deals/${dealId}`
@@ -230,7 +248,7 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params:
         entityType: 'deal',
         entityId: dealId,
         oldData: { stage: prev.stageId },
-        newData: { stage: updateData.stageId }
+        newData: { stage: updateData.stageId, stage_name: resolvedStageName }
       });
 
       // Fire deal.stage_changed automation + webhooks
@@ -239,6 +257,7 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params:
         title: row!.title,
         stage_from: prev.stageId,
         stage_to: updateData.stageId,
+        stage_name: resolvedStageName,
         contact_id: row!.contactId,
       }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
 
@@ -248,23 +267,19 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params:
           tenantId: ctx.tenantId,
           userId: ctx.userId,
           event: 'deal.stage_changed',
-          data: { ...row, id: dealId, stage_from: prev.stageId, stage_to: updateData.stageId },
+          data: { ...row, id: dealId, stage_from: prev.stageId, stage_to: updateData.stageId, stage_name: resolvedStageName },
         }).catch(err => { void logError({ error: err, context: 'tenant/deals/[id] PATCH stage_changed automation' }); });
       } catch (e) {
         await logError({ error: e, context: 'tenant/deals/[id] PATCH automation import' });
       }
 
-      // Check if 'won' stage - get stage name to compare
-      if (updateData.stageId) {
-        const [stageInfo] = await db
-          .select({ name: dealStages.name })
-          .from(dealStages)
-          .where(eq(dealStages.id, updateData.stageId))
-          .limit(1);
-        
-        if (stageInfo?.name?.toLowerCase() === 'won') {
-          await handleDealWon(ctx, dealId, row);
-        }
+      // Fire "won" side-effects when the deal moved into a winning stage.
+      // Match common naming conventions ("Won", "Closed Won", "Deal Won",
+      // "Closed - Won", …) instead of an exact `=== 'won'` so tenants that
+      // rename their winning stage don't silently lose the won email/webhook/
+      // automation. (#658)
+      if (isWonStageName(resolvedStageName)) {
+        await handleDealWon(ctx, dealId, row);
       }
     }
 
@@ -355,7 +370,6 @@ export const DELETE = withApiRoute(async (req: NextRequest, { params }: { params
   }
 });
 
- 
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function handleDealWon(ctx: any, dealId: string, row: any) {
