@@ -4,15 +4,14 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { Component } from 'react';
+import { Component, type ErrorInfo } from 'react';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 import * as Sentry from '@sentry/nextjs';
 
 interface Props {
   children: React.ReactNode;
   fallback?: React.ReactNode;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  onError?: (error: Error, errorInfo: any) => void;
+  onError?: (error: Error, errorInfo: ErrorInfo) => void;
 }
 
 interface State {
@@ -30,8 +29,7 @@ export class AppErrorBoundary extends Component<Props, State> {
     return { hasError: true, error };
   }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  override componentDidCatch(error: Error, errorInfo: any) {
+  override componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error('[Global Error Boundary]', error, errorInfo);
     Sentry.captureException(error, { extra: { errorInfo }, tags: { context: 'AppErrorBoundary' } });
     this.props.onError?.(error, errorInfo);

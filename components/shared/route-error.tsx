@@ -4,7 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { AlertTriangle, RefreshCw } from 'lucide-react';
+import { AlertTriangle, RefreshCw, type LucideIcon } from 'lucide-react';
 import { useCaptureError } from '@/lib/capture-error';
 
 interface Props {
@@ -12,8 +12,7 @@ interface Props {
   reset: () => void;
   title?: string;
   message?: string;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  icon?: any;
+  icon?: LucideIcon;
 }
 
 export function RouteError({ error, reset, title = 'Something went wrong', message }: Props) {

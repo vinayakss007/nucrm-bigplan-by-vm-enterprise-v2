@@ -15,8 +15,16 @@ import { useEffect } from 'react';
 
 const _KEYS = ['font_size', 'ui_density', 'accent_color', 'reduce_motion', 'high_contrast', 'sidebar_default'] as const;
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function applyToHtml(prefs: any) {
+interface UserPrefs {
+  font_size?: string;
+  ui_density?: string;
+  accent_color?: string;
+  reduce_motion?: boolean;
+  high_contrast?: boolean;
+  sidebar_default?: string;
+}
+
+function applyToHtml(prefs: UserPrefs) {
   if (typeof document === 'undefined') return;
   const html = document.documentElement;
 
