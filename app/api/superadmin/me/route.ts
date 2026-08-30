@@ -62,8 +62,11 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       currentTenant = tenant || null;
     }
 
-    return NextResponse.json({
-      ok: true,
+    // #1093 — standardize on the AGENTS.md `{ data, meta?, error? }` envelope.
+    // The payload is nested under `data`; the flat keys are kept alongside for
+    // backward compatibility with any consumer not yet migrated (mirrors the
+    // superset strategy used for the other superadmin routes in #1675).
+    const payload = {
       userId: ctx.userId,
       // Own org — protected from suspension/deletion in UI
       ownTenantId: ownTenant?.id || null,
@@ -73,7 +76,8 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       currentTenantName: currentTenant?.name || null,
       currentTenant,
       isImpersonating: currentTenant?.id !== ownTenant?.id && !!currentTenant,
-    });
+    };
+    return NextResponse.json({ data: payload, ok: true, ...payload });
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

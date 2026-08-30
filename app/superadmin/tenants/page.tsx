@@ -269,7 +269,9 @@ export default function SuperAdminTenantsPage() {
       fetch('/api/superadmin/tenants?' + q, { signal: abortSignal }).then(r=>r.json()),
       fetch('/api/superadmin/me', { signal: abortSignal }).then(r=>r.json()),
     ]);
-    setTenants(t.data||[]); setMeInfo(me); setLoading(false);
+    // #1093 — read the standardized `data` envelope (falls back to the flat
+    // body for backward compatibility).
+    setTenants(t.data||[]); setMeInfo(me.data ?? me); setLoading(false);
   }, [search, filterStatus]);
 
   useEffect(() => {
