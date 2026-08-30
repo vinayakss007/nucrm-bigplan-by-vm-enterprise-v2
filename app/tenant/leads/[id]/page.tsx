@@ -82,8 +82,9 @@ export default async function LeadDetailPage({ params }: PageProps) {
     .where(eq(users.id, lead.created_by as string))
     .limit(1);
   
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (lead as any).created_by_name = creator?.fullName;
+  // Attach created_by_name without mutating (and casting) the query row:
+  // build a new typed object with the extra field.
+  const leadWithCreator = { ...lead, created_by_name: creator?.fullName ?? null };
   
   // Get activities
   const activities = await db.select({
@@ -130,7 +131,9 @@ export default async function LeadDetailPage({ params }: PageProps) {
   // Get team members for assignment
   const teamMembers = await db.select({
     user_id: tenantMembers.userId,
-    full_name: users.fullName,
+    // COALESCE so full_name is a non-null string, matching the client's
+    // TeamMemberOpt type (avoids the previous `as any` cast).
+    full_name: sql<string>`COALESCE(${users.fullName}, '')`,
     avatar_url: users.avatarUrl,
     email: users.email,
   })
@@ -144,11 +147,10 @@ export default async function LeadDetailPage({ params }: PageProps) {
   
   return (
     <LeadDetailClient
-      lead={stripNulls(lead) as unknown as Lead}
+      lead={stripNulls(leadWithCreator) as unknown as Lead}
       activities={activities.map(a => stripNulls(a) as unknown as Activity)}
       relatedContacts={relatedContacts.map(c => stripNulls(c) as unknown as RelatedContact)}
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      teamMembers={teamMembers as any}
+      teamMembers={teamMembers}
       tenantId={ctx.tenantId}
       userId={ctx.userId}
     />
