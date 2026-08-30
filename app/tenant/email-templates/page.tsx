@@ -4,7 +4,9 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import { Mail, Plus, Pencil, Trash2, Eye, Copy, Save, X, Variable, Blocks } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import toast from 'react-hot-toast';
@@ -198,67 +200,77 @@ function TemplateEditor({ template, onSave, onCancel }: EditorProps) {
   );
 }
 
+const TEMPLATES_QUERY = ['tenant', 'email-templates'] as const;
+
 export default function EmailTemplatesPage() {
-  const [templates, setTemplates] = useState<Template[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [editing, setEditing] = useState<Partial<Template> | null>(null);
   const [creating, setCreating] = useState(false);
   const [filter, setFilter] = useState('all');
 
-  const load = async (signal?: AbortSignal) => {
-    setLoading(true);
-    try {
-      const res = await fetch('/api/tenant/email-templates', { signal });
-      const d = await res.json();
-      if (signal?.aborted) return;
-      setTemplates(d.data ?? []);
-    } catch (e) {
-      if ((e as Error)?.name === 'AbortError') return;
-      toast.error('Failed to load templates');
-    }
-    if (signal?.aborted) return;
-    setLoading(false);
-  };
-  useEffect(() => {
-    const controller = new AbortController();
-    load(controller.signal);
-    return () => controller.abort();
-  }, []);
+  // #1328: list via TanStack Query (was raw fetch + useEffect).
+  const { data, isLoading: loading, error } = useApiQuery<{ data?: Template[] }>(
+    TEMPLATES_QUERY,
+    '/api/tenant/email-templates',
+  );
+  const templates: Template[] = data?.data ?? [];
+  if (error) toast.error('Failed to load templates');
 
-  const save = async (t: Partial<Template>) => {
-    const isNew = !t.id;
-    const res = await fetch(isNew ? '/api/tenant/email-templates' : `/api/tenant/email-templates/${t.id}`, {
-      method: isNew ? 'POST' : 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(t),
-    });
-    if (res.ok) {
+  const reload = () => queryClient.invalidateQueries({ queryKey: TEMPLATES_QUERY });
+
+  const saveTemplate = useMutation({
+    mutationFn: async (t: Partial<Template>) => {
+      const isNew = !t.id;
+      const res = await fetch(isNew ? '/api/tenant/email-templates' : `/api/tenant/email-templates/${t.id}`, {
+        method: isNew ? 'POST' : 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(t),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || 'Failed to save');
+      }
+      return isNew;
+    },
+    onSuccess: (isNew) => {
       toast.success(isNew ? 'Template created' : 'Template updated');
       setEditing(null); setCreating(false);
-      load();
-    } else {
-      const d = await res.json();
-      toast.error(d.error || 'Failed to save');
-    }
-  };
+      reload();
+    },
+    onError: (e: Error) => toast.error(e.message || 'Failed to save'),
+  });
+
+  const save = (t: Partial<Template>) => saveTemplate.mutate(t);
+
+  const deleteTemplate = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/tenant/email-templates/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete');
+    },
+    onSuccess: () => { toast.success('Deleted'); reload(); },
+    onError: () => toast.error('Failed to delete'),
+  });
 
   const del = async (id: string) => {
     await confirmThen('Delete this template?', async () => {
-      const res = await fetch(`/api/tenant/email-templates/${id}`, { method: 'DELETE' });
-      if (res.ok) { toast.success('Deleted'); setTemplates(ts => ts.filter(t => t.id !== id)); }
-      else toast.error('Failed to delete');
+      deleteTemplate.mutate(id);
     });
   };
 
-  const duplicate = async (t: Template) => {
-    const res = await fetch('/api/tenant/email-templates', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...t, id: undefined, name: `${t.name} (copy)` }),
-    });
-    if (res.ok) { toast.success('Duplicated'); load(); }
-    else toast.error('Failed to duplicate');
-  };
+  const duplicateTemplate = useMutation({
+    mutationFn: async (t: Template) => {
+      const res = await fetch('/api/tenant/email-templates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...t, id: undefined, name: `${t.name} (copy)` }),
+      });
+      if (!res.ok) throw new Error('Failed to duplicate');
+    },
+    onSuccess: () => { toast.success('Duplicated'); reload(); },
+    onError: () => toast.error('Failed to duplicate'),
+  });
+
+  const duplicate = (t: Template) => duplicateTemplate.mutate(t);
 
   const categories = ['all', ...Array.from(new Set(templates.map(t => t.category).filter(Boolean)))];
   const visible = filter === 'all' ? templates : templates.filter(t => t.category === filter);

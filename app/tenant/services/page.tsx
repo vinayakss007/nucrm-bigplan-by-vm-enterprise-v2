@@ -4,7 +4,9 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import { Plus, Search, Trash2, X, DollarSign, Clock, Package, Building2, User, Users } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import { ListSkeleton } from '@/components/shared/page-skeleton';
@@ -40,11 +42,12 @@ interface Company {
   name: string;
 }
 
+const SERVICES_QUERY = ['tenant', 'services'] as const;
+const CONTACTS_QUERY = ['tenant', 'contacts', 'for-services'] as const;
+const COMPANIES_QUERY = ['tenant', 'companies', 'for-services'] as const;
+
 export default function ServicesPage() {
-  const [services, setServices] = useState<Service[]>([]);
-  const [contacts, setContacts] = useState<Contact[]>([]);
-  const [companies, setCompanies] = useState<Company[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [showModal, setShowModal] = useState(false);
   const [editingService, setEditingService] = useState<Service | null>(null);
   const [showContactModal, setShowContactModal] = useState(false);
@@ -75,62 +78,34 @@ export default function ServicesPage() {
     jobTitle: '',
   });
 
-  useEffect(() => {
-    const controller = new AbortController();
-    const { signal } = controller;
-    fetchServices(signal);
-    fetchContacts(signal);
-    fetchCompanies(signal);
-    return () => controller.abort();
-  }, []);
+  // #1328: reads via TanStack Query (were raw fetch + useEffect).
+  const { data: servicesData, isLoading: loading } = useApiQuery<{ services?: Service[] }>(
+    SERVICES_QUERY,
+    '/api/tenant/services',
+  );
+  const services: Service[] = servicesData?.services ?? [];
 
-  const fetchServices = async (signal?: AbortSignal) => {
-    try {
-      const res = await fetch('/api/tenant/services', { signal });
-      const data = await res.json();
-      if (signal?.aborted) return;
-      setServices(data.services || []);
-    } catch (e) {
-      if ((e as Error)?.name === 'AbortError') return;
-      // Failed to load services
-    } finally {
-      if (signal?.aborted) return;
-      setLoading(false);
-    }
-  };
+  const { data: contactsData } = useApiQuery<{ data?: Contact[] }>(
+    CONTACTS_QUERY,
+    '/api/tenant/contacts?limit=500',
+  );
+  const contacts: Contact[] = contactsData?.data ?? [];
 
-  const fetchContacts = async (signal?: AbortSignal) => {
-    try {
-      const res = await fetch('/api/tenant/contacts?limit=500', { signal });
-      const data = await res.json();
-      if (signal?.aborted) return;
-      setContacts(data.data || []);
-    } catch (e) {
-      if ((e as Error)?.name === 'AbortError') return;
-      // Failed to load contacts
-    }
-  };
+  const { data: companiesData } = useApiQuery<{ data?: Company[] }>(
+    COMPANIES_QUERY,
+    '/api/tenant/companies?limit=500',
+  );
+  const companies: Company[] = companiesData?.data ?? [];
 
-  const fetchCompanies = async (signal?: AbortSignal) => {
-    try {
-      const res = await fetch('/api/tenant/companies?limit=500', { signal });
-      const data = await res.json();
-      if (signal?.aborted) return;
-      setCompanies(data.data || []);
-    } catch (e) {
-      if ((e as Error)?.name === 'AbortError') return;
-      // Failed to load companies
-    }
-  };
+  const reloadServices = () => queryClient.invalidateQueries({ queryKey: SERVICES_QUERY });
+  const reloadContacts = () => queryClient.invalidateQueries({ queryKey: CONTACTS_QUERY });
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      const url = editingService 
-        ? `/api/tenant/services/${editingService.id}` 
+  const saveService = useMutation({
+    mutationFn: async () => {
+      const url = editingService
+        ? `/api/tenant/services/${editingService.id}`
         : '/api/tenant/services';
       const method = editingService ? 'PATCH' : 'POST';
-      
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
@@ -140,26 +115,27 @@ export default function ServicesPage() {
           companyId: form.companyId || null,
         }),
       });
-      
       if (!res.ok) {
-        const err = await res.json();
+        const err = await res.json().catch(() => ({}));
         throw new Error(err.error || 'Failed to save service');
       }
-      
+    },
+    onSuccess: () => {
       toast.success(editingService ? 'Service updated successfully' : 'Service created successfully');
       setShowModal(false);
       resetForm();
-      fetchServices();
-    } catch (error: unknown) {
-      toast.error(error instanceof Error ? error.message : 'Failed to save service');
-    }
+      reloadServices();
+    },
+    onError: (error: Error) => toast.error(error.message || 'Failed to save service'),
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    saveService.mutate();
   };
 
-  const handleCreateContact = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedServiceId) return;
-    
-    try {
+  const createContact = useMutation({
+    mutationFn: async () => {
       const res = await fetch('/api/tenant/contacts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -168,59 +144,55 @@ export default function ServicesPage() {
           jobTitle: contactForm.jobTitle || null,
         }),
       });
-      
       if (!res.ok) {
-        const err = await res.json();
+        const err = await res.json().catch(() => ({}));
         throw new Error(err.error || 'Failed to create contact');
       }
-      
       const contactData = await res.json();
       const newContactId = contactData.contact?.id || contactData.contact?.data?.id;
-      
-      if (newContactId) {
+      if (newContactId && selectedServiceId) {
         await fetch(`/api/tenant/services/${selectedServiceId}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ contactId: newContactId }),
         });
-        fetchServices();
       }
-      
+    },
+    onSuccess: () => {
       toast.success('Contact created and linked to service');
       setShowContactModal(false);
       setContactForm({ firstName: '', lastName: '', email: '', phone: '', jobTitle: '' });
-      fetchContacts();
-    } catch (error: unknown) {
-      toast.error(error instanceof Error ? error.message : 'Failed to create contact');
-    }
+      reloadServices();
+      reloadContacts();
+    },
+    onError: (error: Error) => toast.error(error.message || 'Failed to create contact'),
+  });
+
+  const handleCreateContact = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedServiceId) return;
+    createContact.mutate();
   };
 
-  const _linkContactToService = async (serviceId: string, contactId: string) => {
-    try {
+  const setServiceContact = useMutation({
+    mutationFn: async ({ serviceId, contactId }: { serviceId: string; contactId: string | null }) => {
       await fetch(`/api/tenant/services/${serviceId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ contactId }),
       });
-      fetchServices();
-      toast.success('Contact linked to service');
-    } catch {
-      toast.error('Failed to link contact');
-    }
-  };
+    },
+    onSuccess: () => reloadServices(),
+  });
 
-  const unlinkContact = async (serviceId: string) => {
-    try {
-      await fetch(`/api/tenant/services/${serviceId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contactId: null }),
-      });
-      fetchServices();
-      toast.success('Contact unlinked');
-    } catch {
-      toast.error('Failed to unlink contact');
-    }
+  const unlinkContact = (serviceId: string) => {
+    setServiceContact.mutate(
+      { serviceId, contactId: null },
+      {
+        onSuccess: () => toast.success('Contact unlinked'),
+        onError: () => toast.error('Failed to unlink contact'),
+      },
+    );
   };
 
   const resetForm = () => {
@@ -265,33 +237,37 @@ export default function ServicesPage() {
     setShowContactModal(true);
   };
 
-  const toggleActive = async (service: Service) => {
-    try {
+  const toggleActiveMutation = useMutation({
+    mutationFn: async (service: Service) => {
       const res = await fetch(`/api/tenant/services/${service.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ isActive: !service.isActive }),
       });
       if (!res.ok) throw new Error('Failed to update');
+      return service;
+    },
+    onSuccess: (service) => {
       toast.success(service.isActive ? 'Service deactivated' : 'Service activated');
-      fetchServices();
-    } catch {
-      toast.error('Failed to update service');
-    }
-  };
+      reloadServices();
+    },
+    onError: () => toast.error('Failed to update service'),
+  });
+
+  const toggleActive = (service: Service) => toggleActiveMutation.mutate(service);
+
+  const removeService = useMutation({
+    mutationFn: async (service: Service) => {
+      const res = await fetch(`/api/tenant/services/${service.id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete');
+    },
+    onSuccess: () => { toast.success('Service deleted'); reloadServices(); },
+    onError: () => toast.error('Failed to delete service'),
+  });
 
   const deleteService = async (service: Service) => {
     await confirmThen(`Delete service "${service.name}"?`, async () => {
-      try {
-        const res = await fetch(`/api/tenant/services/${service.id}`, {
-          method: 'DELETE',
-        });
-        if (!res.ok) throw new Error('Failed to delete');
-        toast.success('Service deleted');
-        fetchServices();
-      } catch {
-        toast.error('Failed to delete service');
-      }
+      removeService.mutate(service);
     });
   };
 

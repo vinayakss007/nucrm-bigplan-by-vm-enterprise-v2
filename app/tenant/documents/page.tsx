@@ -5,7 +5,9 @@
  */
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 
 interface DocumentFile {
@@ -25,10 +27,10 @@ interface Folder {
   createdAt: string;
 }
 
+interface DocumentsData { documents?: DocumentFile[]; folders?: Folder[] }
+
 export default function DocumentsPage() {
-  const [documents, setDocuments] = useState<DocumentFile[]>([]);
-  const [folders, setFolders] = useState<Folder[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [currentFolder, setCurrentFolder] = useState<string | null>(null);
   const [breadcrumb, setBreadcrumb] = useState<{ id: string | null; name: string }[]>([
     { id: null, name: 'Root' },
@@ -39,35 +41,22 @@ export default function DocumentsPage() {
   const [dragOver, setDragOver] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  const loadDocuments = useCallback(async (signal?: AbortSignal) => {
-    try {
-      const params = new URLSearchParams();
-      if (currentFolder) params.set('folderId', currentFolder);
-      const res = await fetch(`/api/tenant/documents?${params}`, { signal });
-      if (res.ok) {
-        const { data } = await res.json();
-        if (signal?.aborted) return;
-        setDocuments(data.documents ?? []);
-        setFolders(data.folders ?? []);
-      }
-    } catch (e) {
-      if ((e as Error)?.name === 'AbortError') return;
-      // Failed to load documents
-    }
-    if (signal?.aborted) return;
-    setLoading(false);
-  }, [currentFolder]);
+  // #1328: folder listing via TanStack Query (was raw fetch + useEffect). The
+  // folder id is part of the query key so navigating folders refetches/caches.
+  const DOCUMENTS_QUERY = ['tenant', 'documents', currentFolder] as const;
+  const { data: envelope, isLoading: loading } = useApiQuery<{ data?: DocumentsData }>(
+    DOCUMENTS_QUERY,
+    `/api/tenant/documents?${new URLSearchParams(currentFolder ? { folderId: currentFolder } : {})}`,
+  );
+  const documents: DocumentFile[] = envelope?.data?.documents ?? [];
+  const folders: Folder[] = envelope?.data?.folders ?? [];
 
-  useEffect(() => {
-    const controller = new AbortController();
-    loadDocuments(controller.signal);
-    return () => controller.abort();
-  }, [loadDocuments]);
+  const loadDocuments = () =>
+    queryClient.invalidateQueries({ queryKey: ['tenant', 'documents'] });
 
   function navigateToFolder(folder: Folder) {
     setCurrentFolder(folder.id);
     setBreadcrumb(prev => [...prev, { id: folder.id, name: folder.name }]);
-    setLoading(true);
   }
 
   function navigateToBreadcrumb(index: number) {
@@ -75,7 +64,6 @@ export default function DocumentsPage() {
     if (!item) return;
     setCurrentFolder(item.id);
     setBreadcrumb(prev => prev.slice(0, index + 1));
-    setLoading(true);
   }
 
   async function handleUpload(files: FileList | null) {
@@ -141,7 +129,7 @@ export default function DocumentsPage() {
       try {
         const res = await fetch(`/api/tenant/documents?id=${id}`, { method: 'DELETE' });
         if (res.ok) {
-          setDocuments(prev => prev.filter(d => d.id !== id));
+          await loadDocuments();
           setMessage({ type: 'success', text: 'Document deleted' });
         }
       } catch {

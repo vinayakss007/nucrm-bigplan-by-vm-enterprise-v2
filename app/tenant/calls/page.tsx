@@ -4,7 +4,9 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import { Phone, PhoneIncoming, PhoneOutgoing, Plus, Clock, X, Pencil, Trash2, Search } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
 import toast from 'react-hot-toast';
@@ -28,14 +30,32 @@ interface CallLog {
   companyName: string | null;
 }
 
+type CallContact = { id: string; firstName?: string; first_name?: string; lastName?: string; last_name?: string };
+
+const CALLS_QUERY = ['tenant', 'calls'] as const;
+const CALL_CONTACTS_QUERY = ['tenant', 'contacts', 'for-calls'] as const;
+
 export default function CallsPage() {
-  const [calls, setCalls] = useState<CallLog[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [editingCall, setEditingCall] = useState<CallLog | null>(null);
-  const [contacts, setContacts] = useState<{ id: string; firstName?: string; first_name?: string; lastName?: string; last_name?: string }[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [directionFilter, setDirectionFilter] = useState<'all' | 'inbound' | 'outbound'>('all');
+
+  // #1328: reads via TanStack Query (were raw fetch + useEffect).
+  const { data: callsData, isLoading: loading } = useApiQuery<{ data?: CallLog[] }>(
+    CALLS_QUERY,
+    '/api/tenant/calls?limit=100',
+  );
+  const calls: CallLog[] = useMemo(() => callsData?.data ?? [], [callsData]);
+
+  const { data: contactsData } = useApiQuery<{ data?: CallContact[] }>(
+    CALL_CONTACTS_QUERY,
+    '/api/tenant/contacts?limit=200',
+  );
+  const contacts: CallContact[] = contactsData?.data ?? [];
+
+  const reloadCalls = () => queryClient.invalidateQueries({ queryKey: CALLS_QUERY });
 
   const filteredCalls = useMemo(() => {
     let result = calls;
@@ -54,49 +74,28 @@ export default function CallsPage() {
     return result;
   }, [calls, searchQuery, directionFilter]);
 
-  useEffect(() => {
-    const controller = new AbortController();
-    const { signal } = controller;
-    fetchCalls(signal);
-    fetch('/api/tenant/contacts?limit=200', { signal }).then(r => r.json()).catch(() => ({ data: [] })).then(res => {
-      if (signal.aborted) return;
-      setContacts(res.data || []);
-    });
-    return () => controller.abort();
-  }, []);
-
-  function fetchCalls(signal?: AbortSignal) {
-    setLoading(true);
-    fetch('/api/tenant/calls?limit=100', { signal })
-      .then(r => r.json())
-      .catch(() => ({ data: [] }))
-      .then(res => {
-        if (signal?.aborted) return;
-        setCalls(res.data || []);
-        setLoading(false);
-      });
-  }
-
-  const onCallLogged = (call: CallLog) => {
-    setCalls(prev => [call, ...prev]);
+  const onCallLogged = () => {
     setShowForm(false);
+    reloadCalls();
   };
 
-  const onCallUpdated = (updated: CallLog) => {
-    setCalls(prev => prev.map(c => c.id === updated.id ? { ...c, ...updated } : c));
+  const onCallUpdated = () => {
     setEditingCall(null);
+    reloadCalls();
   };
+
+  const deleteCall = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/tenant/calls/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed');
+    },
+    onSuccess: () => { toast.success('Call deleted'); reloadCalls(); },
+    onError: () => toast.error('Failed to delete call'),
+  });
 
   async function handleDelete(id: string) {
     await confirmThen('Delete this call log?', async () => {
-      try {
-        const res = await fetch(`/api/tenant/calls/${id}`, { method: 'DELETE' });
-        if (!res.ok) throw new Error('Failed');
-        toast.success('Call deleted');
-        setCalls(prev => prev.filter(c => c.id !== id));
-      } catch {
-        toast.error('Failed to delete call');
-      }
+      deleteCall.mutate(id);
     });
   }
 
