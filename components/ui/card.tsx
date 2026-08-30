@@ -24,7 +24,7 @@ export const Card: React.FC<CardProps> = ({
   onClick,
 }) => {
   const baseStyles = clsx(
-    'bg-white border rounded-xl transition-all duration-200',
+    'bg-card text-card-foreground border border-border rounded-xl transition-all duration-200',
     {
       'hover:shadow-lg cursor-pointer': hoverable,
       'shadow-md': !hoverable,
@@ -59,7 +59,7 @@ export const CardHeader: React.FC<CardHeaderProps> = ({
   return (
     <div
       className={clsx(
-        'flex items-center justify-between border-b border-gray-200 pb-4 mb-4',
+        'flex items-center justify-between border-b border-border pb-4 mb-4',
         className
       )}
     >
@@ -78,7 +78,7 @@ export const CardTitle: React.FC<CardTitleProps> = ({ children, className }) => 
   return (
     <h3
       className={clsx(
-        'text-lg font-semibold text-gray-900',
+        'text-lg font-semibold text-foreground',
         className
       )}
     >
@@ -97,7 +97,7 @@ export const CardDescription: React.FC<CardDescriptionProps> = ({
   className,
 }) => {
   return (
-    <p className={clsx('text-sm text-gray-500 mt-1', className)}>
+    <p className={clsx('text-sm text-muted-foreground mt-1', className)}>
       {children}
     </p>
   );
@@ -127,7 +127,7 @@ export const CardFooter: React.FC<CardFooterProps> = ({
   return (
     <div
       className={clsx(
-        'border-t border-gray-200 pt-4 mt-4',
+        'border-t border-border pt-4 mt-4',
         className
       )}
     >
