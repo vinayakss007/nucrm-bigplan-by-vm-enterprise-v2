@@ -75,4 +75,11 @@ describe('documentTotal()', () => {
   it('does not drift on fractional cents', () => {
     expect(documentTotal(0.1, 0, 0.2)).toBe(0.3);
   });
+  it('clamps a total at 0 when the discount exceeds subtotal + tax (#1497)', () => {
+    // A fixed discount larger than the subtotal must not yield a negative total.
+    expect(documentTotal(100, 500, 0)).toBe(0);
+    expect(documentTotal(100, 130, 8.25)).toBe(0);
+    // Exactly covered → 0, not a tiny negative.
+    expect(documentTotal(100, 100, 0)).toBe(0);
+  });
 });
