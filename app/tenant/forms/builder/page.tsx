@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
+import { ErrorBoundary } from '@/components/ui/error-boundary';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
@@ -27,7 +28,18 @@ const FIELD_TEMPLATES = [
   { type: 'checkbox', label: 'Checkbox', icon: CheckSquare },
 ];
 
+// #1075: drag-handle field builder with a dynamic field list and live preview.
+// Isolate in an error boundary so a render fault shows an inline fallback with
+// retry instead of blanking the page.
 export default function FormBuilderPage() {
+  return (
+    <ErrorBoundary>
+      <FormBuilderInner />
+    </ErrorBoundary>
+  );
+}
+
+function FormBuilderInner() {
   const router = useRouter();
   const [name, setName] = useState('New Lead Form');
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

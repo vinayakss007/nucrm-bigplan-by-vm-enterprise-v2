@@ -12,6 +12,7 @@ import {
   Users, TrendingUp, ExternalLink
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { ErrorBoundary } from '@/components/ui/error-boundary';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isToday, addMonths, subMonths, getDay, startOfWeek, endOfWeek, addWeeks, subWeeks, addDays, subDays } from 'date-fns';
 import toast from 'react-hot-toast';
 import { meetingFormSchema, validateForm } from '@/lib/validation/forms';
@@ -28,7 +29,18 @@ interface CalEvent {
   entity?: Record<string, unknown>;
 }
 
+// #1075: month/week/day calendar with date math and a meeting form modal.
+// Isolate in an error boundary so a render fault shows an inline fallback with
+// retry instead of blanking the page.
 export default function CalendarPage() {
+  return (
+    <ErrorBoundary>
+      <CalendarInner />
+    </ErrorBoundary>
+  );
+}
+
+function CalendarInner() {
   const _router = useRouter();
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [viewMode, setViewMode] = useState<'month' | 'week' | 'day'>('month');

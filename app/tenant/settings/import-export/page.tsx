@@ -8,6 +8,7 @@ import { useState, useRef, useCallback } from 'react';
 import { Upload, Download, Loader2, AlertTriangle, CheckCircle, X, Database, FileSpreadsheet, ArrowRight, Eye } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
+import { ErrorBoundary } from '@/components/ui/error-boundary';
 
 const ENTITY_TYPES = [
   { key: 'contacts', label: 'Contacts', requiredCols: ['first_name'], optionalCols: ['last_name', 'email', 'phone', 'company', 'job_title', 'lead_source', 'lead_status', 'notes', 'tags'] },
@@ -37,7 +38,19 @@ const COLUMN_ALIASES: Record<string, Record<string, string>> = {
 
 type ParsedRow = Record<string, string>;
 
+// #1075: this page does client-side spreadsheet/CSV parsing (exceljs),
+// drag-and-drop upload and a multi-step mapping flow — a malformed file can
+// throw during render/handlers. Isolate it in an error boundary so a fault
+// shows an inline fallback with retry instead of blanking the settings page.
 export default function ImportExportPage() {
+  return (
+    <ErrorBoundary>
+      <ImportExportInner />
+    </ErrorBoundary>
+  );
+}
+
+function ImportExportInner() {
   const [tab, setTab] = useState<'import' | 'export'>('import');
   const [entityType, setEntityType] = useState('contacts');
   const [importing, setImporting] = useState(false);

@@ -8,6 +8,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { MessageCircle, Loader2, User, Bot, Clock, CheckCircle2, XCircle } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
 import toast from 'react-hot-toast';
+import { ErrorBoundary } from '@/components/ui/error-boundary';
 
 interface ChatSession {
   id: string;
@@ -42,7 +43,18 @@ const getStatusConfig = (status: string) => {
   return statusConfig.waiting;
 };
 
+// #1075: live session list + message thread + reply form with heavy client
+// state. Isolate in an error boundary so a render fault shows an inline
+// fallback with retry instead of blanking the page.
 export default function ChatPage() {
+  return (
+    <ErrorBoundary>
+      <ChatInner />
+    </ErrorBoundary>
+  );
+}
+
+function ChatInner() {
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(true);

@@ -25,6 +25,7 @@
 import dynamic from 'next/dynamic';
 import React from 'react';
 import { useHasModule } from './client-gate';
+import { ErrorBoundary } from '@/components/ui/error-boundary';
 
 // ── Skeleton placeholder ─────────────────────────────────────────────────────
 
@@ -85,7 +86,16 @@ export function lazyModule<P extends Record<string, any> = Record<string, never>
       return <>{options?.disabledFallback ?? <ModuleDisabledPlaceholder _moduleId={moduleId} />}</>;
     }
 
-    return <DynamicComponent {...props} />;
+    // #1075: isolate every lazy module in an error boundary so a render-time
+    // throw inside a heavy feature (workflow builder, sequence builder, forms
+    // builder, analytics, etc.) shows an inline fallback with retry instead of
+    // bubbling up and blanking the whole page. The `.catch()` on each import
+    // only handles chunk-load failures, not render faults — this covers those.
+    return (
+      <ErrorBoundary>
+        <DynamicComponent {...props} />
+      </ErrorBoundary>
+    );
   }
 
   GatedComponent.displayName = `LazyModule(${moduleId})`;
