@@ -13,6 +13,7 @@
  *   { matrix: { "<event_key>": { in_app:bool, email:bool, telegram:bool } } }
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/errors-server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { tenantMembers } from '@/drizzle/schema';
@@ -111,7 +112,7 @@ export const PATCH = withApiRoute(async (req: NextRequest) => {
     if (ctx instanceof NextResponse) return ctx;
 
     let body;
-    try { body = await readJsonBody(req); } catch (err) { console.error('[notifications/matrix] JSON parse failed', err); return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
+    try { body = await readJsonBody(req); } catch (err) { void logError({ error: err, context: 'tenant/notifications/matrix JSON parse', level: 'warning' }); return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
     const incoming = body.matrix;
     if (!incoming || typeof incoming !== 'object')
       return NextResponse.json({ error: 'matrix object required' }, { status: 400 });

@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest } from 'next/server';
+import { logError } from '@/lib/errors-server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { notifications } from '@/drizzle/schema';
@@ -47,9 +48,9 @@ export const GET = withApiRoute(async (request: NextRequest) => {
             const data = JSON.stringify({ type: 'unread', count: row?.count ?? 0 });
             controller.enqueue(encoder.encode(`data: ${data}\n\n`));
             consecutiveErrors = 0;
-          } catch {
+          } catch (streamErr) {
             consecutiveErrors++;
-            console.error('[notifications-stream] Failed to send unread count');
+            void logError({ error: streamErr, context: 'tenant/notifications/stream send-unread-count', level: 'warning' });
             if (consecutiveErrors >= 3) {
               clearInterval(interval);
               clearInterval(keepalive);
@@ -85,7 +86,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       },
     });
   } catch (err) {
-    console.error('[notifications-stream] Auth failed', err);
+    void logError({ error: err, context: 'tenant/notifications/stream auth', level: 'warning' });
     return new Response('Unauthorized', { status: 401 });
   }
 });

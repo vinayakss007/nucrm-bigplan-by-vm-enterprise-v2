@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/errors-server';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { getProvider, getIntegrationConfig } from '@/lib/calendar-sync/service';
 import { readJsonBody } from '@/lib/api/validate';
@@ -41,7 +42,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     });
     return response;
   } catch (err: unknown) {
-    console.error('[calendar-sync auth GET]', err);
+    void logError({ error: err, context: 'tenant/calendar-sync GET' });
     return NextResponse.json({ error: 'Failed to generate auth URL' }, { status: 500 });
   }
 });
@@ -94,7 +95,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
 
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
   } catch (err: unknown) {
-    console.error('[calendar-sync POST]', err);
+    void logError({ error: err, context: 'tenant/calendar-sync POST' });
     return NextResponse.json({ error: 'Failed' }, { status: 500 });
   }
 });

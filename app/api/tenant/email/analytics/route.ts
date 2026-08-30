@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/errors-server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { emailOpens, emailClicks } from '@/drizzle/schema/email-tracking';
@@ -155,7 +156,7 @@ export const GET = withApiRoute(async (req: NextRequest) => {
       },
     });
   } catch (err) {
-    console.error('[email/analytics GET]', err);
+    void logError({ error: err, context: 'tenant/email/analytics GET' });
     return NextResponse.json({ error: 'Failed to load email analytics' }, { status: 500 });
   }
 });

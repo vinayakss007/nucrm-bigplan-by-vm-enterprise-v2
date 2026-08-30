@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/errors-server';
 import { createOutlookCalendarProvider } from '@/lib/calendar-sync/outlook';
 import { saveIntegrationConfig } from '@/lib/calendar-sync/service';
 import { verifyOAuthState } from '@/lib/calendar-sync/state';
@@ -73,7 +74,7 @@ export async function GET(request: NextRequest) {
 
     return response;
   } catch (err) {
-    console.error('[outlook calendar callback]', err);
+    void logError({ error: err, context: 'tenant/calendar-sync/outlook/callback' });
     return NextResponse.redirect(new URL('/tenant/calendar?error=callback_failed', request.url));
   }
 }

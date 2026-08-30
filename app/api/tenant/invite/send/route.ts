@@ -6,6 +6,7 @@
 import { logAudit } from '@/lib/audit';
 import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/errors-server';
 import { requireAuth, can } from '@/lib/auth/middleware';
 import { checkLimit } from '@/lib/usage/middleware';
 import { db } from '@/drizzle/db';
@@ -154,7 +155,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[invite/send]', err);
+    void logError({ error: err, context: 'tenant/invite/send' });
     return apiError(err);
   }
 });

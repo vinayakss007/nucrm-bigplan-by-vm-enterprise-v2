@@ -5,6 +5,7 @@
  */
 import { checkRateLimit } from '@/lib/rate-limit';
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/errors-server';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { testEmailSchema } from '@/lib/api/schemas';
 import { requireAuth } from '@/lib/auth/middleware';
@@ -52,8 +53,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
  
  
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Unknown error';
-    console.error('[email/test]', msg);
+    void logError({ error: err, context: 'tenant/email/test' });
     return NextResponse.json({ ok: false, error: 'Email test failed' }, { status: 500 });
   }
 });
