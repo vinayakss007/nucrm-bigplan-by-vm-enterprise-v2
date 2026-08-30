@@ -11,6 +11,7 @@
  * Read-only for tenant users.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/errors-server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { apiError } from '@/lib/api-error';
 import { requireAiFeature } from '@/lib/ai/plan-gate';
@@ -39,7 +40,7 @@ export const GET = withApiRoute(async (req: NextRequest) => {
       data: { balance, history },
     });
   } catch (err: unknown) {
-    console.error('[api/tenant/ai/credits] GET error:', (err as Error).message);
+    void logError({ error: err, context: 'tenant/ai/credits GET' });
     return apiError(err);
   }
 });

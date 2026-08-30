@@ -5,6 +5,7 @@
  */
 import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/errors-server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { emailDrafts } from '@/drizzle/schema/comm';
@@ -181,7 +182,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
-    console.error('[AI Email Draft] POST error:', error);
+    void logError({ error, context: 'tenant/ai/email-draft POST' });
     return apiError(error);
   }
 });
@@ -242,7 +243,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
-    console.error('[AI Email Drafts] GET error:', error);
+    void logError({ error, context: 'tenant/ai/email-draft GET' });
     return apiError(error);
   }
 });

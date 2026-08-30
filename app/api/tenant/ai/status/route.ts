@@ -14,6 +14,7 @@
  * tell the user which providers are ready vs missing keys.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/errors-server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { tenants } from '@/drizzle/schema';
@@ -104,7 +105,7 @@ export const GET = withApiRoute(async (req: NextRequest) => {
       const atRiskDeals = await getAtRiskDeals(ctx.tenantId);
       at_risk_count = atRiskDeals.length;
     } catch (e) {
-      console.error('[ai/status] Error (may be expected during migration):', e);
+      void logError({ error: e, context: 'tenant/ai/status at-risk-deals (may be expected during migration)', level: 'warning', tenantId: ctx.tenantId });
     }
 
     return NextResponse.json({
