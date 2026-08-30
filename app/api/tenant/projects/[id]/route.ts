@@ -13,6 +13,7 @@ import { projects, milestones, projectTasks, tasks, users } from '@/drizzle/sche
 import { eq, and, isNull } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { concurrencyGuard } from '@/lib/api/concurrency';
+import { logError } from '@/lib/errors-server';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -75,7 +76,7 @@ export const GET = withApiRoute(async (request: NextRequest,
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[projects/[id] GET]', err);
+    await logError({ error: err, context: 'projects/[id] GET', requestMethod: 'GET' });
     return apiError(err);
   }
 });
@@ -133,7 +134,7 @@ export const PATCH = withApiRoute(async (request: NextRequest,
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[projects/[id] PATCH]', err);
+    await logError({ error: err, context: 'projects/[id] PATCH', requestMethod: 'PATCH' });
     return apiError(err);
   }
 });
@@ -176,7 +177,7 @@ export const DELETE = withApiRoute(async (request: NextRequest,
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[projects/[id] DELETE]', err);
+    await logError({ error: err, context: 'projects/[id] DELETE', requestMethod: 'DELETE' });
     return apiError(err);
   }
 });

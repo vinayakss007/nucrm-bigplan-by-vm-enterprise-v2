@@ -12,6 +12,7 @@ import { db } from '@/drizzle/db';
 import { sql } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { logError } from '@/lib/errors-server';
 
 const ENTITY_CONFIG: Record<string, { label: string; searchFields: string[]; sortFields: string[]; defaultSort: string }> = {
   contacts: {
@@ -169,7 +170,7 @@ export const GET = withApiRoute(async (req: NextRequest) => {
       order,
     });
   } catch (err) {
-    console.error('[data-explorer GET]', err);
+    await logError({ error: err, context: 'data-explorer GET', requestMethod: 'GET' });
     return apiError(err);
   }
 });
@@ -245,7 +246,7 @@ export const PUT = withApiRoute(async (req: NextRequest) => {
 
     return NextResponse.json({ ok: true, data: result.rows[0] });
   } catch (err) {
-    console.error('[data-explorer PUT]', err);
+    await logError({ error: err, context: 'data-explorer PUT', requestMethod: 'PUT' });
     return apiError(err);
   }
 });
@@ -282,7 +283,7 @@ export const DELETE = withApiRoute(async (req: NextRequest) => {
 
     return NextResponse.json({ ok: true, id });
   } catch (err) {
-    console.error('[data-explorer DELETE]', err);
+    await logError({ error: err, context: 'data-explorer DELETE', requestMethod: 'DELETE' });
     return apiError(err);
   }
 });

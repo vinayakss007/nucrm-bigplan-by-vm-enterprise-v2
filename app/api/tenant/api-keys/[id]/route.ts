@@ -12,6 +12,7 @@ import { apiKeys } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { logError } from '@/lib/errors-server';
 
 /**
  * GET /api/tenant/api-keys/[id]
@@ -67,7 +68,7 @@ export const GET = withApiRoute(async (request: NextRequest,
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
-    console.error('[API Keys] GET error:', error);
+    await logError({ error: error, context: 'API Keys GET', requestMethod: 'GET' });
     return apiError(error);
   }
 });
@@ -101,7 +102,7 @@ export const DELETE = withApiRoute(async (request: NextRequest,
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
-    console.error('[API Keys] DELETE error:', error);
+    await logError({ error: error, context: 'API Keys DELETE', requestMethod: 'DELETE' });
     return apiError(error);
   }
 });
@@ -156,7 +157,7 @@ export const POST = withApiRoute(async (request: NextRequest,
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
-    console.error('[API Keys] ROTATE error:', error);
+    await logError({ error: error, context: 'API Keys ROTATE', requestMethod: 'POST' });
     return apiError(error);
   }
 });

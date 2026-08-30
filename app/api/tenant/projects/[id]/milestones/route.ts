@@ -14,6 +14,7 @@ import { eq, and, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { concurrencyGuard } from '@/lib/api/concurrency';
+import { logError } from '@/lib/errors-server';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -55,7 +56,7 @@ export const GET = withApiRoute(async (request: NextRequest,
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[milestones GET]', err);
+    await logError({ error: err, context: 'milestones GET', requestMethod: 'GET' });
     return apiError(err);
   }
 });
@@ -107,7 +108,7 @@ export const POST = withApiRoute(async (request: NextRequest,
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[milestones POST]', err);
+    await logError({ error: err, context: 'milestones POST', requestMethod: 'POST' });
     return apiError(err);
   }
 });
@@ -171,7 +172,7 @@ export const PATCH = withApiRoute(async (request: NextRequest,
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[milestones PATCH]', err);
+    await logError({ error: err, context: 'milestones PATCH', requestMethod: 'PATCH' });
     return apiError(err);
   }
 });
@@ -219,7 +220,7 @@ export const DELETE = withApiRoute(async (request: NextRequest,
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[milestones DELETE]', err);
+    await logError({ error: err, context: 'milestones DELETE', requestMethod: 'DELETE' });
     return apiError(err);
   }
 });

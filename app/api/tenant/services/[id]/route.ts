@@ -12,6 +12,7 @@ import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
 import { apiError } from '@/lib/api-error';
 import { concurrencyGuard } from '@/lib/api/concurrency';
+import { logError } from '@/lib/errors-server';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 export const GET = withApiRoute(async (request: NextRequest,
@@ -36,7 +37,7 @@ export const GET = withApiRoute(async (request: NextRequest,
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
-    console.error('[services/[id]/GET]', error);
+    await logError({ error: error, context: 'services/[id]/GET', requestMethod: 'GET' });
     return apiError(error);
   }
 });
@@ -99,7 +100,7 @@ export const PATCH = withApiRoute(async (request: NextRequest,
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
-    console.error('[services/[id]/PATCH]', error);
+    await logError({ error: error, context: 'services/[id]/PATCH', requestMethod: 'PATCH' });
     return apiError(error);
   }
 });
@@ -128,7 +129,7 @@ export const DELETE = withApiRoute(async (request: NextRequest,
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
-    console.error('[services/[id]/DELETE]', error);
+    await logError({ error: error, context: 'services/[id]/DELETE', requestMethod: 'DELETE' });
     return apiError(error);
   }
 });

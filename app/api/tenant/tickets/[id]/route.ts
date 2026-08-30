@@ -16,6 +16,7 @@ import { logger } from '@/lib/logger';
 import { randomBytes } from 'crypto';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { concurrencyGuard } from '@/lib/api/concurrency';
+import { logError } from '@/lib/errors-server';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 export const GET = withApiRoute(async (request: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
@@ -64,7 +65,7 @@ export const GET = withApiRoute(async (request: NextRequest, { params }: { param
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[ticket GET]', err);
+    await logError({ error: err, context: 'ticket GET', requestMethod: 'GET' });
     return apiError(err);
   }
 });
@@ -203,7 +204,7 @@ export const PATCH = withApiRoute(async (request: NextRequest, { params }: { par
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[ticket PATCH]', err);
+    await logError({ error: err, context: 'ticket PATCH', requestMethod: 'PATCH' });
     return apiError(err);
   }
 });
@@ -227,7 +228,7 @@ export const DELETE = withApiRoute(async (request: NextRequest, { params }: { pa
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[ticket DELETE]', err);
+    await logError({ error: err, context: 'ticket DELETE', requestMethod: 'DELETE' });
     return apiError(err);
   }
 });

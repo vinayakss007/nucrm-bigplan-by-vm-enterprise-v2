@@ -13,6 +13,7 @@ import { sequences, sequenceSteps } from '@/drizzle/schema';
 import { eq, and, sql, isNull } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { concurrencyGuard } from '@/lib/api/concurrency';
+import { logError } from '@/lib/errors-server';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 /**
@@ -57,7 +58,7 @@ export const GET = withApiRoute(async (request: NextRequest,
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
-    console.error('[Sequence] GET error:', error);
+    await logError({ error: error, context: 'Sequence GET error', requestMethod: 'GET' });
     return apiError(error);
   }
 });
@@ -152,7 +153,7 @@ export const PATCH = withApiRoute(async (request: NextRequest,
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
-    console.error('[Sequence] PATCH error:', error);
+    await logError({ error: error, context: 'Sequence PATCH error', requestMethod: 'PATCH' });
     return apiError(error);
   }
 });
@@ -196,7 +197,7 @@ export const DELETE = withApiRoute(async (request: NextRequest,
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
-    console.error('[Sequence] DELETE error:', error);
+    await logError({ error: error, context: 'Sequence DELETE error', requestMethod: 'DELETE' });
     return apiError(error);
   }
 });
@@ -279,7 +280,7 @@ export const POST = withApiRoute(async (request: NextRequest,
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
         } catch (error: any) {
           // Skip if already enrolled or other error
-          console.error(`Failed to enroll contact ${contactId}:`, error.message);
+          await logError({ error: error, context: `Failed to enroll contact ${contactId}`, tenantId: ctx.tenantId, userId: ctx.userId, requestMethod: 'POST' });
           return { contact_id: contactId, error: "Internal server error" };
         }
       })
@@ -296,7 +297,7 @@ export const POST = withApiRoute(async (request: NextRequest,
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
-    console.error('[Enroll] POST error:', error);
+    await logError({ error: error, context: 'Enroll POST error', requestMethod: 'POST' });
     return apiError(error);
   }
 });

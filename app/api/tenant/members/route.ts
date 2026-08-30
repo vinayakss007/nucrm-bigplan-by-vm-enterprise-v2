@@ -22,6 +22,7 @@ import { concurrencyGuard, checkStaleUpdate } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { deleteUserSessions } from '@/lib/cache/sessions';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { logError } from '@/lib/errors-server';
 
 export const POST = withApiRoute(async (request: NextRequest) => {
   try {
@@ -118,7 +119,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[members POST]', err);
+    await logError({ error: err, context: 'members POST', requestMethod: 'POST' });
     return apiError(err);
   }
 });
@@ -166,7 +167,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[members GET]', err);
+    await logError({ error: err, context: 'members GET', requestMethod: 'GET' });
     return apiError(err);
   }
 });
@@ -331,7 +332,7 @@ export const PATCH = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[members PATCH]', err);
+    await logError({ error: err, context: 'members PATCH', requestMethod: 'PATCH' });
     return apiError(err);
   }
 });

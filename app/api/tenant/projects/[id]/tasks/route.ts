@@ -12,6 +12,7 @@ import { db } from '@/drizzle/db';
 import { projects, projectTasks, tasks, users } from '@/drizzle/schema';
 import { eq, and, isNull } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { logError } from '@/lib/errors-server';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -65,7 +66,7 @@ export const GET = withApiRoute(async (request: NextRequest,
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[project-tasks GET]', err);
+    await logError({ error: err, context: 'project-tasks GET', requestMethod: 'GET' });
     return apiError(err);
   }
 });
@@ -135,7 +136,7 @@ export const POST = withApiRoute(async (request: NextRequest,
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[project-tasks POST]', err);
+    await logError({ error: err, context: 'project-tasks POST', requestMethod: 'POST' });
     return apiError(err);
   }
 });
@@ -166,7 +167,7 @@ export const DELETE = withApiRoute(async (request: NextRequest,
         const body = await readJsonBody(request);
         taskId = body.task_id;
     } catch (err) {
-      console.error('[tasks] parse error', err);
+      await logError({ error: err, context: 'tasks parse error', tenantId: ctx.tenantId, userId: ctx.userId, requestMethod: 'DELETE' });
     }
     }
 
@@ -191,7 +192,7 @@ export const DELETE = withApiRoute(async (request: NextRequest,
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[project-tasks DELETE]', err);
+    await logError({ error: err, context: 'project-tasks DELETE', requestMethod: 'DELETE' });
     return apiError(err);
   }
 });

@@ -89,7 +89,7 @@ async function _GET(request: NextRequest) {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[tenant tickets GET]', err);
+    await logError({ error: err, context: 'tenant tickets GET', requestMethod: 'GET' });
     return apiError(err);
   }
 }
@@ -131,7 +131,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       subject: row.subject,
       priority: row.priority,
       contact_id: row.contactId,
-    }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
+    }).catch((err) => logError({ error: err, context: 'tickets POST ticket.created webhook failed', tenantId: ctx.tenantId, userId: ctx.userId, requestMethod: 'POST' }));
 
     try {
       const { evaluateAutomations } = await import('@/lib/automation/engine');
@@ -140,9 +140,9 @@ export const POST = withApiRoute(async (request: NextRequest) => {
         userId: ctx.userId,
         event: 'ticket.created',
         data: { ...row, id: row.id },
-      }).catch(err => console.error('[tickets POST] ticket.created automation failed:', err));
+      }).catch(err => logError({ error: err, context: 'tickets POST ticket.created automation failed', tenantId: ctx.tenantId, userId: ctx.userId, requestMethod: 'POST' }));
     } catch (e) {
-      console.error('[tickets POST] automation import failed:', e);
+      await logError({ error: e, context: 'tickets POST automation import failed', tenantId: ctx.tenantId, userId: ctx.userId, requestMethod: 'POST' });
     }
 
     return NextResponse.json({ data: row }, { status: 201 });
@@ -150,7 +150,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[tenant tickets POST]', err);
+    await logError({ error: err, context: 'tenant tickets POST', requestMethod: 'POST' });
     return apiError(err);
   }
 });

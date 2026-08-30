@@ -21,6 +21,7 @@ import { randomBytes } from 'crypto';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { getS3Config, isS3Configured } from '@/lib/storage/s3-config';
 import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { logError } from '@/lib/errors-server';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 function getS3Client() {
@@ -154,7 +155,7 @@ export const GET = withApiRoute(async (req: NextRequest) => {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[files GET]', err);
+    await logError({ error: err, context: 'files GET', requestMethod: 'GET' });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 });
@@ -253,7 +254,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[files POST]', err);
+    await logError({ error: err, context: 'files POST', requestMethod: 'POST' });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 });
@@ -278,7 +279,7 @@ export const DELETE = withApiRoute(async (req: NextRequest) => {
       try {
         await s3Delete(file.filePath);
       } catch (e) {
-        console.error('[files DELETE] S3 delete failed, continuing with DB cleanup:', e);
+        await logError({ error: e, context: 'files DELETE S3 delete failed, continuing with DB cleanup', tenantId: ctx.tenantId, userId: ctx.userId, requestMethod: 'DELETE' });
       }
     }
 
@@ -294,7 +295,7 @@ export const DELETE = withApiRoute(async (req: NextRequest) => {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[files DELETE]', err);
+    await logError({ error: err, context: 'files DELETE', requestMethod: 'DELETE' });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 });
