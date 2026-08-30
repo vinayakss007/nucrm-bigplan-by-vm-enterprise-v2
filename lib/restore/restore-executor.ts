@@ -27,6 +27,7 @@ import {
   unquoteIdentifier,
 } from './backup-parser';
 import { validateTableName } from '@/lib/sql-allowlist';
+import { logError } from '@/lib/errors-server';
 
 /**
  * Foreign key dependency ordering for restore.
@@ -345,7 +346,7 @@ export async function executeSelectiveRestore(
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
           } catch (err: any) {
-            console.error(`[restore] Failed to restore row in ${table}:`, err.message);
+            await logError({ error: err, context: 'restore failed to restore row', metadata: { table } });
           }
           
           processedStatements++;
@@ -432,8 +433,8 @@ export async function countExistingRecords(
       `);
       const row = result.rows[0] as { cnt?: number } | undefined;
       counts[table] = row?.cnt ?? 0;
-    } catch {
-      console.error('[restore] Failed to count table', table);
+    } catch (err) {
+      await logError({ error: err, context: 'restore failed to count table', metadata: { table } });
       counts[table] = 0;
     }
   }

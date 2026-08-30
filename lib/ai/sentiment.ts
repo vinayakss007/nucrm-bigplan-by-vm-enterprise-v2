@@ -7,6 +7,7 @@ import { db } from '@/drizzle/db';
 import { deals } from '@/drizzle/schema/crm';
 import { eq, and, isNull, sql } from 'drizzle-orm';
 import { chat } from './gateway';
+import { logger } from '@/lib/logger';
 
 export type SentimentLabel = 'positive' | 'neutral' | 'negative';
 
@@ -56,7 +57,7 @@ Rules:
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[sentiment] AI analysis failed:', err.message);
+    logger.error('[sentiment] AI analysis failed', { error: err instanceof Error ? err.message : String(err) });
     return fallbackSentiment(text);
   }
 }
@@ -76,7 +77,7 @@ function parseSentimentResponse(raw: string): SentimentResult {
       summary: String(parsed.summary ?? '').slice(0, 300),
     };
   } catch (e) {
-    console.error('[sentiment] Failed to parse AI response', e);
+    logger.error('[sentiment] Failed to parse AI response', { error: e instanceof Error ? e.message : String(e) });
     return fallbackSentiment(raw);
   }
 }
@@ -173,7 +174,7 @@ export async function analyzeSentimentForContact(
     const dealsUpdated = await updateContactDealsSentiment(contactId, tenantId, sentiment);
     return { sentiment, dealsUpdated };
   } catch (err) {
-    console.error('[sentiment] analyzeSentimentForContact failed:', err);
+    logger.error('[sentiment] analyzeSentimentForContact failed', { tenantId, error: err instanceof Error ? err.message : String(err) });
     return null;
   }
 }
