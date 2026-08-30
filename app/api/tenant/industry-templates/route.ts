@@ -11,6 +11,7 @@ import { customFieldDefs, pipelines, dealStages, automations } from '@/drizzle/s
 import { INDUSTRY_TEMPLATES } from '@/lib/modules/industry-templates';
 import { readJsonBody } from '@/lib/api/validate';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { logError } from '@/lib/errors-server';
 
 // GET /api/tenant/industry-templates - list all available industry templates
 export const GET = withApiRoute(async (req: NextRequest) => {
@@ -32,7 +33,7 @@ export const GET = withApiRoute(async (req: NextRequest) => {
     return NextResponse.json({ data });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[IndustryTemplates] GET error:', err);
+    await logError({ error: err, context: 'IndustryTemplates GET', requestMethod: 'GET' });
     return apiError(err);
   }
 });
@@ -100,7 +101,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[IndustryTemplates] error:', err);
+    await logError({ error: err, context: 'IndustryTemplates POST', requestMethod: 'POST' });
     return apiError(err);
   }
 });

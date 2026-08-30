@@ -13,6 +13,7 @@ import {
   checkConflict,
 } from '@/lib/partners';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { logError } from '@/lib/errors-server';
 
 /**
  * GET /api/tenant/partners/[id]/deals
@@ -36,7 +37,7 @@ export const GET = withApiRoute(async (request: NextRequest,
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[tenant partner deals GET]', err);
+    await logError({ error: err, context: 'tenant partner deals GET', requestMethod: 'GET' });
     return apiError(err);
   }
 });
@@ -90,7 +91,7 @@ export const POST = withApiRoute(async (request: NextRequest,
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[tenant partner deals POST]', err);
+    await logError({ error: err, context: 'tenant partner deals POST', requestMethod: 'POST' });
 
     // Return 404 for partner-not-found, 400 for partner-inactive
     if (err.message === 'Partner not found') {

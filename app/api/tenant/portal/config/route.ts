@@ -13,6 +13,7 @@ import { readJsonBody } from '@/lib/api/validate';
 import { z } from 'zod';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { logError } from '@/lib/errors-server';
 
 const PORTAL_CONFIG_KEY = 'portal_config';
 
@@ -56,7 +57,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[portal config GET]', err);
+    await logError({ error: err, context: 'portal config GET', requestMethod: 'GET' });
     return apiError(err);
   }
 });
@@ -101,7 +102,7 @@ export const PUT = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[portal config PUT]', err);
+    await logError({ error: err, context: 'portal config PUT', requestMethod: 'PUT' });
     return apiError(err);
   }
 });

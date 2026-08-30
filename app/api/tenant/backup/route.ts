@@ -13,6 +13,7 @@ import { readJsonBody, validateBody } from '@/lib/api/validate';
 import { createBackupSchema } from '@/lib/api/schemas';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { logError } from '@/lib/errors-server';
 
 /**
  * GET /api/tenant/backup
@@ -77,7 +78,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     }
 
     let body;
-    try { body = await readJsonBody(request); } catch (err) { console.error('[backup] JSON parse failed', err); return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
+    try { body = await readJsonBody(request); } catch (err) { void logError({ error: err, context: 'backup JSON parse failed', tenantId: ctx.tenantId, userId: ctx.userId, requestMethod: 'POST' }); return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
 
     // Validate the request body (#1072) — bounds backup_type to the allowed
     // enum and rejects unexpected shapes with a 400 before triggering pg_dump.
@@ -104,7 +105,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
         message: 'Backup completed successfully',
       });
     } else {
-      const cronError = await cronRes.json().catch((err) => { console.error('[backup] cron response parse failed', err); return { error: `HTTP ${cronRes.status}` }; });
+      const cronError = await cronRes.json().catch((err) => { void logError({ error: err, context: 'backup cron response parse failed', tenantId: ctx.tenantId, userId: ctx.userId, requestMethod: 'POST' }); return { error: `HTTP ${cronRes.status}` }; });
       return NextResponse.json({ error: cronError.error || 'Backup failed' }, { status: 500 });
     }
  

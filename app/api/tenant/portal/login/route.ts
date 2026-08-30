@@ -11,6 +11,7 @@ import { eq, and } from 'drizzle-orm';
 import { readJsonBody } from '@/lib/api/validate';
 import { rateLimiter } from '@/lib/rate-limit';
 import { PORTAL_SESSION_COOKIE, encodePortalSessionCookie, portalSessionCookieOptions } from '@/lib/portal-session';
+import { logError } from '@/lib/errors-server';
 
 const PORTAL_CONFIG_KEY = 'portal_config';
 
@@ -128,7 +129,7 @@ export async function POST(request: NextRequest) {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[portal login]', err);
+    await logError({ error: err, context: 'portal login', requestMethod: 'POST' });
     return apiError(err);
   }
 }
@@ -156,7 +157,7 @@ export async function GET(request: NextRequest) {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[portal status]', err);
+    await logError({ error: err, context: 'portal status', requestMethod: 'GET' });
     return apiError(err);
   }
 }

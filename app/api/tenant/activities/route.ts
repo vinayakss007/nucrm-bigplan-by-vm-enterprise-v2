@@ -14,6 +14,7 @@ import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { logError } from '@/lib/errors-server';
 
 const createActivitySchema = z.object({
   type: z.string().min(1, 'type is required'),
@@ -95,7 +96,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[activities GET]', err);
+    await logError({ error: err, context: 'activities GET', requestMethod: 'GET' });
     return apiError(err, "Internal server error", 200);
   }
 });
@@ -133,7 +134,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[activities POST]', err);
+    await logError({ error: err, context: 'activities POST', requestMethod: 'POST' });
     return apiError(err);
   }
 });
