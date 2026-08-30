@@ -13,6 +13,7 @@
  * Response: { url: string }
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { logError } from '@/lib/errors-server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { subscriptions } from '@/drizzle/schema';
@@ -66,7 +67,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[Billing Portal]', err);
+    void logError({ error: err, context: 'tenant/billing/portal' });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 });
