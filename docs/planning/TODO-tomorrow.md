@@ -7,6 +7,7 @@
 ## STATUS: July 5, 2026
 
 ### Completed
+
 - [x] PR #294 (CSRF/setup) — merged
 - [x] PR #295 (contact search) — merged
 - [x] PR #296 (email duplicate check + contact_id) — merged
@@ -31,11 +32,13 @@
 ### All Critical/High/Medium Bugs Fixed ✅
 
 ### Remaining: Low Priority
+
 - `app/api/tenant/integrations/route.ts` — hardcoded placeholder webhook URL (cosmetic)
 - Browser test: leads, contacts, deals, settings, superadmin pages
 - Clean up stale branches
 
 ### Commits on main
+
 ```
 6c3b6af  fix: add .next-build/ to .gitignore
 ae4bad4  fix: bypass edge rate limiter for tenant dashboard widget endpoints
