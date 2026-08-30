@@ -9,9 +9,15 @@ import { AlertTriangle, ArrowUpRight, X, Clock, Crown } from 'lucide-react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 
+interface UsageStatus {
+  workspace_status: string;
+  trial_days_left: number | null;
+  max_contacts: number;
+  current_contacts: number;
+}
+
 export default function PlanLimitBanner() {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [status, setStatus] = useState<any>(null);
+  const [status, setStatus] = useState<UsageStatus | null>(null);
   const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {

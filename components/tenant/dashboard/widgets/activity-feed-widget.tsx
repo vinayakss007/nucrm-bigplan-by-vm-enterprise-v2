@@ -6,11 +6,11 @@
 'use client';
 import type { WidgetProps } from '@/types/dashboard';
 import { Activity, Target, Calendar, Zap, CheckSquare, TrendingUp } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { formatRelativeTime } from '@/lib/utils';
 import Link from 'next/link';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const ACTIVITY_ICONS: Record<string, any> = {
+const ACTIVITY_ICONS: Record<string, LucideIcon> = {
   note: Activity, call: Target, email: Activity,
   meeting: Calendar, created: Zap, task_completed: CheckSquare,
   deal_won: TrendingUp, stage_change: TrendingUp,

@@ -6,6 +6,7 @@
 'use client';
 import Link from 'next/link';
 import { CheckCircle2, AlertCircle, ArrowRight, Sparkles } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 /**
@@ -27,8 +28,7 @@ export default function AIComingSoon({
   depends_on,
   cta,
 }: {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  icon: any;
+  icon: LucideIcon;
   title: string;
   blurb: string;
   capabilities: string[];

@@ -17,10 +17,10 @@ import { useHotkeys } from '@/components/shared/use-hotkeys';
 import { setupCmdSSave } from '@/components/shared/save-shortcut';
 import UserPreferencesApplier from '@/components/shared/user-preferences-applier';
 import { Breadcrumb } from '@/components/shared/breadcrumb';
+import type { TenantInfo, ProfileInfo } from './types';
 
 interface Props {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  tenant:any; profile:any; roleSlug:string;
+  tenant:TenantInfo; profile:ProfileInfo; roleSlug:string;
   permissions:Record<string,boolean>; isAdmin:boolean; isSuperAdmin:boolean;
   emailVerified:boolean; email:string; children:React.ReactNode;
 }

@@ -17,8 +17,15 @@ interface RecordOption {
   sub?: string;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function toLabel(kind: RecordKind, row: any): RecordOption {
+interface RecordRow {
+  id: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  title?: string | null;
+  email?: string | null;
+}
+
+function toLabel(kind: RecordKind, row: RecordRow): RecordOption {
   if (kind === 'deal') {
     const name = [row.firstName, row.lastName].filter(Boolean).join(' ').trim();
     return { id: row.id, label: row.title || 'Untitled deal', sub: name || undefined };
@@ -80,7 +87,7 @@ export function RecordPicker({
         .then(r => (r.ok ? r.json() : { data: [] }))
         .then(d => {
           if (controller.signal.aborted) return;
-          setOptions((d.data ?? []).map((row: unknown) => toLabel(kind, row)));
+          setOptions((d.data ?? []).map((row: RecordRow) => toLabel(kind, row)));
         })
         .catch(e => { if ((e as Error)?.name !== 'AbortError') setOptions([]); })
         .finally(() => { if (!controller.signal.aborted) setLoading(false); });
