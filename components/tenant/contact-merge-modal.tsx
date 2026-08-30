@@ -30,8 +30,7 @@ interface DuplicatePair {
 interface ContactMergeModalProps {
   duplicates: DuplicatePair[]
   loading?: boolean
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  onMerge: (primaryId: string, duplicateId: string, strategy: any) => Promise<void>
+  onMerge: (primaryId: string, duplicateId: string, strategy: Record<string, string>) => Promise<void>
   onClose: () => void
 }
 
@@ -55,9 +54,8 @@ export function ContactMergeModal({ duplicates, loading, onMerge, onClose }: Con
       await onMerge(pair.contact1.id, pair.contact2.id, mergeStrategy)
       toast.success('Contacts merged successfully')
       setSelectedPair(null)
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to merge contacts')
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : 'Failed to merge contacts')
     }
     setMerging(false)
   }

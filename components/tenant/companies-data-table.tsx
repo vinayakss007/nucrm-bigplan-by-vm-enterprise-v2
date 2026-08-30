@@ -34,12 +34,11 @@ interface Company {
   city: string | null
   country: string | null
   contact_count?: number
-  created_at: string
+  created_at?: string
 }
 
 interface Props {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  initialCompanies: any[]
+  initialCompanies: Company[]
   permissions: { canCreate: boolean; canEdit: boolean; canDelete: boolean }
   tenantId: string
   userId: string
@@ -259,8 +258,7 @@ export default function CompaniesDataTable({ initialCompanies, permissions, _ten
       .catch((err) => { if (err?.name !== 'AbortError') clientLogWarn('companies-data-table', 'Failed to load segments', err); });
     return () => abort.abort();
   }, [])
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const callBulk = useCallback(async (body: Record<string, any>) => {
+  const callBulk = useCallback(async (body: Record<string, unknown>) => {
     setBulkBusy(true)
     try {
       const res = await fetch('/api/tenant/companies/bulk', {
