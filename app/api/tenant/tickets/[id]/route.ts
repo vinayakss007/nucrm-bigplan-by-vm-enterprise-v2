@@ -9,8 +9,18 @@ import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { updateTicketSchema } from '@/lib/api/schemas';
 import { db } from '@/drizzle/db';
-import { supportTickets, ticketReplies, contacts, users, csatSurveys } from '@/drizzle/schema';
-import { eq, and, asc } from 'drizzle-orm';
+import {
+  supportTickets,
+  ticketReplies,
+  contacts,
+  users,
+  csatSurveys,
+  companies,
+  deals,
+  dealStages,
+  invoices,
+} from '@/drizzle/schema';
+import { eq, and, or, asc, desc } from 'drizzle-orm';
 import { sendEmail } from '@/lib/email/service';
 import { logger } from '@/lib/logger';
 import { randomBytes } from 'crypto';
@@ -36,12 +46,19 @@ export const GET = withApiRoute(async (request: NextRequest, { params }: { param
       priority: supportTickets.priority,
       category: supportTickets.category,
       created_at: supportTickets.createdAt,
+      // FK ids used to build the Customer History panel (#1813)
+      contact_id: supportTickets.contactId,
+      company_id: supportTickets.companyId,
+      deal_id: supportTickets.dealId,
       first_name: contacts.firstName,
       last_name: contacts.lastName,
+      contact_email: contacts.email,
+      company_name: companies.name,
       assigned_name: users.fullName,
     })
     .from(supportTickets)
     .leftJoin(contacts, eq(contacts.id, supportTickets.contactId))
+    .leftJoin(companies, eq(companies.id, supportTickets.companyId))
     .leftJoin(users, eq(users.id, supportTickets.assignedTo))
     .where(and(eq(supportTickets.tenantId, ctx.tenantId), eq(supportTickets.id, id)))
     .limit(1);
@@ -60,7 +77,76 @@ export const GET = withApiRoute(async (request: NextRequest, { params }: { param
     .where(and(eq(ticketReplies.ticketId, id), eq(ticketReplies.tenantId, ctx.tenantId)))
     .orderBy(asc(ticketReplies.createdAt));
 
-    return NextResponse.json({ data: { ...ticket, replies } });
+    // Customer History (#1813): surface the customer's deals & invoices so a
+    // support agent can see sales/billing context without leaving the ticket.
+    // Uses the existing contactId/companyId FKs on support_tickets. Each query
+    // is wrapped in `safe()` so a failure in one section never breaks the page,
+    // and every query is scoped by tenantId to prevent cross-tenant leakage.
+    const contactId = ticket.contact_id;
+    const companyId = ticket.company_id;
+
+    const safe = async <T,>(fn: () => Promise<T[]>): Promise<T[]> => {
+      try { return await fn(); } catch { return []; }
+    };
+
+    // Match records belonging to this customer by contact OR company (whichever
+    // the ticket is linked to). If neither is set, skip the queries entirely.
+    const hasCustomer = !!(contactId || companyId);
+
+    const relatedDeals = !hasCustomer ? [] : await safe(() =>
+      db.select({
+        id: deals.id,
+        title: deals.title,
+        amount: deals.amount,
+        stage_name: dealStages.name,
+        created_at: deals.createdAt,
+      })
+      .from(deals)
+      .leftJoin(dealStages, eq(dealStages.id, deals.stageId))
+      .where(and(
+        eq(deals.tenantId, ctx.tenantId),
+        or(
+          contactId ? eq(deals.contactId, contactId) : undefined,
+          companyId ? eq(deals.companyId, companyId) : undefined,
+        ),
+      ))
+      .orderBy(desc(deals.createdAt))
+      .limit(10),
+    );
+
+    const relatedInvoices = !hasCustomer ? [] : await safe(() =>
+      db.select({
+        id: invoices.id,
+        invoice_number: invoices.invoiceNumber,
+        status: invoices.status,
+        total_amount: invoices.totalAmount,
+        currency: invoices.currency,
+        issue_date: invoices.issueDate,
+        due_date: invoices.dueDate,
+      })
+      .from(invoices)
+      .where(and(
+        eq(invoices.tenantId, ctx.tenantId),
+        or(
+          contactId ? eq(invoices.contactId, contactId) : undefined,
+          companyId ? eq(invoices.companyId, companyId) : undefined,
+        ),
+      ))
+      .orderBy(desc(invoices.issueDate))
+      .limit(10),
+    );
+
+    const customer = {
+      contact_id: contactId,
+      contact_name: ticket.first_name ? `${ticket.first_name} ${ticket.last_name || ''}`.trim() : null,
+      contact_email: ticket.contact_email,
+      company_id: companyId,
+      company_name: ticket.company_name,
+      deals: relatedDeals,
+      invoices: relatedInvoices,
+    };
+
+    return NextResponse.json({ data: { ...ticket, replies, customer } });
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
