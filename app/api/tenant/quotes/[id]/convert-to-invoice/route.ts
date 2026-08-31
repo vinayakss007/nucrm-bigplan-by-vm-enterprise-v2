@@ -79,7 +79,12 @@ export const POST = withApiRoute(async (req: NextRequest, { params }: { params: 
             tenantId: ctx.tenantId,
             createdBy: ctx.userId,
             contactId: quote.contactId ?? undefined,
-            companyId: undefined,
+            // #1818: carry the company and deal from the quote onto the invoice.
+            // These were previously dropped (companyId hard-coded to undefined,
+            // dealId never set), which broke B2B revenue attribution even though
+            // both invoices.companyId and invoices.dealId columns exist for it.
+            companyId: quote.companyId ?? undefined,
+            dealId: quote.dealId ?? undefined,
             invoiceNumber,
             title: quote.title,
             status: 'draft',
