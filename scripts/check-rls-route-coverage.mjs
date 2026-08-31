@@ -15,17 +15,25 @@
  * RLS provides no isolation there, so a single missing app-level tenantId filter
  * becomes a cross-tenant leak.
  *
- * This guard fails CI when any file under app/api/tenant/** :
+ * This guard fails CI when any route file under app/api/** :
  *   - authenticates (requireAuth or requireTenantCtx), AND
  *   - runs a db.* query, AND
  *   - is NOT wrapped in withApiRoute / withTenantScope.
  *
  * Public/webhook/callback routes that never authenticate are unaffected.
+ *
+ * #1838 (hardening): the scan root is the WHOLE app/api tree, not just
+ * app/api/tenant. Authenticated, db-querying routes also live under
+ * app/api/superadmin, app/api/admin, app/api/user, etc.; scanning only the
+ * tenant subtree left those as a blind spot where an unwrapped route could be
+ * added without the guard noticing. The match is precise (an actual
+ * requireAuth(/requireTenantCtx( CALL, not a mention in a comment), so public
+ * routes that only use verifyToken/getSessionToken are correctly ignored.
  */
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
-const ROOT = 'app/api/tenant';
+const ROOT = 'app/api';
 
 function walk(dir) {
   const out = [];
@@ -46,7 +54,10 @@ function walk(dir) {
 
 const files = walk(ROOT);
 
-const AUTH_RE = /\b(requireAuth|requireTenantCtx)\b/;
+// Require an actual CALL — `requireAuth(` / `requireTenantCtx(` — so a mention
+// in a comment or a doc string (e.g. "...without the full requireAuth machinery")
+// never trips the guard now that the scan covers the whole app/api tree.
+const AUTH_RE = /\b(requireAuth|requireTenantCtx)\s*\(/;
 const DB_RE = /\bdb\.(select|insert|update|delete|query|execute|transaction)\b/;
 // Must be USED (called as a wrapper), not merely imported — so a route that
 // imports withApiRoute but exports a bare handler is still caught.
@@ -83,4 +94,4 @@ if (offenders.length > 0) {
   process.exit(1);
 }
 
-console.log(`[check-rls-route-coverage] OK — ${files.length} tenant routes scanned, all authenticated ones are wrapped.`);
+console.log(`[check-rls-route-coverage] OK — ${files.length} API routes scanned, all authenticated db-querying handlers are wrapped.`);
