@@ -5,7 +5,8 @@
  */
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { useApiQuery } from '@/lib/query/client';
 
 type Tab = 'field-permissions' | 'record-permissions' | 'approval-rules';
 
@@ -37,45 +38,28 @@ interface ApprovalRule {
 
 export default function RBACSettingsPage() {
   const [activeTab, setActiveTab] = useState<Tab>('field-permissions');
-  const [fieldPermissions, setFieldPermissions] = useState<FieldPermission[]>([]);
-  const [recordPermissions, setRecordPermissions] = useState<RecordPermission[]>([]);
-  const [approvalRules, setApprovalRules] = useState<ApprovalRule[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [message, _setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [message] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  useEffect(() => {
-    const controller = new AbortController();
-    loadData(controller.signal);
-    return () => controller.abort();
-  }, []);
-
-  async function loadData(signal?: AbortSignal) {
-    setLoading(true);
-    try {
-      const [fpRes, rpRes, arRes] = await Promise.all([
-        fetch('/api/tenant/rbac/field-permissions', { signal }).catch((e) => { if (e instanceof DOMException && e.name === 'AbortError') return null; return null; }),
-        fetch('/api/tenant/rbac/record-permissions', { signal }).catch((e) => { if (e instanceof DOMException && e.name === 'AbortError') return null; return null; }),
-        fetch('/api/tenant/rbac/approval-rules', { signal }).catch((e) => { if (e instanceof DOMException && e.name === 'AbortError') return null; return null; }),
-      ]);
-
-      if (fpRes?.ok) {
-        const { data } = await fpRes.json();
-        setFieldPermissions(data || []);
-      }
-      if (rpRes?.ok) {
-        const { data } = await rpRes.json();
-        setRecordPermissions(data || []);
-      }
-      if (arRes?.ok) {
-        const { data } = await arRes.json();
-        setApprovalRules(data || []);
-      }
-    } catch (err) {
-      if (err instanceof DOMException && err.name === 'AbortError') return;
-    } finally {
-      setLoading(false);
-    }
-  }
+  // #1328: reads via TanStack Query (were parallel raw fetch + useEffect).
+  const { data: fpData, isLoading: fpLoading } = useApiQuery<{ data?: FieldPermission[] }>(
+    ['tenant', 'rbac', 'field-permissions'],
+    '/api/tenant/rbac/field-permissions',
+    { retry: false },
+  );
+  const { data: rpData, isLoading: rpLoading } = useApiQuery<{ data?: RecordPermission[] }>(
+    ['tenant', 'rbac', 'record-permissions'],
+    '/api/tenant/rbac/record-permissions',
+    { retry: false },
+  );
+  const { data: arData, isLoading: arLoading } = useApiQuery<{ data?: ApprovalRule[] }>(
+    ['tenant', 'rbac', 'approval-rules'],
+    '/api/tenant/rbac/approval-rules',
+    { retry: false },
+  );
+  const fieldPermissions: FieldPermission[] = fpData?.data ?? [];
+  const recordPermissions: RecordPermission[] = rpData?.data ?? [];
+  const approvalRules: ApprovalRule[] = arData?.data ?? [];
+  const loading = fpLoading || rpLoading || arLoading;
 
   if (loading) {
     return <div className="p-6">Loading RBAC settings...</div>;

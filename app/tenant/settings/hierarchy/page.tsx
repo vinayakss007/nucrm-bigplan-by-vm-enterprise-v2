@@ -4,7 +4,9 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import { Plus, Building2, X, Loader2, Trash2 } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import { cn } from '@/lib/utils';
@@ -27,12 +29,11 @@ interface HierarchyEntry {
   createdAt: string;
 }
 
+const HIERARCHY_QUERY = ['tenant', 'hierarchy'] as const;
+
 export default function HierarchyPage() {
-  const [children, setChildren] = useState<HierarchyEntry[]>([]);
-  const [parents, setParents] = useState<HierarchyEntry[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [showModal, setShowModal] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     childTenantId: '',
     relationship: 'subsidiary' as string,
@@ -41,29 +42,14 @@ export default function HierarchyPage() {
 
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
 
-  const load = async (signal?: AbortSignal) => {
-    setLoading(true);
-    try {
-      const res = await fetch('/api/tenant/hierarchy', { signal });
-      if (res.ok) {
-        const d = await res.json();
-        if (signal?.aborted) return;
-        setChildren(d.data?.children ?? []);
-        setParents(d.data?.parents ?? []);
-      }
-    } catch (e) {
-      if ((e as Error)?.name === 'AbortError') return;
-      throw e;
-    } finally {
-      if (!signal?.aborted) setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    const controller = new AbortController();
-    load(controller.signal);
-    return () => controller.abort();
-  }, []);
+  // #1328: hierarchy via TanStack Query (was raw fetch + useEffect).
+  const { data, isLoading: loading } = useApiQuery<{ data?: { children?: HierarchyEntry[]; parents?: HierarchyEntry[] } }>(
+    HIERARCHY_QUERY,
+    '/api/tenant/hierarchy',
+  );
+  const children: HierarchyEntry[] = data?.data?.children ?? [];
+  const parents: HierarchyEntry[] = data?.data?.parents ?? [];
+  const reload = () => queryClient.invalidateQueries({ queryKey: HIERARCHY_QUERY });
 
   const openCreate = () => {
     setForm({ childTenantId: '', relationship: 'subsidiary', permissions: [] });
@@ -79,41 +65,37 @@ export default function HierarchyPage() {
     }));
   };
 
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSaving(true);
-    try {
-      const payload = {
-        childTenantId: form.childTenantId,
-        relationship: form.relationship,
-        permissions: form.permissions,
-      };
-
+  const createMutation = useMutation({
+    mutationFn: async () => {
       const res = await fetch('/api/tenant/hierarchy', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ childTenantId: form.childTenantId, relationship: form.relationship, permissions: form.permissions }),
       });
-      const d = await res.json();
-      if (res.ok) {
-        toast.success('Relationship created');
-        setShowModal(false);
-        load();
-      } else {
-        toast.error(d.error || 'Failed to create');
-      }
-    } finally {
-      setSaving(false);
-    }
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || 'Failed to create');
+    },
+    onSuccess: () => { toast.success('Relationship created'); setShowModal(false); reload(); },
+    onError: (e: Error) => toast.error(e.message || 'Failed to create'),
+  });
+  const saving = createMutation.isPending;
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    createMutation.mutate();
   };
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/tenant/hierarchy?id=${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed');
+    },
+    onSuccess: () => { toast.success('Relationship removed'); reload(); },
+  });
 
   const del = async (id: string) => {
     await confirmThen('Remove this hierarchy relationship?', async () => {
-      const res = await fetch(`/api/tenant/hierarchy?id=${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        toast.success('Relationship removed');
-        load();
-      }
+      deleteMutation.mutate(id);
     });
   };
 
