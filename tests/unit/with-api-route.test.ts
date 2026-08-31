@@ -60,8 +60,15 @@ describe('withApiRoute pins the whole handler body (#1615)', () => {
 
     const res = await GET({} as never, undefined as never);
 
-    expect(pinnedDuringAuth).toBe(fakeClient);
-    expect(pinnedDuringHandlerQuery).toBe(fakeClient); // FAILS pre-fix (undefined)
+    // A client IS pinned for the whole body (undefined pre-fix). The pinned
+    // client is a transparent serialization wrapper over the acquired client
+    // (per-pinned-client query serialization), so it is not the fakeClient by
+    // reference identity — assert it is defined and delegates to the fake.
+    expect(pinnedDuringAuth).toBeDefined();
+    expect(pinnedDuringHandlerQuery).toBeDefined(); // FAILS pre-fix (undefined)
+    // The wrapper delegates .query() to the underlying fake client.
+    await (pinnedDuringHandlerQuery as { query: (sql: string) => Promise<unknown> }).query('SELECT 1');
+    expect(fakeClient.query).toHaveBeenCalledWith('SELECT 1');
     expect(res).toBeInstanceOf(Response);
   });
 
