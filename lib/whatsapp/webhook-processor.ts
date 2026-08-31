@@ -19,8 +19,29 @@ import {
 } from '@/drizzle/schema';
 import { eq, and, or, sql } from 'drizzle-orm';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function processWhatsAppPayload(body: any) {
+interface WhatsAppInboundMessage {
+  id: string;
+  from: string;
+  type?: string;
+  text?: { body?: string };
+}
+
+interface WhatsAppStatus {
+  id: string;
+  status: string;
+}
+
+interface WhatsAppChangeValue {
+  metadata?: { phone_number_id?: string };
+  messages?: WhatsAppInboundMessage[];
+  statuses?: WhatsAppStatus[];
+}
+
+interface WhatsAppWebhookBody {
+  entry?: Array<{ changes?: Array<{ value?: WhatsAppChangeValue }> }>;
+}
+
+export async function processWhatsAppPayload(body: WhatsAppWebhookBody) {
   const entry = body.entry?.[0];
   if (!entry) return;
 
