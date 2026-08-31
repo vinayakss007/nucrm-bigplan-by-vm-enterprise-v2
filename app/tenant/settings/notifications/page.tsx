@@ -5,6 +5,8 @@
  */
 'use client';
 import { useEffect, useMemo, useState } from 'react';
+import { useMutation } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import {
   Bell, Mail, MessageSquare, UserCheck, TrendingUp, CheckSquare, LifeBuoy,
   AtSign, Users, ShieldCheck, Receipt, Save, Loader2, RotateCcw, Search,
@@ -93,26 +95,25 @@ const GROUPS: Group[] = [
 
 export default function NotificationsPage() {
   const [matrix, setMatrix] = useState<Matrix>({});
-  const [original, setOriginal] = useState<Matrix>({});
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [original, setOriginal] = useState<Matrix | null>(null);
   const [query, setQuery] = useState('');
 
+  // #1328: matrix via TanStack Query (was raw fetch + useEffect). The editable
+  // copy is seeded once from the query so the dirty-tracking + discard flow is
+  // preserved.
+  const { data, isLoading: loading } = useApiQuery<{ matrix?: Matrix }>(
+    ['tenant', 'notifications', 'matrix'],
+    '/api/tenant/notifications/matrix',
+  );
   useEffect(() => {
-  const controller = new AbortController();
-    fetch('/api/tenant/notifications/matrix', { signal: controller.signal })
-      .then(r => r.ok ? r.json() : { matrix: {} })
-      .then((d: { matrix?: Matrix }) => {
-        if (controller.signal.aborted) return;
-        setMatrix(d.matrix ?? {});
-        setOriginal(d.matrix ?? {});
-      })
-      .catch((e) => { if ((e as Error)?.name === 'AbortError') return; throw e; })
-      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
-    return () => { controller.abort(); };
-}, []);
+    if (data && original === null) {
+      const m = data.matrix ?? {};
+      setMatrix(m);
+      setOriginal(m);
+    }
+  }, [data, original]);
 
-  const dirty = JSON.stringify(matrix) !== JSON.stringify(original);
+  const dirty = original !== null && JSON.stringify(matrix) !== JSON.stringify(original);
 
   const setCell = (eventKey: string, channel: Channel, value: boolean) => {
     setMatrix(prev => ({
@@ -138,22 +139,22 @@ export default function NotificationsPage() {
     }));
   };
 
-  const save = async () => {
-    setSaving(true);
-    const res = await fetch('/api/tenant/notifications/matrix', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ matrix }),
-    });
-    const d = await res.json();
-    if (res.ok) {
-      toast.success(`Saved ${d.count ?? 0} notification rules`);
-      setOriginal(matrix);
-    } else {
-      toast.error(d.error || 'Failed to save');
-    }
-    setSaving(false);
-  };
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch('/api/tenant/notifications/matrix', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ matrix }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || 'Failed to save');
+      return d.count as number | undefined;
+    },
+    onSuccess: (count) => { toast.success(`Saved ${count ?? 0} notification rules`); setOriginal(matrix); },
+    onError: (e: Error) => toast.error(e.message || 'Failed to save'),
+  });
+  const saving = saveMutation.isPending;
+  const save = () => saveMutation.mutate();
 
   const q = query.trim().toLowerCase();
   const filteredGroups = useMemo(() => {
@@ -282,7 +283,7 @@ export default function NotificationsPage() {
         'sticky bottom-0 -mx-6 px-6 py-3 border-t border-border bg-background/80 backdrop-blur flex items-center justify-end gap-2 transition-opacity',
         dirty ? 'opacity-100' : 'opacity-0 pointer-events-none'
       )}>
-        <button type="button" onClick={() => setMatrix(original)}
+        <button type="button" onClick={() => { if (original) setMatrix(original); }}
           className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground">
           <RotateCcw className="w-3.5 h-3.5" /> Discard
         </button>

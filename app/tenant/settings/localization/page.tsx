@@ -5,6 +5,8 @@
  */
 'use client';
 import { useEffect, useMemo, useState } from 'react';
+import { useMutation } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import { Globe, Clock, DollarSign, Calendar, Briefcase, Plus, X, Save, Loader2, ShieldX, type LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
@@ -47,28 +49,31 @@ const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov
 
 export default function LocalizationPage() {
   const [loc, setLoc] = useState<Loc>(DEFAULTS);
-  const [original, setOriginal] = useState<Loc>(DEFAULTS);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(true);
+  const [original, setOriginal] = useState<Loc | null>(null);
   const [newHoliday, setNewHoliday] = useState({ date: '', name: '' });
 
-  useEffect(() => {
-  const controller = new AbortController();
-  let ignore = false;
-    Promise.all([
-      fetch('/api/tenant/admin/localization', { signal: controller.signal }).then(r => r.ok ? r.json() : { localization: DEFAULTS }),
-      fetch('/api/tenant/me', { signal: controller.signal }).then(r => r.ok ? r.json() : {}),
-    ]).then(([d, me]: [{ localization?: Partial<Loc> }, { is_admin?: boolean }]) => { if (ignore) return; 
-      const l = { ...DEFAULTS, ...(d.localization ?? { } ) };
-      setLoc(l); setOriginal(l);
-      setIsAdmin(me?.is_admin ?? false);
-    }).catch(e => { if ((e as Error)?.name === 'AbortError') return; throw e; })
-      .finally(() => { if (!ignore) setLoading(false); });
-    return () => { ignore = true; controller.abort(); };
-}, []);
+  // #1328: reads via TanStack Query (were parallel raw fetch + useEffect). The
+  // editable copy is seeded once so the dirty-tracking + discard flow persists.
+  const { data: locData, isLoading: locLoading } = useApiQuery<{ localization?: Partial<Loc> }>(
+    ['tenant', 'admin', 'localization'],
+    '/api/tenant/admin/localization',
+  );
+  const { data: meData, isLoading: meLoading } = useApiQuery<{ is_admin?: boolean }>(
+    ['tenant', 'me'],
+    '/api/tenant/me',
+  );
+  const loading = locLoading || meLoading;
+  const isAdmin = meData?.is_admin ?? true;
 
-  const dirty = useMemo(() => JSON.stringify(loc) !== JSON.stringify(original), [loc, original]);
+  useEffect(() => {
+    if (locData && original === null) {
+      const l = { ...DEFAULTS, ...(locData.localization ?? {}) };
+      setLoc(l);
+      setOriginal(l);
+    }
+  }, [locData, original]);
+
+  const dirty = useMemo(() => original !== null && JSON.stringify(loc) !== JSON.stringify(original), [loc, original]);
 
   const toggleWeekendDay = (d: string) => {
     setLoc(p => ({
@@ -100,22 +105,21 @@ export default function LocalizationPage() {
     setLoc(p => ({ ...p, holidays: p.holidays.filter(h => !(h.date === date && h.name === name)) }));
   };
 
-  const save = async () => {
-    setSaving(true);
-    const res = await fetch('/api/tenant/admin/localization', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ localization: loc }),
-    });
-    const d = await res.json();
-    if (res.ok) {
-      toast.success('Localization saved');
-      setOriginal(loc);
-    } else {
-      toast.error(d.error || 'Failed to save');
-    }
-    setSaving(false);
-  };
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch('/api/tenant/admin/localization', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ localization: loc }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || 'Failed to save');
+    },
+    onSuccess: () => { toast.success('Localization saved'); setOriginal(loc); },
+    onError: (e: Error) => toast.error(e.message || 'Failed to save'),
+  });
+  const saving = saveMutation.isPending;
+  const save = () => saveMutation.mutate();
 
   if (loading) return <div className="flex items-center justify-center h-48 text-muted-foreground"><Loader2 className="w-5 h-5 animate-spin" /></div>;
 
@@ -274,7 +278,7 @@ export default function LocalizationPage() {
         'sticky bottom-0 -mx-6 px-6 py-3 border-t border-border bg-background/80 backdrop-blur flex items-center justify-end gap-2 transition-opacity',
         dirty ? 'opacity-100' : 'opacity-0 pointer-events-none'
       )}>
-        <button onClick={() => setLoc(original)}
+        <button onClick={() => { if (original) setLoc(original); }}
           className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground">
           Discard
         </button>

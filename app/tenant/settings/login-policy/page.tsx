@@ -5,6 +5,8 @@
  */
 'use client';
 import { useEffect, useMemo, useState } from 'react';
+import { useMutation } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import {
   Lock, ShieldCheck, Clock, Globe, KeyRound, AlertTriangle,
   Plus, X, Save, Loader2, ShieldX,
@@ -52,31 +54,34 @@ const DEFAULTS: Policy = {
 
 export default function LoginPolicyPage() {
   const [pol, setPol] = useState<Policy>(DEFAULTS);
-  const [original, setOriginal] = useState<Policy>(DEFAULTS);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(true);
+  const [original, setOriginal] = useState<Policy | null>(null);
 
   const [newIp, setNewIp] = useState('');
   const [newAllowedDomain, setNewAllowedDomain] = useState('');
   const [newBlockedDomain, setNewBlockedDomain] = useState('');
 
-  useEffect(() => {
-  const controller = new AbortController();
-  let ignore = false;
-    Promise.all([
-      fetch('/api/tenant/admin/login-policy', { signal: controller.signal }).then(r => r.ok ? r.json() : { login_policy: DEFAULTS }),
-      fetch('/api/tenant/me', { signal: controller.signal }).then(r => r.ok ? r.json() : {}),
-    ]).then(([d, me]: [{ login_policy?: Policy }, { is_admin?: boolean }]) => { if (ignore) return; 
-      const p = d.login_policy ?? DEFAULTS;
-      setPol(p); setOriginal(p);
-      setIsAdmin(me?.is_admin ?? false);
-     } ).catch(e => { if ((e as Error)?.name === 'AbortError') return; throw e; })
-      .finally(() => { if (!ignore) setLoading(false); });
-    return () => { ignore = true; controller.abort(); };
-}, []);
+  // #1328: reads via TanStack Query (were parallel raw fetch + useEffect). The
+  // editable copy is seeded once so the dirty-tracking + discard flow persists.
+  const { data: policyData, isLoading: policyLoading } = useApiQuery<{ login_policy?: Policy }>(
+    ['tenant', 'admin', 'login-policy'],
+    '/api/tenant/admin/login-policy',
+  );
+  const { data: meData, isLoading: meLoading } = useApiQuery<{ is_admin?: boolean }>(
+    ['tenant', 'me'],
+    '/api/tenant/me',
+  );
+  const loading = policyLoading || meLoading;
+  const isAdmin = meData?.is_admin ?? true;
 
-  const dirty = useMemo(() => JSON.stringify(pol) !== JSON.stringify(original), [pol, original]);
+  useEffect(() => {
+    if (policyData && original === null) {
+      const p = policyData.login_policy ?? DEFAULTS;
+      setPol(p);
+      setOriginal(p);
+    }
+  }, [policyData, original]);
+
+  const dirty = useMemo(() => original !== null && JSON.stringify(pol) !== JSON.stringify(original), [pol, original]);
 
   // Strength computed from current rules
   const passwordStrength = useMemo(() => {
@@ -94,22 +99,21 @@ export default function LoginPolicyPage() {
     return            { label: 'Excellent', color: 'text-emerald-700', bar: 'bg-emerald-600', pct: 100 };
   }, [pol.password]);
 
-  const save = async () => {
-    setSaving(true);
-    const res = await fetch('/api/tenant/admin/login-policy', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ login_policy: pol }),
-    });
-    const d = await res.json();
-    if (res.ok) {
-      toast.success('Security policy saved');
-      setOriginal(pol);
-    } else {
-      toast.error(d.error || 'Failed to save');
-    }
-    setSaving(false);
-  };
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch('/api/tenant/admin/login-policy', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ login_policy: pol }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || 'Failed to save');
+    },
+    onSuccess: () => { toast.success('Security policy saved'); setOriginal(pol); },
+    onError: (e: Error) => toast.error(e.message || 'Failed to save'),
+  });
+  const saving = saveMutation.isPending;
+  const save = () => saveMutation.mutate();
 
   const addIp = () => {
     const v = newIp.trim();
@@ -306,7 +310,7 @@ export default function LoginPolicyPage() {
         'sticky bottom-0 -mx-6 px-6 py-3 border-t border-border bg-background/80 backdrop-blur flex items-center justify-end gap-2 transition-opacity',
         dirty ? 'opacity-100' : 'opacity-0 pointer-events-none'
       )}>
-        <button onClick={() => setPol(original)}
+        <button onClick={() => { if (original) setPol(original); }}
           className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground">
           Discard
         </button>

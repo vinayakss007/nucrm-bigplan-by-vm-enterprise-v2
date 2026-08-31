@@ -5,6 +5,8 @@
  */
 'use client';
 import { useEffect, useMemo, useState } from 'react';
+import { useMutation } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import { Settings as SettingsIcon, Save, Loader2, RotateCcw, ShieldX, AlertCircle,
   Palette, Calendar, Zap, Mail, Lock,
   type LucideIcon,
@@ -28,27 +30,30 @@ type Defaults = Record<string, unknown>;
 
 export default function UserDefaultsPage() {
   const [defaults, setDefaults] = useState<Defaults>({});
-  const [original, setOriginal] = useState<Defaults>({});
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(true);
+  const [original, setOriginal] = useState<Defaults | null>(null);
+
+  // #1328: reads via TanStack Query (were parallel raw fetch + useEffect). The
+  // editable copy is seeded once so the dirty-tracking + discard flow persists.
+  const { data: defaultsData, isLoading: defaultsLoading } = useApiQuery<{ user_defaults?: Defaults }>(
+    ['tenant', 'admin', 'user-defaults'],
+    '/api/tenant/admin/user-defaults',
+  );
+  const { data: meData, isLoading: meLoading } = useApiQuery<{ is_admin?: boolean }>(
+    ['tenant', 'me'],
+    '/api/tenant/me',
+  );
+  const loading = defaultsLoading || meLoading;
+  const isAdmin = meData?.is_admin ?? true;
 
   useEffect(() => {
-  const controller = new AbortController();
-  let ignore = false;
-    Promise.all([
-      fetch('/api/tenant/admin/user-defaults', { signal: controller.signal }).then(r => r.ok ? r.json() : { user_defaults: {} }),
-      fetch('/api/tenant/me', { signal: controller.signal }).then(r => r.ok ? r.json() : {}),
-    ]).then(([d, me]: [{ user_defaults?: Defaults }, { is_admin?: boolean }]) => { if (ignore) return; 
-      setDefaults(d.user_defaults ?? { } );
-      setOriginal(d.user_defaults ?? {});
-      setIsAdmin(me?.is_admin ?? false);
-    }).catch(e => { if ((e as Error)?.name === 'AbortError') return; throw e; })
-      .finally(() => { if (!ignore) setLoading(false); });
-    return () => { ignore = true; controller.abort(); };
-}, []);
+    if (defaultsData && original === null) {
+      const d = defaultsData.user_defaults ?? {};
+      setDefaults(d);
+      setOriginal(d);
+    }
+  }, [defaultsData, original]);
 
-  const dirty = useMemo(() => JSON.stringify(defaults) !== JSON.stringify(original), [defaults, original]);
+  const dirty = useMemo(() => original !== null && JSON.stringify(defaults) !== JSON.stringify(original), [defaults, original]);
   const setVal = (k: string, v: unknown) => setDefaults(p => {
     const next = { ...p };
     if (v === '' || v === null || v === undefined) delete next[k];
@@ -56,34 +61,35 @@ export default function UserDefaultsPage() {
     return next;
   });
 
-  const save = async () => {
-    setSaving(true);
-    const res = await fetch('/api/tenant/admin/user-defaults', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ user_defaults: defaults }),
-    });
-    const d = await res.json();
-    if (res.ok) {
-      toast.success(`Saved ${Object.keys(defaults).length} default(s)`);
-      setOriginal(defaults);
-    } else {
-      toast.error(d.error || 'Failed');
-    }
-    setSaving(false);
-  };
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch('/api/tenant/admin/user-defaults', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_defaults: defaults }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || 'Failed');
+    },
+    onSuccess: () => { toast.success(`Saved ${Object.keys(defaults).length} default(s)`); setOriginal(defaults); },
+    onError: (e: Error) => toast.error(e.message || 'Failed'),
+  });
+
+  const clearMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch('/api/tenant/admin/user-defaults', { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed');
+    },
+    onSuccess: () => { toast.success('Workspace defaults cleared'); setDefaults({}); setOriginal({}); },
+    onError: () => toast.error('Failed'),
+  });
+
+  const saving = saveMutation.isPending || clearMutation.isPending;
+  const save = () => saveMutation.mutate();
 
   const clearAll = async () => {
     await confirmThen('Remove every workspace user-default? Each user will fall back to platform defaults.', async () => {
-      setSaving(true);
-      const res = await fetch('/api/tenant/admin/user-defaults', { method: 'DELETE' });
-      if (res.ok) {
-        toast.success('Workspace defaults cleared');
-        setDefaults({}); setOriginal({});
-      } else {
-        toast.error('Failed');
-      }
-      setSaving(false);
+      clearMutation.mutate();
     });
   };
 
@@ -265,7 +271,7 @@ export default function UserDefaultsPage() {
         'sticky bottom-0 -mx-6 px-6 py-3 border-t border-border bg-background/80 backdrop-blur flex items-center justify-end gap-2 transition-opacity',
         dirty ? 'opacity-100' : 'opacity-0 pointer-events-none'
       )}>
-        <button onClick={() => setDefaults(original)}
+        <button onClick={() => { if (original) setDefaults(original); }}
           className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground">
           Discard
         </button>
