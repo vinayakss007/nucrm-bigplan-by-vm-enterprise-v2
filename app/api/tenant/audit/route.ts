@@ -7,9 +7,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { auditLogs, users, editHistory } from '@/drizzle/schema';
-import { eq, and, desc, sql, gte, lte, isNull } from 'drizzle-orm';
+import { eq, and, or, desc, sql, gte, lte, isNull, inArray } from 'drizzle-orm';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { logError } from '@/lib/errors-server';
+import { escapeLike } from '@/lib/api/sanitize-like';
 
 export const GET = withApiRoute(async (req: NextRequest) => {
   try {
@@ -37,11 +38,32 @@ export const GET = withApiRoute(async (req: NextRequest) => {
     if (entityType) filters.push(eq(auditLogs.entityType, entityType));
     if (userId) filters.push(eq(auditLogs.userId, userId));
     if (entityId) filters.push(eq(auditLogs.entityId, entityId));
-    if (dateFrom) filters.push(gte(auditLogs.createdAt, new Date(dateFrom)));
-    if (dateTo) filters.push(lte(auditLogs.createdAt, new Date(dateTo)));
+
+    // #661: validate date filters instead of feeding `Invalid Date` into SQL,
+    // which silently returned zero (or garbage) rows on a malformed param.
+    if (dateFrom) {
+      const from = new Date(dateFrom);
+      if (Number.isNaN(from.getTime())) {
+        return NextResponse.json({ error: 'Invalid "from" date' }, { status: 400 });
+      }
+      filters.push(gte(auditLogs.createdAt, from));
+    }
+    if (dateTo) {
+      const to = parseInclusiveEnd(dateTo);
+      if (!to) {
+        return NextResponse.json({ error: 'Invalid "to" date' }, { status: 400 });
+      }
+      // #661: a bare `YYYY-MM-DD` parses to midnight, which as an `lte` bound
+      // excluded that whole day's entries (classic off-by-a-day). parseInclusiveEnd
+      // rolls a date-only value to the end of that day so `to` is inclusive.
+      filters.push(lte(auditLogs.createdAt, to));
+    }
     if (search) {
+      // #661: escape LIKE metacharacters so a search for `_`/`%` matches those
+      // literal characters instead of acting as wildcards that match everything.
+      const term = `%${escapeLike(search)}%`;
       filters.push(
-        sql`(${auditLogs.action} ILIKE ${'%' + search + '%'} OR ${auditLogs.entityType} ILIKE ${'%' + search + '%'})`
+        sql`(${auditLogs.action} ILIKE ${term} OR ${auditLogs.entityType} ILIKE ${term})`
       );
     }
 
@@ -71,7 +93,23 @@ export const GET = withApiRoute(async (req: NextRequest) => {
     .limit(limit)
     .offset(offset);
 
-    const auditLogIds = logs.map(l => l.id).filter(Boolean);
+    // #661: correlate edit_history to THIS PAGE's exact (entity_type, entity_id)
+    // pairs. The previous version used two INDEPENDENT `IN (...)` subqueries —
+    // one over all matching entity_types, one over all matching entity_ids —
+    // which is a cartesian correlation: it could attach field-changes from a
+    // (type, id) combination that never actually appears together in the result
+    // set, and it re-ran the full filtered query twice. We already have every
+    // pair we need in `logs`, so match those precisely.
+    const entityPairs = Array.from(
+      new Map(
+        logs
+          .filter((l) => l.resource_id)
+          .map((l) => [`${l.resource_type}:${l.resource_id}`, {
+            type: l.resource_type as string,
+            id: l.resource_id as string,
+          }]),
+      ).values(),
+    );
 
     let fieldChanges: {
       id: string;
@@ -87,7 +125,17 @@ export const GET = withApiRoute(async (req: NextRequest) => {
       created_at: Date | null;
     }[] = [];
 
-    if (auditLogIds.length > 0) {
+    if (entityPairs.length > 0) {
+      // One OR-clause per exact (type, id) pair on this page, so a change only
+      // matches when BOTH columns line up. Scoped to the same set of entity_ids
+      // via inArray as a cheap index-friendly pre-filter, then narrowed to the
+      // precise pairs.
+      const pairFilter = or(
+        ...entityPairs.map((p) =>
+          and(eq(editHistory.entityType, p.type), eq(editHistory.entityId, p.id)),
+        ),
+      );
+
       fieldChanges = await db.select({
         id: editHistory.id,
         entity_type: editHistory.entityType,
@@ -104,10 +152,12 @@ export const GET = withApiRoute(async (req: NextRequest) => {
       .from(editHistory)
       .where(and(
         eq(editHistory.tenantId, ctx.tenantId),
-        sql`${editHistory.entityType} IN (SELECT DISTINCT ${auditLogs.entityType} FROM ${auditLogs} WHERE ${where})`,
-        sql`${editHistory.entityId} IN (SELECT DISTINCT ${auditLogs.entityId} FROM ${auditLogs} WHERE ${where} AND ${auditLogs.entityId} IS NOT NULL)`,
+        inArray(editHistory.entityId, entityPairs.map((p) => p.id)),
+        pairFilter,
       ))
       .orderBy(desc(editHistory.createdAt))
+      // Generous cap keeps the query bounded for a pathological entity with a
+      // huge change history while still covering the whole page in practice.
       .limit(limit * 5);
     }
 
@@ -136,3 +186,20 @@ export const GET = withApiRoute(async (req: NextRequest) => {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 });
+
+/**
+ * Parse the `to` bound so a date-only value ("2026-08-31") is inclusive of that
+ * whole day. A bare date parses to midnight UTC; used as an `lte` bound that
+ * excludes everything logged later that day. When the caller passes only a date
+ * (no time component) we roll the bound to 23:59:59.999 of that day. Returns
+ * null for an unparseable value so the caller can 400. (#661)
+ */
+function parseInclusiveEnd(value: string): Date | null {
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return null;
+  // Detect a date-only input (no explicit time). Matches "YYYY-MM-DD".
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value.trim())) {
+    d.setUTCHours(23, 59, 59, 999);
+  }
+  return d;
+}

@@ -20,6 +20,13 @@ import { cache } from './index';
 const SESSION_TTL = 30 * 24 * 60 * 60; // 30 days in seconds
 const SESSION_PREFIX = 'session:';
 const USER_SESSIONS_PREFIX = 'user-sessions:';
+// Auth-context cache prefix, kept in sync with lib/tenant/request-context.ts.
+// That cache stores the user's roleSlug + resolved permissions keyed by the
+// SHA-256 token hash — the SAME hash this module uses for the session index
+// (hashToken() in lib/auth/session.ts and tokenKey() below are both
+// `sha256(token).hex`). So the per-user session index doubles as the index we
+// need to clear a user's cached permissions. (#661)
+const AUTH_CONTEXT_PREFIX = 'auth:context:';
 
 /**
  * #1212: never store the raw JWT as a Redis key. If Redis is read by an
@@ -110,18 +117,43 @@ export async function sessionExists(token: string): Promise<boolean> {
 /**
  * Delete all sessions for a user using the reverse index.
  * The index stores hashed tokens, so entries are already the cache keys.
+ *
+ * #661: also clears the auth-context cache (roleSlug + permissions) for each of
+ * the user's tokens. Previously this cleared only the `session:` cache, so a
+ * role/permission change could keep serving the OLD permissions from
+ * `auth:context:` for up to its 5-minute TTL. Because both caches are keyed by
+ * the same SHA-256 token hash, the session index gives us every context key to
+ * bust, making role changes take effect on the very next request.
  */
 export async function deleteUserSessions(userId: string): Promise<void> {
   const indexKey = `${USER_SESSIONS_PREFIX}${userId}`;
   const hashedTokens = await cache.get<string[]>(indexKey) ?? [];
 
-  // Delete each session key
+  // Delete each session key AND its matching auth-context (permissions) key.
   for (const hashed of hashedTokens) {
     await cache.del(`${SESSION_PREFIX}${hashed}`);
+    await cache.del(`${AUTH_CONTEXT_PREFIX}${hashed}`);
   }
 
   // Delete the user's session index
   await cache.del(indexKey);
+}
+
+/**
+ * Invalidate ONLY the cached auth context (roleSlug + permissions) for a user,
+ * leaving their `session:` entries intact so they stay logged in. Use this on a
+ * role/permission change where the goal is to force a fresh permission fetch on
+ * the user's next request without signing them out. (#661)
+ *
+ * Keyed off the same per-user token index as the session cache, so it clears
+ * every device/token the user has active.
+ */
+export async function invalidateUserContexts(userId: string): Promise<void> {
+  const indexKey = `${USER_SESSIONS_PREFIX}${userId}`;
+  const hashedTokens = await cache.get<string[]>(indexKey) ?? [];
+  for (const hashed of hashedTokens) {
+    await cache.del(`${AUTH_CONTEXT_PREFIX}${hashed}`);
+  }
 }
 
 /**
@@ -140,5 +172,6 @@ export const sessionCache = {
   refreshSession,
   sessionExists,
   deleteUserSessions,
+  invalidateUserContexts,
   getSessionCount,
 };

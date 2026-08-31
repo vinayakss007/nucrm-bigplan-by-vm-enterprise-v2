@@ -7,13 +7,15 @@ import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { roles } from '@/drizzle/schema';
+import { roles, tenantMembers } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { updateRoleSchema } from '@/lib/api/schemas';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { concurrencyGuard } from '@/lib/api/concurrency';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { invalidateUserContexts } from '@/lib/cache/sessions';
+import { logError } from '@/lib/errors-server';
 
  
  
@@ -47,6 +49,25 @@ export const PATCH = withApiRoute(async (request: NextRequest, { params }: any) 
       .returning();
 
     if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+    // #661: editing a role's permissions in place must take effect immediately.
+    // The auth-context cache stores each member's resolved permissions for up
+    // to 5 minutes, so without an explicit bust an admin's permission change
+    // would not apply to affected users until that TTL expired. Invalidate the
+    // cached context for every active member assigned to this role so their
+    // next request re-fetches the new permissions. Best-effort: a cache miss
+    // here degrades to the TTL / middleware roleVersion re-check, so never fail
+    // the update over it.
+    try {
+      const members = await db
+        .select({ userId: tenantMembers.userId })
+        .from(tenantMembers)
+        .where(and(eq(tenantMembers.roleId, id), eq(tenantMembers.tenantId, ctx.tenantId)));
+      await Promise.all(members.map((m) => invalidateUserContexts(m.userId)));
+    } catch (e) {
+      await logError({ error: e, context: 'tenant/roles/[id] PATCH context invalidation' });
+    }
+
     return NextResponse.json({ data: row });
  
  

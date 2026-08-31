@@ -466,7 +466,8 @@ describe('notifications - comprehensive', () => {
     await expect(createNotification({
       userId: 'u1', tenantId: 't1', type: 'deal_won',
       title: 'Won!', entity_type: 'deal', entity_id: 'd1',
-    })).resolves.toBeUndefined();
+      // #661: now resolves to a boolean delivery indicator.
+    })).resolves.toBeTypeOf('boolean');
   });
 
   it('createNotification with explicit link', async () => {
@@ -474,7 +475,7 @@ describe('notifications - comprehensive', () => {
     await expect(createNotification({
       userId: 'u1', tenantId: 't1', type: 'task_assigned',
       title: 'Task', link: '/custom',
-    })).resolves.toBeUndefined();
+    })).resolves.toBeTypeOf('boolean');
   });
 
   it('createNotification with all entity types', async () => {
@@ -483,7 +484,7 @@ describe('notifications - comprehensive', () => {
       await expect(createNotification({
         userId: 'u1', tenantId: 't1', type: 'system',
         title: 'Entity', entity_type: et, entity_id: `${et}-1`,
-      })).resolves.toBeUndefined();
+      })).resolves.toBeTypeOf('boolean');
     }
   });
 
@@ -492,7 +493,7 @@ describe('notifications - comprehensive', () => {
     await expect(createNotification({
       userId: 'u1', tenantId: 't1', type: 'system',
       title: 'a'.repeat(300), body: 'b'.repeat(600),
-    })).resolves.toBeUndefined();
+    })).resolves.toBeTypeOf('boolean');
   });
 
   it('notifyTenantMembers handles empty list', async () => {
@@ -501,7 +502,7 @@ describe('notifications - comprehensive', () => {
     const { notifyTenantMembers } = await import('@/lib/notifications');
     await expect(notifyTenantMembers({
       tenantId: 't1', type: 'system', title: 'Msg',
-    })).resolves.toBeUndefined();
+    })).resolves.toBeTypeOf('boolean');
   });
 
   it('notifyTenantMembers with entity link', async () => {
@@ -511,7 +512,7 @@ describe('notifications - comprehensive', () => {
     await expect(notifyTenantMembers({
       tenantId: 't1', type: 'deal_won', title: 'Won!',
       entity_type: 'deal', entity_id: 'd1',
-    })).resolves.toBeUndefined();
+    })).resolves.toBeTypeOf('boolean');
   });
 
   it('processMentions handles no mentions', async () => {

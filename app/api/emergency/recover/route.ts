@@ -173,12 +173,22 @@ export async function POST(request: NextRequest) {
     updateFields.totpBackupCodes = null;
   }
 
-  await db.update(users)
-    .set(updateFields)
-    .where(eq(users.id, user.id));
+  // #685 (HIGH #7): rotate the password AND revoke sessions atomically. These
+  // touch two tables (users, sessions); if the session purge failed after the
+  // password update, stolen cookies would survive the "revocation" while the
+  // caller was told recovery succeeded. One transaction makes reset + revoke
+  // all-or-nothing.
+  await db.transaction(async (tx) => {
+    await tx.update(users)
+      .set(updateFields)
+      .where(eq(users.id, user.id));
 
-  // CRITICAL: Invalidate all existing sessions so stolen cookies are immediately revoked
-  await db.delete(sessions).where(eq(sessions.userId, user.id));
+    // CRITICAL: Invalidate all existing sessions so stolen cookies are immediately revoked
+    await tx.delete(sessions).where(eq(sessions.userId, user.id));
+  });
+
+  // Clear the Redis session + auth-context cache after the DB commit (best
+  // effort; a cache miss simply forces a fresh DB check on the next request).
   await deleteUserSessions(user.id);
 
   void logError({ error: new Error('Emergency recovery SUCCESS — super-admin password reset'), context: 'emergency/recover success', level: 'error', userId: user.id, metadata: { ip, email, disable_2fa } });
