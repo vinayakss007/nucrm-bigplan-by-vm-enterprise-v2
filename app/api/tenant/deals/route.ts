@@ -11,7 +11,7 @@ import { requireAuth, requirePerm, can } from '@/lib/auth/middleware';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { checkLimit } from '@/lib/usage/middleware';
 import { db } from '@/drizzle/db';
-import { deals, contacts, companies, users, tenants, activities, pipelines, dealStages, tasks } from '@/drizzle/schema';
+import { deals, contacts, companies, users, tenants, activities, dealStages, tasks } from '@/drizzle/schema';
 import { eq, and, or, desc, sql, ilike, isNull } from 'drizzle-orm';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { fireWebhooks } from '@/lib/webhooks';
@@ -20,6 +20,7 @@ import { createNotification } from '@/lib/notifications';
 import { cache } from '@/lib/cache';
 import { archiveFilter } from '@/lib/api/deals-archive-filter';
 import { escapeLike } from '@/lib/api/sanitize-like';
+import { resolveDealStage, stageFailureMessage } from '@/lib/deals/resolve-stage';
 
 // #1615: withApiRoute pins ONE connection for the whole handler body so the
 // auth check's setTenantContext() and every db query below (count + list) share
@@ -117,37 +118,25 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;
 
-    // Resolve stage_id - support stage_id (UUID), stage (name), and stage_name (frontend field)
-    // stage_name is not in the Zod schema (stripped), so read from raw body
-    let stageId = v.stage_id;
-    const stageName = v.stage || body.stage_name;
-    
-    if (!stageId && stageName) {
-      const stageConds = [
-        ilike(dealStages.name, stageName),
-        eq(pipelines.tenantId, ctx.tenantId),
-      ];
-      // When pipeline_id is provided, scope stage lookup to that pipeline
-      if (v.pipeline_id) {
-        stageConds.push(eq(dealStages.pipelineId, v.pipeline_id));
-      }
-      const [stageRecord] = await db
-        .select({ id: dealStages.id })
-        .from(dealStages)
-        .innerJoin(pipelines, eq(pipelines.id, dealStages.pipelineId))
-        .where(and(...stageConds))
-        .limit(1);
-      
-      if (stageRecord) {
-        stageId = stageRecord.id;
-      }
+    // Resolve stage_id — supports stage_id (UUID), stage (name), and stage_name
+    // (frontend field). The shared resolver validates the stage belongs to the
+    // tenant (and to pipeline_id when supplied), escapes LIKE metacharacters,
+    // and reports ambiguity instead of silently picking the wrong stage. (#658)
+    const stageResult = await resolveDealStage(db, {
+      stageId: v.stage_id,
+      stageName: v.stage ?? v.stage_name,
+      pipelineId: v.pipeline_id,
+      tenantId: ctx.tenantId,
+    });
+    if (!stageResult.ok) {
+      return NextResponse.json({ error: stageFailureMessage(stageResult) }, { status: 400 });
     }
-    
-    if (!stageId) {
-      const hint = stageName ? ` No stage named "${stageName}" found${v.pipeline_id ? ' in the specified pipeline' : ''}.` : '';
-      return NextResponse.json({ error: `stage_id is required (or valid stage/stage_name).${hint}` }, { status: 400 });
-    }
-    
+    const stageId = stageResult.stageId;
+    // Keep the deal's pipeline consistent with its stage: when the caller did
+    // not send pipeline_id, adopt the resolved stage's pipeline instead of
+    // storing NULL (which previously left stage/pipeline inconsistent).
+    const pipelineId = v.pipeline_id || stageResult.pipelineId;
+
     const amount = v.amount ?? v.value ?? 0;
 
     // Plan limit check (records a violation + alerts owner; only blocks when USAGE_LIMITS=on)
@@ -162,7 +151,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
           title: v.title,
           amount: amount.toString(),
           stageId,
-          pipelineId: v.pipeline_id || null,
+          pipelineId,
           closeDate: v.close_date ? new Date(v.close_date) : null,
           contactId: v.contact_id || null,
           companyId: v.company_id || null,

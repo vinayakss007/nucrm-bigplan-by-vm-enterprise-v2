@@ -114,7 +114,7 @@ export async function createNotification(opts: {
  
  
   metadata?: Record<string, unknown>;
-}) {
+}): Promise<boolean> {
   // Enriched metadata and the derived link are computed ONCE, outside the try,
   // so the retry path below writes the same row as the first attempt. It used to
   // recompute neither, silently dropping the deep link and the entity reference
@@ -155,6 +155,7 @@ export async function createNotification(opts: {
       link,
       type: opts.type,
     });
+    return true;
   } catch (_err) {
     // Retry once after a short delay
     try {
@@ -170,8 +171,22 @@ export async function createNotification(opts: {
           metadata: meta,
         });
       });
-      return;
+      // Parity with the first-attempt path: still push over realtime once the
+      // retry commits, otherwise a notification that only lands on retry never
+      // reaches a connected socket. (#661)
+      void pushNotification(opts.tenantId, opts.userId, {
+        title: opts.title,
+        ...(opts.body !== undefined ? { body: opts.body } : {}),
+        link,
+        type: opts.type,
+      });
+      return true;
     } catch (retryErr) {
+      // #661: delivery failed after a retry. We log it (so it is never fully
+      // silent) AND signal failure to the caller via the return value so
+      // delivery-critical flows (invites, security alerts) can react — e.g.
+      // surface a warning or fall back to email. Fire-and-forget callers that
+      // ignore the result keep their previous behavior.
       logger.error('[notifications] Failed to create notification (retry exhausted)', {
         type: opts.type,
         userId: opts.userId,
@@ -179,6 +194,7 @@ export async function createNotification(opts: {
         title: opts.title?.slice(0, 100),
         error: retryErr instanceof Error ? retryErr.message : String(retryErr),
       });
+      return false;
     }
   }
 }
@@ -193,7 +209,7 @@ export async function notifyTenantMembers(opts: {
   link?: string;
   entity_type?: NotificationEntityType;
   entity_id?: string;
-}) {
+}): Promise<boolean> {
   try {
     const filters = [
       eq(tenantMembers.tenantId, opts.tenantId),
@@ -207,7 +223,7 @@ export async function notifyTenantMembers(opts: {
       .from(tenantMembers)
       .where(and(...filters));
 
-    if (!members.length) return;
+    if (!members.length) return true;
 
     // Build entity metadata
  
@@ -236,6 +252,19 @@ export async function notifyTenantMembers(opts: {
     await withTenantContext(opts.tenantId, members[0]!.userId, async (tx) => {
       await tx.insert(notifications).values(notificationValues);
     });
+
+    // #661: push over realtime to each recipient. Previously a broadcast only
+    // ever hit the DB, so connected clients relied on polling and never got a
+    // live update. Best-effort per pushNotification's own isolation.
+    for (const m of members) {
+      void pushNotification(opts.tenantId, m.userId, {
+        title: opts.title,
+        ...(opts.body !== undefined ? { body: opts.body } : {}),
+        link: resolvedLink,
+        type: opts.type,
+      });
+    }
+    return true;
   } catch (_err) {
     // Retry once after a short delay
     try {
@@ -267,14 +296,23 @@ export async function notifyTenantMembers(opts: {
         await withTenantContext(opts.tenantId, retryMembers[0]!.userId, async (tx) => {
           await tx.insert(notifications).values(retryValues);
         });
+        for (const m of retryMembers) {
+          void pushNotification(opts.tenantId, m.userId, {
+            title: opts.title,
+            ...(opts.body !== undefined ? { body: opts.body } : {}),
+            link: resolvedLink,
+            type: opts.type,
+          });
+        }
       }
-      return;
+      return true;
     } catch (retryErr) {
       logger.error('[notifications] Failed to notify tenant members (retry exhausted)', {
         tenantId: opts.tenantId,
         type: opts.type,
         error: retryErr instanceof Error ? retryErr.message : String(retryErr),
       });
+      return false;
     }
   }
 }

@@ -16,6 +16,8 @@ vi.mock('@/lib/cache/index', () => ({
 // token. These helpers mirror that so tests assert the hashed keys.
 const h = (token: string) => createHash('sha256').update(token).digest('hex');
 const sessionKey = (token: string) => `session:${h(token)}`;
+// #661: the auth-context (permissions) cache is keyed by the SAME token hash.
+const contextKey = (token: string) => `auth:context:${h(token)}`;
 
 describe('cache/sessions', () => {
   beforeEach(() => {
@@ -149,6 +151,40 @@ describe('cache/sessions', () => {
     expect(mockCache.del).toHaveBeenCalledWith('user-sessions:user-nobody');
   });
 
+  // #661: role/permission changes must take effect on the next request, so
+  // clearing a user's sessions has to clear the auth-context (permissions)
+  // cache too — not just the session: cache.
+  it('deleteUserSessions also busts the auth:context cache for every token', async () => {
+    mockCache.get.mockResolvedValue([h('token-a'), h('token-b')]);
+    const { deleteUserSessions } = await import('@/lib/cache/sessions');
+    await deleteUserSessions('user-1');
+    expect(mockCache.del).toHaveBeenCalledWith(sessionKey('token-a'));
+    expect(mockCache.del).toHaveBeenCalledWith(contextKey('token-a'));
+    expect(mockCache.del).toHaveBeenCalledWith(sessionKey('token-b'));
+    expect(mockCache.del).toHaveBeenCalledWith(contextKey('token-b'));
+    expect(mockCache.del).toHaveBeenCalledWith('user-sessions:user-1');
+  });
+
+  it('invalidateUserContexts clears only the auth:context keys, leaving sessions intact', async () => {
+    mockCache.get.mockResolvedValue([h('token-a'), h('token-b')]);
+    const { invalidateUserContexts } = await import('@/lib/cache/sessions');
+    await invalidateUserContexts('user-1');
+    // Context keys cleared for every token.
+    expect(mockCache.del).toHaveBeenCalledWith(contextKey('token-a'));
+    expect(mockCache.del).toHaveBeenCalledWith(contextKey('token-b'));
+    // Sessions and the index survive — the user stays logged in.
+    expect(mockCache.del).not.toHaveBeenCalledWith(sessionKey('token-a'));
+    expect(mockCache.del).not.toHaveBeenCalledWith(sessionKey('token-b'));
+    expect(mockCache.del).not.toHaveBeenCalledWith('user-sessions:user-1');
+  });
+
+  it('invalidateUserContexts is a no-op for a user with no tokens', async () => {
+    mockCache.get.mockResolvedValue([]);
+    const { invalidateUserContexts } = await import('@/lib/cache/sessions');
+    await invalidateUserContexts('user-nobody');
+    expect(mockCache.del).not.toHaveBeenCalled();
+  });
+
   it('sessionCache namespace exports all functions', async () => {
     const { sessionCache } = await import('@/lib/cache/sessions');
     expect(sessionCache.cacheSession).toBeDefined();
@@ -157,6 +193,7 @@ describe('cache/sessions', () => {
     expect(sessionCache.refreshSession).toBeDefined();
     expect(sessionCache.sessionExists).toBeDefined();
     expect(sessionCache.deleteUserSessions).toBeDefined();
+    expect(sessionCache.invalidateUserContexts).toBeDefined();
     expect(sessionCache.getSessionCount).toBeDefined();
   });
 });

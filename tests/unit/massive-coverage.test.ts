@@ -46,7 +46,9 @@ describe('notifications - comprehensive', () => {
         body: 'Great deal closed',
         entity_type: 'deal',
         entity_id: 'deal-123',
-      })).resolves.toBeUndefined();
+        // Returns a boolean delivery indicator (#661); asserting the type keeps
+        // the test valid whether or not the mock's insert path succeeds.
+      })).resolves.toBeTypeOf('boolean');
     });
 
     it('creates notification with explicit link', async () => {
@@ -59,7 +61,7 @@ describe('notifications - comprehensive', () => {
         title: 'New Task',
         body: 'Complete report',
         link: '/custom/link',
-      })).resolves.toBeUndefined();
+      })).resolves.toBeTypeOf('boolean');
     });
 
     it('creates notification with all entity types', async () => {
@@ -75,7 +77,7 @@ describe('notifications - comprehensive', () => {
           title: 'Entity notification',
           entity_type: entityType,
           entity_id: `${entityType}-1`,
-        })).resolves.toBeUndefined();
+        })).resolves.toBeTypeOf('boolean');
       }
     });
 
@@ -88,7 +90,7 @@ describe('notifications - comprehensive', () => {
         type: 'system',
         title: 'a'.repeat(300),
         body: 'b'.repeat(600),
-      })).resolves.toBeUndefined();
+      })).resolves.toBeTypeOf('boolean');
     });
 
     it('handles notification with metadata', async () => {
@@ -101,7 +103,7 @@ describe('notifications - comprehensive', () => {
         title: 'Limit warning',
         body: 'Approaching limit',
         metadata: { current: 95, limit: 100 },
-      })).resolves.toBeUndefined();
+      })).resolves.toBeTypeOf('boolean');
     });
 
     it('handles all notification types', async () => {
@@ -120,7 +122,7 @@ describe('notifications - comprehensive', () => {
           tenantId: 'tenant-1',
           type,
           title: `${type} notification`,
-        })).resolves.toBeUndefined();
+        })).resolves.toBeTypeOf('boolean');
       }
     });
   });
@@ -134,7 +136,7 @@ describe('notifications - comprehensive', () => {
         type: 'team_joined',
         title: 'New team member',
         body: 'Welcome!',
-      })).resolves.toBeUndefined();
+      })).resolves.toBeTypeOf('boolean');
     });
 
     it('notifies with entity deep links', async () => {
@@ -146,7 +148,7 @@ describe('notifications - comprehensive', () => {
         title: 'Deal won!',
         entity_type: 'deal',
         entity_id: 'deal-456',
-      })).resolves.toBeUndefined();
+      })).resolves.toBeTypeOf('boolean');
     });
 
     it('handles empty member list', async () => {
@@ -156,7 +158,7 @@ describe('notifications - comprehensive', () => {
         tenantId: 'tenant-1',
         type: 'system',
         title: 'System message',
-      })).resolves.toBeUndefined();
+      })).resolves.toBeTypeOf('boolean');
     });
   });
 
