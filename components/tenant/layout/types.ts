@@ -30,3 +30,61 @@ export interface ProfileInfo {
   } | null;
   [key: string]: unknown;
 }
+
+
+/**
+ * A single in-app notification as consumed by the tenant header bell panel.
+ * The API is normalized to snake_case (via toSnakeCase) before use, so both
+ * `read_at`/`is_read` and `title`/`message`/`body` variants are tolerated.
+ */
+export interface HeaderNotification {
+  id: string;
+  type?: string | null;
+  title?: string | null;
+  message?: string | null;
+  body?: string | null;
+  link?: string | null;
+  created_at?: string | null;
+  read_at?: string | null;
+  is_read?: boolean | null;
+}
+
+/** Global-search result rows rendered in the header search dropdown. */
+export interface SearchLeadResult {
+  id: string;
+  first_name?: string | null;
+  last_name?: string | null;
+  company_name?: string | null;
+}
+
+export interface SearchContactResult {
+  id: string;
+  first_name?: string | null;
+  last_name?: string | null;
+  email?: string | null;
+}
+
+export interface SearchDealResult {
+  id: string;
+  title?: string | null;
+  value?: number | string | null;
+}
+
+export interface SearchCompanyResult {
+  id: string;
+  name?: string | null;
+}
+
+export interface SearchTaskResult {
+  id: string;
+  title?: string | null;
+  priority?: string | null;
+}
+
+export interface HeaderSearchResults {
+  leads?: SearchLeadResult[];
+  contacts?: SearchContactResult[];
+  deals?: SearchDealResult[];
+  companies?: SearchCompanyResult[];
+  tasks?: SearchTaskResult[];
+}

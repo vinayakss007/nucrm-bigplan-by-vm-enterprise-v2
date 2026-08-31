@@ -4,7 +4,6 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Bell, Sun, Moon, Search, LogOut, X, Users, TrendingUp,
@@ -14,14 +13,17 @@ import { useTheme } from 'next-themes';
 import Link from 'next/link';
 import { cn, formatCurrency, getInitials, formatRelativeTime, toSnakeCase } from '@/lib/utils';
 import { confirmThen } from '@/components/ui/confirm-dialog';
+import type {
+  TenantInfo, ProfileInfo, HeaderNotification, HeaderSearchResults,
+} from './types';
 
 export default function TenantHeader({ tenant, profile, roleSlug, onToggleSidebar }: {
-  tenant: any; profile: any; roleSlug: string; onToggleSidebar?: () => void;
+  tenant: TenantInfo; profile: ProfileInfo; roleSlug: string; onToggleSidebar?: () => void;
 }) {
-  const [notifications, setNotifications] = useState<any[]>([]);
+  const [notifications, setNotifications] = useState<HeaderNotification[]>([]);
   const [unread, setUnread]       = useState(0);
   const [query, setQuery]         = useState('');
-  const [results, setResults]     = useState<any>(null);
+  const [results, setResults]     = useState<HeaderSearchResults | null>(null);
   const [searching, setSearching] = useState(false);
   const [showDrop, setShowDrop]   = useState(false);
   const [showProfile, setShowProfile] = useState(false);
@@ -64,7 +66,7 @@ export default function TenantHeader({ tenant, profile, roleSlug, onToggleSideba
       ]);
       if (signal?.aborted) return;
       setUnread(unreadData.count ?? 0);
-      setNotifications((notifData.data ?? []).slice(0, 8).map((n: any) => toSnakeCase(n)));
+      setNotifications((notifData.data ?? []).slice(0, 8).map((n: Record<string, unknown>) => toSnakeCase(n as Record<string, unknown>)) as HeaderNotification[]);
     } catch (error) {
       if ((error as Error)?.name === 'AbortError') return;
       console.error('[header] Failed to load notifications:', error);
@@ -163,9 +165,9 @@ export default function TenantHeader({ tenant, profile, roleSlug, onToggleSideba
               <div className="px-4 py-5 text-center text-sm text-muted-foreground">No results for "{query}"</div>
             ) : (
               <>
-                {results?.leads?.length>0 && <>
+                {(results?.leads?.length ?? 0) > 0 && <>
                   <div className="px-4 py-1.5 bg-muted/30 border-b border-border text-[10px] font-bold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5"><UserCheck className="w-3 h-3"/>Leads</div>
-                  {results.leads.map((l:any)=>(
+                  {results!.leads!.map((l)=>(
                     <Link key={l.id} href={`/tenant/leads/${l.id}`} onClick={()=>{setShowDrop(false);setQuery('');setResults(null);}}
                       className="flex items-center gap-3 px-4 py-2.5 hover:bg-accent transition-colors">
                       <div className="w-7 h-7 rounded-lg bg-violet-100 dark:bg-violet-900/30 flex items-center justify-center text-violet-600 text-xs font-bold shrink-0">{l.first_name?.charAt(0)?.toUpperCase()}</div>
@@ -173,9 +175,9 @@ export default function TenantHeader({ tenant, profile, roleSlug, onToggleSideba
                     </Link>
                   ))}
                 </>}
-                {results?.contacts?.length>0 && <>
+                {(results?.contacts?.length ?? 0) > 0 && <>
                   <div className="px-4 py-1.5 bg-muted/30 border-b border-border text-[10px] font-bold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5"><Users className="w-3 h-3"/>Contacts</div>
-                  {results.contacts.map((c:any)=>(
+                  {results!.contacts!.map((c)=>(
                     <Link key={c.id} href={`/tenant/contacts/${c.id}`} onClick={()=>{setShowDrop(false);setQuery('');setResults(null);}}
                       className="flex items-center gap-3 px-4 py-2.5 hover:bg-accent transition-colors">
                       <div className="w-7 h-7 rounded-full bg-gradient-to-br from-violet-500 to-indigo-500 flex items-center justify-center text-white text-xs font-bold shrink-0">{c.first_name?.charAt(0)?.toUpperCase()}</div>
@@ -183,9 +185,9 @@ export default function TenantHeader({ tenant, profile, roleSlug, onToggleSideba
                     </Link>
                   ))}
                 </>}
-                {results?.deals?.length>0 && <>
+                {(results?.deals?.length ?? 0) > 0 && <>
                   <div className="px-4 py-1.5 bg-muted/30 border-b border-border text-[10px] font-bold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5"><TrendingUp className="w-3 h-3"/>Deals</div>
-                  {results.deals.map((d:any)=>(
+                  {results!.deals!.map((d)=>(
                     <Link key={d.id} href="/tenant/deals" onClick={()=>{setShowDrop(false);setQuery('');setResults(null);}}
                       className="flex items-center gap-3 px-4 py-2.5 hover:bg-accent transition-colors">
                       <TrendingUp className="w-4 h-4 text-amber-500 shrink-0"/>
@@ -194,9 +196,9 @@ export default function TenantHeader({ tenant, profile, roleSlug, onToggleSideba
                     </Link>
                   ))}
                 </>}
-                {results?.companies?.length>0 && <>
+                {(results?.companies?.length ?? 0) > 0 && <>
                   <div className="px-4 py-1.5 bg-muted/30 border-b border-border text-[10px] font-bold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5"><Building2 className="w-3 h-3"/>Companies</div>
-                  {results.companies.map((c:any)=>(
+                  {results!.companies!.map((c)=>(
                     <Link key={c.id} href={`/tenant/companies/${c.id}`} onClick={()=>{setShowDrop(false);setQuery('');setResults(null);}}
                       className="flex items-center gap-3 px-4 py-2.5 hover:bg-accent transition-colors">
                       <Building2 className="w-4 h-4 text-blue-500 shrink-0"/>
@@ -204,9 +206,9 @@ export default function TenantHeader({ tenant, profile, roleSlug, onToggleSideba
                     </Link>
                   ))}
                 </>}
-                {results?.tasks?.length>0 && <>
+                {(results?.tasks?.length ?? 0) > 0 && <>
                   <div className="px-4 py-1.5 bg-muted/30 border-b border-border text-[10px] font-bold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5"><CheckSquare className="w-3 h-3"/>Tasks</div>
-                  {results.tasks.map((t:any)=>(
+                  {results!.tasks!.map((t)=>(
                     <Link key={t.id} href="/tenant/tasks" onClick={()=>{setShowDrop(false);setQuery('');setResults(null);}}
                       className="flex items-center gap-3 px-4 py-2.5 hover:bg-accent transition-colors">
                       <div className={cn('w-2 h-2 rounded-full shrink-0', t.priority==='high' ? 'bg-red-500' : t.priority==='medium' ? 'bg-amber-500' : 'bg-slate-400')} />
@@ -277,7 +279,7 @@ export default function TenantHeader({ tenant, profile, roleSlug, onToggleSideba
                   </div>
                 ) : (
                   <div className="divide-y divide-border/50">
-                    {notifications.slice(0, 5).map((n: any) => {
+                    {notifications.slice(0, 5).map((n) => {
                       const Icon = n.type === 'lead' ? UserCheck : n.type === 'deal' ? TrendingUp : n.type === 'task' ? CheckSquare : n.type === 'email' ? Mail : n.type === 'alert' ? AlertCircle : Info;
                       const isUnread = !n.read_at && !n.is_read;
                       return (
