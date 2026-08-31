@@ -6,9 +6,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { rateLimitRead } from '@/lib/api/read-rate-limit';
 
 export const GET = withApiRoute(async (request: NextRequest) => {
   try {
+    const limited = await rateLimitRead(request, 'analytics');
+    if (limited) return limited;
     await requireAuth(request);
     return NextResponse.json({
       data: {
