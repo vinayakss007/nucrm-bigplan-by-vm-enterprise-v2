@@ -19,6 +19,11 @@
  *   6. Redis is reachable when REDIS_URL is configured.
  *   7. Email is configured (Resend or SMTP).
  *   8. Off-site backup storage is configured (so backups survive host loss).
+ *   9. Row-Level Security is actually ENFORCED against the connecting role
+ *      (#C1) — not merely present. A DB where the app connects as the table
+ *      owner without FORCE ROW LEVEL SECURITY has policies that are inert, so
+ *      tenant isolation silently degrades to app-level filtering only. In
+ *      production this is a hard failure.
  *
  * Severity model:
  *   - FAIL  → hard blocker. Process exits non-zero; do not start the app.
@@ -223,12 +228,78 @@ async function checkBackupStorage(): Promise<void> {
   }
 }
 
+// ── 9. RLS actually enforced against the connecting role (#C1) ───────────────
+// Isolation has two halves and BOTH must hold: (a) tenant-scoped tables have
+// RLS + a policy, and (b) the role we connect as is SUBJECT to those policies.
+// A table's owner is EXEMPT from its own RLS unless the table is FORCE ROW
+// LEVEL SECURITY, and a BYPASSRLS/superuser role is always exempt. Checking
+// only (a) is how a DB ends up with 160+ policies and zero enforcement.
+async function checkRlsEnforced(): Promise<void> {
+  const url = process.env.DATABASE_URL;
+  if (!url) return; // reported by checkEnv
+
+  let ssl: false | { rejectUnauthorized: boolean } = false;
+  try {
+    const mod = await import('../lib/db/ssl-config');
+    ssl = mod.pgSslConfig();
+  } catch { /* fall back to no ssl override */ }
+
+  const pool = new Pool({ connectionString: url, max: 1, ssl, connectionTimeoutMillis: 8000 });
+  try {
+    const who = await pool.query<{ current_role: string; is_superuser: boolean; bypass_rls: boolean }>(
+      `SELECT current_user AS current_role, rolsuper AS is_superuser, rolbypassrls AS bypass_rls
+         FROM pg_roles WHERE rolname = current_user`
+    );
+    const role = who.rows[0];
+    if (!role) { prodFail('db:rls', 'could not determine connecting role'); return; }
+
+    // Per-table state for uuid tenant-scoped tables.
+    const { rows } = await pool.query<{
+      table_name: string; rls_enabled: boolean; rls_forced: boolean; is_owner: boolean; has_policy: boolean;
+    }>(`
+      SELECT c.relname                       AS table_name,
+             c.relrowsecurity                AS rls_enabled,
+             c.relforcerowsecurity           AS rls_forced,
+             (c.relowner = (SELECT oid FROM pg_roles WHERE rolname = current_user)) AS is_owner,
+             (p.polname IS NOT NULL)         AS has_policy
+        FROM pg_class c
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+        JOIN pg_attribute a ON a.attrelid = c.oid AND a.attname = 'tenant_id' AND a.attisdropped = false
+        JOIN pg_type t ON t.oid = a.atttypid AND t.typname = 'uuid'
+        LEFT JOIN pg_policy p ON p.polrelid = c.oid AND p.polname = 'tenant_isolation'
+       WHERE n.nspname = 'public' AND c.relkind = 'r'`);
+
+    if (rows.length === 0) { prodFail('db:rls', 'no uuid tenant-scoped tables found — cannot verify isolation'); return; }
+
+    const roleExempt = role.is_superuser || role.bypass_rls;
+    const noRls = rows.filter((r) => !r.rls_enabled).map((r) => r.table_name);
+    const noPolicy = rows.filter((r) => !r.has_policy).map((r) => r.table_name);
+    // A table is NOT enforced against us when we own it and it is not FORCE'd.
+    const ownerInert = rows.filter((r) => r.is_owner && !r.rls_forced).map((r) => r.table_name);
+
+    if (roleExempt) {
+      prodFail('db:rls', `connecting role "${role.current_role}" is ${role.is_superuser ? 'a superuser' : 'BYPASSRLS'} — RLS is NOT enforced against it. Connect as a non-owner, non-BYPASSRLS role (e.g. nucrm_app).`);
+    } else if (ownerInert.length) {
+      prodFail('db:rls', `RLS is INERT on ${ownerInert.length} table(s): "${role.current_role}" owns them and they are not FORCE ROW LEVEL SECURITY (e.g. ${ownerInert.slice(0, 3).join(', ')}). Apply migration 0068 (FORCE RLS) or connect as a non-owner role.`);
+    } else if (noRls.length || noPolicy.length) {
+      prodFail('db:rls', `${noRls.length} table(s) without RLS, ${noPolicy.length} without a tenant_isolation policy (e.g. ${[...noRls, ...noPolicy].slice(0, 3).join(', ')}).`);
+    } else {
+      ok('db:rls', `enforced for role "${role.current_role}" across ${rows.length} table(s)`);
+    }
+  } catch (err) {
+    prodFail('db:rls', `could not verify RLS enforcement: ${err instanceof Error ? err.message : String(err)}`);
+  } finally {
+    await pool.end().catch(() => {});
+  }
+}
+
 async function main(): Promise<void> {
   console.log(`\nNuCRM preflight  (NODE_ENV=${process.env.NODE_ENV ?? 'undefined'}${STRICT ? ', STRICT' : ''})`);
   console.log('='.repeat(52));
 
   checkEnv();
   await checkDatabase();
+  await checkRlsEnforced();
   await checkRedis();
   checkEmail();
   await checkBackupStorage();

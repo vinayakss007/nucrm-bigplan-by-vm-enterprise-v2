@@ -55,8 +55,12 @@ async function s3Delete(key: string) {
   await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
 }
 
+// #M2: SVG is intentionally NOT allowed. SVGs can embed inline <script> and
+// on-* event handlers, so an uploaded .svg served inline is a stored-XSS
+// vector. The newer documents/upload-url route already blocks SVG; this keeps
+// the two upload paths consistent. Raster images + documents only.
 const ALLOWED_TYPES = new Set([
-  'image/jpeg','image/png','image/gif','image/webp','image/svg+xml',
+  'image/jpeg','image/png','image/gif','image/webp',
   'application/pdf',
   'application/msword',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -70,7 +74,7 @@ const ALLOWED_TYPES = new Set([
 const EXT_MIME_MAP: Record<string, string> = {
   '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
   '.png': 'image/png', '.gif': 'image/gif', '.webp': 'image/webp',
-  '.svg': 'image/svg+xml', '.pdf': 'application/pdf',
+  '.pdf': 'application/pdf',
   '.doc': 'application/msword',
   '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   '.xls': 'application/vnd.ms-excel',

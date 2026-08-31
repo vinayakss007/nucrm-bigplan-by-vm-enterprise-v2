@@ -6,7 +6,7 @@
 // Background Worker for NuCRM SaaS
 // Handles scheduled jobs, email sending, webhook delivery, etc.
 
-import { Worker } from 'bullmq';
+import { Worker, QueueEvents } from 'bullmq';
 import IORedis from 'ioredis';
 import { db } from '@/drizzle/db';
 import { notifications } from '@/drizzle/schema';
@@ -487,6 +487,106 @@ const tenantCleanupWorker = new Worker(
   { connection: createRedisConnection(), concurrency: 1, ...JOB_RETENTION }
 );
 
+// CSV export worker (#H1) — previously enqueued by enqueueExport() with NO
+// consumer, so async exports were silently dropped. Generates the CSV
+// (bounded by MAX_EXPORT_ROWS, #H2) and, when a callbackUrl was supplied,
+// POSTs the result there so the requester is notified.
+const exportWorker = new Worker(
+  'export-csv',
+  async (job) => {
+    const { tenantId, userId } = job.data;
+    const payload = job.data.payload ?? {};
+    const entityType = payload.type;
+    const filters = payload.filters ?? {};
+    const callbackUrl = payload.callbackUrl as string | undefined;
+    console.log(`[Export Worker] Processing job: ${job.id} - ${entityType} for tenant ${tenantId}`);
+
+    const { generateExportData } = await import('@/lib/export');
+    const csv = await generateExportData({ tenantId, userId, entityType, filters });
+
+    if (callbackUrl) {
+      // #H1: deliver the finished export to the requester's callback. redactUrl
+      // keeps any token in the callback query string out of the logs.
+      const res = await fetch(callbackUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/csv; charset=utf-8' },
+        body: csv,
+        signal: AbortSignal.timeout(15_000),
+      });
+      if (!res.ok) throw new Error(`Export callback failed: HTTP ${res.status}`);
+      console.log(`[Export Worker] Delivered ${entityType} export to ${redactUrl(callbackUrl)}`);
+    } else {
+      console.warn(`[Export Worker] ${entityType} export for tenant ${tenantId} produced no callbackUrl — result not delivered`);
+    }
+    return { rows: csv.split('\n').length - 1, entityType };
+  },
+  { connection: createRedisConnection(), concurrency: 2, ...JOB_RETENTION }
+);
+
+// Contact import worker (#H1) — previously enqueued by enqueueContactImport()
+// with NO consumer. Runs the SAME shared, tenant-scoped, plan-limit-aware
+// import path as the synchronous endpoint (lib/import/contacts).
+const contactImportWorker = new Worker(
+  'contact-import',
+  async (job) => {
+    const { tenantId, userId } = job.data;
+    const payload = job.data.payload ?? {};
+    const csv: string = payload.csv ?? '';
+    const options = payload.options ?? { skipDuplicates: true, updateExisting: false };
+    console.log(`[Contact Import Worker] Processing job: ${job.id} for tenant ${tenantId}`);
+
+    const { parseContactsCsv, processContactImport } = await import('@/lib/import/contacts');
+    const rows = parseContactsCsv(csv);
+    if (rows.length === 0) {
+      console.warn(`[Contact Import Worker] No data rows in CSV for job ${job.id}`);
+      return { imported: 0, updated: 0, skipped: 0, errors: ['No data rows found in CSV'] };
+    }
+    const results = await processContactImport(tenantId, userId, rows, options);
+    console.log(`[Contact Import Worker] Job ${job.id}: imported=${results.imported} updated=${results.updated} skipped=${results.skipped}`);
+    return results;
+  },
+  { connection: createRedisConnection(), concurrency: 2, ...JOB_RETENTION }
+);
+
+// ── Dead-letter / poison-message visibility (#M4) ────────────────────────────
+// Previously a job that exhausted its retries just got evicted after 24h with
+// NO alert — poison messages failed silently. Attach a QueueEvents('failed')
+// listener per queue so a FINAL failure (attemptsMade >= configured attempts)
+// is logged loudly and reported to the error pipeline for alerting.
+const QUEUE_NAMES = [
+  'send-email', 'send-notification', 'send-bulk-emails', 'run-automation',
+  'send-lead-warming', 'whatsapp-webhook', 'webhooks', 'export-csv', 'contact-import',
+  'tenant-cleanup',
+] as const;
+
+const queueEventsList: QueueEvents[] = [];
+for (const name of QUEUE_NAMES) {
+  const qe = new QueueEvents(name, { connection: createRedisConnection() });
+  qe.on('failed', async ({ jobId, failedReason }) => {
+    try {
+      // Only alert on FINAL failure so we don't page for a job that will still
+      // be retried. We fetch the job to compare attemptsMade against attempts.
+      const { Queue } = await import('bullmq');
+      const q = new Queue(name, { connection: createRedisConnection() });
+      const job = jobId ? await q.getJob(jobId) : null;
+      const attemptsMade = job?.attemptsMade ?? 0;
+      const maxAttempts = job?.opts?.attempts ?? 1;
+      await q.close();
+      if (attemptsMade < maxAttempts) return; // will be retried; not dead yet
+
+      console.error(`[DLQ] Job permanently failed in queue "${name}" (job ${jobId}): ${failedReason}`);
+      await logError({
+        error: new Error(`Background job permanently failed: ${failedReason}`),
+        context: `worker:dlq:${name}`,
+        level: 'error',
+        metadata: { queue: name, jobId, attemptsMade, maxAttempts },
+      });
+    } catch (e) {
+      console.error(`[DLQ] Failed to record dead-letter for queue "${name}":`, (e as Error).message);
+    }
+  });
+  queueEventsList.push(qe);
+}
 // Health check heartbeat — writes worker status to Redis every 30s
 const heartbeatInterval = setInterval(async () => {
   try {
@@ -505,6 +605,8 @@ const heartbeatInterval = setInterval(async () => {
         webhook: webhookWorker.isRunning(),
         whatsappWebhook: whatsappWebhookWorker.isRunning(),
         tenantCleanup: tenantCleanupWorker.isRunning(),
+        export: exportWorker.isRunning(),
+        contactImport: contactImportWorker.isRunning(),
       },
       timestamp: new Date().toISOString(),
     };
@@ -541,6 +643,9 @@ async function shutdown(signal: 'SIGTERM' | 'SIGINT') {
     webhookWorker.close(),
     whatsappWebhookWorker.close(),
     tenantCleanupWorker.close(),
+    exportWorker.close(),
+    contactImportWorker.close(),
+    ...queueEventsList.map((qe) => qe.close()),
   ]);
   await Promise.allSettled(
     redisConnections.map((conn) =>

@@ -18,20 +18,20 @@ volumes:
 
 ### Safe Commands (data preserved)
 
-| Command | Effect |
-|---------|--------|
-| `docker compose down` | Stops containers, data safe |
-| `docker compose restart` | Restarts containers, data safe |
-| `docker compose up -d` | Starts/updates containers, data safe |
-| `docker compose down && docker compose up -d` | Full restart, data safe |
+| Command                                       | Effect                               |
+| --------------------------------------------- | ------------------------------------ |
+| `docker compose down`                         | Stops containers, data safe          |
+| `docker compose restart`                      | Restarts containers, data safe       |
+| `docker compose up -d`                        | Starts/updates containers, data safe |
+| `docker compose down && docker compose up -d` | Full restart, data safe              |
 
 ### DANGEROUS Commands (will WIPE data)
 
-| Command | Effect |
-|---------|--------|
-| `docker compose down -v` | Removes volumes — **DELETES ALL DATA** |
-| `docker volume rm nucrm-enterprise_pgdata` | Same — **DELETES ALL DATA** |
-| `docker system prune -a --volumes` | Prunes everything including volumes |
+| Command                                    | Effect                                 |
+| ------------------------------------------ | -------------------------------------- |
+| `docker compose down -v`                   | Removes volumes — **DELETES ALL DATA** |
+| `docker volume rm nucrm-enterprise_pgdata` | Same — **DELETES ALL DATA**            |
+| `docker system prune -a --volumes`         | Prunes everything including volumes    |
 
 > **Never use `-v` or `--volumes` flags on production.**
 
@@ -48,6 +48,7 @@ DATABASE_URL="postgresql://nucrm:YOUR_PASSWORD@localhost:5433/nucrm" \
 ```
 
 The script:
+
 1. Runs `pg_dump` to create a full SQL dump
 2. Uploads to S3 (if `S3_ENDPOINT` is configured)
 3. Cleans up backups older than 30 days
@@ -82,11 +83,11 @@ psql "postgresql://nucrm:YOUR_PASSWORD@localhost:5433/nucrm" < backup.sql
 
 The app has a selective restore UI at `/superadmin/selective-restore` backed by:
 
-| File | Purpose |
-|------|---------|
-| `lib/restore/backup-parser.ts` | Parses SQL dump into individual statements |
-| `lib/restore/backup-verifier.ts` | Checks backup integrity before restore |
-| `lib/restore/restore-executor.ts` | Executes targeted restore operations |
+| File                              | Purpose                                    |
+| --------------------------------- | ------------------------------------------ |
+| `lib/restore/backup-parser.ts`    | Parses SQL dump into individual statements |
+| `lib/restore/backup-verifier.ts`  | Checks backup integrity before restore     |
+| `lib/restore/restore-executor.ts` | Executes targeted restore operations       |
 
 ---
 
@@ -137,11 +138,11 @@ Pool exhaustion causes `Connection terminated due to connection timeout`. Increa
 
 ## 6. User & Permission Model
 
-| Role | Access |
-|------|--------|
-| `nucrm` (app user) | Full access to `nucrm` database only |
+| Role                   | Access                                         |
+| ---------------------- | ---------------------------------------------- |
+| `nucrm` (app user)     | Full access to `nucrm` database only           |
 | `postgres` (superuser) | Cluster-wide access — use only for admin tasks |
-| Tenant members | Scoped to their tenant data via RLS |
+| Tenant members         | Scoped to their tenant data via RLS            |
 
 Database user `nucrm` is the application user. Never give tenant users direct database access.
 
@@ -214,4 +215,64 @@ psql "postgresql://nucrm:..." < pre-migration.sql       # Step 3: rollback if ne
 
 ---
 
-*Last updated: 2026-06-05*
+_Last updated: 2026-06-05_
+
+---
+
+## Row-Level Security (RLS) enforcement (#C1)
+
+Tenant isolation has **two independent halves, and both must hold**:
+
+1. **Policies exist** — every uuid tenant-scoped table has RLS enabled and a
+   `tenant_isolation` policy. (Migrations `0015`, `0031`, `0037`, `0039`,
+   `0054`, `0059`, `0068`.)
+2. **The connecting role is subject to those policies** — this is the half that
+   is easy to miss.
+
+> PostgreSQL **exempts a table's owner from its own RLS** unless the table is
+> marked `FORCE ROW LEVEL SECURITY`, and any role with `BYPASSRLS` (or a
+> superuser) is **always** exempt. So a database can have 160+ policies and
+> **zero enforcement** if the app connects as the table owner without FORCE.
+
+### Required production setup — connect as a non-owner role
+
+Provision two roles and have the **application** connect as the non-owner one:
+
+```sql
+-- Owner role: owns the schema, runs migrations, may bypass RLS for
+-- cross-tenant superadmin/cron work.
+CREATE ROLE nucrm_owner LOGIN PASSWORD '...' BYPASSRLS;
+
+-- Application role: NOT the table owner, NO BYPASSRLS -> policies apply to it.
+CREATE ROLE nucrm_app LOGIN PASSWORD '...';
+GRANT USAGE ON SCHEMA public TO nucrm_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO nucrm_app;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO nucrm_app;
+```
+
+Then point the app's `DATABASE_URL` at **`nucrm_app`** (never the owner), and run
+migrations as `nucrm_owner`. Migration `0068_force_rls_owner.sql` additionally
+applies `FORCE ROW LEVEL SECURITY`, so RLS holds even if the app ever connects
+as an owner.
+
+### Fail-closed startup check
+
+`scripts/preflight.ts` now includes a `db:rls` check that inspects the
+connecting role and every uuid tenant-scoped table. It **fails production
+startup** (hard blocker) when:
+
+- the connecting role is a superuser or has `BYPASSRLS`, or
+- the role owns tables that are not `FORCE ROW LEVEL SECURITY` (policies inert),
+  or
+- any tenant-scoped table lacks RLS or a `tenant_isolation` policy.
+
+Run it any time against a live DB:
+
+```bash
+npm run preflight              # gates prod start (start-production.sh / bootstrap.sh)
+npm run db:verify-isolation    # detailed per-table report
+```
+
+Outside production these surface as warnings so local/dev (which often connects
+as the owner) still boots, but the risk is reported explicitly.
