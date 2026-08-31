@@ -15,7 +15,7 @@ import { db } from '@/drizzle/db';
 import { tenants } from '@/drizzle/schema';
 import { eq, sql } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
-import { acquireLock } from '@/lib/cache/index';
+import { acquireLock, releaseLock } from '@/lib/cache/index';
 
 /** Idempotency window: how long a processed event id blocks re-processing. */
 const IDEMPOTENCY_TTL = 24 * 60 * 60; // 24h
@@ -72,12 +72,15 @@ export async function POST(request: NextRequest) {
     payload?.subscription?.entity?.id ||
     null;
 
-  if (razorpayEventId) {
-    const { acquired } = await acquireLock(`razorpay:evt:${razorpayEventId}`, IDEMPOTENCY_TTL);
-    if (!acquired) {
+  const lockKey = razorpayEventId ? `razorpay:evt:${razorpayEventId}` : null;
+  let lockValue = '';
+  if (lockKey) {
+    const lock = await acquireLock(lockKey, IDEMPOTENCY_TTL);
+    if (!lock.acquired) {
       console.log(`[Razorpay Webhook] Duplicate event ${razorpayEventId} — skipping`);
       return NextResponse.json({ received: true, duplicate: true });
     }
+    lockValue = lock.value;
   }
 
   console.log(`[Razorpay Webhook] Processing event: ${eventType}`);
@@ -112,8 +115,15 @@ export async function POST(request: NextRequest) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     void logError({ error: err, context: 'webhooks/razorpay event processing', metadata: { eventType } });
-    // Return 200 to prevent Razorpay from retrying (we logged the error)
-    return NextResponse.json({ received: true });
+    // Release the idempotency lock so Razorpay's retry of THIS failed event is
+    // processed instead of being dropped as a duplicate, then return 500 so
+    // Razorpay retries. Previously this returned 200 ("we logged the error"),
+    // which told Razorpay never to retry — a transient failure (e.g. DB blip)
+    // in handlePaymentCaptured/handleSubscriptionActivated permanently lost the
+    // event, leaving the tenant un-activated/not-downgraded. Mirrors the Stripe
+    // handler's retry-safe behavior.
+    if (lockKey) await releaseLock(lockKey, lockValue);
+    return NextResponse.json({ error: 'Processing failed' }, { status: 500 });
   }
 }
 

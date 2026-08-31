@@ -69,7 +69,15 @@ export async function createToken(userId: string, expiresInDays?: number): Promi
 export async function verifyToken(token: string): Promise<{ userId: string } | null> {
   try {
     const { payload } = await jwtVerify(token, getJwtSecret());
-    return { userId: payload.sub as string };
+    // A signed token with a valid signature+expiry but no `sub` claim must NOT
+    // be treated as a valid identity. Without this guard verifyToken could
+    // return { userId: undefined }, which downstream callers (middleware,
+    // requireTenantCtx, setTenantContext, cache keys) treat as a real user id
+    // and can poison identity/tenant scoping. Fail closed instead.
+    if (typeof payload.sub !== 'string' || payload.sub.length === 0) {
+      return null;
+    }
+    return { userId: payload.sub };
   } catch (e) {
     console.error('[Session] Token verification failed', e);
     return null;

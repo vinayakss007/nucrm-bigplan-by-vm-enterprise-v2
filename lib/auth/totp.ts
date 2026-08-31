@@ -3,7 +3,7 @@
  * Copyright (c) 2026 abetworks.in. All Rights Reserved.
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
-import { createHmac, randomBytes } from 'crypto';
+import { createHmac, randomBytes, timingSafeEqual } from 'crypto';
 
 /**
  * Verify a 6-digit TOTP code against a base32 secret.
@@ -51,7 +51,13 @@ export function verifyTOTP(secret: string, token: string, window = 1): boolean {
                   (digest[offset + 2]! & 0xff) << 8 |
                   (digest[offset + 3]! & 0xff)) % 1000000;
 
-    if (code.toString().padStart(6, '0') === token) {
+    // Constant-time comparison of the derived code against the submitted token.
+    // Both are exactly 6 ASCII digits (token is validated by /^\d{6}$/ above and
+    // the derived code is left-padded to 6), so the buffers are equal length and
+    // timingSafeEqual is safe. Avoids the timing leak of a short-circuiting `===`.
+    const codeBuf = Buffer.from(code.toString().padStart(6, '0'), 'utf8');
+    const tokenBuf = Buffer.from(token, 'utf8');
+    if (codeBuf.length === tokenBuf.length && timingSafeEqual(codeBuf, tokenBuf)) {
       return true;
     }
   }
