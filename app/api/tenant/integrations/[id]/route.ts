@@ -5,7 +5,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth, requireCsrf } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { integrations } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
@@ -18,6 +18,8 @@ export const PATCH = withApiRoute(async (request: NextRequest, { params }: { par
   try {
   const limited = await rateLimitMutating(request, 'integrations', 'patch');
   if (limited) return limited;
+    const csrf = requireCsrf(request); // #1835: in-handler CSRF defense-in-depth
+    if (csrf) return csrf;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
@@ -55,6 +57,8 @@ export const DELETE = withApiRoute(async (request: NextRequest, { params }: { pa
   try {
   const limited = await rateLimitMutating(request, 'integrations', 'delete');
   if (limited) return limited;
+    const csrf = requireCsrf(request); // #1835: in-handler CSRF defense-in-depth
+    if (csrf) return csrf;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });

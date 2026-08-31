@@ -5,7 +5,7 @@
  */
 import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth, requireCsrf } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { concurrencyGuard } from '@/lib/api/concurrency';
 import { users } from '@/drizzle/schema';
@@ -16,6 +16,8 @@ import { withApiRoute } from '@/lib/api/with-api-route';
 
 export const PATCH = withApiRoute(async (request: NextRequest) => {
   try {
+    const csrf = requireCsrf(request); // #1835: in-handler CSRF defense-in-depth
+    if (csrf) return csrf;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
 

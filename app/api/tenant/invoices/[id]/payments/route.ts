@@ -16,7 +16,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { apiError } from '@/lib/api-error';
 import { logError } from '@/lib/errors-server';
-import { requireAuth, requirePerm } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm, requireCsrf } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { invoices } from '@/drizzle/schema';
 import { eq, and, sql } from 'drizzle-orm';
@@ -81,6 +81,8 @@ export const POST = withApiRoute(async (req: NextRequest, { params }: { params: 
     const limited = await rateLimitMutating(req, 'invoices', 'post');
     if (limited) return limited;
 
+    const csrf = requireCsrf(req); // #1835: in-handler CSRF defense-in-depth
+    if (csrf) return csrf;
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
 
