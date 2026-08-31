@@ -27,48 +27,63 @@ Each module is declared with a **manifest** and can contribute:
 ## `defineModule`
 
 ```ts
-import { defineModule } from '@/lib/modules/sdk/types';
+import { defineModule } from "@/lib/modules/sdk/types";
 
 export default defineModule({
-  id: 'whatsapp-automation',        // unique module id
-  name: 'WhatsApp Automation',
-  version: '1.0.0',                 // semantic version
-  description: 'Send WhatsApp messages, auto-replies, campaigns',
-  author: 'Your Company',
-  category: 'messaging',            // utility | automation | messaging | integration | ai | analytics
-  icon: '💬',                        // emoji or icon name
-  minCrmVersion: '0.4.0',           // optional
+  id: "whatsapp-automation", // unique module id
+  name: "WhatsApp Automation",
+  version: "1.0.0", // semantic version
+  description: "Send WhatsApp messages, auto-replies, campaigns",
+  author: "Your Company",
+  category: "messaging", // utility | automation | messaging | integration | ai | analytics
+  icon: "💬", // emoji or icon name
+  minCrmVersion: "0.8.0", // optional
 
-  pricing: {                        // per-plan availability & price
-    free:       { enabled: false },
-    starter:    { enabled: true, price: 19 },
-    pro:        { enabled: true, price: 19 },
+  pricing: {
+    // per-plan availability & price
+    free: { enabled: false },
+    starter: { enabled: true, price: 19 },
+    pro: { enabled: true, price: 19 },
     enterprise: { enabled: true, price: 0 },
   },
 
   features: [
-    'WhatsApp Business API',
-    'Template messages',
-    'Auto-replies',
-    'Bulk campaigns',
+    "WhatsApp Business API",
+    "Template messages",
+    "Auto-replies",
+    "Bulk campaigns",
   ],
 
-  permissions: ['whatsapp.view', 'whatsapp.send', 'whatsapp.templates'],
+  permissions: ["whatsapp.view", "whatsapp.send", "whatsapp.templates"],
 
   pages: [
-    { path: '/tenant/whatsapp',           label: 'WhatsApp',  icon: 'MessageSquare' },
-    { path: '/tenant/whatsapp/templates', label: 'Templates', icon: 'FileText' },
+    { path: "/tenant/whatsapp", label: "WhatsApp", icon: "MessageSquare" },
+    {
+      path: "/tenant/whatsapp/templates",
+      label: "Templates",
+      icon: "FileText",
+    },
   ],
 
-  migrations: './my-whatsapp-module/migrations',
+  migrations: "./my-whatsapp-module/migrations",
 
   settings_schema: [
-    { key: 'phone_number_id', label: 'Phone Number ID', type: 'text',     required: true },
-    { key: 'access_token',    label: 'Access Token',    type: 'password', required: true },
+    {
+      key: "phone_number_id",
+      label: "Phone Number ID",
+      type: "text",
+      required: true,
+    },
+    {
+      key: "access_token",
+      label: "Access Token",
+      type: "password",
+      required: true,
+    },
   ],
 
-  webhooks: ['whatsapp.message_received'],
-  dependsOn: ['core-crm'],
+  webhooks: ["whatsapp.message_received"],
+  dependsOn: ["core-crm"],
 });
 ```
 
@@ -76,24 +91,24 @@ export default defineModule({
 
 ## Manifest fields
 
-| Field | Type | Notes |
-| --- | --- | --- |
-| `id` | `string` | Unique module id. |
-| `name` | `string` | Display name. |
-| `version` | `string` | Semantic version. |
-| `description` | `string` | Short description. |
-| `author` | `string?` | Vendor/author name. |
-| `category` | enum | `utility \| automation \| messaging \| integration \| ai \| analytics`. |
-| `icon` | `string` | Emoji or icon name. |
-| `minCrmVersion` | `string?` | Minimum CRM version required. |
-| `pricing` | `Record<plan, { enabled; price? }>` | Availability + price per plan. |
-| `features` | `string[]` | Marketplace feature list. |
-| `permissions` | `string[]?` | Auto-created RBAC permissions. |
-| `pages` | `ModulePage[]?` | `{ path, label, icon }` navigation entries. |
-| `settings_schema` | `SettingField[]?` | Renders the config form (see below). |
-| `webhooks` | `string[]?` | Events the module emits/listens to. |
-| `migrations` | `string?` | Path to the module's DB migrations. |
-| `dependsOn` | `string[]?` | Other modules required. |
+| Field             | Type                                | Notes                                                                   |
+| ----------------- | ----------------------------------- | ----------------------------------------------------------------------- |
+| `id`              | `string`                            | Unique module id.                                                       |
+| `name`            | `string`                            | Display name.                                                           |
+| `version`         | `string`                            | Semantic version.                                                       |
+| `description`     | `string`                            | Short description.                                                      |
+| `author`          | `string?`                           | Vendor/author name.                                                     |
+| `category`        | enum                                | `utility \| automation \| messaging \| integration \| ai \| analytics`. |
+| `icon`            | `string`                            | Emoji or icon name.                                                     |
+| `minCrmVersion`   | `string?`                           | Minimum CRM version required.                                           |
+| `pricing`         | `Record<plan, { enabled; price? }>` | Availability + price per plan.                                          |
+| `features`        | `string[]`                          | Marketplace feature list.                                               |
+| `permissions`     | `string[]?`                         | Auto-created RBAC permissions.                                          |
+| `pages`           | `ModulePage[]?`                     | `{ path, label, icon }` navigation entries.                             |
+| `settings_schema` | `SettingField[]?`                   | Renders the config form (see below).                                    |
+| `webhooks`        | `string[]?`                         | Events the module emits/listens to.                                     |
+| `migrations`      | `string?`                           | Path to the module's DB migrations.                                     |
+| `dependsOn`       | `string[]?`                         | Other modules required.                                                 |
 
 ### `SettingField`
 
@@ -101,7 +116,7 @@ export default defineModule({
 interface SettingField {
   key: string;
   label: string;
-  type: 'text' | 'password' | 'select' | 'boolean' | 'number';
+  type: "text" | "password" | "select" | "boolean" | "number";
   required?: boolean;
   placeholder?: string;
   help?: string;

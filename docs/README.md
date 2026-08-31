@@ -17,14 +17,14 @@ exposes platform-operator internals.
 
 ➡️ **[Open the Public Docs →](./public/README.md)**
 
-| Section | For whom | What's inside |
-| --- | --- | --- |
-| [Getting Started](./public/getting-started.md) | New users | Sign up, first login, workspace basics |
-| [User Guide](./public/user-guide/README.md) | Everyday users | Contacts, deals, leads, tasks, tickets, email, automation & more |
-| [Workspace Admin Guide](./public/admin-guide/README.md) | Tenant admins | Team, roles, billing, branding, integrations, security settings |
-| [Developer & API Reference](./public/developer/README.md) | Developers | REST API, authentication, SDK, webhooks, embeds |
-| [Customer Portal Guide](./public/customer-portal.md) | Your customers | Self-service tickets, KB, invoices |
-| [FAQ](./public/faq.md) · [Glossary](./public/glossary.md) | Everyone | Common questions & terminology |
+| Section                                                   | For whom       | What's inside                                                    |
+| --------------------------------------------------------- | -------------- | ---------------------------------------------------------------- |
+| [Getting Started](./public/getting-started.md)            | New users      | Sign up, first login, workspace basics                           |
+| [User Guide](./public/user-guide/README.md)               | Everyday users | Contacts, deals, leads, tasks, tickets, email, automation & more |
+| [Workspace Admin Guide](./public/admin-guide/README.md)   | Tenant admins  | Team, roles, billing, branding, integrations, security settings  |
+| [Developer & API Reference](./public/developer/README.md) | Developers     | REST API, authentication, SDK, webhooks, embeds                  |
+| [Customer Portal Guide](./public/customer-portal.md)      | Your customers | Self-service tickets, KB, invoices                               |
+| [FAQ](./public/faq.md) · [Glossary](./public/glossary.md) | Everyone       | Common questions & terminology                                   |
 
 ---
 
@@ -35,17 +35,17 @@ security, backups/DR, and incident response. Treat this as internal/confidential
 
 ➡️ **[Open the Super-Admin Docs →](./admin/README.md)**
 
-| Section | What's inside |
-| --- | --- |
-| [Platform Architecture](./admin/architecture.md) | System design, multi-tenancy, data model, request lifecycle |
-| [Installation & Deployment](./admin/deployment.md) | Docker, PM2, nginx, environment configuration |
-| [Configuration Reference](./admin/configuration.md) | Every environment variable, grouped and explained |
-| [Super-Admin Console](./admin/superadmin-console.md) | Tenants, billing, usage, impersonation, data explorer |
-| [Security & Compliance](./admin/security.md) | Auth, RBAC, RLS, encryption, GDPR/SOC2 |
-| [Backups & Disaster Recovery](./admin/backups-dr.md) | Backup strategy, restore, selective restore, DR drills |
-| [Monitoring & Observability](./admin/monitoring.md) | Sentry, Grafana/Prometheus, PagerDuty, health checks |
-| [Operations Runbooks](./admin/runbooks.md) | Go-live, incident response, migration recovery |
-| [Background Jobs & Realtime](./admin/jobs-and-realtime.md) | Worker, queues, cron, socket.io |
+| Section                                                                      | What's inside                                                  |
+| ---------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| [Platform Architecture](./admin/architecture.md)                             | System design, multi-tenancy, data model, request lifecycle    |
+| [Installation & Deployment](./admin/deployment.md)                           | Docker, PM2, nginx, environment configuration                  |
+| [Configuration Reference](./admin/configuration.md)                          | Every environment variable, grouped and explained              |
+| [Super-Admin Console](./admin/superadmin-console.md)                         | Tenants, billing, usage, impersonation, data explorer          |
+| [Security & Compliance](./admin/security.md)                                 | Auth, RBAC, RLS, encryption, GDPR/SOC2                         |
+| [Backups & Disaster Recovery](./admin/backups-dr.md)                         | Backup strategy, restore, selective restore, DR drills         |
+| [Monitoring & Observability](./admin/monitoring.md)                          | Sentry, Grafana/Prometheus, PagerDuty, health checks           |
+| [Operations Runbooks](./admin/runbooks.md)                                   | Go-live, incident response, migration recovery                 |
+| [Background Jobs & Realtime](./admin/jobs-and-realtime.md)                   | Worker, queues, cron, socket.io                                |
 | [Contributing & Operations Handbook](./admin/contributing-and-operations.md) | PR policy, engineering standards, toolchain, live deploy facts |
 
 ---
@@ -92,14 +92,14 @@ docs/
 
 ## Conventions used in these docs
 
-| Symbol / label | Meaning |
-| --- | --- |
-| 🔐 **Admin only** | Requires super-admin (platform operator) access |
-| 👤 **Tenant admin** | Requires a workspace admin/owner role |
-| ⚠️ **Caution** | Destructive or high-impact action |
-| `code` | Commands, file paths, API routes, environment variables |
+| Symbol / label              | Meaning                                                   |
+| --------------------------- | --------------------------------------------------------- |
+| 🔐 **Admin only**           | Requires super-admin (platform operator) access           |
+| 👤 **Tenant admin**         | Requires a workspace admin/owner role                     |
+| ⚠️ **Caution**              | Destructive or high-impact action                         |
+| `code`                      | Commands, file paths, API routes, environment variables   |
 | _Source:_ `path/to/file.ts` | Points to the code that implements the behavior described |
 
 ---
 
-_Product version: **0.4.0** · Stack: Next.js 16 · React 19 · TypeScript 5.9 · PostgreSQL 15+ · Drizzle ORM · Redis._
+_Product version: **0.8.0** · Stack: Next.js 16 · React 19 · TypeScript 5.9 · PostgreSQL 15+ · Drizzle ORM · Redis._
