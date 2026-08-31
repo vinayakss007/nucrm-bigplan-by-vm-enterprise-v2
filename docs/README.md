@@ -102,4 +102,4 @@ docs/
 
 ---
 
-_Product version: **0.8.0** · Stack: Next.js 16 · React 19 · TypeScript 5.9 · PostgreSQL 15+ · Drizzle ORM · Redis._
+_Product version: **0.8.1** · Stack: Next.js 16 · React 19 · TypeScript 5.9 · PostgreSQL 15+ · Drizzle ORM · Redis._
