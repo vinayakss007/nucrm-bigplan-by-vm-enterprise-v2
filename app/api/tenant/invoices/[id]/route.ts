@@ -16,6 +16,7 @@ import { logAudit } from '@/lib/audit';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { enforceCsrf } from '@/lib/auth/csrf-guard';
 
 export const GET = withApiRoute(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
@@ -55,6 +56,9 @@ export const PUT = withApiRoute(async (req: NextRequest, { params }: { params: P
   try {
   const limited = await rateLimitMutating(req, 'invoices', 'patch');
   if (limited) return limited;
+  // #1835: in-handler CSRF defense-in-depth on a financial route.
+  const csrf = enforceCsrf(req);
+  if (csrf) return csrf;
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
 
@@ -186,6 +190,9 @@ export const DELETE = withApiRoute(async (req: NextRequest, { params }: { params
   try {
   const limited = await rateLimitMutating(req, 'invoices', 'delete');
   if (limited) return limited;
+  // #1835: in-handler CSRF defense-in-depth on a financial route.
+  const csrf = enforceCsrf(req);
+  if (csrf) return csrf;
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
 

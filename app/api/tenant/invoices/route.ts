@@ -13,6 +13,7 @@ import { eq, and, desc, sql, count, isNull } from 'drizzle-orm';
 import { requireAuth } from '@/lib/auth/middleware';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { enforceCsrf } from '@/lib/auth/csrf-guard';
 import { logError } from '@/lib/errors-server';
 
 export const GET = withApiRoute(async (request: NextRequest) => {
@@ -72,6 +73,9 @@ export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const limited = await rateLimitMutating(request, 'invoices', 'post');
     if (limited) return limited;
+    // #1835: in-handler CSRF defense-in-depth on a financial route.
+    const csrf = enforceCsrf(request);
+    if (csrf) return csrf;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
     const { tenantId, userId } = ctx;

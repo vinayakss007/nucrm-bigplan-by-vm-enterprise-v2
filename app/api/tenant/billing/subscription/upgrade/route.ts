@@ -14,6 +14,7 @@ import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { updateSubscription, getPriceId, isStripeConfigured } from '@/lib/stripe';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { enforceCsrf } from '@/lib/auth/csrf-guard';
 
 const upgradeSchema = z.object({
   planId: z.string().min(1, 'Plan ID is required'),
@@ -30,6 +31,10 @@ export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const limited = await rateLimitMutating(request, 'billing', 'post');
     if (limited) return limited;
+
+    // #1835: in-handler CSRF defense-in-depth on a financial/irreversible route.
+    const csrf = enforceCsrf(request);
+    if (csrf) return csrf;
 
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;

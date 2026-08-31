@@ -14,6 +14,7 @@ import { updateRoleSchema } from '@/lib/api/schemas';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { concurrencyGuard } from '@/lib/api/concurrency';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { enforceCsrf } from '@/lib/auth/csrf-guard';
 
  
  
@@ -22,6 +23,9 @@ export const PATCH = withApiRoute(async (request: NextRequest, { params }: any) 
   try {
   const limited = await rateLimitMutating(request, 'roles', 'patch');
   if (limited) return limited;
+  // #1835: in-handler CSRF defense-in-depth on a permission-changing route.
+  const csrf = enforceCsrf(request);
+  if (csrf) return csrf;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
@@ -63,6 +67,9 @@ export const DELETE = withApiRoute(async (request: NextRequest, { params }: any)
   try {
   const limited = await rateLimitMutating(request, 'roles', 'delete');
   if (limited) return limited;
+  // #1835: in-handler CSRF defense-in-depth on a permission-changing route.
+  const csrf = enforceCsrf(request);
+  if (csrf) return csrf;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });

@@ -13,9 +13,14 @@ import { eq } from 'drizzle-orm';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { updateProfileSchema } from '@/lib/api/schemas';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { enforceCsrf } from '@/lib/auth/csrf-guard';
 
 export const PATCH = withApiRoute(async (request: NextRequest) => {
   try {
+    // #1835: in-handler CSRF defense-in-depth on an account-mutating route.
+    const csrf = enforceCsrf(request);
+    if (csrf) return csrf;
+
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
 

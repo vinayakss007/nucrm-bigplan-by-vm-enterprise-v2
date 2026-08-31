@@ -14,6 +14,7 @@ import { roles } from '@/drizzle/schema';
 import { eq, and, isNull } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { enforceCsrf } from '@/lib/auth/csrf-guard';
 
 export const GET = withApiRoute(async (request: NextRequest) => {
   try {
@@ -46,6 +47,9 @@ export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const limited = await rateLimitMutating(request, 'roles', 'post');
     if (limited) return limited;
+    // #1835: in-handler CSRF defense-in-depth on a permission-changing route.
+    const csrf = enforceCsrf(request);
+    if (csrf) return csrf;
 
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
