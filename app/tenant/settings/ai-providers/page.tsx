@@ -5,6 +5,8 @@
  */
 'use client';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useMutation } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import {
   BrainCircuit, Save, Loader2, ShieldX, ExternalLink, ArrowUpDown, Eye, EyeOff,
   User, Building2, Globe, RefreshCw, ChevronDown, Plus, Trash2, Info,
@@ -41,10 +43,7 @@ const KEY_TYPE_LABELS: Record<KeyType, { label: string; icon: typeof User; color
 
 export default function AIProvidersPage() {
   const [data, setData] = useState<Record<string, ProviderConfig>>({});
-  const [original, setOriginal] = useState<Record<string, ProviderConfig>>({});
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(true);
+  const [original, setOriginal] = useState<Record<string, ProviderConfig> | null>(null);
   const [showKey, setShowKey] = useState<Record<string, boolean>>({});
 
   // Model fetching state per provider
@@ -59,23 +58,33 @@ export default function AIProvidersPage() {
   const [newProviderId, setNewProviderId] = useState('');
   const [newProviderUrl, setNewProviderUrl] = useState('');
 
-  useEffect(() => {
-    const controller = new AbortController();
-    let ignore = false;
-    Promise.all([
-      fetch('/api/tenant/admin/ai-providers', { signal: controller.signal }).then(r => r.ok ? r.json() : { providers: {} }),
-      fetch('/api/tenant/me', { signal: controller.signal }).then(r => r.ok ? r.json() : {}),
-    ]).then(([d, me]: [{ providers?: Record<string, ProviderConfig> }, { is_admin?: boolean }]) => { if (ignore) return;
-      setData(d.providers ?? {} );
-      setOriginal(d.providers ?? {});
-      setIsAdmin(me?.is_admin ?? false);
-    }).catch(e => {
-      if ((e as Error)?.name === 'AbortError') return;
-    }).finally(() => { if (!ignore) setLoading(false); });
-    return () => { ignore = true; controller.abort(); };
-  }, []);
+  // #1328: reads via TanStack Query (were parallel raw fetch + useEffect). The
+  // editable copy (data/original) is seeded from the query once loaded so the
+  // dirty-tracking + discard flow is preserved and a background refetch never
+  // clobbers in-progress edits.
+  const { data: providersData, isLoading: providersLoading } = useApiQuery<{ providers?: Record<string, ProviderConfig> }>(
+    ['tenant', 'admin', 'ai-providers'],
+    '/api/tenant/admin/ai-providers',
+    { retry: false },
+  );
+  const { data: meData, isLoading: meLoading } = useApiQuery<{ is_admin?: boolean }>(
+    ['tenant', 'me'],
+    '/api/tenant/me',
+    { retry: false },
+  );
+  const loading = providersLoading || meLoading;
+  const isAdmin = meData?.is_admin ?? false;
 
-  const dirty = useMemo(() => JSON.stringify(data) !== JSON.stringify(original), [data, original]);
+  const fetchedProviders = providersData?.providers;
+  useEffect(() => {
+    if (providersData && original === null) {
+      const seeded = fetchedProviders ?? {};
+      setData(seeded);
+      setOriginal(seeded);
+    }
+  }, [providersData, fetchedProviders, original]);
+
+  const dirty = useMemo(() => original !== null && JSON.stringify(data) !== JSON.stringify(original), [data, original]);
 
   const setField = <K extends keyof ProviderConfig>(id: string, k: K, v: ProviderConfig[K]) => {
     setData(prev => ({ ...prev, [id]: { ...prev[id]!, [k]: v } }));
@@ -137,27 +146,30 @@ export default function AIProvidersPage() {
     });
   };
 
-  const save = async () => {
-    setSaving(true);
-    const res = await fetch('/api/tenant/admin/ai-providers', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ providers: data }),
-    });
-    const d = await res.json();
-    if (res.ok) {
+  const saveMutation = useMutation({
+    mutationFn: async (providers: Record<string, ProviderConfig>) => {
+      const res = await fetch('/api/tenant/admin/ai-providers', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ providers }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || 'Failed');
+      return providers;
+    },
+    onSuccess: (providers) => {
       toast.success('AI providers saved');
       const cleared: Record<string, ProviderConfig> = {};
-      for (const k of Object.keys(data)) {
-        cleared[k] = { ...data[k]!, api_key: undefined, api_key_set: data[k]!.api_key ? true : data[k]!.api_key_set };
+      for (const k of Object.keys(providers)) {
+        cleared[k] = { ...providers[k]!, api_key: undefined, api_key_set: providers[k]!.api_key ? true : providers[k]!.api_key_set };
       }
       setData(cleared);
       setOriginal(cleared);
-    } else {
-      toast.error(d.error || 'Failed');
-    }
-    setSaving(false);
-  };
+    },
+    onError: (e: Error) => toast.error(e.message || 'Failed'),
+  });
+  const saving = saveMutation.isPending;
+  const save = () => saveMutation.mutate(data);
 
   if (loading) return <div className="flex items-center justify-center h-48 text-muted-foreground"><Loader2 className="w-5 h-5 animate-spin" /></div>;
 
@@ -423,7 +435,7 @@ export default function AIProvidersPage() {
         'sticky bottom-0 -mx-6 px-6 py-3 border-t border-border bg-background/80 backdrop-blur flex items-center justify-end gap-2 transition-opacity',
         dirty ? 'opacity-100' : 'opacity-0 pointer-events-none'
       )}>
-        <button onClick={() => setData(original)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground">
+        <button onClick={() => original && setData(original)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground">
           Discard
         </button>
         <button onClick={save} disabled={saving || !dirty}

@@ -4,7 +4,9 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
+import { useMutation } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import Link from 'next/link';
 import { Crown, ArrowUpRight, Users, Database, Zap, Loader2, CreditCard, FileText, type LucideIcon } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
@@ -58,53 +60,61 @@ function UsageBar({ label, used, max, icon: Icon }: { label: string; used: numbe
 }
 
 export default function BillingPage() {
-  const [workspace, setWorkspace] = useState<BillingWorkspace | null>(null);
-  const [plans, setPlans]         = useState<BillingPlan[]>([]);
-  const [loading, setLoading]     = useState(true);
-  const [upgrading, setUpgrading] = useState<string|null>(null);
-  const [openingPortal, setOpeningPortal] = useState(false);
+  // #1328: reads via TanStack Query (were parallel raw fetch + useEffect).
+  const { data: wsData, isLoading: wsLoading } = useApiQuery<{ data?: BillingWorkspace | null }>(
+    ['tenant', 'workspace'],
+    '/api/tenant/workspace',
+  );
+  const { data: plansData, isLoading: plansLoading } = useApiQuery<{ data?: BillingPlan[] }>(
+    ['tenant', 'plans'],
+    '/api/tenant/plans',
+    { retry: false },
+  );
+  const loading = wsLoading || plansLoading;
+  const workspace = wsData?.data ?? null;
+  const plans = plansData?.data ?? [];
 
+  // Not data fetching — the ?upgraded query-param success toast (kept as-is).
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('upgraded')) {
       toast.success('Payment successful! Your plan has been upgraded.');
       window.history.replaceState({}, '', '/tenant/settings/billing');
     }
-    const controller = new AbortController();
-    Promise.all([
-      fetch('/api/tenant/workspace', { signal: controller.signal }).then(r=>r.json()),
-      fetch('/api/tenant/plans', { signal: controller.signal }).then(r=>r.json()).catch(()=>({data:[]})),
-    ]).then(([ws, pl]) => { if (controller.signal.aborted) return; setWorkspace(ws.data); setPlans(pl.data||[]); setLoading(false); })
-      .catch((e) => { if ((e as Error)?.name === 'AbortError') return; throw e; });
-    return () => controller.abort();
   }, []);
 
-  const startCheckout = async (planId: string) => {
-    setUpgrading(planId);
-    const res = await fetch('/api/tenant/billing/checkout', {
-      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ plan_id: planId }),
-    });
-    const d = await res.json();
-    if (res.ok && d.url) {
-      // #1267: external navigation to the Stripe Checkout URL — must be a real
-      // browser navigation, not a client-side router.push.
-      window.location.href = d.url;
-    } else if (d.error?.includes('not configured')) {
-      toast.error('Stripe is not configured yet. Contact support to upgrade.');
-    } else {
-      toast.error(d.error || 'Could not start checkout');
-    }
-    setUpgrading(null);
-  };
+  // #1328: checkout/portal are fire-and-forget navigations (not cached reads).
+  // Kept as mutations only for the isPending busy state — no cache to invalidate.
+  const checkoutMutation = useMutation({
+    mutationFn: async (planId: string) => {
+      const res = await fetch('/api/tenant/billing/checkout', {
+        method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ plan_id: planId }),
+      });
+      const d = await res.json();
+      if (res.ok && d.url) {
+        // #1267: external navigation to the Stripe Checkout URL — must be a real
+        // browser navigation, not a client-side router.push.
+        window.location.href = d.url;
+      } else if (d.error?.includes('not configured')) {
+        toast.error('Stripe is not configured yet. Contact support to upgrade.');
+      } else {
+        toast.error(d.error || 'Could not start checkout');
+      }
+    },
+  });
+  const startCheckout = (planId: string) => checkoutMutation.mutate(planId);
+  const upgrading = checkoutMutation.isPending ? checkoutMutation.variables : null;
 
-  const openPortal = async () => {
-    setOpeningPortal(true);
-    const res = await fetch('/api/tenant/billing/portal', { method:'POST' });
-    const d = await res.json();
-    if (res.ok && d.url) window.open(d.url, '_blank');
-    else toast.error(d.error || 'Could not open billing portal');
-    setOpeningPortal(false);
-  };
+  const portalMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch('/api/tenant/billing/portal', { method:'POST' });
+      const d = await res.json();
+      if (res.ok && d.url) window.open(d.url, '_blank');
+      else toast.error(d.error || 'Could not open billing portal');
+    },
+  });
+  const openPortal = () => portalMutation.mutate();
+  const openingPortal = portalMutation.isPending;
 
   if (loading) return <div className="animate-pulse space-y-4"><div className="h-8 w-40 bg-muted rounded"/><div className="admin-card h-48"/></div>;
   if (!workspace) return null;
