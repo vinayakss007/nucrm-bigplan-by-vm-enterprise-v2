@@ -7,7 +7,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  ArrowLeft, Mail, Phone, Globe, Linkedin, Building2, Edit, Save,
+  ArrowLeft, Mail, Phone, Globe, Contact, Building2, Edit, Save,
   MessageSquare, PhoneCall, AtSign, Calendar, Briefcase, X, Trash2,
   CheckCircle, Plus, ChevronDown, Star,
   Clock, User, History,
@@ -526,7 +526,7 @@ export default function ContactDetailClient({
               {contact.email && <a href={`mailto:${contact.email}`} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-violet-600 transition-colors"><Mail className="w-3.5 h-3.5 shrink-0 text-muted-foreground/50" />{contact.email}</a>}
               {contact.phone && <a href={`tel:${contact.phone}`} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-violet-600 transition-colors"><Phone className="w-3.5 h-3.5 shrink-0 text-muted-foreground/50" />{contact.phone}</a>}
               {contact.website && <a href={contact.website} target="_blank" className="flex items-center gap-2 text-sm text-muted-foreground hover:text-violet-600 transition-colors"><Globe className="w-3.5 h-3.5 shrink-0 text-muted-foreground/50" />{contact.website.replace(/https?:\/\//,'')}</a>}
-              {contact.linkedin_url && <a href={contact.linkedin_url} target="_blank" className="flex items-center gap-2 text-sm text-muted-foreground hover:text-violet-600 transition-colors"><Linkedin className="w-3.5 h-3.5 shrink-0 text-muted-foreground/50" />LinkedIn</a>}
+              {contact.linkedin_url && <a href={contact.linkedin_url} target="_blank" className="flex items-center gap-2 text-sm text-muted-foreground hover:text-violet-600 transition-colors"><Contact className="w-3.5 h-3.5 shrink-0 text-muted-foreground/50" />LinkedIn</a>}
               <div className="pt-2 border-t border-border space-y-1.5">
                 {contact.lead_source && <div className="flex justify-between text-xs"><span className="text-muted-foreground">Source</span><span className="font-medium capitalize">{contact.lead_source.replace(/_/g,' ')}</span></div>}
                 {contact.assigned_name && <div className="flex justify-between text-xs"><span className="text-muted-foreground">Owner</span><span className="font-medium">{contact.assigned_name}</span></div>}

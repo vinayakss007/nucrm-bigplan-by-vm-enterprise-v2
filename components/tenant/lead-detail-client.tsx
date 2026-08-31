@@ -8,7 +8,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  Target, Mail, Phone, Building2, MapPin, Globe, Linkedin,
+  Target, Mail, Phone, Building2, MapPin, Globe, Contact,
   User, Clock, DollarSign, Briefcase, TrendingUp, Star, Edit, Trash2,
   MoreHorizontal, ChevronDown, CheckCircle, XCircle, RotateCcw, Zap, Archive,
   ArrowLeft, Activity, FileText, MessageSquare, BarChart3, Award,
@@ -331,7 +331,7 @@ export default function LeadDetailClient({ lead, activities, relatedContacts, te
               </DropdownMenuItem>
               {lead.linkedin_url && (
                 <DropdownMenuItem onClick={() => openExternalUrl(lead.linkedin_url)}>
-                  <Linkedin className="w-4 h-4 mr-2" />
+                  <Contact className="w-4 h-4 mr-2" />
                   View LinkedIn
                 </DropdownMenuItem>
               )}
@@ -729,7 +729,7 @@ export default function LeadDetailClient({ lead, activities, relatedContacts, te
                 <div>
                   <p className="text-xs text-muted-foreground">LinkedIn</p>
                   <a href={lead.linkedin_url} target="_blank" className="text-sm text-violet-600 hover:underline flex items-center gap-1">
-                    <Linkedin className="w-3.5 h-3.5" />
+                    <Contact className="w-3.5 h-3.5" />
                     View Profile
                     <ExternalLink className="w-3 h-3" />
                   </a>
