@@ -5,6 +5,8 @@
  */
 'use client';
 import { useState, useEffect } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Plus, FileText, ExternalLink, Copy, Check, ToggleLeft, ToggleRight,
@@ -51,17 +53,15 @@ const FIELD_TYPES = [
   { id:'number', label:'Number' }, { id:'date', label:'Date' },
 ];
 
+const limit = 20;
+
 export default function FormsPage() {
   const router = useRouter();
-  const [forms, setForms]       = useState<FormItem[]>([]);
-  const [loading, setLoading]   = useState(true);
+  const queryClient = useQueryClient();
   const [showCreate, setShowCreate] = useState(false);
   const [_selected, _setSelected] = useState<FormItem | null>(null);
-  const [saving, setSaving]     = useState(false);
   const [copiedId, setCopiedId] = useState<string|null>(null);
-  const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
-  const limit = 20;
   const [form, setForm] = useState({
     name:'', description:'',
     fields:[
@@ -72,79 +72,78 @@ export default function FormsPage() {
     settings:{ success_message:'Thank you! We will be in touch.', notify_email:'' },
   });
 
-  const load = async (signal?: AbortSignal) => {
-    setLoading(true);
-    try {
-      const res = await fetch(`/api/tenant/forms?limit=${limit}&offset=${offset}`, { signal });
-      if (res.ok) { const d = await res.json(); if (signal?.aborted) return; setForms(d.data ?? []); setTotal(d.total ?? 0); }
-      setLoading(false);
-    } catch (e) {
-      if ((e as Error)?.name === 'AbortError') return;
-      throw e;
-    }
-  };
-  useEffect(() => {
-    const controller = new AbortController();
-    load(controller.signal);
-    return () => controller.abort();
-  }, [offset]); // eslint-disable-line react-hooks/exhaustive-deps
+  // #1328: list via TanStack Query (was raw fetch + useEffect). offset is part
+  // of the key so paging refetches and caches per page.
+  const FORMS_QUERY = ['tenant', 'forms', { offset }] as const;
+  const { data, isLoading: loading } = useApiQuery<{ data?: FormItem[]; total?: number }>(
+    FORMS_QUERY,
+    `/api/tenant/forms?limit=${limit}&offset=${offset}`,
+  );
+  const forms: FormItem[] = data?.data ?? [];
+  const total = data?.total ?? 0;
+  const reload = () => queryClient.invalidateQueries({ queryKey: ['tenant', 'forms'] });
 
-  const create = async (e: React.FormEvent) => {
-    e.preventDefault(); setSaving(true);
-    const res = await fetch('/api/tenant/forms', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify(form),
-    });
-    const d = await res.json();
-    if (res.ok) { toast.success('Form created'); setShowCreate(false); load(); }
-    else toast.error(d.error ?? 'Failed');
-    setSaving(false);
-  };
+  const createMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch('/api/tenant/forms', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(form),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error ?? 'Failed');
+    },
+    onSuccess: () => { toast.success('Form created'); setShowCreate(false); reload(); },
+    onError: (e: Error) => toast.error(e.message || 'Failed'),
+  });
+  const saving = createMutation.isPending;
+  const create = (e: React.FormEvent) => { e.preventDefault(); createMutation.mutate(); };
 
+  const toggleMutation = useMutation({
+    mutationFn: async (f: { id: string; is_active?: boolean }) => {
+      await fetch(`/api/tenant/forms/${f.id}`, {
+        method:'PATCH', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ is_active: !f.is_active }),
+      });
+    },
+    onSuccess: () => reload(),
+  });
   const toggle = async (f: { id: string; is_active?: boolean }) => {
     const becomingActive = !f.is_active;
     await confirmThen(
       becomingActive
         ? 'Publish this form? It will become publicly accessible immediately.'
         : 'Unpublish this form? The public link will stop working.',
-      async () => {
-        await fetch(`/api/tenant/forms/${f.id}`, {
-          method:'PATCH', headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ is_active: !f.is_active }),
-        });
-        setForms((prev) => prev.map((x) => x.id === f.id ? {...x, is_active: !f.is_active} : x));
-      },
+      async () => { toggleMutation.mutate(f); },
       'always'
     );
   };
 
-  const del = async (id: string) => {
-    const form = forms.find(f => f.id === id);
-    await confirmThen(`Delete form "${form?.name || 'this form'}"?`, async () => {
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
       await fetch(`/api/tenant/forms/${id}`, { method:'DELETE' });
-      setForms(f => f.filter(x => x.id !== id));
-      toast.success('Deleted');
+    },
+    onSuccess: () => { toast.success('Deleted'); reload(); },
+  });
+  const del = async (id: string) => {
+    const f = forms.find(x => x.id === id);
+    await confirmThen(`Delete form "${f?.name || 'this form'}"?`, async () => {
+      deleteMutation.mutate(id);
     });
   };
 
   const [viewingSubmissions, setViewingSubmissions] = useState<FormItem | null>(null);
-  const [submissions, setSubmissions] = useState<FormSubmissionRecord[]>([]);
-  const [loadingSubmissions, setLoadingSubmissions] = useState(false);
 
-  const viewSubmissions = async (form: { id: string }) => {
+  // #1328: submissions loaded on-demand via a query keyed by the viewed form.
+  const { data: submissionsData, isLoading: loadingSubmissions, error: submissionsError } = useApiQuery<{ data?: { submissions?: FormSubmissionRecord[] } }>(
+    ['tenant', 'forms', 'submissions', viewingSubmissions?.id ?? 'none'],
+    `/api/tenant/forms/${viewingSubmissions?.id}`,
+    { enabled: !!viewingSubmissions },
+  );
+  const submissions: FormSubmissionRecord[] = submissionsData?.data?.submissions ?? [];
+  useEffect(() => { if (submissionsError) toast.error('Failed to load submissions'); }, [submissionsError]);
+
+  const viewSubmissions = (form: { id: string }) => {
     setViewingSubmissions(form as FormItem);
-    setLoadingSubmissions(true);
-    try {
-      const res = await fetch(`/api/tenant/forms/${form.id}`);
-      if (res.ok) {
-        const d = await res.json();
-        setSubmissions(d.data?.submissions ?? []);
-      }
-    } catch {
-      toast.error('Failed to load submissions');
-    } finally {
-      setLoadingSubmissions(false);
-    }
   };
 
   const copyEmbed = (formId: string) => {
