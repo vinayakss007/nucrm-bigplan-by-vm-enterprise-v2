@@ -9,6 +9,8 @@ import { useRouter, useParams } from 'next/navigation';
 import { ArrowLeft, Send, Loader2, User, Bot } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
 import toast from 'react-hot-toast';
+import { useQuery } from '@tanstack/react-query';
+import { ApiQueryError } from '@/lib/query/client';
 
 interface PortalSession { email: string; name: string; permissions: { quotes: boolean; invoices: boolean; cases: boolean }; }
 
@@ -22,7 +24,6 @@ export default function PortalTicketDetailPage() {
   const [session, setSession] = useState<PortalSession | null>(null);
   const [ticket, setTicket] = useState<Ticket | null>(null);
   const [replies, setReplies] = useState<Reply[]>([]);
-  const [loading, setLoading] = useState(true);
   const [replyText, setReplyText] = useState('');
   const [sending, setSending] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -34,21 +35,40 @@ export default function PortalTicketDetailPage() {
       const s = JSON.parse(raw) as PortalSession;
       if (!s.email) { router.replace('/portal/login'); return; }
       setSession(s);
-
-      const controller = new AbortController();
-      fetch(`/api/public/tickets/${ticketId}`, { headers: { 'x-portal-email': s.email }, signal: controller.signal })
-        .then(r => { if (!r.ok) throw new Error('not found'); return r.json(); })
-        .then(d => {
-          if (controller.signal.aborted) return;
-          setTicket(d.data.ticket); setReplies(d.data.replies); setLoading(false);
-        })
-        .catch((e) => {
-          if ((e as Error)?.name === 'AbortError') return;
-          toast.error('Ticket not found'); router.replace('/portal/tickets');
-        });
-      return () => controller.abort();
     } catch { router.replace('/portal/login'); }
-  }, [router, ticketId]);
+  }, [router]);
+
+  const { data, isLoading, error } = useQuery<{ data: { ticket: Ticket; replies: Reply[] } }, ApiQueryError>({
+    queryKey: ['portal-ticket', ticketId, session?.email],
+    enabled: !!session?.email && !!ticketId,
+    queryFn: async () => {
+      const res = await fetch(`/api/public/tickets/${ticketId}`, { headers: { 'x-portal-email': session!.email } });
+      if (!res.ok) {
+        const info = await res.json().catch(() => ({}));
+        throw new ApiQueryError('not found', res.status, info);
+      }
+      return res.json();
+    },
+  });
+
+  const loading = !session || isLoading;
+
+  // Seed local ticket + replies from the query so writes (sendReply) can append
+  // replies and flip the ticket status locally.
+  useEffect(() => {
+    if (data?.data) {
+      setTicket(data.data.ticket);
+      setReplies(data.data.replies);
+    }
+  }, [data]);
+
+  // On load failure the ticket doesn't exist (or isn't ours) — bounce back.
+  useEffect(() => {
+    if (error) {
+      toast.error('Ticket not found');
+      router.replace('/portal/tickets');
+    }
+  }, [error, router]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });

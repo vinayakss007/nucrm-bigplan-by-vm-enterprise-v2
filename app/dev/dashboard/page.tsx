@@ -17,8 +17,8 @@
  * Access at: http://localhost:3000/dev/dashboard
  */
 
-import { useState, useEffect } from 'react';
-import { clientLogError } from '@/lib/client-logger';
+import { useState } from 'react';
+import { useApiQuery } from '@/lib/query/client';
 
 interface DashboardData {
   timestamp: string;
@@ -70,54 +70,19 @@ interface ErrorLog {
 }
 
 export default function DevelopmentDashboard() {
-  const [data, setData] = useState<DashboardData | null>(null);
-  const [requests, setRequests] = useState<RequestLog[]>([]);
-  const [queries, setQueries] = useState<QueryLog[]>([]);
-  const [errors, setErrors] = useState<ErrorLog[]>([]);
-  const [loading, setLoading] = useState(true);
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [activeTab, setActiveTab] = useState<'overview' | 'requests' | 'queries' | 'errors'>('overview');
 
-  const fetchData = async (signal?: AbortSignal) => {
-    try {
-      const res = await fetch('/api/dev/dashboard', { signal });
-      const jsonData = await res.json();
-      if (signal?.aborted) return;
-      setData(jsonData);
+  const dashboardQuery = useApiQuery<DashboardData>(['dev-dashboard'], '/api/dev/dashboard', { refetchInterval: autoRefresh ? 5000 : false, retry: false });
+  const logsQuery = useApiQuery<{ requests: RequestLog[] }>(['dev-logs'], '/api/dev/logs?limit=50', { refetchInterval: autoRefresh ? 5000 : false, retry: false });
+  const queriesQuery = useApiQuery<{ queries: QueryLog[] }>(['dev-queries'], '/api/dev/queries?limit=50&slow=true', { refetchInterval: autoRefresh ? 5000 : false, retry: false });
+  const errorsQuery = useApiQuery<{ errors: ErrorLog[] }>(['dev-errors'], '/api/dev/errors?limit=20', { refetchInterval: autoRefresh ? 5000 : false, retry: false });
 
-      const logsRes = await fetch('/api/dev/logs?limit=50', { signal });
-      const logsData = await logsRes.json();
-      if (signal?.aborted) return;
-      setRequests(logsData.requests || []);
-
-      const queriesRes = await fetch('/api/dev/queries?limit=50&slow=true', { signal });
-      const queriesData = await queriesRes.json();
-      if (signal?.aborted) return;
-      setQueries(queriesData.queries || []);
-
-      const errorsRes = await fetch('/api/dev/errors?limit=20', { signal });
-      const errorsData = await errorsRes.json();
-      if (signal?.aborted) return;
-      setErrors(errorsData.errors || []);
-
-      setLoading(false);
-    } catch (error) {
-      if ((error as Error)?.name === 'AbortError') return;
-      clientLogError('dev-dashboard:fetch', error);
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    const controller = new AbortController();
-    fetchData(controller.signal);
-
-    if (autoRefresh) {
-      const interval = setInterval(() => fetchData(controller.signal), 5000); // Refresh every 5 seconds
-      return () => { clearInterval(interval); controller.abort(); };
-    }
-    return () => controller.abort();
-  }, [autoRefresh]);
+  const data = dashboardQuery.data ?? null;
+  const requests = logsQuery.data?.requests ?? [];
+  const queries = queriesQuery.data?.queries ?? [];
+  const errors = errorsQuery.data?.errors ?? [];
+  const loading = dashboardQuery.isLoading || logsQuery.isLoading || queriesQuery.isLoading || errorsQuery.isLoading;
 
   const formatUptime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -196,7 +161,7 @@ export default function DevelopmentDashboard() {
           </div>
           <div className="flex gap-4">
             <button
-              onClick={() => fetchData()}
+              onClick={() => { dashboardQuery.refetch(); logsQuery.refetch(); queriesQuery.refetch(); errorsQuery.refetch(); }}
               className="px-4 py-2 bg-blue-600 rounded hover:bg-blue-700"
             >
               🔄 Refresh

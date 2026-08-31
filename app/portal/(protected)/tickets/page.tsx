@@ -4,11 +4,13 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { LifeBuoy, Plus } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
 import toast from 'react-hot-toast';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { ApiQueryError } from '@/lib/query/client';
 
 interface PortalSession { email: string; name: string; permissions: { quotes: boolean; invoices: boolean; cases: boolean }; }
 
@@ -23,34 +25,34 @@ interface PortalTicket {
 
 export default function PortalTicketsPage() {
   const router = useRouter();
-  const [tickets, setTickets] = useState<PortalTicket[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [showCreate, setShowCreate] = useState(false);
   const [session, setSession] = useState<PortalSession | null>(null);
-
-  const loadTickets = useCallback((email: string, signal?: AbortSignal) => {
-    setLoading(true);
-    fetch('/api/public/tickets', { headers: { 'x-portal-email': email }, signal }).then(r => r.json()).then(d => {
-      if (signal?.aborted) return;
-      setTickets(d.data || []); setLoading(false);
-    }).catch((e) => {
-      if ((e as Error)?.name === 'AbortError') return;
-      setLoading(false);
-    });
-  }, []);
 
   useEffect(() => {
     const raw = localStorage.getItem('portal_session');
     if (!raw) { router.replace('/portal/login'); return; }
-    const controller = new AbortController();
     try {
       const s = JSON.parse(raw) as PortalSession;
       if (!s.email) { router.replace('/portal/login'); return; }
       setSession(s);
-      loadTickets(s.email, controller.signal);
     } catch { router.replace('/portal/login'); }
-    return () => controller.abort();
-  }, [router, loadTickets]);
+  }, [router]);
+
+  const { data, isLoading } = useQuery<{ data: PortalTicket[] }, ApiQueryError>({
+    queryKey: ['portal-tickets', session?.email],
+    enabled: !!session?.email,
+    queryFn: async () => {
+      const res = await fetch('/api/public/tickets', { headers: { 'x-portal-email': session!.email } });
+      if (!res.ok) {
+        const info = await res.json().catch(() => ({}));
+        throw new ApiQueryError(`Request failed (${res.status})`, res.status, info);
+      }
+      return res.json();
+    },
+  });
+  const tickets = data?.data ?? [];
+  const loading = !session || isLoading;
 
   const statusColor: Record<string, string> = {
     open: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30',
@@ -104,7 +106,7 @@ export default function PortalTicketsPage() {
         </div>
       )}
 
-      {showCreate && <CreateTicketModal onClose={() => setShowCreate(false)} onCreated={() => { setShowCreate(false); if (session?.email) loadTickets(session.email); }} sessionEmail={session?.email} />}
+      {showCreate && <CreateTicketModal onClose={() => setShowCreate(false)} onCreated={() => { setShowCreate(false); queryClient.invalidateQueries({ queryKey: ['portal-tickets', session?.email] }); }} sessionEmail={session?.email} />}
     </div>
   );
 }
