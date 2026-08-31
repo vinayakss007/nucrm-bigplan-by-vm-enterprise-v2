@@ -4,7 +4,9 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { useMutation } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import Link from 'next/link';
 import { 
   Crown, ArrowUpRight, Users, Database, Zap, Loader2, 
@@ -75,99 +77,106 @@ function UsageBar({ label, used, max, icon: Icon }: { label: string; used: numbe
 }
 
 export default function SubscriptionPage() {
-  const [subscription, setSubscription] = useState<SubscriptionInfo | null>(null);
-  const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
-  const [workspace, setWorkspace] = useState<SubscriptionWorkspace | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [showPlanComparison, setShowPlanComparison] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
   const [cancelFeedback, setCancelFeedback] = useState('');
 
-  useEffect(() => {
-    const controller = new AbortController();
-    Promise.all([
-      fetch('/api/tenant/billing/subscription', { signal: controller.signal }).then(r => r.json()),
-      fetch('/api/tenant/plans', { signal: controller.signal }).then(r => r.json()).catch(() => ({ data: [] })),
-      fetch('/api/tenant/workspace', { signal: controller.signal }).then(r => r.json()),
-    ]).then(([sub, pl, ws]) => {
-      if (controller.signal.aborted) return;
-      setSubscription(sub.data);
-      setPlans(pl.data || []);
-      setWorkspace(ws.data);
-      setLoading(false);
-    }).catch((e) => { if ((e as Error)?.name === 'AbortError') return; throw e; });
-    return () => controller.abort();
-  }, []);
+  // #1328: load subscription + plans + workspace via TanStack Query
+  // (was raw fetch + useEffect with a Promise.all).
+  const { data: subData, isLoading: subLoading } = useApiQuery<{ data?: SubscriptionInfo }>(
+    ['tenant', 'billing', 'subscription'],
+    '/api/tenant/billing/subscription',
+  );
+  const { data: plansData, isLoading: plansLoading } = useApiQuery<{ data?: SubscriptionPlan[] }>(
+    ['tenant', 'plans'],
+    '/api/tenant/plans',
+    { retry: false },
+  );
+  const { data: wsData, isLoading: wsLoading } = useApiQuery<{ data?: SubscriptionWorkspace }>(
+    ['tenant', 'workspace'],
+    '/api/tenant/workspace',
+  );
 
-  const handleUpgrade = async (planId: string) => {
-    setActionLoading(`upgrade-${planId}`);
-    try {
-      const res = await fetch('/api/tenant/billing/subscription/upgrade', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ planId, interval: 'month' }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        toast.success(data.data.message);
-        window.location.reload();
-      } else {
-        toast.error(data.error || 'Failed to upgrade');
-      }
-    } catch {
-      toast.error('An error occurred');
-    }
-    setActionLoading(null);
+  const loading = subLoading || plansLoading || wsLoading;
+  const subscription: SubscriptionInfo | null = subData?.data ?? null;
+  const plans: SubscriptionPlan[] = plansData?.data ?? [];
+  const workspace: SubscriptionWorkspace | null = wsData?.data ?? null;
+
+  // Actions — a single mutation whose variables double as the busy token,
+  // so `actionLoading` can be derived from `isPending ? variables.token : null`.
+  const actionMutation = useMutation({
+    mutationFn: async (vars: { token: string; run: () => Promise<void> }) => {
+      await vars.run();
+    },
+    onError: () => toast.error('An error occurred'),
+  });
+  const actionLoading = actionMutation.isPending ? actionMutation.variables?.token ?? null : null;
+
+  const handleUpgrade = (planId: string) => {
+    actionMutation.mutate({
+      token: `upgrade-${planId}`,
+      run: async () => {
+        const res = await fetch('/api/tenant/billing/subscription/upgrade', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ planId, interval: 'month' }),
+        });
+        const data = await res.json();
+        if (res.ok) {
+          toast.success(data.data.message);
+          window.location.reload();
+        } else {
+          toast.error(data.error || 'Failed to upgrade');
+        }
+      },
+    });
   };
 
-  const handleDowngrade = async (planId: string) => {
-    setActionLoading(`downgrade-${planId}`);
-    try {
-      const res = await fetch('/api/tenant/billing/subscription/downgrade', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ planId }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        toast.success(data.data.message);
-        setShowPlanComparison(false);
-        window.location.reload();
-      } else {
-        toast.error(data.error || 'Failed to schedule downgrade');
-      }
-    } catch {
-      toast.error('An error occurred');
-    }
-    setActionLoading(null);
+  const handleDowngrade = (planId: string) => {
+    actionMutation.mutate({
+      token: `downgrade-${planId}`,
+      run: async () => {
+        const res = await fetch('/api/tenant/billing/subscription/downgrade', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ planId }),
+        });
+        const data = await res.json();
+        if (res.ok) {
+          toast.success(data.data.message);
+          setShowPlanComparison(false);
+          window.location.reload();
+        } else {
+          toast.error(data.error || 'Failed to schedule downgrade');
+        }
+      },
+    });
   };
 
-  const handleCancel = async () => {
-    setActionLoading('cancel');
-    try {
-      const res = await fetch('/api/tenant/billing/subscription/cancel', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          reason: cancelReason,
-          feedback: cancelFeedback || undefined,
-          cancelAtPeriodEnd: true 
-        }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        toast.success(data.data.message);
-        setShowCancelModal(false);
-        window.location.reload();
-      } else {
-        toast.error(data.error || 'Failed to cancel');
-      }
-    } catch {
-      toast.error('An error occurred');
-    }
-    setActionLoading(null);
+  const handleCancel = () => {
+    actionMutation.mutate({
+      token: 'cancel',
+      run: async () => {
+        const res = await fetch('/api/tenant/billing/subscription/cancel', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            reason: cancelReason,
+            feedback: cancelFeedback || undefined,
+            cancelAtPeriodEnd: true,
+          }),
+        });
+        const data = await res.json();
+        if (res.ok) {
+          toast.success(data.data.message);
+          setShowCancelModal(false);
+          window.location.reload();
+        } else {
+          toast.error(data.error || 'Failed to cancel');
+        }
+      },
+    });
   };
 
   if (loading) {
@@ -316,14 +325,15 @@ export default function SubscriptionPage() {
           {/* Manage Billing Button */}
           {hasStripe && (
             <button
-              onClick={async () => {
-                setActionLoading('portal');
-                const res = await fetch('/api/tenant/billing/portal', { method: 'POST' });
-                const data = await res.json();
-                if (res.ok && data.url) window.open(data.url, '_blank');
-                else toast.error(data.error || 'Could not open billing portal');
-                setActionLoading(null);
-              }}
+              onClick={() => actionMutation.mutate({
+                token: 'portal',
+                run: async () => {
+                  const res = await fetch('/api/tenant/billing/portal', { method: 'POST' });
+                  const data = await res.json();
+                  if (res.ok && data.url) window.open(data.url, '_blank');
+                  else toast.error(data.error || 'Could not open billing portal');
+                },
+              })}
               disabled={actionLoading === 'portal'}
               className="flex items-center justify-center gap-2 p-4 rounded-xl border border-border hover:border-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/20 transition-all disabled:opacity-50"
             >
@@ -356,20 +366,21 @@ export default function SubscriptionPage() {
           {/* Resume Button (if cancelled) */}
           {isCancelled && subscription?.cancelAtPeriodEnd && (
             <button
-              onClick={async () => {
-                setActionLoading('resume');
-                const res = await fetch('/api/tenant/billing/subscription/resume', {
-                  method: 'POST',
-                });
-                const data = await res.json();
-                if (res.ok) {
-                  toast.success('Subscription resumed');
-                  window.location.reload();
-                } else {
-                  toast.error(data.error || 'Failed to resume');
-                }
-                setActionLoading(null);
-              }}
+              onClick={() => actionMutation.mutate({
+                token: 'resume',
+                run: async () => {
+                  const res = await fetch('/api/tenant/billing/subscription/resume', {
+                    method: 'POST',
+                  });
+                  const data = await res.json();
+                  if (res.ok) {
+                    toast.success('Subscription resumed');
+                    window.location.reload();
+                  } else {
+                    toast.error(data.error || 'Failed to resume');
+                  }
+                },
+              })}
               disabled={actionLoading === 'resume'}
               className="flex items-center justify-center gap-2 p-4 rounded-xl border border-border hover:border-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/20 transition-all disabled:opacity-50"
             >

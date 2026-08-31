@@ -5,6 +5,8 @@
  */
 'use client';
 import { useState, useEffect } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { Shield, Lock, Key, Download, RefreshCw, Trash2, Eye, EyeOff, Loader2, CheckCircle, AlertTriangle } from 'lucide-react';
@@ -17,13 +19,23 @@ interface PendingDeletion {
   cutoff_date?: string | null;
 }
 
+interface MeResponse { user?: { totp_enabled?: boolean } & Record<string, unknown> }
+interface TrashSettingsResponse { data?: { retention_days?: number } }
+interface AutoCleanupResponse { data?: PendingDeletion | null }
+interface IpWhitelistResponse { data?: { ips?: string[]; enabled?: boolean } }
+
+const ME_QUERY = ['tenant', 'me'] as const;
+const TRASH_SETTINGS_QUERY = ['tenant', 'trash', 'settings'] as const;
+const TRASH_CLEANUP_QUERY = ['tenant', 'trash', 'auto-cleanup'] as const;
+const IP_WHITELIST_QUERY = ['tenant', 'security', 'ip-whitelist'] as const;
+
 export default function SecuritySettingsPage() {
   const _router = useRouter();
-  const [_user, setUser] = useState<unknown>(null);
-  const [loading, setLoading] = useState(true);
-  
+  const queryClient = useQueryClient();
+
   // 2FA states
   const [totpEnabled, setTotpEnabled] = useState(false);
+  const [totpSeeded, setTotpSeeded] = useState(false);
   const [showTotpSetup, setShowTotpSetup] = useState(false);
   const [_totpSecret, setTotpSecret] = useState('');
   const [totpQrCode, setTotpQrCode] = useState('');
@@ -42,107 +54,124 @@ export default function SecuritySettingsPage() {
   const [disableCode, setDisableCode] = useState('');
   const [disabling, setDisabling] = useState(false);
   
-  // Trash retention states
+  // Trash retention states (editable copy seeded from query)
   const [retentionDays, setRetentionDays] = useState(30);
-  const [pendingDeletion, setPendingDeletion] = useState<PendingDeletion | null>(null);
-  const [_loadingRetention, setLoadingRetention] = useState(true);
-  const [savingRetention, setSavingRetention] = useState(false);
+  const [retentionSeeded, setRetentionSeeded] = useState(false);
 
-  // IP whitelist states
+  // IP whitelist states (editable copy seeded from query)
   const [ipWhitelist, setIpWhitelist] = useState<string[]>([]);
   const [ipEnabled, setIpEnabled] = useState(false);
+  const [ipSeeded, setIpSeeded] = useState(false);
   const [newIp, setNewIp] = useState('');
-  const [_loadingIp, setLoadingIp] = useState(true);
-  const [savingIp, setSavingIp] = useState(false);
 
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
 
+  // #1328: load user + trash retention + IP whitelist via TanStack Query
+  // (was raw fetch + useEffect + AbortController plumbing).
+  const { data: meData, isLoading: meLoading, error: meError } = useApiQuery<MeResponse>(
+    ME_QUERY,
+    '/api/tenant/me',
+  );
+  const { data: trashSettingsData } = useApiQuery<TrashSettingsResponse>(
+    TRASH_SETTINGS_QUERY,
+    '/api/tenant/trash/settings',
+    { retry: false },
+  );
+  const { data: cleanupData } = useApiQuery<AutoCleanupResponse>(
+    TRASH_CLEANUP_QUERY,
+    '/api/tenant/trash/auto-cleanup',
+    { retry: false },
+  );
+  const { data: ipData } = useApiQuery<IpWhitelistResponse>(
+    IP_WHITELIST_QUERY,
+    '/api/tenant/security/ip-whitelist',
+    { retry: false },
+  );
+
+  const loading = meLoading;
+  const pendingDeletion: PendingDeletion | null = cleanupData?.data ?? null;
+
+  if (meError) toast.error('Failed to load user data');
+
+  // Seed 2FA state from /api/tenant/me once (guard against background refetch).
   useEffect(() => {
-    const controller = new AbortController();
-    loadUser(controller.signal);
-    return () => controller.abort();
-  }, []);
-
-  const loadUser = async (signal?: AbortSignal) => {
-    try {
-      const res = await fetch('/api/tenant/me', { signal });
-      const data = await res.json();
-      setUser(data.user);
-      setTotpEnabled(data.user?.totp_enabled ?? false);
-    } catch (_err) {
-      if (_err instanceof DOMException && _err.name === 'AbortError') return;
-      toast.error('Failed to load user data');
-    } finally {
-      setLoading(false);
+    if (meData && !totpSeeded) {
+      setTotpEnabled(meData.user?.totp_enabled ?? false);
+      setTotpSeeded(true);
     }
-  };
+  }, [meData, totpSeeded]);
 
-  const loadTrashRetention = async (signal?: AbortSignal) => {
-    try {
-      const [settingsRes, cleanupRes] = await Promise.all([
-        fetch('/api/tenant/trash/settings', { signal }),
-        fetch('/api/tenant/trash/auto-cleanup', { signal })
-      ]);
-      const settingsData = await settingsRes.json();
-      const cleanupData = await cleanupRes.json();
-      setRetentionDays(settingsData.data?.retention_days || 30);
-      setPendingDeletion(cleanupData.data);
-    } catch (err) {
-      if (err instanceof DOMException && err.name === 'AbortError') return;
-    } finally {
-      setLoadingRetention(false);
+  // Seed editable retention days once.
+  useEffect(() => {
+    if (trashSettingsData && !retentionSeeded) {
+      setRetentionDays(trashSettingsData.data?.retention_days || 30);
+      setRetentionSeeded(true);
     }
-  };
+  }, [trashSettingsData, retentionSeeded]);
 
-  const saveTrashRetention = async (days: number) => {
-    setSavingRetention(true);
-    try {
+  // Seed editable IP whitelist once.
+  useEffect(() => {
+    if (ipData && !ipSeeded) {
+      setIpWhitelist(ipData.data?.ips || []);
+      setIpEnabled(ipData.data?.enabled || false);
+      setIpSeeded(true);
+    }
+  }, [ipData, ipSeeded]);
+
+  const retentionMutation = useMutation({
+    mutationFn: async (days: number) => {
       const res = await fetch('/api/tenant/trash/settings', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ retention_days: days })
       });
       if (!res.ok) throw new Error('Failed to save');
+      return days;
+    },
+    onSuccess: (days) => {
       setRetentionDays(days);
       toast.success('Trash retention updated');
-    } catch (_err) {
-      toast.error('Failed to save retention settings');
-    } finally {
-      setSavingRetention(false);
-    }
-  };
+      queryClient.invalidateQueries({ queryKey: TRASH_SETTINGS_QUERY });
+    },
+    onError: () => toast.error('Failed to save retention settings'),
+  });
+  const savingRetention = retentionMutation.isPending;
+  const saveTrashRetention = (days: number) => retentionMutation.mutate(days);
 
-  const loadIpWhitelist = async (signal?: AbortSignal) => {
-    try {
-      const res = await fetch('/api/tenant/security/ip-whitelist', { signal });
-      const data = await res.json();
-      setIpWhitelist(data.data?.ips || []);
-      setIpEnabled(data.data?.enabled || false);
-    } catch (err) {
-      if (err instanceof DOMException && err.name === 'AbortError') return;
-    } finally {
-      setLoadingIp(false);
-    }
-  };
-
-  const saveIpWhitelist = async (ips: string[], enabled: boolean) => {
-    setSavingIp(true);
-    try {
+  const ipMutation = useMutation({
+    mutationFn: async (vars: { ips: string[]; enabled: boolean }) => {
       const res = await fetch('/api/tenant/security/ip-whitelist', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ips, enabled })
+        body: JSON.stringify(vars)
       });
       if (!res.ok) throw new Error('Failed to save');
+      return vars;
+    },
+    onSuccess: ({ ips, enabled }) => {
       setIpWhitelist(ips);
       setIpEnabled(enabled);
       toast.success('IP whitelist updated');
-    } catch (_err) {
-      toast.error('Failed to save IP whitelist');
-    } finally {
-      setSavingIp(false);
-    }
-  };
+      queryClient.invalidateQueries({ queryKey: IP_WHITELIST_QUERY });
+    },
+    onError: () => toast.error('Failed to save IP whitelist'),
+  });
+  const savingIp = ipMutation.isPending;
+  const saveIpWhitelist = (ips: string[], enabled: boolean) => ipMutation.mutate({ ips, enabled });
+
+  const cleanupMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch('/api/tenant/trash/auto-cleanup', { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to run cleanup');
+      return data;
+    },
+    onSuccess: (data) => {
+      toast.success(`Cleaned up ${data.cleaned_up.contacts + data.cleaned_up.companies + data.cleaned_up.deals + data.cleaned_up.tasks + data.cleaned_up.leads} items`);
+      queryClient.invalidateQueries({ queryKey: TRASH_CLEANUP_QUERY });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
 
   const addIp = () => {
     const ipRegex = /^(\d{1,3}\.){3}\d{1,3}(\/\d{1,2})?$/;
@@ -162,13 +191,6 @@ export default function SecuritySettingsPage() {
     const newList = ipWhitelist.filter(i => i !== ip);
     saveIpWhitelist(newList, newList.length > 0);
   };
-
-  useEffect(() => {
-    const controller = new AbortController();
-    loadTrashRetention(controller.signal);
-    loadIpWhitelist(controller.signal);
-    return () => controller.abort();
-  }, []);
 
   // ── Enable 2FA ──────────────────────────────────────────────
   const startTotpSetup = async () => {
@@ -571,16 +593,7 @@ export default function SecuritySettingsPage() {
 
           <div className="flex gap-2">
             <button
-              onClick={async () => {
-                const res = await fetch('/api/tenant/trash/auto-cleanup', { method: 'POST' });
-                const data = await res.json();
-                if (res.ok) {
-                  toast.success(`Cleaned up ${data.cleaned_up.contacts + data.cleaned_up.companies + data.cleaned_up.deals + data.cleaned_up.tasks + data.cleaned_up.leads} items`);
-                  loadTrashRetention();
-                } else {
-                  toast.error(data.error);
-                }
-              }}
+              onClick={() => cleanupMutation.mutate()}
               className="px-4 py-2 rounded-lg border border-border text-sm hover:bg-muted"
             >
               Run Cleanup Now
