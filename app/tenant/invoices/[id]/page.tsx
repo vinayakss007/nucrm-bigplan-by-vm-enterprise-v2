@@ -6,6 +6,8 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import Link from 'next/link';
 import { ArrowLeft, Edit2, Trash2, Save, X, FileText, Send, CheckCircle, XCircle, Calendar, Download, Mail, DollarSign } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
@@ -56,36 +58,77 @@ const statusColors: Record<string, string> = {
   partial: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
 };
 
+interface InvoiceResponse { data: Invoice }
+
+const INVOICE_QUERY = (id: string) => ['tenant', 'invoices', id] as const;
+
 export default function InvoiceDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const [invoice, setInvoice] = useState<Invoice | null>(null);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<Partial<Invoice>>({});
   const [showEmailDialog, setShowEmailDialog] = useState(false);
 
+  // #1328: detail read via TanStack Query.
+  const { data, isLoading: loading, error } = useApiQuery<InvoiceResponse>(
+    INVOICE_QUERY(id),
+    `/api/tenant/invoices/${id}`,
+    { enabled: !!id },
+  );
+  const invoice = data?.data;
+
   useEffect(() => {
-    const controller = new AbortController();
-    const { signal } = controller;
-    const fetchInvoice = async () => {
-      try {
-        const res = await fetch(`/api/tenant/invoices/${id}`, { signal });
-        if (!res.ok) throw new Error('Not found');
-        const data = await res.json();
-        if (signal.aborted) return;
-        setInvoice(data.data);
-      } catch (e) {
-        if ((e as Error)?.name === 'AbortError') return;
-        toast.error('Failed to load invoice');
-      } finally {
-        if (signal.aborted) return;
-        setLoading(false);
-      }
-    };
-    fetchInvoice();
-    return () => controller.abort();
-  }, [id]);
+    if (error) toast.error('Failed to load invoice');
+  }, [error]);
+
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: INVOICE_QUERY(id) });
+
+  const saveMutation = useMutation({
+    mutationFn: async (body: Partial<Invoice>) => {
+      const res = await fetch(`/api/tenant/invoices/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error('Failed to update');
+    },
+    onSuccess: () => {
+      setEditing(false);
+      toast.success('Invoice updated');
+      invalidate();
+    },
+    onError: () => toast.error('Failed to update invoice'),
+  });
+
+  const statusMutation = useMutation({
+    mutationFn: async (newStatus: string) => {
+      const res = await fetch(`/api/tenant/invoices/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      if (!res.ok) throw new Error('Failed');
+      return newStatus;
+    },
+    onSuccess: (newStatus) => {
+      toast.success(`Invoice marked as ${newStatus}`);
+      invalidate();
+    },
+    onError: () => toast.error('Failed to change status'),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/tenant/invoices/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed');
+    },
+    onSuccess: () => {
+      toast.success('Invoice deleted');
+      router.push('/tenant/invoices');
+    },
+    onError: () => toast.error('Failed to delete invoice'),
+  });
 
   const handleEdit = () => {
     if (invoice) {
@@ -112,49 +155,13 @@ export default function InvoiceDetailPage() {
     }
   };
 
-  const handleSave = async () => {
-    try {
-      const res = await fetch(`/api/tenant/invoices/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
-      });
-      if (!res.ok) throw new Error('Failed to update');
-      const data = await res.json();
-      setInvoice(data.data);
-      setEditing(false);
-      toast.success('Invoice updated');
-    } catch {
-      toast.error('Failed to update invoice');
-    }
-  };
+  const handleSave = () => saveMutation.mutate(form);
 
-  const handleStatusChange = async (newStatus: string) => {
-    try {
-      const res = await fetch(`/api/tenant/invoices/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: newStatus }),
-      });
-      if (!res.ok) throw new Error('Failed');
-      const data = await res.json();
-      setInvoice(data.data);
-      toast.success(`Invoice marked as ${newStatus}`);
-    } catch {
-      toast.error('Failed to change status');
-    }
-  };
+  const handleStatusChange = (newStatus: string) => statusMutation.mutate(newStatus);
 
   const handleDelete = async () => {
     await confirmThen('Are you sure you want to delete this invoice?', async () => {
-      try {
-        const res = await fetch(`/api/tenant/invoices/${id}`, { method: 'DELETE' });
-        if (!res.ok) throw new Error('Failed');
-        toast.success('Invoice deleted');
-        router.push('/tenant/invoices');
-      } catch {
-        toast.error('Failed to delete invoice');
-      }
+      deleteMutation.mutate();
     });
   };
 
@@ -469,7 +476,7 @@ export default function InvoiceDetailPage() {
             });
             if (res.ok) {
               toast.success(`Invoice sent to ${email}`);
-              setInvoice(prev => prev ? { ...prev, status: 'sent' } : prev);
+              invalidate();
             } else {
               const data = await res.json();
               toast.error(data.error || 'Failed to send');

@@ -4,8 +4,10 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import { ArrowLeft, User, Clock, MessageSquare, Trash2, Send,
   Building2, Briefcase, Receipt, Mail, ExternalLink
 } from 'lucide-react';
@@ -57,69 +59,80 @@ interface TicketDetail {
   customer?: CustomerHistory;
 }
 
+interface TicketResponse { data: TicketDetail }
+
 export default function TicketDetailPage() {
   const params = useParams();
   const router = useRouter();
-  const [ticket, setTicket] = useState<TicketDetail | null>(null);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [replyText, setReplyText] = useState('');
-  const [sending, setSending] = useState(false);
 
   const ticketId = params['id'] as string;
+  const TICKET_QUERY = ['tenant', 'tickets', ticketId] as const;
 
-  const loadTicket = useCallback(async (signal?: AbortSignal) => {
-    try {
-      const res = await fetch(`/api/tenant/tickets/${ticketId}`, { signal });
-      if (signal?.aborted) return;
-      if (!res.ok) { toast.error('Failed to load ticket'); router.push('/tenant/tickets'); return; }
-      const d = await res.json();
-      if (signal?.aborted) return;
-      setTicket(d.data);
-    } catch (e) {
-      if ((e as Error)?.name === 'AbortError') return;
-      toast.error('Failed to load');
-    } finally {
-      if (signal?.aborted) return;
-      setLoading(false);
-    }
-  }, [ticketId, router]);
+  // #1328: detail read via TanStack Query.
+  const { data, isLoading: loading, error } = useApiQuery<TicketResponse>(
+    TICKET_QUERY,
+    `/api/tenant/tickets/${ticketId}`,
+    { enabled: !!ticketId },
+  );
+  const ticket = data?.data;
 
+  // Preserve prior behavior: on load failure, toast + redirect to list.
   useEffect(() => {
-    const controller = new AbortController();
-    loadTicket(controller.signal);
-    return () => controller.abort();
-  }, [loadTicket]);
+    if (error) { toast.error('Failed to load ticket'); router.push('/tenant/tickets'); }
+  }, [error, router]);
 
-  const sendReply = async () => {
-    if (!replyText.trim()) { toast.error('Reply cannot be empty'); return; }
-    setSending(true);
-    try {
-      const res = await fetch(`/api/tenant/tickets/${params['id']}/replies`, {
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: TICKET_QUERY });
+
+  const replyMutation = useMutation({
+    mutationFn: async (body: string) => {
+      const res = await fetch(`/api/tenant/tickets/${ticketId}/replies`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ body: replyText }),
+        body: JSON.stringify({ body }),
       });
-      if (res.ok) { toast.success('Reply sent'); setReplyText(''); loadTicket(); }
-      else toast.error('Failed to send');
-    } catch { toast.error('Failed'); }
-    setSending(false);
+      if (!res.ok) throw new Error('Failed to send');
+    },
+    onSuccess: () => { toast.success('Reply sent'); setReplyText(''); invalidate(); },
+    onError: () => toast.error('Failed to send'),
+  });
+
+  const statusMutation = useMutation({
+    mutationFn: async (status: string) => {
+      const res = await fetch(`/api/tenant/tickets/${ticketId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      });
+      if (!res.ok) throw new Error('Failed to update');
+      return status;
+    },
+    onSuccess: (status) => { toast.success(`Status: ${status}`); invalidate(); },
+    onError: () => toast.error('Failed to update'),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/tenant/tickets/${ticketId}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete');
+    },
+    onSuccess: () => { toast.success('Deleted'); router.push('/tenant/tickets'); },
+    onError: () => toast.error('Failed to delete'),
+  });
+
+  const sending = replyMutation.isPending;
+
+  const sendReply = () => {
+    if (!replyText.trim()) { toast.error('Reply cannot be empty'); return; }
+    replyMutation.mutate(replyText);
   };
 
-  const updateStatus = async (status: string) => {
-    const res = await fetch(`/api/tenant/tickets/${params['id']}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status }),
-    });
-    if (res.ok) { toast.success(`Status: ${status}`); loadTicket(); }
-    else toast.error('Failed to update');
-  };
+  const updateStatus = (status: string) => statusMutation.mutate(status);
 
   const deleteTicket = async () => {
     await confirmThen('Delete this ticket?', async () => {
-      const res = await fetch(`/api/tenant/tickets/${params['id']}`, { method: 'DELETE' });
-      if (res.ok) { toast.success('Deleted'); router.push('/tenant/tickets'); }
-      else toast.error('Failed to delete');
+      deleteMutation.mutate();
     });
   };
 

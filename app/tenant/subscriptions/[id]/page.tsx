@@ -6,6 +6,8 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import Link from 'next/link';
 import { ArrowLeft, Edit2, Save, X, Calendar, DollarSign, CreditCard, RefreshCw, Pause, Play } from 'lucide-react';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
@@ -42,36 +44,82 @@ const statusColors: Record<string, string> = {
   past_due: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
 };
 
+interface SubscriptionResponse { data: Subscription }
+
+const SUBSCRIPTION_QUERY = (id: string) => ['tenant', 'subscriptions', id] as const;
+
 export default function SubscriptionDetailPage() {
   const { id } = useParams<{ id: string }>();
   const _router = useRouter();
-  const [subscription, setSubscription] = useState<Subscription | null>(null);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<Partial<Subscription>>({});
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
 
+  // #1328: detail read via TanStack Query.
+  const { data, isLoading: loading, error } = useApiQuery<SubscriptionResponse>(
+    SUBSCRIPTION_QUERY(id),
+    `/api/tenant/subscriptions/${id}`,
+    { enabled: !!id },
+  );
+  const subscription = data?.data;
+
   useEffect(() => {
-    const controller = new AbortController();
-    const { signal } = controller;
-    const fetchSubscription = async () => {
-      try {
-        const res = await fetch(`/api/tenant/subscriptions/${id}`, { signal });
-        if (!res.ok) throw new Error('Not found');
-        const data = await res.json();
-        if (signal.aborted) return;
-        setSubscription(data.data);
-      } catch (e) {
-        if ((e as Error)?.name === 'AbortError') return;
-        toast.error('Failed to load subscription');
-      } finally {
-        if (signal.aborted) return;
-        setLoading(false);
-      }
-    };
-    fetchSubscription();
-    return () => controller.abort();
-  }, [id]);
+    if (error) toast.error('Failed to load subscription');
+  }, [error]);
+
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: SUBSCRIPTION_QUERY(id) });
+
+  const saveMutation = useMutation({
+    mutationFn: async (body: Partial<Subscription>) => {
+      const res = await fetch(`/api/tenant/subscriptions/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error('Failed to update');
+    },
+    onSuccess: () => {
+      setEditing(false);
+      toast.success('Subscription updated');
+      invalidate();
+    },
+    onError: () => toast.error('Failed to update subscription'),
+  });
+
+  const statusActionMutation = useMutation({
+    mutationFn: async ({ newStatus }: { action: 'pause' | 'resume'; newStatus: string }) => {
+      const res = await fetch(`/api/tenant/subscriptions/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      if (!res.ok) throw new Error('Failed');
+    },
+    onSuccess: (_data, variables) => {
+      toast.success(`Subscription ${variables.action}d`);
+      invalidate();
+    },
+    onError: (_e, variables) => toast.error(`Failed to ${variables.action} subscription`),
+  });
+
+  const cancelMutation = useMutation({
+    mutationFn: async () => {
+      const body: Record<string, unknown> = { status: 'cancelled' };
+      body['cancelledAt'] = new Date().toISOString();
+      const res = await fetch(`/api/tenant/subscriptions/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error('Failed');
+    },
+    onSuccess: () => {
+      toast.success('Subscription cancelled');
+      invalidate();
+    },
+    onError: () => toast.error('Failed to cancel subscription'),
+  });
 
   const handleEdit = () => {
     if (subscription) {
@@ -87,61 +135,19 @@ export default function SubscriptionDetailPage() {
     }
   };
 
-  const handleSave = async () => {
-    try {
-      const res = await fetch(`/api/tenant/subscriptions/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
-      });
-      if (!res.ok) throw new Error('Failed to update');
-      const data = await res.json();
-      setSubscription(data.data);
-      setEditing(false);
-      toast.success('Subscription updated');
-    } catch {
-      toast.error('Failed to update subscription');
-    }
-  };
+  const handleSave = () => saveMutation.mutate(form);
 
-  const handleStatusAction = async (action: 'pause' | 'resume' | 'cancel') => {
+  const handleStatusAction = (action: 'pause' | 'resume' | 'cancel') => {
     const statusMap = { pause: 'paused', resume: 'active', cancel: 'cancelled' };
-    const newStatus = statusMap[action];
     if (action === 'cancel') {
       setShowCancelConfirm(true);
       return;
     }
-    try {
-      const res = await fetch(`/api/tenant/subscriptions/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: newStatus }),
-      });
-      if (!res.ok) throw new Error('Failed');
-      const data = await res.json();
-      setSubscription(data.data);
-      toast.success(`Subscription ${action}d`);
-    } catch {
-      toast.error(`Failed to ${action} subscription`);
-    }
+    statusActionMutation.mutate({ action, newStatus: statusMap[action] });
   };
 
   const handleCancelSubscription = async () => {
-    try {
-      const body: Record<string, unknown> = { status: 'cancelled' };
-      body['cancelledAt'] = new Date().toISOString();
-      const res = await fetch(`/api/tenant/subscriptions/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) throw new Error('Failed');
-      const data = await res.json();
-      setSubscription(data.data);
-      toast.success('Subscription cancelled');
-    } catch {
-      toast.error('Failed to cancel subscription');
-    }
+    cancelMutation.mutate();
   };
 
   if (loading) {
