@@ -34,8 +34,7 @@ export interface IndustryTemplate {
     action: string;
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    config: any;
+    config: Record<string, unknown>;
   }>;
   defaultDashboardLayout?: Array<{
     widget: string;
@@ -43,8 +42,7 @@ export interface IndustryTemplate {
     size: '1x1' | '2x1' | '1x2' | '2x2';
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    config?: Record<string, any>;
+    config?: Record<string, unknown>;
   }>;
 }
 
