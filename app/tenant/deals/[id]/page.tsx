@@ -11,7 +11,6 @@ import {
   companies as companiesTable, 
   users as usersTable, 
   tasks as tasksTable, 
-  activities as activitiesTable,
   dealStages,
   followUps as followUpsTable,
   leads as leadsTable
@@ -20,6 +19,7 @@ import { eq, and, sql, desc } from 'drizzle-orm';
 import { notFound } from 'next/navigation';
 import DealDetailClient from '@/components/tenant/deal-detail-client';
 import { withTenantScope } from '@/lib/api/with-api-route';
+import { getActivityTimeline } from '@/lib/activity/timeline';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -152,39 +152,9 @@ export default async function DealDetailPage({ params }: PageProps) {
   .limit(50)
   .catch(() => []);
 
-  // Get activities (graceful fallback if query fails)
-  let activities: Array<{
-    id: string;
-    entity_type: string;
-    action: string | null;
-    description: string | null;
-    metadata: unknown;
-    created_at: Date;
-    performed_by_name: string | null;
-    performed_by_avatar: string | null;
-  }> = [];
-  try {
-    activities = await db.select({
-      id: activitiesTable.id,
-      entity_type: activitiesTable.entityType,
-      action: activitiesTable.eventType,
-      description: activitiesTable.description,
-      metadata: activitiesTable.metadata,
-      created_at: activitiesTable.createdAt,
-      performed_by_name: usersTable.fullName,
-      performed_by_avatar: usersTable.avatarUrl
-    })
-    .from(activitiesTable)
-    .leftJoin(usersTable, eq(usersTable.id, activitiesTable.userId))
-    .where(and(
-      eq(activitiesTable.dealId, id),
-      eq(activitiesTable.tenantId, ctx.tenantId)
-    ))
-    .orderBy(desc(activitiesTable.createdAt))
-    .limit(100);
-  } catch {
-    // Failed to load deal activities
-  }
+  // #1820: unified activity timeline — merges activities + calls + notes for
+  // this deal into one chronological feed.
+  const activities = await getActivityTimeline('deal', id, ctx.tenantId, 100);
 
   const permissions = {
     canEdit: can(ctx, 'deals.edit'),
