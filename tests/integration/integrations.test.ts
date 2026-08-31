@@ -7,6 +7,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // Mock auth middleware
 vi.mock('@/lib/auth/middleware', () => ({
   requireAuth: vi.fn(),
+  // #1835: handlers call requireCsrf() as defense-in-depth; no-op in tests.
+  requireCsrf: vi.fn(() => null),
 }));
 
 // Mock drizzle db

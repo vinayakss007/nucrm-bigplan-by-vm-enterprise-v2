@@ -16,10 +16,10 @@ import { withApiRoute } from '@/lib/api/with-api-route';
 
 export const PATCH = withApiRoute(async (request: NextRequest) => {
   try {
-    const csrf = requireCsrf(request); // #1835: in-handler CSRF defense-in-depth
-    if (csrf) return csrf;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+    const csrf = requireCsrf(request); // #1835: in-handler CSRF defense-in-depth (after auth)
+    if (csrf) return csrf;
 
     const rawBody = await readJsonBody(request);
     const validated = validateBody(updateProfileSchema, rawBody);

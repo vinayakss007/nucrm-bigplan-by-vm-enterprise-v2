@@ -72,13 +72,13 @@ export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const limited = await rateLimitMutating(request, 'invoices', 'post');
     if (limited) return limited;
-    // #1835: in-handler CSRF check as defense-in-depth (the proxy middleware is
-    // the primary gate; this ensures a sensitive money endpoint stays protected
-    // even if a request ever reaches it without passing the middleware matcher).
-    const csrf = requireCsrf(request);
-    if (csrf) return csrf;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+    // #1835: in-handler CSRF check as defense-in-depth (the proxy middleware is
+    // the primary gate). Runs AFTER auth so an unauthenticated request still
+    // gets a 401, matching the middleware/handler contract.
+    const csrf = requireCsrf(request);
+    if (csrf) return csrf;
     const { tenantId, userId } = ctx;
 
     const rawBody = await readJsonBody(request);

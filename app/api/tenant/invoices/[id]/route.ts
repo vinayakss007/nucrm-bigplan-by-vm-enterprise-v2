@@ -55,10 +55,10 @@ export const PUT = withApiRoute(async (req: NextRequest, { params }: { params: P
   try {
   const limited = await rateLimitMutating(req, 'invoices', 'patch');
   if (limited) return limited;
-    const csrf = requireCsrf(req); // #1835: in-handler CSRF defense-in-depth
-    if (csrf) return csrf;
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
+    const csrf = requireCsrf(req); // #1835: in-handler CSRF defense-in-depth (after auth)
+    if (csrf) return csrf;
 
     const deny = requirePerm(ctx, 'invoices.edit');
     if (deny) return deny;
@@ -188,10 +188,10 @@ export const DELETE = withApiRoute(async (req: NextRequest, { params }: { params
   try {
   const limited = await rateLimitMutating(req, 'invoices', 'delete');
   if (limited) return limited;
-    const csrf = requireCsrf(req); // #1835: in-handler CSRF defense-in-depth
-    if (csrf) return csrf;
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
+    const csrf = requireCsrf(req); // #1835: in-handler CSRF defense-in-depth (after auth)
+    if (csrf) return csrf;
 
     const deny = requirePerm(ctx, 'invoices.delete');
     if (deny) return deny;

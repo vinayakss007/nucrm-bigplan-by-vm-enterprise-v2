@@ -81,10 +81,10 @@ export const POST = withApiRoute(async (req: NextRequest, { params }: { params: 
     const limited = await rateLimitMutating(req, 'invoices', 'post');
     if (limited) return limited;
 
-    const csrf = requireCsrf(req); // #1835: in-handler CSRF defense-in-depth
-    if (csrf) return csrf;
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
+    const csrf = requireCsrf(req); // #1835: in-handler CSRF defense-in-depth (after auth)
+    if (csrf) return csrf;
 
     // Recording money received is an edit to the invoice's financial state.
     const deny = requirePerm(ctx, 'invoices.edit');

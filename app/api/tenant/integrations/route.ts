@@ -36,10 +36,10 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     const limited = await rateLimitMutating(request, 'integrations', 'post');
     if (limited) return limited;
 
-    const csrf = requireCsrf(request); // #1835: in-handler CSRF defense-in-depth
-    if (csrf) return csrf;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+    const csrf = requireCsrf(request); // #1835: in-handler CSRF defense-in-depth (after auth)
+    if (csrf) return csrf;
     if (!ctx.isAdmin) {
       return NextResponse.json({ error: 'Admin required' }, { status: 403 });
     }
