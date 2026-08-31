@@ -4,7 +4,9 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect, type ComponentType } from 'react';
+import { useState, useMemo, type ComponentType } from 'react';
+import { useMutation, useQueryClient, useQueries } from '@tanstack/react-query';
+import { apiFetcher } from '@/lib/query/client';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useOpenCreateParam } from '@/hooks/use-open-create-param';
@@ -41,56 +43,62 @@ export default function CalendarPage() {
   );
 }
 
+interface ListResponse { data?: Record<string, unknown>[] }
+
 function CalendarInner() {
   const _router = useRouter();
+  const queryClient = useQueryClient();
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [viewMode, setViewMode] = useState<'month' | 'week' | 'day'>('month');
-  const [events, setEvents] = useState<CalEvent[]>([]);
   const [selectedDay, setSelectedDay] = useState(new Date());
   const [showMeetingForm, setShowMeetingForm] = useState(false);
   const [editingEvent, setEditingEvent] = useState<Record<string, unknown> | null>(null);
   // Open the meeting form when arriving via ⌘K "New Meeting" (?action=create).
   useOpenCreateParam(() => setShowMeetingForm(true));
-  const [contacts, setContacts] = useState<{ id: string; first_name?: string; last_name?: string }[]>([]);
-  const [loading, setLoading] = useState(true);
 
-  const loadEvents = (month: Date, signal?: AbortSignal) => {
-    setLoading(true);
-    const start = startOfMonth(month).toISOString().split('T')[0];
-    const end = endOfMonth(month).toISOString().split('T')[0];
-    Promise.all([
-      fetch(`/api/tenant/meetings?start=${start}&end=${end}`, { signal }).then(r => r.json()).catch(() => ({ data: [] })),
-      fetch(`/api/tenant/tasks?limit=200`, { signal }).then(r => r.json()).catch(() => ({ data: [] })),
-      fetch('/api/tenant/contacts?limit=200', { signal }).then(r => r.json()).catch(() => ({ data: [] })),
-    ]).then(([meetings, tasks, cs]) => {
-      if (signal?.aborted) return;
-      const evs: CalEvent[] = [
-        ...(meetings.data || []).map((m: Record<string, unknown>) => ({
-          id: m.id as string, type: 'meeting' as const, title: m.title as string,
-          time: ((m.start_time as string) || '')?.split('T')[1]?.slice(0, 5),
-          date: m.start_time ? new Date(m.start_time as string).toISOString().split('T')[0] : '',
-          color: 'bg-violet-500', icon: Calendar,
-          contact: m.contact_name as string, entity: m,
-        })),
-        ...(tasks.data || []).filter((t: Record<string, unknown>) => t.due_date && !t.completed).map((t: Record<string, unknown>) => ({
-          id: t.id as string, type: 'task' as const, title: t.title as string,
-          date: new Date(t.due_date as string).toISOString().split('T')[0],
-          color: t.priority === 'high' ? 'bg-red-500' : t.priority === 'medium' ? 'bg-amber-500' : 'bg-slate-400',
-          icon: CheckSquare, href: `/tenant/tasks/${t.id}`, entity: t,
-          contact: t.contact_name as string,
-        })),
-      ];
-      setEvents(evs);
-      setContacts(cs.data || []);
-      setLoading(false);
-    });
-  };
+  // #1328: on-mount reads via TanStack Query. Meetings are keyed on the visible
+  // month; tasks/contacts are month-independent lists.
+  const monthStart = startOfMonth(currentMonth).toISOString().split('T')[0];
+  const monthEnd = endOfMonth(currentMonth).toISOString().split('T')[0];
+  const MEETINGS_QUERY = ['tenant', 'meetings', monthStart, monthEnd] as const;
+  const results = useQueries({
+    queries: [
+      { queryKey: MEETINGS_QUERY, queryFn: () => apiFetcher<ListResponse>(`/api/tenant/meetings?start=${monthStart}&end=${monthEnd}`) },
+      { queryKey: ['tenant', 'tasks', 'calendar'] as const, queryFn: () => apiFetcher<ListResponse>('/api/tenant/tasks?limit=200') },
+      { queryKey: ['tenant', 'contacts', 'calendar'] as const, queryFn: () => apiFetcher<ListResponse>('/api/tenant/contacts?limit=200') },
+    ],
+  });
+  const [meetingsRes, tasksRes, contactsRes] = results;
+  const loading = meetingsRes.isLoading || tasksRes.isLoading || contactsRes.isLoading;
 
-  useEffect(() => {
-    const controller = new AbortController();
-    loadEvents(currentMonth, controller.signal);
-    return () => controller.abort();
-  }, [currentMonth]);
+  const events: CalEvent[] = useMemo(() => {
+    const meetings = meetingsRes.data?.data ?? [];
+    const tasks = tasksRes.data?.data ?? [];
+    return [
+      ...meetings.map((m: Record<string, unknown>): CalEvent => ({
+        id: m.id as string, type: 'meeting' as const, title: m.title as string,
+        time: ((m.start_time as string) || '')?.split('T')[1]?.slice(0, 5),
+        date: m.start_time ? new Date(m.start_time as string).toISOString().split('T')[0] ?? '' : '',
+        color: 'bg-violet-500', icon: Calendar,
+        contact: m.contact_name as string, entity: m,
+      })),
+      ...tasks.filter((t: Record<string, unknown>) => t.due_date && !t.completed).map((t: Record<string, unknown>): CalEvent => ({
+        id: t.id as string, type: 'task' as const, title: t.title as string,
+        date: new Date(t.due_date as string).toISOString().split('T')[0] ?? '',
+        color: t.priority === 'high' ? 'bg-red-500' : t.priority === 'medium' ? 'bg-amber-500' : 'bg-slate-400',
+        icon: CheckSquare, href: `/tenant/tasks/${t.id}`, entity: t,
+        contact: t.contact_name as string,
+      })),
+    ];
+  }, [meetingsRes.data, tasksRes.data]);
+
+  const contacts = useMemo(
+    () => (contactsRes.data?.data ?? []) as { id: string; first_name?: string; last_name?: string }[],
+    [contactsRes.data],
+  );
+
+  // Refresh the current month's data after a meeting is created/updated.
+  const reloadEvents = () => queryClient.invalidateQueries({ queryKey: MEETINGS_QUERY });
 
   const days = eachDayOfInterval({ start: startOfMonth(currentMonth), end: endOfMonth(currentMonth) });
   const startPad = getDay(startOfMonth(currentMonth));
@@ -445,7 +453,7 @@ function CalendarInner() {
       </div>
 
       {/* Meeting form modal */}
-      {showMeetingForm && <MeetingForm contacts={contacts} editEvent={editingEvent} onSaved={() => { setShowMeetingForm(false); setEditingEvent(null); loadEvents(currentMonth); }} onClose={() => { setShowMeetingForm(false); setEditingEvent(null); }} />}
+      {showMeetingForm && <MeetingForm contacts={contacts} editEvent={editingEvent} onSaved={() => { setShowMeetingForm(false); setEditingEvent(null); reloadEvents(); }} onClose={() => { setShowMeetingForm(false); setEditingEvent(null); }} />}
     </div>
   );
 }
@@ -465,10 +473,24 @@ function MeetingForm({ contacts, editEvent, onSaved, onClose }: {
     contact_id: (editEvent?.contact_id as string) || '',
     description: (editEvent?.description as string) || '',
   });
-  const [saving, setSaving] = useState(false);
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
 
-  const save = async (e: React.FormEvent) => {
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      const url = editEvent ? `/api/tenant/meetings/${editEvent.id}` : '/api/tenant/meetings';
+      const method = editEvent ? 'PATCH' : 'POST';
+      const res = await fetch(url, {
+        method, headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...form, contact_id: form.contact_id || null, end_time: form.end_time || new Date(new Date(form.start_time).getTime() + 3600000).toISOString() }),
+      });
+      if (!res.ok) throw new Error('Failed to save meeting');
+    },
+    onSuccess: () => { toast.success(editEvent ? 'Meeting updated' : 'Meeting scheduled'); onSaved(); },
+    onError: (e: Error) => toast.error(e.message || 'Failed'),
+  });
+  const saving = saveMutation.isPending;
+
+  const save = (e: React.FormEvent) => {
     e.preventDefault();
     const validation = validateForm(meetingFormSchema, {
       title: form.title,
@@ -484,18 +506,7 @@ function MeetingForm({ contacts, editEvent, onSaved, onClose }: {
       toast.error(firstError);
       return;
     }
-    setSaving(true);
-    try {
-      const url = editEvent ? `/api/tenant/meetings/${editEvent.id}` : '/api/tenant/meetings';
-      const method = editEvent ? 'PATCH' : 'POST';
-      const res = await fetch(url, {
-        method, headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, contact_id: form.contact_id || null, end_time: form.end_time || new Date(new Date(form.start_time).getTime() + 3600000).toISOString() }),
-      });
-      if (res.ok) { toast.success(editEvent ? 'Meeting updated' : 'Meeting scheduled'); onSaved(); }
-      else toast.error('Failed to save meeting');
-    } catch { toast.error('Failed'); }
-    setSaving(false);
+    saveMutation.mutate();
   };
 
   return (

@@ -4,7 +4,9 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useMemo } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import { Plus, Zap, ToggleLeft, ToggleRight, Trash2,
   Mail, Users, Calendar, TrendingUp, X, Loader2, Workflow,
   type LucideIcon } from 'lucide-react';
@@ -67,14 +69,15 @@ const PREBUILT: AutomationWorkflow[] = [
 
 type Tab = 'prebuilt' | 'custom';
 
+const WORKFLOWS_QUERY = ['tenant', 'automation', 'workflows'] as const;
+const AUTOMATIONS_QUERY = ['tenant', 'automations'] as const;
+
+interface PrebuiltRow { workflow_id?: string; enabled?: boolean; run_count?: number; last_run_at?: string }
+
 export default function AutomationPage() {
+  const queryClient = useQueryClient();
   const [tab, setTab]               = useState<Tab>('prebuilt');
-  const [prebuilts, setPrebuilts]   = useState<AutomationWorkflow[]>([]);
-  const [customs, setCustoms]       = useState<AutomationWorkflow[]>([]);
-  const [loading, setLoading]       = useState(true);
   const [showCreate, setShowCreate] = useState(false);
-  const [deleting, setDeleting]     = useState<string|null>(null);
-  const [toggling, setToggling]     = useState<string|null>(null);
   const [form, setForm] = useState<{
     name:string; description:string; trigger_type:string; is_active:boolean;
     actions: { type:string; config:Record<string,string> }[];
@@ -82,79 +85,106 @@ export default function AutomationPage() {
     name:'', description:'', trigger_type:'contact.created', is_active:true,
     actions: [{ type:'send_notification', config:{ title:'', body:'', subject:'', tag:'' } }],
   });
-  const [saving, setSaving] = useState(false);
 
-  const load = async (signal?: AbortSignal) => {
-    setLoading(true);
-    const [pb, cu] = await Promise.all([
-      fetch('/api/tenant/automation/workflows', { signal }).then(r => r.json()).catch(() => ({data:[]})),
-      fetch('/api/tenant/automations', { signal }).then(r => r.json()).catch(() => ({data:[]})),
-    ]);
-    if (signal?.aborted) return;
-    // Merge prebuilts with DB state
-    const pbData = PREBUILT.map(p => {
-      const db = (pb.data as { workflow_id?: string; enabled?: boolean; run_count?: number; last_run_at?: string }[] || [])
-        .find((d) => d.workflow_id === p.id);
+  // #1328: parallel on-mount reads via TanStack Query (was raw fetch + useEffect).
+  const { data: pbData, isLoading: pbLoading } = useApiQuery<{ data?: PrebuiltRow[] }>(
+    WORKFLOWS_QUERY,
+    '/api/tenant/automation/workflows',
+  );
+  const { data: cuData, isLoading: cuLoading } = useApiQuery<{ data?: AutomationWorkflow[] }>(
+    AUTOMATIONS_QUERY,
+    '/api/tenant/automations',
+  );
+  const loading = pbLoading || cuLoading;
+
+  // Merge static PREBUILT config with DB runtime state.
+  const prebuilts: AutomationWorkflow[] = useMemo(() => {
+    const rows = pbData?.data ?? [];
+    return PREBUILT.map(p => {
+      const db = rows.find(d => d.workflow_id === p.id);
       return { ...p, enabled: db?.enabled ?? false, run_count: db?.run_count ?? 0, last_run_at: db?.last_run_at };
     });
-    setPrebuilts(pbData);
-    setCustoms(cu.data ?? []);
-    setLoading(false);
-  };
-  useEffect(() => {
-    const controller = new AbortController();
-    load(controller.signal);
-    return () => controller.abort();
-  }, []);
+  }, [pbData]);
+  const customs: AutomationWorkflow[] = useMemo(() => cuData?.data ?? [], [cuData]);
 
-  const togglePrebuilt = async (id: string, current: boolean) => {
-    setToggling(id);
-    await fetch('/api/tenant/automation/workflows', {
-      method:'PATCH', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ workflow_id: id, enabled: !current }),
-    });
-    setPrebuilts(p => p.map(w => w.id === id ? { ...w, enabled: !current } : w));
-    toast.success(current ? 'Automation paused' : 'Automation enabled');
-    setToggling(null);
-  };
+  const togglePrebuiltMutation = useMutation({
+    mutationFn: async ({ id, current }: { id: string; current: boolean }) => {
+      await fetch('/api/tenant/automation/workflows', {
+        method:'PATCH', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ workflow_id: id, enabled: !current }),
+      });
+      return current;
+    },
+    onSuccess: (current) => {
+      toast.success(current ? 'Automation paused' : 'Automation enabled');
+      queryClient.invalidateQueries({ queryKey: WORKFLOWS_QUERY });
+    },
+  });
 
-  const toggleCustom = async (id: string, current: boolean) => {
-    setToggling(id);
-    await fetch(`/api/tenant/automations/${id}`, {
-      method:'PATCH', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ is_active: !current }),
-    });
-    setCustoms(c => c.map(a => a.id === id ? { ...a, is_active: !current } : a));
-    toast.success(current ? 'Automation paused' : 'Automation enabled');
-    setToggling(null);
-  };
+  const toggleCustomMutation = useMutation({
+    mutationFn: async ({ id, current }: { id: string; current: boolean }) => {
+      await fetch(`/api/tenant/automations/${id}`, {
+        method:'PATCH', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ is_active: !current }),
+      });
+      return current;
+    },
+    onSuccess: (current) => {
+      toast.success(current ? 'Automation paused' : 'Automation enabled');
+      queryClient.invalidateQueries({ queryKey: AUTOMATIONS_QUERY });
+    },
+  });
 
-  const deleteCustom = async (id: string) => {
-    const automation = [...prebuilts, ...customs].find(a => a.id === id);
-    await confirmThen(`Delete automation "${automation?.name || 'this automation'}"?`, async () => {
-      setDeleting(id);
+  const deleteCustomMutation = useMutation({
+    mutationFn: async (id: string) => {
       await fetch(`/api/tenant/automations/${id}`, { method:'DELETE' });
-      setCustoms(c => c.filter(a => a.id !== id));
+    },
+    onSuccess: () => {
       toast.success('Deleted');
-      setDeleting(null);
-    });
-  };
+      queryClient.invalidateQueries({ queryKey: AUTOMATIONS_QUERY });
+    },
+  });
 
-  const createCustom = async (e: React.FormEvent) => {
-    e.preventDefault(); setSaving(true);
-    const res = await fetch('/api/tenant/automations', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify(form),
-    });
-    const d = await res.json();
-    if (res.ok) {
+  const createCustomMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch('/api/tenant/automations', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(form),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error);
+    },
+    onSuccess: () => {
       toast.success('Automation created');
       setShowCreate(false);
       setForm({ name:'', description:'', trigger_type:'contact.created', is_active:true,
         actions:[{ type:'send_notification', config:{ title:'', body:'', subject:'', tag:'' } }] });
-      load();
-    } else toast.error(d.error);
-    setSaving(false);
+      queryClient.invalidateQueries({ queryKey: AUTOMATIONS_QUERY });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  // Per-row spinner state derived from mutation variables.
+  const toggling =
+    togglePrebuiltMutation.isPending ? togglePrebuiltMutation.variables?.id :
+    toggleCustomMutation.isPending ? toggleCustomMutation.variables?.id : null;
+  const deleting = deleteCustomMutation.isPending ? deleteCustomMutation.variables : null;
+  const saving = createCustomMutation.isPending;
+
+  const togglePrebuilt = (id: string, current: boolean) => togglePrebuiltMutation.mutate({ id, current });
+
+  const toggleCustom = (id: string, current: boolean) => toggleCustomMutation.mutate({ id, current });
+
+  const deleteCustom = async (id: string) => {
+    const automation = [...prebuilts, ...customs].find(a => a.id === id);
+    await confirmThen(`Delete automation "${automation?.name || 'this automation'}"?`, async () => {
+      deleteCustomMutation.mutate(id);
+    });
+  };
+
+  const createCustom = (e: React.FormEvent) => {
+    e.preventDefault();
+    createCustomMutation.mutate();
   };
 
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";

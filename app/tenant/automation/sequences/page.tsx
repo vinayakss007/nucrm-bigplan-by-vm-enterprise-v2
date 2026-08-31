@@ -4,7 +4,9 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useMemo } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import { Plus, Clock, Trash2, Loader2, X } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import { cn } from '@/lib/utils';
@@ -25,12 +27,12 @@ interface Sequence {
   steps?: unknown[];
 }
 
+const SEQUENCES_QUERY = ['tenant', 'sequences'] as const;
+
 export default function SequencesPage() {
-  const [sequences, setSequences] = useState<Sequence[]>([]);
-  const [loading, setLoading]     = useState(true);
+  const queryClient = useQueryClient();
   const [showCreate, setShowCreate] = useState(false);
   const [_selected, _setSelected]   = useState<Sequence | null>(null);
-  const [saving, setSaving]       = useState(false);
   const [form, setForm] = useState({
     name:'', description:'',
     steps:[
@@ -40,36 +42,49 @@ export default function SequencesPage() {
     ],
   });
 
-  const load = async (signal?: AbortSignal) => {
-    setLoading(true);
-    const res = await fetch('/api/tenant/sequences', { signal }).catch(() => null);
-    if (signal?.aborted) return;
-    if (res?.ok) { const d = await res.json(); if (signal?.aborted) return; setSequences(d.data ?? []); }
-    setLoading(false);
-  };
-  useEffect(() => {
-    const controller = new AbortController();
-    load(controller.signal);
-    return () => controller.abort();
-  }, []);
+  // #1328: list via TanStack Query (was raw fetch + useEffect).
+  const { data, isLoading: loading } = useApiQuery<{ data?: Sequence[] }>(
+    SEQUENCES_QUERY,
+    '/api/tenant/sequences',
+  );
+  const sequences: Sequence[] = useMemo(() => data?.data ?? [], [data]);
 
-  const create = async (e: React.FormEvent) => {
-    e.preventDefault(); setSaving(true);
-    const res = await fetch('/api/tenant/sequences', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify(form),
-    });
-    const d = await res.json();
-    if (res.ok) { toast.success('Sequence created'); setShowCreate(false); load(); }
-    else toast.error(d.error ?? 'Failed');
-    setSaving(false);
+  const createMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch('/api/tenant/sequences', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(form),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error ?? 'Failed');
+    },
+    onSuccess: () => {
+      toast.success('Sequence created');
+      setShowCreate(false);
+      queryClient.invalidateQueries({ queryKey: SEQUENCES_QUERY });
+    },
+    onError: (e: Error) => toast.error(e.message ?? 'Failed'),
+  });
+  const saving = createMutation.isPending;
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await fetch(`/api/tenant/sequences/${id}`, { method:'DELETE' });
+    },
+    onSuccess: () => {
+      toast.success('Deleted');
+      queryClient.invalidateQueries({ queryKey: SEQUENCES_QUERY });
+    },
+  });
+
+  const create = (e: React.FormEvent) => {
+    e.preventDefault();
+    createMutation.mutate();
   };
 
   const del = async (id: string) => {
     await confirmThen('Delete this sequence?', async () => {
-      await fetch(`/api/tenant/sequences/${id}`, { method:'DELETE' });
-      setSequences(s => s.filter(x => x.id !== id));
-      toast.success('Deleted');
+      deleteMutation.mutate(id);
     });
   };
 
