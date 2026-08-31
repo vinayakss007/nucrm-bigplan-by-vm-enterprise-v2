@@ -10,6 +10,7 @@ import { customEntities, customEntityData } from '@/drizzle/schema';
 import { eq, and, isNull } from 'drizzle-orm';
 import { readJsonBody } from '@/lib/api/validate';
 import { apiError } from '@/lib/api-error';
+import { concurrencyGuard } from '@/lib/api/concurrency';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 export const GET = withApiRoute(async (request: NextRequest, { params }: { params: Promise<{ id: string; rowId: string }> }) => {
@@ -50,6 +51,16 @@ export const PATCH = withApiRoute(async (request: NextRequest, { params }: { par
     if (!rawBody || typeof rawBody !== 'object') {
       return NextResponse.json({ error: 'Request body must be a JSON object' }, { status: 400 });
     }
+
+    // Optimistic concurrency (#680): the row payload is dynamic user data, so we
+    // carry the expected version in a reserved `_expectedUpdatedAt` key and strip
+    // it before persisting. Opt-in — omitting it keeps last-write-wins.
+    const expectedUpdatedAt = (rawBody as Record<string, unknown>)._expectedUpdatedAt
+      ? new Date(String((rawBody as Record<string, unknown>)._expectedUpdatedAt))
+      : null;
+    delete (rawBody as Record<string, unknown>)._expectedUpdatedAt;
+    const guard = await concurrencyGuard(db, customEntityData, rowId, ctx.tenantId, expectedUpdatedAt);
+    if (guard) return guard;
 
     const dataSchema = (entity.fields as Array<{ name: string; type: string; required?: boolean; label?: string }>) || [];
     const errors: string[] = [];

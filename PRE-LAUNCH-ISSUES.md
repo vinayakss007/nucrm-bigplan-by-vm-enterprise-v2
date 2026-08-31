@@ -1,43 +1,61 @@
 # Pre-Launch Issues
 
 Generated: 2026-07-31
+Last verified: 2026-08-31 (code re-audit)
 
-## CRITICAL (must fix before launch)
+> **Status legend:** ✅ Resolved · ⚠️ Partially resolved · 🔴 Open
 
-### 1. SQL Injection via `sql.raw()` in Report Builder & Data Explorer
+## CRITICAL
 
-- **Files**: `app/api/tenant/reports/builder/route.ts` (lines 195-199), `app/api/tenant/data-explorer/route.ts` (lines 98, 109, 122, 134, 145)
-- **Risk**: User input interpolated into raw SQL via `sql.raw()`. Allowlist validation exists but can be bypassed if upstream paths skip it.
-- **Fix**: Harden all `sql.raw()` call sites with explicit allowlists. Reference: Issue #683.
-- **Effort**: 1-2 days
+### 1. ✅ RESOLVED — SQL Injection via `sql.raw()` in Report Builder & Data Explorer
 
-### 2. Cross-Tenant Data Leak on Contacts Page
+- **Files**: `app/api/tenant/reports/builder/route.ts`, `app/api/tenant/data-explorer/route.ts`
+- **Verification (2026-08-31)**: No `sql.raw()` on user input remains. All dynamic
+  identifiers go through `sql.identifier()` (safe quoting) **and** explicit
+  allowlists (`ALLOWED_GROUP_FIELDS`, `ALLOWED_METRIC_FIELDS`, `EDITABLE_FIELDS`,
+  `ENTITY_CONFIG.sortFields`). Values are always bound as parameters.
+- Reference: Issue #683.
 
-- **Reference**: Issue #664
-- **Risk**: Contacts from one tenant visible to another tenant. Wasted DB query + cross-tenant leak.
-- **Fix**: Audit contacts query for missing tenant filter. Verify RLS policies.
-- **Effort**: 1-2 days
+### 2. ✅ RESOLVED — Cross-Tenant Data Leak on Contacts Page
 
-### 3. No Rate Limiting on GET/PATCH/DELETE Endpoints
+- **Verification (2026-08-31)**: Contacts list/detail queries filter on
+  `eq(contacts.tenantId, ctx.tenantId)`, and `withApiRoute` pins a single DB
+  connection for the whole handler so `setTenantContext()` + every query share
+  it and RLS stays enforced (fix #1615). Detail routes add RBAC ownership checks.
+- Reference: Issue #664.
 
-- **Reference**: Issue #652
-- **Risk**: Only mutating POST endpoints have rate limiting. GET, PATCH, DELETE are unprotected — brute-force ID enumeration and DoS possible.
-- **Fix**: Add `checkRateLimit()` calls to remaining routes.
-- **Effort**: 2-3 days
+### 3. ⚠️ PARTIALLY RESOLVED — Rate Limiting on GET/PATCH/DELETE Endpoints
 
-### 4. No Optimistic Concurrency Guard on Entity Updates
+- **Verification (2026-08-31)**: 182 of 314 tenant route files now call
+  `checkRateLimit()` / `rateLimitMutating()`. All mutating PATCH/DELETE routes
+  audited are covered. The remaining uncovered routes are predominantly
+  **read-only GET** analytics/dashboard-widget endpoints (`analytics/*`,
+  `dashboard/widgets/*`).
+- **Remaining**: Decide whether read-only GET endpoints need rate limiting for
+  launch (lower risk: no mutation, still an enumeration/DoS surface).
+- Reference: Issue #652.
 
-- **Reference**: Issue #680
-- **Risk**: Two simultaneous edits silently overwrite each other (lost update). Only contacts PATCH has a guard (`eq(contacts.updatedAt, existing.updatedAt!)`), not consistently applied.
-- **Fix**: Add `updatedAt` check to all entity PATCH/PUT routes.
-- **Effort**: 3-5 days
+### 4. ⚠️ PARTIALLY RESOLVED — Optimistic Concurrency Guard on Entity Updates
 
-### 5. Secrets in `.env.local` Need Rotation + Secure Deployment
+- **Verification (2026-08-31)**: Two guard patterns exist and are applied:
+  - `withConcurrencyGuard()` + `updatedAtMs()` — contacts, deals, leads, tasks,
+    quotes, products, meetings, email-templates.
+  - `concurrencyGuard(db, table, id, tenantId, expectedUpdatedAt)` (opt-in) —
+    companies, and now custom-entities, custom-entity rows, and data-explorer
+    inline edits.
+- **Remaining**: A number of secondary/config-style routes still rely on
+  last-write-wins by design (upsert/singleton settings). Confirm none of the
+  remaining business entities (e.g. invoices, orders, tickets, contracts) need
+  a guard before launch — several already send `updated_at`/`_version`.
+- Reference: Issue #680.
 
-- **Files**: `.env`, `.env.local`
-- **Risk**: Real DB passwords, JWT secrets, session secrets, encryption keys, Redis passwords in plaintext. Not in git, but travels with backups/deploys.
-- **Fix**: Rotate all keys. Implement deployment secret injection (e.g., vault, cloud secrets manager). Ensure `.gitignore` covers all env files.
-- **Effort**: 0.5 day
+### 5. ✅ RESOLVED — Secrets in `.env.local` Need Rotation + Secure Deployment
+
+- **Verification (2026-08-31)**: `.gitignore` blanket-blocks `.env*` except
+  `.env.example`. `deploy/.env.production` is tracked but contains **only
+  placeholders** (`<<<REQUIRED>>>`), not real secrets. `deploy/generate-secrets.sh`
+  - documented `openssl rand` workflow provide secure injection. Git-history
+    scan for real secret values is clean.
 
 ---
 
@@ -59,7 +77,7 @@ Generated: 2026-07-31
 
 ### 8. Deal Creation `stage_name` vs `stage` Resolution Bug
 
-- **Files**: `app/api/tenant/deals/route.ts` (lines 115-136), `app/api/tenant/deals/[id]/route.ts` (lines 100-109)
+- **Files**: `app/api/tenant/deals/route.ts`, `app/api/tenant/deals/[id]/route.ts`
 - **Risk**: Frontend sends `stage_name` (string like "won") but API expects `stage_id` (UUID). Fallback resolution has edge cases that fail silently.
 - **Fix**: Robust `stage_name` → `stageId` resolution with validation. Reference: Issue #658.
 - **Effort**: 1-2 days
@@ -127,13 +145,12 @@ Generated: 2026-07-31
 
 ## Recommended Launch Order
 
-1. Fix SQL injection in data-explorer & report-builder (CRITICAL #1)
-2. Fix cross-tenant contacts leak (CRITICAL #2)
-3. Rotate secrets + secure deployment injection (CRITICAL #5)
-4. Add rate limiting to unprotected endpoints (CRITICAL #3)
-5. Fix deal creation stage resolution (HIGH #8)
-6. Harden CSP policy (HIGH #6)
-7. Merge pending PRs #552 and #553 (MEDIUM #15)
-8. Fix migration journal (HIGH #10)
-9. Add optimistic concurrency guards (CRITICAL #4) — phased
-10. Wrap remaining multi-table writes in transactions (HIGH #7) — phased
+_CRITICAL #1, #2, #5 are resolved. Remaining blockers below._
+
+1. ⚠️ Finish rate limiting decision for read-only GET endpoints (CRITICAL #3)
+2. ⚠️ Confirm concurrency-guard coverage for remaining business entities (CRITICAL #4)
+3. Fix deal creation stage resolution (HIGH #8)
+4. Harden CSP policy (HIGH #6)
+5. Merge pending PRs #552 and #553 (MEDIUM #15)
+6. Fix migration journal (HIGH #10)
+7. Wrap remaining multi-table writes in transactions (HIGH #7) — phased
