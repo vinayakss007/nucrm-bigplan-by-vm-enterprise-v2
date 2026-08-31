@@ -4,7 +4,9 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useEffect, useState, use } from 'react';
+import { useState, use } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import Link from 'next/link';
 import {
   ArrowLeft, Send, Copy, Check, X, Eye, CheckCircle2, XCircle, Clock,
@@ -53,42 +55,66 @@ function fmtCurrency(amt: string | number | null | undefined): string {
   return n.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
 }
 
+interface OfferResponse {
+  quote?: Quote;
+  line_items?: LineItem[];
+  lineItems?: LineItem[];
+}
+
 export default function OfferDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const [quote, setQuote] = useState<Quote | null>(null);
-  const [items, setItems] = useState<LineItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState<'send' | 'cancel' | null>(null);
+  const queryClient = useQueryClient();
+  const [actionError, setActionError] = useState<string | null>(null);
   const [showSendModal, setShowSendModal] = useState(false);
   const [sendForm, setSendForm] = useState({ to_email: '', message: '', expires_at: '' });
   const [linkCopied, setLinkCopied] = useState(false);
 
-  function load(signal?: AbortSignal) {
-    setLoading(true);
-    setError(null);
-    fetch(`/api/tenant/quotes/${id}`, { cache: 'no-store', signal })
-      .then(async r => {
-        if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? `HTTP ${r.status}`);
-        return r.json();
-      })
-      .then(d => {
-        if (signal?.aborted) return;
-        setQuote(d.quote ?? d);
-        setItems(d.line_items ?? d.lineItems ?? []);
-      })
-      .catch(e => {
-        if ((e as Error)?.name === 'AbortError') return;
-        setError(e.message || 'Failed to load offer');
-      })
-      .finally(() => { if (signal?.aborted) return; setLoading(false); });
-  }
-  useEffect(() => {
-    const controller = new AbortController();
-    load(controller.signal);
-    return () => controller.abort();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
+  // #1328: detail read via TanStack Query (offer is backed by the quote record).
+  const OFFER_QUERY = ['tenant', 'offers', id] as const;
+  const { data, isLoading: loading, error: loadError } = useApiQuery<OfferResponse | Quote>(
+    OFFER_QUERY,
+    `/api/tenant/quotes/${id}`,
+    { enabled: !!id },
+  );
+  const resp = data as OfferResponse | undefined;
+  const quote: Quote | undefined =
+    resp && 'quote' in resp ? resp.quote : (data as Quote | undefined);
+  const items: LineItem[] = resp?.line_items ?? resp?.lineItems ?? [];
+
+  // Displayed error combines the initial load failure and any action error.
+  const error = actionError ?? (loadError ? (loadError.message || 'Failed to load offer') : null);
+
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: OFFER_QUERY });
+
+  const sendMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/tenant/offers/${id}/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(sendForm),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error ?? `HTTP ${res.status}`);
+    },
+    onSuccess: () => { setShowSendModal(false); invalidate(); },
+    onError: (e: Error) => setActionError(e.message),
+  });
+
+  const cancelMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/tenant/offers/${id}/cancel`, { method: 'POST' });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error ?? `HTTP ${res.status}`);
+    },
+    onSuccess: () => { invalidate(); },
+    onError: (e: Error) => setActionError(e.message),
+  });
+
+  const busy: 'send' | 'cancel' | null = sendMutation.isPending
+    ? 'send'
+    : cancelMutation.isPending
+      ? 'cancel'
+      : null;
 
   const offerMeta = (quote?.metadata?.offer ?? {}) as Record<string, unknown>;
   const publicToken = (offerMeta['public_token'] ?? null) as string | null;
@@ -105,44 +131,19 @@ export default function OfferDetailPage({ params }: { params: Promise<{ id: stri
 
   async function send() {
     if (!sendForm.to_email && !quote?.contactId) {
-      setError('Provide a buyer email or attach a contact');
+      setActionError('Provide a buyer email or attach a contact');
       return;
     }
     await confirmThen('Send this offer? The buyer link will become public immediately.', async () => {
-      setBusy('send');
-      setError(null);
-      try {
-        const res = await fetch(`/api/tenant/offers/${id}/send`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(sendForm),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
-        setShowSendModal(false);
-        load();
-      } catch (e) {
-        setError((e as Error).message);
-      } finally {
-        setBusy(null);
-      }
+      setActionError(null);
+      sendMutation.mutate();
     });
   }
 
   async function cancel() {
     await confirmThen('Cancel this offer? The buyer link will stop working.', async () => {
-      setBusy('cancel');
-      setError(null);
-      try {
-        const res = await fetch(`/api/tenant/offers/${id}/cancel`, { method: 'POST' });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
-        load();
-      } catch (e) {
-        setError((e as Error).message);
-      } finally {
-        setBusy(null);
-      }
+      setActionError(null);
+      cancelMutation.mutate();
     });
   }
 

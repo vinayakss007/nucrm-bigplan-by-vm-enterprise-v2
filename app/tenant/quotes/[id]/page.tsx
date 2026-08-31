@@ -6,6 +6,8 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import Link from 'next/link';
 import { ArrowLeft, Edit2, Trash2, Save, X, FileText, Send, CheckCircle, XCircle, Calendar, ShoppingCart, Download, Mail, Receipt } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
@@ -44,36 +46,77 @@ const statusColors: Record<string, string> = {
   cancelled: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400',
 };
 
+interface QuoteResponse { data: Quote }
+
+const QUOTE_QUERY = (id: string) => ['tenant', 'quotes', id] as const;
+
 export default function QuoteDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const [quote, setQuote] = useState<Quote | null>(null);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<Partial<Quote>>({});
   const [showEmailDialog, setShowEmailDialog] = useState(false);
 
+  // #1328: detail read via TanStack Query.
+  const { data, isLoading: loading, error } = useApiQuery<QuoteResponse>(
+    QUOTE_QUERY(id),
+    `/api/tenant/quotes/${id}`,
+    { enabled: !!id },
+  );
+  const quote = data?.data;
+
   useEffect(() => {
-    const controller = new AbortController();
-    const { signal } = controller;
-    const fetchQuote = async () => {
-      try {
-        const res = await fetch(`/api/tenant/quotes/${id}`, { signal });
-        if (!res.ok) throw new Error('Not found');
-        const data = await res.json();
-        if (signal.aborted) return;
-        setQuote(data.data);
-      } catch (e) {
-        if ((e as Error)?.name === 'AbortError') return;
-        toast.error('Failed to load quote');
-      } finally {
-        if (signal.aborted) return;
-        setLoading(false);
-      }
-    };
-    fetchQuote();
-    return () => controller.abort();
-  }, [id]);
+    if (error) toast.error('Failed to load quote');
+  }, [error]);
+
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: QUOTE_QUERY(id) });
+
+  const saveMutation = useMutation({
+    mutationFn: async (body: Partial<Quote>) => {
+      const res = await fetch(`/api/tenant/quotes/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error('Failed to update');
+    },
+    onSuccess: () => {
+      setEditing(false);
+      toast.success('Quote updated');
+      invalidate();
+    },
+    onError: () => toast.error('Failed to update quote'),
+  });
+
+  const statusMutation = useMutation({
+    mutationFn: async (newStatus: string) => {
+      const res = await fetch(`/api/tenant/quotes/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      if (!res.ok) throw new Error('Failed');
+      return newStatus;
+    },
+    onSuccess: (newStatus) => {
+      toast.success(`Quote marked as ${newStatus}`);
+      invalidate();
+    },
+    onError: () => toast.error('Failed to change status'),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/tenant/quotes/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed');
+    },
+    onSuccess: () => {
+      toast.success('Quote deleted');
+      router.push('/tenant/quotes');
+    },
+    onError: () => toast.error('Failed to delete quote'),
+  });
 
   const handleEdit = () => {
     if (quote) {
@@ -91,49 +134,13 @@ export default function QuoteDetailPage() {
     }
   };
 
-  const handleSave = async () => {
-    try {
-      const res = await fetch(`/api/tenant/quotes/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
-      });
-      if (!res.ok) throw new Error('Failed to update');
-      const data = await res.json();
-      setQuote(data.data);
-      setEditing(false);
-      toast.success('Quote updated');
-    } catch {
-      toast.error('Failed to update quote');
-    }
-  };
+  const handleSave = () => saveMutation.mutate(form);
 
-  const handleStatusChange = async (newStatus: string) => {
-    try {
-      const res = await fetch(`/api/tenant/quotes/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: newStatus }),
-      });
-      if (!res.ok) throw new Error('Failed');
-      const data = await res.json();
-      setQuote(data.data);
-      toast.success(`Quote marked as ${newStatus}`);
-    } catch {
-      toast.error('Failed to change status');
-    }
-  };
+  const handleStatusChange = (newStatus: string) => statusMutation.mutate(newStatus);
 
   const handleDelete = async () => {
     await confirmThen('Are you sure you want to delete this quote?', async () => {
-      try {
-        const res = await fetch(`/api/tenant/quotes/${id}`, { method: 'DELETE' });
-        if (!res.ok) throw new Error('Failed');
-        toast.success('Quote deleted');
-        router.push('/tenant/quotes');
-      } catch {
-        toast.error('Failed to delete quote');
-      }
+      deleteMutation.mutate();
     });
   };
 
@@ -418,7 +425,7 @@ export default function QuoteDetailPage() {
             });
             if (res.ok) {
               toast.success(`Quote sent to ${email}`);
-              setQuote(prev => prev ? { ...prev, status: 'sent' } : prev);
+              invalidate();
             } else {
               const data = await res.json();
               toast.error(data.error || 'Failed to send');

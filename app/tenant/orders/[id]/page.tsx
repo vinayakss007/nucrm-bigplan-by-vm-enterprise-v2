@@ -6,6 +6,8 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import Link from 'next/link';
 import { ArrowLeft, Edit2, Trash2, Save, X, Package, Truck, CheckCircle, Clock, Calendar } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -53,35 +55,76 @@ const statusColors: Record<string, string> = {
 
 const statusFlow = ['draft', 'confirmed', 'processing', 'shipped', 'delivered'];
 
+interface OrderResponse { data: Order }
+
+const ORDER_QUERY = (id: string) => ['tenant', 'orders', id] as const;
+
 export default function OrderDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const [order, setOrder] = useState<Order | null>(null);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<Partial<Order>>({});
 
+  // #1328: detail read via TanStack Query.
+  const { data, isLoading: loading, error } = useApiQuery<OrderResponse>(
+    ORDER_QUERY(id),
+    `/api/tenant/orders/${id}`,
+    { enabled: !!id },
+  );
+  const order = data?.data;
+
   useEffect(() => {
-    const controller = new AbortController();
-    const { signal } = controller;
-    const fetchOrder = async () => {
-      try {
-        const res = await fetch(`/api/tenant/orders/${id}`, { signal });
-        if (!res.ok) throw new Error('Not found');
-        const data = await res.json();
-        if (signal.aborted) return;
-        setOrder(data.data);
-      } catch (e) {
-        if ((e as Error)?.name === 'AbortError') return;
-        toast.error('Failed to load order');
-      } finally {
-        if (signal.aborted) return;
-        setLoading(false);
-      }
-    };
-    fetchOrder();
-    return () => controller.abort();
-  }, [id]);
+    if (error) toast.error('Failed to load order');
+  }, [error]);
+
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: ORDER_QUERY(id) });
+
+  const saveMutation = useMutation({
+    mutationFn: async (body: Partial<Order>) => {
+      const res = await fetch(`/api/tenant/orders/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error('Failed to update');
+    },
+    onSuccess: () => {
+      setEditing(false);
+      toast.success('Order updated');
+      invalidate();
+    },
+    onError: () => toast.error('Failed to update order'),
+  });
+
+  const statusMutation = useMutation({
+    mutationFn: async (newStatus: string) => {
+      const res = await fetch(`/api/tenant/orders/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      if (!res.ok) throw new Error('Failed');
+      return newStatus;
+    },
+    onSuccess: (newStatus) => {
+      toast.success(`Order marked as ${newStatus}`);
+      invalidate();
+    },
+    onError: () => toast.error('Failed to change status'),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/tenant/orders/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed');
+    },
+    onSuccess: () => {
+      toast.success('Order deleted');
+      router.push('/tenant/orders');
+    },
+    onError: () => toast.error('Failed to delete order'),
+  });
 
   const handleEdit = () => {
     if (order) {
@@ -101,49 +144,13 @@ export default function OrderDetailPage() {
     }
   };
 
-  const handleSave = async () => {
-    try {
-      const res = await fetch(`/api/tenant/orders/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
-      });
-      if (!res.ok) throw new Error('Failed to update');
-      const data = await res.json();
-      setOrder(data.data);
-      setEditing(false);
-      toast.success('Order updated');
-    } catch {
-      toast.error('Failed to update order');
-    }
-  };
+  const handleSave = () => saveMutation.mutate(form);
 
-  const handleStatusChange = async (newStatus: string) => {
-    try {
-      const res = await fetch(`/api/tenant/orders/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: newStatus }),
-      });
-      if (!res.ok) throw new Error('Failed');
-      const data = await res.json();
-      setOrder(data.data);
-      toast.success(`Order marked as ${newStatus}`);
-    } catch {
-      toast.error('Failed to change status');
-    }
-  };
+  const handleStatusChange = (newStatus: string) => statusMutation.mutate(newStatus);
 
   const handleDelete = async () => {
     await confirmThen('Are you sure you want to delete this order?', async () => {
-      try {
-        const res = await fetch(`/api/tenant/orders/${id}`, { method: 'DELETE' });
-        if (!res.ok) throw new Error('Failed');
-        toast.success('Order deleted');
-        router.push('/tenant/orders');
-      } catch {
-        toast.error('Failed to delete order');
-      }
+      deleteMutation.mutate();
     });
   };
 
