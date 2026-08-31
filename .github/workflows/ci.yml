@@ -46,6 +46,9 @@ jobs:
       - name: Route-boundary coverage guard (#1840)
         run: npm run guard:boundaries
 
+      - name: File-size ratchet (#1843)
+        run: npm run guard:filesize
+
   test-unit:
     name: Unit Tests
     runs-on: ubuntu-latest
