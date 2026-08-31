@@ -4,7 +4,8 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { useApiQuery } from '@/lib/query/client';
 import { CreditCard, Plus, Edit, X, Save, Loader2, Users, Zap, Crown, Package } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
@@ -154,25 +155,19 @@ function PlanForm({ plan, onSave, onClose }: PlanFormProps) {
 }
 
 export default function BillingPage() {
-  const [plans, setPlans] = useState<Plan[]>([]);
-  const [tenants, setTenants] = useState<{ plan_id: string; status: string }[]>([]);
-  const [loading, setLoading] = useState(true);
   const [editPlan, setEditPlan] = useState<Plan | null>(null);
   const [creating, setCreating] = useState(false);
   const [offeringsPlan, setOfferingsPlan] = useState<Plan | null>(null);
 
-  const load = async (abortSignal?: AbortSignal) => {
-    const [p, t] = await Promise.all([
-      fetch('/api/superadmin/plans', { signal: abortSignal }).then(r=>r.json()),
-      fetch('/api/superadmin/tenants', { signal: abortSignal }).then(r=>r.json()),
-    ]);
-    setPlans(p.data||[]); setTenants(t.data||[]); setLoading(false);
-  };
-  useEffect(() => {
-    const abort = new AbortController();
-    load(abort.signal);
-    return () => abort.abort();
-  }, []);
+  // #1328: TanStack Query replaces fetch + useEffect + useState.
+  const plansQuery = useApiQuery<{ data?: Plan[] }>(['superadmin', 'plans'], '/api/superadmin/plans');
+  const tenantsQuery = useApiQuery<{ data?: { plan_id: string; status: string }[] }>(['superadmin', 'tenants'], '/api/superadmin/tenants');
+  const plans: Plan[] = plansQuery.data?.data ?? [];
+  const tenants: { plan_id: string; status: string }[] = tenantsQuery.data?.data ?? [];
+  const loading = plansQuery.isLoading || tenantsQuery.isLoading;
+
+  // Re-load both reads after a plan is created/edited (was `load()`).
+  const reload = () => { plansQuery.refetch(); tenantsQuery.refetch(); };
 
   const planCounts: Record<string,{active:number;trialing:number}> = {};
   tenants.forEach(t => {
@@ -186,7 +181,7 @@ export default function BillingPage() {
 
   return (
     <div className="space-y-5 max-w-6xl">
-      {(editPlan != null || creating) && <PlanForm plan={editPlan ?? undefined} onSave={load} onClose={()=>{setEditPlan(null);setCreating(false);}}/>}
+      {(editPlan != null || creating) && <PlanForm plan={editPlan ?? undefined} onSave={reload} onClose={()=>{setEditPlan(null);setCreating(false);}}/>}
       {offeringsPlan && <PlanOfferingsPanel planId={offeringsPlan.id} planName={offeringsPlan.name} onClose={() => setOfferingsPlan(null)} />}
 
       <div className="flex items-center justify-between">

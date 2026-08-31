@@ -4,7 +4,8 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { useApiQuery } from '@/lib/query/client';
 import { BarChart3, RefreshCw, Search, AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
@@ -42,29 +43,13 @@ function UsageBar({ pct, _danger }: { pct: number; _danger?: boolean }) {
 }
 
 export default function UsagePage() {
-  const [data, setData] = useState<UsageData | null>(null);
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState<'contacts'|'deals'|'users'>('contacts');
   const [sortDir, setSortDir] = useState<'asc'|'desc'>('desc');
 
-  const load = async (signal?: AbortSignal) => {
-    setLoading(true);
-    try {
-      const res = await fetch('/api/superadmin/usage', { signal });
-      const d = await res.json();
-      if (signal?.aborted) return;
-      setData(d); setLoading(false);
-    } catch (e) {
-      if ((e as Error)?.name === 'AbortError') return;
-      throw e;
-    }
-  };
-  useEffect(() => {
-    const controller = new AbortController();
-    load(controller.signal);
-    return () => controller.abort();
-  }, []);
+  // #1328: TanStack Query replaces fetch + useEffect + useState.
+  const { data, isLoading, refetch } = useApiQuery<UsageData>(['superadmin', 'usage'], '/api/superadmin/usage');
+  const loading = isLoading;
 
   const toggleSort = (col: typeof sortBy) => {
     if (sortBy === col) setSortDir(d => d==='desc'?'asc':'desc');
@@ -104,7 +89,7 @@ export default function UsagePage() {
           <h1 className="text-lg font-bold text-white flex items-center gap-2"><BarChart3 className="w-5 h-5 text-violet-400"/>Usage Monitoring</h1>
           <p className="text-xs text-white/30">Per-tenant resource consumption and limit enforcement</p>
         </div>
-        <button onClick={() => load()} className="p-2 rounded-lg border border-white/10 text-white/30 hover:text-white transition-colors"><RefreshCw className="w-3.5 h-3.5"/></button>
+        <button onClick={() => refetch()} className="p-2 rounded-lg border border-white/10 text-white/30 hover:text-white transition-colors"><RefreshCw className="w-3.5 h-3.5"/></button>
       </div>
 
       {/* Near limit alert */}

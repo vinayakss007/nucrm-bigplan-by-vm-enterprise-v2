@@ -4,8 +4,9 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useEffect } from 'react';
 import { useParams } from 'next/navigation';
+import { useApiQuery } from '@/lib/query/client';
 import Link from 'next/link';
 import { ArrowLeft, User, Mail, Shield, Calendar, Globe, Palette, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -36,29 +37,22 @@ interface UserDetail {
 export default function UserDetailPage() {
   const params = useParams();
   const userId = params['id'] as string;
-  const [user, setUser] = useState<UserDetail | null>(null);
-  const [loading, setLoading] = useState(true);
 
-  const load = useCallback(async (signal?: AbortSignal) => {
-    try {
-      const res = await fetch(`/api/superadmin/users/${userId}`, { signal });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to load');
-      if (signal?.aborted) return;
-      setUser(data.data);
-    } catch (err: unknown) {
-      if ((err as Error)?.name === 'AbortError') return;
-      toast.error(err instanceof Error ? err.message : 'Failed to load user');
-    } finally {
-      if (!signal?.aborted) setLoading(false);
-    }
-  }, [userId]);
+  // #1328: TanStack Query replaces fetch + useEffect + useState.
+  const { data, isLoading, error } = useApiQuery<{ data?: UserDetail }>(
+    ['superadmin', 'user', userId],
+    `/api/superadmin/users/${userId}`,
+    { enabled: !!userId, retry: false },
+  );
+  const user: UserDetail | null = data?.data ?? null;
+  const loading = isLoading;
 
   useEffect(() => {
-    const controller = new AbortController();
-    load(controller.signal);
-    return () => controller.abort();
-  }, [load]);
+    if (error) {
+      const info = error.info as { error?: string } | undefined;
+      toast.error(info?.error || error.message || 'Failed to load user');
+    }
+  }, [error]);
 
   if (loading) {
     return (
