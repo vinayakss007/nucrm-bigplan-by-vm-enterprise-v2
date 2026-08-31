@@ -6,6 +6,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useMutation } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import { brandingFormSchema, validateForm } from '@/lib/validation/forms';
 
 interface BrandingFormData {
@@ -34,55 +36,36 @@ export default function BrandingSettingsPage() {
     customCss: '',
     headerLayout: 'default',
   });
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [seeded, setSeeded] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+  // #1328: load branding via TanStack Query (was raw fetch + useEffect). The
+  // form is seeded once from the query result.
+  const { data, isLoading: loading } = useApiQuery<{ data?: Partial<BrandingFormData> }>(
+    ['tenant', 'branding'],
+    '/api/tenant/branding',
+  );
   useEffect(() => {
-    const controller = new AbortController();
-    async function loadBranding() {
-      try {
-        const res = await fetch('/api/tenant/branding', { signal: controller.signal });
-        if (res.ok) {
-          const { data } = await res.json();
-          setForm({
-            logoUrl: data.logoUrl || '',
-            faviconUrl: data.faviconUrl || '',
-            primaryColor: data.primaryColor || '#7c3aed',
-            secondaryColor: data.secondaryColor || '#6366f1',
-            accentColor: data.accentColor || '#f59e0b',
-            companyName: data.companyName || '',
-            customDomain: data.customDomain || '',
-            hidePoweredBy: data.hidePoweredBy || false,
-            customCss: data.customCss || '',
-            headerLayout: data.headerLayout || 'default',
-          });
-        }
-      } catch (err) {
-        if (err instanceof DOMException && err.name === 'AbortError') return;
-      } finally {
-        setLoading(false);
-      }
+    const d = data?.data;
+    if (d && !seeded) {
+      setForm({
+        logoUrl: d.logoUrl || '',
+        faviconUrl: d.faviconUrl || '',
+        primaryColor: d.primaryColor || '#7c3aed',
+        secondaryColor: d.secondaryColor || '#6366f1',
+        accentColor: d.accentColor || '#f59e0b',
+        companyName: d.companyName || '',
+        customDomain: d.customDomain || '',
+        hidePoweredBy: d.hidePoweredBy || false,
+        customCss: d.customCss || '',
+        headerLayout: d.headerLayout || 'default',
+      });
+      setSeeded(true);
     }
-    loadBranding();
-    return () => controller.abort();
-  }, []);
+  }, [data, seeded]);
 
-  async function handleSave(e: React.FormEvent) {
-    e.preventDefault();
-    setMessage(null);
-
-    const validation = validateForm(brandingFormSchema, form);
-    if (!validation.success) {
-      const firstError =
-        validation.errors._form || Object.values(validation.errors)[0] || 'Please check the form and try again.';
-      setMessage({ type: 'error', text: firstError });
-      return;
-    }
-
-    setSaving(true);
-
-    try {
+  const saveMutation = useMutation({
+    mutationFn: async () => {
       const payload: Record<string, unknown> = { ...form };
       // Convert empty strings to null for optional fields
       if (!form.logoUrl) payload['logoUrl'] = null;
@@ -96,18 +79,29 @@ export default function BrandingSettingsPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-
-      if (res.ok) {
-        setMessage({ type: 'success', text: 'Branding saved successfully!' });
-      } else {
-        const err = await res.json();
-        setMessage({ type: 'error', text: err.error || 'Failed to save branding' });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to save branding');
       }
-    } catch {
-      setMessage({ type: 'error', text: 'Network error. Please try again.' });
-    } finally {
-      setSaving(false);
+    },
+    onSuccess: () => setMessage({ type: 'success', text: 'Branding saved successfully!' }),
+    onError: (e: Error) => setMessage({ type: 'error', text: e.message || 'Network error. Please try again.' }),
+  });
+  const saving = saveMutation.isPending;
+
+  function handleSave(e: React.FormEvent) {
+    e.preventDefault();
+    setMessage(null);
+
+    const validation = validateForm(brandingFormSchema, form);
+    if (!validation.success) {
+      const firstError =
+        validation.errors._form || Object.values(validation.errors)[0] || 'Please check the form and try again.';
+      setMessage({ type: 'error', text: firstError });
+      return;
     }
+
+    saveMutation.mutate();
   }
 
   if (loading) {
