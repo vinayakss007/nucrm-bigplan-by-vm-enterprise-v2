@@ -4,8 +4,9 @@
 > Copyright (c) 2026 abetworks.in. All Rights Reserved.
 > Unauthorized copying, modification, distribution, or use is strictly prohibited. See [`LICENSE`](./LICENSE).
 
-**Multi-tenant Enterprise SaaS CRM** — Next.js 16, PostgreSQL, Drizzle ORM, TypeScript.  
-Self-hosted with full plugin engine, workflow automation, AI-powered insights, and 215 database tables.
+**Multi-tenant Enterprise SaaS CRM** — Next.js 16 (React 19), PostgreSQL, Drizzle ORM, TypeScript.  
+Self-hosted with a full plugin engine, workflow automation, AI-powered insights, a public
+marketing website, and 220+ database tables.
 
 > **📚 Documentation:** the full product documentation lives in **[`docs/`](./docs/README.md)**,
 > split into **[Public docs](./docs/public/README.md)** (users, workspace admins, developers) and
@@ -25,7 +26,7 @@ git clone <repo-url>
 cd nucrm-enterprise
 cp .env.example .env.local   # Edit with your DB credentials
 npm install
-npm run db:sync              # Create all 215 tables
+npm run db:sync              # Create all tables (220+)
 npm run dev                  # Start at localhost:3000
 ```
 
@@ -43,7 +44,8 @@ curl -X POST http://localhost:3000/api/setup/create-admin \
 
 | Layer            | Choice                        | Why                                          |
 | ---------------- | ----------------------------- | -------------------------------------------- |
-| Framework        | Next.js 16 (App Router)       | SSR, streaming, Turbopack                    |
+| Framework        | Next.js 16.3 (App Router)     | SSR, streaming, Turbopack                    |
+| UI runtime       | React 19                      | Server Components, transitions               |
 | Language         | TypeScript 5.9                | Strict mode, full type safety                |
 | Database         | PostgreSQL 15+                | Drizzle ORM, JSONB, full-text search         |
 | ORM              | Drizzle                       | Type-safe SQL, no hidden queries             |
@@ -68,12 +70,12 @@ curl -X POST http://localhost:3000/api/setup/create-admin \
 ```
 src/
 ├── app/                          # Next.js App Router
-│   ├── api/                      # ~290 API endpoints
+│   ├── api/                      # ~490 API endpoints
 │   │   ├── auth/                 # JWT, OAuth, SSO, 2FA, password reset
 │   │   ├── tenant/               # All CRM operations (tenant-scoped)
 │   │   ├── superadmin/           # Platform management
 │   │   ├── public/               # Customer portal API
-│   │   ├── cron/                 # Scheduled jobs (~15 cron endpoints)
+│   │   ├── cron/                 # Scheduled jobs (~22 cron endpoints)
 │   │   ├── webhooks/             # Inbound webhooks (Stripe, WhatsApp, Resend)
 │   │   ├── admin/                # Admin operations
 │   │   ├── v2/                   # API v2 routes
@@ -81,14 +83,16 @@ src/
 │   │   ├── track/                # Email tracking (click/open)
 │   │   ├── embed/                # Embeddable form JS
 │   │   └── setup/                # Initial setup
-│   ├── tenant/                   # ~130 tenant-facing pages
-│   ├── superadmin/               # ~27 admin pages
-│   ├── portal/                   # 5 customer portal pages
+│   ├── (marketing)/              # 17 public marketing pages (landing, pricing, etc.)
+│   ├── tenant/                   # ~149 tenant-facing pages
+│   ├── superadmin/               # ~31 admin pages
+│   ├── portal/                   # 9 customer portal pages
 │   └── auth/                     # 8 auth pages (login, signup, 2FA, etc.)
 ├── components/
 │   ├── ui/                       # 25+ shared UI components (Radix-based)
 │   ├── tenant/                   # 60+ tenant-specific components
 │   ├── shared/                   # 20+ cross-cutting components
+│   ├── marketing/                # Public marketing site components (hero, mocks, tour)
 │   ├── superadmin/               # Super admin components
 │   ├── branding/                 # Branding components
 │   └── documents/                # Document components
@@ -126,9 +130,10 @@ src/
 │   ├── plugins/                  # Plugin system
 │   ├── products/                 # Product registry
 │   ├── onboarding/               # Onboarding flows
+│   ├── marketing/                # Public marketing site content (features, pricing, etc.)
 │   └── export/                   # Data export
 ├── drizzle/
-│   ├── schema/                   # 35 schema files, 215 tables
+│   ├── schema/                   # 60+ schema files, 220+ tables
 │   └── migrations/               # DDL + indexes + RLS policies
 ├── hooks/                        # Custom React hooks
 ├── types/                        # TypeScript type definitions
@@ -136,18 +141,23 @@ src/
 ├── deploy/                       # Docker, nginx, pgbouncer, postgres configs
 ├── monitoring/                   # Grafana, Prometheus configs
 ├── tests/
-│   ├── unit/                     # ~85+ unit test files
-│   ├── integration/              # ~9 integration test files
+│   ├── unit/                     # ~350 unit test files
+│   ├── integration/              # ~21 integration test files
 │   ├── e2e/                      # 6 Playwright E2E specs
-│   └── dashboard/                # ~10 dashboard widget tests
+│   └── dashboard/                # dashboard widget tests
 └── docs/                         # Architecture, changelog, production readiness
 ```
 
 ---
 
-## Database — 215 Tables
+## Database — 220+ Tables
 
-35 schema files across 13 domains, 9,045 lines of schema definitions, with full RLS (Row-Level Security) for tenant isolation.
+60+ schema files across 13 domains, with full RLS (Row-Level Security) for tenant isolation.
+Run `npm run verify-schema` to print the authoritative live table count for your checkout.
+
+> **Note:** the per-file table breakdown and full table list below describe the core domains and
+> are kept as a representative reference. The schema has grown past 220 tables; treat the live
+> database (or `verify-schema`) as the source of truth for exact counts.
 
 ### Schema Files
 
@@ -175,7 +185,7 @@ src/
 ### Complete Table List
 
 <details>
-<summary>Click to expand all 215 tables</summary>
+<summary>Click to expand the core table list (representative — see note above)</summary>
 
 **Core CRM:** activities, companies, contact_emails, contact_lifecycle_history, contact_merge_history, contact_scores, contact_tags, contacts, deals, deal_forecasts, deal_products, deal_stages, leads, lead_activities, lead_assignments, lead_offers, lead_scoring_rules, lead_tags, meetings, milestones, notes, tasks, tags, entity_tags, follow_ups
 
@@ -373,6 +383,33 @@ src/
 
 ---
 
+## Public Marketing Website
+
+A fully server-rendered public marketing site ships in the same app under the `app/(marketing)`
+route group. It is public (no auth) and shares the header/footer shell but is a self-contained,
+fixed dark composition (styled by `app/(marketing)/marketing.css`) with a vivid blue + pearl-white
+theme. All page copy is data-driven from `lib/marketing/*`.
+
+| Route                                          | Page                                                                  |
+| ---------------------------------------------- | --------------------------------------------------------------------- |
+| `/`                                            | Landing page — hero, module marquee, bento capabilities, product tour |
+| `/features`, `/features/[slug]`                | Feature pillars (sales, AI, automation, analytics, …)                 |
+| `/modules`                                     | All switchable modules and pricing add-ons                            |
+| `/solutions`, `/solutions/[slug]`              | Industry blueprints (SaaS, education, e-commerce, …)                  |
+| `/pricing`                                     | Plans, per-module add-ons, pricing FAQ                                |
+| `/compare`, `/compare/[slug]`                  | NuCRM vs HubSpot / Salesforce / Pipedrive / Zoho / monday             |
+| `/integrations`                                | First-party connectors and the integration engine / developer API     |
+| `/security`                                    | Trust, isolation, compliance overview                                 |
+| `/contact`                                     | Sales/enquiry form (files as a lead into the marketing workspace)     |
+| `/abetworks`, `/abetworks/[slug]`              | The abetworks studio and its family of products                       |
+| `/legal/privacy`, `/legal/terms`, `/legal/dpa` | Legal documents                                                       |
+
+**Marketing-specific env:** `NEXT_PUBLIC_SITE_URL` (canonical origin for canonical URLs, sitemap,
+robots) and `NEXT_PUBLIC_MARKETING_TENANT_ID` (workspace that `/contact` enquiries file into — when
+unset the contact page shows a mailto fallback instead of the form).
+
+---
+
 ## API Reference
 
 Browse the full interactive API docs at `/tenant/docs` (logged in).
@@ -394,7 +431,10 @@ All API endpoints except auth/public require either:
 | Password reset | 3 req/hour  | 1 hour   |
 | AI endpoints   | 30 req/hour | 1 hour   |
 
-### API Endpoints Overview (~290 routes)
+### API Endpoints Overview (~490 routes)
+
+> The list below is a curated tour of the main endpoints. The full route surface is larger
+> (~490 `route.ts` handlers); browse the interactive docs at `/tenant/docs` for the complete set.
 
 #### Auth (20+ endpoints)
 
@@ -512,7 +552,7 @@ All API endpoints except auth/public require either:
 - `GET/POST /api/superadmin/templates` — Industry templates
 - `GET /api/superadmin/tickets` — All tenant tickets
 
-#### Cron Jobs (15+ endpoints)
+#### Cron Jobs (~22 endpoints)
 
 - `GET /api/cron/auto-backup` — Automated database backup
 - `GET /api/cron/cleanup` — Data cleanup (expired sessions, trash)
@@ -529,13 +569,14 @@ All API endpoints except auth/public require either:
 - `GET /api/cron/detect-missed-followups` — Missed follow-up detection
 - `GET /api/cron/backup-health` — Backup health status check
 
-#### Webhooks (5 endpoints)
+#### Webhooks (7 endpoints)
 
 - `POST /api/webhooks/stripe` — Stripe events
 - `POST /api/webhooks/whatsapp` — WhatsApp incoming messages
 - `POST /api/webhooks/resend` — Resend delivery events
 - `POST /api/webhooks/inbound` — Generic inbound webhooks
 - `POST /api/webhooks/inbound/tenant/[id]` — Tenant-scoped inbound
+- `POST /api/webhooks/telegram/bot` — Telegram bot webhook
 
 #### Public/Portal (10 endpoints)
 
@@ -551,9 +592,9 @@ All API endpoints except auth/public require either:
 
 ---
 
-## Pages (~170 page.tsx files)
+## Pages (~227 page.tsx files)
 
-### Tenant Pages (~130)
+### Tenant Pages (~149)
 
 | Area               | Pages                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -570,7 +611,7 @@ All API endpoints except auth/public require either:
 | **Settings**       | General, Profile, Preferences, Security, Team, Roles, Permissions, Pipelines, Custom fields, Tags, Picklists, Email, SMS, Webhooks, Integrations, Plugins, API keys, Branding, Billing, Backup, Audit, Compliance, SSO, Tax, Currency, Localization, Login policy, User defaults, Notifications, Out of office, Portal, SLA, Territories, Hierarchy, Import/Export, Sessions, Telegram, AI providers, AI templates, AI activity, At-risk rules, Lead scoring, Assignment rules, Bulk transfer, Industry templates |
 | **Other**          | Search, Calendar, Trash, Notifications, Onboarding, Trial expired, Visitors                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 
-### Super Admin Pages (~27)
+### Super Admin Pages (~31)
 
 | Area           | Pages                                                                                                          |
 | -------------- | -------------------------------------------------------------------------------------------------------------- |
@@ -578,13 +619,19 @@ All API endpoints except auth/public require either:
 | **Monitoring** | Health, Monitoring, Errors, Logs, Rate limits, Usage, Analytics, Adoption, Revenue, Billing                    |
 | **Operations** | Backups, Selective restore, Data explorer, Token control, Settings, Templates (list + detail), Docs            |
 
-### Customer Portal Pages (5)
+### Customer Portal Pages (9)
 
-- Home/Dashboard, Tickets, Knowledge Base (list + article), Invoices
+- Home/Dashboard, Tickets, Knowledge Base (list + article), Invoices, and account/self-service pages
 
 ### Auth Pages (8)
 
 - Login, Login (simple), Signup, Forgot password, Reset password, Verify email, Invite accept, No workspace
+
+### Marketing Pages (17)
+
+- Landing, Features (+ detail), Modules, Solutions (+ detail), Pricing, Compare (+ detail),
+  Integrations, Security, Contact, abetworks (+ detail), Legal (privacy / terms / DPA)
+- See [Public Marketing Website](#public-marketing-website) for the full route map.
 
 ---
 
@@ -608,14 +655,14 @@ All API endpoints except auth/public require either:
 
 ---
 
-## Tests (~115 test files)
+## Tests (~389 test files)
 
 | Type                  | Files | Description                                                                     |
 | --------------------- | ----- | ------------------------------------------------------------------------------- |
-| **Unit Tests**        | ~85   | Component, utility, service, and model tests                                    |
-| **Integration Tests** | 9     | API validation, backup integrity, tenant isolation, security, calculated fields |
+| **Unit Tests**        | ~350  | Component, utility, service, and model tests                                    |
+| **Integration Tests** | ~21   | API validation, backup integrity, tenant isolation, security, calculated fields |
 | **E2E Tests**         | 6     | Auth, contacts, deals, multi-tenant, notifications, smoke                       |
-| **Dashboard Tests**   | 10    | Widget rendering, data fetching, caching                                        |
+| **Dashboard Tests**   | —     | Widget rendering, data fetching, caching                                        |
 
 **Test commands:**
 
@@ -634,7 +681,7 @@ route/DB exercise → full suite: 5610 passed / 0 failed) is documented in
 
 ---
 
-## Scripts (~25 scripts)
+## Scripts (79 npm scripts)
 
 ### Database
 
@@ -711,25 +758,27 @@ Includes: Next.js app, PostgreSQL 16, Redis 7, Nginx, PG Bouncer, Workers, Cron
 
 ### Environment Variables
 
-| Variable                | Required | Description                        |
-| ----------------------- | -------- | ---------------------------------- |
-| `DATABASE_URL`          | Yes      | PostgreSQL connection string       |
-| `JWT_SECRET`            | Yes      | JWT signing secret (64+ chars)     |
-| `SETUP_KEY`             | Yes      | Initial setup authorization key    |
-| `NEXT_PUBLIC_APP_URL`   | Yes      | Public application URL             |
-| `SESSION_SECRET`        | Yes      | Session encryption secret          |
-| `ENCRYPTION_KEY`        | Yes      | Field-level encryption key         |
-| `REDIS_URL`             | No       | Redis connection (caching, queues) |
-| `RESEND_API_KEY`        | No       | Email sending via Resend           |
-| `STRIPE_SECRET_KEY`     | No       | Stripe payment processing          |
-| `STRIPE_WEBHOOK_SECRET` | No       | Stripe webhook verification        |
-| `AWS_ACCESS_KEY_ID`     | No       | S3 file storage                    |
-| `AWS_SECRET_ACCESS_KEY` | No       | S3 file storage                    |
-| `AWS_S3_BUCKET`         | No       | S3 bucket name                     |
-| `OPENAI_API_KEY`        | No       | AI features                        |
-| `SENTRY_DSN`            | No       | Error tracking                     |
-| `CRON_SECRET`           | No       | Cron job authentication            |
-| `METRICS_SECRET`        | No       | Metrics endpoint auth              |
+| Variable                          | Required | Description                                                       |
+| --------------------------------- | -------- | ----------------------------------------------------------------- |
+| `DATABASE_URL`                    | Yes      | PostgreSQL connection string                                      |
+| `JWT_SECRET`                      | Yes      | JWT signing secret (64+ chars)                                    |
+| `SETUP_KEY`                       | Yes      | Initial setup authorization key                                   |
+| `NEXT_PUBLIC_APP_URL`             | Yes      | Public application URL                                            |
+| `SESSION_SECRET`                  | Yes      | Session encryption secret                                         |
+| `ENCRYPTION_KEY`                  | Yes      | Field-level encryption key                                        |
+| `REDIS_URL`                       | No       | Redis connection (caching, queues)                                |
+| `RESEND_API_KEY`                  | No       | Email sending via Resend                                          |
+| `STRIPE_SECRET_KEY`               | No       | Stripe payment processing                                         |
+| `STRIPE_WEBHOOK_SECRET`           | No       | Stripe webhook verification                                       |
+| `AWS_ACCESS_KEY_ID`               | No       | S3 file storage                                                   |
+| `AWS_SECRET_ACCESS_KEY`           | No       | S3 file storage                                                   |
+| `AWS_S3_BUCKET`                   | No       | S3 bucket name                                                    |
+| `OPENAI_API_KEY`                  | No       | AI features                                                       |
+| `SENTRY_DSN`                      | No       | Error tracking                                                    |
+| `CRON_SECRET`                     | No       | Cron job authentication                                           |
+| `METRICS_SECRET`                  | No       | Metrics endpoint auth                                             |
+| `NEXT_PUBLIC_SITE_URL`            | No       | Marketing site canonical origin (canonical URLs, sitemap, robots) |
+| `NEXT_PUBLIC_MARKETING_TENANT_ID` | No       | Workspace `/contact` enquiries file into (else mailto fallback)   |
 
 ### Deployment Options
 
@@ -774,31 +823,25 @@ Copyright (c) 2026 abetworks.in. All Rights Reserved.
 
 ## Quick Stats
 
-| Metric             | Value     |
-| ------------------ | --------- |
-| Database Tables    | 215       |
-| Schema Files       | 35        |
-| API Routes         | ~290      |
-| Tenant Pages       | ~130      |
-| Super Admin Pages  | ~27       |
-| Portal Pages       | 5         |
-| Auth Pages         | 8         |
-| UI Components      | 25+       |
-| Tenant Components  | 60+       |
-| Unit Tests         | ~85 files |
-| Integration Tests  | 9 files   |
-| E2E Tests          | 6 specs   |
-| Dashboard Tests    | 10 files  |
-| Scripts            | ~25       |
-| Node Version       | >=22      |
-| Next.js Version    | 16.2.6    |
-| TypeScript Version | 5.9       |
-
-## License
-
-**Proprietary — All code is the property of [abetworks.in](https://abetworks.in).**
-
-Copyright (c) 2026 abetworks.in. All Rights Reserved.
-
-Unauthorized copying, modification, distribution, or use of this software,
-via any medium, is strictly prohibited. See [`LICENSE`](./LICENSE) for full terms.
+| Metric             | Value      |
+| ------------------ | ---------- |
+| Database Tables    | 220+       |
+| Schema Files       | 60+        |
+| API Routes         | ~490       |
+| Total Pages        | ~227       |
+| Tenant Pages       | ~149       |
+| Super Admin Pages  | ~31        |
+| Portal Pages       | 9          |
+| Auth Pages         | 8          |
+| Marketing Pages    | 17         |
+| UI Components      | 25+        |
+| Tenant Components  | 60+        |
+| Unit Tests         | ~350 files |
+| Integration Tests  | ~21 files  |
+| E2E Tests          | 6 specs    |
+| Total Test Files   | ~389       |
+| npm Scripts        | 79         |
+| Node Version       | >=22       |
+| Next.js Version    | 16.3.3     |
+| React Version      | 19         |
+| TypeScript Version | 5.9        |
