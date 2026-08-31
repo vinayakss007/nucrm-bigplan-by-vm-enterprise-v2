@@ -570,6 +570,13 @@
       "breakpoints": true
     },
     {
+      "idx": 81,
+      "version": "7",
+      "when": 1788609600000,
+      "tag": "0082_analytics_events",
+      "breakpoints": true
+    },
+    {
       "idx": 82,
       "version": "7",
       "when": 1788696000000,
