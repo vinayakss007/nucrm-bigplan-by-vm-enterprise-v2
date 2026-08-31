@@ -5,7 +5,7 @@
  */
 import { requireTenantCtx } from '@/lib/tenant/context';
 import { db } from '@/drizzle/db';
-import { leads, users, leadActivities, contacts, tenantMembers, products, services, teams } from '@/drizzle/schema';
+import { leads, users, leadActivities, contacts, tenantMembers, products, services, teams, followUps } from '@/drizzle/schema';
 import { eq, and, sql, desc, or, ilike } from 'drizzle-orm';
 import { notFound } from 'next/navigation';
 import LeadDetailClient from '@/components/tenant/lead-detail-client';
@@ -144,13 +144,35 @@ export default async function LeadDetailPage({ params }: PageProps) {
     eq(tenantMembers.status, 'active')
   ))
   .orderBy(users.fullName);
-  
+
+  // #1815: the lead's follow-ups (FK already existed but was never surfaced on
+  // the record). Wrapped in a fallback so a failure never breaks the page.
+  const followUpsList = await db.select({
+    id: followUps.id,
+    title: followUps.title,
+    description: followUps.description,
+    due_date: followUps.dueDate,
+    status: followUps.status,
+    completed_at: followUps.completedAt,
+    assignee_name: users.fullName,
+  })
+  .from(followUps)
+  .leftJoin(users, eq(users.id, followUps.assignedTo))
+  .where(and(
+    eq(followUps.leadId, id),
+    eq(followUps.tenantId, ctx.tenantId),
+  ))
+  .orderBy(desc(followUps.dueDate))
+  .limit(50)
+  .catch(() => []);
+
   return (
     <LeadDetailClient
       lead={stripNulls(leadWithCreator) as unknown as Lead}
       activities={activities.map(a => stripNulls(a) as unknown as Activity)}
       relatedContacts={relatedContacts.map(c => stripNulls(c) as unknown as RelatedContact)}
       teamMembers={teamMembers}
+      followUps={followUpsList}
       tenantId={ctx.tenantId}
       userId={ctx.userId}
     />

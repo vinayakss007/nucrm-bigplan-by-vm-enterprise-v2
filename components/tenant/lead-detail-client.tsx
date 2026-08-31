@@ -70,16 +70,27 @@ export interface Lead {
 export interface Activity { id: string; description?: string; performed_at?: string; performed_by_name?: string }
 export interface RelatedContact { id: string; first_name?: string; last_name?: string; email?: string }
 
+export interface FollowUp {
+  id: string;
+  title?: string;
+  description?: string | null;
+  due_date?: string | Date | null;
+  status?: string | null;
+  completed_at?: string | Date | null;
+  assignee_name?: string | null;
+}
+
 interface Props {
   lead: Lead;
   activities: Activity[];
   relatedContacts: RelatedContact[];
   teamMembers: TeamMemberOpt[];
+  followUps?: FollowUp[];
   tenantId: string;
   userId: string;
 }
 
-export default function LeadDetailClient({ lead, activities, relatedContacts, teamMembers }: Props) {
+export default function LeadDetailClient({ lead, activities, relatedContacts, teamMembers, followUps = [] }: Props) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<'overview' | 'activities' | 'notes'>('overview');
   const [_showEdit, setShowEdit] = useState(false);
@@ -807,6 +818,51 @@ export default function LeadDetailClient({ lead, activities, relatedContacts, te
           </div>
         </div>
       )}
+
+      {/* Follow-ups (#1815) */}
+      <div className="admin-card p-4">
+        <h3 className="font-semibold mb-4 flex items-center gap-2">
+          <Clock className="w-4 h-4" /> Follow-ups
+          <span className="text-xs font-normal text-muted-foreground">
+            ({followUps.filter(f => f.status !== 'completed' && f.status !== 'done' && !f.completed_at).length} open)
+          </span>
+        </h3>
+        {followUps.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No follow-ups scheduled for this lead.</p>
+        ) : (
+          <div className="space-y-2">
+            {followUps.map((f) => {
+              const done = f.status === 'completed' || f.status === 'done' || !!f.completed_at;
+              const overdue = !done && f.due_date && new Date(f.due_date) < new Date();
+              return (
+                <div key={String(f.id)} className="flex items-center gap-3 p-3 rounded-lg border border-border">
+                  <div className={cn('shrink-0', done ? 'text-emerald-600' : overdue ? 'text-red-600' : 'text-muted-foreground')}>
+                    {done ? <CheckCircle className="w-4 h-4" /> : <Clock className="w-4 h-4" />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className={cn('text-sm font-medium', done && 'line-through text-muted-foreground')}>{f.title}</p>
+                    {f.description && <p className="text-xs text-muted-foreground truncate">{f.description}</p>}
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className={cn('text-[10px] font-semibold px-1.5 py-0.5 rounded-full capitalize',
+                        done ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
+                             : overdue ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                                       : 'bg-muted text-muted-foreground')}>
+                        {done ? 'done' : overdue ? 'overdue' : (f.status || 'pending')}
+                      </span>
+                      {f.assignee_name && <span className="text-xs text-muted-foreground">· {f.assignee_name}</span>}
+                    </div>
+                  </div>
+                  {f.due_date && (
+                    <span className={cn('text-xs shrink-0', overdue ? 'text-red-600 font-medium' : 'text-muted-foreground')}>
+                      {formatDate(f.due_date)}
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
 
       {/* Related Contacts */}
       {relatedContacts.length > 0 && (
