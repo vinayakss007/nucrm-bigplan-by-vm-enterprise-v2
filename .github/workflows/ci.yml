@@ -40,6 +40,9 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: RLS route-coverage guard (#1838)
+        run: npm run guard:rls
+
   test-unit:
     name: Unit Tests
     runs-on: ubuntu-latest
