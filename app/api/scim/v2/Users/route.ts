@@ -14,6 +14,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { logError } from '@/lib/errors-server';
+import { RateLimiter } from '@/lib/rate-limit';
 import { escapeLike } from '@/lib/api/sanitize-like';
 import { selectLeastPrivilegeRole } from '@/lib/auth/default-role';
 import { db } from '@/drizzle/db';
@@ -29,6 +30,17 @@ import {
   scimUserSchema,
   type SCIMUser,
 } from '@/lib/scim';
+
+// ── Rate Limiting ────────────────────────────────────────────────────────────
+
+/**
+ * Per-tenant rate limiter for SCIM provisioning (POST). SCIM tokens are not
+ * browser sessions and are not covered by session-based limits, and mass user
+ * creation is the primary abuse vector for this endpoint. Keyed by tenantId so
+ * one tenant's IdP cannot exhaust another tenant's budget. 30 provisioning
+ * calls per 60s per tenant.
+ */
+const provisionLimiter = new RateLimiter({ max: 30, window: 60 });
 
 // ── Auth Helper ──────────────────────────────────────────────────────────────
 
@@ -158,6 +170,18 @@ export async function POST(request: NextRequest) {
   const authResult = await authenticateSCIM(request);
   if (authResult instanceof NextResponse) return authResult;
   const { tenantId } = authResult;
+
+  // Per-tenant rate limit, applied AFTER token verification (tenantId known)
+  // and BEFORE any provisioning work. A rejection MUST be returned as a
+  // SCIM-formatted 429 (via generateSCIMError) to honor the SCIM error
+  // contract, NOT a plain JSON 429.
+  const rl = await provisionLimiter.check(`scim:provision:${tenantId}`);
+  if (!rl.allowed) {
+    return NextResponse.json(
+      generateSCIMError('Too many requests', 429),
+      { status: 429, headers: { 'Content-Type': 'application/scim+json' } }
+    );
+  }
 
   try {
     const parsedBody = scimUserSchema.safeParse(await request.json());
