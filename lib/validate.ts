@@ -89,8 +89,7 @@ export type ValidationErrors = Record<string, string>;
 
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function validate(data: Record<string, any>, schema: ValidationSchema): ValidationErrors | null {
+export function validate(data: Record<string, unknown>, schema: ValidationSchema): ValidationErrors | null {
   const errors: ValidationErrors = {};
 
   for (const [field, rules] of Object.entries(schema)) {

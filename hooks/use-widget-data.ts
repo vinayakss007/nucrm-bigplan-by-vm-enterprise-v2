@@ -12,8 +12,7 @@ interface UseWidgetDataOptions {
   enabled?: boolean
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function useWidgetData<T = any>(
+export function useWidgetData<T = unknown>(
   endpoint: string,
   options?: UseWidgetDataOptions
 ): DashboardDataState<T> & { refresh: () => void } {
