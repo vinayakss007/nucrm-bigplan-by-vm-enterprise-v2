@@ -177,8 +177,7 @@ export async function recordUsage(
   tokensUsed: number = 0,
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  responseData?: any
+  responseData?: Record<string, unknown>
 ) {
   const currentPeriod = sql`TO_CHAR(NOW(), 'YYYY-MM')`;
 
@@ -384,9 +383,17 @@ async function getTenantUsage(tenantId: string, module: string) {
 
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function getLimitForModule(limits: any, module: string): number {
-  const map: Record<string, number> = {
+interface ModuleLimits {
+  scoreMonthlyCnt: number | null;
+  followupMonthlyCnt: number | null;
+  whatsappMonthlyMsgs: number | null;
+  voiceMonthlyMins: number | null;
+  contentMonthlyGen: number | null;
+  proposalMonthlyGen: number | null;
+}
+
+function getLimitForModule(limits: ModuleLimits, module: string): number {
+  const map: Record<string, number | null> = {
     'lead_scoring': limits.scoreMonthlyCnt,
     'revenue_agent': limits.followupMonthlyCnt,
     'whatsapp_agent': limits.whatsappMonthlyMsgs,

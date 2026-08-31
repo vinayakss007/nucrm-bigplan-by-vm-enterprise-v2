@@ -807,13 +807,12 @@ export async function validateBackupFile(filePath: string): Promise<{
     };
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err: unknown) {
     return {
       valid: false,
       format,
       statement_count: 0,
-      error: err.message || 'Failed to read file',
+      error: err instanceof Error ? err.message : 'Failed to read file',
     };
   }
 }
