@@ -9,8 +9,29 @@ import { useMutation } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
 import Image from 'next/image';
 import { Save, Globe, Palette, Download, Loader2,
-  Link2, CheckCircle, AlertTriangle, Copy } from 'lucide-react';
+  Link2, CheckCircle, AlertTriangle, Copy, Receipt } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { cn } from '@/lib/utils';
+
+// Accessible switch row (matches the pattern used on the Preferences page).
+function ToggleRow({ label, desc, checked, onChange }: { label: string; desc?: string; checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <div className="flex items-start justify-between gap-4 py-1">
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-medium">{label}</p>
+        {desc && <p className="text-xs text-muted-foreground mt-0.5">{desc}</p>}
+      </div>
+      <button type="button" role="switch" aria-checked={checked} aria-label={label} onClick={() => onChange(!checked)}
+        className={cn(
+          'relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors mt-0.5',
+          checked ? 'bg-violet-600' : 'bg-muted'
+        )}>
+        <span className={cn('inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform',
+          checked ? 'translate-x-5' : 'translate-x-1')} />
+      </button>
+    </div>
+  );
+}
 
 const INDUSTRIES = ['','Technology','Healthcare','Finance','Education','Retail','Manufacturing','Real Estate','Consulting','Marketing','Legal','Other'];
 const TIMEZONES  = ['UTC','America/New_York','America/Chicago','America/Los_Angeles','Europe/London','Europe/Paris','Europe/Berlin','Asia/Dubai','Asia/Kolkata','Asia/Singapore','Asia/Tokyo','Australia/Sydney'];
@@ -25,13 +46,13 @@ interface WorkspaceData {
   logo_url?: string;
   favicon_url?: string;
   plan_id?: string;
-  settings?: { timezone?: string; currency?: string };
+  settings?: { timezone?: string; currency?: string; autoInvoiceOnWon?: boolean };
   [key: string]: unknown;
 }
 
 export default function TenantGeneralSettings() {
   const [tenantOverride, setTenantOverride] = useState<WorkspaceData | null>(null);
-  const [form, setForm]     = useState({ name:'', primary_color:'#7c3aed', industry:'', subdomain:'', custom_domain:'', settings:{ timezone:'UTC', currency:'USD' } });
+  const [form, setForm]     = useState({ name:'', primary_color:'#7c3aed', industry:'', subdomain:'', custom_domain:'', settings:{ timezone:'UTC', currency:'USD', autoInvoiceOnWon:false } });
   const [exporting, setExporting] = useState(false);
   const [checkingSubdomain, setCheckingSubdomain] = useState(false);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
@@ -52,7 +73,11 @@ export default function TenantGeneralSettings() {
         name: fetchedTenant.name || '', primary_color: fetchedTenant.primary_color || '#7c3aed',
         industry: fetchedTenant.industry || '', subdomain: fetchedTenant.subdomain || '',
         custom_domain: fetchedTenant.custom_domain || '',
-        settings: { timezone: fetchedTenant.settings?.timezone || 'UTC', currency: fetchedTenant.settings?.currency || 'USD' },
+        settings: {
+          timezone: fetchedTenant.settings?.timezone || 'UTC',
+          currency: fetchedTenant.settings?.currency || 'USD',
+          autoInvoiceOnWon: fetchedTenant.settings?.autoInvoiceOnWon === true,
+        },
       });
     }
   }, [fetchedTenant]);
@@ -264,6 +289,17 @@ export default function TenantGeneralSettings() {
               </div>
             )}
           </div>
+        </div>
+
+        {/* Sales automation (#1817) */}
+        <div className="admin-card p-5 space-y-3">
+          <div className="flex items-center gap-2 text-sm font-semibold"><Receipt className="w-4 h-4 text-muted-foreground"/>Sales Automation</div>
+          <ToggleRow
+            label="Auto-create draft invoice when a deal is won"
+            desc="When a deal moves to a won stage, generate a draft invoice from it (using an accepted quote's line items when available). Drafts are never sent automatically."
+            checked={form.settings.autoInvoiceOnWon === true}
+            onChange={v => setForm(f => ({ ...f, settings: { ...f.settings, autoInvoiceOnWon: v } }))}
+          />
         </div>
 
         <button type="submit" disabled={saving} className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold disabled:opacity-50 transition-colors">
