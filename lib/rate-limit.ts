@@ -66,7 +66,9 @@ export function getEndpointWindow(endpoint: string): number {
 }
 
 /**
- * Get global default rate limits from system_settings table
+ * Get global default rate limits from system_settings table.
+ * Throws on DB error so the caller can distinguish "lookup failed" from
+ * "configured empty" and fail closed (#1834).
  */
 export async function getGlobalDefaults(): Promise<Record<string, number>> {
   // #1834: distinguish "no config" from "lookup failed". A successful query
@@ -144,7 +146,9 @@ export async function hasUnlimitedRateLimit(userId: string): Promise<boolean> {
     });
 
     return user?.unlimitedRateLimit === true || user?.isSuperAdmin === true;
-  } catch {
+  } catch (err) {
+    // Fail closed: if we can't verify, treat as non-unlimited (#1834).
+    console.error('[rate-limit] hasUnlimitedRateLimit lookup failed:', err);
     return false;
   }
 }
@@ -304,10 +308,13 @@ export async function checkPlanRateLimit(
     };
   }
 
-  // Get limit from database (plan config > global defaults)
+  // Get limit from database (plan config > global defaults).
+  // #1834: getRateLimit already fails closed (returns FAIL_CLOSED_MAX) on a
+  // DB/cache lookup error, so a transient outage never yields an "unlimited"
+  // bypass here.
   const maxRequests = await getRateLimit(planId, endpoint);
 
-  // If limit is 0, rate limiting is disabled for this endpoint
+  // A configured 0 means an admin intentionally disabled this endpoint.
   if (maxRequests === 0) {
     return {
       result: { allowed: true, remaining: 999999, reset: Date.now() + 60000, limit: 999999 },
@@ -357,9 +364,10 @@ export async function rateLimitMiddleware(
 
   const endpoint = endpointOrLimiter;
 
-  // Get limit from DB
+  // Get limit from DB. #1834: getRateLimit fails closed (FAIL_CLOSED_MAX) on a
+  // lookup error, so only a genuine, successful "nothing configured" returns 0.
   const max = await getRateLimit(null, endpoint);
-  if (max === 0) return null; // Disabled
+  if (max === 0) return null; // Intentionally disabled by admin
 
   const window = getEndpointWindow(endpoint);
   const limiter = new RateLimiter({ max, window });
@@ -411,9 +419,15 @@ export async function checkRateLimit(
   const ip = getClientIp(request);
   const key = `v1_rate:${action}:${ip}`;
 
-  // Get limit from DB first, fall back to provided max
+  // Get limit from DB first, fall back to provided max.
+  // #1834: getRateLimit fails closed (returns FAIL_CLOSED_MAX > 0) on a lookup
+  // error, so dbMax is never left as a "disabled" 0 due to a transient outage.
+  // When genuinely disabled (0), fall back to the caller's max or the
+  // conservative ceiling — never leave the request effectively unlimited.
   const dbMax = await getRateLimit(null, action);
-  const max = dbMax > 0 ? dbMax : (fallbackMax || 100);
+  const max = dbMax > 0
+    ? dbMax
+    : (fallbackMax || FAIL_CLOSED_MAX);
   const window = fallbackWindow ? fallbackWindow * 60 : getEndpointWindow(action);
   const limiter = new RateLimiter({ max, window });
   const result = await limiter.check(key);
