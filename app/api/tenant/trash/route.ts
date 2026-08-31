@@ -182,28 +182,41 @@ export const PATCH = withApiRoute(async (req: NextRequest) => {
     // Row not in trash at all → 404
     if (!current) return NextResponse.json({ error: 'Not found in trash' }, { status: 404 });
 
+    // Resolve the concurrency guard from the pre-tx read, then run the guarded
+    // restore + tenant-counter re-increment atomically (H7). If the guarded
+    // update matches 0 rows the tx returns null and we roll back to the 409
+    // stale response — the counter must not be bumped without a restore.
     const guard = concurrencyGuard(table, current.updatedAt);
     const conditions = [eq(table.id, id), eq(table.tenantId, ctx.tenantId), isNotNull(table.deletedAt)];
     if (guard) conditions.push(guard);
 
-    const [row] = await db
-      .update(table)
-      .set(updateData)
-      .where(and(...conditions))
-      .returning({ id: table.id });
+    const row = await db.transaction(async (tx) => {
+      const [restored] = await tx
+        .update(table)
+        .set(updateData)
+        .where(and(...conditions))
+        .returning({ id: table.id });
+
+      // Row was in trash but update returned 0 rows → stale write. Abort the
+      // tx so the counter update below never runs.
+      if (!restored) return null;
+
+      // Re-increment the tenant counter for the restored resource
+      if (resource_type === 'contact') {
+        await tx.update(tenants)
+          .set({ currentContacts: sql`${tenants.currentContacts} + 1` })
+          .where(eq(tenants.id, ctx.tenantId));
+      } else if (resource_type === 'deal') {
+        await tx.update(tenants)
+          .set({ currentDeals: sql`${tenants.currentDeals} + 1` })
+          .where(eq(tenants.id, ctx.tenantId));
+      }
+
+      return restored;
+    });
 
     // Row was in trash but update returned 0 rows → stale write (concurrent modification)
     if (!row) return NextResponse.json({ error: 'Stale data — this record was modified by another user. Please refresh and retry.' }, { status: 409 });
-    // Re-increment the tenant counter for the restored resource
-    if (resource_type === 'contact') {
-      await db.update(tenants)
-        .set({ currentContacts: sql`${tenants.currentContacts} + 1` })
-        .where(eq(tenants.id, ctx.tenantId));
-    } else if (resource_type === 'deal') {
-      await db.update(tenants)
-        .set({ currentDeals: sql`${tenants.currentDeals} + 1` })
-        .where(eq(tenants.id, ctx.tenantId));
-    }
 
     await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action:`restore`, entityType: resource_type, entityId: id });
     return NextResponse.json({ ok: true, message: `${resource_type} restored successfully` });

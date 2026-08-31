@@ -18,7 +18,7 @@ import { getAppUrl } from './app-url';
  * No new table — public_token + offer-lifecycle metadata go in `quotes.metadata.offer`.
  */
 import { randomBytes } from 'crypto';
-import { db } from '@/drizzle/db';
+import { db, type DbClient } from '@/drizzle/db';
 import { quotes } from '@/drizzle/schema';
 import { eq, and, sql, isNull } from 'drizzle-orm';
 
@@ -64,9 +64,17 @@ export async function findOfferByToken(publicToken: string) {
   return row ?? null;
 }
 
-/** Patch the `metadata.offer` jsonb sub-tree without clobbering siblings. */
-export async function patchOfferMetadata(quoteId: string, tenantId: string, patch: Partial<OfferMetadata>): Promise<void> {
-  await db
+/**
+ * Patch the `metadata.offer` jsonb sub-tree without clobbering siblings.
+ *
+ * Accepts an optional dbOrTx (mirrors lib/audit.ts logAudit) so callers can
+ * thread a transaction and keep the status update + metadata patch atomic.
+ * Defaults to the shared db when omitted — no behavior change for existing
+ * no-tx callers, and the jsonb_set SQL is unchanged.
+ */
+export async function patchOfferMetadata(quoteId: string, tenantId: string, patch: Partial<OfferMetadata>, dbOrTx?: DbClient): Promise<void> {
+  const client = dbOrTx ?? db;
+  await client
     .update(quotes)
     .set({
       metadata: sql`

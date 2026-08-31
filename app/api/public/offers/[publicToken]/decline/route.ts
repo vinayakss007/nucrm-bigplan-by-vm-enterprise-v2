@@ -52,19 +52,23 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pub
     const email = parsed.data.email?.trim() ?? null;
 
     const now = new Date();
-    await db
-      .update(quotes)
-      .set({ status: 'declined', declinedAt: now, updatedAt: now })
-      .where(eq(quotes.id, offer.id));
+    // Persist the lifecycle change: status + metadata + timeline activity all in
+    // one db.transaction so the offer is never marked 'declined' without its
+    // decline metadata (H7). patchOfferMetadata takes the tx; the activity write
+    // participates so a failed timeline row rolls the decline back.
+    await db.transaction(async (tx) => {
+      await tx
+        .update(quotes)
+        .set({ status: 'declined', declinedAt: now, updatedAt: now })
+        .where(eq(quotes.id, offer.id));
 
-    await patchOfferMetadata(offer.id, offer.tenantId, {
-      decline_reason: reason || undefined,
-      declined_at: now.toISOString(),
-    });
+      await patchOfferMetadata(offer.id, offer.tenantId, {
+        decline_reason: reason || undefined,
+        declined_at: now.toISOString(),
+      }, tx);
 
-    if (offer.contactId) {
-      try {
-        await db.insert(activities).values({
+      if (offer.contactId) {
+        await tx.insert(activities).values({
           tenantId: offer.tenantId,
           userId: null,
           entityType: 'quote',
@@ -75,10 +79,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pub
           description: `Buyer declined offer "${offer.title}"${reason ? ` — ${reason}` : ''}`,
           metadata: { offer_id: offer.id, decline_reason: reason, email },
         });
-      } catch (err) {
-        console.warn('[offers/decline] activity insert failed:', (err as Error).message);
       }
-    }
+    });
 
     await logAudit({
       tenantId: offer.tenantId,

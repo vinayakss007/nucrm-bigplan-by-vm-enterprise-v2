@@ -218,32 +218,38 @@ export const POST = withApiRoute(async (req: NextRequest) => {
         const deny = requirePerm(ctx, 'deals.delete');
         if (deny) return deny;
 
-        const res = await db
-          .update(deals)
-          .set({
-            deletedAt: new Date(),
-            deletedBy: ctx.userId,
-            updatedAt: new Date(),
-          })
-          .where(
-            and(
-              inArray(deals.id, validIds),
-              eq(deals.tenantId, ctx.tenantId),
-              sql`${deals.deletedAt} IS NULL`
-            )
-          );
-        affected = res.rowCount ?? 0;
+        // Wrap the soft-delete + tenant-counter decrement so the two writes
+        // succeed or fail together (H7). Without the tx a failed counter update
+        // would leave currentDeals inflated after the rows are marked deleted.
+        affected = await db.transaction(async (tx) => {
+          const res = await tx
+            .update(deals)
+            .set({
+              deletedAt: new Date(),
+              deletedBy: ctx.userId,
+              updatedAt: new Date(),
+            })
+            .where(
+              and(
+                inArray(deals.id, validIds),
+                eq(deals.tenantId, ctx.tenantId),
+                sql`${deals.deletedAt} IS NULL`
+              )
+            );
+          const deleted = res.rowCount ?? 0;
 
-        // Decrement the tenant's usage counter by the number actually deleted.
-        // Mirrors the single-deal DELETE route and the inverse of bulk 'restore';
-        // without this, bulk deletes leave currentDeals inflated and can wrongly
-        // exhaust the plan's maxDeals limit. Clamp at 0 to avoid drift below zero.
-        if (affected > 0) {
-          await db
-            .update(tenants)
-            .set({ currentDeals: sql`greatest(0, ${tenants.currentDeals} - ${affected})` })
-            .where(eq(tenants.id, ctx.tenantId));
-        }
+          // Decrement the tenant's usage counter by the number actually deleted.
+          // Mirrors the single-deal DELETE route and the inverse of bulk 'restore';
+          // without this, bulk deletes leave currentDeals inflated and can wrongly
+          // exhaust the plan's maxDeals limit. Clamp at 0 to avoid drift below zero.
+          if (deleted > 0) {
+            await tx
+              .update(tenants)
+              .set({ currentDeals: sql`greatest(0, ${tenants.currentDeals} - ${deleted})` })
+              .where(eq(tenants.id, ctx.tenantId));
+          }
+          return deleted;
+        });
         break;
       }
 
@@ -399,30 +405,35 @@ export const POST = withApiRoute(async (req: NextRequest) => {
           return NextResponse.json({ error: `Restore would exceed plan limit of ${tenantWithPlan.maxDeals} deals.` }, { status: 403 });
         }
 
-        const res = await db
-          .update(deals)
-          .set({
-            deletedAt: null,
-            deletedBy: null,
-            updatedAt: new Date(),
-          })
-          .where(
-            and(
-              inArray(deals.id, restorableIds),
-              eq(deals.tenantId, ctx.tenantId),
-              sql`${deals.deletedAt} IS NOT NULL`
-            )
-          );
-        affected = res.rowCount ?? 0;
+        // Wrap the restore + tenant-counter re-increment so the two writes
+        // succeed or fail together (H7), the inverse of the 'delete' case.
+        affected = await db.transaction(async (tx) => {
+          const res = await tx
+            .update(deals)
+            .set({
+              deletedAt: null,
+              deletedBy: null,
+              updatedAt: new Date(),
+            })
+            .where(
+              and(
+                inArray(deals.id, restorableIds),
+                eq(deals.tenantId, ctx.tenantId),
+                sql`${deals.deletedAt} IS NOT NULL`
+              )
+            );
+          const restored = res.rowCount ?? 0;
 
-        // Re-increment the tenant's usage counter only for rows actually
-        // restored (mirrors single restore in trash route).
-        if (affected > 0) {
-          await db
-            .update(tenants)
-            .set({ currentDeals: sql`${tenants.currentDeals} + ${affected}` })
-            .where(eq(tenants.id, ctx.tenantId));
-        }
+          // Re-increment the tenant's usage counter only for rows actually
+          // restored (mirrors single restore in trash route).
+          if (restored > 0) {
+            await tx
+              .update(tenants)
+              .set({ currentDeals: sql`${tenants.currentDeals} + ${restored}` })
+              .where(eq(tenants.id, ctx.tenantId));
+          }
+          return restored;
+        });
         break;
       }
       case 'add_to_segment': {

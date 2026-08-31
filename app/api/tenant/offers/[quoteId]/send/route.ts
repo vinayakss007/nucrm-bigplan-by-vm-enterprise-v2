@@ -97,26 +97,30 @@ export const POST = withApiRoute(async (req: NextRequest, { params }: { params: 
       expiresAt = parsed;
     }
 
-    // Persist the lifecycle change
-    await db
-      .update(quotes)
-      .set({
-        status: 'sent',
-        sentAt: new Date(),
-        ...(expiresAt ? { expiresAt } : {}),
-        updatedAt: new Date(),
-      })
-      .where(eq(quotes.id, quoteId));
+    // Persist the lifecycle change: status + metadata (public_token/sent_to_email)
+    // + timeline activity all in one db.transaction so the offer is never marked
+    // 'sent' without its public_token metadata (H7). patchOfferMetadata now takes
+    // the tx; the activity write participates so a failed timeline row rolls the
+    // send back rather than leaving a half-sent offer.
+    await db.transaction(async (tx) => {
+      await tx
+        .update(quotes)
+        .set({
+          status: 'sent',
+          sentAt: new Date(),
+          ...(expiresAt ? { expiresAt } : {}),
+          updatedAt: new Date(),
+        })
+        .where(eq(quotes.id, quoteId));
 
-    await patchOfferMetadata(quoteId, ctx.tenantId, {
-      public_token: publicToken,
-      sent_to_email: toEmail,
-    });
+      await patchOfferMetadata(quoteId, ctx.tenantId, {
+        public_token: publicToken,
+        sent_to_email: toEmail,
+      }, tx);
 
-    // Activity row so the timeline reflects it
-    if (quote.contactId) {
-      try {
-        await db.insert(activities).values({
+      // Activity row so the timeline reflects it
+      if (quote.contactId) {
+        await tx.insert(activities).values({
           tenantId: ctx.tenantId,
           userId: ctx.userId,
           entityType: 'quote',
@@ -132,10 +136,8 @@ export const POST = withApiRoute(async (req: NextRequest, { params }: { params: 
             to_email: toEmail,
           },
         });
-      } catch (err) {
-        console.warn('[offers/send] activity insert failed:', (err as Error).message);
       }
-    }
+    });
 
     // Outbound email — non-fatal if it fails
     const link = publicOfferUrl(publicToken);

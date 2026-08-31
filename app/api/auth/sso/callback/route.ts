@@ -163,86 +163,91 @@ async function upsertUserAndMembership(args: {
   tenantId: string;
   providerId: string;
 }): Promise<string> {
-  // 1. user
-  const [existingUser] = await db
-    .select({ id: users.id })
-    .from(users)
-    .where(eq(users.email, args.email))
-    .limit(1);
+  // The user upsert and the tenant-membership upsert must succeed or fail
+  // together: a created/updated user with no membership row (or vice versa)
+  // leaves the account in an inconsistent, un-loginable state.
+  return db.transaction(async (tx) => {
+    // 1. user
+    const [existingUser] = await tx
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.email, args.email))
+      .limit(1);
 
-  let userId: string;
-  if (existingUser) {
-    userId = existingUser.id;
-    await db
-      .update(users)
-      .set({
-        emailVerified: true,
-        lastTenantId: args.tenantId,
-        updatedAt: new Date(),
-        ...(args.fullName ? { fullName: args.fullName } : {}),
-      })
-      .where(eq(users.id, userId));
-  } else {
-    const [created] = await db
-      .insert(users)
-      .values({
-        email: args.email,
-        fullName: args.fullName ?? args.email,
-        emailVerified: true,
-        lastTenantId: args.tenantId,
-      })
-      .returning({ id: users.id });
-    if (!created) throw new Error('Failed to create user');
-    userId = created.id;
-  }
-
-  // 2. membership — pick a default role for the tenant (sales_rep if it exists, else admin)
-  const [existingMember] = await db
-    .select({ id: tenantMembers.id, status: tenantMembers.status })
-    .from(tenantMembers)
-    .where(and(eq(tenantMembers.tenantId, args.tenantId), eq(tenantMembers.userId, userId)))
-    .limit(1);
-
-  if (!existingMember) {
-    // SECURITY: pick a LEAST-PRIVILEGE default role for auto-provisioned SSO
-    // users. The previous code fell back to `admin` when `sales_rep` was
-    // missing, so any tenant that renamed/removed the sales_rep role would make
-    // every SSO login a tenant admin (privilege escalation). See
-    // selectLeastPrivilegeRole below.
-    const tenantRoles = await db
-      .select({ id: roles.id, slug: roles.slug, sortOrder: roles.sortOrder })
-      .from(roles)
-      .where(eq(roles.tenantId, args.tenantId));
-
-    const chosen = selectLeastPrivilegeRole(tenantRoles);
-
-    if (chosen) {
-      await db.insert(tenantMembers).values({
-        tenantId: args.tenantId,
-        userId,
-        roleId: chosen.id,
-        roleSlug: chosen.slug,
-        status: 'active',
-        joinedAt: new Date(),
-      });
+    let userId: string;
+    if (existingUser) {
+      userId = existingUser.id;
+      await tx
+        .update(users)
+        .set({
+          emailVerified: true,
+          lastTenantId: args.tenantId,
+          updatedAt: new Date(),
+          ...(args.fullName ? { fullName: args.fullName } : {}),
+        })
+        .where(eq(users.id, userId));
     } else {
-      // Only an admin role exists — do NOT auto-grant admin via SSO.
-      console.warn(
-        `[sso/callback] no non-admin role in tenant ${args.tenantId}; refusing to auto-provision ${userId} as admin`,
-      );
+      const [created] = await tx
+        .insert(users)
+        .values({
+          email: args.email,
+          fullName: args.fullName ?? args.email,
+          emailVerified: true,
+          lastTenantId: args.tenantId,
+        })
+        .returning({ id: users.id });
+      if (!created) throw new Error('Failed to create user');
+      userId = created.id;
     }
-  } else if (existingMember.status !== 'active' && existingMember.status !== 'removed') {
-    // Reactivate members whose access simply lapsed (e.g. 'invited'/'pending'/
-    // 'suspended'), but NOT members an admin explicitly removed — SSO must not
-    // silently undo a deliberate removal. A removed member has to be re-invited
-    // by an admin. Active members are left untouched.
-    await db
-      .update(tenantMembers)
-      .set({ status: 'active', updatedAt: new Date() })
-      .where(eq(tenantMembers.id, existingMember.id));
-  }
 
-  return userId;
+    // 2. membership — pick a default role for the tenant (sales_rep if it exists, else admin)
+    const [existingMember] = await tx
+      .select({ id: tenantMembers.id, status: tenantMembers.status })
+      .from(tenantMembers)
+      .where(and(eq(tenantMembers.tenantId, args.tenantId), eq(tenantMembers.userId, userId)))
+      .limit(1);
+
+    if (!existingMember) {
+      // SECURITY: pick a LEAST-PRIVILEGE default role for auto-provisioned SSO
+      // users. The previous code fell back to `admin` when `sales_rep` was
+      // missing, so any tenant that renamed/removed the sales_rep role would make
+      // every SSO login a tenant admin (privilege escalation). See
+      // selectLeastPrivilegeRole below.
+      const tenantRoles = await tx
+        .select({ id: roles.id, slug: roles.slug, sortOrder: roles.sortOrder })
+        .from(roles)
+        .where(eq(roles.tenantId, args.tenantId));
+
+      const chosen = selectLeastPrivilegeRole(tenantRoles);
+
+      if (chosen) {
+        await tx.insert(tenantMembers).values({
+          tenantId: args.tenantId,
+          userId,
+          roleId: chosen.id,
+          roleSlug: chosen.slug,
+          status: 'active',
+          joinedAt: new Date(),
+        });
+      } else {
+        // Only an admin role exists — do NOT auto-grant admin via SSO.
+        console.warn(
+          `[sso/callback] no non-admin role in tenant ${args.tenantId}; refusing to auto-provision ${userId} as admin`,
+        );
+      }
+    } else if (existingMember.status !== 'active' && existingMember.status !== 'removed') {
+      // Reactivate members whose access simply lapsed (e.g. 'invited'/'pending'/
+      // 'suspended'), but NOT members an admin explicitly removed — SSO must not
+      // silently undo a deliberate removal. A removed member has to be re-invited
+      // by an admin. Active members are left untouched.
+      await tx
+        .update(tenantMembers)
+        .set({ status: 'active', updatedAt: new Date() })
+        .where(eq(tenantMembers.id, existingMember.id));
+    }
+
+    return userId;
+  });
 }
 
 function absoluteCallbackUrl(request: NextRequest): string {
