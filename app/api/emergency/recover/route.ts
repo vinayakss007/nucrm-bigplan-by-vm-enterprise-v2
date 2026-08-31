@@ -173,12 +173,19 @@ export async function POST(request: NextRequest) {
     updateFields.totpBackupCodes = null;
   }
 
-  await db.update(users)
-    .set(updateFields)
-    .where(eq(users.id, user.id));
+  // The password reset and the session purge must be atomic: resetting the
+  // password without revoking sessions (or vice versa) leaves the account in
+  // an insecure half-recovered state. The cache invalidation below stays
+  // OUTSIDE the tx — it is best-effort cache clearing, not a DB write.
+  await db.transaction(async (tx) => {
+    await tx.update(users)
+      .set(updateFields)
+      .where(eq(users.id, user.id));
 
-  // CRITICAL: Invalidate all existing sessions so stolen cookies are immediately revoked
-  await db.delete(sessions).where(eq(sessions.userId, user.id));
+    // CRITICAL: Invalidate all existing sessions so stolen cookies are immediately revoked
+    await tx.delete(sessions).where(eq(sessions.userId, user.id));
+  });
+
   await deleteUserSessions(user.id);
 
   void logError({ error: new Error('Emergency recovery SUCCESS — super-admin password reset'), context: 'emergency/recover success', level: 'error', userId: user.id, metadata: { ip, email, disable_2fa } });

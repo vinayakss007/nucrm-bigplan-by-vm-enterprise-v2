@@ -60,39 +60,45 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       }
     }
 
-    // End impersonation session (deletes session + creates audit log)
-    await db.execute(sql`SELECT public.end_impersonation(${sessionId})`);
+    // The impersonation teardown must be atomic: ending the session, restoring
+    // (or removing) the superadmin's original membership, and clearing their
+    // last tenant all describe one consistent "back to superadmin" state. A
+    // partial failure would strand the admin with elevated tenant access.
+    await db.transaction(async (tx) => {
+      // End impersonation session (deletes session + creates audit log)
+      await tx.execute(sql`SELECT public.end_impersonation(${sessionId})`);
 
-    // Restore the superadmin's original tenant membership state
-    if (impersonatorId && tenantId) {
-      if (originalMembershipState?.existed) {
-        // Restore to the original role and status
-        await db
-          .update(tenantMembers)
-          .set({
-            status: originalMembershipState.status,
-            roleSlug: originalMembershipState.roleSlug,
-          })
-          .where(and(
-            eq(tenantMembers.tenantId, tenantId),
-            eq(tenantMembers.userId, impersonatorId),
-          ));
-      } else {
-        // Membership was created solely for impersonation — remove it
-        await db
-          .delete(tenantMembers)
-          .where(and(
-            eq(tenantMembers.tenantId, tenantId),
-            eq(tenantMembers.userId, impersonatorId),
-          ));
+      // Restore the superadmin's original tenant membership state
+      if (impersonatorId && tenantId) {
+        if (originalMembershipState?.existed) {
+          // Restore to the original role and status
+          await tx
+            .update(tenantMembers)
+            .set({
+              status: originalMembershipState.status,
+              roleSlug: originalMembershipState.roleSlug,
+            })
+            .where(and(
+              eq(tenantMembers.tenantId, tenantId),
+              eq(tenantMembers.userId, impersonatorId),
+            ));
+        } else {
+          // Membership was created solely for impersonation — remove it
+          await tx
+            .delete(tenantMembers)
+            .where(and(
+              eq(tenantMembers.tenantId, tenantId),
+              eq(tenantMembers.userId, impersonatorId),
+            ));
+        }
       }
-    }
 
-    // Clear last tenant
-    await db
-      .update(users)
-      .set({ lastTenantId: null, updatedAt: new Date() })
-      .where(eq(users.id, ctx.userId));
+      // Clear last tenant
+      await tx
+        .update(users)
+        .set({ lastTenantId: null, updatedAt: new Date() })
+        .where(eq(users.id, ctx.userId));
+    });
 
     logSuperAdminAction({
       adminId: ctx.userId,

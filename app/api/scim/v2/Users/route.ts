@@ -209,93 +209,111 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // #1171: users are shared across tenants (membership lives in
-    // tenant_members), so an unscoped email lookup let one tenant's IdP mutate
-    // a user account owned/used by ANOTHER tenant. Resolve membership in THIS
-    // tenant first: only a user who is already a member here may have their
-    // profile (name) updated. A globally-existing but non-member account is
-    // re-used by id for the membership row below, but is never mutated.
-    const [existingMemberUser] = await db
-      .select({ id: users.id })
-      .from(users)
-      .innerJoin(tenantMembers, eq(tenantMembers.userId, users.id))
-      .where(and(eq(users.email, internalUser.email), eq(tenantMembers.tenantId, tenantId)))
-      .limit(1);
+    // The user create/update and the tenant-membership insert-or-reactivate
+    // are one atomic provisioning unit: a partial failure would leave a user
+    // with no membership (or a membership pointing at a half-created user),
+    // which is exactly the orphaned-state H7 targets.
+    let createErrorResponse: NextResponse | null = null;
+    const provisioned = await db.transaction(async (tx) => {
+      // #1171: users are shared across tenants (membership lives in
+      // tenant_members), so an unscoped email lookup let one tenant's IdP mutate
+      // a user account owned/used by ANOTHER tenant. Resolve membership in THIS
+      // tenant first: only a user who is already a member here may have their
+      // profile (name) updated. A globally-existing but non-member account is
+      // re-used by id for the membership row below, but is never mutated.
+      const [existingMemberUser] = await tx
+        .select({ id: users.id })
+        .from(users)
+        .innerJoin(tenantMembers, eq(tenantMembers.userId, users.id))
+        .where(and(eq(users.email, internalUser.email!), eq(tenantMembers.tenantId, tenantId)))
+        .limit(1);
 
-    const [existingGlobalUser] = existingMemberUser
-      ? [existingMemberUser]
-      : await db
-          .select({ id: users.id })
-          .from(users)
-          .where(eq(users.email, internalUser.email))
-          .limit(1);
+      const [existingGlobalUser] = existingMemberUser
+        ? [existingMemberUser]
+        : await tx
+            .select({ id: users.id })
+            .from(users)
+            .where(eq(users.email, internalUser.email!))
+            .limit(1);
 
-    let userId: string;
-    let isNew = false;
+      let userId: string;
+      let isNew = false;
 
-    if (existingMemberUser) {
-      userId = existingMemberUser.id;
-      // Safe to update: this user is a member of the requesting tenant.
-      if (internalUser.fullName) {
-        await db.update(users)
-          .set({ fullName: internalUser.fullName, updatedAt: new Date() })
-          .where(eq(users.id, userId));
+      if (existingMemberUser) {
+        userId = existingMemberUser.id;
+        // Safe to update: this user is a member of the requesting tenant.
+        if (internalUser.fullName) {
+          await tx.update(users)
+            .set({ fullName: internalUser.fullName, updatedAt: new Date() })
+            .where(eq(users.id, userId));
+        }
+      } else if (existingGlobalUser) {
+        // Account exists but is NOT a member of this tenant — re-use the id for
+        // the membership, but do NOT modify the foreign user's profile.
+        userId = existingGlobalUser.id;
+      } else {
+        // Create new user
+        const [created] = await tx.insert(users).values({
+          email: internalUser.email!,
+          fullName: internalUser.fullName ?? internalUser.email!,
+          emailVerified: true,
+          lastTenantId: tenantId,
+        }).returning({ id: users.id });
+
+        if (!created) {
+          createErrorResponse = NextResponse.json(
+            generateSCIMError('Failed to create user', 500),
+            { status: 500, headers: { 'Content-Type': 'application/scim+json' } }
+          );
+          return null;
+        }
+        userId = created.id;
+        isNew = true;
       }
-    } else if (existingGlobalUser) {
-      // Account exists but is NOT a member of this tenant — re-use the id for
-      // the membership, but do NOT modify the foreign user's profile.
-      userId = existingGlobalUser.id;
-    } else {
-      // Create new user
-      const [created] = await db.insert(users).values({
-        email: internalUser.email,
-        fullName: internalUser.fullName ?? internalUser.email,
-        emailVerified: true,
-        lastTenantId: tenantId,
-      }).returning({ id: users.id });
 
-      if (!created) {
-        return NextResponse.json(
-          generateSCIMError('Failed to create user', 500),
-          { status: 500, headers: { 'Content-Type': 'application/scim+json' } }
-        );
+      // Ensure tenant membership exists
+      const [existingMember] = await tx
+        .select({ id: tenantMembers.id })
+        .from(tenantMembers)
+        .where(and(eq(tenantMembers.tenantId, tenantId), eq(tenantMembers.userId, userId)))
+        .limit(1);
+
+      if (!existingMember) {
+        // SECURITY: pick a LEAST-PRIVILEGE default role. The previous fallback was
+        // an unordered `roles ... limit(1)`, which could return the tenant's
+        // `admin` role — silently provisioning an IdP-managed user as admin.
+        // selectLeastPrivilegeRole never returns admin/super_admin.
+        const tenantRoles = await tx
+          .select({ id: roles.id, slug: roles.slug, sortOrder: roles.sortOrder })
+          .from(roles)
+          .where(eq(roles.tenantId, tenantId));
+
+        const roleToAssign = selectLeastPrivilegeRole(tenantRoles);
+
+        await tx.insert(tenantMembers).values({
+          tenantId,
+          userId,
+          ...(roleToAssign ? { roleId: roleToAssign.id, roleSlug: roleToAssign.slug } : { roleSlug: 'member' }),
+          status: 'active',
+          joinedAt: new Date(),
+        });
+      } else {
+        // Reactivate if inactive
+        await tx.update(tenantMembers)
+          .set({ status: 'active', updatedAt: new Date() })
+          .where(eq(tenantMembers.id, existingMember.id));
       }
-      userId = created.id;
-      isNew = true;
+
+      return { userId, isNew };
+    });
+
+    if (!provisioned) {
+      return createErrorResponse ?? NextResponse.json(
+        generateSCIMError('Failed to create user', 500),
+        { status: 500, headers: { 'Content-Type': 'application/scim+json' } }
+      );
     }
-
-    // Ensure tenant membership exists
-    const [existingMember] = await db
-      .select({ id: tenantMembers.id })
-      .from(tenantMembers)
-      .where(and(eq(tenantMembers.tenantId, tenantId), eq(tenantMembers.userId, userId)))
-      .limit(1);
-
-    if (!existingMember) {
-      // SECURITY: pick a LEAST-PRIVILEGE default role. The previous fallback was
-      // an unordered `roles ... limit(1)`, which could return the tenant's
-      // `admin` role — silently provisioning an IdP-managed user as admin.
-      // selectLeastPrivilegeRole never returns admin/super_admin.
-      const tenantRoles = await db
-        .select({ id: roles.id, slug: roles.slug, sortOrder: roles.sortOrder })
-        .from(roles)
-        .where(eq(roles.tenantId, tenantId));
-
-      const roleToAssign = selectLeastPrivilegeRole(tenantRoles);
-
-      await db.insert(tenantMembers).values({
-        tenantId,
-        userId,
-        ...(roleToAssign ? { roleId: roleToAssign.id, roleSlug: roleToAssign.slug } : { roleSlug: 'member' }),
-        status: 'active',
-        joinedAt: new Date(),
-      });
-    } else {
-      // Reactivate if inactive
-      await db.update(tenantMembers)
-        .set({ status: 'active', updatedAt: new Date() })
-        .where(eq(tenantMembers.id, existingMember.id));
-    }
+    const { userId, isNew } = provisioned;
 
     // Fetch the created/updated user to return
     const [finalUser] = await db

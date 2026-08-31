@@ -83,22 +83,24 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      await db
-        .update(oauthCodes)
-        .set({ usedAt: new Date() })
-        .where(eq(oauthCodes.id, authCode.id));
+      const [token] = await db.transaction(async (tx) => {
+        await tx
+          .update(oauthCodes)
+          .set({ usedAt: new Date() })
+          .where(eq(oauthCodes.id, authCode.id));
 
-      const [token] = await db
-        .insert(oauthTokens)
-        .values({
-          clientId: client.id,
-          userId: authCode.userId,
-          accessToken: uuidv4(),
-          refreshToken: uuidv4(),
-          scope: authCode.scope,
-          expiresAt: new Date(Date.now() + 3600 * 1000),
-        })
-        .returning();
+        return tx
+          .insert(oauthTokens)
+          .values({
+            clientId: client.id,
+            userId: authCode.userId,
+            accessToken: uuidv4(),
+            refreshToken: uuidv4(),
+            scope: authCode.scope,
+            expiresAt: new Date(Date.now() + 3600 * 1000),
+          })
+          .returning();
+      });
 
       if (!token) {
         return NextResponse.json(
@@ -137,19 +139,21 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      await db.delete(oauthTokens).where(eq(oauthTokens.id, existingToken.id));
+      const [newToken] = await db.transaction(async (tx) => {
+        await tx.delete(oauthTokens).where(eq(oauthTokens.id, existingToken.id));
 
-      const [newToken] = await db
-        .insert(oauthTokens)
-        .values({
-          clientId: client.id,
-          userId: existingToken.userId,
-          accessToken: uuidv4(),
-          refreshToken: uuidv4(),
-          scope: existingToken.scope,
-          expiresAt: new Date(Date.now() + 3600 * 1000),
-        })
-        .returning();
+        return tx
+          .insert(oauthTokens)
+          .values({
+            clientId: client.id,
+            userId: existingToken.userId,
+            accessToken: uuidv4(),
+            refreshToken: uuidv4(),
+            scope: existingToken.scope,
+            expiresAt: new Date(Date.now() + 3600 * 1000),
+          })
+          .returning();
+      });
 
       if (!newToken) {
         return NextResponse.json(
