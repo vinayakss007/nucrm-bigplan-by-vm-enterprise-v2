@@ -11,8 +11,11 @@ import { scheduledReports } from '@/drizzle/schema';
 import { eq, desc } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
 import { readJsonBody } from '@/lib/api/validate';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
-export async function GET(_request: NextRequest) {
+// #1838: wrapped in withApiRoute so requireTenantCtx()'s setTenantContext() and
+// the tenant queries below share one pinned connection (RLS isolation).
+export const GET = withApiRoute(async (_request: NextRequest) => {
   try {
     const ctx = await requireTenantCtx();
     if (ctx instanceof NextResponse) return ctx;
@@ -26,9 +29,9 @@ export async function GET(_request: NextRequest) {
     void logError({ error, context: 'tenant/analytics/scheduled-reports GET' });
     return NextResponse.json({ error: 'Failed to fetch reports' }, { status: 500 });
   }
-}
+});
 
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireTenantCtx();
     if (ctx instanceof NextResponse) return ctx;
@@ -59,7 +62,7 @@ export async function POST(request: NextRequest) {
     void logError({ error, context: 'tenant/analytics/scheduled-reports POST' });
     return NextResponse.json({ error: 'Failed to create report' }, { status: 500 });
   }
-}
+});
 
 function calculateNextRun(frequency: string): Date {
   const now = new Date();
