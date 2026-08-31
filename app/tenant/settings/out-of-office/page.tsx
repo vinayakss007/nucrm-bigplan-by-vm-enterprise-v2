@@ -4,7 +4,9 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
+import { useMutation } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import { Plane, Save, Loader2, Calendar, User, MessageSquare, AlertCircle, CheckCircle2, type LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
@@ -31,61 +33,66 @@ const DEFAULT: OOO = {
 
 export default function OutOfOfficePage() {
   const [ooo, setOoo] = useState<OOO>(DEFAULT);
-  const [original, setOriginal] = useState<OOO>(DEFAULT);
-  const [members, setMembers] = useState<{ user_id: string; full_name: string; email: string }[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [meId, setMeId] = useState<string | null>(null);
+  const [original, setOriginal] = useState<OOO | null>(null);
 
+  // #1328: reads via TanStack Query (were parallel raw fetch + useEffect).
+  const { data: oooData, isLoading: oooLoading } = useApiQuery<{ out_of_office?: OOO }>(
+    ['tenant', 'out-of-office'],
+    '/api/user/out-of-office',
+  );
+  const { data: membersData, isLoading: membersLoading } = useApiQuery<{ data?: MemberApiRow[] }>(
+    ['tenant', 'members', 'for-ooo'],
+    '/api/tenant/members',
+  );
+  const { data: meData, isLoading: meLoading } = useApiQuery<{ user?: { id?: string | null } }>(
+    ['tenant', 'me'],
+    '/api/tenant/me',
+  );
+  const loading = oooLoading || membersLoading || meLoading;
+  const meId = meData?.user?.id ?? null;
+  const members = useMemo(
+    () => (membersData?.data ?? []).map((m) => ({ user_id: m.userId, full_name: m.fullName ?? m.email, email: m.email })),
+    [membersData],
+  );
+
+  // Seed the editable copy once the OOO config loads (preserves dirty-tracking).
+  const fetchedOoo = oooData?.out_of_office ?? null;
   useEffect(() => {
-  const controller = new AbortController();
-  let ignore = false;
-    Promise.all([
-      fetch('/api/user/out-of-office', { signal: controller.signal }).then(r => r.ok ? r.json() : { out_of_office: DEFAULT }),
-      fetch('/api/tenant/members', { signal: controller.signal }).then(r => r.ok ? r.json() : { data: [] }),
-      fetch('/api/tenant/me', { signal: controller.signal }).then(r => r.ok ? r.json() : {}),
-    ]).then(([oooRes, members, me]: [
-      { out_of_office?: OOO },
-      { data?: MemberApiRow[] },
-      { user?: { id?: string | null } },
-    ]) => { if (ignore) return; 
-      setOoo(oooRes.out_of_office ?? DEFAULT);
-      setOriginal(oooRes.out_of_office ?? DEFAULT);
-      const mapped = (members.data ?? []).map((m) => ({
-        user_id: m.userId, full_name: m.fullName ?? m.email, email: m.email,
-       } ));
-      setMembers(mapped);
-      setMeId(me?.user?.id ?? null);
-    }).catch(e => { if ((e as Error)?.name === 'AbortError') return; throw e; })
-      .finally(() => { if (!ignore) setLoading(false); });
-    return () => { ignore = true; controller.abort(); };
-}, []);
+    if (oooData && original === null) {
+      const val = fetchedOoo ?? DEFAULT;
+      setOoo(val);
+      setOriginal(val);
+    }
+  }, [oooData, fetchedOoo, original]);
 
-  const dirty = JSON.stringify(ooo) !== JSON.stringify(original);
+  const dirty = original !== null && JSON.stringify(ooo) !== JSON.stringify(original);
   const today = new Date().toISOString().slice(0, 10);
   const inWindow =
     ooo.enabled && ooo.start_date && ooo.end_date &&
     today >= ooo.start_date && today <= ooo.end_date;
 
-  const save = async () => {
-    setSaving(true);
-    const res = await fetch('/api/user/out-of-office', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ out_of_office: ooo }),
-    });
-    const d = await res.json();
-    if (res.ok) {
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch('/api/user/out-of-office', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ out_of_office: ooo }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || 'Failed to save');
+      return d as { reassigned?: Record<string, unknown> };
+    },
+    onSuccess: (d) => {
       const total = ooo.auto_reassign && d.reassigned
         ? Object.values(d.reassigned as Record<string, unknown>).reduce((a: number, b) => a + Number(b ?? 0), 0)
         : 0;
       toast.success(total > 0 ? `Saved. Reassigned ${total} record(s).` : 'Out-of-office saved');
       setOriginal(ooo);
-    } else {
-      toast.error(d.error || 'Failed to save');
-    }
-    setSaving(false);
-  };
+    },
+    onError: (e: Error) => toast.error(e.message || 'Failed to save'),
+  });
+  const saving = saveMutation.isPending;
+  const save = () => saveMutation.mutate();
 
   if (loading) return <div className="flex items-center justify-center h-48 text-muted-foreground"><Loader2 className="w-5 h-5 animate-spin" /></div>;
 
@@ -230,7 +237,7 @@ export default function OutOfOfficePage() {
         'sticky bottom-0 -mx-6 px-6 py-3 border-t border-border bg-background/80 backdrop-blur flex items-center justify-end gap-2 transition-opacity',
         dirty ? 'opacity-100' : 'opacity-0 pointer-events-none'
       )}>
-        <button onClick={() => setOoo(original)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground">
+        <button onClick={() => { if (original) setOoo(original); }} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground">
           Discard
         </button>
         <button onClick={save} disabled={saving || !dirty}
