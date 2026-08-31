@@ -10,21 +10,19 @@ export interface RetryOptions {
   backoffMultiplier?: number;
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  shouldRetry?: (error: any) => boolean;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  onRetry?: (attempt: number, error: any) => void;
+  shouldRetry?: (error: unknown) => boolean;
+  onRetry?: (attempt: number, error: unknown) => void;
 }
 
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const defaultShouldRetry = (error: any): boolean => {
+const defaultShouldRetry = (error: unknown): boolean => {
   if (!error) return false;
-  const status = error.status || error.statusCode;
+  const e = error as { status?: number; statusCode?: number; code?: string };
+  const status = e.status || e.statusCode;
   if (status === 429 || status === 503) return true;
-  if (status >= 500) return true;
-  if (error.code === 'ECONNRESET' || error.code === 'ETIMEDOUT') return true;
+  if (status !== undefined && status >= 500) return true;
+  if (e.code === 'ECONNRESET' || e.code === 'ETIMEDOUT') return true;
   return false;
 };
 
@@ -43,8 +41,7 @@ export async function withRetry<T>(
 
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let lastError: any;
+  let lastError: unknown;
   let delay = initialDelay;
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -52,8 +49,7 @@ export async function withRetry<T>(
       return await fn();
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (error: any) {
+    } catch (error: unknown) {
       lastError = error;
 
       if (attempt === maxRetries) {
@@ -91,7 +87,7 @@ export async function withExponentialBackoff<T>(
     maxDelay: 30000,
     backoffMultiplier: 2,
     onRetry: (attempt, error) => {
-      console.log(`[Retry] ${context} - Attempt ${attempt} failed:`, error.message);
+      console.log(`[Retry] ${context} - Attempt ${attempt} failed:`, error instanceof Error ? error.message : String(error));
     },
   });
 }
