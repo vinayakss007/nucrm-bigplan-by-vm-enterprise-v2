@@ -30,7 +30,7 @@ or workspace admin, use the [Public Docs](../public/README.md) instead.
 
 | Aspect            | Summary                                                             |
 | ----------------- | ------------------------------------------------------------------- |
-| **Product**       | NuCRM Enterprise — multi-tenant SaaS CRM (v0.8.0)                   |
+| **Product**       | NuCRM Enterprise — multi-tenant SaaS CRM (v0.8.1)                   |
 | **Runtime**       | Next.js 16 (App Router), React 19, TypeScript 5.9, Node ≥ 22        |
 | **Data**          | PostgreSQL 15+ (Drizzle ORM, ~215 tables), Redis                    |
 | **Processes**     | `web` (Next.js), `worker` (BullMQ), `realtime` (socket.io), `cron`  |

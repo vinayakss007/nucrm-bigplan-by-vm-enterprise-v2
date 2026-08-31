@@ -37,7 +37,7 @@ export default defineModule({
   author: "Your Company",
   category: "messaging", // utility | automation | messaging | integration | ai | analytics
   icon: "💬", // emoji or icon name
-  minCrmVersion: "0.8.0", // optional
+  minCrmVersion: "0.8.1", // optional
 
   pricing: {
     // per-plan availability & price
