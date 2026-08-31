@@ -4,7 +4,8 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { CheckCircle, XCircle, AlertTriangle, RefreshCw, Activity, Database, Mail, Server, Wifi } from 'lucide-react';
 import { cn, formatRelativeTime } from '@/lib/utils';
 import { logError } from '@/lib/errors-client';
@@ -36,30 +37,32 @@ const SERVICE_ICONS: Record<string,React.ComponentType<{ className?: string }>> 
   database:Database, app:Server, email:Mail, storage:Database, schema:Database,
 };
 
+interface HealthResponse { checks?: HealthCheck[] }
+
 export default function HealthPage() {
-  const [checks, setChecks] = useState<HealthCheck[]>([]);
-  const [appHealth, setAppHealth] = useState<AppHealthData | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [lastRun, setLastRun] = useState<Date|null>(null);
   const [autoRefresh, setAutoRefresh] = useState(true);
 
-  const run = async (abortSignal?: AbortSignal) => {
-    setLoading(true);
-    const [sa, app] = await Promise.all([
-      fetch('/api/superadmin/health', { signal: abortSignal }).then(r=>r.json()).catch((err) => { clientLogError('superadmin-health:fetch', err); return {checks:[]}; }),
-      fetch('/api/health', { signal: abortSignal }).then(r=>r.json()).catch((err) => logError({ error: err, context: "async-catch:[context]" })),
-    ]);
-    setChecks(sa.checks||[]); setAppHealth(app);
-    setLastRun(new Date()); setLoading(false);
-  };
+  // #1328: TanStack Query replaces fetch + useEffect + useState. Both endpoints
+  // keep their original tolerant behavior (log + fall back) via custom queryFns.
+  const saQuery = useQuery<HealthResponse>({
+    queryKey: ['superadmin', 'health'],
+    queryFn: () => fetch('/api/superadmin/health').then(r=>r.json()).catch((err) => { clientLogError('superadmin-health:fetch', err); return {checks:[]}; }),
+    refetchInterval: autoRefresh ? 30_000 : false,
+  });
+  const appQuery = useQuery<AppHealthData | null>({
+    queryKey: ['app', 'health'],
+    queryFn: () => fetch('/api/health').then(r=>r.json()).catch((err) => { logError({ error: err, context: "async-catch:[context]" }); return null; }),
+    refetchInterval: autoRefresh ? 30_000 : false,
+  });
 
-  useEffect(() => {
-    const abort = new AbortController();
-    run(abort.signal);
-    let iv: NodeJS.Timeout;
-    if (autoRefresh) iv = setInterval(() => run(abort.signal), 30_000);
-    return () => { abort.abort(); clearInterval(iv); };
-  }, [autoRefresh]);
+  const checks: HealthCheck[] = saQuery.data?.checks ?? [];
+  const appHealth: AppHealthData | null = appQuery.data ?? null;
+  const loading = saQuery.isFetching || appQuery.isFetching;
+  const lastRun = (saQuery.dataUpdatedAt || appQuery.dataUpdatedAt)
+    ? new Date(Math.max(saQuery.dataUpdatedAt, appQuery.dataUpdatedAt))
+    : null;
+
+  const run = () => { saQuery.refetch(); appQuery.refetch(); };
 
   const allUp = checks.every(c=>c.status==='up') && appHealth?.status==='ok';
   const anyDown = checks.some(c=>c.status==='down') || appHealth?.status==='error';

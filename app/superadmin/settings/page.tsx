@@ -5,6 +5,7 @@
  */
 'use client';
 import { useState, useEffect } from 'react';
+import { useApiQuery } from '@/lib/query/client';
 import {
   Settings, Save, Mail, Globe, Shield, Loader2,
   CreditCard, AlertTriangle,
@@ -13,7 +14,6 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
-import { clientLogError } from '@/lib/client-logger';
 import toast from 'react-hot-toast';
 import { cn } from '@/lib/utils';
 
@@ -43,31 +43,32 @@ export default function SuperAdminSettingsPage() {
   });
   // Write-only secret inputs, kept OUT of `s`. Empty means "leave unchanged".
   const [secrets, setSecrets] = useState<Record<string,string>>({});
-  const [loading, setLoading]   = useState(true);
+  const [seeded, setSeeded]     = useState(false);
   const [saving, setSaving]     = useState(false);
   const [showKeys, setShowKeys] = useState<Record<string,boolean>>({});
   const [testEmail, setTestEmail] = useState('');
   const [testing, setTesting]   = useState(false);
   const [testResult, setTestResult] = useState<'ok'|'fail'|null>(null);
 
+  // #1328: TanStack Query replaces fetch + useEffect + useState.
+  const { data, isLoading } = useApiQuery<{ data?: Record<string, unknown> }>(['superadmin', 'settings'], '/api/superadmin/settings');
+  const loading = isLoading;
+
+  // Seed the editable form once settings load.
   useEffect(() => {
-    const abort = new AbortController();
-    fetch('/api/superadmin/settings', { signal: abort.signal }).then(r=>r.json()).then(d=>{ if (abort.signal.aborted) return;
-      if(d.data) {
-        // #1095: never load secret values (even redacted) into client state.
-        // Settings persist as strings; coerce any non-string values so state
-        // stays Record<string, string> for the controlled inputs.
-        const nonSecret = Object.fromEntries(
-          Object.entries(d.data as Record<string, unknown>)
-            .filter(([k]) => !isSecretKey(k))
-            .map(([k, v]) => [k, v == null ? '' : String(v)])
-        );
-        setS(prev => ({...prev, ...nonSecret}));
-      }
-      setLoading(false);
-    }).catch((err) => { if (err instanceof DOMException && err.name === 'AbortError') return; clientLogError('settings:fetch', err); setLoading(false); });
-    return () => abort.abort();
-  }, []);
+    if (!seeded && data?.data) {
+      // #1095: never load secret values (even redacted) into client state.
+      // Settings persist as strings; coerce any non-string values so state
+      // stays Record<string, string> for the controlled inputs.
+      const nonSecret = Object.fromEntries(
+        Object.entries(data.data as Record<string, unknown>)
+          .filter(([k]) => !isSecretKey(k))
+          .map(([k, v]) => [k, v == null ? '' : String(v)])
+      );
+      setS(prev => ({...prev, ...nonSecret}));
+      setSeeded(true);
+    }
+  }, [seeded, data]);
 
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => setS(p=>({...p,[k]:e.target.value}));
   const toggle = (k: string) => setS(p=>({...p,[k]: p[k]==='true'?'false':'true'}));

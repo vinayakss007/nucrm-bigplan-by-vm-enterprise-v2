@@ -4,8 +4,10 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import Link from 'next/link';
 import { ArrowLeft, Building2, Mail, Users, Calendar, Shield, Edit, Save, Loader2, ExternalLink } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -40,10 +42,9 @@ const STATUS_COLORS: Record<string, string> = {
 export default function TenantDetailPage() {
   const params = useParams();
   const tenantId = params['id'] as string;
-  const [tenant, setTenant] = useState<Tenant | null>(null);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [editing, setEditing] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const [seeded, setSeeded] = useState(false);
   const [form, setForm] = useState({
     plan_id: '',
     status: '',
@@ -51,52 +52,55 @@ export default function TenantDetailPage() {
     admin_notes: '',
   });
 
-  const load = useCallback(async (signal?: AbortSignal) => {
-    try {
-      const res = await fetch(`/api/superadmin/tenants/${tenantId}`, { signal });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to load');
-      if (signal?.aborted) return;
-      setTenant(data.data);
-      setForm({
-        plan_id: data.data.plan_id || 'free',
-        status: data.data.status || 'trialing',
-        billing_email: data.data.billing_email || '',
-        admin_notes: data.data.admin_notes || '',
-      });
-    } catch (err: unknown) {
-      if ((err as Error)?.name === 'AbortError') return;
-      toast.error(err instanceof Error ? err.message : 'Failed to load tenant');
-    } finally {
-      if (!signal?.aborted) setLoading(false);
-    }
-  }, [tenantId]);
+  // #1328: TanStack Query replaces fetch + useEffect + useState.
+  const queryKey = ['superadmin', 'tenant', tenantId] as const;
+  const { data, isLoading, error } = useApiQuery<{ data?: Tenant }>(
+    queryKey,
+    `/api/superadmin/tenants/${tenantId}`,
+    { enabled: !!tenantId, retry: false },
+  );
+  const tenant: Tenant | null = data?.data ?? null;
+  const loading = isLoading;
 
   useEffect(() => {
-    const controller = new AbortController();
-    load(controller.signal);
-    return () => controller.abort();
-  }, [load]);
+    if (error) {
+      const info = error.info as { error?: string } | undefined;
+      toast.error(info?.error || error.message || 'Failed to load tenant');
+    }
+  }, [error]);
 
-  const save = async () => {
-    setSaving(true);
-    try {
+  // Seed the editable form once the tenant loads.
+  useEffect(() => {
+    if (!seeded && tenant) {
+      setForm({
+        plan_id: tenant.plan_id || 'free',
+        status: tenant.status || 'trialing',
+        billing_email: tenant.billing_email || '',
+        admin_notes: tenant.admin_notes || '',
+      });
+      setSeeded(true);
+    }
+  }, [seeded, tenant]);
+
+  const saveMutation = useMutation({
+    mutationFn: async () => {
       const res = await fetch('/api/superadmin/tenants', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: tenantId, ...form }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to save');
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || 'Failed to save');
+    },
+    onSuccess: () => {
       toast.success('Tenant updated');
       setEditing(false);
-      load();
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to save');
-    } finally {
-      setSaving(false);
-    }
-  };
+      queryClient.invalidateQueries({ queryKey });
+    },
+    onError: (err: Error) => toast.error(err.message || 'Failed to save'),
+  });
+  const saving = saveMutation.isPending;
+  const save = () => saveMutation.mutate();
 
   if (loading) {
     return (

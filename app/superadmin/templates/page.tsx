@@ -4,7 +4,9 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import { Package, Plus, Users, FileText, Edit, Copy, UserPlus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
@@ -23,31 +25,20 @@ interface Template {
 }
 
 export default function SuperAdminTemplatesPage() {
-  const [templates, setTemplates] = useState<Template[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
 
-  const load = async (signal?: AbortSignal) => {
-    try {
-      const res = await fetch('/api/superadmin/templates', { signal });
-      const d = await res.json();
-      if (signal?.aborted) return;
-      setTemplates(d.data ?? []);
-    } catch (e) {
-      if ((e as Error)?.name === 'AbortError') return;
-      toast.error('Failed to load templates');
-    } finally {
-      if (!signal?.aborted) setLoading(false);
-    }
-  };
+  // #1328: TanStack Query replaces fetch + useEffect + useState.
+  const queryKey = ['superadmin', 'templates'] as const;
+  const { data, isLoading, error } = useApiQuery<{ data?: Template[] }>(queryKey, '/api/superadmin/templates');
+  const templates: Template[] = data?.data ?? [];
+  const loading = isLoading;
 
   useEffect(() => {
-    const controller = new AbortController();
-    load(controller.signal);
-    return () => controller.abort();
-  }, []);
+    if (error) toast.error('Failed to load templates');
+  }, [error]);
 
-  const createTemplate = async () => {
-    try {
+  const createMutation = useMutation({
+    mutationFn: async () => {
       const res = await fetch('/api/superadmin/templates', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -63,13 +54,12 @@ export default function SuperAdminTemplatesPage() {
         }),
       });
       if (!res.ok) throw new Error('Create failed');
-      const _d = await res.json();
-      toast.success('Template created');
-      load();
-    } catch {
-      toast.error('Failed to create template');
-    }
-  };
+      await res.json();
+    },
+    onSuccess: () => { toast.success('Template created'); queryClient.invalidateQueries({ queryKey }); },
+    onError: () => toast.error('Failed to create template'),
+  });
+  const createTemplate = () => createMutation.mutate();
 
   const activeCount = templates.filter(t => t.status === 'active').length;
   const draftCount = templates.filter(t => t.status === 'draft').length;

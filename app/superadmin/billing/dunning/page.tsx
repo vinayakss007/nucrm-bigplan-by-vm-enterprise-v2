@@ -5,6 +5,8 @@
  */
 'use client';
 import { useState, useEffect } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import { 
   AlertTriangle, Clock, RefreshCw, Loader2, 
   CheckCircle, XCircle
@@ -30,52 +32,35 @@ interface DunningAttempt {
 }
 
 export default function DunningDashboard() {
-  const [attempts, setAttempts] = useState<DunningAttempt[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [retrying, setRetrying] = useState<string | null>(null);
+  const queryClient = useQueryClient();
   const [filter, setFilter] = useState<'all' | 'pending' | 'completed' | 'failed'>('all');
 
+  // #1328: TanStack Query replaces fetch + useEffect + useState.
+  const queryKey = ['superadmin', 'billing', 'dunning'] as const;
+  const { data, isLoading, error, refetch } = useApiQuery<{ data?: DunningAttempt[] }>(queryKey, '/api/superadmin/billing/dunning');
+  const attempts: DunningAttempt[] = data?.data ?? [];
+  const loading = isLoading;
+
   useEffect(() => {
-    const controller = new AbortController();
-    fetchAttempts(controller.signal);
-    return () => controller.abort();
-  }, []);
+    if (error) toast.error('Failed to load dunning data');
+  }, [error]);
 
-  const fetchAttempts = async (signal?: AbortSignal) => {
-    setLoading(true);
-    try {
-      const res = await fetch('/api/superadmin/billing/dunning', { signal });
-      const data = await res.json();
-      if (signal?.aborted) return;
-      setAttempts(data.data || []);
-    } catch (e) {
-      if ((e as Error)?.name === 'AbortError') return;
-      toast.error('Failed to load dunning data');
-    } finally {
-      if (!signal?.aborted) setLoading(false);
-    }
-  };
-
-  const handleRetry = async (subscriptionId: string) => {
-    setRetrying(subscriptionId);
-    try {
+  const retryMutation = useMutation({
+    mutationFn: async (subscriptionId: string) => {
       const res = await fetch('/api/tenant/billing/dunning/retry', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ subscriptionId }),
       });
-      const data = await res.json();
-      if (res.ok) {
-        toast.success(data.data.message);
-        fetchAttempts();
-      } else {
-        toast.error(data.error || 'Failed to retry payment');
-      }
-    } catch {
-      toast.error('An error occurred');
-    }
-    setRetrying(null);
-  };
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || 'Failed to retry payment');
+      return d.data.message as string;
+    },
+    onSuccess: (message) => { toast.success(message); queryClient.invalidateQueries({ queryKey }); },
+    onError: (e: Error) => toast.error(e.message || 'An error occurred'),
+  });
+  const retrying = retryMutation.isPending ? (retryMutation.variables ?? null) : null;
+  const handleRetry = (subscriptionId: string) => retryMutation.mutate(subscriptionId);
 
   const filteredAttempts = attempts.filter(a => {
     if (filter === 'all') return true;
@@ -106,7 +91,7 @@ export default function DunningDashboard() {
           <p className="text-sm text-muted-foreground">Manage failed payments and retries</p>
         </div>
         <button
-          onClick={() => fetchAttempts()}
+          onClick={() => refetch()}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border hover:bg-accent text-xs font-medium transition-colors"
         >
           <RefreshCw className="w-3 h-3" />

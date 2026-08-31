@@ -4,8 +4,9 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import { ArrowLeft, Zap, ToggleRight, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
@@ -19,60 +20,59 @@ const CAT_COLORS: Record<string, string> = {
   analytics: 'bg-orange-500/15 text-orange-400',
 };
 
+interface ModuleData {
+  id: string;
+  status: string;
+  planAllowed: boolean;
+  name: string;
+  icon?: string;
+  description?: string;
+  category?: string;
+  features?: string[];
+}
+
+interface ModulesResponse {
+  data?: ModuleData[];
+  plan?: string;
+}
+
 export default function TenantModulesPage() {
   const params = useParams();
   const router = useRouter();
   const tenantId = params['id'] as string;
-  const [modules, setModules] = useState<ModuleData[]>([]);
-  const [_tenant, _setTenant] = useState<Record<string, unknown> | null>(null);
-  const [plan, setPlan] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [toggling, setToggling] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
-  const load = useCallback(async (signal?: AbortSignal) => {
-    try {
-      const res = await fetch(`/api/superadmin/tenants/${tenantId}/modules`, { signal });
-      const d = await res.json();
-      if (signal?.aborted) return;
-      setModules(d.data || []);
-      setPlan(d.plan || 'free');
-      setLoading(false);
-    } catch (e) {
-      if ((e as Error)?.name === 'AbortError') return;
-      throw e;
-    }
-  }, [tenantId]);
+  // #1328: TanStack Query replaces fetch + useEffect + useState.
+  const queryKey = ['superadmin', 'tenant-modules', tenantId] as const;
+  const { data, isLoading, refetch } = useApiQuery<ModulesResponse>(
+    queryKey,
+    `/api/superadmin/tenants/${tenantId}/modules`,
+    { enabled: !!tenantId },
+  );
 
-  useEffect(() => {
-    const controller = new AbortController();
-    load(controller.signal);
-    return () => controller.abort();
-  }, [load]);
+  const modules: ModuleData[] = data?.data ?? [];
+  const plan = data?.plan ?? 'free';
+  const loading = isLoading;
 
-  interface ModuleData {
-    id: string;
-    status: string;
-    planAllowed: boolean;
-    name: string;
-    icon?: string;
-    description?: string;
-    category?: string;
-    features?: string[];
-  }
-
-  const toggleModule = async (mod: ModuleData) => {
-    setToggling(mod.id);
-    const action = mod.status === 'active' ? 'disable' : 'install';
-    const res = await fetch(`/api/superadmin/tenants/${tenantId}/modules`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ module_id: mod.id, action, force_enabled: !mod.planAllowed }),
-    });
-    if (res.ok) {
+  const toggleMutation = useMutation({
+    mutationFn: async (mod: ModuleData) => {
+      const action = mod.status === 'active' ? 'disable' : 'install';
+      const res = await fetch(`/api/superadmin/tenants/${tenantId}/modules`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ module_id: mod.id, action, force_enabled: !mod.planAllowed }),
+      });
+      if (!res.ok) { const d = await res.json(); throw new Error(d.error); }
+      return action;
+    },
+    onSuccess: (action) => {
       toast.success(action === 'install' ? 'Module enabled' : 'Module disabled');
-      load();
-    } else { const d = await res.json(); toast.error(d.error); }
-    setToggling(null);
-  };
+      queryClient.invalidateQueries({ queryKey });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const toggling = toggleMutation.isPending ? (toggleMutation.variables?.id ?? null) : null;
+
+  const toggleModule = (mod: ModuleData) => toggleMutation.mutate(mod);
 
   const totalEnabled = modules.filter(m => m.status === 'active').length;
 
@@ -91,7 +91,7 @@ export default function TenantModulesPage() {
             Plan: <span className="capitalize font-semibold text-white/60">{plan}</span> · {totalEnabled}/{modules.length} active
           </p>
         </div>
-        <button onClick={() => load()} className="p-2 rounded-lg border border-white/10 text-white/40 hover:text-white hover:bg-white/5 transition-colors">
+        <button onClick={() => refetch()} className="p-2 rounded-lg border border-white/10 text-white/40 hover:text-white hover:bg-white/5 transition-colors">
           <RefreshCw className="w-4 h-4" />
         </button>
       </div>
