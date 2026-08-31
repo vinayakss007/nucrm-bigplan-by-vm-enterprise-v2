@@ -5,7 +5,9 @@
  */
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
+import { useMutation } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import {
   Search, ChevronLeft, ChevronRight, Download,
@@ -93,8 +95,6 @@ export default function DataExplorerPage() {
 function DataExplorerInner() {
   const [query, setQuery] = useState('');
   const [entityType, setEntityType] = useState<EntityType>('contacts');
-  const [results, setResults] = useState<SearchResult | null>(null);
-  const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
   const [sort, setSort] = useState('created_at');
   const [order, setOrder] = useState<'desc' | 'asc'>('desc');
@@ -102,37 +102,16 @@ function DataExplorerInner() {
 
   const columns = COLUMNS[entityType];
 
-  const handleSearch = useCallback(async (signal?: AbortSignal) => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams({
-        type: entityType,
-        page: String(page),
-        limit: '50',
-        sort,
-        order,
-      });
-      if (query.trim()) params.set('q', query.trim());
-
-      const res = await fetch(`/api/tenant/data-explorer?${params}`, { signal });
-      if (!res.ok) throw new Error('Search failed');
-      const data = await res.json();
-      if (signal?.aborted) return;
-      setResults(data);
-    } catch (e) {
-      if ((e as Error)?.name === 'AbortError') return;
-      toast.error('Search failed');
-    } finally {
-      if (signal?.aborted) return;
-      setLoading(false);
-    }
-  }, [query, entityType, page, sort, order]);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    handleSearch(controller.signal);
-    return () => controller.abort();
-  }, [handleSearch]);
+  // #1328: data via TanStack Query (was raw fetch + useEffect). All the query
+  // inputs are part of the key so it refetches/caches per combination.
+  const params = new URLSearchParams({ type: entityType, page: String(page), limit: '50', sort, order });
+  if (query.trim()) params.set('q', query.trim());
+  const { data: results = null, isFetching: loading, error, refetch } = useApiQuery<SearchResult>(
+    ['tenant', 'data-explorer', { entityType, page, sort, order, q: query.trim() }],
+    `/api/tenant/data-explorer?${params}`,
+  );
+  useEffect(() => { if (error) toast.error('Search failed'); }, [error]);
+  const handleSearch = () => refetch();
 
   useEffect(() => {
     setPage(1);
@@ -151,37 +130,34 @@ function DataExplorerInner() {
     setEditTarget({ table: entityType, id, field, value: currentValue });
   };
 
-  const handleSaveEdit = async () => {
-    if (!editTarget) return;
-    try {
+  const saveEditMutation = useMutation({
+    mutationFn: async (target: { table: string; id: string; field: string; value: unknown }) => {
       const res = await fetch('/api/tenant/data-explorer', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(editTarget),
+        body: JSON.stringify(target),
       });
       if (!res.ok) throw new Error('Update failed');
-      toast.success('Record updated');
-      setEditTarget(null);
-      handleSearch();
-    } catch {
-      toast.error('Failed to update record');
-    }
-  };
+    },
+    onSuccess: () => { toast.success('Record updated'); setEditTarget(null); refetch(); },
+    onError: () => toast.error('Failed to update record'),
+  });
 
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch('/api/tenant/data-explorer', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ table: entityType, id }),
+      });
+      if (!res.ok) throw new Error('Delete failed');
+    },
+    onSuccess: () => { toast.success('Record deleted'); refetch(); },
+    onError: () => toast.error('Failed to delete record'),
+  });
   const handleDelete = async (id: string) => {
     await confirmThen('Delete this record? It will be soft-deleted.', async () => {
-      try {
-        const res = await fetch('/api/tenant/data-explorer', {
-          method: 'DELETE',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ table: entityType, id }),
-        });
-        if (!res.ok) throw new Error('Delete failed');
-        toast.success('Record deleted');
-        handleSearch();
-      } catch {
-        toast.error('Failed to delete record');
-      }
+      deleteMutation.mutate(id);
     });
   };
 
@@ -342,14 +318,12 @@ function DataExplorerInner() {
                               className="w-full px-2 py-1 text-xs border border-border rounded bg-card"
                               onKeyDown={e => {
                                 if (e.key === 'Enter') {
-                                  setEditTarget({ ...editTarget, value: (e.target as HTMLInputElement).value });
-                                  handleSaveEdit();
+                                  saveEditMutation.mutate({ ...editTarget, value: (e.target as HTMLInputElement).value });
                                 }
                                 if (e.key === 'Escape') setEditTarget(null);
                               }}
                               onBlur={e => {
-                                setEditTarget({ ...editTarget, value: e.target.value });
-                                handleSaveEdit();
+                                saveEditMutation.mutate({ ...editTarget, value: e.target.value });
                               }}
                             />
                           </div>

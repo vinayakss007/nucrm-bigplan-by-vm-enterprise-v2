@@ -4,7 +4,9 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect, useRef, useCallback, Suspense } from 'react';
+import { useState, useEffect, useRef, Suspense } from 'react';
+import { useMutation } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Search, Users, TrendingUp, Building2, CheckSquare, Loader2, X, Target } from 'lucide-react';
@@ -81,77 +83,71 @@ function SearchPageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const [query, setQuery] = useState(searchParams.get('q') ?? '');
-  const [results, setResults] = useState<SearchResults | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [debouncedQuery, setDebouncedQuery] = useState(searchParams.get('q') ?? '');
   const [activeType, setActiveType] = useState('all');
   const [filters, setFilters] = useState<SearchFilters>({});
   const [_advancedResults, setAdvancedResults] = useState<unknown[] | null>(null);
   const [_advancedTotal, setAdvancedTotal] = useState(0);
-  const [page, _setPage] = useState(1);
+  const [page] = useState(1);
   const inputRef = useRef<HTMLInputElement>(null);
   const timerRef = useRef<NodeJS.Timeout | undefined>(undefined);
 
-  const search = useCallback(async (q: string, type = activeType, signal?: AbortSignal) => {
-    if (!q.trim()) { setResults(null); return; }
-    setLoading(true);
-    const params = new URLSearchParams({ q, type, limit: '12' });
-    try {
-      const res = await fetch('/api/tenant/search?' + params, { signal });
-      const data = await res.json();
-      if (signal?.aborted) return;
-      setResults(data);
-      setLoading(false);
-    } catch (e) {
-      if ((e as Error)?.name === 'AbortError') return;
-      throw e;
-    }
-  }, [activeType]);
+  // #1328: quick search via TanStack Query (was a debounced fetch in an
+  // effect). The debounced term + type form the key so results cache per query
+  // and stale requests are superseded automatically.
+  const trimmed = debouncedQuery.trim();
+  const { data: results = null, isFetching } = useApiQuery<SearchResults>(
+    ['tenant', 'search', activeType, trimmed],
+    `/api/tenant/search?${new URLSearchParams({ q: trimmed, type: activeType, limit: '12' })}`,
+    { enabled: trimmed.length > 0 },
+  );
+  const loadingQuery = isFetching && trimmed.length > 0;
 
+  // Sync the input from the URL and focus on mount.
   useEffect(() => {
-    const controller = new AbortController();
     const q = searchParams.get('q');
-    if (q) { setQuery(q); search(q, undefined, controller.signal); }
+    if (q) { setQuery(q); setDebouncedQuery(q); }
     inputRef.current?.focus();
-    return () => controller.abort();
-  }, [searchParams, search]);
+  }, [searchParams]);
 
   const handleInput = (val: string) => {
     setQuery(val);
     clearTimeout(timerRef.current);
-    if (!val.trim()) { setResults(null); return; }
+    if (!val.trim()) { setDebouncedQuery(''); return; }
     timerRef.current = setTimeout(() => {
       router.replace(`/tenant/search?q=${encodeURIComponent(val)}`, { scroll: false });
-      search(val);
+      setDebouncedQuery(val);
     }, 300);
   };
 
   const handleTypeChange = (type: string) => {
     setActiveType(type);
-    if (query.trim()) search(query, type);
   };
 
-  // Advanced search with filters
-  const advancedSearch = useCallback(async () => {
-    if (!query.trim() && Object.keys(filters).length === 0) return;
-    if (activeType === 'all') return; // Advanced search requires a specific type
-    setLoading(true);
-    try {
+  // Advanced search with filters (POST) — a mutation whose result is held
+  // locally (it powers a separate advanced-results view).
+  const advancedMutation = useMutation({
+    mutationFn: async () => {
       const res = await fetch('/api/tenant/search/advanced', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({ query: query.trim() || undefined, type: activeType, filters, page, limit: 25 }),
       });
-      const data = await res.json();
+      return res.json();
+    },
+    onSuccess: (data) => {
       setAdvancedResults(data.data ?? []);
       setAdvancedTotal(data.pagination?.total ?? 0);
-    } catch {
-      // Search failed
-    } finally {
-      setLoading(false);
-    }
-  }, [query, activeType, filters, page]);
+    },
+  });
+  const advancedSearch = () => {
+    if (!query.trim() && Object.keys(filters).length === 0) return;
+    if (activeType === 'all') return; // Advanced search requires a specific type
+    advancedMutation.mutate();
+  };
 
+  const loading = loadingQuery || advancedMutation.isPending;
   const total = results ? (results.contacts?.length ?? 0) + (results.leads?.length ?? 0) + (results.deals?.length ?? 0) + (results.companies?.length ?? 0) + (results.tasks?.length ?? 0) : 0;
 
   const TYPES = [
@@ -182,7 +178,7 @@ function SearchPageContent() {
           autoFocus
         />
         {query && (
-          <button onClick={() => { setQuery(''); setResults(null); inputRef.current?.focus(); }}
+          <button onClick={() => { setQuery(''); setDebouncedQuery(''); inputRef.current?.focus(); }}
             className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors">
             <X className="w-4 h-4" />
           </button>

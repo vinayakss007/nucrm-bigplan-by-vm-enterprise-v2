@@ -4,7 +4,9 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import { Trash2, RotateCcw, AlertTriangle, X, Clock } from 'lucide-react';
 import { cn, formatRelativeTime } from '@/lib/utils';
 import { confirmThen } from '@/components/ui/confirm-dialog';
@@ -28,57 +30,52 @@ interface TrashItem {
 }
 
 export default function TrashPage() {
-  const [items, setItems] = useState<TrashItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [filter, setFilter] = useState('all');
-  const [restoring, setRestoring] = useState<string | null>(null);
-  const [deleting, setDeleting] = useState<string | null>(null);
 
-  const load = useCallback(async (signal?: AbortSignal) => {
-    setLoading(true);
-    const q = filter !== 'all' ? `?type=${filter}` : '';
-    try {
-      const res = await fetch('/api/tenant/trash' + q, { signal });
-      const data = await res.json();
-      if (signal?.aborted) return;
-      setItems(data.data ?? []);
-      setLoading(false);
-    } catch (e) {
-      if ((e as Error)?.name === 'AbortError') return;
-      throw e;
-    }
-  }, [filter]);
-  useEffect(() => {
-    const controller = new AbortController();
-    load(controller.signal);
-    return () => controller.abort();
-  }, [filter, load]);
+  // #1328: trash items via TanStack Query (was raw fetch + useEffect). filter is
+  // part of the key so switching tabs refetches and caches per view.
+  const { data, isLoading: loading } = useApiQuery<{ data?: TrashItem[] }>(
+    ['tenant', 'trash', { filter }],
+    '/api/tenant/trash' + (filter !== 'all' ? `?type=${filter}` : ''),
+  );
+  const items: TrashItem[] = data?.data ?? [];
+  const load = () => queryClient.invalidateQueries({ queryKey: ['tenant', 'trash'] });
 
-  const restore = async (item: TrashItem) => {
-    await confirmThen(`Restore "${item.name}"?`, async () => {
-      setRestoring(item.id);
+  const restoreMutation = useMutation({
+    mutationFn: async (item: TrashItem) => {
       const res = await fetch('/api/tenant/trash', {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: item.id, resource_type: item.resource_type }),
       });
-      const data = await res.json();
-      if (res.ok) { toast.success(`${item.name} restored`); load(); }
-      else toast.error(data.error);
-      setRestoring(null);
-    });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error);
+      return item;
+    },
+    onSuccess: (item) => { toast.success(`${item.name} restored`); load(); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const restoring = restoreMutation.isPending ? (restoreMutation.variables?.id ?? null) : null;
+  const restore = async (item: TrashItem) => {
+    await confirmThen(`Restore "${item.name}"?`, async () => { restoreMutation.mutate(item); });
   };
 
-  const permanentDelete = async (item: TrashItem) => {
-    await confirmThen(`Permanently delete "${item.name}"? This CANNOT be undone.`, async () => {
-      setDeleting(item.id);
+  const deleteMutation = useMutation({
+    mutationFn: async (item: TrashItem) => {
       const res = await fetch('/api/tenant/trash', {
         method: 'DELETE', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: item.id, resource_type: item.resource_type }),
       });
-      const data = await res.json();
-      if (res.ok) { toast.success('Permanently deleted'); load(); }
-      else toast.error(data.error);
-      setDeleting(null);
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error);
+    },
+    onSuccess: () => { toast.success('Permanently deleted'); load(); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const deleting = deleteMutation.isPending ? (deleteMutation.variables?.id ?? null) : null;
+  const permanentDelete = async (item: TrashItem) => {
+    await confirmThen(`Permanently delete "${item.name}"? This CANNOT be undone.`, async () => {
+      deleteMutation.mutate(item);
     });
   };
 

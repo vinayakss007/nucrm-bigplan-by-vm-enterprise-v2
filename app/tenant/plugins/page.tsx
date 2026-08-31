@@ -4,7 +4,9 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import { Puzzle, Plus, Trash2, X, Loader2, ToggleLeft, ToggleRight, Zap, TestTube, Copy, ChevronDown, ChevronUp, Clock, Activity } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { confirmThen } from '@/components/ui/confirm-dialog';
@@ -56,38 +58,24 @@ const TEMPLATES = [
 
 const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
 
+const PLUGINS_QUERY = ['tenant', 'plugins'] as const;
+
 export default function PluginsPage() {
+  const queryClient = useQueryClient();
   const [tab, setTab] = useState<Tab>('my_plugins');
-  const [plugins, setPlugins] = useState<Plugin[]>([]);
-  const [loading, setLoading] = useState(true);
   const [expandedPlugin, setExpandedPlugin] = useState<string | null>(null);
   const [logs, setLogs] = useState<Record<string, LogEntry[]>>({});
   const [selectedTemplate, setSelectedTemplate] = useState<(typeof TEMPLATES)[number] | null>(null);
 
-  const loadPlugins = useCallback(async (signal?: AbortSignal) => {
-    setLoading(true);
-    try {
-      const res = await fetch('/api/tenant/plugins', { signal });
-      if (res.ok) {
-        const d = await res.json() as { data: Plugin[] };
-        if (signal?.aborted) return;
-        setPlugins(d.data ?? []);
-      }
-    } catch (e) {
-      if ((e as Error)?.name === 'AbortError') return;
-      throw e;
-    } finally {
-      if (signal?.aborted) return;
-      setLoading(false);
-    }
-  }, []);
+  // #1328: list via TanStack Query (was raw fetch + useEffect).
+  const { data, isLoading: loading } = useApiQuery<{ data?: Plugin[] }>(
+    PLUGINS_QUERY,
+    '/api/tenant/plugins',
+  );
+  const plugins: Plugin[] = data?.data ?? [];
+  const loadPlugins = () => queryClient.invalidateQueries({ queryKey: PLUGINS_QUERY });
 
-  useEffect(() => {
-    const controller = new AbortController();
-    void loadPlugins(controller.signal);
-    return () => controller.abort();
-  }, [loadPlugins]);
-
+  // Per-plugin execution logs are loaded on demand (on expand) into a local map.
   const loadLogs = async (pluginId: string) => {
     const res = await fetch(`/api/tenant/plugins/${pluginId}/logs?limit=50`);
     if (res.ok) {
@@ -96,27 +84,35 @@ export default function PluginsPage() {
     }
   };
 
-  const togglePlugin = async (plugin: Plugin) => {
-    const newStatus = plugin.status === 'active' ? 'disabled' : 'active';
-    const res = await fetch(`/api/tenant/plugins/${plugin.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: newStatus }),
-    });
-    if (res.ok) {
-      setPlugins((prev) => prev.map((p) => p.id === plugin.id ? { ...p, status: newStatus } : p));
+  const toggleMutation = useMutation({
+    mutationFn: async (plugin: Plugin) => {
+      const newStatus = plugin.status === 'active' ? 'disabled' : 'active';
+      const res = await fetch(`/api/tenant/plugins/${plugin.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      if (!res.ok) throw new Error('Failed');
+      return newStatus;
+    },
+    onSuccess: (newStatus) => {
       toast.success(newStatus === 'active' ? 'Plugin enabled' : 'Plugin disabled');
-    }
-  };
+      loadPlugins();
+    },
+  });
+  const togglePlugin = (plugin: Plugin) => toggleMutation.mutate(plugin);
 
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/tenant/plugins/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed');
+    },
+    onSuccess: () => { toast.success('Plugin deleted'); loadPlugins(); },
+  });
   const deletePlugin = async (id: string) => {
     const plugin = plugins.find(p => p.id === id);
     await confirmThen(`Delete plugin "${plugin?.name || 'this plugin'}"?`, async () => {
-      const res = await fetch(`/api/tenant/plugins/${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        setPlugins((prev) => prev.filter((p) => p.id !== id));
-        toast.success('Plugin deleted');
-      }
+      deleteMutation.mutate(id);
     });
   };
 
