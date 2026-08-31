@@ -10,6 +10,7 @@ import { customEntities } from '@/drizzle/schema';
 import { eq, and, isNull } from 'drizzle-orm';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { apiError } from '@/lib/api-error';
+import { concurrencyGuard } from '@/lib/api/concurrency';
 import { z } from 'zod';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
@@ -65,6 +66,13 @@ export const PATCH = withApiRoute(async (request: NextRequest, { params }: { par
     if (v.fields !== undefined) updateData.fields = v.fields;
     if (v.settings !== undefined) updateData.settings = v.settings;
     if (v.isActive !== undefined) updateData.isActive = v.isActive;
+
+    // Optimistic concurrency (#680): if the client sends expectedUpdatedAt,
+    // reject the write when the row moved on since it was read. Opt-in — callers
+    // that omit it keep the previous last-write-wins behaviour.
+    const expectedUpdatedAt = rawBody?.expectedUpdatedAt ? new Date(rawBody.expectedUpdatedAt) : null;
+    const guard = await concurrencyGuard(db, customEntities, id, ctx.tenantId, expectedUpdatedAt);
+    if (guard) return guard;
 
     const [row] = await db
       .update(customEntities)

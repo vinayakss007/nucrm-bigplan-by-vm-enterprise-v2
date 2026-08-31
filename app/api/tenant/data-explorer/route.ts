@@ -180,6 +180,10 @@ const updateSchema = z.object({
   id: z.string().min(1),
   field: z.string().min(1),
   value: z.any(),
+  // Optimistic concurrency (#680): when supplied, the inline edit only applies
+  // if the row's updated_at still matches. Opt-in — omitting it keeps the prior
+  // last-write-wins behaviour.
+  expectedUpdatedAt: z.string().datetime().optional(),
 });
 
 // Explicit per-table allowlist of editable columns.
@@ -211,7 +215,7 @@ export const PUT = withApiRoute(async (req: NextRequest) => {
     const body = await readJsonBody(req);
     const validated = validateBody(updateSchema, body);
     if (validated instanceof NextResponse) return validated;
-    const { table, id, field, value } = validated.data;
+    const { table, id, field, value, expectedUpdatedAt } = validated.data;
 
     // #1126: authenticated is not enough — updating a record requires the
     // per-entity edit permission (e.g. deals.edit), not just a valid session.
@@ -234,13 +238,33 @@ export const PUT = withApiRoute(async (req: NextRequest) => {
       return NextResponse.json({ error: 'Invalid field name' }, { status: 400 });
     }
 
+    // Optimistic concurrency guard: truncate both sides to millisecond
+    // precision so the comparison survives the JS/pg round-trip (pg keeps
+    // microseconds, JS Date only ms).
+    const versionCond = expectedUpdatedAt
+      ? sql` AND date_trunc('millisecond', updated_at::timestamptz) = date_trunc('millisecond', ${new Date(expectedUpdatedAt)}::timestamptz)`
+      : sql``;
+
     const result = await db.execute(sql`
       UPDATE ${sql.identifier(table)} SET ${sql.identifier(safeField)} = ${value}, updated_at = now()
-      WHERE id = ${id} AND tenant_id = ${ctx.tenantId}
+      WHERE id = ${id} AND tenant_id = ${ctx.tenantId}${versionCond}
       RETURNING id, ${sql.identifier(safeField)}
     `);
 
     if (result.rows.length === 0) {
+      // With a version condition, a 0-row result may mean the row moved on
+      // rather than not existing — distinguish so the client can refresh.
+      if (expectedUpdatedAt) {
+        const [exists] = (await db.execute(sql`
+          SELECT 1 FROM ${sql.identifier(table)} WHERE id = ${id} AND tenant_id = ${ctx.tenantId} LIMIT 1
+        `)).rows;
+        if (exists) {
+          return NextResponse.json(
+            { error: 'Stale data — this record was modified by another user. Please refresh and retry.' },
+            { status: 409 },
+          );
+        }
+      }
       return NextResponse.json({ error: 'Record not found' }, { status: 404 });
     }
 
