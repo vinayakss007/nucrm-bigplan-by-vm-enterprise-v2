@@ -10,9 +10,12 @@ import { db } from '@/drizzle/db';
 import { contacts, deals, tasks, supportTickets, companies, activities, emailLog } from '@/drizzle/schema';
 import { eq, and, sql, gte, isNull } from 'drizzle-orm';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { rateLimitRead } from '@/lib/api/read-rate-limit';
 
 export const GET = withApiRoute(async (request: NextRequest) => {
   try {
+    const limited = await rateLimitRead(request, 'analytics');
+    if (limited) return limited;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
 

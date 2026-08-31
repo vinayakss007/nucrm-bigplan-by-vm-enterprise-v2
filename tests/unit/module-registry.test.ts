@@ -1,9 +1,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const { mockFindFirst, mockSelectChain } = vi.hoisted(() => ({
+const { mockFindFirst, mockSelectChain, mockUpdate, mockUpdateSet, mockUpdateWhere } = vi.hoisted(() => ({
   mockFindFirst: vi.fn(),
   mockSelectChain: vi.fn(),
+  mockUpdate: vi.fn(),
+  mockUpdateSet: vi.fn(),
+  mockUpdateWhere: vi.fn(),
 }));
 
 vi.mock('@/drizzle/db', () => ({
@@ -20,11 +23,17 @@ vi.mock('@/drizzle/db', () => ({
         onConflictDoUpdate: vi.fn(() => ({ then: vi.fn() })),
       }),
     }),
-    update: (..._args: any[]) => ({
-      set: (..._setArgs: any[]) => ({
-        where: (..._whereArgs: any[]) => undefined,
-      }),
-    }),
+    update: (...args: any[]) => {
+      mockUpdate(...args);
+      return {
+        set: (...setArgs: any[]) => {
+          mockUpdateSet(...setArgs);
+          return {
+            where: (...whereArgs: any[]) => mockUpdateWhere(...whereArgs),
+          };
+        },
+      };
+    },
     transaction: vi.fn((cb: (tx: any) => Promise<any>) => {
       const tx: any = {
         insert: () => ({
@@ -223,11 +232,24 @@ describe('module-registry', () => {
     });
 
     it('updates settings and reflects in DB call', async () => {
-      await ModuleRegistry.updateSettings('tenant-1', 'whatsapp-bot', {
-        phone_number_id: '99999',
-        access_token: 'new_tok',
-      });
-      expect(true).toBe(true);
+      const newSettings = { phone_number_id: '99999', access_token: 'new_tok' };
+      await ModuleRegistry.updateSettings('tenant-1', 'whatsapp-bot', newSettings);
+
+      // Targets the tenant_modules table
+      expect(mockUpdate).toHaveBeenCalledTimes(1);
+
+      // Persists the provided settings plus refreshed timestamps
+      expect(mockUpdateSet).toHaveBeenCalledTimes(1);
+      const setArg = mockUpdateSet.mock.calls[0][0];
+      expect(setArg.settings).toEqual(newSettings);
+      expect(setArg.lastUsedAt).toBeInstanceOf(Date);
+      expect(setArg.updatedAt).toBeInstanceOf(Date);
+
+      // Scoped to the correct tenant + module (eq mock encodes the value)
+      expect(mockUpdateWhere).toHaveBeenCalledTimes(1);
+      const { eq } = await import('drizzle-orm');
+      expect(eq).toHaveBeenCalledWith('tenant_id', 'tenant-1');
+      expect(eq).toHaveBeenCalledWith('module_id', 'whatsapp-bot');
     });
   });
 

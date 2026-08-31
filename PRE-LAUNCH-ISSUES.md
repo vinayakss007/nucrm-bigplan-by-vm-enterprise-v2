@@ -1,7 +1,7 @@
 # Pre-Launch Issues
 
 Generated: 2026-07-31
-Last verified: 2026-08-31 (code re-audit)
+Last verified: 2026-08-31 (code re-audit; reconciled C3 rate limiting, C4 concurrency guards, and H6 CSP)
 
 > **Status legend:** ✅ Resolved · ⚠️ Partially resolved · 🔴 Open
 
@@ -24,29 +24,36 @@ Last verified: 2026-08-31 (code re-audit)
   it and RLS stays enforced (fix #1615). Detail routes add RBAC ownership checks.
 - Reference: Issue #664.
 
-### 3. ⚠️ PARTIALLY RESOLVED — Rate Limiting on GET/PATCH/DELETE Endpoints
+### 3. ✅ RESOLVED — Rate Limiting on GET/PATCH/DELETE Endpoints
 
-- **Verification (2026-08-31)**: 182 of 314 tenant route files now call
-  `checkRateLimit()` / `rateLimitMutating()`. All mutating PATCH/DELETE routes
-  audited are covered. The remaining uncovered routes are predominantly
-  **read-only GET** analytics/dashboard-widget endpoints (`analytics/*`,
-  `dashboard/widgets/*`).
-- **Remaining**: Decide whether read-only GET endpoints need rate limiting for
-  launch (lower risk: no mutation, still an enumeration/DoS surface).
+- **Verification (2026-08-31, re-audit)**: The global edge limiter in `proxy.ts`
+  covers **all** non-public API paths (120 req/min per user, 300 req/min for
+  API keys, 30 req/min unauthenticated). All mutating PATCH/DELETE routes are
+  additionally covered by in-route `checkRateLimit()` / `rateLimitMutating()`.
+- **Read-only GET analytics endpoints**: A defense-in-depth in-route layer was
+  added for the 6 expensive analytics GET endpoints (`advanced`, `forecast`,
+  `overview`, `scheduled-reports`, `stats`, `usage`) via the new
+  `lib/api/read-rate-limit.ts` helper (`rateLimitRead`, analytics bucket =
+  60 req/min). These endpoints now have **both** edge and in-route rate limiting.
+- The open question ("decide whether read-only GET endpoints need rate limiting")
+  is resolved — they have it.
 - Reference: Issue #652.
 
-### 4. ⚠️ PARTIALLY RESOLVED — Optimistic Concurrency Guard on Entity Updates
+### 4. ✅ RESOLVED — Optimistic Concurrency Guard on Entity Updates
 
-- **Verification (2026-08-31)**: Two guard patterns exist and are applied:
+- **Verification (2026-08-31, re-audit)**: Two guard patterns exist and are applied:
   - `withConcurrencyGuard()` + `updatedAtMs()` — contacts, deals, leads, tasks,
     quotes, products, meetings, email-templates.
-  - `concurrencyGuard(db, table, id, tenantId, expectedUpdatedAt)` (opt-in) —
-    companies, and now custom-entities, custom-entity rows, and data-explorer
-    inline edits.
-- **Remaining**: A number of secondary/config-style routes still rely on
-  last-write-wins by design (upsert/singleton settings). Confirm none of the
-  remaining business entities (e.g. invoices, orders, tickets, contracts) need
-  a guard before launch — several already send `updated_at`/`_version`.
+  - `concurrencyGuard(db, table, id, tenantId, expectedUpdatedAt)` — companies,
+    custom-entities, custom-entity rows, data-explorer inline edits, and the
+    remaining business entities: `invoices/[id]/route.ts` (PUT),
+    `orders/[id]/route.ts` (PUT), `tickets/[id]/route.ts` (PATCH),
+    `contracts/[id]/route.ts` (PUT).
+- **Confirmed**: Sub-resource routes (payments create, replies create, bulk POST,
+  pdf GET, send POST) are create-only/list/pdf/send/bulk/delete actions that
+  legitimately do not need optimistic locking. Config-style/singleton settings
+  routes remain last-write-wins by design. No remaining business entity needs a
+  guard.
 - Reference: Issue #680.
 
 ### 5. ✅ RESOLVED — Secrets in `.env.local` Need Rotation + Secure Deployment
@@ -61,12 +68,16 @@ Last verified: 2026-08-31 (code re-audit)
 
 ## HIGH (significant risk — should fix)
 
-### 6. CSP `unsafe-inline` for Scripts in Production
+### 6. ✅ RESOLVED — CSP `unsafe-inline` for Scripts in Production
 
-- **File**: `next.config.mjs` (line 71)
-- **Risk**: Weakens XSS protection. `script-src 'self' 'unsafe-inline'` allows inline script injection.
-- **Fix**: Implement `NEXT_SCRIPT_NONCE` strategy. Reference: Issue #657.
-- **Effort**: 1-2 days
+- **File**: `proxy.ts` (`buildCsp(nonce)`)
+- **Verification (2026-08-31, re-audit)**: Resolved via the nonce-based CSP in
+  `proxy.ts` `buildCsp(nonce)` (issue #1070). Production `script-src` is
+  `'self' 'nonce-${nonce}'` — no `'unsafe-inline'` for scripts in prod
+  (`'unsafe-eval'` remains only in dev for Fast Refresh). `next.config.mjs`
+  intentionally sets no static CSP. Only `style-src-attr` retains
+  `'unsafe-inline'`, which is unavoidable for React inline styles.
+- Reference: Issue #657, Issue #1070.
 
 ### 7. ✅ RESOLVED — Multi-Table Writes Not in `db.transaction()`
 
@@ -174,13 +185,13 @@ Last verified: 2026-08-31 (code re-audit)
 
 ## Recommended Launch Order
 
-_CRITICAL #1, #2, #5 are resolved. Remaining blockers below._
+_All CRITICAL items (#1–#5) are now resolved. HIGH #6 (CSP) is resolved. Remaining blockers below._
 
-1. ⚠️ Finish rate limiting decision for read-only GET endpoints (CRITICAL #3)
-2. ⚠️ Confirm concurrency-guard coverage for remaining business entities (CRITICAL #4)
+1. ✅ Rate limiting for read-only GET endpoints — done (edge + in-route analytics limiter) (CRITICAL #3)
+2. ✅ Concurrency-guard coverage for remaining business entities — done (invoices, orders, tickets, contracts) (CRITICAL #4)
 3. ✅ Fix deal creation stage resolution (HIGH #8) — done
-4. Harden CSP policy (HIGH #6)
-5. Merge pending PRs #552 and #553 (MEDIUM #15)
+4. ✅ Harden CSP policy — done (nonce-based CSP in `proxy.ts`, #1070) (HIGH #6)
+5. ✅ Merge pending PRs #552 and #553 — done (merged 2026-07-12) (MEDIUM #15)
 6. Fix migration journal (HIGH #10)
 7. ✅ Wrap remaining multi-table writes in transactions (HIGH #7) — done
 8. ✅ Audit filter + session invalidation + notification delivery (HIGH #9) — done
