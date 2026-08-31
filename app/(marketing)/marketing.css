@@ -13,18 +13,27 @@
  */
 
 .mk-root {
-  --mk-bg: #06060e;
-  --mk-bg-soft: #0a0a16;
-  --mk-line: rgba(255, 255, 255, 0.08);
-  --mk-line-strong: rgba(255, 255, 255, 0.14);
-  --mk-panel: rgba(255, 255, 255, 0.028);
-  --mk-panel-hi: rgba(255, 255, 255, 0.055);
+  /* Vivid blue + pearl-white theme. The canvas is a deep ocean-blue rather
+     than near-black, and every accent that used to be violet now runs on a
+     blue → sky → cyan ramp so the site reads bright and colourful instead of
+     the old "AI purple". Pearl-white highlights are layered on top via the
+     aurora and text gradients. */
+  --mk-bg: #071033;
+  --mk-bg-soft: #0b1a4a;
+  --mk-line: rgba(255, 255, 255, 0.1);
+  --mk-line-strong: rgba(255, 255, 255, 0.18);
+  --mk-panel: rgba(255, 255, 255, 0.04);
+  --mk-panel-hi: rgba(255, 255, 255, 0.08);
   --mk-text: #ffffff;
-  --mk-muted: #9aa4b8;
-  --mk-dim: #6b7488;
-  --mk-violet: #8b5cf6;
-  --mk-indigo: #6366f1;
+  --mk-muted: #b9c6e6;
+  --mk-dim: #8394c0;
+  /* Accent ramp — kept under the same variable names so existing references
+     don't break, but every value is now a vivid blue instead of violet. */
+  --mk-violet: #3b82f6;
+  --mk-indigo: #2563eb;
   --mk-cyan: #22d3ee;
+  --mk-sky: #38bdf8;
+  --mk-pearl: #eaf2ff;
 
   color-scheme: dark;
   background: var(--mk-bg);
@@ -146,7 +155,7 @@
    at 0.72 alpha with no blur the hero headline read straight through an open
    navigation menu. */
 .mk-glass {
-  background: rgba(9, 9, 19, 0.95);
+  background: rgba(9, 20, 55, 0.94);
   border: 1px solid var(--mk-line);
   /* The 0.95 alpha does the readability work (see comment above); the blur is
      pure decoration. This surface is the full-width fixed header, so the blur
@@ -166,7 +175,7 @@
   inset: 0;
   border-radius: inherit;
   padding: 1px;
-  background: linear-gradient(160deg, rgba(139, 92, 246, 0.5), rgba(255, 255, 255, 0.04) 35%, transparent 70%);
+  background: linear-gradient(160deg, rgba(59, 130, 246, 0.6), rgba(234, 242, 255, 0.06) 35%, transparent 70%);
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
@@ -177,13 +186,14 @@
 /* ── Text effects ───────────────────────────────────────────────────── */
 
 .mk-grad {
-  background: linear-gradient(103deg, #ffffff 0%, #e9d5ff 34%, #a78bfa 62%, #67e8f9 100%);
+  background: linear-gradient(103deg, #ffffff 0%, #dbeafe 30%, #60a5fa 60%, #67e8f9 100%);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
 }
+/* Kept the .mk-grad-violet name for compatibility; the ramp is now blue. */
 .mk-grad-violet {
-  background: linear-gradient(100deg, #a78bfa, #818cf8 55%, #22d3ee);
+  background: linear-gradient(100deg, #60a5fa, #3b82f6 50%, #22d3ee);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -192,12 +202,12 @@
 /* ── Backdrops ──────────────────────────────────────────────────────── */
 
 .mk-grid-bg {
-  background-image: linear-gradient(rgba(148, 163, 184, 0.055) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(148, 163, 184, 0.055) 1px, transparent 1px);
+  background-image: linear-gradient(rgba(125, 211, 252, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(125, 211, 252, 0.07) 1px, transparent 1px);
   background-size: 56px 56px;
 }
 .mk-dot-bg {
-  background-image: radial-gradient(rgba(148, 163, 184, 0.14) 1px, transparent 1px);
+  background-image: radial-gradient(rgba(125, 211, 252, 0.18) 1px, transparent 1px);
   background-size: 22px 22px;
 }
 .mk-fade-y {
@@ -346,12 +356,12 @@
 }
 .mk-btn-primary {
   color: #ffffff;
-  background: linear-gradient(135deg, #7c3aed, #6366f1);
-  box-shadow: 0 10px 30px -10px rgba(124, 58, 237, 0.85), inset 0 1px 0 rgba(255, 255, 255, 0.22);
+  background: linear-gradient(135deg, #2563eb, #38bdf8);
+  box-shadow: 0 10px 30px -10px rgba(37, 99, 235, 0.9), inset 0 1px 0 rgba(255, 255, 255, 0.3);
 }
 .mk-btn-primary:hover {
   transform: translateY(-2px);
-  box-shadow: 0 16px 40px -12px rgba(124, 58, 237, 0.95), inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  box-shadow: 0 16px 40px -12px rgba(37, 99, 235, 1), inset 0 1px 0 rgba(255, 255, 255, 0.35);
 }
 .mk-btn-ghost {
   color: #e6e9f2;
@@ -387,7 +397,7 @@
 
 /* Underline that grows in on hover, used for inline text links. */
 .mk-link {
-  color: #c4b5fd;
+  color: #7dd3fc;
   font-weight: 600;
   position: relative;
 }
@@ -498,7 +508,7 @@
   position: absolute;
   inset: -1px;
   border-radius: inherit;
-  background: linear-gradient(135deg, rgba(139, 92, 246, 0.4), rgba(34, 211, 238, 0.3));
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.45), rgba(34, 211, 238, 0.35));
   opacity: 0;
   filter: blur(12px);
   transition: opacity 0.4s ease;
@@ -543,7 +553,7 @@
   width: 600px;
   height: 600px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(139, 92, 246, 0.12) 0%, transparent 70%);
+  background: radial-gradient(circle, rgba(56, 189, 248, 0.16) 0%, transparent 70%);
   pointer-events: none;
   transform: translate(-50%, -50%);
   opacity: 0;
@@ -604,23 +614,23 @@
   z-index: 1;
   /* Opaque, not a translucent wash. The header sticks while rows scroll beneath
      it, so any transparency lets row text read straight through the labels. */
-  background: #0d0d1a;
+  background: #0d1636;
   box-shadow: inset 0 -1px 0 var(--mk-line);
 }
 /* Needs to outrank `.mk-table .mk-col-own` on the header cell, so the violet
    tint layers over the opaque base instead of replacing it. */
 .mk-table thead th.mk-col-own {
-  background: linear-gradient(180deg, rgba(124, 58, 237, 0.22), rgba(124, 58, 237, 0.12)), #0d0d1a;
-  color: #f4f2ff;
+  background: linear-gradient(180deg, rgba(37, 99, 235, 0.26), rgba(37, 99, 235, 0.14)), #0d1636;
+  color: #eaf2ff;
 }
 .mk-table tbody tr:hover td {
   background: rgba(255, 255, 255, 0.022);
 }
 .mk-table .mk-col-own {
-  background: linear-gradient(180deg, rgba(124, 58, 237, 0.11), rgba(124, 58, 237, 0.045));
-  border-left: 1px solid rgba(139, 92, 246, 0.22);
-  border-right: 1px solid rgba(139, 92, 246, 0.22);
-  color: #f4f2ff;
+  background: linear-gradient(180deg, rgba(37, 99, 235, 0.13), rgba(37, 99, 235, 0.05));
+  border-left: 1px solid rgba(59, 130, 246, 0.26);
+  border-right: 1px solid rgba(59, 130, 246, 0.26);
+  color: #eaf2ff;
 }
 
 
@@ -675,14 +685,14 @@
   width: 5px;
   height: 5px;
   border-radius: 999px;
-  background: rgba(167, 139, 250, 0.7);
+  background: rgba(56, 189, 248, 0.8);
 }
 .mk-prose strong {
   color: #e8ecf5;
   font-weight: 650;
 }
 .mk-prose a {
-  color: #c4b5fd;
+  color: #7dd3fc;
   text-decoration: underline;
   text-underline-offset: 2px;
 }

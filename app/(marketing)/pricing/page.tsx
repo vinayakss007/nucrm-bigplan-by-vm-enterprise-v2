@@ -59,12 +59,12 @@ export default function PricingPage() {
                 <div
                   className={`relative flex h-full flex-col rounded-2xl border p-6 ${
                     plan.featured
-                      ? 'mk-edge border-violet-400/30 bg-gradient-to-b from-violet-600/[0.14] to-white/[0.02]'
+                      ? 'mk-edge border-sky-400/30 bg-gradient-to-b from-blue-600/[0.16] to-white/[0.02]'
                       : 'border-white/[0.08] bg-white/[0.025]'
                   }`}
                 >
                   {plan.featured && (
-                    <span className="absolute -top-3 left-6 rounded-full bg-gradient-to-r from-violet-500 to-indigo-500 px-3 py-1 text-[10.5px] font-bold uppercase tracking-wider text-white shadow-lg shadow-violet-500/30">
+                    <span className="absolute -top-3 left-6 rounded-full bg-gradient-to-r from-blue-500 to-sky-400 px-3 py-1 text-[10.5px] font-bold uppercase tracking-wider text-white shadow-lg shadow-blue-500/30">
                       Most teams
                     </span>
                   )}
@@ -97,7 +97,7 @@ export default function PricingPage() {
                       <li key={f} className="flex gap-2.5">
                         <Icon
                           name="Check"
-                          className={`mt-[3px] h-3.5 w-3.5 shrink-0 ${plan.featured ? 'text-violet-300' : 'text-emerald-400'}`}
+                          className={`mt-[3px] h-3.5 w-3.5 shrink-0 ${plan.featured ? 'text-sky-300' : 'text-emerald-400'}`}
                           strokeWidth={2.6}
                         />
                         <span className="text-[12.5px] leading-relaxed text-slate-400">{f}</span>
@@ -132,7 +132,7 @@ export default function PricingPage() {
                   <span className="min-w-0 flex-1">
                     <span className="flex items-baseline gap-2">
                       <span className="mk-h4 text-white">{m.name}</span>
-                      <span className="mk-mono ml-auto shrink-0 text-[11px] text-violet-300">+${m.addOn}/mo</span>
+                      <span className="mk-mono ml-auto shrink-0 text-[11px] text-sky-300">+${m.addOn}/mo</span>
                     </span>
                     <span className="mk-small mt-1 block">{m.summary}</span>
                     <span className="mk-tiny mt-2 block uppercase tracking-wider">Available from {m.from}</span>
@@ -174,7 +174,7 @@ export default function PricingPage() {
                     <Fragment key={group.group}>
                       <tr>
                         <td colSpan={5} className="!py-3 !pl-4">
-                          <span className="mk-eyebrow text-violet-300/90">{group.group}</span>
+                          <span className="mk-eyebrow text-sky-300/90">{group.group}</span>
                         </td>
                       </tr>
                       {group.rows.map((row) => (
@@ -201,12 +201,12 @@ export default function PricingPage() {
         <Container>
           <Reveal className="mk-card mk-edge relative overflow-hidden p-7 sm:p-10">
             <div
-              className="pointer-events-none absolute -right-24 -top-24 h-80 w-80 rounded-full bg-violet-500/20 blur-3xl"
+              className="pointer-events-none absolute -right-24 -top-24 h-80 w-80 rounded-full bg-sky-500/22 blur-3xl"
               aria-hidden
             />
             <div className="relative grid gap-10 lg:grid-cols-[1fr_1.15fr]">
               <div>
-                <div className="mk-eyebrow text-violet-300/90">Enterprise</div>
+                <div className="mk-eyebrow text-sky-300/90">Enterprise</div>
                 <h2 className="mk-h2 mt-3 text-white">When the procurement questionnaire arrives</h2>
                 <p className="mk-lead mt-4">
                   Every module included, multiple isolated workspaces under one account, single sign-on, white label, and
@@ -233,7 +233,7 @@ export default function PricingPage() {
                   { t: 'Onboarding and migration help', i: 'HeartHandshake' },
                 ].map((f) => (
                   <div key={f.t} className="flex items-center gap-2.5 rounded-xl border border-white/[0.07] bg-white/[0.025] p-3">
-                    <Icon name={f.i} className="h-4 w-4 shrink-0 text-violet-300" />
+                    <Icon name={f.i} className="h-4 w-4 shrink-0 text-sky-300" />
                     <span className="text-[12.5px] font-medium text-slate-300">{f.t}</span>
                   </div>
                 ))}

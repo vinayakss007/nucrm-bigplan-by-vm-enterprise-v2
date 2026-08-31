@@ -17,7 +17,7 @@ export type Pillar = {
   /** Short label used in nav/cards. */
   short: string;
   icon: string;
-  /** Tailwind gradient stops, e.g. 'from-violet-500 to-indigo-500'. */
+  /** Tailwind gradient stops, e.g. 'from-blue-500 to-indigo-500'. */
   accent: string;
   eyebrow: string;
   headline: string;
@@ -38,7 +38,7 @@ export const PILLARS: Pillar[] = [
     name: 'Sales & pipeline',
     short: 'Sales',
     icon: 'TrendingUp',
-    accent: 'from-violet-500 to-indigo-500',
+    accent: 'from-blue-500 to-indigo-500',
     eyebrow: 'Sales & pipeline',
     headline: 'Every deal, every stage, one screen',
     sub: 'Leads come in, get scored, get assigned and get worked — without anyone maintaining a spreadsheet on the side.',
@@ -95,7 +95,7 @@ export const PILLARS: Pillar[] = [
     name: 'AI assistant',
     short: 'AI',
     icon: 'Sparkles',
-    accent: 'from-fuchsia-500 to-violet-500',
+    accent: 'from-sky-400 to-blue-600',
     eyebrow: 'AI assistant',
     headline: 'AI that does the admin, not the talking',
     sub: 'It drafts the follow-up, scores the lead, summarises the thread and tells you which account is quietly leaving.',
@@ -372,7 +372,7 @@ export const PILLARS: Pillar[] = [
     name: 'Analytics',
     short: 'Analytics',
     icon: 'BarChart3',
-    accent: 'from-indigo-400 to-violet-500',
+    accent: 'from-indigo-400 to-blue-500',
     eyebrow: 'Analytics',
     headline: 'Answers, not exports',
     sub: 'Build the report once, put it on a dashboard, and have it in your inbox every Monday morning.',
@@ -498,7 +498,7 @@ export const FEATURE_CATALOG: {
   {
     group: 'Core CRM',
     icon: 'Users',
-    accent: 'from-violet-500 to-indigo-500',
+    accent: 'from-blue-500 to-indigo-500',
     rows: [
       { name: 'Contacts', detail: 'Lifecycle stages, scoring, merge detection, duplicate warnings, timeline, tags, bulk operations, CSV import/export' },
       { name: 'Companies', detail: 'Industry, size and revenue tracking, linked contacts, parent/child hierarchy' },
@@ -532,7 +532,7 @@ export const FEATURE_CATALOG: {
   {
     group: 'AI',
     icon: 'Sparkles',
-    accent: 'from-fuchsia-500 to-violet-500',
+    accent: 'from-sky-400 to-blue-600',
     rows: [
       { name: 'Email drafting', detail: 'Context-aware drafts with tone and language control, always reviewed before send' },
       { name: 'Content generation', detail: 'Templates, knowledge-base articles and campaign copy' },
@@ -590,7 +590,7 @@ export const FEATURE_CATALOG: {
   {
     group: 'Analytics',
     icon: 'BarChart3',
-    accent: 'from-indigo-400 to-violet-500',
+    accent: 'from-indigo-400 to-blue-500',
     rows: [
       { name: 'Report builder', detail: 'Custom reports across every entity with filters, grouping and columns' },
       { name: 'Dashboards', detail: 'Configurable widget grid with layout templates and per-role visibility' },
@@ -632,7 +632,7 @@ export const FEATURE_CATALOG: {
   {
     group: 'Extensibility',
     icon: 'Blocks',
-    accent: 'from-violet-400 to-fuchsia-500',
+    accent: 'from-sky-400 to-cyan-500',
     rows: [
       { name: 'Integration engine', detail: 'Connect almost any API with a key and a base URL, mapping requests and responses with a template builder' },
       { name: 'Built-in connectors', detail: 'Email delivery, messaging, chat-ops, payments, telephony and AI providers' },

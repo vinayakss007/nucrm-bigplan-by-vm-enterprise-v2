@@ -146,7 +146,7 @@ export default async function PillarPage({ params }: { params: Promise<{ slug: s
                 <ul className="mt-4 space-y-2.5">
                   {group.items.map((item) => (
                     <li key={item} className="flex gap-2.5">
-                      <span className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-violet-400/70" />
+                      <span className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-sky-400/70" />
                       <span className="text-[13.5px] leading-relaxed text-slate-400">{item}</span>
                     </li>
                   ))}
@@ -232,7 +232,7 @@ export default async function PillarPage({ params }: { params: Promise<{ slug: s
                       </span>
                       <Icon
                         name="ArrowUpRight"
-                        className="h-4 w-4 shrink-0 text-slate-600 transition-all group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-violet-300"
+                        className="h-4 w-4 shrink-0 text-slate-600 transition-all group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-sky-300"
                       />
                     </Link>
                   </Reveal>
@@ -247,9 +247,9 @@ export default async function PillarPage({ params }: { params: Promise<{ slug: s
                   <Link
                     key={s.slug}
                     href={`/solutions/${s.slug}`}
-                    className="mk-chip hover:!border-violet-400/30 hover:!text-white"
+                    className="mk-chip hover:!border-sky-400/30 hover:!text-white"
                   >
-                    <Icon name={s.icon} className="h-3.5 w-3.5 text-violet-300" />
+                    <Icon name={s.icon} className="h-3.5 w-3.5 text-sky-300" />
                     {s.name}
                   </Link>
                 ))}

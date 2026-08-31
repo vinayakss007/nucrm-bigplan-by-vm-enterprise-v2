@@ -178,7 +178,7 @@ export function SiteHeader() {
                             className="group flex gap-3 rounded-xl p-2 transition-colors hover:bg-white/[0.05]"
                           >
                             {l.icon && (
-                              <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.04] text-slate-400 transition-colors group-hover:border-violet-400/30 group-hover:text-violet-300">
+                              <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.04] text-slate-400 transition-colors group-hover:border-sky-400/30 group-hover:text-sky-300">
                                 <Icon name={l.icon} className="h-3.5 w-3.5" />
                               </span>
                             )}
@@ -196,7 +196,7 @@ export function SiteHeader() {
                 ))}
 
                 {group.feature && (
-                  <div className="relative overflow-hidden bg-gradient-to-br from-violet-600/20 via-indigo-600/10 to-transparent p-5">
+                  <div className="relative overflow-hidden bg-gradient-to-br from-blue-600/22 via-sky-600/10 to-transparent p-5">
                     <div className="mk-dot-bg pointer-events-none absolute inset-0 opacity-40" aria-hidden />
                     <div className="relative">
                       <div className="mk-h4 text-white">{group.feature.heading}</div>

@@ -83,7 +83,7 @@ export default async function StudioProductPage({ params }: { params: Promise<{ 
                 <div className="flex items-center gap-3">
                   <IconTile name={p.icon} accent={p.accent} size="lg" />
                   <div>
-                    <div className="mk-eyebrow text-violet-300/90">The dashboard you land on</div>
+                    <div className="mk-eyebrow text-sky-300/90">The dashboard you land on</div>
                     <h2 className="mk-h3 mt-2 text-white">Four numbers that actually matter here</h2>
                   </div>
                 </div>
@@ -91,7 +91,7 @@ export default async function StudioProductPage({ params }: { params: Promise<{ 
                   {p.dashboard.map((d) => (
                     <div key={d} className="rounded-xl border border-white/[0.08] bg-white/[0.025] p-4">
                       <div className="mk-tiny uppercase tracking-wider">{d}</div>
-                      <div className="mt-2 h-1 w-10 rounded-full bg-gradient-to-r from-violet-400 to-cyan-400" />
+                      <div className="mt-2 h-1 w-10 rounded-full bg-gradient-to-r from-blue-400 to-cyan-400" />
                     </div>
                   ))}
                 </div>
@@ -126,7 +126,7 @@ export default async function StudioProductPage({ params }: { params: Promise<{ 
                     key={w}
                     className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13.5px] ${
                       i === 0
-                        ? 'bg-violet-500/12 font-semibold text-violet-200 ring-1 ring-inset ring-violet-400/20'
+                        ? 'bg-sky-500/12 font-semibold text-sky-200 ring-1 ring-inset ring-sky-400/20'
                         : 'text-slate-400'
                     }`}
                   >
@@ -246,7 +246,7 @@ export default async function StudioProductPage({ params }: { params: Promise<{ 
             <div className="space-y-4">
               {solution && (
                 <Reveal className="mk-card p-6">
-                  <div className="mk-eyebrow text-violet-300/90">Industry blueprint</div>
+                  <div className="mk-eyebrow text-sky-300/90">Industry blueprint</div>
                   <h3 className="mk-h3 mt-3 text-white">{solution.name}</h3>
                   <p className="mk-body mt-2.5">
                     This product ships with the {softLower(solution.name)} blueprint: {solution.pipelines.length}{' '}
@@ -277,7 +277,7 @@ export default async function StudioProductPage({ params }: { params: Promise<{ 
                       <span className="flex-1 text-[13px] font-medium text-slate-400 group-hover:text-white">
                         {o.name}
                       </span>
-                      <Icon name="ArrowUpRight" className="h-3.5 w-3.5 text-slate-700 group-hover:text-violet-300" />
+                      <Icon name="ArrowUpRight" className="h-3.5 w-3.5 text-slate-700 group-hover:text-sky-300" />
                     </Link>
                   ))}
                 </div>

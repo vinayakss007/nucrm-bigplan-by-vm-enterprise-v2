@@ -16,7 +16,7 @@ export const SECURITY_PILLARS = [
   {
     title: 'Isolation you can point at',
     icon: 'Layers',
-    accent: 'from-violet-500 to-indigo-500',
+    accent: 'from-blue-500 to-indigo-500',
     body: 'Every workspace is separated at the data layer, not merely filtered in the interface. A query that forgets a workspace filter returns nothing rather than someone else’s customers.',
     points: [
       'Workspace isolation enforced beneath the application',
