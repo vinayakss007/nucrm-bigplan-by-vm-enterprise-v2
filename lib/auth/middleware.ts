@@ -28,6 +28,10 @@ export interface AuthContext {
   permissions: Record<string, boolean>;
   isAdmin: boolean;
   isSuperAdmin: boolean;
+  // #1836: epoch-ms of the role's `updated_at` at the time this context was
+  // built. Used to detect in-place permission edits (same roleSlug) so the
+  // cached context is invalidated immediately instead of after the TTL.
+  roleVersion?: number;
   noWorkspace?: boolean; // FIX CRITICAL-07: Flag for superadmin without workspace
   user?: {
     id: string;
@@ -139,6 +143,7 @@ async function isCachedContextStillAuthorized(
   const [membership] = await db.select({
     status: tenantMembers.status,
     roleSlug: tenantMembers.roleSlug,
+    roleId: tenantMembers.roleId,
   })
     .from(tenantMembers)
     .where(and(
@@ -150,7 +155,21 @@ async function isCachedContextStillAuthorized(
   if (!membership || membership.status !== 'active') return false;
 
   // A role change must invalidate the cached permission set.
-  return (membership.roleSlug ?? '') === cached.roleSlug;
+  if ((membership.roleSlug ?? '') !== cached.roleSlug) return false;
+
+  // #1836: detect in-place permission edits (same roleSlug but permissions
+  // object changed). The role's `updated_at` serves as a cheap version stamp:
+  // if it advanced past what was cached, the permission set may have changed.
+  if (cached.roleVersion != null && membership.roleId) {
+    const [role] = await db.select({ updatedAt: roles.updatedAt })
+      .from(roles)
+      .where(eq(roles.id, membership.roleId))
+      .limit(1);
+    const currentVersion = role?.updatedAt ? new Date(role.updatedAt).getTime() : 0;
+    if (currentVersion > cached.roleVersion) return false;
+  }
+
+  return true;
 }
 
 export async function requireAuth(request: NextRequest): Promise<AuthContext | NextResponse> {
@@ -269,7 +288,8 @@ export async function requireAuth(request: NextRequest): Promise<AuthContext | N
       lastTenantId: users.lastTenantId,
       tenantId: tenantMembers.tenantId,
       roleSlug: tenantMembers.roleSlug,
-      permissions: sql`COALESCE(${roles.permissions}, '{}'::jsonb)`
+      permissions: sql`COALESCE(${roles.permissions}, '{}'::jsonb)`,
+      roleUpdatedAt: roles.updatedAt,
     })
     .from(users)
     .innerJoin(tenantMembers, and(eq(tenantMembers.userId, users.id), eq(tenantMembers.status, 'active')))
@@ -297,6 +317,9 @@ export async function requireAuth(request: NextRequest): Promise<AuthContext | N
     const ctx: AuthContext = {
       userId: userWithMember.id, tenantId: userWithMember.tenantId,
       roleSlug: userWithMember.roleSlug || '', permissions: perms,
+      // #1836: stamp the role version so a later in-place permission edit
+      // invalidates this cached context immediately.
+      roleVersion: userWithMember.roleUpdatedAt ? new Date(userWithMember.roleUpdatedAt).getTime() : 0,
       isAdmin: userWithMember.roleSlug === 'admin' || userWithMember.isSuperAdmin === true,
       isSuperAdmin: userWithMember.isSuperAdmin || false,
       user: {
