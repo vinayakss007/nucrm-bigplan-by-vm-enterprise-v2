@@ -72,8 +72,7 @@ export function ModuleProvider({ children, initialModules }: ModuleProviderProps
       const res = await fetch('/api/tenant/modules', { credentials: 'include' });
       if (!res.ok) return;
       const json = await res.json();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const data: ModuleInfo[] = (json.data ?? []).map((m: any) => ({
+      const data: ModuleInfo[] = (json.data ?? []).map((m: ModuleInfo) => ({
         id: m.id,
         name: m.name,
         status: m.status,
