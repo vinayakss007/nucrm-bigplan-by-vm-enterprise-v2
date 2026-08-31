@@ -123,14 +123,11 @@ export async function logAudit(opts: {
   entityId?: string;
   
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  oldData?: any;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  newData?: any;
+  oldData?: unknown;
+  newData?: unknown;
   
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   ipAddress?: string;
   userAgent?: string;
   dbOrTx?: DbClient;

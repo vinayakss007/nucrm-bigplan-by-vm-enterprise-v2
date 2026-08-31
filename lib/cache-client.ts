@@ -177,8 +177,7 @@ export function clearExpiredCache(): void {
         
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const entry = JSON.parse(item) as CacheEntry<any>;
+        const entry = JSON.parse(item) as CacheEntry<unknown>;
         if (isStale(entry)) {
           keysToRemove.push(key);
         }
@@ -234,8 +233,7 @@ export function getCacheStats(): { total: number; size: number; entries: Array<{
       try {
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const entry = JSON.parse(item) as CacheEntry<any>;
+        const entry = JSON.parse(item) as CacheEntry<unknown>;
         entries.push({
           key: key.replace(CACHE_PREFIX, ''),
           age: Date.now() - entry.timestamp,
