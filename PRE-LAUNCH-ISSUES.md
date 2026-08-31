@@ -24,15 +24,23 @@ Last verified: 2026-08-31 (code re-audit)
   it and RLS stays enforced (fix #1615). Detail routes add RBAC ownership checks.
 - Reference: Issue #664.
 
-### 3. ⚠️ PARTIALLY RESOLVED — Rate Limiting on GET/PATCH/DELETE Endpoints
+### 3. ✅ RESOLVED (mutations) — Rate Limiting on Mutating Endpoints
 
-- **Verification (2026-08-31)**: 182 of 314 tenant route files now call
-  `checkRateLimit()` / `rateLimitMutating()`. All mutating PATCH/DELETE routes
-  audited are covered. The remaining uncovered routes are predominantly
-  **read-only GET** analytics/dashboard-widget endpoints (`analytics/*`,
-  `dashboard/widgets/*`).
-- **Remaining**: Decide whether read-only GET endpoints need rate limiting for
-  launch (lower risk: no mutation, still an enumeration/DoS surface).
+- **Verification (2026-08-31)**: **All 239 mutating tenant routes**
+  (POST/PATCH/PUT/DELETE) now call `rateLimitMutating()` (was 174/239). The
+  previously-unprotected auth, external-send, billing, AI/chat and
+  plugin-execution surfaces are covered.
+- **Cost-tiered policy** (not blanket): regular CRM CRUD (contacts, deals,
+  leads, tasks, tickets, activities, …) uses **LIBERAL** ceilings so paid — and
+  free — users never trip a limit during normal read/write-heavy work; only
+  **costly/external/auth** surfaces (AI, SMS, WhatsApp, e-sign, sends, billing,
+  export/import, plugin exec, 2FA, invite) stay strict. Limits still resolve
+  DB-first (`getRateLimit(planId, endpoint)`), so higher plans can raise or
+  remove any ceiling without a code change; super admins bypass.
+- **Remaining (optional)**: read-only GET endpoints are still unthrottled
+  (reads must stay free-flowing for a CRM). Lower risk — no mutation, no
+  external cost. Add a dedicated read limiter only if enumeration/DoS on
+  GET-by-id becomes a concern.
 - Reference: Issue #652.
 
 ### 4. ⚠️ PARTIALLY RESOLVED — Optimistic Concurrency Guard on Entity Updates

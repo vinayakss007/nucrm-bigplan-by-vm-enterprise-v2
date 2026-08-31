@@ -15,7 +15,7 @@ import { db } from '@/drizzle/db';
 import { contacts, companies, users, tenants, activities } from '@/drizzle/schema';
 import { eq, and, or, desc, sql, ilike, isNull } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
-import { checkRateLimit } from '@/lib/rate-limit';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { logError } from '@/lib/errors-server';
 import { invalidateWidgetCache } from '@/lib/dashboard/widget-cache';
 import { escapeLike } from '@/lib/api/sanitize-like';
@@ -136,7 +136,10 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
 
-    const limited = await checkRateLimit(request, { action:'contacts_create', max:100, windowMinutes:60 });
+    // Contacts is core CRM CRUD — keep the ceiling liberal (abuse-only) via the
+    // shared entity limits so a busy rep or a single-record bulk import never
+    // trips it. Was previously a hard 100/hour, which throttled real data entry.
+    const limited = await rateLimitMutating(request, 'contacts', 'post');
     if (limited) return limited;
 
     const deny = requirePerm(ctx, 'contacts.create');

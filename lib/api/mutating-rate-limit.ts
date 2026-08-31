@@ -6,111 +6,150 @@
 import { checkRateLimit } from '@/lib/rate-limit';
 
 /**
- * Rate limit configuration for mutating (PATCH/DELETE) endpoints.
- * Each entity has separate limits for updates and deletes.
- * DELETE limits are stricter than PATCH limits.
+ * Fallback rate-limit ceilings for mutating (POST/PATCH/PUT/DELETE) endpoints,
+ * per minute, keyed by entity. Each has separate post/patch/delete buckets
+ * (DELETE is kept tighter than PATCH).
+ *
+ * DESIGN — cost-tiered, NOT blanket (paid CRM usage must never trip these):
+ *
+ *   • A CRM is read/write-heavy by nature — reps create/update contacts, deals,
+ *     tasks, notes and activities continuously. Regular CRUD is therefore
+ *     LIBERAL: the ceiling exists only to blunt scripted scraping/DoS, not to
+ *     throttle a busy human (or a normal bulk import feeding single-record
+ *     writes). These apply to everyone, free and paid alike.
+ *   • COSTLY / EXTERNAL / AUTH surfaces stay STRICT because each call has real
+ *     money cost (AI, SMS, WhatsApp, e-sign, email sends, plugin execution,
+ *     report/analytics runs, billing) or is a brute-force target (2FA, invite).
+ *
+ * These are only FALLBACKS. Actual limits resolve DB-first via
+ * getRateLimit(planId, endpoint): a plan's `rateLimitConfig` (or the global
+ * defaults) override these, and a configured value of 0 disables limiting for
+ * that endpoint. Super admins / unlimited users bypass entirely. So a higher
+ * plan can raise or remove any of these without a code change.
  */
+
+// Tier presets (requests/min). Tune the tier, not 60 individual entities.
+const LIBERAL = { post: 300, patch: 600, delete: 120 }; // regular CRM CRUD — effectively unlimited for humans
+const STANDARD = { post: 120, patch: 240, delete: 60 };  // frequent but less hot objects
+const CONFIG = { post: 60, patch: 60, delete: 30 };      // settings-ish, change occasionally
+const SENSITIVE = { post: 15, patch: 20, delete: 10 };   // security/admin config
+const COSTLY = { post: 20, patch: 20, delete: 10 };      // AI / expensive compute / external cost
+const STRICT = { post: 5, patch: 5, delete: 5 };         // financial / auth / session-minting
+
 const MUTATING_LIMITS: Record<string, { post: number; patch: number; delete: number }> = {
-  // Core CRM entities — high volume
-  contacts: { post: 30, patch: 60, delete: 15 },
-  deals: { post: 30, patch: 60, delete: 15 },
-  companies: { post: 30, patch: 60, delete: 15 },
-  leads: { post: 30, patch: 60, delete: 15 },
-  tickets: { post: 30, patch: 60, delete: 15 },
-  tasks: { post: 30, patch: 60, delete: 15 },
-  // Communication
-  meetings: { post: 15, patch: 30, delete: 10 },
-  calls: { post: 15, patch: 30, delete: 10 },
-  followUps: { post: 15, patch: 30, delete: 10 },
-  // Documents & files
-  documents: { post: 15, patch: 30, delete: 10 },
-  quotes: { post: 15, patch: 30, delete: 10 },
-  invoices: { post: 15, patch: 30, delete: 10 },
-  contracts: { post: 15, patch: 30, delete: 10 },
-  orders: { post: 15, patch: 30, delete: 10 },
-  // Config & admin
-  roles: { post: 5, patch: 10, delete: 5 },
-  forms: { post: 10, patch: 20, delete: 10 },
-  sequences: { post: 10, patch: 20, delete: 10 },
-  emailTemplates: { post: 10, patch: 20, delete: 10 },
-  webhooks: { post: 5, patch: 10, delete: 5 },
-  workflows: { post: 5, patch: 10, delete: 5 },
-  automations: { post: 5, patch: 10, delete: 5 },
-  views: { post: 10, patch: 20, delete: 10 },
-  reports: { post: 10, patch: 20, delete: 10 },
-  // AI & automation
-  aiTemplates: { post: 5, patch: 10, delete: 5 },
-  kbArticles: { post: 10, patch: 20, delete: 10 },
-  kbCategories: { post: 10, patch: 20, delete: 10 },
-  integrations: { post: 5, patch: 10, delete: 5 },
-  ssoProviders: { post: 3, patch: 5, delete: 3 },
-  // Projects
-  projects: { post: 15, patch: 30, delete: 10 },
-  milestones: { post: 10, patch: 20, delete: 10 },
-  // Misc
-  cannedResponses: { post: 10, patch: 20, delete: 10 },
-  segments: { post: 10, patch: 20, delete: 10 },
-  assignments: { post: 15, patch: 30, delete: 15 },
-  services: { post: 10, patch: 20, delete: 10 },
-  plugins: { post: 5, patch: 10, delete: 5 },
-  trash: { post: 5, patch: 10, delete: 5 },
-  portalClients: { post: 5, patch: 10, delete: 5 },
-  subscriptions: { post: 5, patch: 10, delete: 5 },
-  smsTemplates: { post: 5, patch: 10, delete: 5 },
-  taxRates: { post: 5, patch: 10, delete: 5 },
-  territories: { post: 5, patch: 10, delete: 5 },
-  modules: { post: 3, patch: 5, delete: 3 },
-  hierarchy: { post: 5, patch: 10, delete: 5 },
-  customFields: { post: 10, patch: 10, delete: 5 },
-  webhookFieldMappings: { post: 10, patch: 10, delete: 5 },
-  notifications: { post: 5, patch: 10, delete: 5 },
-  // Bulk operations — strict limits (expensive, high-impact)
-  bulk: { post: 5, patch: 5, delete: 5 },
-  // Billing & admin — strict limits (financial, irreversible)
-  billing: { post: 5, patch: 5, delete: 5 },
-  backup: { post: 3, patch: 3, delete: 3 },
-  calendarSync: { post: 10, patch: 10, delete: 5 },
-  branding: { post: 10, patch: 10, delete: 5 },
-  pipelines: { post: 10, patch: 10, delete: 5 },
-  activities: { post: 30, patch: 30, delete: 10 },
-  apiKeys: { post: 5, patch: 5, delete: 5 },
+  // ── Regular CRM CRUD — LIBERAL (paid + free; abuse-ceiling only) ──────────
+  contacts: LIBERAL,
+  deals: LIBERAL,
+  companies: LIBERAL,
+  leads: LIBERAL,
+  tickets: LIBERAL,
+  tasks: LIBERAL,
+  activities: LIBERAL,
+  notifications: LIBERAL,
+
+  // ── Communication & everyday objects — STANDARD ──────────────────────────
+  meetings: STANDARD,
+  calls: STANDARD,
+  followUps: STANDARD,
+  documents: STANDARD,
+  quotes: STANDARD,
+  invoices: STANDARD,
+  contracts: STANDARD,
+  orders: STANDARD,
+  projects: STANDARD,
+  milestones: STANDARD,
+  cannedResponses: STANDARD,
+  segments: STANDARD,
+  assignments: STANDARD,
+  services: STANDARD,
+  kbArticles: STANDARD,
+  kbCategories: STANDARD,
+  customEntities: STANDARD,
+  partners: STANDARD,
+  leadWarming: STANDARD,
+  fieldSales: STANDARD,
+
+  // ── Config / low-frequency setup — CONFIG ─────────────────────────────────
+  forms: CONFIG,
+  sequences: CONFIG,
+  emailTemplates: CONFIG,
+  views: CONFIG,
+  reports: CONFIG,
+  pipelines: CONFIG,
+  customFields: CONFIG,
+  webhookFieldMappings: CONFIG,
+  hierarchy: CONFIG,
+  branding: CONFIG,
+  calendarSync: CONFIG,
+  currency: CONFIG,
+  industryTemplates: CONFIG,
+  settings: CONFIG,
+  trash: CONFIG,
+  portalClients: CONFIG,
+  smsTemplates: CONFIG,
+  taxRates: CONFIG,
+  territories: CONFIG,
+  plugins: CONFIG,
+
+  // ── Security / privileged config — SENSITIVE ──────────────────────────────
+  roles: SENSITIVE,
+  webhooks: SENSITIVE,
+  workflows: SENSITIVE,
+  automations: SENSITIVE,
+  integrations: SENSITIVE,
+  aiTemplates: SENSITIVE,
+  modules: SENSITIVE,
+  apiKeys: SENSITIVE,
+  permissions: SENSITIVE,
+  compliance: SENSITIVE,
+
+  // ── Costly compute / external cost — COSTLY (strict on purpose) ───────────
+  chat: COSTLY,          // AI/LLM inference
+  reportRun: COSTLY,     // heavy aggregation
+  analytics: COSTLY,     // heavy aggregation / scheduled reports
+  pluginExec: COSTLY,    // arbitrary server-side work
+  tax: COSTLY,           // external tax calc
+  documentsUpload: COSTLY,
+  sms: COSTLY,           // per-message cost + spam surface
+  whatsapp: COSTLY,      // per-message cost + spam surface
+  esignature: COSTLY,    // per-envelope cost
+  send: COSTLY,          // outbound email/document sends
+  telegramTest: COSTLY,
+
+  // ── Bulk / financial / auth / superadmin — STRICT ─────────────────────────
+  bulk: STRICT,
   bulkTransfer: { post: 3, patch: 3, delete: 3 },
-  // Superadmin sensitive operations — strict limits (session minting, cross-tenant restore)
-  impersonate: { post: 5, patch: 5, delete: 5 },
-  joinTenant: { post: 5, patch: 5, delete: 5 },
-  selectiveRestore: { post: 3, patch: 3, delete: 3 },
-  // Auth / account security — very strict (brute-force & abuse surface)
-  twoFactor: { post: 5, patch: 5, delete: 5 },
+  backup: { post: 3, patch: 3, delete: 3 },
+  billing: STRICT,
+  subscriptions: STRICT,
+  ssoProviders: { post: 3, patch: 5, delete: 3 },
+  twoFactor: STRICT,     // TOTP brute-force surface
   invite: { post: 10, patch: 10, delete: 10 },
-  onboarding: { post: 5, patch: 5, delete: 5 },
-  permissions: { post: 20, patch: 20, delete: 20 },
-  // Outbound messaging / external sends — strict (cost + spam/abuse surface)
-  sms: { post: 10, patch: 10, delete: 10 },
-  whatsapp: { post: 10, patch: 10, delete: 10 },
-  esignature: { post: 10, patch: 10, delete: 10 },
-  send: { post: 10, patch: 10, delete: 10 },
-  telegramTest: { post: 5, patch: 5, delete: 5 },
-  // AI / chat — expensive compute
-  chat: { post: 20, patch: 20, delete: 20 },
-  // Plugin execution — arbitrary/expensive server-side work
-  pluginExec: { post: 10, patch: 10, delete: 10 },
-  // Expensive analytics / report execution
-  reportRun: { post: 20, patch: 20, delete: 10 },
-  analytics: { post: 20, patch: 20, delete: 10 },
-  // Config-ish / low-frequency admin
-  customEntities: { post: 10, patch: 20, delete: 10 },
-  partners: { post: 10, patch: 20, delete: 10 },
-  leadWarming: { post: 15, patch: 30, delete: 10 },
-  fieldSales: { post: 30, patch: 30, delete: 10 },
-  compliance: { post: 5, patch: 5, delete: 5 },
-  currency: { post: 5, patch: 10, delete: 5 },
-  industryTemplates: { post: 5, patch: 10, delete: 5 },
-  tax: { post: 30, patch: 30, delete: 10 },
-  documentsUpload: { post: 20, patch: 20, delete: 10 },
-  settings: { post: 15, patch: 20, delete: 10 },
+  onboarding: STRICT,
+  impersonate: STRICT,   // session minting
+  joinTenant: STRICT,
+  selectiveRestore: { post: 3, patch: 3, delete: 3 },
+
+  // ── Expensive data movement — STRICT (whole-dataset scans / writes) ───────
+  export: { post: 10, patch: 10, delete: 10 },   // full-dataset export (per hour-ish load)
+  import: { post: 10, patch: 10, delete: 10 },   // bulk ingest
+  restore: { post: 3, patch: 3, delete: 3 },     // superadmin dataset restore
+
+  // ── Everyday CRUD / config not covered above ──────────────────────────────
+  products: STANDARD,              // catalog CRUD — normal data
+  teams: CONFIG,                   // team/membership management
+  userPreferences: LIBERAL,        // per-user UI prefs, saved constantly
+  dashboardLayout: LIBERAL,        // drag/drop layout saves fire often
+  portalConfig: CONFIG,
+  slaPolicies: SENSITIVE,          // support policy config
+  retentionPolicies: SENSITIVE,    // data-retention/compliance config
 };
 
-const DEFAULT_LIMITS = { post: 15, patch: 30, delete: 10 };
+// Fallback for any entity not listed. Generous by default — this is a CRM, and
+// an unlisted mutating route is far more likely to be a normal data write than
+// an expensive/abusable one. Costly/auth surfaces are enumerated explicitly
+// above, so the safe default is to lean permissive rather than throttle real work.
+const DEFAULT_LIMITS = STANDARD;
 
 /**
  * Apply rate limiting to a mutating (PATCH/DELETE) route handler.
