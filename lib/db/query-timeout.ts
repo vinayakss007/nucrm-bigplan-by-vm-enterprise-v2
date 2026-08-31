@@ -67,7 +67,15 @@ export async function withTimeout<T>(
     await client.query('COMMIT');
     return result;
   } catch (err) {
-    await client.query('ROLLBACK').catch(() => {});
+    // #1837: a failing ROLLBACK can leave the connection in a bad state; make
+    // it observable instead of silent. We still rethrow the ORIGINAL error and
+    // never let a rollback failure mask it.
+    await client.query('ROLLBACK').catch((rollbackErr: unknown) => {
+      console.error(
+        '[query-timeout] ROLLBACK failed after query error:',
+        rollbackErr instanceof Error ? rollbackErr.message : String(rollbackErr),
+      );
+    });
     throw err;
   } finally {
     client.release();
