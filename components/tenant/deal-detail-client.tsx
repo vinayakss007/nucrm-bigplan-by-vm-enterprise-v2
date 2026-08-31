@@ -11,7 +11,7 @@ import { useRouter } from 'next/navigation';
 import {
   ArrowLeft, DollarSign, Calendar, User, Building2, TrendingUp,
   Edit, Trash2, Activity, Phone, StickyNote,
-  FileText, Plus, MoreHorizontal
+  FileText, Plus, MoreHorizontal, CheckCircle
 } from 'lucide-react';
 import { cn, formatDate, formatCurrency, formatRelativeTime } from '@/lib/utils';
 import DocumentsPanel from '@/components/documents/documents-panel';
@@ -92,10 +92,21 @@ interface DealActivity {
   created_at?: Date | string | null;
 }
 
+interface DealFollowUp {
+  id: string;
+  title?: string;
+  description?: string | null;
+  due_date?: Date | string | null;
+  status?: string | null;
+  completed_at?: Date | string | null;
+  assignee_name?: string | null;
+}
+
 interface Props {
   deal: DealDetail;
   tasks: DealTask[];
   activities: DealActivity[];
+  followUps?: DealFollowUp[];
   permissions: { canEdit: boolean; canDelete: boolean; canViewValue: boolean };
   tenantId: string;
   userId: string;
@@ -103,7 +114,7 @@ interface Props {
   _userId?: string;
 }
 
-export default function DealDetailClient({ deal, tasks, activities, permissions, _tenantId, _userId }: Props) {
+export default function DealDetailClient({ deal, tasks, activities, followUps = [], permissions, _tenantId, _userId }: Props) {
   // Fetch dynamic pipeline stages; fall back to defaults if unavailable (#756 item 8).
   const [_STAGES, setSTAGES] = useState(DEFAULT_STAGES);
   useEffect(() => {
@@ -477,6 +488,44 @@ export default function DealDetailClient({ deal, tasks, activities, permissions,
                         </div>
                         <Badge className={cn('text-[10px] font-semibold', sCfg.color)}>{sCfg.label}</Badge>
                         <span className={cn('text-xs font-semibold', pCfg.color)}>{pCfg.label}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Follow-ups (#1815) */}
+            <div className="admin-card overflow-hidden">
+              <div className="px-5 py-3 border-b border-border flex items-center justify-between">
+                <h2 className="text-sm font-semibold flex items-center gap-2">
+                  <Calendar className="w-4 h-4" /> Follow-ups
+                  <span className="text-xs font-normal text-muted-foreground">
+                    ({followUps.filter(f => f.status !== 'completed' && f.status !== 'done' && !f.completed_at).length} open)
+                  </span>
+                </h2>
+              </div>
+              {!followUps.length ? (
+                <p className="px-5 py-6 text-sm text-muted-foreground text-center">No follow-ups scheduled</p>
+              ) : (
+                <div className="divide-y divide-border">
+                  {followUps.map(f => {
+                    const done = f.status === 'completed' || f.status === 'done' || !!f.completed_at;
+                    const overdue = !done && f.due_date && new Date(f.due_date) < new Date();
+                    return (
+                      <div key={f.id} className="flex items-center gap-3 px-5 py-3">
+                        <span className={cn('shrink-0', done ? 'text-emerald-600' : overdue ? 'text-red-600' : 'text-muted-foreground')}>
+                          {done ? <CheckCircle className="w-4 h-4" /> : <Calendar className="w-4 h-4" />}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <p className={cn('text-sm font-medium truncate', done && 'line-through text-muted-foreground')}>{f.title}</p>
+                          {f.due_date && (
+                            <p className={cn('text-xs', overdue ? 'text-red-600 font-medium' : 'text-muted-foreground')}>
+                              {done ? 'Done' : overdue ? 'Overdue' : 'Due'}: {formatDate(f.due_date)}
+                            </p>
+                          )}
+                        </div>
+                        {f.assignee_name && <span className="text-xs text-muted-foreground shrink-0">{f.assignee_name}</span>}
                       </div>
                     );
                   })}

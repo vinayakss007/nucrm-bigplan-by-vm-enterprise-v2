@@ -12,7 +12,8 @@ import {
   users as usersTable, 
   tasks as tasksTable, 
   activities as activitiesTable,
-  dealStages
+  dealStages,
+  followUps as followUpsTable
 } from '@/drizzle/schema';
 import { eq, and, sql, desc } from 'drizzle-orm';
 import { notFound } from 'next/navigation';
@@ -107,6 +108,27 @@ export default async function DealDetailPage({ params }: PageProps) {
   ))
   .orderBy(desc(tasksTable.createdAt));
 
+  // #1815: the deal's follow-ups (followUps.dealId FK already existed but was
+  // never surfaced on the deal). Fallback so a failure never breaks the page.
+  const followUpsList = await db.select({
+    id: followUpsTable.id,
+    title: followUpsTable.title,
+    description: followUpsTable.description,
+    due_date: followUpsTable.dueDate,
+    status: followUpsTable.status,
+    completed_at: followUpsTable.completedAt,
+    assignee_name: usersTable.fullName,
+  })
+  .from(followUpsTable)
+  .leftJoin(usersTable, eq(usersTable.id, followUpsTable.assignedTo))
+  .where(and(
+    eq(followUpsTable.dealId, id),
+    eq(followUpsTable.tenantId, ctx.tenantId),
+  ))
+  .orderBy(desc(followUpsTable.dueDate))
+  .limit(50)
+  .catch(() => []);
+
   // Get activities (graceful fallback if query fails)
   let activities: Array<{
     id: string;
@@ -152,6 +174,7 @@ export default async function DealDetailPage({ params }: PageProps) {
       deal={deal}
       tasks={tasks}
       activities={activities}
+      followUps={followUpsList}
       permissions={permissions}
       tenantId={ctx.tenantId}
       userId={ctx.userId}
