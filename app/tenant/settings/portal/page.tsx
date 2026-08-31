@@ -5,6 +5,8 @@
  */
 'use client';
 import { useState, useEffect } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import { Globe, Save, Loader2, Plus, Trash2, CheckCircle, Users } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import toast from 'react-hot-toast';
@@ -28,90 +30,112 @@ interface PortalClient {
   created_at: string;
 }
 
+const DEFAULT_CONFIG: PortalConfig = {
+  enabled: false,
+  allow_quotes: true,
+  allow_invoices: true,
+  allow_cases: true,
+  custom_message: '',
+};
+
 export default function PortalSettingsPage() {
-  const [config, setConfig] = useState<PortalConfig>({
-    enabled: false,
-    allow_quotes: true,
-    allow_invoices: true,
-    allow_cases: true,
-    custom_message: '',
-  });
-  const [clients, setClients] = useState<PortalClient[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const queryClient = useQueryClient();
+  const [config, setConfig] = useState<PortalConfig>(DEFAULT_CONFIG);
+  const [seeded, setSeeded] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [newClient, setNewClient] = useState({ name: '', email: '' });
-  const [creating, setCreating] = useState(false);
 
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
 
+  // #1328: load config + clients via TanStack Query (was raw fetch + useEffect).
+  const { data: configData, isLoading: configLoading } = useApiQuery<{ data?: PortalConfig }>(
+    ['tenant', 'portal', 'config'],
+    '/api/tenant/portal/config',
+  );
+  const { data: clientsData, isLoading: clientsLoading } = useApiQuery<{ data?: PortalClient[] }>(
+    ['tenant', 'portal', 'clients'],
+    '/api/tenant/portal/clients',
+  );
+  const loading = configLoading || clientsLoading;
+  const clients: PortalClient[] = clientsData?.data ?? [];
+
+  // Seed the editable config once from the query.
   useEffect(() => {
-  const controller = new AbortController();
-  let ignore = false;
-    Promise.all([
-      fetch('/api/tenant/portal/config', { signal: controller.signal }).then(r => r.json()),
-      fetch('/api/tenant/portal/clients', { signal: controller.signal }).then(r => r.json()),
-    ]).then(([cfg, clt]) => { if (ignore) return; 
-      if (cfg.data) setConfig(cfg.data);
-      setClients(clt.data || []);
-     } ).catch(e => { if ((e as Error)?.name === 'AbortError') return; throw e; })
-      .finally(() => { if (!ignore) setLoading(false); });
-    return () => { ignore = true; controller.abort(); };
-}, []);
+    if (seeded || !configData) return;
+    if (configData.data) setConfig(configData.data);
+    setSeeded(true);
+  }, [configData, seeded]);
 
-  const saveConfig = async () => {
-    setSaving(true);
-    const res = await fetch('/api/tenant/portal/config', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(config),
-    });
-    if (res.ok) {
+  const saveConfigMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch('/api/tenant/portal/config', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(config),
+      });
+      if (!res.ok) throw new Error('Failed to save');
+    },
+    onSuccess: () => {
       toast.success('Settings saved');
-    } else {
-      toast.error('Failed to save');
-    }
-    setSaving(false);
-  };
+      queryClient.invalidateQueries({ queryKey: ['tenant', 'portal', 'config'] });
+    },
+    onError: () => toast.error('Failed to save'),
+  });
+  const saving = saveConfigMutation.isPending;
+  const saveConfig = () => saveConfigMutation.mutate();
 
-  const createClient = async () => {
+  const createClientMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch('/api/tenant/portal/clients', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newClient),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(typeof data.error === 'string' ? data.error : 'Failed to create client');
+      return data.data as PortalClient & { login_url?: string };
+    },
+    onSuccess: async (created) => {
+      toast.success('Client created');
+      setShowCreate(false);
+      setNewClient({ name: '', email: '' });
+      queryClient.invalidateQueries({ queryKey: ['tenant', 'portal', 'clients'] });
+      if (created?.login_url) {
+        await navigator.clipboard.writeText(created.login_url);
+        toast.success('Login URL copied to clipboard');
+      }
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const creating = createClientMutation.isPending;
+
+  const createClient = () => {
     if (!newClient.name || !newClient.email) {
       toast.error('Name and email required');
       return;
     }
-    setCreating(true);
-    const res = await fetch('/api/tenant/portal/clients', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(newClient),
-    });
-    const data = await res.json();
-    if (res.ok) {
-      toast.success('Client created');
-      setClients([data.data, ...clients]);
-      setShowCreate(false);
-      setNewClient({ name: '', email: '' });
-      if (data.data.login_url) {
-        await navigator.clipboard.writeText(data.data.login_url);
-        toast.success('Login URL copied to clipboard');
-      }
-    } else {
-      toast.error(data.error);
-    }
-    setCreating(false);
+    createClientMutation.mutate();
   };
 
-  const deleteClient = async (id: string) => {
-    await confirmThen('Remove this client access?', async () => {
+  const deleteClientMutation = useMutation({
+    mutationFn: async (id: string) => {
       const res = await fetch('/api/tenant/portal/clients', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id }),
       });
-      if (res.ok) {
-        setClients(clients.filter(c => c.id !== id));
-        toast.success('Client removed');
-      }
+      if (!res.ok) throw new Error('Failed to remove client');
+    },
+    onSuccess: () => {
+      toast.success('Client removed');
+      queryClient.invalidateQueries({ queryKey: ['tenant', 'portal', 'clients'] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const deleteClient = async (id: string) => {
+    await confirmThen('Remove this client access?', async () => {
+      deleteClientMutation.mutate(id);
     });
   };
 

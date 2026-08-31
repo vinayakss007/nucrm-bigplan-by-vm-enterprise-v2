@@ -4,7 +4,9 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import { Plug, Trash2, CheckCircle, XCircle, Globe, Mail, Zap, Send, Loader2 } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import { cn, formatDate } from '@/lib/utils';
@@ -159,34 +161,35 @@ function IntegrationModal({ type, onSaved, onClose }: {
 }
 
 export default function IntegrationsPage() {
-  const [integrations, setIntegrations] = useState<ConnectedIntegration[]>([]);
-  const [loading, setLoading]           = useState(true);
-  const [addType, setAddType]           = useState<IntegrationType | null>(null);
+  const queryClient = useQueryClient();
+  const [addType, setAddType] = useState<IntegrationType | null>(null);
 
-  const load = async (signal?: AbortSignal) => {
-    try {
-      const r=await fetch('/api/tenant/integrations', { signal }).then(r=>r.json());
-      if (signal?.aborted) return;
-      setIntegrations(r.data||[]); setLoading(false);
-    } catch (e) {
-      if ((e as Error)?.name === 'AbortError') return;
-      throw e;
-    }
-  };
-  useEffect(() => {
-    const controller = new AbortController();
-    load(controller.signal);
-    return () => controller.abort();
-  }, []);
+  // #1328: load connected integrations via TanStack Query (was raw fetch + useEffect).
+  const { data, isLoading: loading } = useApiQuery<{ data?: ConnectedIntegration[] }>(
+    ['tenant', 'integrations'],
+    '/api/tenant/integrations',
+  );
+  const integrations: ConnectedIntegration[] = data?.data ?? [];
 
-  const toggle = async (id: string, active: boolean) => {
-    await fetch(`/api/tenant/integrations/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({is_active:!active})});
-    setIntegrations(prev=>prev.map(i=>i.id===id?{...i,is_active:!active}:i));
-  };
+  const reload = () => queryClient.invalidateQueries({ queryKey: ['tenant', 'integrations'] });
+
+  const toggleMutation = useMutation({
+    mutationFn: async ({ id, active }: { id: string; active: boolean }) => {
+      await fetch(`/api/tenant/integrations/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ is_active: !active }) });
+    },
+    onSuccess: reload,
+  });
+  const toggle = (id: string, active: boolean) => toggleMutation.mutate({ id, active });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await fetch(`/api/tenant/integrations/${id}`, { method: 'DELETE' });
+    },
+    onSuccess: () => { toast.success('Removed'); reload(); },
+  });
   const del = async (id: string) => {
     await confirmThen('Remove this integration?', async () => {
-      await fetch(`/api/tenant/integrations/${id}`,{method:'DELETE'});
-      setIntegrations(prev=>prev.filter(i=>i.id!==id)); toast.success('Removed');
+      deleteMutation.mutate(id);
     });
   };
 
@@ -245,7 +248,7 @@ export default function IntegrationsPage() {
         <div className="text-center py-10"><Plug className="w-10 h-10 text-muted-foreground/20 mx-auto mb-3"/><p className="font-semibold text-sm mb-1">No integrations yet</p><p className="text-sm text-muted-foreground">Connect a tool above to get started</p></div>
       )}
 
-      {addType && <IntegrationModal type={addType} onSaved={()=>{load();setAddType(null);}} onClose={()=>setAddType(null)}/>}
+      {addType && <IntegrationModal type={addType} onSaved={()=>{reload();setAddType(null);}} onClose={()=>setAddType(null)}/>}
     </div>
   );
 }
