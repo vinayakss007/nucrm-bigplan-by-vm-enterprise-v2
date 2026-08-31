@@ -50,13 +50,11 @@ export interface ActionResult {
   success: boolean;
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  data?: any;
+  data?: unknown;
   error?: string;
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  raw?: any;
+  raw?: unknown;
 }
 
 export interface ActionRequest {
@@ -64,6 +62,5 @@ export interface ActionRequest {
   action: string;
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  params: Record<string, any>;
+  params: Record<string, unknown>;
 }
