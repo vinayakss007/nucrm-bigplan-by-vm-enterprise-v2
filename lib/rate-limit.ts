@@ -27,6 +27,21 @@ export interface RateLimitConfig {
   window: number;   // Time window in seconds
 }
 
+/**
+ * Conservative limit applied when a limit LOOKUP fails (DB/cache error) so we
+ * fail CLOSED instead of disabling rate limiting (#1834). This is deliberately
+ * generous enough not to break legitimate traffic during a transient outage,
+ * but low enough to blunt brute-force / scraping while the store is degraded.
+ */
+export const FAIL_CLOSED_DEFAULT = 60;
+
+/**
+ * Sentinel returned by getRateLimit() when the underlying lookup THREW, as
+ * opposed to being intentionally configured to 0 (disabled). Callers must
+ * treat this as "apply FAIL_CLOSED_DEFAULT", never as "unlimited".
+ */
+export const RATE_LIMIT_LOOKUP_ERROR = -1;
+
 export interface RateLimitResult {
   allowed: boolean;
   remaining: number;
@@ -57,37 +72,39 @@ export function getEndpointWindow(endpoint: string): number {
 }
 
 /**
- * Get global default rate limits from system_settings table
+ * Get global default rate limits from system_settings table.
+ * Throws on DB error so the caller can distinguish "lookup failed" from
+ * "configured empty" and fail closed (#1834).
  */
 export async function getGlobalDefaults(): Promise<Record<string, number>> {
-  try {
-    const setting = await db.query.systemSettings.findFirst({
-      where: eq(systemSettings.key, 'global_rate_limits'),
-      columns: { value: true },
-    });
+  const setting = await db.query.systemSettings.findFirst({
+    where: eq(systemSettings.key, 'global_rate_limits'),
+    columns: { value: true },
+  });
 
-    if (setting?.value) {
-      return typeof setting.value === 'string'
-        ? JSON.parse(setting.value)
-        : (setting.value as Record<string, number>);
-    }
-  } catch {
-    // Fall through to empty
+  if (setting?.value) {
+    return typeof setting.value === 'string'
+      ? JSON.parse(setting.value)
+      : (setting.value as Record<string, number>);
   }
   return {};
 }
 
 /**
- * Get rate limit for a specific endpoint
- * Priority: Plan config > Global defaults > 0 (disabled)
+ * Get rate limit for a specific endpoint.
+ * Priority: Plan config > Global defaults > 0 (intentionally disabled).
+ *
+ * Returns RATE_LIMIT_LOOKUP_ERROR (-1) when the DB lookup THROWS — callers
+ * must treat that as "apply FAIL_CLOSED_DEFAULT", NOT as unlimited (#1834).
+ * A returned 0 means an admin intentionally disabled the endpoint.
  */
 export async function getRateLimit(
   planId: string | null,
   endpoint: string
 ): Promise<number> {
-  // 1. Try plan-specific config
-  if (planId) {
-    try {
+  try {
+    // 1. Try plan-specific config
+    if (planId) {
       const plan = await db.query.plans.findFirst({
         where: eq(plans.id, planId),
         columns: { rateLimitConfig: true },
@@ -99,19 +116,22 @@ export async function getRateLimit(
           return config[endpoint];
         }
       }
-    } catch {
-      // Fall through
     }
-  }
 
-  // 2. Try global defaults
-  const globals = await getGlobalDefaults();
-  if (globals[endpoint] !== undefined) {
-    return globals[endpoint];
-  }
+    // 2. Try global defaults
+    const globals = await getGlobalDefaults();
+    if (globals[endpoint] !== undefined) {
+      return globals[endpoint];
+    }
 
-  // 3. If nothing configured, return 0 (rate limiting disabled)
-  return 0;
+    // 3. Nothing configured → 0 (rate limiting intentionally disabled)
+    return 0;
+  } catch (err) {
+    // DB/cache failure: DO NOT disable rate limiting. Signal the error so
+    // callers fall back to FAIL_CLOSED_DEFAULT (#1834).
+    console.error('[rate-limit] getRateLimit lookup failed — failing closed:', err);
+    return RATE_LIMIT_LOOKUP_ERROR;
+  }
 }
 
 /**
@@ -125,9 +145,40 @@ export async function hasUnlimitedRateLimit(userId: string): Promise<boolean> {
     });
 
     return user?.unlimitedRateLimit === true || user?.isSuperAdmin === true;
-  } catch {
+  } catch (err) {
+    // Fail closed: if we can't verify, treat as non-unlimited (#1834).
+    console.error('[rate-limit] hasUnlimitedRateLimit lookup failed:', err);
     return false;
   }
+}
+
+/**
+ * In-process fallback counter used ONLY when the shared cache store returns a
+ * non-positive count (Redis down / cache.incr() swallowed an error and
+ * returned 0). Without this, `0 <= max` would evaluate to allowed=true and the
+ * limiter would fail OPEN on every request during a Redis outage (#1834).
+ *
+ * This is per-instance (not multi-instance safe), which is acceptable as a
+ * degraded fail-closed fallback: it still caps abuse per node while the shared
+ * store recovers.
+ */
+const fallbackCounters = new Map<string, { count: number; resetAt: number }>();
+
+function fallbackIncr(key: string, windowSeconds: number): number {
+  const now = Date.now();
+  const entry = fallbackCounters.get(key);
+  if (!entry || entry.resetAt <= now) {
+    fallbackCounters.set(key, { count: 1, resetAt: now + windowSeconds * 1000 });
+    // Opportunistic cleanup to bound memory.
+    if (fallbackCounters.size > 10_000) {
+      for (const [k, v] of fallbackCounters) {
+        if (v.resetAt <= now) fallbackCounters.delete(k);
+      }
+    }
+    return 1;
+  }
+  entry.count += 1;
+  return entry.count;
 }
 
 /**
@@ -163,7 +214,15 @@ export class RateLimiter {
     const windowKey = `rate:${key}`;
 
     // Add current request with timestamp
-    const current = await cache.incr(windowKey, win);
+    let current = await cache.incr(windowKey, win);
+
+    // #1834: cache.incr() returns 0 when the Redis store errored (it swallows
+    // the exception). A raw 0 would make `0 <= max` always allow → fail OPEN.
+    // Detect the degraded store and fail CLOSED via an in-process counter so a
+    // Redis outage still enforces a per-instance ceiling.
+    if (current <= 0) {
+      current = fallbackIncr(windowKey, win);
+    }
 
     const result: RateLimitResult = {
       allowed: current <= max,
@@ -272,9 +331,13 @@ export async function checkPlanRateLimit(
   }
 
   // Get limit from database (plan config > global defaults)
-  const maxRequests = await getRateLimit(planId, endpoint);
+  const lookedUpMax = await getRateLimit(planId, endpoint);
 
-  // If limit is 0, rate limiting is disabled for this endpoint
+  // Lookup FAILED (DB/cache error) → fail closed with a conservative limit,
+  // never treat as unlimited (#1834).
+  const maxRequests = lookedUpMax === RATE_LIMIT_LOOKUP_ERROR ? FAIL_CLOSED_DEFAULT : lookedUpMax;
+
+  // A configured 0 means an admin intentionally disabled this endpoint.
   if (maxRequests === 0) {
     return {
       result: { allowed: true, remaining: 999999, reset: Date.now() + 60000, limit: 999999 },
@@ -325,8 +388,10 @@ export async function rateLimitMiddleware(
   const endpoint = endpointOrLimiter;
 
   // Get limit from DB
-  const max = await getRateLimit(null, endpoint);
-  if (max === 0) return null; // Disabled
+  const lookedUp = await getRateLimit(null, endpoint);
+  if (lookedUp === 0) return null; // Intentionally disabled by admin
+  // Lookup error → fail closed with a conservative limit (#1834)
+  const max = lookedUp === RATE_LIMIT_LOOKUP_ERROR ? FAIL_CLOSED_DEFAULT : lookedUp;
 
   const window = getEndpointWindow(endpoint);
   const limiter = new RateLimiter({ max, window });
@@ -378,9 +443,13 @@ export async function checkRateLimit(
   const ip = getClientIp(request);
   const key = `v1_rate:${action}:${ip}`;
 
-  // Get limit from DB first, fall back to provided max
+  // Get limit from DB first, fall back to provided max.
+  // #1834: on lookup ERROR fail closed to the caller's fallback (or the
+  // conservative default) — never leave the request effectively unlimited.
   const dbMax = await getRateLimit(null, action);
-  const max = dbMax > 0 ? dbMax : (fallbackMax || 100);
+  const max = dbMax > 0
+    ? dbMax
+    : (fallbackMax || FAIL_CLOSED_DEFAULT);
   const window = fallbackWindow ? fallbackWindow * 60 : getEndpointWindow(action);
   const limiter = new RateLimiter({ max, window });
   const result = await limiter.check(key);

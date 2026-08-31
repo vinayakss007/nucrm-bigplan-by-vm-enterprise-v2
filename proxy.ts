@@ -30,6 +30,12 @@ const RATE_LIMIT_UNAUTH = 30;
 const RATE_LIMIT_AUTH = 120;
 const RATE_LIMIT_API_KEY = 300;
 const RATE_LIMIT_WINDOW_MS = 60_000;
+// #1834: absolute per-IP ceiling applied to EVERY /api/* request (before the
+// finer per-user/per-IP limits below). Guarantees a floor even for routes that
+// forget to opt into a handler-level limiter, and throttles invalid-token
+// probes that never reach the per-user branch. Set high enough not to interfere
+// with the tighter limits, low enough to blunt a single-IP flood.
+const RATE_LIMIT_API_FLOOR = 600;
 
 function generateRequestId(): string {
   return globalThis.crypto.randomUUID();
@@ -248,6 +254,18 @@ export async function proxy(request: NextRequest) {
       response.headers.set('Access-Control-Max-Age', '86400');
     }
     return response;
+  }
+
+  // #1834: absolute per-IP floor for ALL /api/* traffic. Runs before the
+  // public/authenticated branches so every route (including ones missing a
+  // handler-level limiter, and invalid-token probes that 401 below) has a
+  // ceiling. Bypass list still applies (webhooks/health/metrics).
+  if (isApiRequest(pathname) && !shouldBypassRateLimit(pathname)) {
+    const ip = getClientIp(request);
+    const floor = edgeLimiter.check(`rl:apifloor:${ip}`, RATE_LIMIT_API_FLOOR, RATE_LIMIT_WINDOW_MS);
+    if (!floor.allowed) {
+      return buildRateLimitResponse(requestId, floor, origin);
+    }
   }
 
   // Public API routes: apply rate limiting or pass through
