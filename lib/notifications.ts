@@ -113,8 +113,7 @@ export async function createNotification(opts: {
   entity_id?: string;
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }) {
   // Enriched metadata and the derived link are computed ONCE, outside the try,
   // so the retry path below writes the same row as the first attempt. It used to
@@ -125,8 +124,7 @@ export async function createNotification(opts: {
   // mutate the caller's own object as a side effect.
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const meta: Record<string, any> = { ...(opts.metadata ?? {}) };
+  const meta: Record<string, unknown> = { ...(opts.metadata ?? {}) };
   if (opts.entity_type) meta['entity_type'] = opts.entity_type;
   if (opts.entity_id)   meta['entity_id']   = opts.entity_id;
 
@@ -214,8 +212,7 @@ export async function notifyTenantMembers(opts: {
     // Build entity metadata
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const meta: Record<string, any> = {};
+    const meta: Record<string, unknown> = {};
     if (opts.entity_type) meta['entity_type'] = opts.entity_type;
     if (opts.entity_id)   meta['entity_id']   = opts.entity_id;
 
