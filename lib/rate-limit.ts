@@ -369,14 +369,13 @@ export default rateLimiter;
  * Accepts max/windowMinutes but fetches from DB when available
  */
 export async function checkRateLimit(
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  request: any,
+  request: Request,
   options: { action?: string; max?: number; windowMinutes?: number } = {}
 ) {
   const { action = 'api', max: fallbackMax, windowMinutes: fallbackWindow } = options;
 
   // #1249: header values only honored when TRUST_PROXY=true (see getClientIp)
-  const ip = request?.headers?.get ? getClientIp(request) : 'unknown';
+  const ip = getClientIp(request);
   const key = `v1_rate:${action}:${ip}`;
 
   // Get limit from DB first, fall back to provided max
