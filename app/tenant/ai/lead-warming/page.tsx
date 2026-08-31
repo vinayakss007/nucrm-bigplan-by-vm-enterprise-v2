@@ -4,7 +4,9 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useEffect, useState, useCallback } from 'react';
+import { useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import {
   Heart, Loader2, Mail, MessageSquare, Phone, ArrowRight,
   ThumbsUp, Clock, CheckCircle2, Plus, Pause, Play, Archive, Trash2, FileText,
@@ -74,51 +76,53 @@ const CHANNEL_ICONS: Record<string, typeof Mail> = { email: Mail, whatsapp: Mess
 type Tab = 'campaigns' | 'replies';
 
 export default function LeadWarmingPage() {
-  const [stats, setStats] = useState<WarmingStats | null>(null);
-  const [replies, setReplies] = useState<Reply[]>([]);
-  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [filter, setFilter] = useState('all');
   const [tab, setTab] = useState<Tab>('campaigns');
   const [showBuilder, setShowBuilder] = useState(false);
 
-  const loadData = useCallback((signal?: AbortSignal) => {
-    Promise.all([
-      fetch('/api/tenant/lead-warming/stats', { signal }).then(r => r.ok ? r.json() : null),
-      fetch('/api/tenant/lead-warming/replies?limit=50', { signal }).then(r => r.ok ? r.json() : null),
-      fetch('/api/tenant/lead-warming/campaigns', { signal }).then(r => r.ok ? r.json() : null),
-    ]).then(([statsData, repliesData, campaignsData]) => {
-      if (signal?.aborted) return;
-      if (statsData) setStats(statsData);
-      if (repliesData?.data) setReplies(repliesData.data);
-      if (campaignsData?.data) setCampaigns(campaignsData.data);
-    }).catch((e) => {
-      if ((e as Error)?.name === 'AbortError') return;
-    }).finally(() => {
-      if (!signal?.aborted) setLoading(false);
-    });
-  }, []);
+  // #1328: reads via TanStack Query (were parallel raw fetch + useEffect).
+  const { data: statsData, isLoading: statsLoading } = useApiQuery<WarmingStats>(
+    ['tenant', 'lead-warming', 'stats'],
+    '/api/tenant/lead-warming/stats',
+  );
+  const { data: repliesData, isLoading: repliesLoading } = useApiQuery<{ data?: Reply[] }>(
+    ['tenant', 'lead-warming', 'replies'],
+    '/api/tenant/lead-warming/replies?limit=50',
+  );
+  const { data: campaignsData, isLoading: campaignsLoading } = useApiQuery<{ data?: Campaign[] }>(
+    ['tenant', 'lead-warming', 'campaigns'],
+    '/api/tenant/lead-warming/campaigns',
+  );
+  const stats = statsData ?? null;
+  const replies: Reply[] = repliesData?.data ?? [];
+  const campaigns: Campaign[] = campaignsData?.data ?? [];
+  const loading = statsLoading || repliesLoading || campaignsLoading;
 
-  useEffect(() => {
-    const controller = new AbortController();
-    loadData(controller.signal);
-    return () => controller.abort();
-  }, [loadData]);
-
-  const toggleCampaignStatus = async (id: string, currentStatus: string) => {
-    const newStatus = currentStatus === 'active' ? 'paused' : 'active';
-    await fetch(`/api/tenant/lead-warming/campaigns/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: newStatus }),
-    });
-    loadData();
+  const loadData = () => {
+    queryClient.invalidateQueries({ queryKey: ['tenant', 'lead-warming'] });
   };
 
-  const archiveCampaign = async (id: string) => {
-    await fetch(`/api/tenant/lead-warming/campaigns/${id}`, { method: 'DELETE' });
-    loadData();
-  };
+  const toggleMutation = useMutation({
+    mutationFn: async ({ id, currentStatus }: { id: string; currentStatus: string }) => {
+      const newStatus = currentStatus === 'active' ? 'paused' : 'active';
+      await fetch(`/api/tenant/lead-warming/campaigns/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      });
+    },
+    onSuccess: () => loadData(),
+  });
+  const toggleCampaignStatus = (id: string, currentStatus: string) => toggleMutation.mutate({ id, currentStatus });
+
+  const archiveMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await fetch(`/api/tenant/lead-warming/campaigns/${id}`, { method: 'DELETE' });
+    },
+    onSuccess: () => loadData(),
+  });
+  const archiveCampaign = (id: string) => archiveMutation.mutate(id);
 
   const filtered = filter === 'all' ? replies : replies.filter(r => r.intent === filter);
   const intentCounts = replies.reduce((acc, r) => { acc[r.intent] = (acc[r.intent] || 0) + 1; return acc; }, {} as Record<string, number>);
