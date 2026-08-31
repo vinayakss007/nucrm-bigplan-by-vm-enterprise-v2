@@ -5,6 +5,7 @@
  */
 'use client';
 import { useState, useEffect, useRef } from 'react';
+import type { Socket } from 'socket.io-client';
 import { RealtimeEvent, REALTIME_PATH } from '@/lib/realtime/events';
 
 interface NotificationState {
@@ -52,8 +53,7 @@ export function useNotifications(enabled = true) {
     if (!enabled) return;
 
     const abort = new AbortController();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let socket: any = null;
+    let socket: Socket | null = null;
     let eventSource: EventSource | null = null;
     let sseReconnectTimer: ReturnType<typeof setTimeout>;
     let sseAttempts = 0;
