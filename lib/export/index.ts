@@ -17,8 +17,7 @@ export interface ExportOptions {
   entityType: ExportEntityType;
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  filters?: Record<string, any>;
+  filters?: Record<string, string | undefined>;
   callbackUrl?: string;
 }
 
@@ -48,8 +47,7 @@ const FORMULA_PREFIXES = ['=', '+', '-', '@', '\t', '\r'];
  */
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function escapeCSV(val: any): string {
+export function escapeCSV(val: unknown): string {
   if (val === null || val === undefined) return '';
   let str = String(val);
 
@@ -85,8 +83,7 @@ export async function generateExportData(opts: Omit<ExportOptions, 'callbackUrl'
   
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let data: any[] = [];
+  let data: Record<string, unknown>[] = [];
   
   switch (entityType) {
     case 'contacts': {
@@ -191,8 +188,8 @@ export async function generateExportData(opts: Omit<ExportOptions, 'callbackUrl'
     return '';
   }
   
-  const headers = Object.keys(data[0]);
-  const rows = data.map(row => headers.map(h => (row as Record<string, unknown>)[h] === null ? '' : escapeCSV((row as Record<string, unknown>)[h] as string)).join(','));
+  const headers = Object.keys(data[0] ?? {});
+  const rows = data.map(row => headers.map(h => row[h] === null ? '' : escapeCSV(row[h])).join(','));
   
   return [headers.join(','), ...rows].join('\n');
 }
