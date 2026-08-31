@@ -4,7 +4,9 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import { Mail, TrendingUp, Users, Clock, Pause, Play, Loader2, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
@@ -35,13 +37,11 @@ interface PoolParticipant {
   replyCount: number;
 }
 
+const WARMUP_QUERY = ['tenant', 'email-warmup'] as const;
+
 export default function WarmupDashboardPage() {
-  const [config, setConfig] = useState<WarmupConfig | null>(null);
-  const [pool, setPool] = useState<PoolParticipant[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [toggling, setToggling] = useState(false);
+  const queryClient = useQueryClient();
   const [showSetup, setShowSetup] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     from_email: '',
     from_name: '',
@@ -52,68 +52,60 @@ export default function WarmupDashboardPage() {
   });
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
 
-  const load = useCallback(async (signal?: AbortSignal) => {
-    setLoading(true);
-    try {
-      const res = await fetch('/api/tenant/email-warmup', { signal });
-      if (res.ok) {
-        const d = await res.json();
-        if (signal?.aborted) return;
-        setConfig(d.config ?? null);
-        setPool(d.pool ?? []);
-      }
-    } catch (e) {
-      if ((e as Error)?.name === 'AbortError') return;
-      throw e;
-    } finally {
-      if (!signal?.aborted) setLoading(false);
-    }
-  }, []);
+  // #1328: load config + pool via TanStack Query (was raw fetch + useEffect).
+  const { data, isLoading: loading } = useApiQuery<{ config?: WarmupConfig | null; pool?: PoolParticipant[] }>(
+    WARMUP_QUERY,
+    '/api/tenant/email-warmup',
+  );
+  const config: WarmupConfig | null = data?.config ?? null;
+  const pool: PoolParticipant[] = data?.pool ?? [];
 
-  useEffect(() => {
-    const controller = new AbortController();
-    load(controller.signal);
-    return () => controller.abort();
-  }, [load]);
-
-  const toggleWarmup = async () => {
-    if (!config) return;
-    setToggling(true);
-    try {
+  const toggleMutation = useMutation({
+    mutationFn: async (nextActive: boolean) => {
       const res = await fetch('/api/tenant/email-warmup', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ is_active: !config.isActive }),
+        body: JSON.stringify({ is_active: nextActive }),
       });
-      if (res.ok) {
-        setConfig(c => c ? { ...c, isActive: !c.isActive } : c);
-        toast.success(config.isActive ? 'Warmup paused' : 'Warmup resumed');
-      }
-    } finally {
-      setToggling(false);
-    }
+      if (!res.ok) throw new Error('Failed to toggle warmup');
+      return nextActive;
+    },
+    onSuccess: (nextActive) => {
+      toast.success(nextActive ? 'Warmup resumed' : 'Warmup paused');
+      queryClient.invalidateQueries({ queryKey: WARMUP_QUERY });
+    },
+  });
+  const toggling = toggleMutation.isPending;
+
+  const toggleWarmup = () => {
+    if (!config) return;
+    toggleMutation.mutate(!config.isActive);
   };
 
-  const submitSetup = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSaving(true);
-    try {
+  const setupMutation = useMutation({
+    mutationFn: async () => {
       const res = await fetch('/api/tenant/email-warmup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),
       });
-      if (res.ok) {
-        toast.success('Warmup configured');
-        setShowSetup(false);
-        load();
-      } else {
-        const d = await res.json();
-        toast.error(d.error || 'Failed to configure');
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || 'Failed to configure');
       }
-    } finally {
-      setSaving(false);
-    }
+    },
+    onSuccess: () => {
+      toast.success('Warmup configured');
+      setShowSetup(false);
+      queryClient.invalidateQueries({ queryKey: WARMUP_QUERY });
+    },
+    onError: (e: Error) => toast.error(e.message || 'Failed to configure'),
+  });
+  const saving = setupMutation.isPending;
+
+  const submitSetup = (e: React.FormEvent) => {
+    e.preventDefault();
+    setupMutation.mutate();
   };
 
   const addParticipant = () => setForm(f => ({ ...f, participants: [...f.participants, { email: '', name: '' }] }));
