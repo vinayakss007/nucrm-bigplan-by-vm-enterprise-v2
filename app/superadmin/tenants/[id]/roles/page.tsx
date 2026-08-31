@@ -4,11 +4,12 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
 import { useParams } from 'next/navigation';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import Link from 'next/link';
 import { ArrowLeft, Shield, Plus, Edit, Trash2, Save, Lock, ChevronDown, Check, Crown, X, Loader2 } from 'lucide-react';
-import { clientLogError } from '@/lib/client-logger';
 import { PERMISSIONS, PERMISSION_CATEGORIES } from '@/lib/permissions/definitions';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import { cn } from '@/lib/utils';
@@ -29,93 +30,87 @@ interface Role {
 export default function TenantRolesPage() {
   const params = useParams();
   const tenantId = params['id'] as string;
-  const [tenant, setTenant] = useState<{ id: string; name: string } | null>(null);
-  const [roles, setRoles] = useState<Role[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [editRole, setEditRole] = useState<Role | null>(null);
   const [showEditor, setShowEditor] = useState(false);
-  const [, setSaving] = useState(false);
 
-  const load = useCallback(async (signal?: AbortSignal) => {
-    try {
-      const [tenantRes, rolesRes] = await Promise.all([
-        fetch(`/api/superadmin/tenants/${tenantId}`, { signal }).then(r => r.json()),
-        fetch(`/api/tenant/roles`, { signal }).then(r => r.json()),
-      ]);
-      if (signal?.aborted) return;
-      setTenant(tenantRes.data || tenantRes);
-      setRoles(rolesRes.data || []);
-    } catch (error) {
-      if ((error as Error)?.name === 'AbortError') return;
-      clientLogError('tenant-roles:load', error);
-      toast.error('Failed to load tenant data');
-    } finally {
-      if (!signal?.aborted) setLoading(false);
-    }
-  }, [tenantId]);
+  // #1328: parallel reads via TanStack Query (were raw fetch + useEffect).
+  const tenantQuery = useApiQuery<{ data?: { id: string; name: string }; id?: string; name?: string }>(
+    ['superadmin', 'tenant', tenantId],
+    `/api/superadmin/tenants/${tenantId}`,
+    { enabled: !!tenantId },
+  );
+  const rolesQuery = useApiQuery<{ data?: Role[] }>(
+    ['superadmin', 'tenant-roles', tenantId],
+    `/api/tenant/roles`,
+    { enabled: !!tenantId },
+  );
+  const loading = tenantQuery.isLoading || rolesQuery.isLoading;
+  const tenant: { id: string; name: string } | null =
+    (tenantQuery.data?.data ?? (tenantQuery.data as { id: string; name: string } | undefined)) ?? null;
+  const roles: Role[] = rolesQuery.data?.data ?? [];
 
-  useEffect(() => {
-    const controller = new AbortController();
-    load(controller.signal);
-    return () => controller.abort();
-  }, [load]);
+  const invalidateRoles = () => {
+    queryClient.invalidateQueries({ queryKey: ['superadmin', 'tenant', tenantId] });
+    queryClient.invalidateQueries({ queryKey: ['superadmin', 'tenant-roles', tenantId] });
+  };
 
-  const saveRole = async (roleId: string, permissions: Record<string, boolean>) => {
-    setSaving(true);
-    try {
+  const saveRoleMutation = useMutation({
+    mutationFn: async ({ roleId, permissions }: { roleId: string; permissions: Record<string, boolean> }) => {
       const res = await fetch(`/api/tenant/roles/${roleId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ permissions }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Failed to save');
-      toast.success('Permissions updated');
-      load();
-    } catch (error: unknown) {
-      toast.error(error instanceof Error ? error.message : 'Failed to save');
-    } finally {
-      setSaving(false);
-    }
-  };
+      return data;
+    },
+    onSuccess: () => { toast.success('Permissions updated'); invalidateRoles(); },
+    onError: (e: Error) => toast.error(e.message || 'Failed to save'),
+  });
 
-  const createRole = async (name: string, description: string) => {
-    setSaving(true);
-    try {
+  const createRoleMutation = useMutation({
+    mutationFn: async ({ name, description }: { name: string; description: string }) => {
       const res = await fetch('/api/superadmin/tenants/roles', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ tenantId, name, description }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Failed to create');
-      toast.success('Role created');
-      load();
-    } catch (error: unknown) {
-      toast.error(error instanceof Error ? error.message : 'Failed to create');
-    } finally {
-      setSaving(false);
-    }
+      return data;
+    },
+    onSuccess: () => { toast.success('Role created'); invalidateRoles(); },
+    onError: (e: Error) => toast.error(e.message || 'Failed to create'),
+  });
+
+  const deleteRoleMutation = useMutation({
+    mutationFn: async (roleId: string) => {
+      const res = await fetch(`/api/superadmin/tenants/roles/${roleId}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tenantId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Failed to delete');
+      return data;
+    },
+    onSuccess: () => { toast.success('Role deleted'); invalidateRoles(); },
+    onError: (e: Error) => toast.error(e.message || 'Failed to delete'),
+  });
+
+  const saveRole = (roleId: string, permissions: Record<string, boolean>) => {
+    saveRoleMutation.mutate({ roleId, permissions });
+  };
+
+  const createRole = (name: string, description: string) => {
+    createRoleMutation.mutate({ name, description });
   };
 
   const deleteRole = async (roleId: string, roleName: string) => {
     await confirmThen(`Delete role "${roleName}"? Users with this role will need reassignment.`, async () => {
-      setSaving(true);
-      try {
-        const res = await fetch(`/api/superadmin/tenants/roles/${roleId}`, {
-          method: 'DELETE',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ tenantId }),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Failed to delete');
-        toast.success('Role deleted');
-        load();
-      } catch (error: unknown) {
-        toast.error(error instanceof Error ? error.message : 'Failed to delete');
-      } finally {
-        setSaving(false);
-      }
+      deleteRoleMutation.mutate(roleId);
     });
   };
 

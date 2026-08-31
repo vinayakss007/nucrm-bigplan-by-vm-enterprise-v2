@@ -5,8 +5,8 @@
  */
 'use client';
 
-import { useState, useEffect } from 'react';
-import { clientLogError } from '@/lib/client-logger';
+import { useState } from 'react';
+import { useApiQuery } from '@/lib/query/client';
 import {
   Coins,
   TrendingUp,
@@ -64,40 +64,34 @@ interface TokenApiKey {
 
 export default function SuperAdminTokenControl() {
   const [activeTab, setActiveTab] = useState<'budgets' | 'tenants' | 'keys' | 'alerts'>('budgets');
-  const [budgets, setBudgets] = useState<TokenBudget[]>([]);
-  const [topTenants, setTopTenants] = useState<TopTenant[]>([]);
-  const [alerts, setAlerts] = useState<UsageAlert[]>([]);
-  const [apiKeys, setApiKeys] = useState<TokenApiKey[]>([]);
-  const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    const controller = new AbortController();
-    loadAll(controller.signal);
-    return () => controller.abort();
-  }, []);
+  // #1328: parallel reads via TanStack Query (were raw fetch + useEffect). The
+  // manual Refresh button refetches all four queries.
+  const budgetsQuery = useApiQuery<{ budgets?: TokenBudget[] }>(
+    ['superadmin', 'token-control', 'budgets'], '/api/superadmin/token-control/budgets',
+  );
+  const spendersQuery = useApiQuery<{ tenants?: TopTenant[] }>(
+    ['superadmin', 'token-control', 'top-spenders'], '/api/superadmin/token-control/report/top-spenders',
+  );
+  const alertsQuery = useApiQuery<{ alerts?: UsageAlert[] }>(
+    ['superadmin', 'token-control', 'alerts'], '/api/superadmin/token-control/alerts?limit=20',
+  );
+  const keysQuery = useApiQuery<{ keys?: TokenApiKey[] }>(
+    ['superadmin', 'token-control', 'keys'], '/api/superadmin/token-control/keys',
+  );
 
-  const loadAll = async (signal?: AbortSignal) => {
-    setLoading(true);
-    try {
-      const [bRes, tRes, aRes, kRes] = await Promise.all([
-        fetch('/api/superadmin/token-control/budgets', { signal }),
-        fetch('/api/superadmin/token-control/report/top-spenders', { signal }),
-        fetch('/api/superadmin/token-control/alerts?limit=20', { signal }),
-        fetch('/api/superadmin/token-control/keys', { signal }),
-      ]);
-      const [b, t, a, k] = await Promise.all([bRes.json(), tRes.json(), aRes.json(), kRes.json()]);
-      if (signal?.aborted) return;
-      if (b.budgets) setBudgets(b.budgets);
-      if (t.tenants) setTopTenants(t.tenants);
-      if (a.alerts) setAlerts(a.alerts);
-      if (k.keys) setApiKeys(k.keys);
-    } catch (err) {
-      if ((err as Error)?.name === 'AbortError') return;
-      clientLogError('token-control:load', err);
-    }
-    finally {
-      if (!signal?.aborted) setLoading(false);
-    }
+  const budgets: TokenBudget[] = budgetsQuery.data?.budgets ?? [];
+  const topTenants: TopTenant[] = spendersQuery.data?.tenants ?? [];
+  const alerts: UsageAlert[] = alertsQuery.data?.alerts ?? [];
+  const apiKeys: TokenApiKey[] = keysQuery.data?.keys ?? [];
+  const loading =
+    budgetsQuery.isLoading || spendersQuery.isLoading || alertsQuery.isLoading || keysQuery.isLoading;
+
+  const loadAll = () => {
+    budgetsQuery.refetch();
+    spendersQuery.refetch();
+    alertsQuery.refetch();
+    keysQuery.refetch();
   };
 
   const formatCurrency = (cents: number) => {

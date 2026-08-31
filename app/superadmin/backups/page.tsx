@@ -5,7 +5,9 @@
  */
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import { clientLogError } from '@/lib/client-logger';
 import {
   Clock,
@@ -80,68 +82,41 @@ interface CriticalStats {
 // ── Main Page ────────────────────────────────────────────────────────────────
 
 export default function SuperAdminBackups() {
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<'schedules' | 'history' | 'deleted'>('schedules');
-  const [schedules, setSchedules] = useState<BackupSchedule[]>([]);
-  const [backups, setBackups] = useState<BackupRecord[]>([]);
-  const [deletedData, setDeletedData] = useState<CriticalBackup[]>([]);
-  const [criticalStats, setCriticalStats] = useState<CriticalStats | null>(null);
-  const [_loading, _setLoading] = useState(false);
   const [_showScheduleModal, setShowScheduleModal] = useState(false);
   const [showRestoreModal, setShowRestoreModal] = useState(false);
   const [selectedBackup, setSelectedBackup] = useState<CriticalBackup | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [runningBackup, setRunningBackup] = useState(false);
   const [backupError, setBackupError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const abort = new AbortController();
-    loadSchedules(abort.signal);
-    loadBackups(abort.signal);
-    loadCriticalData(abort.signal);
-    return () => abort.abort();
-  }, []);
+  // #1328: parallel on-mount reads via TanStack Query (were raw fetch +
+  // useEffect). Refresh buttons and mutations invalidate these keys.
+  const SCHEDULES_QUERY = ['superadmin', 'backups', 'schedules'] as const;
+  const BACKUPS_QUERY = ['superadmin', 'backups', 'recent'] as const;
+  const CRITICAL_QUERY = ['superadmin', 'backups', 'critical'] as const;
 
-  const loadSchedules = async (abortSignal?: AbortSignal) => {
-    try {
-      const res = await fetch('/api/superadmin/backups', { signal: abortSignal });
-      const data = await res.json();
-      // #1300: prefer the standardized { data } envelope, fall back to legacy key.
-      const list = data.data ?? data.schedules;
-      if (list) setSchedules(list);
-    } catch (err) {
-      if (err instanceof DOMException && err.name === 'AbortError') return;
-      clientLogError('backups:load-schedules', err);
-    }
-  };
+  const schedulesQuery = useApiQuery<{ data?: BackupSchedule[]; schedules?: BackupSchedule[] }>(
+    SCHEDULES_QUERY, '/api/superadmin/backups',
+  );
+  const backupsQuery = useApiQuery<{ data?: BackupRecord[]; backups?: BackupRecord[] }>(
+    BACKUPS_QUERY, '/api/superadmin/backups?list=recent',
+  );
+  const criticalQuery = useApiQuery<{ deleted?: CriticalBackup[]; stats?: CriticalStats }>(
+    CRITICAL_QUERY, '/api/superadmin/backups?critical=true',
+  );
 
-  const loadBackups = async (abortSignal?: AbortSignal) => {
-    try {
-      const res = await fetch('/api/superadmin/backups?list=recent', { signal: abortSignal });
-      const data = await res.json();
-      // #1300: prefer the standardized { data } envelope, fall back to legacy key.
-      const list = data.data ?? data.backups;
-      if (list) setBackups(list);
-    } catch (err) {
-      if (err instanceof DOMException && err.name === 'AbortError') return;
-      clientLogError('backups:load-backups', err);
-    }
-  };
+  // #1300: prefer the standardized { data } envelope, fall back to legacy key.
+  const schedules: BackupSchedule[] = schedulesQuery.data?.data ?? schedulesQuery.data?.schedules ?? [];
+  const backups: BackupRecord[] = backupsQuery.data?.data ?? backupsQuery.data?.backups ?? [];
+  const deletedData: CriticalBackup[] = criticalQuery.data?.deleted ?? [];
+  const criticalStats: CriticalStats | null = criticalQuery.data?.stats ?? null;
 
-  const loadCriticalData = async (abortSignal?: AbortSignal) => {
-    try {
-      const res = await fetch('/api/superadmin/backups?critical=true', { signal: abortSignal });
-      const data = await res.json();
-      if (data.deleted) setDeletedData(data.deleted);
-      if (data.stats) setCriticalStats(data.stats);
-    } catch (err) {
-      if (err instanceof DOMException && err.name === 'AbortError') return;
-      clientLogError('backups:load-critical', err);
-    }
-  };
+  const loadBackups = () => queryClient.invalidateQueries({ queryKey: BACKUPS_QUERY });
+  const loadCriticalData = () => queryClient.invalidateQueries({ queryKey: CRITICAL_QUERY });
 
-  const runManualBackup = async () => {
-    setRunningBackup(true);
-    try {
+  const manualBackupMutation = useMutation({
+    mutationFn: async () => {
       const res = await fetch('/api/superadmin/backups', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -149,49 +124,48 @@ export default function SuperAdminBackups() {
       });
       // #1090: do not console.log the backup result — it leaks backup metadata
       // into the browser console in production. Surface a status instead.
-      if (!res.ok) {
-        setBackupError('Manual backup failed. Check server logs.');
-      } else {
-        setBackupError(null);
-      }
-      loadBackups();
-    } catch {
-      setBackupError('Manual backup failed. Check your connection and try again.');
-    } finally {
-      setRunningBackup(false);
-    }
-  };
+      if (!res.ok) throw new Error('Manual backup failed. Check server logs.');
+    },
+    onSuccess: () => { setBackupError(null); loadBackups(); },
+    onError: (e: Error) => { setBackupError(e.message || 'Manual backup failed. Check your connection and try again.'); },
+  });
+  const runningBackup = manualBackupMutation.isPending;
+  const runManualBackup = () => manualBackupMutation.mutate();
 
-  const toggleSchedule = async (scheduleId: string, enabled: boolean) => {
-    try {
+  const toggleScheduleMutation = useMutation({
+    mutationFn: async ({ scheduleId, enabled }: { scheduleId: string; enabled: boolean }) => {
       await fetch('/api/superadmin/backups', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ scheduleId, enabled }),
       });
-      loadSchedules();
-    } catch (err) {
-      clientLogError('backups:toggle-schedule', err);
-    }
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: SCHEDULES_QUERY }),
+    onError: (err) => clientLogError('backups:toggle-schedule', err),
+  });
+  const toggleSchedule = (scheduleId: string, enabled: boolean) => {
+    toggleScheduleMutation.mutate({ scheduleId, enabled });
   };
 
-  const restoreDeletedData = async (backupId: string) => {
-    try {
+  const restoreMutation = useMutation({
+    mutationFn: async (backupId: string) => {
       const res = await fetch('/api/superadmin/backups', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'restore', backupId }),
       });
-      const data = await res.json();
-      if (data.success) {
-        setShowRestoreModal(false);
-        setSelectedBackup(null);
-        loadCriticalData();
-      }
-    } catch (err) {
-      clientLogError('backups:restore', err);
-    }
-  };
+      const data = await res.json().catch(() => ({}));
+      if (!data.success) throw new Error('Restore failed');
+      return data;
+    },
+    onSuccess: () => {
+      setShowRestoreModal(false);
+      setSelectedBackup(null);
+      loadCriticalData();
+    },
+    onError: (err) => clientLogError('backups:restore', err),
+  });
+  const restoreDeletedData = (backupId: string) => restoreMutation.mutate(backupId);
 
   const formatSize = (bytes: number) => {
     if (bytes < 1024) return `${bytes} B`;

@@ -5,7 +5,8 @@
  */
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
+import { useApiQuery } from '@/lib/query/client';
 import { clientLogError } from '@/lib/client-logger';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import {
@@ -143,7 +144,6 @@ export default function SuperAdminDataExplorer() {
   const [searchType, setSearchType] = useState('all');
   const [tenantFilter, setTenantFilter] = useState('');
   const [results, setResults] = useState<SearchResult | null>(null);
-  const [summary, setSummary] = useState<PlatformSummary | null>(null);
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -151,24 +151,13 @@ export default function SuperAdminDataExplorer() {
   const [expandedTable, setExpandedTable] = useState<string | null>(null);
   const [showSummary, setShowSummary] = useState(true);
 
-  // Load summary on mount
-  useEffect(() => {
-    const controller = new AbortController();
-    loadSummary(controller.signal);
-    return () => controller.abort();
-  }, []);
-
-  const loadSummary = async (signal?: AbortSignal) => {
-    try {
-      const res = await fetch('/api/superadmin/data-explorer?action=summary', { signal });
-      const data = await res.json();
-      if (signal?.aborted) return;
-      if (data.summary) setSummary(data.summary);
-    } catch (err) {
-      if ((err as Error)?.name === 'AbortError') return;
-      clientLogError('data-explorer:load-summary', err);
-    }
-  };
+  // #1328: on-mount summary read via TanStack Query (was raw fetch + useEffect).
+  // The manual Refresh button calls refetch(). Search is on-demand, stays plain fetch.
+  const summaryQuery = useApiQuery<{ summary?: PlatformSummary }>(
+    ['superadmin', 'data-explorer', 'summary'],
+    '/api/superadmin/data-explorer?action=summary',
+  );
+  const summary: PlatformSummary | null = summaryQuery.data?.summary ?? null;
 
   const handleSearch = useCallback(async () => {
     setLoading(true);
@@ -322,7 +311,7 @@ export default function SuperAdminDataExplorer() {
               Export CSV
             </button>
           )}
-          <button onClick={() => loadSummary()} className="px-3 py-2 text-sm bg-gray-800 hover:bg-gray-700 rounded-lg flex items-center gap-2">
+          <button onClick={() => summaryQuery.refetch()} className="px-3 py-2 text-sm bg-gray-800 hover:bg-gray-700 rounded-lg flex items-center gap-2">
             <RefreshCw className="w-4 h-4" />
             Refresh
           </button>

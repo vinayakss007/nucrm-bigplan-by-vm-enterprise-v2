@@ -47,9 +47,12 @@ export default function UsagePage() {
   const [sortBy, setSortBy] = useState<'contacts'|'deals'|'users'>('contacts');
   const [sortDir, setSortDir] = useState<'asc'|'desc'>('desc');
 
-  // #1328: TanStack Query replaces fetch + useEffect + useState.
-  const { data, isLoading, refetch } = useApiQuery<UsageData>(['superadmin', 'usage'], '/api/superadmin/usage');
-  const loading = isLoading;
+  // #1328: TanStack Query replaces fetch + useEffect + useState. The manual
+  // refresh button calls refetch().
+  const { data, isLoading: loading, refetch } = useApiQuery<UsageData>(
+    ['superadmin', 'usage'],
+    '/api/superadmin/usage',
+  );
 
   const toggleSort = (col: typeof sortBy) => {
     if (sortBy === col) setSortDir(d => d==='desc'?'asc':'desc');

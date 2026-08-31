@@ -5,6 +5,8 @@
  */
 'use client';
 import { useState, useEffect } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import { Shield, Save, Loader2, RotateCcw, Users, CreditCard, Zap, Info, Check, Globe } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import toast from 'react-hot-toast';
@@ -31,41 +33,46 @@ interface SuperAdmin {
   unlimitedRateLimit: boolean;
 }
 
+interface RateLimitsResponse {
+  data?: {
+    plans?: PlanRateLimits[];
+    superAdmins?: SuperAdmin[];
+    endpoints?: RateLimitEndpoint[];
+    globalDefaults?: Record<string, number>;
+  };
+}
+
+const RATE_LIMITS_QUERY = ['superadmin', 'rate-limits'] as const;
+
 export default function SuperAdminRateLimitsPage() {
-  const [plans, setPlans] = useState<PlanRateLimits[]>([]);
-  const [superAdmins, setSuperAdmins] = useState<SuperAdmin[]>([]);
-  const [endpoints, setEndpoints] = useState<RateLimitEndpoint[]>([]);
-  const [, setGlobalDefaults] = useState<Record<string, number>>({});
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState<string | null>(null);
+  const queryClient = useQueryClient();
   const [selectedPlan, setSelectedPlan] = useState<string>('');
   const [editLimits, setEditLimits] = useState<Record<string, number>>({});
   const [editGlobal, setEditGlobal] = useState<Record<string, number>>({});
   const [hasChanges, setHasChanges] = useState(false);
   const [activeTab, setActiveTab] = useState<'global' | 'plans'>('global');
+  const [seeded, setSeeded] = useState(false);
+
+  // #1328: reads via TanStack Query (were raw fetch + useEffect). The editable
+  // state is seeded once from the fetched config; mutations invalidate this key.
+  const { data: rlData, isLoading: loading } = useApiQuery<RateLimitsResponse>(
+    RATE_LIMITS_QUERY,
+    '/api/superadmin/rate-limits',
+  );
+  const plans: PlanRateLimits[] = rlData?.data?.plans ?? [];
+  const superAdmins: SuperAdmin[] = rlData?.data?.superAdmins ?? [];
+  const endpoints: RateLimitEndpoint[] = rlData?.data?.endpoints ?? [];
 
   useEffect(() => {
-    const abort = new AbortController();
-    fetch('/api/superadmin/rate-limits', { signal: abort.signal })
-      .then(r => r.json())
-      .then(d => {
-        if (abort.signal.aborted) return;
-        if (d.data) {
-          setPlans(d.data.plans || []);
-          setSuperAdmins(d.data.superAdmins || []);
-          setEndpoints(d.data.endpoints || []);
-          setGlobalDefaults(d.data.globalDefaults || {});
-          setEditGlobal(d.data.globalDefaults || {});
-          if (d.data.plans.length > 0) {
-            setSelectedPlan(d.data.plans[0].id);
-            setEditLimits(d.data.plans[0].rateLimits || {});
-          }
-        }
-        setLoading(false);
-      })
-      .catch(() => { if (!abort.signal.aborted) setLoading(false); });
-    return () => abort.abort();
-  }, []);
+    if (seeded || !rlData?.data) return;
+    setEditGlobal(rlData.data.globalDefaults || {});
+    const firstPlan = rlData.data.plans?.[0];
+    if (firstPlan) {
+      setSelectedPlan(firstPlan.id);
+      setEditLimits(firstPlan.rateLimits || {});
+    }
+    setSeeded(true);
+  }, [seeded, rlData]);
 
   const selectPlan = (planId: string) => {
     const plan = plans.find(p => p.id === planId);
@@ -90,95 +97,74 @@ export default function SuperAdminRateLimitsPage() {
     setHasChanges(true);
   };
 
-  const saveGlobalDefaults = async () => {
-    setSaving('global');
-    try {
-      const res = await fetch('/api/superadmin/rate-limits', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'update_global', rateLimits: editGlobal }),
-      });
-      const d = await res.json();
-      if (res.ok) {
-        toast.success('Global defaults saved');
-        setGlobalDefaults(editGlobal);
-        setHasChanges(false);
-      } else {
-        toast.error(d.error || 'Save failed');
-      }
-    } catch {
-      toast.error('Network error');
-    }
-    setSaving(null);
+  // #1328: write actions via useMutation; onSuccess invalidates the config query.
+  const putRateLimits = async (body: Record<string, unknown>) => {
+    const res = await fetch('/api/superadmin/rate-limits', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(d.error || 'Request failed');
+    return d;
   };
 
-  const savePlanLimits = async () => {
-    setSaving(selectedPlan);
-    try {
-      const res = await fetch('/api/superadmin/rate-limits', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'update_plan_limits', planId: selectedPlan, rateLimits: editLimits }),
-      });
-      const d = await res.json();
-      if (res.ok) {
-        toast.success('Plan limits saved');
-        setPlans(prev => prev.map(p => p.id === selectedPlan ? { ...p, rateLimits: editLimits } : p));
-        setHasChanges(false);
-      } else {
-        toast.error(d.error || 'Save failed');
-      }
-    } catch {
-      toast.error('Network error');
-    }
-    setSaving(null);
-  };
+  const saveGlobalMutation = useMutation({
+    mutationFn: () => putRateLimits({ action: 'update_global', rateLimits: editGlobal }),
+    onSuccess: () => {
+      toast.success('Global defaults saved');
+      setHasChanges(false);
+      queryClient.invalidateQueries({ queryKey: RATE_LIMITS_QUERY });
+    },
+    onError: (e: Error) => toast.error(e.message === 'Request failed' ? 'Network error' : e.message),
+  });
 
+  const savePlanMutation = useMutation({
+    mutationFn: () => putRateLimits({ action: 'update_plan_limits', planId: selectedPlan, rateLimits: editLimits }),
+    onSuccess: () => {
+      toast.success('Plan limits saved');
+      setHasChanges(false);
+      queryClient.invalidateQueries({ queryKey: RATE_LIMITS_QUERY });
+    },
+    onError: (e: Error) => toast.error(e.message === 'Request failed' ? 'Network error' : e.message),
+  });
+
+  const resetMutation = useMutation({
+    mutationFn: () => putRateLimits({ action: 'reset_to_defaults', planId: selectedPlan }),
+    onSuccess: () => {
+      setEditLimits({});
+      toast.success('Reset to global defaults');
+      setHasChanges(false);
+      queryClient.invalidateQueries({ queryKey: RATE_LIMITS_QUERY });
+    },
+    onError: (e: Error) => toast.error(e.message === 'Request failed' ? 'Reset failed' : e.message),
+  });
+
+  const toggleAdminMutation = useMutation({
+    mutationFn: ({ userId, current }: { userId: string; current: boolean }) =>
+      putRateLimits({ action: 'toggle_super_admin_unlimited', userId, unlimited: !current }),
+    onSuccess: (_d, { current }) => {
+      toast.success(current ? 'Unlimited disabled' : 'Unlimited enabled');
+      queryClient.invalidateQueries({ queryKey: RATE_LIMITS_QUERY });
+    },
+    onError: (e: Error) => toast.error(e.message === 'Request failed' ? 'Toggle failed' : e.message),
+  });
+
+  // `saving` mirrors the previous per-target busy token behavior.
+  const saving: string | null =
+    saveGlobalMutation.isPending ? 'global'
+    : (savePlanMutation.isPending || resetMutation.isPending) ? selectedPlan
+    : null;
+
+  const saveGlobalDefaults = () => saveGlobalMutation.mutate();
+  const savePlanLimits = () => savePlanMutation.mutate();
   const resetToDefaults = async () => {
     await confirmThen('Reset this plan to use global defaults?', async () => {
-      setSaving(selectedPlan);
-      try {
-        const res = await fetch('/api/superadmin/rate-limits', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'reset_to_defaults', planId: selectedPlan }),
-        });
-        const d = await res.json();
-        if (res.ok) {
-          const plan = plans.find(p => p.id === selectedPlan);
-          if (plan) {
-            setEditLimits({});
-            setPlans(prev => prev.map(p => p.id === selectedPlan ? { ...p, rateLimits: {} } : p));
-          }
-          toast.success('Reset to global defaults');
-          setHasChanges(false);
-        } else {
-          toast.error(d.error || 'Reset failed');
-        }
-      } catch {
-        toast.error('Network error');
-      }
-      setSaving(null);
+      resetMutation.mutate();
     });
   };
-
-  const toggleSuperAdminUnlimited = async (userId: string, current: boolean) => {
-    try {
-      const res = await fetch('/api/superadmin/rate-limits', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'toggle_super_admin_unlimited', userId, unlimited: !current }),
-      });
-      const d = await res.json();
-      if (res.ok) {
-        setSuperAdmins(prev => prev.map(u => u.id === userId ? { ...u, unlimitedRateLimit: !current } : u));
-        toast.success(current ? 'Unlimited disabled' : 'Unlimited enabled');
-      } else {
-        toast.error(d.error || 'Toggle failed');
-      }
-    } catch {
-      toast.error('Network error');
-    }
+  const toggleSuperAdminUnlimited = (userId: string, current: boolean) => {
+    toggleAdminMutation.mutate({ userId, current });
   };
 
   const inp = "w-full px-3 py-2 rounded-lg border border-white/10 bg-white/5 text-sm text-white placeholder-white/20 focus:outline-none focus:border-violet-500";
