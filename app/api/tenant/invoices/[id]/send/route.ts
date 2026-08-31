@@ -11,7 +11,7 @@
  * Sends the invoice PDF link to the customer via email.
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth, requireCsrf } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { invoices, contacts, activities } from '@/drizzle/schema';
 import { eq, and, isNull } from 'drizzle-orm';
@@ -27,6 +27,8 @@ export const POST = withApiRoute(async (req: NextRequest, { params }: { params: 
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
+    const csrf = requireCsrf(req); // #1835: in-handler CSRF defense-in-depth (after auth)
+    if (csrf) return csrf;
 
     const { id } = await params;
     if (!id) return NextResponse.json({ error: 'Invoice ID required' }, { status: 400 });

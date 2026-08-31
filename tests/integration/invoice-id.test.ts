@@ -12,6 +12,8 @@ const {
 vi.mock('@/lib/auth/middleware', () => ({
   requireAuth: (...args: unknown[]) => mockRequireAuth(...args),
   requirePerm: (...args: unknown[]) => mockCan(...args),
+  // #1835: handlers call requireCsrf() as defense-in-depth; no-op in tests.
+  requireCsrf: () => null,
 }));
 
 vi.mock('@/lib/audit', () => ({

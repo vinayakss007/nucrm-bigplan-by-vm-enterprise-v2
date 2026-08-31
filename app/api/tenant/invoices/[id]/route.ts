@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { logError } from '@/lib/errors-server';
-import { requireAuth, requirePerm } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm, requireCsrf } from '@/lib/auth/middleware';
 import { documentTotal, money } from '@/lib/money';
 import { db } from '@/drizzle/db';
 import { concurrencyGuard } from '@/lib/api/concurrency';
@@ -57,6 +57,8 @@ export const PUT = withApiRoute(async (req: NextRequest, { params }: { params: P
   if (limited) return limited;
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
+    const csrf = requireCsrf(req); // #1835: in-handler CSRF defense-in-depth (after auth)
+    if (csrf) return csrf;
 
     const deny = requirePerm(ctx, 'invoices.edit');
     if (deny) return deny;
@@ -188,6 +190,8 @@ export const DELETE = withApiRoute(async (req: NextRequest, { params }: { params
   if (limited) return limited;
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
+    const csrf = requireCsrf(req); // #1835: in-handler CSRF defense-in-depth (after auth)
+    if (csrf) return csrf;
 
     const deny = requirePerm(ctx, 'invoices.delete');
     if (deny) return deny;

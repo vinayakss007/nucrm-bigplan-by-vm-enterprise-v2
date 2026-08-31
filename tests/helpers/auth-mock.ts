@@ -64,6 +64,9 @@ vi.mock('@/lib/auth/middleware', () => ({
   requirePerm: vi.fn(() => null),
   requireModule: vi.fn().mockResolvedValue(null),
   can: vi.fn(() => true),
+  // #1835: handlers now call requireCsrf() as defense-in-depth. In tests it is
+  // a no-op pass-through (null = CSRF ok) so it never blocks mocked requests.
+  requireCsrf: vi.fn(() => null),
 }));
 
 /**

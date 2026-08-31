@@ -10,7 +10,7 @@ import { sumLineItems, lineTotal, money, round2 } from '@/lib/money';
 import { db } from '@/drizzle/db';
 import { invoices, invoiceLineItems } from '@/drizzle/schema';
 import { eq, and, desc, sql, count, isNull } from 'drizzle-orm';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth, requireCsrf } from '@/lib/auth/middleware';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { logError } from '@/lib/errors-server';
@@ -74,6 +74,11 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     if (limited) return limited;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+    // #1835: in-handler CSRF check as defense-in-depth (the proxy middleware is
+    // the primary gate). Runs AFTER auth so an unauthenticated request still
+    // gets a 401, matching the middleware/handler contract.
+    const csrf = requireCsrf(request);
+    if (csrf) return csrf;
     const { tenantId, userId } = ctx;
 
     const rawBody = await readJsonBody(request);
