@@ -168,7 +168,7 @@ export const POST = withApiRoute(async (request: NextRequest, { params }: { para
         title: `Lead handed off to you${lead.leadOid ? `: ${lead.leadOid}` : ''}`,
         body: `${lead.firstName} ${lead.lastName ?? ''}`.trim() + (reason ? ` — ${reason}` : ''),
         link: `/tenant/leads/${id}`,
-      }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
+      }).catch((err) => logError({ error: err, context: 'tenant/leads/:id/assign async side-effect' }));
     }
 
     return NextResponse.json({ ok: true });

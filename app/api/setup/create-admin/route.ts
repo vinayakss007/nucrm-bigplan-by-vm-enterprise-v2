@@ -182,7 +182,7 @@ export async function POST(request: NextRequest) {
         stepName: 'admin_created',
         isCompleted: true,
         completedAt: new Date(),
-      }).onConflictDoNothing().catch((err) => logError({ error: err, context: "async-catch:[context]" }));
+      }).onConflictDoNothing().catch((err) => logError({ error: err, context: 'setup/create-admin async side-effect' }));
 
       // 8. Create session
       const token = await createToken(u.id);

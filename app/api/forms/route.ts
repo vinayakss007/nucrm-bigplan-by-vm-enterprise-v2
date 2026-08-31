@@ -154,7 +154,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    await fireWebhooks(form.tenantId, 'contact.created', { form_id, contact_id, ...formData }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
+    await fireWebhooks(form.tenantId, 'contact.created', { form_id, contact_id, ...formData }).catch((err) => logError({ error: err, context: 'forms fireWebhooks contact.created' }));
     return NextResponse.json({ ok: true, message: (form.settings as Record<string, unknown>)?.success_message as string ?? 'Thank you! We will be in touch.' });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {

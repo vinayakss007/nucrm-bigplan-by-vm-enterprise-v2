@@ -19,7 +19,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
     // Trigger usage snapshot
-    await db.execute(sql`SELECT public.snapshot_tenant_usage()`).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
+    await db.execute(sql`SELECT public.snapshot_tenant_usage()`).catch((err) => logError({ error: err, context: 'superadmin/usage db.execute' }));
 
     const [tenantUsage, growth] = await Promise.all([
       db.select({

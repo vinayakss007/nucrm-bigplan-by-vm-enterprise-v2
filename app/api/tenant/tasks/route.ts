@@ -177,10 +177,10 @@ export const POST = withApiRoute(async (request: NextRequest) => {
         body: v.description?.slice(0, 150) ?? '',
         entity_type: 'task',
         link: `/tenant/tasks`,
-      }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
+      }).catch((err) => logError({ error: err, context: 'tenant/tasks async side-effect' }));
     }
 
-    fireWebhooks(ctx.tenantId, 'task.created', { id: newTask.id, title: v.title }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
+    fireWebhooks(ctx.tenantId, 'task.created', { id: newTask.id, title: v.title }).catch((err) => logError({ error: err, context: 'tenant/tasks fireWebhooks task.created' }));
 
     return NextResponse.json({ data: newTask }, { status: 201 });
  

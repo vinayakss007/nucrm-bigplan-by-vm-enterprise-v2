@@ -260,7 +260,7 @@ export const PATCH = withApiRoute(async (request: NextRequest,
       return [lead];
     });
 
-    fireWebhooks(ctx.tenantId, 'lead.updated', { id }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
+    fireWebhooks(ctx.tenantId, 'lead.updated', { id }).catch((err) => logError({ error: err, context: 'tenant/leads/:id fireWebhooks lead.updated' }));
     
     return NextResponse.json({ data: updatedLead });
  
@@ -314,7 +314,7 @@ export const DELETE = withApiRoute(async (request: NextRequest,
       action: 'delete', entityType: 'lead', entityId: id,
     });
 
-    fireWebhooks(ctx.tenantId, 'lead.deleted', { id }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
+    fireWebhooks(ctx.tenantId, 'lead.deleted', { id }).catch((err) => logError({ error: err, context: 'tenant/leads/:id fireWebhooks lead.deleted' }));
 
     return NextResponse.json({ success: true, message: 'Moved to trash. Restore within 30 days.' });
  

@@ -265,7 +265,7 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params:
       entityId: contactId
     });
 
-    fireWebhooks(ctx.tenantId, 'contact.updated', { id: contactId }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
+    fireWebhooks(ctx.tenantId, 'contact.updated', { id: contactId }).catch((err) => logError({ error: err, context: 'tenant/contacts/:id fireWebhooks contact.updated' }));
 
     invalidateWidgetCache(ctx.tenantId, 'stats-contacts', 'contacts-recent', 'activity');
 
@@ -343,7 +343,7 @@ export const DELETE = withApiRoute(async (req: NextRequest, { params }: { params
       entityId: contactId
     });
 
-    fireWebhooks(ctx.tenantId, 'contact.deleted', { id: contactId }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
+    fireWebhooks(ctx.tenantId, 'contact.deleted', { id: contactId }).catch((err) => logError({ error: err, context: 'tenant/contacts/:id fireWebhooks contact.deleted' }));
 
     invalidateWidgetCache(ctx.tenantId, 'stats-contacts', 'contacts-recent', 'activity');
 

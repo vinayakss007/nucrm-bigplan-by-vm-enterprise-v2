@@ -286,7 +286,7 @@ async function handlePaymentSucceeded(invoice: any) {
       stripe_invoice_id: invoice.id,
       amount_paid: invoice.amount_paid,
       customer: invoice.customer,
-    }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
+    }).catch((err) => logError({ error: err, context: 'webhooks/stripe async side-effect' }));
 
     try {
       const { evaluateAutomations } = await import('@/lib/automation/engine');
