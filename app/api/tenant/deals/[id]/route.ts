@@ -436,6 +436,20 @@ async function handleDealWon(ctx: any, dealId: string, row: any) {
     .where(and(eq(deals.id, dealId), eq(deals.tenantId, ctx.tenantId)))
     .catch(err => { void logError({ error: err, context: 'tenant/deals/[id] deal-won won_at update' }); });
 
+  // #1817: optionally create a DRAFT invoice from the won deal (opt-in per
+  // tenant via settings.autoInvoiceOnWon, idempotent, non-fatal). This closes
+  // the sales→billing gap by populating invoices.dealId for revenue attribution.
+  try {
+    const { createInvoiceFromWonDeal } = await import('@/lib/billing/deal-invoice');
+    await createInvoiceFromWonDeal(
+      { tenantId: ctx.tenantId, userId: ctx.userId },
+      dealId,
+      { title: row.title, amount: row.amount, contactId: row.contactId, companyId: row.companyId },
+    );
+  } catch (e) {
+    await logError({ error: e, context: 'tenant/deals/[id] deal-won invoice create' });
+  }
+
   // Trigger Automations
   try {
     const { evaluateAutomations } = await import('@/lib/automation/engine');
