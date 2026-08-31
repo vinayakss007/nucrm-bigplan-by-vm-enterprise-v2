@@ -43,7 +43,7 @@ Multiple different PostgreSQL passwords are scattered across configuration files
 | File                         | Password Value                     |
 | ---------------------------- | ---------------------------------- |
 | `.env` / `.env.local`        | `07a8ad1c17f42c56dd734b4e5ae5eafe` |
-| `start_nucrm.sh`             | `nucrm_pass_2026`                  |
+| `scripts/start_nucrm.sh`     | `nucrm_pass_2026`                  |
 | `AGENTS.md`                  | `nucrm_prod_db_pass_2026`          |
 | `drizzle.config.ts` fallback | `nucrm_secure_password`            |
 
@@ -57,7 +57,7 @@ Multiple different PostgreSQL passwords are scattered across configuration files
 ### Proposed Solution
 
 1. **Single source of truth**: Use `deploy/generate-secrets.sh` to generate and store the production password
-2. **Remove hardcoded passwords** from `start_nucrm.sh`, `AGENTS.md`, `drizzle.config.ts`
+2. **Remove hardcoded passwords** from `scripts/start_nucrm.sh`, `AGENTS.md`, `drizzle.config.ts`
 3. **All configs reference env vars only** — no inline passwords
 4. **Add `.env.local` to `.gitignore`** (verify it's already there)
 5. **Rotate all passwords** after consolidation

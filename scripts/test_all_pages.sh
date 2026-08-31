@@ -2,8 +2,10 @@
 # NuCRM Enterprise Page Test Script
 # Tests each page by navigating via curl and checking HTTP status
 
-RESULTS_FILE="/home/vinayak_shruti_biz/nucrm-enterprise/PAGE_TEST_RESULTS.txt"
-BASE_URL="http://localhost:3000"
+# This script lives in scripts/; write results to the repo root by default.
+REPO_ROOT="$(cd "$(dirname "$0")" && pwd)/.."
+RESULTS_FILE="${RESULTS_FILE:-$REPO_ROOT/PAGE_TEST_RESULTS.txt}"
+BASE_URL="${BASE_URL:-http://localhost:3000}"
 
 echo "========================================" > "$RESULTS_FILE"
 echo "NUCRM ENTERPRISE - PAGE TEST RESULTS" >> "$RESULTS_FILE"

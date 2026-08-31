@@ -53,7 +53,7 @@ drizzle/
   db.ts             The db client
 hooks/              Reusable React hooks (data fetching, etc.)
 types/              Shared TS types (incl. ModuleManifest)
-scripts/            ~45 ops scripts (migrate, seed, verify-*, diagnose, ...)
+scripts/            ~55 ops scripts (migrate, seed, verify-*, diagnose, run-local, start-*, ...)
 tests/              unit/ integration/ e2e/ dashboard/ load/ + helpers
 monitoring/         Prometheus / Grafana / Alertmanager / Promtail (Docker)
 docs/               Reference docs (this hub lives in docs/agent-plans/)
@@ -170,7 +170,7 @@ soft-delete; add FKs + indexes; changes go through migrations (`db:generate` →
 | `integration/` | API routes incl. tenant isolation | `npm run test:integration` |
 | `dashboard/`   | Dashboard widget logic            | (part of `test:unit`)      |
 | `e2e/`         | Playwright end-to-end             | `npm run test:e2e`         |
-| `load/`        | Load testing                      | see `load-test.js`         |
+| load testing   | k6 load script                    | see `scripts/load-test.js` |
 
 ---
 

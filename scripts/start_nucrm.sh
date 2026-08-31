@@ -1,4 +1,6 @@
 #!/bin/bash
+# This script lives in scripts/; run from the repo root so npm/node_modules resolve.
+cd "$(cd "$(dirname "$0")" && pwd)/.."
 source ~/.nvm/nvm.sh
 nvm use 22.22.2
 export DATABASE_URL=${DATABASE_URL:?DATABASE_URL is not set. Source .env first: source .env}

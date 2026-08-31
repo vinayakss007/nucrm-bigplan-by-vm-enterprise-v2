@@ -6,15 +6,15 @@ How to see what the platform is doing and get alerted when something breaks.
 
 ## The observability stack
 
-| Tool | Role | Config |
-| --- | --- | --- |
-| **Sentry** | Error/exception tracking (client, server, edge) | `sentry.*.config.ts`, `instrumentation*.ts` |
-| **Prometheus** | Metrics collection | `monitoring/`, `deploy/monitoring/` |
-| **Grafana** | Dashboards over Prometheus/Loki | `monitoring/` |
-| **Loki + Promtail** | Log aggregation and shipping | `deploy/monitoring/` |
-| **Alertmanager** | Routes alerts (Slack, webhook) | `deploy/monitoring/` |
-| **Exporters** | node / redis / postgres exporters | docker-compose `monitoring` profile |
-| **PagerDuty** | On-call incident paging | `lib/pagerduty.ts` |
+| Tool                | Role                                            | Config                                      |
+| ------------------- | ----------------------------------------------- | ------------------------------------------- |
+| **Sentry**          | Error/exception tracking (client, server, edge) | `sentry.*.config.ts`, `instrumentation*.ts` |
+| **Prometheus**      | Metrics collection                              | `monitoring/`, `deploy/monitoring/`         |
+| **Grafana**         | Dashboards over Prometheus/Loki                 | `monitoring/`                               |
+| **Loki + Promtail** | Log aggregation and shipping                    | `deploy/monitoring/`                        |
+| **Alertmanager**    | Routes alerts (Slack, webhook)                  | `deploy/monitoring/`                        |
+| **Exporters**       | node / redis / postgres exporters               | docker-compose `monitoring` profile         |
+| **PagerDuty**       | On-call incident paging                         | `lib/pagerduty.ts`                          |
 
 Bring the stack up locally with `docker compose --profile monitoring up -d`. See
 [Deployment](./deployment.md).
@@ -23,11 +23,11 @@ Bring the stack up locally with `docker compose --profile monitoring up -d`. See
 
 ## Health checks
 
-| Endpoint | Purpose |
-| --- | --- |
-| `GET /api/health` | Basic liveness. |
-| `GET /api/system/health` | Detailed health incl. dependency status (DB, Redis, email); reports `degraded` when, e.g., no email provider is configured. |
-| **Super-Admin → Health / Monitoring** | Operator UI for system + worker status. |
+| Endpoint                              | Purpose                                                                                                                     |
+| ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `GET /api/health`                     | Basic liveness.                                                                                                             |
+| `GET /api/system/health`              | Detailed health incl. dependency status (DB, Redis, email); reports `degraded` when, e.g., no email provider is configured. |
+| **Super-Admin → Health / Monitoring** | Operator UI for system + worker status.                                                                                     |
 
 Use `/api/health` for load-balancer liveness and `/api/system/health` for deeper diagnostics.
 
@@ -49,19 +49,19 @@ Use `/api/health` for load-balancer liveness and `/api/system/health` for deeper
   `worker-*.log`, `cron-*.log`.
 - In the monitoring stack, **Promtail** ships logs to **Loki** for querying in Grafana.
 - Quick tails: `npm run logs:watch` (all), `npm run logs:errors` (errors only). A simple
-  `log-viewer.html` is included for local inspection.
+  `scripts/log-viewer.html` is included for local inspection (or run `npm run logs:view`).
 - **Super-Admin → Logs / Errors** provides an in-app view of application logs and captured errors.
 
 ---
 
 ## Alerting
 
-| Signal | Destination |
-| --- | --- |
-| **Fatal errors** | POST to `CRITICAL_ERROR_WEBHOOK_URL` (rate-limited to avoid storms). |
-| **PagerDuty** | Set `PAGERDUTY_ROUTING_KEY` to page on-call for critical incidents. |
+| Signal           | Destination                                                            |
+| ---------------- | ---------------------------------------------------------------------- |
+| **Fatal errors** | POST to `CRITICAL_ERROR_WEBHOOK_URL` (rate-limited to avoid storms).   |
+| **PagerDuty**    | Set `PAGERDUTY_ROUTING_KEY` to page on-call for critical incidents.    |
 | **Alertmanager** | Routes Prometheus alerts (thresholds defined in `deploy/monitoring/`). |
-| **Sentry** | Notifies on new/spiking exceptions. |
+| **Sentry**       | Notifies on new/spiking exceptions.                                    |
 
 ---
 

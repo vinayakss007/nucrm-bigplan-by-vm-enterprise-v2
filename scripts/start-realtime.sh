@@ -3,7 +3,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-cd "$SCRIPT_DIR"
+# This script lives in scripts/; run everything from the repo root.
+cd "$SCRIPT_DIR/.."
 
 # Source .env.local to get REDIS_URL, DATABASE_URL, JWT_SECRET, etc.
 if [ -f .env.local ]; then
