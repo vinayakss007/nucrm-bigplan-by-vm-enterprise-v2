@@ -33,11 +33,18 @@ const KNOWN_DRIFT = new Set(
   JSON.parse(readFileSync('scripts/schema-drift-baseline.json', 'utf8')).knownDrift,
 );
 
+// Strip line/block comments so drift is judged on Zod STRUCTURE, not prose.
+function stripComments(s) {
+  return s
+    .replace(/\/\*[\s\S]*?\*\//g, '') // block comments
+    .replace(/(^|[^:])\/\/[^\n]*/g, '$1'); // line comments (avoid eating "://")
+}
+
 function extract(src) {
   const map = {};
   const re = /export const (\w+Schema)\s*=\s*([\s\S]*?);\n(?=\nexport |\nconst |\n\/\/|\nexport|$)/g;
   let m;
-  while ((m = re.exec(src))) map[m[1]] = m[2].replace(/\s+/g, ' ').trim();
+  while ((m = re.exec(src))) map[m[1]] = stripComments(m[2]).replace(/\s+/g, ' ').trim();
   return map;
 }
 

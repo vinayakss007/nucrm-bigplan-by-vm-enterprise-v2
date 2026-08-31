@@ -33,7 +33,7 @@ export const updateContactSchema = createContactSchema.partial();
 
 export const contactQuerySchema = z.object({
   offset: z.coerce.number().int().min(0).default(0),
-  limit: z.coerce.number().int().min(1).max(200).default(25),
+  limit: z.coerce.number().int().min(1).max(200).default(50),
   q: z.string().optional(),
   lead_status: z.string().optional(),
   company_id: z.string().uuid().optional().or(z.literal('')),
@@ -44,14 +44,14 @@ export const createDealSchema = z.object({
   title: requiredString.max(200, 'Title too long'),
   amount: z.coerce.number().min(0).optional().default(0),
   value: z.coerce.number().min(0).optional(),
-  stage_id: uuid.optional(),
+  stage_id: uuid,
   stage: z.string().max(50).optional(),
   stage_name: z.string().max(50).optional(),
-  pipeline_id: uuid.optional(),
+  pipeline_id: uuid,
   close_date: z.string().date().optional().nullable(),
-  contact_id: uuid.optional().nullable(),
-  company_id: uuid.optional().nullable(),
-  assigned_to: uuid.optional().nullable(),
+  contact_id: uuid,
+  company_id: uuid,
+  assigned_to: uuid,
   description: z.string().trim().max(2000).nullable().optional(),
   metadata: z.record(z.string(), z.unknown()).optional().default({}),
 });
@@ -69,7 +69,7 @@ export const dealQuerySchema = z.object({
    * Archive visibility. Deals are archived by setting metadata.archived = true
    * (see the `archive` action in app/api/tenant/deals/bulk/route.ts).
    *   omitted / 'false' -> only live deals (default)
-   *   'true'            -> only archived deals, so they can be reviewed/unarchived
+   *   'true'            -> only archived deals
    *   'all'             -> both
    */
   archived: z.enum(['true', 'false', 'all']).optional(),
@@ -83,6 +83,10 @@ export const createCompanySchema = z.object({
   size: z.string().max(50).optional().nullable(),
   annual_revenue: z.coerce.number().min(0).optional().nullable(),
   description: z.string().trim().max(2000).nullable().optional(),
+  // `notes` is the memo field the companies UI (edit form, detail page, list,
+  // CSV export) reads/writes. Accept it alongside `description`; the route
+  // mirrors the two so the user-visible Notes never goes silently empty.
+  notes: z.string().trim().max(2000).nullable().optional(),
   website: urlField,
   phone: z.string().max(30).optional().nullable(),
   billing_address: z.string().max(500).optional().nullable(),
@@ -110,7 +114,7 @@ export const companyQuerySchema = z.object({
 
 // ── Lead schemas ──
 export const createLeadSchema = z.object({
-  contact_id: uuid.optional(),
+  contact_id: uuid,
   first_name: requiredString.max(100),
   last_name: z.string().trim().max(100).nullable().optional(),
   email: z.string().email().max(255).optional().nullable().or(z.literal('')),
@@ -123,10 +127,8 @@ export const createLeadSchema = z.object({
   score: z.coerce.number().int().min(0).max(1000).optional().default(0),
   value: z.coerce.number().min(0).optional().nullable(),
   assigned_to: uuid,
-  // What the lead is a request for, from the tenant's catalogue. Optional.
   requested_product_id: uuid,
   requested_service_id: uuid,
-  // Attach to an existing company by id (as well as, or instead of, a name).
   company_id: uuid,
   utm_source: z.string().trim().max(200).nullable().optional(),
   utm_medium: z.string().trim().max(200).nullable().optional(),
@@ -142,6 +144,16 @@ export const leadQuerySchema = z.object({
   q: z.string().optional(),
   status: z.string().optional(),
   source: z.string().optional(),
+  // #1083 — surface the leads data model as filters
+  lead_status: z.string().trim().max(50).optional(),
+  assigned_to: z.string().uuid().optional().or(z.literal('')),
+  lifecycle_stage: z.string().trim().max(50).optional(),
+  // Comma-separated tag list; every provided tag must be present on the lead.
+  tags: z.string().trim().max(500).optional(),
+  score_min: z.coerce.number().int().min(0).max(1000).optional(),
+  score_max: z.coerce.number().int().min(0).max(1000).optional(),
+  sort_by: z.string().trim().max(50).optional(),
+  sort_order: z.enum(['ASC', 'DESC']).optional(),
 });
 
 // ── Task schemas ──
@@ -189,16 +201,44 @@ export const updateMeetingSchema = createMeetingSchema.partial();
 
 // ── Note schemas ──
 export const createNoteSchema = z.object({
-  content: requiredString.max(10000),
+  content: z.string().trim().max(10000).optional(),
+  description: z.string().trim().max(10000).optional(),
+  type: z.enum(['note', 'call', 'email', 'meeting', 'task', 'deal_update']).optional().default('note'),
   contact_id: uuid,
   deal_id: uuid,
   company_id: uuid,
   task_id: uuid,
   ticket_id: uuid,
   is_pinned: z.boolean().optional().default(false),
-});
+})
+  .superRefine((val, ctx) => {
+    const text = (val.content ?? val.description ?? '').trim();
+    if (!text) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'content is required',
+        path: ['content'],
+      });
+    }
+  })
+  .transform((val) => ({
+    ...val,
+    // Canonicalize: callers may send the note text as `description`; expose it
+    // as `content` so downstream code reads a single field.
+    content: (val.content ?? val.description ?? '').trim(),
+  }));
 
-export const updateNoteSchema = createNoteSchema.partial();
+export const updateNoteSchema = z.object({
+  content: z.string().trim().max(10000).optional(),
+  description: z.string().trim().max(10000).optional(),
+  type: z.enum(['note', 'call', 'email', 'meeting', 'task', 'deal_update']).optional(),
+  contact_id: uuid,
+  deal_id: uuid,
+  company_id: uuid,
+  task_id: uuid,
+  ticket_id: uuid,
+  is_pinned: z.boolean().optional(),
+});
 
 // ── Pipeline schemas ──
 export const createPipelineSchema = z.object({
@@ -278,13 +318,9 @@ export const updateHierarchySchema = createHierarchySchema.partial().extend({
 
 // ── Contact Assignment schema ──
 export const assignContactSchema = z.object({
-  contact_ids: z.array(z.string().uuid()).min(1, 'At least one contact required'),
+  contact_ids: z.array(z.string().uuid()).min(1, 'At least one contact ID required').max(500),
   assign_to: z.string().uuid(),
-  reason: z.string().trim().max(2000).optional(),
-  contact_id: z.string().uuid().optional(),
-  assigned_to: z.string().uuid().optional().nullable(),
-  team_id: z.string().uuid().optional().nullable(),
-  notes: z.string().trim().max(2000).optional(),
+  reason: z.string().trim().max(500).optional().nullable(),
 });
 
 // ── Type exports ──
