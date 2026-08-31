@@ -189,6 +189,30 @@ describe('validateEnv', () => {
     expect(() => validateEnv()).not.toThrow();
   });
 
+  it('accepts redis+unix:// (Unix socket) REDIS_URL', async () => {
+    process.env.REDIS_URL = 'redis+unix:///var/run/redis/redis.sock';
+    const { validateEnv } = await import('@/lib/env');
+    expect(() => validateEnv()).not.toThrow();
+  });
+
+  it('accepts rediss+unix:// (TLS Unix socket) REDIS_URL', async () => {
+    process.env.REDIS_URL = 'rediss+unix:///var/run/redis/redis.sock';
+    const { validateEnv } = await import('@/lib/env');
+    expect(() => validateEnv()).not.toThrow();
+  });
+
+  it('accepts unix:// REDIS_URL', async () => {
+    process.env.REDIS_URL = 'unix:///var/run/redis/redis.sock';
+    const { validateEnv } = await import('@/lib/env');
+    expect(() => validateEnv()).not.toThrow();
+  });
+
+  it('still rejects a non-Redis scheme (e.g. http://)', async () => {
+    process.env.REDIS_URL = 'http://localhost:6379';
+    const { validateEnv } = await import('@/lib/env');
+    expect(() => validateEnv()).toThrow('REDIS_URL must be a valid Redis connection string');
+  });
+
   it('accepts missing REDIS_URL', async () => {
     delete process.env.REDIS_URL;
     const { validateEnv } = await import('@/lib/env');

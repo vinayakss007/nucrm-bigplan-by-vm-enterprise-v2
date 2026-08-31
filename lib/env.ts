@@ -161,10 +161,17 @@ export function validateEnv(): EnvConfig {
     errors.push('ALLOWED_ORIGINS is required (use "*" for dev or comma-separated origins)');
   }
 
-  // Validate REDIS_URL (optional — system has in-memory fallbacks)
+  // Validate REDIS_URL (optional — system has in-memory fallbacks).
+  // Accept both TCP schemes (redis://, rediss://) and Unix-socket schemes that
+  // ioredis supports natively: redis+unix://, rediss+unix:// and unix://. The
+  // URL is passed straight through to `new Redis(url)` by every consumer
+  // (lib/cache, lib/feature-flags, lib/queue, lib/realtime, worker.ts), so no
+  // client change is needed — only this validator gated socket URLs out.
+  // (Mirrors the Unix-socket DATABASE_URL support already in lib/db/pool.ts, #1544.)
   const redisUrl = getOptionalEnv('REDIS_URL');
-  if (redisUrl && !redisUrl.startsWith('redis://') && !redisUrl.startsWith('rediss://')) {
-    errors.push('REDIS_URL must be a valid Redis connection string (or unset for in-memory fallback)');
+  const REDIS_URL_SCHEMES = ['redis://', 'rediss://', 'redis+unix://', 'rediss+unix://', 'unix://'];
+  if (redisUrl && !REDIS_URL_SCHEMES.some((scheme) => redisUrl.startsWith(scheme))) {
+    errors.push('REDIS_URL must be a valid Redis connection string (redis://, rediss://, redis+unix://, rediss+unix:// or unix://), or unset for in-memory fallback');
   }
 
   // Validate CRON_SECRET
