@@ -11,6 +11,7 @@ import { contacts, deals, tasks, dealStages } from '@/drizzle/schema';
 import { eq, and, sql, count } from 'drizzle-orm';
 import type { AnyColumn } from 'drizzle-orm';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { rateLimitRead } from '@/lib/api/read-rate-limit';
 
 // F4 (#1544): this endpoint used to ship raw row arrays capped at .limit(500)
 // per entity (~143 KB per call) AND silently under-counted once a tenant had
@@ -27,8 +28,10 @@ import { withApiRoute } from '@/lib/api/with-api-route';
 // #1838: wrapped in withApiRoute so requireTenantCtx()'s setTenantContext() and
 // all the aggregate queries below share ONE pinned connection — otherwise RLS
 // sees an empty tenant GUC on these queries and provides no isolation.
-export const GET = withApiRoute(async (_request: NextRequest) => {
+export const GET = withApiRoute(async (request: NextRequest) => {
   try {
+    const limited = await rateLimitRead(request, 'analytics');
+    if (limited) return limited;
     const ctx = await requireTenantCtx();
     if (ctx instanceof NextResponse) return ctx;
 
