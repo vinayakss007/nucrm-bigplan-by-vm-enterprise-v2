@@ -74,19 +74,37 @@ const PIPELINE_CONFIG = {
   },
 };
 
+interface Lead {
+  id: string;
+  first_name?: string | null;
+  last_name?: string | null;
+  company_name?: string | null;
+  assigned_name?: string | null;
+  created_at?: Date | string | null;
+  lead_source?: string | null;
+  lead_status?: string | null;
+  score?: number | null;
+}
+
+interface CompanyOption {
+  id: string;
+  name?: string | null;
+}
+
+interface TeamMember {
+  user_id: string;
+  full_name: string;
+}
+
 interface Props {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  initialLeads: any[];
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  companies: any[];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  teamMembers: any[];
+  initialLeads: Lead[];
+  companies: CompanyOption[];
+  teamMembers: TeamMember[];
   permissions: Record<string, boolean>;
   totalCount: number;
   tenantId: string;
   userId: string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  _teamMembers?: any[];
+  _teamMembers?: TeamMember[];
   _permissions?: Record<string, boolean>;
   _tenantId?: string;
 }
@@ -276,9 +294,8 @@ export default function LeadsClient({
       setShowQuickAdd(false);
       setQuickAddData({ first_name: '', last_name: '', email: '', phone: '', company_id: '', contact_id: '', lead_source: '', tags: '', requested_product_id: '', requested_service_id: '' });
       load();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to add lead');
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to add lead');
     } finally {
       setAddingLead(false);
     }
@@ -860,7 +877,7 @@ export default function LeadsClient({
                     )}
                   </td>
                   <td className="px-4 py-3">
-                    {lead.score > 0 && (
+                    {(lead.score ?? 0) > 0 && (
                       <div className="flex items-center gap-1.5">
                         <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
                         <span className="text-sm font-medium">{lead.score}</span>
