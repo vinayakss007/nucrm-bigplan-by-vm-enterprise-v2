@@ -26,8 +26,7 @@ export interface WebhookPayload {
   event: string;
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  payload: any;
+  payload: unknown;
   headers?: Record<string, string>;
   max_retries?: number;
 }
@@ -43,10 +42,8 @@ export interface WebhookDelivery {
   duration_ms?: number;
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  metadata?: Record<string, any>;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  payload: any;
+  metadata?: Record<string, unknown>;
+  payload: unknown;
   max_retries?: number;
 }
 
@@ -145,8 +142,8 @@ export async function processWebhookDelivery(deliveryId: string, url?: string, h
     }
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errMessage = error instanceof Error ? error.message : String(error);
     const durationMs = Date.now() - startTime;
 
     if (attempt < maxRetries) {
@@ -160,7 +157,7 @@ export async function processWebhookDelivery(deliveryId: string, url?: string, h
       await db.update(webhookDeliveries)
         .set({
           status: 'pending',
-          responseBody: error.message,
+          responseBody: errMessage,
           durationMs: durationMs,
           metadata: {
             ...(delivery.metadata as Record<string, unknown>),
@@ -168,7 +165,7 @@ export async function processWebhookDelivery(deliveryId: string, url?: string, h
             max_retries: maxRetries,
             url: deliveryUrl,
             nextRetryAt: nextRetry.toISOString(),
-            lastError: error.message,
+            lastError: errMessage,
           }
         })
         .where(eq(webhookDeliveries.id, deliveryId));
@@ -179,14 +176,14 @@ export async function processWebhookDelivery(deliveryId: string, url?: string, h
       await db.update(webhookDeliveries)
         .set({
           status: 'failed',
-          responseBody: error.message,
+          responseBody: errMessage,
           durationMs: durationMs,
           metadata: {
             ...(delivery.metadata as Record<string, unknown>),
             attempt,
             max_retries: maxRetries,
             url: deliveryUrl,
-            failureReason: error.message,
+            failureReason: errMessage,
             exhaustedAt: new Date().toISOString(),
           }
         })
