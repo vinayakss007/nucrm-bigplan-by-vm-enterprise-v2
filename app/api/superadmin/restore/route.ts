@@ -136,7 +136,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       level: 'warning',
       code: 'RESTORE_INITIATED',
       message: `Database restore initiated from backup: ${backup.storagePath} by user ${ctx.userId}`,
-    }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
+    }).catch((err) => logError({ error: err, context: 'superadmin/restore async side-effect' }));
 
     let localPath = backup.storagePath;
     let tempFileCreated = false;
@@ -173,7 +173,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       level: 'info',
       code: 'RESTORE_COMPLETED',
       message: `Database restore completed from ${backup.storagePath} in ${durationMs}ms`,
-    }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
+    }).catch((err) => logError({ error: err, context: 'superadmin/restore async side-effect' }));
 
     logSuperAdminAction({
       adminId: ctx.userId,
@@ -199,7 +199,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       code: 'RESTORE_FAILED',
       message: "Internal server error",
       stack: err.stack?.slice(0, 2000),
-    }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
+    }).catch((err) => logError({ error: err, context: 'superadmin/restore async side-effect' }));
     return apiError(err);
   }
 });

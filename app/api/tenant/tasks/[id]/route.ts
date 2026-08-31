@@ -115,9 +115,9 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: any) => {
           title: `Task completed: ${row.title}`,
           entity_type: 'task',
           link: `/tenant/tasks`,
-        }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
+        }).catch((err) => logError({ error: err, context: 'tenant/tasks/:id async side-effect' }));
       }
-      fireWebhooks(ctx.tenantId, 'task.completed', { id }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
+      fireWebhooks(ctx.tenantId, 'task.completed', { id }).catch((err) => logError({ error: err, context: 'tenant/tasks/:id fireWebhooks task.completed' }));
     }
 
     return NextResponse.json({ data: row });
@@ -174,7 +174,7 @@ export const DELETE = withApiRoute(async (req: NextRequest, { params }: any) => 
 
     if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-    fireWebhooks(ctx.tenantId, 'task.deleted', { id }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
+    fireWebhooks(ctx.tenantId, 'task.deleted', { id }).catch((err) => logError({ error: err, context: 'tenant/tasks/:id fireWebhooks task.deleted' }));
 
     return NextResponse.json({ ok: true, message: 'Moved to trash. Restore within 30 days.' });
  

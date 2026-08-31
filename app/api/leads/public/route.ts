@@ -224,7 +224,7 @@ export async function POST(request: NextRequest) {
         title: `New lead: ${safeFirst || ''} ${safeLast || email}`.trim(),
         body: `Via ${safeSource}${safeMessage ? ` — "${safeMessage.slice(0, 80)}"` : ''}`,
         link: `/tenant/leads/${leadId}`,
-      }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
+      }).catch((err) => logError({ error: err, context: 'leads/public async side-effect' }));
     }
 
     // Fire webhooks
@@ -233,7 +233,7 @@ export async function POST(request: NextRequest) {
       email: email.trim(),
       name: `${safeFirst || ''} ${safeLast || ''}`.trim(),
       source: safeSource,
-    }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
+    }).catch((err) => logError({ error: err, context: 'leads/public async side-effect' }));
 
     return NextResponse.json({
       ok: true,
@@ -245,7 +245,7 @@ export async function POST(request: NextRequest) {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    logError({ error: err, context: 'leads/public' }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
+    logError({ error: err, context: 'leads/public' }).catch((err) => logError({ error: err, context: 'leads/public async side-effect' }));
     // Internal errors must NOT fake success (#1109): the caller's data was not
     // saved, so report failure. Anti-enumeration masking only applies to
     // validation-style checks (e.g. GET email-existence below), never to

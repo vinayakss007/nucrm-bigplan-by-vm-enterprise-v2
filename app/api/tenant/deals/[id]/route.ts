@@ -259,7 +259,7 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params:
         stage_to: updateData.stageId,
         stage_name: resolvedStageName,
         contact_id: row!.contactId,
-      }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
+      }).catch((err) => logError({ error: err, context: 'tenant/deals/:id async side-effect' }));
 
       try {
         const { evaluateAutomations } = await import('@/lib/automation/engine');
@@ -357,7 +357,7 @@ export const DELETE = withApiRoute(async (req: NextRequest, { params }: { params
       entityId: dealId
     });
 
-    fireWebhooks(ctx.tenantId, 'deal.deleted', { id: dealId }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
+    fireWebhooks(ctx.tenantId, 'deal.deleted', { id: dealId }).catch((err) => logError({ error: err, context: 'tenant/deals/:id fireWebhooks deal.deleted' }));
 
     cache.delByPattern(`tenant:${ctx.tenantId}:deals:*`);
     return NextResponse.json({ ok: true, message: 'Moved to trash. Restore within 30 days.' });
@@ -379,7 +379,7 @@ async function handleDealWon(ctx: any, dealId: string, row: any) {
     title: row.title,
     amount: row.amount,
     contact_id: row.contactId,
-  }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
+  }).catch((err) => logError({ error: err, context: 'tenant/deals/:id async side-effect' }));
 
   // Send Email
   if (row.contactId) {
@@ -413,7 +413,7 @@ async function handleDealWon(ctx: any, dealId: string, row: any) {
             <br/>
             <p>Best regards,<br/>${contactData.tenantName} Team</p>
           </div>`,
-        }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
+        }).catch((err) => logError({ error: err, context: 'tenant/deals/:id async side-effect' }));
       }
     } catch (e) {
       await logError({ error: e, context: 'tenant/deals/[id] deal-won email' });

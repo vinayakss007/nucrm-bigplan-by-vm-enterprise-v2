@@ -396,10 +396,10 @@ export const POST = withApiRoute(async (request: NextRequest) => {
         entity_type: 'lead',
         entity_id: newLead.id,
         link: `/tenant/leads/${newLead.id}`,
-      }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
+      }).catch((err) => logError({ error: err, context: 'tenant/leads async side-effect' }));
     }
 
-    fireWebhooks(ctx.tenantId, 'lead.created', { id: newLead.id, email: v.email }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
+    fireWebhooks(ctx.tenantId, 'lead.created', { id: newLead.id, email: v.email }).catch((err) => logError({ error: err, context: 'tenant/leads fireWebhooks lead.created' }));
 
     return NextResponse.json({ data: newLead }, { status: 201 });
  

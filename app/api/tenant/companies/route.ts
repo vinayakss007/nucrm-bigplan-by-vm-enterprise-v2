@@ -140,7 +140,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       .returning();
 
     if (row) {
-      fireWebhooks(ctx.tenantId, 'company.created', { id: row.id, name: v.name }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
+      fireWebhooks(ctx.tenantId, 'company.created', { id: row.id, name: v.name }).catch((err) => logError({ error: err, context: 'tenant/companies POST fireWebhooks company.created' }));
     }
 
     return NextResponse.json({ data: row }, { status: 201 });

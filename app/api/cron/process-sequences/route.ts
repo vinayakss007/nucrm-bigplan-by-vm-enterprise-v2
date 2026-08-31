@@ -301,7 +301,7 @@ export async function POST(req: NextRequest) {
         await db.update(sequenceEnrollments)
           .set({ nextStepAt: new Date(Date.now() + 3600000), updatedAt: new Date() })
           .where(and(eq(sequenceEnrollments.id, enrollment.id), eq(sequenceEnrollments.status, 'active')))
-          .catch((e) => logError({ error: e, context: "async-catch:[context]" }));
+          .catch((e) => logError({ error: e, context: 'cron/process-sequences async side-effect' }));
       }
     }
 
