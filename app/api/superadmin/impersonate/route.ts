@@ -12,6 +12,7 @@ import { eq, and, sql, asc } from 'drizzle-orm';
 import { createToken, setSessionCookie } from '@/lib/auth/session';
 import { logSuperAdminAction } from '@/lib/audit/super-admin';
 import { readJsonBody } from '@/lib/api/validate';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { logError } from '@/lib/errors-server';
 
@@ -20,7 +21,10 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Super admin required' }, { status: 403 });
-    
+
+    const limited = await rateLimitMutating(request, 'impersonate', 'post');
+    if (limited) return limited;
+
     const { userId, tenantId, reason } = await readJsonBody(request);
     if (!tenantId) return NextResponse.json({ error: 'tenantId required' }, { status: 400 });
 
