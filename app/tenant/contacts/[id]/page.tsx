@@ -22,6 +22,7 @@ import {
   callLogs,
   supportTickets,
   followUps,
+  leads as leadsTable,
 } from '@/drizzle/schema';
 import { eq, and, sql, desc, isNull } from 'drizzle-orm';
 import { notFound } from 'next/navigation';
@@ -207,6 +208,28 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
     created_by_name: contactRow.created_by_name
   };
 
+  // #1816: if this contact was created by converting a lead, resolve that lead
+  // so the UI can show a "Converted from Lead →" back-link. The originating
+  // lead id is stored in contacts.metadata.source_lead_id by lib/leads/convert.
+  const sourceLeadId = (contactRow.contact.metadata as { source_lead_id?: string } | null)?.source_lead_id;
+  let sourceLead: { id: string; name: string } | null = null;
+  if (sourceLeadId) {
+    const [ld] = await db.select({
+      id: leadsTable.id,
+      full_name: leadsTable.fullName,
+      first_name: leadsTable.firstName,
+      last_name: leadsTable.lastName,
+    })
+    .from(leadsTable)
+    .where(and(eq(leadsTable.id, sourceLeadId), eq(leadsTable.tenantId, ctx.tenantId)))
+    .limit(1)
+    .catch(() => []);
+    if (ld) {
+      const name = ld.full_name || `${ld.first_name ?? ''} ${ld.last_name ?? ''}`.trim() || 'Lead';
+      sourceLead = { id: ld.id, name };
+    }
+  }
+
   const [invoicesList, ordersList, contractsList, subscriptionsList, quotesList] = billingData ?? [[], [], [], [], []];
 
   const permissions = {
@@ -233,6 +256,7 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
       callLogs={callLogsList}
       tickets={ticketsList}
       followUps={followUpsList}
+      sourceLead={sourceLead}
     />
   );
 

@@ -11,7 +11,7 @@ import { useRouter } from 'next/navigation';
 import {
   ArrowLeft, DollarSign, Calendar, User, Building2, TrendingUp,
   Edit, Trash2, Activity, Phone, StickyNote,
-  FileText, Plus, MoreHorizontal, CheckCircle
+  FileText, Plus, MoreHorizontal, CheckCircle, Target
 } from 'lucide-react';
 import { cn, formatDate, formatCurrency, formatRelativeTime } from '@/lib/utils';
 import DocumentsPanel from '@/components/documents/documents-panel';
@@ -107,6 +107,7 @@ interface Props {
   tasks: DealTask[];
   activities: DealActivity[];
   followUps?: DealFollowUp[];
+  sourceLead?: { id: string; name: string } | null;
   permissions: { canEdit: boolean; canDelete: boolean; canViewValue: boolean };
   tenantId: string;
   userId: string;
@@ -114,7 +115,7 @@ interface Props {
   _userId?: string;
 }
 
-export default function DealDetailClient({ deal, tasks, activities, followUps = [], permissions, _tenantId, _userId }: Props) {
+export default function DealDetailClient({ deal, tasks, activities, followUps = [], sourceLead = null, permissions, _tenantId, _userId }: Props) {
   // Fetch dynamic pipeline stages; fall back to defaults if unavailable (#756 item 8).
   const [_STAGES, setSTAGES] = useState(DEFAULT_STAGES);
   useEffect(() => {
@@ -342,6 +343,15 @@ export default function DealDetailClient({ deal, tasks, activities, followUps = 
               </Badge>
               {permissions.canViewValue && (
                 <span className="text-sm font-bold text-violet-600">{formatCurrency(Number(deal.value))}</span>
+              )}
+              {sourceLead && (
+                <Link
+                  href={`/tenant/leads/${sourceLead.id}`}
+                  className="flex items-center gap-1 text-xs text-violet-600 hover:text-violet-700 hover:underline transition-colors"
+                  title={`Converted from lead: ${sourceLead.name}`}
+                >
+                  <Target className="w-3 h-3" />Converted from Lead: {sourceLead.name}
+                </Link>
               )}
             </div>
           </div>

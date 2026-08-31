@@ -13,7 +13,8 @@ import {
   tasks as tasksTable, 
   activities as activitiesTable,
   dealStages,
-  followUps as followUpsTable
+  followUps as followUpsTable,
+  leads as leadsTable
 } from '@/drizzle/schema';
 import { eq, and, sql, desc } from 'drizzle-orm';
 import { notFound } from 'next/navigation';
@@ -88,6 +89,28 @@ export default async function DealDetailPage({ params }: PageProps) {
     stage: dealResult.stage_name, // Map stage_name to stage for legacy compatibility
     value: dealResult.deal.amount, // Map amount to value
   };
+
+  // #1816: if this deal was created by converting a lead, resolve that lead so
+  // the UI can show a "Converted from Lead →" back-link. The originating lead
+  // id is stored in deals.metadata.source_lead_id by lib/leads/convert.
+  const sourceLeadId = (dealResult.deal.metadata as { source_lead_id?: string } | null)?.source_lead_id;
+  let sourceLead: { id: string; name: string } | null = null;
+  if (sourceLeadId) {
+    const [ld] = await db.select({
+      id: leadsTable.id,
+      full_name: leadsTable.fullName,
+      first_name: leadsTable.firstName,
+      last_name: leadsTable.lastName,
+    })
+    .from(leadsTable)
+    .where(and(eq(leadsTable.id, sourceLeadId), eq(leadsTable.tenantId, ctx.tenantId)))
+    .limit(1)
+    .catch(() => []);
+    if (ld) {
+      const name = ld.full_name || `${ld.first_name ?? ''} ${ld.last_name ?? ''}`.trim() || 'Lead';
+      sourceLead = { id: ld.id, name };
+    }
+  }
 
   // Get related tasks
   const tasks = await db.select({
@@ -175,6 +198,7 @@ export default async function DealDetailPage({ params }: PageProps) {
       tasks={tasks}
       activities={activities}
       followUps={followUpsList}
+      sourceLead={sourceLead}
       permissions={permissions}
       tenantId={ctx.tenantId}
       userId={ctx.userId}

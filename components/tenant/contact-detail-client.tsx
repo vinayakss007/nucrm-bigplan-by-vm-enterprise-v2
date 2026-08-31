@@ -7,7 +7,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  ArrowLeft, Mail, Phone, Globe, Contact, Building2, Edit, Save,
+  ArrowLeft, Mail, Phone, Globe, Contact, Building2, Edit, Save, Target,
   MessageSquare, PhoneCall, AtSign, Calendar, Briefcase, X, Trash2,
   CheckCircle, Plus, ChevronDown, Star,
   Clock, User, History,
@@ -241,7 +241,7 @@ export default function ContactDetailClient({
   tasks: initialTasks, companies, teamMembers, permissions, userId,
   invoices=[], orders=[], contracts=[], subscriptions=[], quotes=[],
   callLogs: initialCallLogs=[],
-  tickets=[], followUps=[],
+  tickets=[], followUps=[], sourceLead=null,
 }: {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   contact: any; initialActivities: any[]; deals: any[]; tasks: any[];
@@ -251,6 +251,7 @@ export default function ContactDetailClient({
   invoices?: any[]; orders?: any[]; contracts?: any[]; subscriptions?: any[]; quotes?: any[]; callLogs?: any[];
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   tickets?: any[]; followUps?: any[];
+  sourceLead?: { id: string; name: string } | null;
 }) {
   const [contact, setContact]       = useState(initialContact);
   const [activities, setActivities] = useState(initialActivities);
@@ -414,6 +415,16 @@ export default function ContactDetailClient({
             )}
             {contact.phone && (
               <a href={`tel:${contact.phone}`} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-violet-600 transition-colors"><Phone className="w-3 h-3" />{contact.phone}</a>
+            )}
+            {sourceLead && (
+              <button
+                type="button"
+                onClick={() => router.push(`/tenant/leads/${sourceLead.id}`)}
+                className="flex items-center gap-1 text-xs text-violet-600 hover:text-violet-700 hover:underline transition-colors"
+                title={`Converted from lead: ${sourceLead.name}`}
+              >
+                <Target className="w-3 h-3" />Converted from Lead: {sourceLead.name}
+              </button>
             )}
           </div>
         </div>
