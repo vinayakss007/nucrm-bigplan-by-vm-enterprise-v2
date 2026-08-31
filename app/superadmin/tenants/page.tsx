@@ -5,6 +5,8 @@
  */
 'use client';
 import { useState, useEffect, useCallback } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import Link from 'next/link';
 import { Building2, Plus, Search, X, LogIn, Trash2, Loader2, Crown, Mail,
   DollarSign, Shield, RefreshCw, Edit, Save, Zap, Sliders } from 'lucide-react';
@@ -241,8 +243,7 @@ interface MeInfo {
 }
 
 export default function SuperAdminTenantsPage() {
-  const [tenants, setTenants]     = useState<TenantInfo[]>([]);
-  const [loading, setLoading]     = useState(true);
+  const queryClient = useQueryClient();
   const [search, setSearch]       = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [showCreate, setShowCreate] = useState(false);
@@ -252,56 +253,94 @@ export default function SuperAdminTenantsPage() {
   const [modulesTenant, setModulesTenant] = useState<TenantInfo | null>(null);
   const [featuresTenant, setFeaturesTenant] = useState<TenantInfo | null>(null);
   const [impersonating, setImpersonating] = useState<string|null>(null);
-  const [meInfo, setMeInfo]       = useState<MeInfo | null>(null);
   const [form, setForm]           = useState({name:'',plan_id:'free',status:'trialing',billing_email:'',primary_color:'#7c3aed',owner_email:'',owner_name:'',owner_password:'',trial_days:'14',billing_type:'trial'});
-  const [saving, setSaving]       = useState(false);
   const [suspendTarget, setSuspendTarget] = useState<{id: string; name: string} | null>(null);
   const [deleteTarget, setDeleteTarget]   = useState<{id: string; name: string} | null>(null);
   const [extendTarget, setExtendTarget]   = useState<{id: string; name: string} | null>(null);
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-muted/30 text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500";
   const lbl = "block text-xs font-medium text-muted-foreground mb-1";
 
-  const load = useCallback(async (abortSignal?: AbortSignal) => {
+  // #1328: reads via TanStack Query (were parallel raw fetch + useEffect). The
+  // tenants list URL depends on search + filterStatus, so both are in the key.
+  const tenantsUrl = (() => {
     const q = new URLSearchParams();
     if (search) q.set('q', search);
     if (filterStatus) q.set('status', filterStatus);
-    const [t, me] = await Promise.all([
-      fetch('/api/superadmin/tenants?' + q, { signal: abortSignal }).then(r=>r.json()),
-      fetch('/api/superadmin/me', { signal: abortSignal }).then(r=>r.json()),
-    ]);
-    // #1093 — read the standardized `data` envelope (falls back to the flat
-    // body for backward compatibility).
-    setTenants(t.data||[]); setMeInfo(me.data ?? me); setLoading(false);
-  }, [search, filterStatus]);
+    const qs = q.toString();
+    return '/api/superadmin/tenants' + (qs ? '?' + qs : '');
+  })();
+  const tenantsQuery = useApiQuery<{ data?: TenantInfo[] }>(
+    ['superadmin', 'tenants', search, filterStatus],
+    tenantsUrl,
+  );
+  const meQuery = useApiQuery<{ data?: MeInfo } & Partial<MeInfo>>(
+    ['superadmin', 'me'],
+    '/api/superadmin/me',
+  );
+  // #1093 — read the standardized `data` envelope (falls back to the flat body).
+  const tenants: TenantInfo[] = tenantsQuery.data?.data ?? [];
+  const meInfo: MeInfo | null = (meQuery.data?.data ?? (meQuery.data as MeInfo | undefined)) ?? null;
+  const loading = tenantsQuery.isLoading;
 
-  useEffect(() => {
-    const abort = new AbortController();
-    load(abort.signal);
-    return () => abort.abort();
-  }, [load]);
+  const invalidateTenants = () => queryClient.invalidateQueries({ queryKey: ['superadmin', 'tenants'] });
 
-  const create = async (e: React.FormEvent) => {
-    e.preventDefault(); setSaving(true);
-    const res = await fetch('/api/superadmin/tenants',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(form)});
-    const d = await res.json();
-    if(res.ok){
+  const createMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch('/api/superadmin/tenants',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(form)});
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || 'Failed');
+      return d;
+    },
+    onSuccess: (d) => {
       toast.success(`"${form.name}" created`);
       if(d.data?.owner?.temp_password) toast(`Owner temp password: ${d.data.owner.temp_password}`,{duration:12000,icon:'🔑'});
       setShowCreate(false); setForm({name:'',plan_id:'free',status:'trialing',billing_email:'',primary_color:'#7c3aed',owner_email:'',owner_name:'',owner_password:'',trial_days:'14',billing_type:'trial'});
-      load();
-    } else toast.error(d.error);
-    setSaving(false);
+      invalidateTenants();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const saving = createMutation.isPending;
+
+  const create = async (e: React.FormEvent) => {
+    e.preventDefault();
+    createMutation.mutate();
   };
+
+  // Shared PATCH/DELETE mutation for the tenant row actions.
+  const patchMutation = useMutation({
+    mutationFn: async (body: Record<string, unknown>) => {
+      const res = await fetch('/api/superadmin/tenants',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || 'Failed');
+      return d;
+    },
+    onSuccess: () => invalidateTenants(),
+  });
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch('/api/superadmin/tenants',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,hard_delete:true})});
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || 'Failed');
+      return d;
+    },
+    onSuccess: () => invalidateTenants(),
+  });
 
   const suspend   = async (id:string,name:string) => {
     setSuspendTarget({id, name});
   };
-  const activate  = async (id:string) => { const res=await fetch('/api/superadmin/tenants',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,status:'active'})}); if(res.ok){toast.success('Activated');load();}else{const d=await res.json();toast.error(d.error||'Failed');} };
+  const activate  = async (id:string) => {
+    patchMutation.mutate({ id, status: 'active' }, {
+      onSuccess: () => toast.success('Activated'),
+      onError: (e: Error) => toast.error(e.message || 'Failed'),
+    });
+  };
   const grantLifetime = async (id:string,name:string) => {
     await confirmThen(`Grant lifetime access to "${name}"? This sets Pro plan + active + lifetime billing.`, async () => {
-      const res = await fetch('/api/superadmin/tenants',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,plan_id:'pro',status:'active',billing_type:'lifetime'})});
-      if (!res.ok) { const d = await res.json().catch(() => ({})); toast.error(d.error || 'Failed to grant lifetime'); return; }
-      toast.success('Lifetime access granted'); load();
+      patchMutation.mutate({ id, plan_id: 'pro', status: 'active', billing_type: 'lifetime' }, {
+        onSuccess: () => toast.success('Lifetime access granted'),
+        onError: (e: Error) => toast.error(e.message || 'Failed to grant lifetime'),
+      });
     });
   };
   const extendTrial = async (id:string) => {
@@ -316,9 +355,10 @@ export default function SuperAdminTenantsPage() {
     const tenant = tenants.find(t=>t.id===id);
     const base = new Date(Math.max(Date.now(), new Date(tenant?.trial_ends_at||Date.now()).getTime()));
     base.setDate(base.getDate() + days);
-    const res = await fetch('/api/superadmin/tenants',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,trial_ends_at:base.toISOString(),status:'trialing'})});
-    if (!res.ok) { const d = await res.json().catch(() => ({})); toast.error(d.error || 'Failed to extend trial'); return; }
-    toast.success(`Trial extended ${days} days`); load();
+    patchMutation.mutate({ id, trial_ends_at: base.toISOString(), status: 'trialing' }, {
+      onSuccess: () => toast.success(`Trial extended ${days} days`),
+      onError: (e: Error) => toast.error(e.message || 'Failed to extend trial'),
+    });
   };
   const hardDelete = async (id:string,name:string) => {
     if(id===meInfo?.ownTenantId){toast.error("Can't delete your own org");return;}
@@ -326,13 +366,17 @@ export default function SuperAdminTenantsPage() {
   };
   const executeSuspend = async () => {
     if (!suspendTarget) return;
-    const res=await fetch('/api/superadmin/tenants',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:suspendTarget.id,status:'suspended'})});
-    if(res.ok){toast.success('Suspended');load();}else{const d=await res.json();toast.error(d.error||'Failed');}
+    patchMutation.mutate({ id: suspendTarget.id, status: 'suspended' }, {
+      onSuccess: () => toast.success('Suspended'),
+      onError: (e: Error) => toast.error(e.message || 'Failed'),
+    });
   };
   const executeDelete = async () => {
     if (!deleteTarget) return;
-    const res=await fetch('/api/superadmin/tenants',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:deleteTarget.id,hard_delete:true})});
-    if(res.ok){toast.success('Deleted');load();}else{const d=await res.json();toast.error(d.error||'Failed');}
+    deleteMutation.mutate(deleteTarget.id, {
+      onSuccess: () => toast.success('Deleted'),
+      onError: (e: Error) => toast.error(e.message || 'Failed'),
+    });
   };
   const impersonate = async (tenantId:string, tenantName:string) => {
     await confirmThen(`Enter "${tenantName}" as superadmin? You will see everything as if you are them.`, async () => {
@@ -362,7 +406,7 @@ export default function SuperAdminTenantsPage() {
 
   return (
     <div className="space-y-5 max-w-7xl">
-      {editTenant && <EditModal tenant={editTenant} onSave={()=>{setEditTenant(null);load();}} onClose={()=>setEditTenant(null)}/>}
+      {editTenant && <EditModal tenant={editTenant} onSave={()=>{setEditTenant(null);invalidateTenants();}} onClose={()=>setEditTenant(null)}/>}
 
       <ConfirmDialog
         open={!!suspendTarget}
@@ -407,7 +451,7 @@ export default function SuperAdminTenantsPage() {
           </div>
         </div>
         <div className="flex gap-2">
-          <button onClick={() => load()} className="p-2 rounded-lg border border-border text-muted-foreground hover:text-foreground transition-colors"><RefreshCw className="w-4 h-4"/></button>
+          <button onClick={() => tenantsQuery.refetch()} className="p-2 rounded-lg border border-border text-muted-foreground hover:text-foreground transition-colors"><RefreshCw className="w-4 h-4"/></button>
           <button onClick={()=>setShowCreate(s=>!s)} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold transition-colors"><Plus className="w-4 h-4"/>New Organization</button>
         </div>
       </div>
@@ -592,7 +636,7 @@ export default function SuperAdminTenantsPage() {
         </div>
       )}
 
-      {modulesTenant && <ModulesModal tenant={modulesTenant} onClose={()=>setModulesTenant(null)} _onSaved={()=>{setModulesTenant(null);load();}} />}
+      {modulesTenant && <ModulesModal tenant={modulesTenant} onClose={()=>setModulesTenant(null)} _onSaved={()=>{setModulesTenant(null);invalidateTenants();}} />}
       {featuresTenant && <TenantFeaturesPanel tenantId={featuresTenant.id} tenantName={featuresTenant.name} plan={featuresTenant.plan_id} onClose={() => setFeaturesTenant(null)} />}
     </div>
   );
@@ -617,54 +661,69 @@ interface TenantModule {
 }
 
 function ModulesModal({ tenant, onClose, _onSaved }: ModulesModalProps) {
-  const [modules, setModules] = useState<TenantModule[]>([]);
-  const [plan, setPlan] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [toggling, setToggling] = useState<string | null>(null);
+  const queryClient = useQueryClient();
   const [expandedModule, setExpandedModule] = useState<string | null>(null);
   const [featureSaving, setFeatureSaving] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    const res = await fetch(`/api/superadmin/tenants/${tenant.id}/modules`);
-    const d = await res.json();
-    setModules(d.data || []);
-    setPlan(d.plan || 'free');
-    setLoading(false);
-  }, [tenant.id]);
-  useEffect(() => { load(); }, [load]);
+  // #1328: on-mount read via TanStack Query (was raw fetch + useEffect).
+  const MODULES_QUERY = ['superadmin', 'tenant-modules', tenant.id] as const;
+  const modulesQuery = useApiQuery<{ data?: TenantModule[]; plan?: string }>(
+    MODULES_QUERY, `/api/superadmin/tenants/${tenant.id}/modules`,
+  );
+  const modules: TenantModule[] = modulesQuery.data?.data ?? [];
+  const plan = modulesQuery.data?.plan ?? 'free';
+  const loading = modulesQuery.isLoading;
 
-  const toggleModule = async (mod: { id: string; status: string; planAllowed: boolean }) => {
-    setToggling(mod.id);
-    const action = mod.status === 'active' ? 'disable' : 'install';
-    const res = await fetch(`/api/superadmin/tenants/${tenant.id}/modules`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ module_id: mod.id, action, force_enabled: !mod.planAllowed }),
-    });
-    if (res.ok) {
+  const toggleModuleMutation = useMutation({
+    mutationFn: async (mod: { id: string; status: string; planAllowed: boolean }) => {
+      const action = mod.status === 'active' ? 'disable' : 'install';
+      const res = await fetch(`/api/superadmin/tenants/${tenant.id}/modules`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ module_id: mod.id, action, force_enabled: !mod.planAllowed }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || 'Failed');
+      return action;
+    },
+    onSuccess: (action) => {
       toast.success(action === 'install' ? 'Module enabled' : 'Module disabled');
-      load();
-    } else { const d = await res.json(); toast.error(d.error); }
-    setToggling(null);
+      queryClient.invalidateQueries({ queryKey: MODULES_QUERY });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const toggling = toggleModuleMutation.isPending ? toggleModuleMutation.variables?.id ?? null : null;
+  const toggleModule = (mod: { id: string; status: string; planAllowed: boolean }) => {
+    toggleModuleMutation.mutate(mod);
   };
+
+  const toggleFeatureMutation = useMutation({
+    mutationFn: async ({ mod, newFeatures }: { mod: TenantModule; newFeatures: string[] }) => {
+      const res = await fetch(`/api/superadmin/tenants/${tenant.id}/modules`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ module_id: mod.id, action: 'update_features', features: newFeatures }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || 'Failed to update features');
+      return d;
+    },
+    onError: (e: Error) => {
+      toast.error(e.message || 'Failed to update features');
+      queryClient.invalidateQueries({ queryKey: MODULES_QUERY }); // revert optimistic
+    },
+    onSettled: () => setFeatureSaving(null),
+  });
 
   const toggleFeature = async (mod: TenantModule, feature: string) => {
     if (mod.status !== 'active') return;
     const current = new Set(mod.enabledFeatures ?? mod.features ?? []);
     if (current.has(feature)) current.delete(feature); else current.add(feature);
     const newFeatures = Array.from(current);
-    // optimistic update
-    setModules(prev => prev.map(m => m.id === mod.id ? { ...m, enabledFeatures: newFeatures } : m));
+    // optimistic update in the cache
+    queryClient.setQueryData<{ data?: TenantModule[]; plan?: string }>(MODULES_QUERY, (prev) =>
+      prev ? { ...prev, data: (prev.data ?? []).map(m => m.id === mod.id ? { ...m, enabledFeatures: newFeatures } : m) } : prev,
+    );
     setFeatureSaving(`${mod.id}:${feature}`);
-    const res = await fetch(`/api/superadmin/tenants/${tenant.id}/modules`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ module_id: mod.id, action: 'update_features', features: newFeatures }),
-    });
-    if (!res.ok) {
-      const d = await res.json();
-      toast.error(d.error || 'Failed to update features');
-      load(); // revert
-    }
-    setFeatureSaving(null);
+    toggleFeatureMutation.mutate({ mod, newFeatures });
   };
 
   const CAT_COLORS: Record<string, string> = {

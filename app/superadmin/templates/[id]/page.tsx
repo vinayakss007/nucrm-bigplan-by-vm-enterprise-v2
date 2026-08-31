@@ -5,6 +5,8 @@
  */
 'use client';
 import { useState, useEffect, use } from 'react';
+import { useMutation } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import { Save, ArrowLeft, Plus, Trash2, GripVertical, Zap, Users, ChevronDown, ChevronUp,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -50,38 +52,45 @@ const ACTIONS = ['send_email', 'send_notification', 'create_task', 'update_field
 export default function TemplateEditorPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const [template, setTemplate] = useState<TemplateData | null>(null);
-  const [availableModules, setAvailableModules] = useState<Array<{ id: string; name: string; icon: string }>>([]);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [seeded, setSeeded] = useState(false);
   const [assignTenantId, setAssignTenantId] = useState('');
   const [showAssign, setShowAssign] = useState(false);
 
+  // #1328: parallel reads via TanStack Query (were raw fetch + useEffect). The
+  // template is loaded into editable local state (edit-model), seeded once.
+  const templateQuery = useApiQuery<{ data?: TemplateData } & Partial<TemplateData>>(
+    ['superadmin', 'template', id],
+    `/api/superadmin/templates/${id}`,
+    { enabled: !!id, retry: false },
+  );
+  const modulesQuery = useApiQuery<{ data?: Array<{ id: string; name: string; icon: string }> }>(
+    ['superadmin', 'modules'],
+    '/api/superadmin/modules',
+    { retry: false },
+  );
+  const loading = templateQuery.isLoading || modulesQuery.isLoading;
+  const availableModules = (modulesQuery.data?.data ?? []).map(
+    (m: { id: string; name: string; icon: string }) => ({ id: m.id, name: m.name, icon: m.icon }),
+  );
+
   useEffect(() => {
-    const controller = new AbortController();
-    Promise.all([
-      fetch(`/api/superadmin/templates/${id}`, { signal: controller.signal }).then(r => r.json()),
-      fetch('/api/superadmin/modules', { signal: controller.signal }).then(r => r.json()),
-    ]).then(([tmpl, mods]) => {
-      if (controller.signal.aborted) return;
-      setTemplate(tmpl.data ?? tmpl);
-      setAvailableModules((mods.data ?? []).map((m: { id: string; name: string; icon: string }) => ({ id: m.id, name: m.name, icon: m.icon })));
-      setLoading(false);
-    }).catch((e) => {
-      if ((e as Error)?.name === 'AbortError') return;
-      toast.error('Failed to load template');
-      setLoading(false);
-    });
-    return () => controller.abort();
-  }, [id]);
+    if (seeded || !templateQuery.data) return;
+    const d = templateQuery.data;
+    setTemplate((d.data ?? (d as TemplateData)) ?? null);
+    setSeeded(true);
+  }, [seeded, templateQuery.data]);
+
+  useEffect(() => {
+    if (templateQuery.isError) toast.error('Failed to load template');
+  }, [templateQuery.isError]);
 
   const update = (patch: Partial<TemplateData>) => {
     if (template) setTemplate({ ...template, ...patch });
   };
 
-  const saveTemplate = async () => {
-    if (!template) return;
-    setSaving(true);
-    try {
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      if (!template) throw new Error('No template');
       const res = await fetch(`/api/superadmin/templates/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -97,28 +106,37 @@ export default function TemplateEditorPage({ params }: { params: Promise<{ id: s
         }),
       });
       if (!res.ok) throw new Error('Save failed');
-      toast.success('Template saved');
-    } catch {
-      toast.error('Failed to save template');
-    }
-    setSaving(false);
+    },
+    onSuccess: () => toast.success('Template saved'),
+    onError: () => toast.error('Failed to save template'),
+  });
+  const saving = saveMutation.isPending;
+
+  const saveTemplate = async () => {
+    if (!template) return;
+    saveMutation.mutate();
   };
 
-  const assignToTenant = async () => {
-    if (!assignTenantId.trim()) return;
-    try {
+  const assignMutation = useMutation({
+    mutationFn: async (tenant_id: string) => {
       const res = await fetch(`/api/superadmin/templates/${id}/assign`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tenant_id: assignTenantId.trim() }),
+        body: JSON.stringify({ tenant_id }),
       });
       if (!res.ok) throw new Error('Assign failed');
+    },
+    onSuccess: () => {
       toast.success('Template assigned to tenant');
       setAssignTenantId('');
       setShowAssign(false);
-    } catch {
-      toast.error('Failed to assign template');
-    }
+    },
+    onError: () => toast.error('Failed to assign template'),
+  });
+
+  const assignToTenant = async () => {
+    if (!assignTenantId.trim()) return;
+    assignMutation.mutate(assignTenantId.trim());
   };
 
   const toggleModule = (moduleId: string) => {
