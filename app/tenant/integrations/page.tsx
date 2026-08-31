@@ -4,7 +4,9 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import {
   Plug, Plus, Trash2, CheckCircle, XCircle, ExternalLink,
   Mail, MessageSquare, Brain, Database, Cloud, Power,
@@ -20,51 +22,51 @@ const ICON_MAP: Record<string, LucideIcon> = {
 };
 
 export default function IntegrationsPage() {
-  const [instances, setInstances] = useState<IntegrationInstance[]>([]);
-  const [providers, setProviders] = useState<ProviderDefinition[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<'installed' | 'available'>('installed');
   const [showAdd, setShowAdd] = useState<string | null>(null);
 
-  const load = async (signal?: AbortSignal) => {
-    try {
-      const [iRes, pRes] = await Promise.all([
-        fetch('/api/tenant/plugin-engine', { signal }).then(r => r.json()),
-        fetch('/api/tenant/plugin-engine?type=providers', { signal }).then(r => r.json()),
-      ]);
-      if (signal?.aborted) return;
-      setInstances(iRes.data || []);
-      setProviders(pRes.data || []);
-    } catch (e) {
-      if ((e as Error)?.name === 'AbortError') return;
-      toast.error('Failed to load integrations');
-    }
-    if (signal?.aborted) return;
-    setLoading(false);
-  };
+  // #1328: reads via TanStack Query (were parallel raw fetch + useEffect).
+  const { data: instancesData, isLoading: instancesLoading, error: instancesError } = useApiQuery<{ data?: IntegrationInstance[] }>(
+    ['tenant', 'integrations', 'instances'],
+    '/api/tenant/plugin-engine',
+  );
+  const { data: providersData, isLoading: providersLoading } = useApiQuery<{ data?: ProviderDefinition[] }>(
+    ['tenant', 'integrations', 'providers'],
+    '/api/tenant/plugin-engine?type=providers',
+  );
+  const instances: IntegrationInstance[] = instancesData?.data ?? [];
+  const providers: ProviderDefinition[] = providersData?.data ?? [];
+  const loading = instancesLoading || providersLoading;
+  if (instancesError) toast.error('Failed to load integrations');
 
-  useEffect(() => {
-    const controller = new AbortController();
-    load(controller.signal);
-    return () => controller.abort();
-  }, []);
+  const load = () => queryClient.invalidateQueries({ queryKey: ['tenant', 'integrations'] });
 
-  const removeIntegration = async (id: string) => {
-    await confirmThen('Remove this integration?', async () => {
+  const removeMutation = useMutation({
+    mutationFn: async (id: string) => {
       const res = await fetch(`/api/tenant/plugin-engine?id=${id}`, { method: 'DELETE' });
-      if (res.ok) { toast.success('Integration removed'); load(); }
-      else toast.error('Failed to remove');
-    });
+      if (!res.ok) throw new Error('Failed to remove');
+    },
+    onSuccess: () => { toast.success('Integration removed'); load(); },
+    onError: () => toast.error('Failed to remove'),
+  });
+  const removeIntegration = async (id: string) => {
+    await confirmThen('Remove this integration?', async () => { removeMutation.mutate(id); });
   };
 
-  const toggleIntegration = async (inst: IntegrationInstance) => {
-    const res = await fetch('/api/tenant/plugin-engine', {
-      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: inst.id, enabled: !inst.enabled }),
-    });
-    if (res.ok) { toast.success(inst.enabled ? 'Disabled' : 'Enabled'); load(); }
-    else toast.error('Failed');
-  };
+  const toggleMutation = useMutation({
+    mutationFn: async (inst: IntegrationInstance) => {
+      const res = await fetch('/api/tenant/plugin-engine', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: inst.id, enabled: !inst.enabled }),
+      });
+      if (!res.ok) throw new Error('Failed');
+      return inst;
+    },
+    onSuccess: (inst) => { toast.success(inst.enabled ? 'Disabled' : 'Enabled'); load(); },
+    onError: () => toast.error('Failed'),
+  });
+  const toggleIntegration = (inst: IntegrationInstance) => toggleMutation.mutate(inst);
 
   const installedIds = new Set(instances.map(i => i.providerId));
 
