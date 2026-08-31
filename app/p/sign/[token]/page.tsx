@@ -4,11 +4,13 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useEffect, useState, use } from 'react';
+import { useState, use } from 'react';
 import {
   CheckCircle2, XCircle, AlertCircle, Loader2, ShieldCheck, FileText, PenLine,
 } from 'lucide-react';
 import { OptimizedImage } from '@/components/ui/optimized-image';
+import { useQuery } from '@tanstack/react-query';
+import { ApiQueryError } from '@/lib/query/client';
 
 interface SignData {
   signer: { name: string; email: string };
@@ -20,44 +22,30 @@ interface SignData {
 
 export default function PublicSignPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = use(params);
-  const [data, setData] = useState<SignData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [errorStatus, setErrorStatus] = useState<number | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [busy, setBusy] = useState<'sign' | 'decline' | null>(null);
   const [typedName, setTypedName] = useState('');
   const [submitted, setSubmitted] = useState<'signed' | 'declined' | null>(null);
 
-  function load(signal?: AbortSignal) {
-    setLoading(true);
-    setError(null);
-    setErrorStatus(null);
-    fetch(`/api/public/sign/${token}`, { cache: 'no-store', signal })
-      .then(async r => {
-        if (!r.ok) {
-          const body = await r.json().catch(() => ({}));
-          throw Object.assign(new Error(body.error ?? `Unable to load document (${r.status})`), { status: r.status });
-        }
-        return r.json();
-      })
-      .then((d: SignData) => { if (signal?.aborted) return; setData(d); })
-      .catch((e: Error & { status?: number }) => {
-        if (e?.name === 'AbortError') return;
-        setError(e.message);
-        setErrorStatus(e.status ?? null);
-      })
-      .finally(() => { if (signal?.aborted) return; setLoading(false); });
-  }
-  useEffect(() => {
-    const controller = new AbortController();
-    load(controller.signal);
-    return () => controller.abort();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token]);
+  const { data, isLoading, error } = useQuery<SignData, ApiQueryError>({
+    queryKey: ['public-sign', token],
+    enabled: !!token,
+    retry: false,
+    queryFn: async () => {
+      const res = await fetch(`/api/public/sign/${token}`, { cache: 'no-store' });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new ApiQueryError(body.error ?? `Unable to load document (${res.status})`, res.status, body);
+      }
+      return res.json();
+    },
+  });
+  const loading = isLoading;
+  const errorStatus = error?.status ?? null;
 
   async function act(action: 'sign' | 'decline') {
     setBusy(action);
-    setError(null);
+    setActionError(null);
     try {
       const res = await fetch(`/api/public/sign/${token}`, {
         method: 'POST',
@@ -68,7 +56,7 @@ export default function PublicSignPage({ params }: { params: Promise<{ token: st
       if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`);
       setSubmitted(action === 'sign' ? 'signed' : 'declined');
     } catch (e) {
-      setError((e as Error).message);
+      setActionError((e as Error).message);
     } finally {
       setBusy(null);
     }
@@ -153,10 +141,10 @@ export default function PublicSignPage({ params }: { params: Promise<{ token: st
           </div>
         )}
 
-        {error && (
+        {actionError && (
           <div className="rounded-xl border border-red-300 bg-red-50 dark:border-red-800/50 dark:bg-red-950/20 px-4 py-3 text-sm text-red-700 dark:text-red-300 flex items-start gap-2">
             <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-            <span className="flex-1">{error}</span>
+            <span className="flex-1">{actionError}</span>
           </div>
         )}
 

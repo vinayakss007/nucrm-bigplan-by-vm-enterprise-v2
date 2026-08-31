@@ -7,6 +7,7 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { Check, MessageSquare } from 'lucide-react';
+import { useApiQuery } from '@/lib/query/client';
 
 export default function CSATResponsePage() {
   const params = useParams();
@@ -14,27 +15,23 @@ export default function CSATResponsePage() {
   const [score, setScore] = useState<number | null>(null);
   const [comment, setComment] = useState('');
   const [submitted, setSubmitted] = useState(false);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
+  const { data, isLoading, error: queryError } = useApiQuery<{ data?: { respondedAt?: string }; error?: string }>(
+    ['csat', token],
+    `/api/public/csat/${token}`,
+    { enabled: !!token, retry: false },
+  );
+  const loading = isLoading;
+
   useEffect(() => {
-    const controller = new AbortController();
-    const { signal } = controller;
-    fetch(`/api/public/csat/${token}`, { signal })
-      .then(r => r.json())
-      .then(d => {
-        if (signal.aborted) return;
-        if (d.error) setError(d.error);
-        else if (d.data?.respondedAt) setError('You have already responded to this survey');
-      })
-      .catch((e) => {
-        if ((e as Error)?.name === 'AbortError') return;
-        setError('Invalid survey link');
-      })
-      .finally(() => { if (signal.aborted) return; setLoading(false); });
-    return () => controller.abort();
-  }, [token]);
+    if (queryError) { setError('Invalid survey link'); return; }
+    if (data) {
+      if (data.error) setError(data.error);
+      else if (data.data?.respondedAt) setError('You have already responded to this survey');
+    }
+  }, [data, queryError]);
 
   const emojis = ['😞', '😕', '😐', '😊', '😄'];
   const labels = ['Very Poor', 'Poor', 'Average', 'Good', 'Excellent'];

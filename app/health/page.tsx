@@ -5,9 +5,8 @@
  */
 'use client';
 
-import { useEffect, useState } from 'react';
 import { CheckCircle, AlertCircle, XCircle, Loader2, Database, Mail, User, Cpu, type LucideIcon } from 'lucide-react';
-import { clientLogError } from '@/lib/client-logger';
+import { useApiQuery } from '@/lib/query/client';
 
 interface HealthStatus {
   status: 'healthy' | 'degraded' | 'unhealthy';
@@ -37,35 +36,9 @@ const statusColors = {
 };
 
 export default function HealthPage() {
-  const [health, setHealth] = useState<HealthStatus | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    const { signal } = controller;
-    fetch('/api/health', { signal })
-      .then(r => r.json())
-      .then(d => {
-        if (signal.aborted) return;
-        setHealth(d);
-        setLoading(false);
-      })
-      .catch(err => {
-        if ((err as Error)?.name === 'AbortError') return;
-        clientLogError('health:fetch', err);
-        setLoading(false);
-      });
-    return () => controller.abort();
-  }, []);
-
-  const refresh = () => {
-    setLoading(true);
-    fetch('/api/health')
-      .then(r => r.json())
-      .then(d => setHealth(d))
-      .catch(err => clientLogError('health:refresh', err))
-      .finally(() => setLoading(false));
-  };
+  const { data, isLoading, isFetching, refetch } = useApiQuery<HealthStatus>(['health'], '/api/health');
+  const health = data ?? null;
+  const loading = isLoading;
 
   if (loading) {
     return (
@@ -87,10 +60,10 @@ export default function HealthPage() {
             </p>
           </div>
           <button
-            onClick={refresh}
+            onClick={() => refetch()}
             className="px-4 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700 transition-colors flex items-center gap-2"
           >
-            <Loader2 className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            <Loader2 className={`w-4 h-4 ${isFetching ? 'animate-spin' : ''}`} />
             Refresh
           </button>
         </div>

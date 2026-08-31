@@ -8,6 +8,7 @@ import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { CheckCircle, AlertTriangle, Loader2, Mail } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { useApiQuery } from '@/lib/query/client';
 
 interface Invitation {
   email: string;
@@ -21,31 +22,30 @@ function AcceptInviteContent() {
   const token = params.get('token');
   const router = useRouter();
   const [invitation, setInvitation] = useState<Invitation | null>(null);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [accepting, setAccepting] = useState(false);
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
+  const { data, isLoading, error: queryError } = useApiQuery<Invitation & { error?: string; isLoggedIn?: boolean }>(
+    ['invite-details', token],
+    `/api/auth/invite-details?token=${token}`,
+    { enabled: !!token, retry: false },
+  );
+
+  const loading = !!token && isLoading;
+
+  // Seed invitation / isLoggedIn / error from the query response and any
+  // network failure, preserving the original branching.
   useEffect(() => {
-    if (!token) { setError('Invalid invitation link'); setLoading(false); return; }
-    const controller = new AbortController();
-    const { signal } = controller;
-    // Fetch invite details
-    fetch(`/api/auth/invite-details?token=${token}`, { signal })
-      .then(r => r.json())
-      .then(d => {
-        if (signal.aborted) return;
-        if (d.error) { setError(d.error); } else { setInvitation(d); setIsLoggedIn(d.isLoggedIn); }
-        setLoading(false);
-      })
-      .catch((e) => {
-        if ((e as Error)?.name === 'AbortError') return;
-        setError('Failed to load invitation'); setLoading(false);
-      });
-    return () => controller.abort();
-  }, [token, router]);
+    if (!token) { setError('Invalid invitation link'); return; }
+    if (queryError) { setError('Failed to load invitation'); return; }
+    if (data) {
+      if (data.error) { setError(data.error); }
+      else { setInvitation(data); setIsLoggedIn(!!data.isLoggedIn); }
+    }
+  }, [token, data, queryError]);
 
   const accept = async (e: React.FormEvent) => {
     e.preventDefault();
