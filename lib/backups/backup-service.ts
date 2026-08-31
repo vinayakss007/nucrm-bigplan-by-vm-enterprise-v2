@@ -245,13 +245,13 @@ export async function createBackup(options: BackupOptions): Promise<BackupResult
 
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err: unknown) {
     const durationMs = Date.now() - t0;
+    const errMessage = err instanceof Error ? err.message : String(err);
     await db.update(backupRecords)
       .set({
         status: 'failed',
-        errorMessage: err.message.slice(0, 500),
+        errorMessage: errMessage.slice(0, 500),
         durationMs
       })
       .where(eq(backupRecords.id, backup.id));

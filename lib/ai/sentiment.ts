@@ -55,8 +55,7 @@ Rules:
     return parseSentimentResponse(resp.text);
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err: unknown) {
     logger.error('[sentiment] AI analysis failed', { error: err instanceof Error ? err.message : String(err) });
     return fallbackSentiment(text);
   }
