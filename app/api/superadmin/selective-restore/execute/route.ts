@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { requireAuth } from '@/lib/auth/middleware';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { db } from '@/drizzle/db';
 import { selectiveRestoreLogs, selectiveRestoreAuditLog, superAdminBackups } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
@@ -39,6 +40,9 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     if (!ctx.isSuperAdmin) {
       return NextResponse.json({ error: 'Super admin access required' }, { status: 403 });
     }
+
+    const limited = await rateLimitMutating(request, 'selectiveRestore', 'post');
+    if (limited) return limited;
 
     const body = await readJsonBody(request);
     const validated = validateBody(executeRestoreSchema, body);

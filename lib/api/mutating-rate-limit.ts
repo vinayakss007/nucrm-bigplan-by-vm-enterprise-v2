@@ -75,6 +75,10 @@ const MUTATING_LIMITS: Record<string, { post: number; patch: number; delete: num
   activities: { post: 30, patch: 30, delete: 10 },
   apiKeys: { post: 5, patch: 5, delete: 5 },
   bulkTransfer: { post: 3, patch: 3, delete: 3 },
+  // Superadmin sensitive operations — strict limits (session minting, cross-tenant restore)
+  impersonate: { post: 5, patch: 5, delete: 5 },
+  joinTenant: { post: 5, patch: 5, delete: 5 },
+  selectiveRestore: { post: 3, patch: 3, delete: 3 },
 };
 
 const DEFAULT_LIMITS = { post: 15, patch: 30, delete: 10 };
