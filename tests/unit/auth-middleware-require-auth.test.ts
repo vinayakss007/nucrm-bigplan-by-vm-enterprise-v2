@@ -703,6 +703,32 @@ describe('requireAuth — cached context path', () => {
     expect(m.rc.invalidate).toHaveBeenCalledWith(TOKEN_HASH);
   });
 
+  it('#1836: re-validates a cached context that has NO roleVersion stamp (null treated as 0)', async () => {
+    // Contexts cached before the version stamp existed (e.g. across a deploy)
+    // have roleVersion == null. Previously the version check was skipped for
+    // them, so an in-place permission edit stayed effective for the full TTL.
+    // Now null is treated as 0, so any real role (updated_at > 0) forces a
+    // re-validation on the next hit.
+    m.rc.getCached.mockResolvedValue(cachedCtx({ roleVersion: undefined, roleSlug: 'member' }));
+    queueSelects(
+      [{ count: 1 }],                                              // session live
+      [{ status: 'active', roleSlug: 'member', roleId: 'role-1' }], // membership ok, has roleId
+      [{ updatedAt: new Date() }],                                 // live role has a real updated_at (> 0)
+    );
+    // rebuild path (cache was treated as stale)
+    m.db.query.sessions.findFirst.mockResolvedValue({ id: 'sess-1' });
+    queueSelects(
+      [userRow()],
+      [memberRow({ tenantId: 'cached-tenant', roleSlug: 'member', roleUpdatedAt: new Date() })],
+    );
+
+    const result = await requireAuth(makeRequest({ token: TOKEN }));
+
+    expect(isContext(result)).toBe(true);
+    // The unstamped cache was NOT trusted — it was invalidated and rebuilt.
+    expect(m.rc.invalidate).toHaveBeenCalledWith(TOKEN_HASH);
+  });
+
   it('#1836: stamps roleVersion from the role updated_at when building a fresh context', async () => {
     const roleUpdated = new Date('2026-08-01T00:00:00Z');
     m.db.query.sessions.findFirst.mockResolvedValue({ id: 'sess-1' });

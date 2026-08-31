@@ -160,13 +160,22 @@ async function isCachedContextStillAuthorized(
   // #1836: detect in-place permission edits (same roleSlug but permissions
   // object changed). The role's `updated_at` serves as a cheap version stamp:
   // if it advanced past what was cached, the permission set may have changed.
-  if (cached.roleVersion != null && membership.roleId) {
+  //
+  // Treat a missing stamp (roleVersion null/undefined) as 0 rather than
+  // skipping the check. Contexts cached before this stamp existed (e.g. across
+  // a deploy) or by any path that didn't set it would otherwise NEVER be
+  // re-validated against the current role and could serve stale permissions
+  // for the full cache TTL. With `0`, the first hit after such a context is
+  // cached re-validates against the live role.updatedAt (which is > 0),
+  // refreshing it once, after which it carries a proper numeric stamp.
+  if (membership.roleId) {
+    const cachedVersion = cached.roleVersion ?? 0;
     const [role] = await db.select({ updatedAt: roles.updatedAt })
       .from(roles)
       .where(eq(roles.id, membership.roleId))
       .limit(1);
     const currentVersion = role?.updatedAt ? new Date(role.updatedAt).getTime() : 0;
-    if (currentVersion > cached.roleVersion) return false;
+    if (currentVersion > cachedVersion) return false;
   }
 
   return true;
