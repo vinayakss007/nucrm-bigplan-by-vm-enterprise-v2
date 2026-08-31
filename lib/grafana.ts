@@ -26,8 +26,7 @@ interface LogEntry {
   labels: Record<string, string>;
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  context?: Record<string, any>;
+  context?: Record<string, unknown>;
 }
 
 class GrafanaOTLPClient extends EventEmitter {
@@ -140,8 +139,7 @@ class GrafanaOTLPClient extends EventEmitter {
    */
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  logError(error: Error, context: Record<string, any> = {}) {
+  logError(error: Error, context: Record<string, unknown> = {}) {
     this.log('error', error.message, {
       error: error.name,
       stack: error.stack,
@@ -154,8 +152,7 @@ class GrafanaOTLPClient extends EventEmitter {
    */
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  log(level: 'info' | 'warn' | 'error' | 'debug', message: string, context: Record<string, any> = {}) {
+  log(level: 'info' | 'warn' | 'error' | 'debug', message: string, context: Record<string, unknown> = {}) {
     if (!this.enabled) {
       console.log(`[Log] [${level.toUpperCase()}] ${message}`, context);
       return;
@@ -374,14 +371,12 @@ export const metrics = {
   
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  log: (level: 'info' | 'warn' | 'error' | 'debug', message: string, context?: Record<string, any>) =>
+  log: (level: 'info' | 'warn' | 'error' | 'debug', message: string, context?: Record<string, unknown>) =>
     getGrafanaClient().log(level, message, context),
   
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  logError: (error: Error, context?: Record<string, any>) =>
+  logError: (error: Error, context?: Record<string, unknown>) =>
     getGrafanaClient().logError(error, context),
   
   recordHttpRequest: (method: string, path: string, statusCode: number, durationMs: number) =>
