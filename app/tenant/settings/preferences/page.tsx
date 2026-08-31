@@ -5,6 +5,8 @@
  */
 'use client';
 import { useState, useEffect, useMemo } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import { Save, Palette, Calendar, Clock, Loader2, RotateCcw, Mail, Lock, Zap, Search,
   PanelLeftClose, ShieldCheck,
   type LucideIcon,
@@ -64,30 +66,37 @@ type SectionId = typeof SECTIONS[number]['id'];
 
 type Prefs = Record<string, unknown>;
 
+interface PreferencesResponse {
+  preferences?: Prefs;
+  workspace_defaults?: Prefs;
+}
+
 export default function PreferencesPage() {
+  const queryClient = useQueryClient();
   const [prefs, setPrefs] = useState<Prefs>({});
   const [original, setOriginal] = useState<Prefs>({});
-  const [workspaceDefaults, setWorkspaceDefaults] = useState<Prefs>({});
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [seeded, setSeeded] = useState(false);
   const [activeSection, setActiveSection] = useState<SectionId>('appearance');
   const [query, setQuery] = useState('');
   const { setTheme } = useTheme();
 
+  // #1328: load preferences via TanStack Query (was raw fetch + useEffect).
+  // retry:false — endpoint returns empty defaults when unset.
+  const { data, isLoading: loading } = useApiQuery<PreferencesResponse>(
+    ['user', 'preferences'],
+    '/api/user/preferences',
+    { retry: false },
+  );
+  const workspaceDefaults: Prefs = data?.workspace_defaults ?? {};
+
+  // Seed the editable prefs once from the query.
   useEffect(() => {
-  const controller = new AbortController();
-  let ignore = false;
-    fetch('/api/user/preferences', { signal: controller.signal })
-      .then(r => r.ok ? r.json() : { preferences: {}, workspace_defaults: {} })
-      .then(d => { if (ignore) return;
-        setPrefs(d.preferences ?? {});
-        setOriginal(d.preferences ?? {});
-        setWorkspaceDefaults(d.workspace_defaults ?? {});
-      })
-      .catch(e => { if ((e as Error)?.name === 'AbortError') return; throw e; })
-      .finally(() => { if (!ignore) setLoading(false); });
-    return () => { ignore = true; controller.abort(); };
-}, []);
+    if (seeded || !data) return;
+    const loaded = data.preferences ?? {};
+    setPrefs(loaded);
+    setOriginal(loaded);
+    setSeeded(true);
+  }, [data, seeded]);
 
   const dirty = useMemo(() => JSON.stringify(prefs) !== JSON.stringify(original), [prefs, original]);
 
@@ -98,40 +107,52 @@ export default function PreferencesPage() {
     return typeof v === 'string' ? v : v == null ? fallback : String(v);
   };
 
-  const save = async () => {
-    setSaving(true);
-    const res = await fetch('/api/user/preferences', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(prefs),
-    });
-    const d = await res.json();
-    if (res.ok) {
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch('/api/user/preferences', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(prefs),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(typeof d.error === 'string' ? d.error : 'Failed to save');
+    },
+    onSuccess: () => {
       toast.success('Preferences saved');
       setOriginal(prefs);
-      setTheme(pstr('theme','system'));
+      setTheme(pstr('theme', 'system'));
+      queryClient.invalidateQueries({ queryKey: ['user', 'preferences'] });
       // Notify the global applier to reapply data attributes
       window.dispatchEvent(new Event('nucrm:prefs-changed'));
-    } else {
-      toast.error(d.error || 'Failed to save');
-    }
-    setSaving(false);
-  };
+    },
+    onError: (e: Error) => toast.error(e.message || 'Failed to save'),
+  });
+
+  const resetMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch('/api/user/preferences', { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to reset');
+      const refresh = await fetch('/api/user/preferences');
+      const d = await refresh.json().catch(() => ({}));
+      return (d.preferences ?? {}) as Prefs;
+    },
+    onSuccess: (fresh) => {
+      toast.success('Reset to workspace defaults');
+      setPrefs(fresh);
+      setOriginal(fresh);
+      queryClient.invalidateQueries({ queryKey: ['user', 'preferences'] });
+      window.dispatchEvent(new Event('nucrm:prefs-changed'));
+    },
+    onError: () => toast.error('Failed to reset'),
+  });
+
+  const saving = saveMutation.isPending || resetMutation.isPending;
+
+  const save = () => saveMutation.mutate();
 
   const resetToWorkspace = async () => {
     await confirmThen('Reset all your preferences to the workspace defaults?', async () => {
-      setSaving(true);
-      const res = await fetch('/api/user/preferences', { method: 'DELETE' });
-      if (res.ok) {
-        toast.success('Reset to workspace defaults');
-        const refresh = await fetch('/api/user/preferences');
-        const d = await refresh.json();
-        setPrefs(d.preferences ?? {}); setOriginal(d.preferences ?? {});
-        window.dispatchEvent(new Event('nucrm:prefs-changed'));
-      } else {
-        toast.error('Failed to reset');
-      }
-      setSaving(false);
+      resetMutation.mutate();
     });
   };
 
