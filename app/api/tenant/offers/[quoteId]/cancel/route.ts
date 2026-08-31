@@ -38,29 +38,31 @@ export const POST = withApiRoute(async (req: NextRequest, { params }: { params: 
       return NextResponse.json({ error: `Cannot cancel an offer in '${quote.status}' state` }, { status: 409 });
     }
 
-    // Clear the public token so the buyer link is dead, set status
-    await db
-      .update(quotes)
-      .set({
-        status: 'cancelled',
-        updatedAt: new Date(),
-        // Strip the public_token so /p/offers/<token> 404s cleanly going forward
-        metadata: sql`
-          CASE
-            WHEN ${quotes.metadata}->'offer' IS NULL THEN ${quotes.metadata}
-            ELSE jsonb_set(
-              COALESCE(${quotes.metadata}, '{}'::jsonb),
-              '{offer}',
-              (${quotes.metadata}->'offer') - 'public_token'
-            )
-          END
-        `,
-      })
-      .where(eq(quotes.id, quoteId));
+    // Clear the public token so the buyer link is dead, set status, and write
+    // the timeline activity — all in one db.transaction so the offer is never
+    // marked 'cancelled' without its matching timeline row, and vice-versa (H7).
+    await db.transaction(async (tx) => {
+      await tx
+        .update(quotes)
+        .set({
+          status: 'cancelled',
+          updatedAt: new Date(),
+          // Strip the public_token so /p/offers/<token> 404s cleanly going forward
+          metadata: sql`
+            CASE
+              WHEN ${quotes.metadata}->'offer' IS NULL THEN ${quotes.metadata}
+              ELSE jsonb_set(
+                COALESCE(${quotes.metadata}, '{}'::jsonb),
+                '{offer}',
+                (${quotes.metadata}->'offer') - 'public_token'
+              )
+            END
+          `,
+        })
+        .where(eq(quotes.id, quoteId));
 
-    if (quote.contactId) {
-      try {
-        await db.insert(activities).values({
+      if (quote.contactId) {
+        await tx.insert(activities).values({
           tenantId: ctx.tenantId,
           userId: ctx.userId,
           entityType: 'quote',
@@ -71,10 +73,8 @@ export const POST = withApiRoute(async (req: NextRequest, { params }: { params: 
           description: `Offer "${quote.title}" cancelled`,
           metadata: { offer_id: quoteId },
         });
-      } catch (err) {
-        console.warn('[offers/cancel] activity insert failed:', (err as Error).message);
       }
-    }
+    });
 
     await logAudit({
       tenantId: ctx.tenantId,
