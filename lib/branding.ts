@@ -292,7 +292,11 @@ type TenantLike = {
   name?: string | null;
   primaryColor?: string | null;
   primary_color?: string | null;
-  settings?: Record<string, unknown> | null;
+  // Accept any settings shape (plain record from the DB row OR the typed
+  // `TenantSettings` interface from the tenant context, which has no index
+  // signature and so is not assignable to Record<string, unknown>). The body
+  // narrows it to a record before reading `settings.branding`.
+  settings?: unknown;
   logoUrl?: string | null;
   faviconUrl?: string | null;
   customDomain?: string | null;
