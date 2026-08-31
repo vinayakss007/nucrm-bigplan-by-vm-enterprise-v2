@@ -20,6 +20,8 @@ import {
   serviceSubscriptions,
   quotes,
   callLogs,
+  supportTickets,
+  followUps,
 } from '@/drizzle/schema';
 import { eq, and, sql, desc, isNull } from 'drizzle-orm';
 import { notFound } from 'next/navigation';
@@ -31,7 +33,7 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
   const ctx = await requireTenantCtx();
   const { id: contactId } = await params;
 
-  const [contactResult, activities, deals, tasks, companies, teamMembers, billingData, callLogsList] = await Promise.all([
+  const [contactResult, activities, deals, tasks, companies, teamMembers, billingData, callLogsList, ticketsList, followUpsList] = await Promise.all([
     db.select({
       contact: contactsTable,
       company_name: companiesTable.name,
@@ -150,6 +152,49 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
     .where(and(eq(callLogs.contactId, contactId), eq(callLogs.tenantId, ctx.tenantId), isNull(callLogs.deletedAt)))
     .orderBy(desc(callLogs.createdAt))
     .limit(50),
+
+    // #1814: the customer's support tickets — surfaced as a Contact-360 tab so
+    // support history is no longer siloed away in the Tickets section. Wrapped
+    // in a fallback so a failure here never breaks the contact page.
+    db.select({
+      id: supportTickets.id,
+      subject: supportTickets.subject,
+      status: supportTickets.status,
+      priority: supportTickets.priority,
+      category: supportTickets.category,
+      createdAt: supportTickets.createdAt,
+    })
+    .from(supportTickets)
+    .where(and(
+      eq(supportTickets.contactId, contactId),
+      eq(supportTickets.tenantId, ctx.tenantId),
+      isNull(supportTickets.deletedAt),
+    ))
+    .orderBy(desc(supportTickets.createdAt))
+    .limit(50)
+    .catch(() => []),
+
+    // #1814: the contact's follow-ups (FK already existed but was never shown
+    // on the record). Pending/overdue first so the "what's next" is obvious.
+    db.select({
+      id: followUps.id,
+      title: followUps.title,
+      description: followUps.description,
+      dueDate: followUps.dueDate,
+      status: followUps.status,
+      missedDays: followUps.missedDays,
+      completedAt: followUps.completedAt,
+      assignee_name: usersTable.fullName,
+    })
+    .from(followUps)
+    .leftJoin(usersTable, eq(usersTable.id, followUps.assignedTo))
+    .where(and(
+      eq(followUps.contactId, contactId),
+      eq(followUps.tenantId, ctx.tenantId),
+    ))
+    .orderBy(desc(followUps.dueDate))
+    .limit(50)
+    .catch(() => []),
   ]);
 
   if (!contactResult.length) notFound();
@@ -186,6 +231,8 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
       subscriptions={subscriptionsList}
       quotes={quotesList}
       callLogs={callLogsList}
+      tickets={ticketsList}
+      followUps={followUpsList}
     />
   );
 
