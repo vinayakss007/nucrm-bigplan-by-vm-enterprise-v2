@@ -151,12 +151,15 @@ export const PUT = withApiRoute(async (req: NextRequest, { params }: { params: P
         .limit(1);
 
       if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    // Optimistic concurrency: reject if another update happened since client read
+    }
+
+    // Optimistic concurrency: reject if another update happened since client
+    // read. This MUST run for every update path — previously it was nested in
+    // the `!body.status` branch, so a status-change PUT skipped the guard
+    // entirely and could silently clobber a concurrent edit.
     const expectedUpdatedAt = body.expectedUpdatedAt ?? body._updated_at;
     const guard = await concurrencyGuard(db, orders, orderId, ctx.tenantId, expectedUpdatedAt);
     if (guard) return guard;
-
-    }
 
     const [updated] = await db
       .update(orders)
