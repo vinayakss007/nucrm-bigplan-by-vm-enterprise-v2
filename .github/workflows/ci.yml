@@ -47,6 +47,9 @@ jobs:
       - name: RLS route-coverage guard (#1838)
         run: npm run guard:rls
 
+      - name: CSRF coverage guard (#C2)
+        run: npm run guard:csrf
+
       - name: Schema drift guard (#1883)
         run: npm run guard:schemas
 

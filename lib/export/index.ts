@@ -24,6 +24,29 @@ export interface ExportOptions {
 // Maximum contacts per import to prevent system overload
 export const MAX_IMPORT_CONTACTS = 1000;
 
+// #H2: Hard cap on rows returned by a single export. Without a LIMIT the query
+// streams an entire tenant's dataset into the Node heap (and holds a pooled DB
+// connection for the full scan), which can OOM the web process or exhaust the
+// pool for large tenants. 50k rows keeps the in-memory CSV bounded (~tens of
+// MB) while covering the overwhelming majority of real exports. Callers that
+// need more should page (offset filter) or use an async/streamed export.
+// Override with EXPORT_MAX_ROWS for operators with different memory budgets.
+export const MAX_EXPORT_ROWS = (() => {
+  const raw = parseInt(process.env['EXPORT_MAX_ROWS'] ?? '', 10);
+  return Number.isFinite(raw) && raw > 0 ? raw : 50_000;
+})();
+
+/**
+ * Raised when an export would exceed MAX_EXPORT_ROWS. Callers should surface a
+ * 413 and prompt the user to narrow their filter or use a paged/async export.
+ */
+export class ExportLimitError extends Error {
+  constructor(public readonly limit: number) {
+    super(`Export exceeds the maximum of ${limit} rows. Narrow your filter or export in smaller batches.`);
+    this.name = 'ExportLimitError';
+  }
+}
+
 /**
  * Import limit error
  */
@@ -116,7 +139,10 @@ export async function generateExportData(opts: Omit<ExportOptions, 'callbackUrl'
           ilike(contacts.lastName, `%${escapeLike(q)}%`),
           ilike(contacts.email, `%${escapeLike(q)}%`)
         ) : undefined
-      ));
+      ))
+      // #H2: fetch at most MAX_EXPORT_ROWS + 1 so we can detect (and reject)
+      // an over-limit export without loading the whole table into memory.
+      .limit(MAX_EXPORT_ROWS + 1);
       break;
     }
       
@@ -136,7 +162,8 @@ export async function generateExportData(opts: Omit<ExportOptions, 'callbackUrl'
       .where(and(
         eq(deals.tenantId, tenantId),
         isNull(deals.deletedAt)
-      ));
+      ))
+      .limit(MAX_EXPORT_ROWS + 1);
       break;
       
     case 'tasks':
@@ -154,7 +181,8 @@ export async function generateExportData(opts: Omit<ExportOptions, 'callbackUrl'
       .where(and(
         eq(tasks.tenantId, tenantId),
         isNull(tasks.deletedAt)
-      ));
+      ))
+      .limit(MAX_EXPORT_ROWS + 1);
       break;
 
     case 'companies':
@@ -173,13 +201,20 @@ export async function generateExportData(opts: Omit<ExportOptions, 'callbackUrl'
       .where(and(
         eq(companies.tenantId, tenantId),
         isNull(companies.deletedAt)
-      ));
+      ))
+      .limit(MAX_EXPORT_ROWS + 1);
       break;
       
     default:
       throw new Error(`Unsupported export entity type: ${entityType}`);
   }
-  
+
+  // #H2: if we fetched more than the cap, the export is too large to build
+  // safely in memory. Reject rather than risk OOM / pool exhaustion.
+  if (data.length > MAX_EXPORT_ROWS) {
+    throw new ExportLimitError(MAX_EXPORT_ROWS);
+  }
+
   if (data.length === 0) {
     if (entityType === 'contacts') return 'first_name,last_name,email,phone,company,lead_status,lead_source,city,country,website,linkedin_url,twitter_url,score,tags,notes,created_date';
     if (entityType === 'deals') return 'title,amount,stage_id,contact_name,company_name,close_date,created_at';

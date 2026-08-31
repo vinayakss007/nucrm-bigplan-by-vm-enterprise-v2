@@ -1,8 +1,26 @@
 /**
- * Tenant Isolation Penetration Tests
+ * Tenant Isolation — application-level scoping tests.
  *
- * Attempts to access one tenant's data from another tenant's context.
- * These tests verify that Row Level Security (RLS) policies are working correctly.
+ * SCOPE / HONESTY NOTE (#M7):
+ * This suite connects with the ordinary DATABASE_URL role (typically the
+ * migration/owner role in test), which is EXEMPT from RLS. So the queries here
+ * that include an explicit `.where(tenantId = ...)` verify only the
+ * APPLICATION-LEVEL scoping contract (a filtered query returns just that
+ * tenant's rows) and data integrity — they do NOT and cannot prove that RLS
+ * blocks an UNFILTERED cross-tenant read.
+ *
+ * The real, database-enforced RLS proof — running as a NOSUPERUSER /
+ * NOBYPASSRLS role with FORCE ROW LEVEL SECURITY and asserting that a
+ * filter-less SELECT still hides another tenant's rows — lives in
+ * tests/integration/rls-connection-affinity.test.ts. Do not duplicate or weaken
+ * that here.
+ *
+ * Previously this file was mislabeled a "penetration test" and its
+ * cross-tenant-UPDATE case asserted `updateResult.length >= 0`, which passes
+ * even if a tenant hijack SUCCEEDS — a vacuous assertion that created false
+ * confidence. That case has been corrected below to assert on the actual row
+ * state and to skip cleanly when the connecting role is RLS-exempt (where the
+ * update is expected to succeed and is not a security finding).
  *
  * Run: npx vitest run tests/integration/tenant-isolation.test.ts
  *
@@ -34,7 +52,7 @@ async function isDatabaseAvailable(): Promise<boolean> {
 
 const dbAvailable = await isDatabaseAvailable();
 
-describe.skipIf(!dbAvailable)('Tenant Isolation (Penetration Tests)', () => {
+describe.skipIf(!dbAvailable)('Tenant Isolation (application-level scoping)', () => {
   let pool: Pool;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let db: any;
@@ -176,11 +194,24 @@ describe.skipIf(!dbAvailable)('Tenant Isolation (Penetration Tests)', () => {
     }
   });
 
-  it('should prevent tenant ID manipulation in API requests', async () => {
-    // Simulate an attacker sending a request with a forged tenant ID
-    // The API should use the authenticated user's tenant, not the request body
+  it('cross-tenant reassignment: RLS blocks it for an enforced role; app layer must guard otherwise', async () => {
+    // Is the CONNECTING role actually subject to RLS? An owner/superuser/
+    // BYPASSRLS role is exempt, in which case a raw cross-tenant UPDATE is
+    // EXPECTED to succeed at the DB level (isolation then rests on the app layer
+    // never deriving tenantId from user input — proven elsewhere). We assert on
+    // the real outcome for whichever role we are, instead of the old vacuous
+    // `updateResult.length >= 0` which passed even on a successful hijack.
+    const who = await db.execute(sql`
+      SELECT rolsuper AS is_superuser, rolbypassrls AS bypass_rls,
+             (SELECT relforcerowsecurity FROM pg_class WHERE relname = 'contacts') AS forced
+        FROM pg_roles WHERE rolname = current_user
+    `);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const row = (Array.isArray(who) ? who[0] : (who as any)?.rows?.[0]) ?? {};
+    const roleExempt = row.is_superuser === true || row.bypass_rls === true;
+    const forced = row.forced === true;
+    const rlsEnforcedForThisRole = !roleExempt && forced;
 
-    // Create a contact for Tenant A
     const [contactA] = await db.insert(schema.contacts)
       .values({
         id: randomUUID(),
@@ -192,18 +223,33 @@ describe.skipIf(!dbAvailable)('Tenant Isolation (Penetration Tests)', () => {
       })
       .returning();
 
-    // Attempt to "reassign" it to Tenant B (should fail in production)
-    // In a properly secured system, the tenantId should be derived from auth context
+    // Attempt to "reassign" the contact to Tenant B via a raw UPDATE.
     const updateResult = await db.update(schema.contacts)
       .set({ tenantId: tenantBId })
       .where(eq(schema.contacts.id, contactA.id))
       .returning();
 
-    // If RLS is enabled, this update should affect 0 rows
-    // Without RLS, it would succeed (which is a security issue)
-    // This test documents the current behavior
-
-    expect(updateResult.length).toBeGreaterThanOrEqual(0);
+    if (rlsEnforcedForThisRole) {
+      // Enforced role: the cross-tenant write must be blocked (0 rows changed)
+      // and the row must remain owned by Tenant A.
+      expect(updateResult.length).toBe(0);
+      const [after] = await db.select()
+        .from(schema.contacts)
+        .where(eq(schema.contacts.id, contactA.id));
+      expect(after?.tenantId).toBe(tenantAId);
+    } else {
+      // Exempt role (typical in test): the DB does not block this, so the write
+      // succeeds. That is NOT a product security finding — it just means the
+      // real defense here is the application never trusting a client-supplied
+      // tenantId (and RLS enforced in production via a non-owner role, proven in
+      // rls-connection-affinity.test.ts). Assert the honest expected behavior.
+      expect(updateResult.length).toBe(1);
+      expect(updateResult[0]?.tenantId).toBe(tenantBId);
+      // Restore so afterAll cleanup by tenantAId still collects it.
+      await db.update(schema.contacts)
+        .set({ tenantId: tenantAId })
+        .where(eq(schema.contacts.id, contactA.id));
+    }
   });
 
   it('should prevent access to another tenant deals', async () => {
@@ -316,11 +362,12 @@ describe.skipIf(!dbAvailable)('Tenant Isolation (Penetration Tests)', () => {
       rlsStatus[row.tablename as string] = row.rowsecurity === true;
     }
 
-    // Log the results (in production, you'd want these all to be true)
-    console.log('RLS Status:', rlsStatus);
-
-    // At minimum, tenants table should have RLS
-    expect(rlsStatus['tenants']).toBeDefined();
+    // Assert RLS is actually ENABLED (not merely that the key exists) on the
+    // core tenant-scoped tables. The previous assertion only checked that the
+    // 'tenants' key was defined, which held even with RLS switched off.
+    for (const table of ['contacts', 'deals', 'companies', 'tasks']) {
+      expect(rlsStatus[table], `RLS should be enabled on "${table}"`).toBe(true);
+    }
   });
 
   it('should prevent bulk data export across tenants', async () => {
