@@ -48,7 +48,7 @@ export function MockFrame({
 }) {
   return (
     <div
-      className={`mk-edge overflow-hidden rounded-2xl border border-white/[0.09] bg-[#0b0b16]/90 shadow-[0_40px_100px_-40px_rgba(0,0,0,0.9)] backdrop-blur-xl ${className}`}
+      className={`mk-edge overflow-hidden rounded-2xl border border-white/[0.09] bg-[#0a1330]/90 shadow-[0_40px_100px_-40px_rgba(3,10,35,0.9)] backdrop-blur-xl ${className}`}
     >
       <WindowChrome title={title} right={right} />
       {children}
@@ -84,7 +84,7 @@ const COLUMNS: { name: string; total: string; tone: string; cards: { co: string;
   {
     name: 'Proposal',
     total: '$127k',
-    tone: 'bg-violet-400',
+    tone: 'bg-sky-400',
     cards: [
       { co: 'Meridian Health', value: '$74,000', owner: 'VC', score: 92, tag: 'Quote sent' },
       { co: 'Cobalt Studio', value: '$53,000', owner: 'AK', score: 68 },
@@ -109,7 +109,7 @@ const COLUMNS: { name: string; total: string; tone: string; cards: { co: string;
 
 function ScorePill({ score }: { score: number }) {
   const tone =
-    score >= 80 ? 'text-emerald-300 bg-emerald-500/12 border-emerald-400/25' : score >= 65 ? 'text-violet-300 bg-violet-500/12 border-violet-400/25' : 'text-amber-300 bg-amber-500/12 border-amber-400/25';
+    score >= 80 ? 'text-emerald-300 bg-emerald-500/12 border-emerald-400/25' : score >= 65 ? 'text-sky-300 bg-sky-500/12 border-sky-400/25' : 'text-amber-300 bg-amber-500/12 border-amber-400/25';
   return (
     <span className={`mk-mono rounded-md border px-1.5 py-[1px] text-[10px] font-semibold ${tone}`}>{score}</span>
   );
@@ -126,7 +126,7 @@ export function AppPreview() {
         {/* sidebar */}
         <aside className="hidden w-[186px] shrink-0 flex-col border-r border-white/[0.06] bg-black/25 p-3 md:flex">
           <div className="mb-3 flex items-center gap-2 rounded-lg border border-white/[0.07] bg-white/[0.03] px-2.5 py-2">
-            <span className="flex h-6 w-6 items-center justify-center rounded-md bg-gradient-to-br from-violet-500 to-indigo-500 text-[10px] font-bold text-white">
+            <span className="flex h-6 w-6 items-center justify-center rounded-md bg-gradient-to-br from-blue-500 to-sky-400 text-[10px] font-bold text-white">
               A
             </span>
             <span className="min-w-0 flex-1">
@@ -139,7 +139,7 @@ export function AppPreview() {
             <span
               key={n.label}
               className={`flex items-center gap-2.5 rounded-lg px-2.5 py-[7px] text-[11.5px] font-medium ${
-                n.active ? 'bg-violet-500/15 text-violet-200 ring-1 ring-inset ring-violet-400/20' : 'text-slate-500'
+                n.active ? 'bg-sky-500/15 text-sky-200 ring-1 ring-inset ring-sky-400/20' : 'text-slate-500'
               }`}
             >
               <Icon name={n.icon} className="h-3.5 w-3.5" />
@@ -147,7 +147,7 @@ export function AppPreview() {
             </span>
           ))}
           <div className="mt-auto flex items-center gap-2 rounded-lg border border-white/[0.06] px-2.5 py-2">
-            <Icon name="Sparkles" className="h-3.5 w-3.5 text-violet-300" />
+            <Icon name="Sparkles" className="h-3.5 w-3.5 text-sky-300" />
             <span className="text-[10px] text-slate-400">AI credits</span>
             <span className="mk-mono ml-auto text-[10px] text-slate-300">82%</span>
           </div>
@@ -166,7 +166,7 @@ export function AppPreview() {
             {/* Spelled out rather than the ⌘ glyph, which renders as tofu in the
                 mock's monospace stack. */}
             <span className="mk-mono ml-auto hidden text-[10px] text-slate-500 sm:block">Cmd K</span>
-            <span className="flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-violet-600 to-indigo-600 px-2.5 py-1 text-[10.5px] font-semibold text-white">
+            <span className="flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-blue-600 to-sky-500 px-2.5 py-1 text-[10.5px] font-semibold text-white">
               New deal
             </span>
           </div>
@@ -186,7 +186,7 @@ export function AppPreview() {
                       {col.cards.map((c) => (
                         <div
                           key={c.co}
-                          className="rounded-lg border border-white/[0.07] bg-white/[0.028] p-2.5 transition-colors hover:border-violet-400/25 hover:bg-white/[0.05]"
+                          className="rounded-lg border border-white/[0.07] bg-white/[0.028] p-2.5 transition-colors hover:border-sky-400/25 hover:bg-white/[0.05]"
                         >
                           <div className="flex items-start justify-between gap-2">
                             <span className="truncate text-[11px] font-semibold text-slate-100">{c.co}</span>
@@ -194,7 +194,7 @@ export function AppPreview() {
                           </div>
                           <div className="mk-mono mt-1.5 text-[11px] text-slate-300">{c.value}</div>
                           <div className="mt-2 flex items-center gap-1.5">
-                            <span className="flex h-4 w-4 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-indigo-500 text-[7px] font-bold text-white">
+                            <span className="flex h-4 w-4 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-sky-400 text-[7px] font-bold text-white">
                               {c.owner}
                             </span>
                             {c.tag && (
@@ -214,7 +214,7 @@ export function AppPreview() {
             {/* insight rail */}
             <aside className="hidden w-[188px] shrink-0 border-l border-white/[0.06] bg-black/20 p-3 lg:block">
               <div className="mb-2 flex items-center gap-1.5">
-                <Icon name="Sparkles" className="h-3.5 w-3.5 text-violet-300" />
+                <Icon name="Sparkles" className="h-3.5 w-3.5 text-sky-300" />
                 <span className="text-[10.5px] font-semibold text-slate-200">AI insights</span>
                 <span className="relative ml-auto flex h-1.5 w-1.5 text-emerald-400">
                   <span className="mk-ping absolute inset-0 rounded-full" />
@@ -231,7 +231,7 @@ export function AppPreview() {
                     <div className="flex items-start gap-1.5">
                       <span
                         className={`mt-[5px] h-1.5 w-1.5 shrink-0 rounded-full ${
-                          i.tone === 'emerald' ? 'bg-emerald-400' : i.tone === 'amber' ? 'bg-amber-400' : 'bg-violet-400'
+                          i.tone === 'emerald' ? 'bg-emerald-400' : i.tone === 'amber' ? 'bg-amber-400' : 'bg-sky-400'
                         }`}
                       />
                       <span className="text-[10px] font-semibold leading-snug text-slate-200">{i.t}</span>
@@ -260,15 +260,15 @@ function Sparkline() {
     <svg viewBox="0 0 120 34" className="mt-2 h-8 w-full" aria-hidden>
       <defs>
         <linearGradient id="mk-spark" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#8b5cf6" stopOpacity="0.4" />
-          <stop offset="100%" stopColor="#8b5cf6" stopOpacity="0" />
+          <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.45" />
+          <stop offset="100%" stopColor="#38bdf8" stopOpacity="0" />
         </linearGradient>
       </defs>
       <path d="M0 28 L18 24 L34 26 L52 16 L70 19 L88 9 L104 12 L120 4 V34 H0 Z" fill="url(#mk-spark)" />
       <path
         d="M0 28 L18 24 L34 26 L52 16 L70 19 L88 9 L104 12 L120 4"
         fill="none"
-        stroke="#a78bfa"
+        stroke="#60a5fa"
         strokeWidth="1.6"
         strokeLinecap="round"
       />
@@ -283,7 +283,7 @@ export function AiDraftMock() {
     <MockFrame title="nucrm — ai · draft follow-up" right="Meridian Health">
       <div className="p-4">
         <div className="mb-3 flex items-center gap-2">
-          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-fuchsia-500 to-violet-600">
+          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-sky-400 to-blue-600">
             <Icon name="Sparkles" className="h-4 w-4 text-white" />
           </span>
           <div className="min-w-0">
@@ -306,11 +306,11 @@ export function AiDraftMock() {
             </p>
             <p>
               I have attached the revised quote with the two seats you asked about removed.
-              <span className="mk-caret ml-0.5 inline-block h-3.5 w-[2px] translate-y-[2px] bg-violet-400" />
+              <span className="mk-caret ml-0.5 inline-block h-3.5 w-[2px] translate-y-[2px] bg-sky-400" />
             </p>
           </div>
           <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-white/[0.06] pt-3">
-            <span className="rounded-lg bg-gradient-to-r from-violet-600 to-indigo-600 px-2.5 py-1 text-[10.5px] font-semibold text-white">
+            <span className="rounded-lg bg-gradient-to-r from-blue-600 to-sky-500 px-2.5 py-1 text-[10.5px] font-semibold text-white">
               Approve &amp; send
             </span>
             <span className="rounded-lg border border-white/10 px-2.5 py-1 text-[10.5px] text-slate-300">Edit</span>
@@ -358,7 +358,7 @@ export function AutomationMock() {
       <div className="p-3">
         <svg viewBox="0 0 420 250" className="h-auto w-full" aria-hidden>
           {/* connectors */}
-          <g fill="none" stroke="#8b5cf6" strokeWidth="1.5" opacity="0.65">
+          <g fill="none" stroke="#38bdf8" strokeWidth="1.5" opacity="0.7">
             <path className="mk-flow" d="M76 47 C76 70 154 62 154 82" />
             <path className="mk-flow" d="M210 116 C210 138 118 132 118 152" style={{ animationDelay: '-0.4s' }} />
             <path className="mk-flow" d="M210 116 C210 138 300 132 300 152" style={{ animationDelay: '-0.8s' }} />
@@ -368,9 +368,9 @@ export function AutomationMock() {
 
           {/* trigger */}
           <g>
-            <rect x="20" y="13" width="112" height="34" rx="9" fill="rgba(139,92,246,0.16)" stroke="rgba(139,92,246,0.5)" />
-            <circle cx="36" cy="30" r="4" fill="#a78bfa" />
-            <text x="48" y="34" fill="#e9d5ff" fontSize="9.5" fontWeight="700">
+            <rect x="20" y="13" width="112" height="34" rx="9" fill="rgba(56,189,248,0.16)" stroke="rgba(56,189,248,0.5)" />
+            <circle cx="36" cy="30" r="4" fill="#60a5fa" />
+            <text x="48" y="34" fill="#dbeafe" fontSize="9.5" fontWeight="700">
               Deal marked Won
             </text>
           </g>
@@ -413,7 +413,7 @@ export function AutomationMock() {
 const THREAD = [
   { ch: 'Email', icon: 'Mail', tone: 'text-cyan-300 bg-cyan-500/10 border-cyan-400/25', who: 'Priya Raman', text: 'Can you send the revised quote with two fewer seats?', time: '09:14', inbound: true },
   { ch: 'WhatsApp', icon: 'MessageCircle', tone: 'text-emerald-300 bg-emerald-500/10 border-emerald-400/25', who: 'You', text: 'On its way — sending the updated PDF in five minutes.', time: '09:21', inbound: false },
-  { ch: 'Call', icon: 'Headphones', tone: 'text-violet-300 bg-violet-500/10 border-violet-400/25', who: 'Logged by AK', text: '12 min · Walked through the rollout dates. Positive.', time: '11:02', inbound: false },
+  { ch: 'Call', icon: 'Headphones', tone: 'text-indigo-300 bg-indigo-500/10 border-indigo-400/25', who: 'Logged by AK', text: '12 min · Walked through the rollout dates. Positive.', time: '11:02', inbound: false },
   { ch: 'Ticket', icon: 'Ticket', tone: 'text-rose-300 bg-rose-500/10 border-rose-400/25', who: 'Support', text: '#4821 resolved · SLA met in 42 minutes', time: '14:37', inbound: true },
 ];
 
@@ -422,7 +422,7 @@ export function ConversationMock() {
     <MockFrame title="nucrm — meridian health · timeline" right="Every channel, one record">
       <div className="p-4">
         <div className="mb-3 flex items-center gap-2.5 border-b border-white/[0.06] pb-3">
-          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-indigo-500 text-[10px] font-bold text-white">
+          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-sky-400 text-[10px] font-bold text-white">
             MH
           </span>
           <div>
@@ -481,7 +481,7 @@ export function AnalyticsMock() {
             {BARS.map((h, i) => (
               <div
                 key={i}
-                className="mk-bar flex-1 rounded-t bg-gradient-to-t from-violet-600/40 to-violet-400"
+                className="mk-bar flex-1 rounded-t bg-gradient-to-t from-blue-600/40 to-sky-400"
                 style={{ height: `${h}%`, animationDelay: `${i * 70}ms` }}
               />
             ))}
@@ -566,7 +566,7 @@ export function QuoteMock() {
         </div>
 
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <span className="rounded-lg bg-gradient-to-r from-violet-600 to-indigo-600 px-2.5 py-1 text-[10.5px] font-semibold text-white">
+          <span className="rounded-lg bg-gradient-to-r from-blue-600 to-sky-500 px-2.5 py-1 text-[10.5px] font-semibold text-white">
             Send for signature
           </span>
           <span className="rounded-lg border border-white/10 px-2.5 py-1 text-[10.5px] text-slate-300">Download PDF</span>
@@ -608,10 +608,10 @@ export function TicketMock() {
             <div className="text-[9.5px] font-semibold text-slate-400">Internal note · not visible to customer</div>
             <p className="mt-1 text-[10.5px] text-slate-300">Reproduced on small screens. Fix shipping today.</p>
           </div>
-          <div className="rounded-lg border border-violet-400/20 bg-violet-500/[0.07] p-2.5">
+          <div className="rounded-lg border border-sky-400/20 bg-sky-500/[0.07] p-2.5">
             <div className="flex items-center gap-1.5">
-              <Icon name="Sparkles" className="h-3 w-3 text-violet-300" />
-              <span className="text-[9.5px] font-semibold text-violet-200">Suggested reply from knowledge base</span>
+              <Icon name="Sparkles" className="h-3 w-3 text-sky-300" />
+              <span className="text-[9.5px] font-semibold text-sky-200">Suggested reply from knowledge base</span>
             </div>
             <p className="mt-1 text-[10.5px] text-slate-300">
               “Clearing the saved form draft resolves this while the fix rolls out…”
@@ -620,7 +620,7 @@ export function TicketMock() {
         </div>
 
         <div className="mt-3 flex items-center gap-2 border-t border-white/[0.06] pt-3">
-          <span className="rounded-lg bg-gradient-to-r from-violet-600 to-indigo-600 px-2.5 py-1 text-[10.5px] font-semibold text-white">
+          <span className="rounded-lg bg-gradient-to-r from-blue-600 to-sky-500 px-2.5 py-1 text-[10.5px] font-semibold text-white">
             Resolve &amp; send CSAT
           </span>
           <span className="mk-mono ml-auto text-[9.5px] text-slate-600">Portal visible</span>
@@ -703,7 +703,7 @@ export function GovernanceMock() {
             ].map(([t, who, what]) => (
               <div key={t} className="flex items-start gap-2 text-[10px]">
                 <span className="mk-mono shrink-0 text-slate-600">{t}</span>
-                <span className="mk-mono shrink-0 text-violet-300">{who}</span>
+                <span className="mk-mono shrink-0 text-sky-300">{who}</span>
                 <span className="min-w-0 truncate text-slate-400">{what}</span>
               </div>
             ))}

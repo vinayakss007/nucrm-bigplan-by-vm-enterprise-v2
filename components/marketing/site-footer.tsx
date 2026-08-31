@@ -23,10 +23,10 @@ export function SiteFooter() {
   const year = new Date().getFullYear();
 
   return (
-    <footer className="relative overflow-hidden border-t border-white/[0.08] bg-[#04040a]">
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-violet-500/50 to-transparent" aria-hidden />
+    <footer className="relative overflow-hidden border-t border-white/[0.08] bg-[#050d28]">
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-sky-400/60 to-transparent" aria-hidden />
       <div
-        className="pointer-events-none absolute -bottom-40 left-1/2 h-80 w-[900px] -translate-x-1/2 rounded-full bg-violet-600/10 blur-[130px]"
+        className="pointer-events-none absolute -bottom-40 left-1/2 h-80 w-[900px] -translate-x-1/2 rounded-full bg-blue-600/12 blur-[130px]"
         aria-hidden
       />
 
@@ -62,7 +62,7 @@ export function SiteFooter() {
                 <Link
                   key={p.slug}
                   href={`/abetworks/${p.slug}`}
-                  className="group flex items-start gap-2.5 rounded-xl border border-white/[0.06] bg-white/[0.02] p-2.5 transition-colors hover:border-violet-400/25 hover:bg-white/[0.045]"
+                  className="group flex items-start gap-2.5 rounded-xl border border-white/[0.06] bg-white/[0.02] p-2.5 transition-colors hover:border-sky-400/25 hover:bg-white/[0.045]"
                 >
                   <span
                     className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br ${p.accent} ring-1 ring-inset ring-white/20`}
@@ -87,7 +87,7 @@ export function SiteFooter() {
               <ul className="space-y-2">
                 {col.links.map((l) => (
                   <li key={l.href + l.label}>
-                    <Link href={l.href} className="text-[13px] text-slate-400 transition-colors hover:text-violet-300">
+                    <Link href={l.href} className="text-[13px] text-slate-400 transition-colors hover:text-sky-300">
                       {l.label}
                     </Link>
                   </li>
@@ -115,23 +115,23 @@ export function SiteFooter() {
                     target="_blank"
                     rel="noreferrer noopener"
                     aria-label={`${BRAND.maker} on ${s.label}`}
-                    className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.03] text-slate-400 transition-colors hover:border-violet-400/30 hover:bg-white/[0.07] hover:text-violet-300"
+                    className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.03] text-slate-400 transition-colors hover:border-sky-400/30 hover:bg-white/[0.07] hover:text-sky-300"
                   >
                     <SocialIcon icon={s.icon} />
                   </a>
                 ))}
               </div>
             )}
-            <a href={`mailto:${BRAND.email}`} className="mk-tiny transition-colors hover:text-violet-300">
+            <a href={`mailto:${BRAND.email}`} className="mk-tiny transition-colors hover:text-sky-300">
               {BRAND.email}
             </a>
-            <Link href="/legal/privacy" className="mk-tiny transition-colors hover:text-violet-300">
+            <Link href="/legal/privacy" className="mk-tiny transition-colors hover:text-sky-300">
               Privacy
             </Link>
-            <Link href="/legal/terms" className="mk-tiny transition-colors hover:text-violet-300">
+            <Link href="/legal/terms" className="mk-tiny transition-colors hover:text-sky-300">
               Terms
             </Link>
-            <Link href="/security" className="mk-tiny transition-colors hover:text-violet-300">
+            <Link href="/security" className="mk-tiny transition-colors hover:text-sky-300">
               Security
             </Link>
           </div>

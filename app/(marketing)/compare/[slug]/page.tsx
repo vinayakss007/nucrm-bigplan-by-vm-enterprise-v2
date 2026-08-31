@@ -170,11 +170,11 @@ export default async function ComparisonPage({ params }: { params: Promise<{ slu
           <div className="mt-12 grid gap-4 lg:grid-cols-2">
             <Reveal className="mk-card mk-edge relative overflow-hidden p-7">
               <div
-                className="pointer-events-none absolute -right-20 -top-20 h-52 w-52 rounded-full bg-violet-500/20 blur-3xl"
+                className="pointer-events-none absolute -right-20 -top-20 h-52 w-52 rounded-full bg-sky-500/22 blur-3xl"
                 aria-hidden
               />
               <div className="relative">
-                <div className="mk-eyebrow text-violet-300/90">Choose NuCRM if</div>
+                <div className="mk-eyebrow text-sky-300/90">Choose NuCRM if</div>
                 <p className="mk-lead mt-4 !text-slate-200">{c.bestFor.nucrm}</p>
                 <div className="mt-6">
                   <PrimaryCta>Start free</PrimaryCta>
@@ -234,7 +234,7 @@ export default async function ComparisonPage({ params }: { params: Promise<{ slu
                   <span className="mk-small mt-1.5 flex-1">{o.hook}</span>
                   <Icon
                     name="ArrowUpRight"
-                    className="mt-4 h-4 w-4 text-slate-600 transition-all group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-violet-300"
+                    className="mt-4 h-4 w-4 text-slate-600 transition-all group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-sky-300"
                   />
                 </Link>
               </Reveal>

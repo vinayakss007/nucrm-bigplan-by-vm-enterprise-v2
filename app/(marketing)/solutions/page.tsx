@@ -55,7 +55,7 @@ export default function SolutionsPage() {
         <Container>
           <div className="mk-card mk-edge relative overflow-hidden p-7 sm:p-9">
             <div
-              className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-violet-500/20 blur-3xl"
+              className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-sky-500/22 blur-3xl"
               aria-hidden
             />
             <div className="relative grid gap-8 lg:grid-cols-[1fr_1.1fr]">
@@ -128,7 +128,7 @@ export default function SolutionsPage() {
                       </span>
                       <Icon
                         name="ArrowUpRight"
-                        className="ml-auto h-4 w-4 text-slate-600 transition-all group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-violet-300"
+                        className="ml-auto h-4 w-4 text-slate-600 transition-all group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-sky-300"
                       />
                     </div>
                   </div>
@@ -164,7 +164,7 @@ export default function SolutionsPage() {
                 'Territories, teams and hierarchy that match your org',
               ].map((t) => (
                 <li key={t} className="flex gap-3">
-                  <Icon name="Check" className="mt-[3px] h-4 w-4 shrink-0 text-violet-400" strokeWidth={2.4} />
+                  <Icon name="Check" className="mt-[3px] h-4 w-4 shrink-0 text-sky-400" strokeWidth={2.4} />
                   <span className="mk-body text-slate-300">{t}</span>
                 </li>
               ))}

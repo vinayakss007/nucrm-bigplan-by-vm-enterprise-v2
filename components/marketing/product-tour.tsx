@@ -51,11 +51,11 @@ export function ProductTour({ tabs }: { tabs: TourTab[] }) {
               onClick={() => setActive(i)}
               className={`flex shrink-0 items-center gap-2 rounded-xl border px-3.5 py-2.5 text-[13.5px] font-semibold transition-all duration-300 ${
                 on
-                  ? 'border-violet-400/35 bg-violet-500/15 text-white shadow-[0_8px_30px_-12px_rgba(124,58,237,0.9)]'
+                  ? 'border-sky-400/35 bg-sky-500/15 text-white shadow-[0_8px_30px_-12px_rgba(37,99,235,0.9)]'
                   : 'border-white/[0.08] bg-white/[0.025] text-slate-400 hover:border-white/20 hover:text-slate-200'
               }`}
             >
-              <Icon name={t.icon} className={`h-4 w-4 ${on ? 'text-violet-300' : 'text-slate-500'}`} />
+              <Icon name={t.icon} className={`h-4 w-4 ${on ? 'text-sky-300' : 'text-slate-500'}`} />
               {t.label}
             </button>
           );
@@ -81,7 +81,7 @@ export function ProductTour({ tabs }: { tabs: TourTab[] }) {
             <ul className="mt-5 space-y-2.5">
               {current.points.map((p) => (
                 <li key={p} className="flex gap-3">
-                  <Icon name="Check" className="mt-[3px] h-4 w-4 shrink-0 text-violet-400" strokeWidth={2.4} />
+                  <Icon name="Check" className="mt-[3px] h-4 w-4 shrink-0 text-sky-400" strokeWidth={2.4} />
                   <span className="mk-body text-slate-300">{p}</span>
                 </li>
               ))}

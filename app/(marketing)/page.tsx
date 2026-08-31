@@ -89,7 +89,7 @@ const TOUR: TourTab[] = [
     id: 'ai',
     label: 'AI',
     icon: 'Sparkles',
-    accent: 'from-fuchsia-500 to-violet-600',
+    accent: 'from-sky-400 to-blue-600',
     title: 'It writes the follow-up you keep postponing',
     body: 'The assistant reads the record — every email, call note, ticket and deal change — then drafts the next message in the tone you picked. Nothing sends without your approval.',
     points: [
@@ -153,7 +153,7 @@ const TOUR: TourTab[] = [
     id: 'analytics',
     label: 'Analytics',
     icon: 'BarChart3',
-    accent: 'from-indigo-400 to-violet-500',
+    accent: 'from-blue-400 to-cyan-500',
     title: 'Build the report once. Read it every Monday.',
     body: 'Pick the entity, the filters and the grouping. Save it, drop it on a dashboard, schedule it. Weekly reporting stops being a manual ritual.',
     points: [
@@ -181,11 +181,11 @@ export default function LandingPage() {
             <Reveal>
               <Link
                 href="/features/ai"
-                className="mk-chip group !border-violet-400/25 !bg-violet-500/10 !text-violet-200"
+                className="mk-chip group !border-sky-400/25 !bg-sky-500/10 !text-sky-200"
               >
-                <span className="relative flex h-1.5 w-1.5 text-violet-400">
+                <span className="relative flex h-1.5 w-1.5 text-sky-400">
                   <span className="mk-ping absolute inset-0 rounded-full" />
-                  <span className="h-1.5 w-1.5 rounded-full bg-violet-400" />
+                  <span className="h-1.5 w-1.5 rounded-full bg-sky-400" />
                 </span>
                 AI assistant, automation builder and billing — all included
                 <Icon name="ArrowRight" className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
@@ -241,7 +241,7 @@ export default function LandingPage() {
           {/* product shot */}
           <Reveal delay={280} className="relative mt-14 sm:mt-20">
             <div
-              className="pointer-events-none absolute -inset-x-10 -top-10 bottom-10 -z-10 rounded-[40px] bg-gradient-to-b from-violet-600/25 via-indigo-600/10 to-transparent blur-3xl"
+              className="pointer-events-none absolute -inset-x-10 -top-10 bottom-10 -z-10 rounded-[40px] bg-gradient-to-b from-blue-600/30 via-sky-500/12 to-transparent blur-3xl"
               aria-hidden
             />
             <div style={{ perspective: '2200px' }}>
@@ -251,7 +251,7 @@ export default function LandingPage() {
             </div>
             {/* reflection fading into the page */}
             <div
-              className="pointer-events-none mx-auto h-24 w-[92%] rounded-b-[40px] bg-gradient-to-b from-violet-500/10 to-transparent blur-2xl"
+              className="pointer-events-none mx-auto h-24 w-[92%] rounded-b-[40px] bg-gradient-to-b from-sky-500/12 to-transparent blur-2xl"
               aria-hidden
             />
           </Reveal>
@@ -271,7 +271,7 @@ export default function LandingPage() {
               key={m.id}
               className="flex items-center gap-2.5 rounded-xl border border-white/[0.07] bg-white/[0.025] px-4 py-2.5"
             >
-              <Icon name={m.icon} className="h-4 w-4 text-violet-300" />
+              <Icon name={m.icon} className="h-4 w-4 text-sky-300" />
               <span className="whitespace-nowrap text-[13px] font-semibold text-slate-300">{m.name}</span>
             </span>
           ))}
@@ -323,7 +323,7 @@ export default function LandingPage() {
 
             {/* arrow */}
             <div className="flex items-center justify-center lg:px-2">
-              <span className="flex h-11 w-11 rotate-90 items-center justify-center rounded-full border border-violet-400/30 bg-violet-500/12 text-violet-300 lg:rotate-0">
+              <span className="flex h-11 w-11 rotate-90 items-center justify-center rounded-full border border-sky-400/30 bg-sky-500/12 text-sky-300 lg:rotate-0">
                 <Icon name="ArrowRight" className="h-5 w-5" strokeWidth={2.2} />
               </span>
             </div>
@@ -331,7 +331,7 @@ export default function LandingPage() {
             {/* after */}
             <Reveal delay={120} className="mk-card mk-edge relative overflow-hidden p-6">
               <div
-                className="pointer-events-none absolute -right-20 -top-20 h-56 w-56 rounded-full bg-violet-500/20 blur-3xl"
+                className="pointer-events-none absolute -right-20 -top-20 h-56 w-56 rounded-full bg-sky-500/22 blur-3xl"
                 aria-hidden
               />
               <div className="relative">
@@ -486,7 +486,7 @@ export default function LandingPage() {
                   </span>
                   <Icon
                     name="ArrowUpRight"
-                    className="h-4 w-4 shrink-0 text-slate-600 transition-all group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-violet-300"
+                    className="h-4 w-4 shrink-0 text-slate-600 transition-all group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-sky-300"
                   />
                 </Link>
               </Reveal>
@@ -528,7 +528,7 @@ export default function LandingPage() {
             <Reveal delay={120}>
               <div className="relative">
                 <div
-                  className="pointer-events-none absolute inset-0 -z-10 rounded-[32px] bg-gradient-to-br from-violet-600/20 to-cyan-500/10 blur-3xl"
+                  className="pointer-events-none absolute inset-0 -z-10 rounded-[32px] bg-gradient-to-br from-blue-600/22 to-cyan-500/12 blur-3xl"
                   aria-hidden
                 />
                 <div className="grid grid-cols-4 gap-2.5">
@@ -675,7 +675,7 @@ export default function LandingPage() {
               ['Zoho CRM', 'zoho'],
               ['monday CRM', 'monday'],
             ].map(([label, slug]) => (
-              <Link key={slug} href={`/compare/${slug}`} className="mk-chip hover:!border-violet-400/30 hover:!text-white">
+              <Link key={slug} href={`/compare/${slug}`} className="mk-chip hover:!border-sky-400/30 hover:!text-white">
                 NuCRM vs {label}
                 <Icon name="ArrowUpRight" className="h-3 w-3" />
               </Link>
@@ -699,12 +699,12 @@ export default function LandingPage() {
                 <div
                   className={`relative flex h-full flex-col rounded-2xl border p-6 ${
                     plan.featured
-                      ? 'mk-edge mk-glow border-violet-400/30 bg-gradient-to-b from-violet-600/[0.14] to-white/[0.02]'
+                      ? 'mk-edge mk-glow border-sky-400/30 bg-gradient-to-b from-blue-600/[0.16] to-white/[0.02]'
                       : 'border-white/[0.08] bg-white/[0.025]'
                   }`}
                 >
                   {plan.featured && (
-                    <span className="absolute -top-3 left-6 rounded-full bg-gradient-to-r from-violet-500 to-indigo-500 px-3 py-1 text-[10.5px] font-bold uppercase tracking-wider text-white shadow-lg shadow-violet-500/30">
+                    <span className="absolute -top-3 left-6 rounded-full bg-gradient-to-r from-blue-500 to-sky-400 px-3 py-1 text-[10.5px] font-bold uppercase tracking-wider text-white shadow-lg shadow-blue-500/30">
                       Most teams
                     </span>
                   )}
@@ -727,7 +727,7 @@ export default function LandingPage() {
                       <li key={f} className="flex gap-2.5">
                         <Icon
                           name="Check"
-                          className={`mt-[3px] h-3.5 w-3.5 shrink-0 ${plan.featured ? 'text-violet-300' : 'text-emerald-400'}`}
+                          className={`mt-[3px] h-3.5 w-3.5 shrink-0 ${plan.featured ? 'text-sky-300' : 'text-emerald-400'}`}
                           strokeWidth={2.6}
                         />
                         <span className="text-[12.5px] leading-relaxed text-slate-400">{f}</span>

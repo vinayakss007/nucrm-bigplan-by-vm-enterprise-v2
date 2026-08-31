@@ -64,7 +64,7 @@ export default function ComparePage() {
         <Container>
           <Reveal className="mk-card mk-edge relative overflow-hidden p-7 sm:p-9">
             <div
-              className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-violet-500/20 blur-3xl"
+              className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-sky-500/22 blur-3xl"
               aria-hidden
             />
             <div className="relative grid gap-8 lg:grid-cols-[1fr_1.1fr]">

@@ -61,8 +61,9 @@ export const metadata: Metadata = {
 export default function MarketingLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="mk-root relative min-h-screen overflow-x-hidden">
-      {/* Painted behind everything so overscroll and short pages stay dark. */}
-      <div className="fixed inset-0 -z-50 bg-[#06060e]" aria-hidden />
+      {/* Painted behind everything so overscroll and short pages keep the deep
+          ocean-blue canvas instead of falling through to plain black. */}
+      <div className="fixed inset-0 -z-50 bg-[#071033]" aria-hidden />
       <SiteHeader />
       <main id="main">{children}</main>
       <SiteFooter />

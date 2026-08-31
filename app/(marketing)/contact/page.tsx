@@ -32,7 +32,7 @@ const ROUTES = [
     d: 'Plan fit, volume pricing, annual terms and anything a quote needs to say.',
     email: BRAND.sales,
     i: 'Wallet',
-    accent: 'from-violet-500 to-indigo-500',
+    accent: 'from-blue-500 to-indigo-500',
   },
   {
     t: 'Existing customer support',
@@ -124,7 +124,7 @@ export default function ContactPage() {
                     >
                       <Icon
                         name="ArrowRight"
-                        className="mt-0.5 h-4 w-4 shrink-0 text-slate-600 transition-all group-hover:translate-x-0.5 group-hover:text-violet-300"
+                        className="mt-0.5 h-4 w-4 shrink-0 text-slate-600 transition-all group-hover:translate-x-0.5 group-hover:text-sky-300"
                         strokeWidth={2.2}
                       />
                       <span className="min-w-0">
@@ -157,7 +157,7 @@ export default function ContactPage() {
               { t: 'You decide', d: 'A call if you want one. If you would rather just try it, that is fine too.', i: 'Check' },
             ].map((c, i) => (
               <Reveal key={c.t} delay={i * 70} className="mk-card p-6">
-                <span className="mk-mono flex h-9 w-9 items-center justify-center rounded-xl border border-violet-400/25 bg-violet-500/10 text-violet-300">
+                <span className="mk-mono flex h-9 w-9 items-center justify-center rounded-xl border border-sky-400/25 bg-sky-500/10 text-sky-300">
                   {String(i + 1).padStart(2, '0')}
                 </span>
                 <h3 className="mk-h4 mt-4 text-white">{c.t}</h3>

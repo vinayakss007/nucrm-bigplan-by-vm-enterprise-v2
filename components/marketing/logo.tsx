@@ -18,8 +18,8 @@ export function LogoMark({ size = 34, className = '' }: { size?: number; classNa
         width: size,
         height: size,
         borderRadius: size * 0.3,
-        background: 'linear-gradient(148deg, #8b5cf6 0%, #6366f1 55%, #4f46e5 100%)',
-        boxShadow: '0 6px 20px -6px rgba(124,58,237,0.85), inset 0 1px 0 rgba(255,255,255,0.3)',
+        background: 'linear-gradient(148deg, #38bdf8 0%, #3b82f6 55%, #2563eb 100%)',
+        boxShadow: '0 6px 20px -6px rgba(37,99,235,0.85), inset 0 1px 0 rgba(255,255,255,0.35)',
       }}
     >
       <svg viewBox="0 0 32 32" width={size} height={size} aria-hidden>
