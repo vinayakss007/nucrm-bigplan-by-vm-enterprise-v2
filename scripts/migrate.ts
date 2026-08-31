@@ -215,10 +215,37 @@ async function main() {
   }
 
   if (!isYes) {
-    const ok = await confirm(`Apply ${pendingCount} migration(s) to the "${env}" database? (y/N)`);
-    if (!ok) {
-      console.log('[migrate] Aborted by user.');
-      process.exit(0);
+    // Non-interactive contexts (CI, deploy scripts, piped stdin) cannot answer
+    // an interactive y/N prompt — the readline question would hang until the
+    // job times out. Detect that and decide without blocking:
+    //   - non-production targets (local/staging/unknown): auto-proceed. This is
+    //     the CI/deploy happy path and keeps `npm run db:migrate` fail-proof
+    //     for automation.
+    //   - production: fail CLOSED. Refuse to apply unattended; require an
+    //     explicit --yes so a prod migration is always a deliberate act.
+    // Interactive TTYs keep the existing human confirmation prompt.
+    const interactive = Boolean(process.stdin.isTTY) && process.env['CI'] !== 'true';
+
+    if (!interactive) {
+      if (env === 'production') {
+        console.error(
+          '[migrate] ERROR: Refusing to apply migrations to a "production" database ' +
+          'in a non-interactive context without explicit confirmation.\n' +
+          '[migrate] Re-run with --yes (e.g. `npm run db:migrate -- --yes`) to proceed.',
+        );
+        process.exit(1);
+      }
+      console.log(
+        `[migrate] Non-interactive context detected — auto-applying ${pendingCount} ` +
+        `migration(s) to the "${env}" database (use --dry-run to preview, or run in a ` +
+        'TTY to be prompted).',
+      );
+    } else {
+      const ok = await confirm(`Apply ${pendingCount} migration(s) to the "${env}" database? (y/N)`);
+      if (!ok) {
+        console.log('[migrate] Aborted by user.');
+        process.exit(0);
+      }
     }
   }
 
