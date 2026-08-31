@@ -213,17 +213,37 @@ describe('Cursor Pagination - Empty ID', () => {
 // 6. Sequence Processor Locking
 // ---------------------------------------------------------------
 describe('Sequence Processor - Distributed Lock', () => {
-  it('acquireLock returns acquired:true when no Redis (fallback mode)', async () => {
-    // Without REDIS_URL set, acquireLock should return acquired:true (no-op)
+  it('acquireLock fails closed (acquired:false) when no Redis (#M3 default)', async () => {
+    // Without REDIS_URL and without LOCK_FAIL_OPEN, acquireLock must NOT
+    // grant the lock — otherwise every replica runs the fallback at once.
     const originalRedisUrl = process.env['REDIS_URL'];
+    const originalFailOpen = process.env['LOCK_FAIL_OPEN'];
     delete process.env['REDIS_URL'];
+    delete process.env['LOCK_FAIL_OPEN'];
     try {
       // Force reimport to get fresh state
+      const { acquireLock } = await import('@/lib/cache/index');
+      const result = await acquireLock('test:lock', 10);
+      expect(result.acquired).toBe(false);
+    } finally {
+      if (originalRedisUrl) process.env['REDIS_URL'] = originalRedisUrl;
+      if (originalFailOpen) process.env['LOCK_FAIL_OPEN'] = originalFailOpen;
+    }
+  });
+
+  it('acquireLock honors LOCK_FAIL_OPEN=true legacy opt-out', async () => {
+    const originalRedisUrl = process.env['REDIS_URL'];
+    const originalFailOpen = process.env['LOCK_FAIL_OPEN'];
+    delete process.env['REDIS_URL'];
+    process.env['LOCK_FAIL_OPEN'] = 'true';
+    try {
       const { acquireLock } = await import('@/lib/cache/index');
       const result = await acquireLock('test:lock', 10);
       expect(result.acquired).toBe(true);
     } finally {
       if (originalRedisUrl) process.env['REDIS_URL'] = originalRedisUrl;
+      if (originalFailOpen) process.env['LOCK_FAIL_OPEN'] = originalFailOpen;
+      else delete process.env['LOCK_FAIL_OPEN'];
     }
   });
 });
