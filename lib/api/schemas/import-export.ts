@@ -4,14 +4,14 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { z } from 'zod';
+import { requiredString } from './common';
 
 // ── Import schemas ──
 export const importSchema = z.object({
-  file_url: z.string().url('Invalid file URL'),
-  entity_type: z.enum(['contacts', 'deals', 'companies']).default('contacts'),
+  entity_type: z.enum(['contacts', 'companies', 'deals', 'leads']),
+  data: z.array(z.record(z.string(), z.unknown())).min(1, 'At least one record required').max(10000),
   mapping: z.record(z.string(), z.string()).optional().default({}),
   skip_duplicates: z.boolean().optional().default(true),
-  dry_run: z.boolean().optional().default(false),
 });
 
 export const importContactsSchema = z.object({
@@ -41,27 +41,26 @@ export const convertLeadSchema = z.object({
 
 // ── Search schema ──
 export const searchSchema = z.object({
-  q: z.string().trim().min(1).max(500),
-  entity_type: z.enum(['contacts', 'deals', 'companies', 'tickets']).optional(),
-  limit: z.coerce.number().int().min(1).max(100).optional().default(20),
+  q: requiredString.max(200),
+  entity_types: z.array(z.enum(['contacts', 'companies', 'deals', 'leads', 'tasks', 'tickets'])).optional(),
+  offset: z.coerce.number().int().min(0).default(0),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
 });
 
 // ── Bulk operations schemas ──
 export const bulkDeleteSchema = z.object({
   ids: z.array(z.string().uuid()).min(1, 'At least one ID required').max(1000),
-  entity_type: z.string().max(50).optional(),
 });
 
 export const bulkUpdateSchema = z.object({
   ids: z.array(z.string().uuid()).min(1, 'At least one ID required').max(1000),
-  updates: z.record(z.string(), z.unknown()).refine(obj => Object.keys(obj).length > 0, 'At least one update field required'),
-  entity_type: z.string().max(50).optional(),
+  updates: z.record(z.string(), z.unknown()),
 });
 
 // ── Export schema ──
 export const exportSchema = z.object({
-  entity_type: z.enum(['contacts', 'deals', 'companies', 'tickets', 'invoices', 'quotes']),
-  format: z.enum(['csv', 'xlsx', 'json']).optional().default('csv'),
+  entity_type: z.enum(['contacts', 'companies', 'deals', 'leads', 'tasks', 'tickets', 'invoices']),
+  format: z.enum(['csv', 'json']).optional().default('csv'),
   filters: z.record(z.string(), z.unknown()).optional().default({}),
   fields: z.array(z.string()).optional(),
 });

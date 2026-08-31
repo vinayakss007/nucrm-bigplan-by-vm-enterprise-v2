@@ -171,26 +171,31 @@ describe('api/schemas', () => {
     expect(result.password).toBe('newpassword');
   });
 
+  // NOTE: The canonical 2FA schemas live in '@/lib/api/schemas/auth' (the live
+  // routes import them from there). Their field is `totp_code`. The former
+  // monolith copies (which used `token`/`password`) were dead + wrong and were
+  // removed for a single source of truth (#1883).
   it('verify2faSchema validates a 6-digit totp_code', async () => {
-    const { verify2faSchema } = await import('@/lib/api/schemas');
-    const result = verify2faSchema.parse({ token: '123456', password: 'password123' });
-    expect(result.token).toBe('123456');
+    const { verify2faSchema } = await import('@/lib/api/schemas/auth');
+    const result = verify2faSchema.parse({ totp_code: '123456' });
+    expect(result.totp_code).toBe('123456');
   });
 
   it('verify2faSchema rejects a non-6-digit totp_code', async () => {
-    const { verify2faSchema } = await import('@/lib/api/schemas');
-    expect(() => verify2faSchema.parse({ token: '12345', password: 'password123' })).toThrow();
-    expect(() => verify2faSchema.parse({ token: '1234567', password: 'password123' })).toThrow();
-    expect(() => verify2faSchema.parse({ token: 'abcdef', password: 'password123' })).toThrow();
-    expect(() => verify2faSchema.parse({ password: 'password123' })).toThrow();
+    const { verify2faSchema } = await import('@/lib/api/schemas/auth');
+    expect(() => verify2faSchema.parse({ totp_code: '12345' })).toThrow();
+    expect(() => verify2faSchema.parse({ totp_code: '1234567' })).toThrow();
+    expect(() => verify2faSchema.parse({ totp_code: 'abcdef' })).toThrow();
+    expect(() => verify2faSchema.parse({})).toThrow();
   });
 
   it('disable2faSchema requires a password and accepts an optional totp_code', async () => {
-    const { disable2faSchema } = await import('@/lib/api/schemas');
-    expect(() => disable2faSchema.parse({ password: 'mypassword' })).toThrow();
-    expect(disable2faSchema.parse({ password: 'mypassword', token: '123456' }).token).toBe('123456');
+    const { disable2faSchema } = await import('@/lib/api/schemas/auth');
+    // password alone is valid (totp_code is optional)
+    expect(disable2faSchema.parse({ password: 'mypassword' }).password).toBe('mypassword');
+    expect(disable2faSchema.parse({ password: 'mypassword', totp_code: '123456' }).totp_code).toBe('123456');
     expect(() => disable2faSchema.parse({})).toThrow();
-    expect(() => disable2faSchema.parse({ password: 'mypassword', token: '123' })).toThrow();
+    expect(() => disable2faSchema.parse({ password: 'mypassword', totp_code: '123' })).toThrow();
   });
 
   it('createInvoiceSchema requires at least one line item', async () => {

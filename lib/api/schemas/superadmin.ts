@@ -83,8 +83,11 @@ export const superadminInviteMemberSchema = z.object({
   full_name: z.string().trim().max(200).optional(),
   role_slug: z.string().trim().max(50).optional().default('user'),
 });
-// Alias for backward compatibility
-export const inviteMemberSchema = superadminInviteMemberSchema;
+// NOTE: no `inviteMemberSchema` alias here. The name `inviteMemberSchema` is
+// owned by the canonical monolith (lib/api/schemas.ts) — both live importers
+// (superadmin + tenant members routes) use that one. The former alias had no
+// importers and only collided with the canonical name (#1883). Import
+// `superadminInviteMemberSchema` explicitly if the superadmin variant is needed.
 
 // ── Tenant schemas ──
 export const createTenantSchema = z.object({
@@ -107,6 +110,10 @@ export const updateTenantSchema = z.object({
   plan_id: z.string().max(50).optional(),
   admin_notes: z.string().max(2000).optional().nullable(),
   manual_paid_until: z.string().date().optional().nullable(),
+  logo_url: z.string().max(500).optional().nullable(),
+  custom_domain: z.string().max(255).optional().nullable(),
+  trial_ends_at: z.string().date().optional().nullable(),
+  billing_type: z.string().max(50).optional(),
 });
 
 export const platformSettingsSchema = z.record(
@@ -116,7 +123,7 @@ export const platformSettingsSchema = z.record(
 
 // ── Backup schemas ──
 export const createBackupSchema = z.object({
-  backup_type: z.enum(['full', 'schema', 'selective']).default('full'),
+  backup_type: z.enum(['full', 'schema', 'selective']).optional().default('full'),
   action: z.literal('restore').optional(),
   backupId: z.string().uuid().optional(),
   tenant_id: z.string().uuid().optional(),

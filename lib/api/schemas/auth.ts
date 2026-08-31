@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { z } from 'zod';
+import { requiredString } from './common';
 
 // ── Auth schemas ──
 export const signupSchema = z.object({
@@ -31,7 +32,7 @@ export const resetPasswordSchema = z.object({
 
 // ── 2FA schemas ──
 export const setup2faSchema = z.object({
-  password: z.string().min(8),
+  password: requiredString.min(8),
 });
 
 /**
@@ -58,8 +59,8 @@ export const disable2faSchema = z.object({
 
 // ── Password change schema ──
 export const changePasswordSchema = z.object({
-  current_password: z.string().trim().min(1),
-  new_password: z.string().min(8, 'Password must be at least 8 characters'),
+  current_password: requiredString.min(1),
+  new_password: requiredString.min(12, 'Password must be at least 12 characters'),
 });
 
 // ── SSO ──
