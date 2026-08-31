@@ -365,10 +365,10 @@ export async function sendSmartEmail(options: SendOptions) {
     
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
-    logger.error('[EmailRouter] provider failed', { provider: provider.name, error: err instanceof Error ? err.message : String(err) });
-    updateUsage(providerKey, false, err.message);
+  } catch (err: unknown) {
+    const errMessage = err instanceof Error ? err.message : String(err);
+    logger.error('[EmailRouter] provider failed', { provider: provider.name, error: errMessage });
+    updateUsage(providerKey, false, errMessage);
 
     // Try fallback providers for critical emails
     if (emailType === 'critical') {
