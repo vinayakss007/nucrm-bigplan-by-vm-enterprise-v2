@@ -43,6 +43,9 @@ jobs:
       - name: RLS route-coverage guard (#1838)
         run: npm run guard:rls
 
+      - name: Schema drift guard (#1883)
+        run: npm run guard:schemas
+
       - name: Route-boundary coverage guard (#1840)
         run: npm run guard:boundaries
 

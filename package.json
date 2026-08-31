@@ -45,6 +45,7 @@
     "start": "next start",
     "lint": "eslint .",
     "guard:rls": "node scripts/check-rls-route-coverage.mjs",
+    "guard:schemas": "node scripts/check-schema-drift.mjs",
     "guard:boundaries": "node scripts/check-route-boundaries.mjs",
     "guard:filesize": "node scripts/check-file-size.mjs",
     "typecheck": "npx tsc --noEmit --pretty",
