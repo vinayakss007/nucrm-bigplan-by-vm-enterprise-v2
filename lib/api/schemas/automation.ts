@@ -4,31 +4,35 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { z } from 'zod';
-import { requiredString } from './common';
+import { requiredString, uuid, urlField } from './common';
 
 // ── Automation schemas ──
 export const createAutomationSchema = z.object({
-  name: requiredString.max(200, 'Name too long'),
-  description: z.string().trim().max(2000).nullable().optional(),
-  trigger_type: requiredString.max(100),
-  trigger_config: z.record(z.string(), z.unknown()).optional().default({}),
-  actions: z.array(z.record(z.string(), z.unknown())).optional().default([]),
-  conditions: z.array(z.record(z.string(), z.unknown())).optional().default([]),
+  name: requiredString.max(200),
+  description: z.string().trim().max(1000).nullable().optional(),
+  event: requiredString.max(100),
+  conditions: z.array(z.object({
+    field: z.string(),
+    operator: z.string(),
+    value: z.unknown(),
+  })).optional().default([]),
+  actions: z.array(z.object({
+    type: z.string(),
+  config: z.record(z.string(), z.unknown()).optional().default({}),
+  })).min(1, 'At least one action required'),
   is_active: z.boolean().optional().default(true),
 });
 
-export const updateAutomationSchema = createAutomationSchema.partial().extend({
-  conditions: z.array(z.record(z.string(), z.unknown())).optional(),
-});
+export const updateAutomationSchema = createAutomationSchema.partial();
 
 // ── Workflow schemas ──
 export const createWorkflowSchema = z.object({
-  name: requiredString.max(200, 'Name too long'),
-  description: z.string().trim().max(2000).nullable().optional(),
-  trigger_type: requiredString.max(100),
+  name: requiredString.max(200),
+  description: z.string().trim().max(1000).nullable().optional(),
+  trigger_type: z.enum(['event', 'schedule', 'manual']).optional().default('event'),
   trigger_config: z.record(z.string(), z.unknown()).optional().default({}),
-  steps: z.array(z.record(z.string(), z.unknown())).optional().default([]),
   nodes: z.array(z.record(z.string(), z.unknown())).optional().default([]),
+  edges: z.array(z.record(z.string(), z.unknown())).optional().default([]),
   is_active: z.boolean().optional().default(true),
 });
 
@@ -36,63 +40,60 @@ export const updateWorkflowSchema = createWorkflowSchema.partial();
 
 // ── Sequence schemas ──
 export const createSequenceSchema = z.object({
-  name: requiredString.max(200, 'Name too long'),
-  description: z.string().trim().max(2000).nullable().optional(),
-  status: z.enum(['active', 'draft', 'paused', 'completed']).optional().default('draft'),
+  name: requiredString.max(200),
+  description: z.string().trim().max(1000).nullable().optional(),
+  status: z.enum(['draft', 'active', 'paused', 'completed']).optional().default('draft'),
   steps: z.array(z.object({
-    type: z.enum(['email', 'delay', 'condition', 'task']),
-    config: z.record(z.string(), z.unknown()).optional().default({}),
-    delay_days: z.coerce.number().int().min(0).optional().default(0),
+    type: z.enum(['email', 'task', 'wait']),
+    delay_minutes: z.coerce.number().int().min(0).optional().default(0),
+    template_id: uuid,
+    subject: z.string().max(200).optional(),
+    body: z.string().max(10000).optional(),
   })).optional().default([]),
-  is_active: z.boolean().optional().default(true),
 });
 
 export const updateSequenceSchema = createSequenceSchema.partial();
 
 // ── Email Template schemas ──
 export const createEmailTemplateSchema = z.object({
-  name: requiredString.max(200, 'Template name too long'),
-  subject: requiredString,
-  body: requiredString,
-  html_body: z.string().max(100000).optional().nullable(),
-  category: z.string().trim().max(50).optional(),
-  tags: z.array(z.string()).optional().default([]),
-  metadata: z.record(z.string(), z.unknown()).optional().nullable(),
-  is_system: z.boolean().optional().default(false),
-  language: z.string().trim().max(10).optional(),
-  reply_to: z.string().email().optional().nullable(),
-  cc: z.array(z.string().email()).optional().default([]),
-  bcc: z.array(z.string().email()).optional().default([]),
+  name: requiredString.max(200),
+  subject: requiredString.max(200),
+  body: requiredString.max(50000),
+  category: z.string().trim().max(100).nullable().optional(),
+  variables: z.array(z.string()).optional().default([]),
 });
 
 export const updateEmailTemplateSchema = createEmailTemplateSchema.partial();
 
 // ── Form schemas ──
 export const createFormSchema = z.object({
-  name: requiredString.max(200, 'Form name too long'),
-  slug: z.string().trim().max(200).optional(),
-  description: z.string().trim().max(2000).nullable().optional(),
-  fields: z.array(z.record(z.string(), z.unknown())).optional().default([]),
-  submit_action: z.enum(['message', 'redirect', 'webhook']).optional().default('message'),
-  submit_url: z.string().url().optional().nullable(),
-  redirect_url: z.string().url().optional().nullable(),
-  success_message: z.string().trim().max(500).optional().nullable(),
-  notification_emails: z.array(z.string().email()).optional().default([]),
+  name: requiredString.max(200),
+  description: z.string().trim().max(1000).nullable().optional(),
+  fields: z.array(z.object({
+    id: z.string(),
+    label: z.string(),
+    type: z.string(),
+    required: z.boolean().optional().default(false),
+    options: z.array(z.string()).optional(),
+  })).min(1, 'At least one field required').refine(
+    (fields) => new Set(fields.map(f => f.id)).size === fields.length,
+    { message: 'Duplicate field IDs are not allowed' }
+  ),
   is_active: z.boolean().optional().default(true),
-  theme: z.string().trim().max(50).optional(),
+  redirect_url: urlField,
+  success_message: z.string().trim().max(500).nullable().optional(),
 });
 
 export const updateFormSchema = createFormSchema.partial();
 
 // ── Webhook schemas ──
 export const createWebhookSchema = z.object({
-  url: z.string().url('Invalid webhook URL'),
+  name: requiredString.max(200),
+  url: z.string().max(500),
   events: z.array(z.string()).min(1, 'At least one event required'),
-  name: z.string().trim().max(200).optional(),
-  secret: z.string().trim().max(500).optional(),
-  headers: z.record(z.string(), z.string()).optional(),
+  secret: z.string().trim().max(100).nullable().optional(),
   is_active: z.boolean().optional().default(true),
-  description: z.string().trim().max(2000).optional(),
+  headers: z.record(z.string(), z.string()).optional().default({}),
 });
 
 export const updateWebhookSchema = createWebhookSchema.partial();

@@ -660,15 +660,11 @@ export const setup2faSchema = z.object({
   password: requiredString.min(8),
 });
 
-export const verify2faSchema = z.object({
-  token: z.string().regex(/^\d{6}$/, 'Invalid TOTP token'),
-  password: requiredString.min(8),
-});
-
-export const disable2faSchema = z.object({
-  token: z.string().regex(/^\d{6}$/, 'Invalid TOTP token'),
-  password: requiredString.min(8),
-});
+// NOTE: verify2faSchema / disable2faSchema are intentionally NOT defined here.
+// The live 2FA routes import them from '@/lib/api/schemas/auth', which is the
+// canonical source (its field is `totp_code`, matching the client + route). The
+// former monolith copies here used `token`/`password` and were dead + wrong, so
+// they were removed to keep a single source of truth (#1883).
 
 // ── Notification preference schemas ──
 export const updateNotificationPrefsSchema = z.object({

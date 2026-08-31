@@ -40,11 +40,32 @@ function stripComments(s) {
     .replace(/(^|[^:])\/\/[^\n]*/g, '$1'); // line comments (avoid eating "://")
 }
 
+// Extract each `export const NAME = <body>;` by scanning from `=` to the first
+// TOP-LEVEL `;` (respecting brackets and strings), so trailing comments or the
+// next declaration are never captured into the body. Judged on Zod STRUCTURE.
 function extract(src) {
   const map = {};
-  const re = /export const (\w+Schema)\s*=\s*([\s\S]*?);\n(?=\nexport |\nconst |\n\/\/|\nexport|$)/g;
+  const re = /export const (\w+Schema)\s*=\s*/g;
   let m;
-  while ((m = re.exec(src))) map[m[1]] = stripComments(m[2]).replace(/\s+/g, ' ').trim();
+  while ((m = re.exec(src))) {
+    let i = re.lastIndex;
+    let depth = 0;
+    let inStr = null;
+    for (; i < src.length; i++) {
+      const c = src[i];
+      const prev = src[i - 1];
+      if (inStr) {
+        if (c === inStr && prev !== '\\') inStr = null;
+        continue;
+      }
+      if (c === "'" || c === '"' || c === '`') { inStr = c; continue; }
+      if (c === '(' || c === '[' || c === '{') depth++;
+      else if (c === ')' || c === ']' || c === '}') depth--;
+      else if (c === ';' && depth === 0) break;
+    }
+    map[m[1]] = stripComments(src.slice(re.lastIndex, i)).replace(/\s+/g, ' ').trim();
+    re.lastIndex = i;
+  }
   return map;
 }
 

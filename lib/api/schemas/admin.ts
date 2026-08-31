@@ -4,7 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { z } from 'zod';
-import { requiredString } from './common';
+import { requiredString, uuid, urlField } from './common';
 
 // ── Custom Field schemas ──
 const customFieldTypes = ['text', 'number', 'date', 'select', 'multiselect', 'boolean', 'url', 'email', 'phone', 'currency', 'json'] as const;
@@ -95,11 +95,7 @@ export const updateScheduledReportSchema = createScheduledReportSchema.partial()
 export const updateTenantSettingsSchema = z.object({
   name: z.string().trim().max(200).nullable().optional(),
   domain: z.string().max(255).optional().nullable(),
-  logo_url: z.string().max(500).optional().nullable().or(z.literal('')).transform(v => {
-    if (!v) return v;
-    if (v.startsWith('http://') || v.startsWith('https://')) return v;
-    return `https://${v}`;
-  }),
+  logo_url: urlField,
   primary_color: z.string().regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/).optional().nullable(),
   timezone: z.string().trim().max(50).nullable().optional(),
   currency: z.string().length(3).optional(),
@@ -135,9 +131,10 @@ export const testEmailSchema = z.object({
 
 // ── Role schemas ──
 export const createRoleSchema = z.object({
-  name: requiredString.max(100, 'Role name too long'),
+  name: requiredString.max(100),
   description: z.string().trim().max(500).nullable().optional(),
   permissions: z.record(z.string(), z.boolean()).optional().default({}),
+  is_system: z.boolean().optional().default(false),
 });
 
 export const updateRoleSchema = createRoleSchema.partial();
@@ -181,28 +178,22 @@ export const createLeadScoringRuleSchema = z.object({
 export const updateLeadScoringRuleSchema = createLeadScoringRuleSchema.partial();
 
 // ── Inbound webhook field mapping schemas ──
-// The five entities the inbound webhook endpoint dispatches to.
-const webhookMappingEntities = ['contact', 'lead', 'deal', 'company', 'task'] as const;
-const webhookMappingTransforms = ['string', 'number', 'boolean', 'date', 'trim', 'lowercase'] as const;
-
 export const createWebhookFieldMappingSchema = z.object({
-  // apiKeyId omitted or null = the mapping applies to every key in the tenant.
-  apiKeyId: z.string().uuid().nullable().optional(),
-  entityType: z.enum(webhookMappingEntities),
-  // Stored exactly as the sender writes it, so no case normalisation here.
-  sourceKey: requiredString.max(200, 'sourceKey must be at most 200 characters'),
-  targetType: z.enum(['custom_field', 'native']).optional().default('custom_field'),
+  apiKeyId: uuid,
+  entityType: z.enum(['contact', 'lead', 'deal', 'company', 'task']),
+  sourceKey: requiredString.max(200),
+  targetType: z.enum(['custom_field', 'native']).default('custom_field'),
   targetKey: requiredString.max(200),
-  transform: z.enum(webhookMappingTransforms).nullable().optional(),
-  isActive: z.boolean().optional().default(true),
+  transform: z.enum(['string', 'number', 'boolean', 'date', 'trim', 'lowercase']).nullable().optional(),
+  isActive: z.boolean().default(true),
 });
 
 export const updateWebhookFieldMappingSchema = z.object({
   id: z.string().uuid(),
-  sourceKey: z.string().trim().min(1).max(200, 'sourceKey must be at most 200 characters').optional(),
+  sourceKey: requiredString.max(200).optional(),
   targetType: z.enum(['custom_field', 'native']).optional(),
-  targetKey: z.string().trim().min(1).max(200).optional(),
-  transform: z.enum(webhookMappingTransforms).nullable().optional(),
+  targetKey: requiredString.max(200).optional(),
+  transform: z.enum(['string', 'number', 'boolean', 'date', 'trim', 'lowercase']).nullable().optional(),
   isActive: z.boolean().optional(),
 });
 
