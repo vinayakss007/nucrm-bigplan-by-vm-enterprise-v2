@@ -4,7 +4,9 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import { Clock, Plus, Play, Pause, Trash2, Mail, FileText, X } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
 import { confirmThen } from '@/components/ui/confirm-dialog';
@@ -36,56 +38,55 @@ interface ScheduledReport {
   status: string;
 }
 
+const SCHEDULED_QUERY = ['tenant', 'reports', 'scheduled'] as const;
+
 export default function ScheduledReportsPage() {
-  const [reports, setReports] = useState<ScheduledReport[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [showCreate, setShowCreate] = useState(false);
 
-  const load = async (signal?: AbortSignal) => {
-    try {
-      const res = await fetch('/api/tenant/reports/scheduled', { signal });
-      const d = await res.json();
-      if (signal?.aborted) return;
-      setReports(d.data || []);
-    } catch (e) {
-      if ((e as Error)?.name === 'AbortError') return;
-      toast.error('Failed to load');
-    }
-    if (signal?.aborted) return;
-    setLoading(false);
-  };
+  // #1328: list via TanStack Query (was raw fetch + useEffect).
+  const { data, isLoading: loading, error } = useApiQuery<{ data?: ScheduledReport[] }>(
+    SCHEDULED_QUERY,
+    '/api/tenant/reports/scheduled',
+  );
+  const reports: ScheduledReport[] = data?.data ?? [];
+  if (error) toast.error('Failed to load');
 
-  useEffect(() => {
-    const controller = new AbortController();
-    load(controller.signal);
-    return () => controller.abort();
-  }, []);
+  const load = () => queryClient.invalidateQueries({ queryKey: SCHEDULED_QUERY });
 
-  const toggleStatus = async (id: string, current: string) => {
-    const newStatus = current === 'active' ? 'paused' : 'active';
-    try {
+  const toggleMutation = useMutation({
+    mutationFn: async ({ id, newStatus }: { id: string; newStatus: string }) => {
       const res = await fetch('/api/tenant/reports/scheduled', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id, status: newStatus }),
       });
-      if (res.ok) { toast.success(newStatus === 'active' ? 'Report activated' : 'Report paused'); load(); }
-      else toast.error('Failed');
-    } catch { toast.error('Failed'); }
+      if (!res.ok) throw new Error('Failed');
+      return newStatus;
+    },
+    onSuccess: (newStatus) => { toast.success(newStatus === 'active' ? 'Report activated' : 'Report paused'); load(); },
+    onError: () => toast.error('Failed'),
+  });
+  const toggleStatus = (id: string, current: string) => {
+    toggleMutation.mutate({ id, newStatus: current === 'active' ? 'paused' : 'active' });
   };
 
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch('/api/tenant/reports/scheduled', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+      });
+      if (!res.ok) throw new Error('Failed');
+    },
+    onSuccess: () => { toast.success('Deleted'); load(); },
+    onError: () => toast.error('Failed'),
+  });
   const deleteReport = async (id: string) => {
     const report = reports.find(r => r.id === id);
     await confirmThen(`Delete scheduled report "${report?.name || 'this report'}"?`, async () => {
-      try {
-        const res = await fetch('/api/tenant/reports/scheduled', {
-          method: 'DELETE',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id }),
-        });
-        if (res.ok) { toast.success('Deleted'); load(); }
-        else toast.error('Failed');
-      } catch { toast.error('Failed'); }
+      deleteMutation.mutate(id);
     });
   };
 

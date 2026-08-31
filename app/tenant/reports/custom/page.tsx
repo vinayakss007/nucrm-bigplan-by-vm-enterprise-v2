@@ -5,11 +5,12 @@
  */
 'use client';
 import { useState, useEffect } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import { FilePlus, Play, Save, Trash2, Download, Plus, X, Filter, Columns } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import toast from 'react-hot-toast';
-import { logError } from '@/lib/errors-client';
 
 const REPORT_TYPES = [
   { id: 'contacts', label: 'Contacts', columns: ['first_name','last_name','email','phone','job_title','lead_status','lead_source','score','lifecycle_stage','company_name','city','country','created_at'] },
@@ -49,36 +50,31 @@ interface ReportFilter {
 
 type ReportRow = Record<string, string | number | boolean | null | undefined>;
 
+const CUSTOM_REPORTS_QUERY = ['tenant', 'reports', 'custom'] as const;
+
 export default function CustomReportBuilder() {
-  const [savedReports, setSavedReports] = useState<SavedReport[]>([]);
+  const queryClient = useQueryClient();
   const [reportType, setReportType] = useState<ReportTypeId>('contacts');
   const [selectedColumns, setSelectedColumns] = useState<string[]>([]);
   const [filters, setFilters] = useState<ReportFilter[]>([]);
   const [results, setResults] = useState<ReportRow[]>([]);
-  const [loading, setLoading] = useState(false);
   const [reportName, setReportName] = useState('');
   const [showSaved, setShowSaved] = useState(false);
 
   const currentType = REPORT_TYPES.find(r => r.id === reportType)!;
 
+  // #1328: saved reports via TanStack Query (was raw fetch + useEffect).
+  const { data: savedData } = useApiQuery<{ data?: SavedReport[] }>(
+    CUSTOM_REPORTS_QUERY,
+    '/api/tenant/reports/custom',
+  );
+  const savedReports: SavedReport[] = savedData?.data ?? [];
+  const loadSaved = () => queryClient.invalidateQueries({ queryKey: CUSTOM_REPORTS_QUERY });
+
+  // Reset the visible columns whenever the report type changes.
   useEffect(() => {
     setSelectedColumns(currentType.columns.slice(0, 5));
-    const controller = new AbortController();
-    loadSaved(controller.signal);
-    return () => controller.abort();
   }, [reportType, currentType.columns]);
-
-  const loadSaved = async (signal?: AbortSignal) => {
-    try {
-      const res = await fetch('/api/tenant/reports/custom', { signal });
-      const d = await res.json();
-      if (signal?.aborted) return;
-      setSavedReports(d.data || []);
-    } catch (err) {
-      if ((err as Error)?.name === 'AbortError') return;
-      logError({ error: err, context: "catch:[context]" });
-    }
-  };
 
   const toggleColumn = (col: string) => {
     setSelectedColumns(prev => prev.includes(col) ? prev.filter(c => c !== col) : [...prev, col]);
@@ -92,10 +88,8 @@ export default function CustomReportBuilder() {
 
   const removeFilter = (i: number) => setFilters(prev => prev.filter((_, j) => j !== i));
 
-  const runReport = async () => {
-    if (selectedColumns.length === 0) { toast.error('Select at least one column'); return; }
-    setLoading(true);
-    try {
+  const runMutation = useMutation({
+    mutationFn: async () => {
       const res = await fetch('/api/tenant/reports/run', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -105,22 +99,29 @@ export default function CustomReportBuilder() {
           limit: 500,
         }),
       });
-      const d = await res.json();
-      if (!res.ok) { toast.error(d.error || 'Failed'); setLoading(false); return; }
-      const data: ReportRow[] = (d.data || []).map((row: ReportRow) => {
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || 'Failed');
+      return (d.data || []).map((row: ReportRow) => {
         const filtered: ReportRow = {};
         selectedColumns.forEach(col => { filtered[col] = row[col]; });
         return filtered;
-      });
+      }) as ReportRow[];
+    },
+    onSuccess: (data) => {
       setResults(data);
       if (!data.length) toast('No data found', { icon: '📊' });
-    } catch (err: unknown) { toast.error(err instanceof Error ? err.message : 'Unknown error'); }
-    setLoading(false);
+    },
+    onError: (err: Error) => toast.error(err.message || 'Unknown error'),
+  });
+  const loading = runMutation.isPending;
+
+  const runReport = () => {
+    if (selectedColumns.length === 0) { toast.error('Select at least one column'); return; }
+    runMutation.mutate();
   };
 
-  const saveReport = async () => {
-    if (!reportName.trim()) { toast.error('Enter a report name'); return; }
-    try {
+  const saveMutation = useMutation({
+    mutationFn: async () => {
       const res = await fetch('/api/tenant/reports/custom', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -131,9 +132,18 @@ export default function CustomReportBuilder() {
           filters,
         }),
       });
-      if (res.ok) { toast.success('Report saved'); loadSaved(); }
-      else { const d = await res.json(); toast.error(d.error || 'Failed'); }
-    } catch { toast.error('Failed'); }
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || 'Failed');
+      }
+    },
+    onSuccess: () => { toast.success('Report saved'); loadSaved(); },
+    onError: (e: Error) => toast.error(e.message || 'Failed'),
+  });
+
+  const saveReport = () => {
+    if (!reportName.trim()) { toast.error('Enter a report name'); return; }
+    saveMutation.mutate();
   };
 
   const loadReport = (r: SavedReport) => {
@@ -144,14 +154,19 @@ export default function CustomReportBuilder() {
     setShowSaved(false);
   };
 
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch('/api/tenant/reports/custom', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
+      if (!res.ok) throw new Error('Failed');
+    },
+    onSuccess: () => { toast.success('Deleted'); loadSaved(); },
+    onError: () => toast.error('Failed'),
+  });
+
   const deleteSaved = async (id: string) => {
     const report = savedReports.find(r => r.id === id);
     await confirmThen(`Delete saved report "${report?.name || 'this report'}"?`, async () => {
-      try {
-        await fetch('/api/tenant/reports/custom', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
-        toast.success('Deleted');
-        loadSaved();
-      } catch { toast.error('Failed'); }
+      deleteMutation.mutate(id);
     });
   };
 

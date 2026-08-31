@@ -5,6 +5,8 @@
  */
 'use client';
 import { useState, useEffect } from 'react';
+import { useMutation } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import { useParams } from 'next/navigation';
 import { FileText, CheckCircle, Loader2, AlertCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -16,55 +18,36 @@ export default function PublicFormPage() {
   const params = useParams();
   const formId = params['id'] as string;
   
-  const [form, setForm] = useState<PublicForm | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [values, setValues] = useState<Record<string, unknown>>({});
 
+  // #1328: public form via TanStack Query (was raw fetch + useEffect).
+  const { data: form, isLoading: loading, error } = useApiQuery<PublicForm>(
+    ['forms', 'public', formId],
+    `/api/tenant/forms/public/${formId}`,
+  );
   useEffect(() => {
-    const controller = new AbortController();
-    const { signal } = controller;
-    const loadForm = async () => {
-      try {
-        const res = await fetch(`/api/tenant/forms/public/${formId}`, { signal });
-        const data = await res.json();
-        if (signal.aborted) return;
-        if (!res.ok) throw new Error(data.error);
-        setForm(data);
-      } catch (err: unknown) {
-        if ((err as Error)?.name === 'AbortError') return;
-        toast.error(err instanceof Error ? err.message : 'Failed to load form');
-      } finally {
-        if (signal.aborted) return;
-        setLoading(false);
-      }
-    };
-    loadForm();
-    return () => controller.abort();
-  }, [formId]);
+    if (error) toast.error(error.message || 'Failed to load form');
+  }, [error]);
 
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSubmitting(true);
-    
-    try {
+  const submitMutation = useMutation({
+    mutationFn: async () => {
       const res = await fetch('/api/forms/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ form_id: formId, values }),
       });
-      
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error);
-      
-      setSubmitted(true);
-      toast.success('Form submitted successfully!');
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to submit form');
-    } finally {
-      setSubmitting(false);
-    }
+    },
+    onSuccess: () => { setSubmitted(true); toast.success('Form submitted successfully!'); },
+    onError: (err: Error) => toast.error(err.message || 'Failed to submit form'),
+  });
+  const submitting = submitMutation.isPending;
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    submitMutation.mutate();
   };
 
   const updateValue = (key: string, value: unknown) => {
