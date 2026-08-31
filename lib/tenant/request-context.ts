@@ -31,6 +31,9 @@ export interface RequestContext {
   permissions: Record<string, boolean>;
   isAdmin: boolean;
   isSuperAdmin: boolean;
+  // #1836: epoch-ms of the role's updated_at when this context was built, so an
+  // in-place permission edit can be detected on the cache-hit path.
+  roleVersion?: number;
   authMethod?: 'jwt' | 'api_key';
   cachedAt: number;
 }
