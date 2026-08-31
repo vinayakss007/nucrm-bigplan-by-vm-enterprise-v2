@@ -15,6 +15,7 @@ import { scoreLead, bulkScoreLeads } from '@/lib/ai/scoring';
 import { requireAiFeature } from '@/lib/ai/plan-gate';
 import { readJsonBody } from '@/lib/api/validate';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 /**
  * POST /api/tenant/ai/score
@@ -33,6 +34,9 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     if (!can(ctx, 'contacts.view_all')) {
       return NextResponse.json({ error: 'Permission denied' }, { status: 403 });
     }
+
+    const limited = await checkRateLimit(request, { action: 'ai_score', max: 30, windowMinutes: 60 });
+    if (limited) return limited;
 
     let body;
     try { body = await readJsonBody(request); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }

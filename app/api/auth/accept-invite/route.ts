@@ -8,6 +8,7 @@ import { logError } from '@/lib/errors-server';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
+import { checkRateLimit } from '@/lib/rate-limit';
 import { cookies } from 'next/headers';
 import { verifyToken } from '@/lib/auth/session';
 import { db } from '@/drizzle/db';
@@ -24,6 +25,9 @@ export async function POST(request: NextRequest) {
     if (!token) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     const payload = await verifyToken(token);
     if (!payload) return NextResponse.json({ error: 'Invalid session' }, { status: 401 });
+
+    const limited = await checkRateLimit(request, { action: 'accept-invite', max: 10, windowMinutes: 15 });
+    if (limited) return limited;
 
     const body = await readJsonBody(request);
     const validated = validateBody(schema, body);
