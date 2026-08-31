@@ -53,14 +53,18 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ publ
       return NextResponse.json({ error: 'This offer has expired' }, { status: 410 });
     }
 
-    // Mark as viewed if first open
+    // Mark as viewed if first open — status + viewed metadata written atomically
+    // in one db.transaction so the offer is never marked 'viewed' without its
+    // viewed_at/viewed_count metadata (H7). patchOfferMetadata takes the tx.
     if (offer.status === 'sent') {
       const meta = readOfferMetadata(offer);
       if (canTransition(offer.status, 'viewed')) {
-        await db.update(quotes).set({ status: 'viewed', updatedAt: new Date() }).where(eq(quotes.id, offer.id));
-        await patchOfferMetadata(offer.id, offer.tenantId, {
-          viewed_at: new Date().toISOString(),
-          viewed_count: (meta.viewed_count ?? 0) + 1,
+        await db.transaction(async (tx) => {
+          await tx.update(quotes).set({ status: 'viewed', updatedAt: new Date() }).where(eq(quotes.id, offer.id));
+          await patchOfferMetadata(offer.id, offer.tenantId, {
+            viewed_at: new Date().toISOString(),
+            viewed_count: (meta.viewed_count ?? 0) + 1,
+          }, tx);
         });
       }
     } else if (offer.status === 'viewed') {
