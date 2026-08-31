@@ -37,9 +37,30 @@ const STATUS_CFG: Record<string, { label: string; bg: string }> = {
   cancelled: { label: 'Cancelled', bg: 'bg-red-100 text-red-600' },
 };
 
+interface TaskDetail {
+  id: string;
+  title: string;
+  description?: string | null;
+  priority?: string | null;
+  status?: string | null;
+  completed?: boolean | null;
+  /** Server column is `due_date` (aliased `due_at` by the task page query). */
+  due_at?: Date | string | null;
+  created_at?: Date | string | null;
+  completed_at?: Date | string | null;
+  assigned_to?: string | null;
+  assigned_name?: string | null;
+  contact_id?: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
+  deal_id?: string | null;
+  deal_title?: string | null;
+  company_id?: string | null;
+  company_name?: string | null;
+}
+
 interface Props {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  task: any;
+  task: TaskDetail;
   permissions: { canEdit: boolean; canDelete: boolean; canAssign: boolean };
   tenantId: string;
   userId: string;
@@ -57,14 +78,15 @@ export default function TaskDetailClient({ task, permissions, _tenantId, _userId
     description: task.description || '',
     priority: task.priority || 'medium',
     status: task.status || 'pending',
-    due_date: task.due_date ? new Date(task.due_date).toISOString().split('T')[0] : '',
+    due_date: task.due_at ? new Date(task.due_at).toISOString().split('T')[0] : '',
     assigned_to: task.assigned_to || '',
   });
 
   const today = new Date().toISOString().split('T')[0] || '';
-  const isOverdue = !task.completed && task.due_date && task.due_date < today;
-  const pCfg = PRIORITY_CFG[task.priority] || { label: task.priority || 'Medium', color: 'text-slate-500', dot: 'bg-slate-400' };
-  const sCfg = STATUS_CFG[task.status] || { label: task.status || 'Pending', bg: 'bg-slate-100 text-slate-600' };
+  const dueDateStr = task.due_at ? new Date(task.due_at).toISOString().split('T')[0] : '';
+  const isOverdue = !task.completed && !!dueDateStr && dueDateStr < today;
+  const pCfg = (task.priority ? PRIORITY_CFG[task.priority] : undefined) || { label: task.priority || 'Medium', color: 'text-slate-500', dot: 'bg-slate-400' };
+  const sCfg = (task.status ? STATUS_CFG[task.status] : undefined) || { label: task.status || 'Pending', bg: 'bg-slate-100 text-slate-600' };
 
   const toggleComplete = async () => {
     try {
@@ -171,7 +193,7 @@ export default function TaskDetailClient({ task, permissions, _tenantId, _userId
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="admin-card p-4 text-center">
           <Calendar className="w-5 h-5 text-muted-foreground mx-auto mb-1" />
-          <p className="text-lg font-bold">{task.due_date ? formatDate(task.due_date) : '—'}</p>
+          <p className="text-lg font-bold">{task.due_at ? formatDate(task.due_at) : '—'}</p>
           <p className="text-xs text-muted-foreground">Due Date</p>
         </div>
         <div className="admin-card p-4 text-center">
@@ -251,7 +273,7 @@ export default function TaskDetailClient({ task, permissions, _tenantId, _userId
             <FileText className="w-10 h-10 text-muted-foreground/20 mx-auto mb-3" />
             <p className="text-sm font-semibold text-muted-foreground">Task Details</p>
             <p className="text-xs text-muted-foreground mt-1">
-              {task.due_date && `Due: ${formatDate(task.due_date)}`}
+              {task.due_at && `Due: ${formatDate(task.due_at)}`}
             </p>
           </div>
         </div>
