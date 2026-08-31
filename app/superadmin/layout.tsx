@@ -10,6 +10,14 @@ import { db } from '@/drizzle/db';
 import { users, tenants } from '@/drizzle/schema';
 import { eq, sql, count } from 'drizzle-orm';
 import SuperAdminShell from '@/components/superadmin/shell';
+import { logError } from '@/lib/errors-server';
+
+/** Header platform stats — mirrors the ShellStats prop consumed by SuperAdminShell. */
+interface PlatformStats {
+  total_tenants: number;
+  active_tenants: number;
+  open_errors: number;
+}
 
 export default async function SuperAdminLayout({ children }: { children: React.ReactNode }) {
   const cookieStore = await cookies();
@@ -45,10 +53,12 @@ export default async function SuperAdminLayout({ children }: { children: React.R
     open_errors: sql<number>`(SELECT count(*)::int FROM error_logs WHERE resolved = false AND level IN ('error','fatal'))`,
   })
   .from(tenants)
-  .catch((err) => { console.error('[superadmin/layout] stats query failed', err); return [{ total_tenants: 0, active_tenants: 0, open_errors: 0 }]; });
+  .catch((error): PlatformStats[] => {
+    void logError({ error, context: 'superadmin/layout stats query failed' });
+    return [{ total_tenants: 0, active_tenants: 0, open_errors: 0 }];
+  });
 
   return (
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    <SuperAdminShell user={userData} stats={stats as any}>{children}</SuperAdminShell>
+    <SuperAdminShell user={userData} stats={stats ?? null}>{children}</SuperAdminShell>
   );
 }
