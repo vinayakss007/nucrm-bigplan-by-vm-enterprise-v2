@@ -56,12 +56,12 @@ export default function AbetworksPage() {
         <Container>
           <Reveal className="mk-card mk-edge relative overflow-hidden p-7 sm:p-10">
             <div
-              className="pointer-events-none absolute -right-28 -top-28 h-80 w-80 rounded-full bg-violet-500/18 blur-3xl"
+              className="pointer-events-none absolute -right-28 -top-28 h-80 w-80 rounded-full bg-sky-500/20 blur-3xl"
               aria-hidden
             />
             <div className="relative grid gap-10 lg:grid-cols-[1fr_1.1fr]">
               <div>
-                <div className="mk-eyebrow text-violet-300/90">Why we started</div>
+                <div className="mk-eyebrow text-sky-300/90">Why we started</div>
                 <h2 className="mk-h2 mt-3 text-white">{STUDIO.tagline}</h2>
               </div>
               <div className="space-y-4">
@@ -144,7 +144,7 @@ export default function AbetworksPage() {
                     { l: 'Shared foundation', v: '1', d: 'One customer record, one permission model, one audit trail' },
                   ].map((r) => (
                     <div key={r.l} className="flex items-start gap-4 border-b border-white/[0.06] pb-4 last:border-0 last:pb-0">
-                      <span className="mk-mono flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-violet-400/25 bg-violet-500/10 text-[15px] font-bold text-violet-300">
+                      <span className="mk-mono flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-sky-400/25 bg-sky-500/10 text-[15px] font-bold text-sky-300">
                         {r.v}
                       </span>
                       <span className="min-w-0">

@@ -12,11 +12,14 @@ import { eq, desc } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
 import { readJsonBody } from '@/lib/api/validate';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { rateLimitRead } from '@/lib/api/read-rate-limit';
 
 // #1838: wrapped in withApiRoute so requireTenantCtx()'s setTenantContext() and
 // the tenant queries below share one pinned connection (RLS isolation).
-export const GET = withApiRoute(async (_request: NextRequest) => {
+export const GET = withApiRoute(async (request: NextRequest) => {
   try {
+    const limited = await rateLimitRead(request, 'analytics');
+    if (limited) return limited;
     const ctx = await requireTenantCtx();
     if (ctx instanceof NextResponse) return ctx;
 

@@ -83,7 +83,7 @@ export function ContactForm({ tenantId }: { tenantId: string }) {
   }
 
   const field =
-    'w-full rounded-xl border border-white/[0.1] bg-white/[0.03] px-3.5 py-3 text-[14px] text-white placeholder:text-slate-600 transition-colors focus:border-violet-400/50 focus:outline-none focus:ring-2 focus:ring-violet-500/20';
+    'w-full rounded-xl border border-white/[0.1] bg-white/[0.03] px-3.5 py-3 text-[14px] text-white placeholder:text-slate-600 transition-colors focus:border-sky-400/50 focus:outline-none focus:ring-2 focus:ring-sky-500/20';
 
   return (
     <form onSubmit={submit} className="mk-card p-6 sm:p-7">

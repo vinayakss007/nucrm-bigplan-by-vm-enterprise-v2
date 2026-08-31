@@ -71,7 +71,7 @@ export default function FeaturesPage() {
                   <ul className="mt-5 grid gap-2 border-t border-white/[0.07] pt-5 sm:grid-cols-2">
                     {p.highlights.map((h) => (
                       <li key={h.title} className="flex items-start gap-2">
-                        <Icon name={h.icon} className="mt-[3px] h-3.5 w-3.5 shrink-0 text-violet-400" />
+                        <Icon name={h.icon} className="mt-[3px] h-3.5 w-3.5 shrink-0 text-sky-400" />
                         <span className="text-[12.5px] leading-snug text-slate-400">{h.title}</span>
                       </li>
                     ))}

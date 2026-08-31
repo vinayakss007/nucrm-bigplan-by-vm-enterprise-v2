@@ -208,74 +208,77 @@ export async function POST(request: NextRequest) {
         { status: 400, headers: { 'Content-Type': 'application/scim+json' } }
       );
     }
+    // Narrow email to a plain string here so the transaction closure below
+    // (which captures it) keeps the non-undefined type after the guard above.
+    const email = internalUser.email;
 
-    // The user create/update and the tenant-membership insert-or-reactivate
-    // are one atomic provisioning unit: a partial failure would leave a user
-    // with no membership (or a membership pointing at a half-created user),
-    // which is exactly the orphaned-state H7 targets.
-    let createErrorResponse: NextResponse | null = null;
-    const provisioned = await db.transaction(async (tx) => {
-      // #1171: users are shared across tenants (membership lives in
-      // tenant_members), so an unscoped email lookup let one tenant's IdP mutate
-      // a user account owned/used by ANOTHER tenant. Resolve membership in THIS
-      // tenant first: only a user who is already a member here may have their
-      // profile (name) updated. A globally-existing but non-member account is
-      // re-used by id for the membership row below, but is never mutated.
-      const [existingMemberUser] = await tx
-        .select({ id: users.id })
-        .from(users)
-        .innerJoin(tenantMembers, eq(tenantMembers.userId, users.id))
-        .where(and(eq(users.email, internalUser.email!), eq(tenantMembers.tenantId, tenantId)))
-        .limit(1);
+    // #1171: users are shared across tenants (membership lives in
+    // tenant_members), so an unscoped email lookup let one tenant's IdP mutate
+    // a user account owned/used by ANOTHER tenant. Resolve membership in THIS
+    // tenant first: only a user who is already a member here may have their
+    // profile (name) updated. A globally-existing but non-member account is
+    // re-used by id for the membership row below, but is never mutated.
+    const [existingMemberUser] = await db
+      .select({ id: users.id })
+      .from(users)
+      .innerJoin(tenantMembers, eq(tenantMembers.userId, users.id))
+      .where(and(eq(users.email, email), eq(tenantMembers.tenantId, tenantId)))
+      .limit(1);
 
-      const [existingGlobalUser] = existingMemberUser
-        ? [existingMemberUser]
-        : await tx
-            .select({ id: users.id })
-            .from(users)
-            .where(eq(users.email, internalUser.email!))
-            .limit(1);
+    const [existingGlobalUser] = existingMemberUser
+      ? [existingMemberUser]
+      : await db
+          .select({ id: users.id })
+          .from(users)
+          .where(eq(users.email, email))
+          .limit(1);
 
-      let userId: string;
-      let isNew = false;
+    // #685 (HIGH #7): the user upsert and the tenant_members upsert write two
+    // distinct tables and MUST be atomic. Previously a fresh `users` INSERT
+    // that succeeded followed by a failing `tenant_members` INSERT left an
+    // ORPHANED global user row with no membership — which SCIM's later unscoped
+    // email lookup would then silently re-use across tenants. Wrap the whole
+    // provisioning write (user + membership, and the role lookup they depend
+    // on) in one transaction so a failure rolls the user creation back too.
+    const provisionResult = await db.transaction(async (tx): Promise<{ userId: string; isNew: boolean }> => {
+      let uid: string;
+      let created = false;
 
       if (existingMemberUser) {
-        userId = existingMemberUser.id;
+        uid = existingMemberUser.id;
         // Safe to update: this user is a member of the requesting tenant.
         if (internalUser.fullName) {
           await tx.update(users)
             .set({ fullName: internalUser.fullName, updatedAt: new Date() })
-            .where(eq(users.id, userId));
+            .where(eq(users.id, uid));
         }
       } else if (existingGlobalUser) {
         // Account exists but is NOT a member of this tenant — re-use the id for
         // the membership, but do NOT modify the foreign user's profile.
-        userId = existingGlobalUser.id;
+        uid = existingGlobalUser.id;
       } else {
         // Create new user
-        const [created] = await tx.insert(users).values({
-          email: internalUser.email!,
-          fullName: internalUser.fullName ?? internalUser.email!,
+        const [createdUser] = await tx.insert(users).values({
+          email,
+          fullName: internalUser.fullName ?? email,
           emailVerified: true,
           lastTenantId: tenantId,
         }).returning({ id: users.id });
 
-        if (!created) {
-          createErrorResponse = NextResponse.json(
-            generateSCIMError('Failed to create user', 500),
-            { status: 500, headers: { 'Content-Type': 'application/scim+json' } }
-          );
-          return null;
+        if (!createdUser) {
+          // Returning a NextResponse from inside the tx lets us abort without
+          // committing a half-provisioned state; the throw rolls it back.
+          throw new Error('scim-provision:user-create-failed');
         }
-        userId = created.id;
-        isNew = true;
+        uid = createdUser.id;
+        created = true;
       }
 
       // Ensure tenant membership exists
       const [existingMember] = await tx
         .select({ id: tenantMembers.id })
         .from(tenantMembers)
-        .where(and(eq(tenantMembers.tenantId, tenantId), eq(tenantMembers.userId, userId)))
+        .where(and(eq(tenantMembers.tenantId, tenantId), eq(tenantMembers.userId, uid)))
         .limit(1);
 
       if (!existingMember) {
@@ -292,7 +295,7 @@ export async function POST(request: NextRequest) {
 
         await tx.insert(tenantMembers).values({
           tenantId,
-          userId,
+          userId: uid,
           ...(roleToAssign ? { roleId: roleToAssign.id, roleSlug: roleToAssign.slug } : { roleSlug: 'member' }),
           status: 'active',
           joinedAt: new Date(),
@@ -304,16 +307,10 @@ export async function POST(request: NextRequest) {
           .where(eq(tenantMembers.id, existingMember.id));
       }
 
-      return { userId, isNew };
+      return { userId: uid, isNew: created };
     });
 
-    if (!provisioned) {
-      return createErrorResponse ?? NextResponse.json(
-        generateSCIMError('Failed to create user', 500),
-        { status: 500, headers: { 'Content-Type': 'application/scim+json' } }
-      );
-    }
-    const { userId, isNew } = provisioned;
+    const { userId, isNew } = provisionResult;
 
     // Fetch the created/updated user to return
     const [finalUser] = await db

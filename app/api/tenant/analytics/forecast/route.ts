@@ -13,6 +13,7 @@ import { revenueForecastSummary } from '@/drizzle/schema';
 import { eq, desc, sql } from 'drizzle-orm';
 import { readJsonBody } from '@/lib/api/validate';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { rateLimitRead } from '@/lib/api/read-rate-limit';
 
 /**
  * GET /api/tenant/analytics/forecast
@@ -20,6 +21,8 @@ import { withApiRoute } from '@/lib/api/with-api-route';
  */
 export const GET = withApiRoute(async (request: NextRequest) => {
   try {
+    const limited = await rateLimitRead(request, 'analytics');
+    if (limited) return limited;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
     if (!can(ctx, 'reports.view')) {

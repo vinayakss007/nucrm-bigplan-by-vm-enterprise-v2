@@ -4,15 +4,15 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { escapeLike } from '@/lib/api/sanitize-like';
 import { isWonStageName } from '@/lib/deals/won-stage';
+import { resolveDealStage, stageFailureMessage, normalizeStageField } from '@/lib/deals/resolve-stage';
 import { apiError } from '@/lib/api-error';
 import { requireAuth, requirePerm, can } from '@/lib/auth/middleware';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { updateDealSchema } from '@/lib/api/schemas';
 import { db } from '@/drizzle/db';
-import { deals, contacts, tenants, activities, pipelines, dealStages } from '@/drizzle/schema';
-import { eq, and, sql, ilike } from 'drizzle-orm';
+import { deals, contacts, tenants, activities } from '@/drizzle/schema';
+import { eq, and, sql } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { fireWebhooks } from '@/lib/webhooks';
 import { notifyTenantMembers } from '@/lib/notifications';
@@ -114,32 +114,31 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params:
       normalizedAmount = rawAmount.toString();
     }
 
-    // Map legacy 'stage' or 'stage_name' (string like "won") to stageId (UUID)
-    let resolvedStageId = v.stage_id;
+    // Map legacy 'stage' or 'stage_name' (string like "won") to stageId (UUID).
+    // Only resolve when the caller actually sent a stage field; a PATCH that
+    // doesn't touch the stage must not fail or clear it. The shared resolver
+    // validates tenant + pipeline ownership, escapes LIKE metacharacters and
+    // reports ambiguity instead of silently picking the wrong stage. (#658)
+    let resolvedStageId: string | undefined;
     // Human-readable name of the destination stage, resolved once so the
     // notification/audit show the stage NAME (not a raw UUID) and so the
     // won-stage side-effects can match by name reliably.
     let resolvedStageName: string | null = null;
-    const stageName = v.stage || v.stage_name;
-    if (!resolvedStageId && stageName) {
-      const stageConds = [
-        ilike(dealStages.name, escapeLike(stageName)),
-        eq(pipelines.tenantId, ctx.tenantId),
-      ];
-      if (v.pipeline_id) {
-        stageConds.push(eq(dealStages.pipelineId, v.pipeline_id));
+    const stageProvided = normalizeStageField(v.stage_id) !== undefined
+      || normalizeStageField(v.stage) !== undefined
+      || normalizeStageField(v.stage_name) !== undefined;
+    if (stageProvided) {
+      const stageResult = await resolveDealStage(db, {
+        stageId: v.stage_id,
+        stageName: v.stage ?? v.stage_name,
+        pipelineId: v.pipeline_id,
+        tenantId: ctx.tenantId,
+      });
+      if (!stageResult.ok) {
+        return NextResponse.json({ error: stageFailureMessage(stageResult) }, { status: 400 });
       }
-      const [stageRecord] = await db
-        .select({ id: dealStages.id, name: dealStages.name })
-        .from(dealStages)
-        .innerJoin(pipelines, eq(pipelines.id, dealStages.pipelineId))
-        .where(and(...stageConds))
-        .limit(1);
-      
-      if (stageRecord) {
-        resolvedStageId = stageRecord.id;
-        resolvedStageName = stageRecord.name;
-      }
+      resolvedStageId = stageResult.stageId;
+      resolvedStageName = stageResult.stageName;
     }
 
     const [prev] = await db
@@ -218,16 +217,8 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params:
     });
 
     if (updateData.stageId && prev.stageId !== updateData.stageId) {
-      // Resolve the destination stage NAME once. When the stage was supplied
-      // by name we already have it; otherwise (stage_id path) look it up.
-      if (resolvedStageName === null) {
-        const [stageInfo] = await db
-          .select({ name: dealStages.name })
-          .from(dealStages)
-          .where(eq(dealStages.id, updateData.stageId))
-          .limit(1);
-        resolvedStageName = stageInfo?.name ?? null;
-      }
+      // The resolver always returns the destination stage NAME whenever a stage
+      // was supplied (by id or by name), so it is guaranteed set here.
       const stageLabel = resolvedStageName ?? 'a new stage';
 
       // Logic for stage change

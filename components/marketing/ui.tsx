@@ -48,15 +48,15 @@ export function Aurora({
     <div className={`pointer-events-none absolute inset-0 -z-10 overflow-hidden ${className}`} aria-hidden>
       <div
         className="mk-aurora absolute -top-40 left-[6%] h-[520px] w-[520px] rounded-full blur-[130px]"
-        style={{ background: `rgba(124,58,237,${0.34 * intensity})` }}
+        style={{ background: `rgba(37,99,235,${0.4 * intensity})` }}
       />
       <div
         className="mk-aurora absolute -top-24 right-[4%] h-[460px] w-[460px] rounded-full blur-[130px]"
-        style={{ background: `rgba(79,70,229,${0.3 * intensity})`, animationDelay: '-9s' }}
+        style={{ background: `rgba(56,189,248,${0.34 * intensity})`, animationDelay: '-9s' }}
       />
       <div
         className="mk-aurora absolute top-[38%] left-[38%] h-[420px] w-[420px] rounded-full blur-[140px]"
-        style={{ background: `rgba(34,211,238,${0.16 * intensity})`, animationDelay: '-17s' }}
+        style={{ background: `rgba(224,242,254,${0.22 * intensity})`, animationDelay: '-17s' }}
       />
       <div className="mk-grid-bg mk-fade-y absolute inset-0" />
     </div>
@@ -67,8 +67,8 @@ export function Aurora({
 
 export function Eyebrow({ children, className = '' }: { children: ReactNode; className?: string }) {
   return (
-    <span className={`mk-eyebrow inline-flex items-center gap-2 text-violet-300/90 ${className}`}>
-      <span className="h-[5px] w-[5px] rounded-full bg-violet-400" />
+    <span className={`mk-eyebrow inline-flex items-center gap-2 text-sky-300/90 ${className}`}>
+      <span className="h-[5px] w-[5px] rounded-full bg-sky-400" />
       {children}
     </span>
   );
@@ -101,7 +101,7 @@ export function SectionHeading({
 export function Chip({ children, icon }: { children: ReactNode; icon?: string }) {
   return (
     <span className="mk-chip">
-      {icon && <Icon name={icon} className="h-3.5 w-3.5 text-violet-300" />}
+      {icon && <Icon name={icon} className="h-3.5 w-3.5 text-sky-300" />}
       {children}
     </span>
   );
@@ -109,7 +109,7 @@ export function Chip({ children, icon }: { children: ReactNode; icon?: string })
 
 export function IconTile({
   name,
-  accent = 'from-violet-500 to-indigo-500',
+  accent = 'from-blue-500 to-sky-400',
   size = 'md',
 }: {
   name: string;
@@ -138,7 +138,7 @@ export function CheckList({
   className?: string;
   tone?: 'violet' | 'emerald';
 }) {
-  const color = tone === 'emerald' ? 'text-emerald-400' : 'text-violet-400';
+  const color = tone === 'emerald' ? 'text-emerald-400' : 'text-sky-400';
   return (
     <ul className={`space-y-2.5 ${className}`}>
       {items.map((item) => (
@@ -221,7 +221,7 @@ export function PageHero({
             {breadcrumb.map((b, i) => (
               <span key={b.href} className="flex items-center gap-1.5">
                 {i > 0 && <Icon name="ChevronRight" className="h-3 w-3 text-slate-600" />}
-                <Link href={b.href} className="transition-colors hover:text-violet-300">
+                <Link href={b.href} className="transition-colors hover:text-sky-300">
                   {b.label}
                 </Link>
               </span>
@@ -254,7 +254,7 @@ export function CtaBand({
   return (
     <section className="relative overflow-hidden py-20 sm:py-28">
       <div className="pointer-events-none absolute inset-0 -z-10" aria-hidden>
-        <div className="absolute inset-0 bg-[linear-gradient(135deg,#4c1d95_0%,#4338ca_48%,#0e7490_100%)] opacity-90" />
+        <div className="absolute inset-0 bg-[linear-gradient(135deg,#1d4ed8_0%,#0284c7_50%,#0e7490_100%)] opacity-95" />
         <div className="mk-grid-bg absolute inset-0 opacity-60" />
         <div className="mk-aurora absolute -top-24 left-1/4 h-80 w-80 rounded-full bg-white/15 blur-[110px]" />
         <div className="mk-aurora absolute -bottom-20 right-1/5 h-80 w-80 rounded-full bg-cyan-300/20 blur-[110px]" style={{ animationDelay: '-11s' }} />
@@ -305,7 +305,7 @@ export function Marquee({
 export function MatrixValue({ value, own = false }: { value: boolean | string; own?: boolean }) {
   if (value === true) {
     return (
-      <span className={`inline-flex items-center gap-1.5 text-sm font-semibold ${own ? 'text-violet-200' : 'text-emerald-400'}`}>
+      <span className={`inline-flex items-center gap-1.5 text-sm font-semibold ${own ? 'text-sky-200' : 'text-emerald-400'}`}>
         <Icon name="Check" className="h-4 w-4" strokeWidth={2.6} />
         <span className="sr-only">Included</span>
       </span>
@@ -318,14 +318,14 @@ export function MatrixValue({ value, own = false }: { value: boolean | string; o
       </span>
     );
   }
-  return <span className={`text-sm ${own ? 'font-semibold text-violet-200' : 'text-slate-400'}`}>{value}</span>;
+  return <span className={`text-sm ${own ? 'font-semibold text-sky-200' : 'text-slate-400'}`}>{value}</span>;
 }
 
 /** Numbered step used on migration and how-it-works sections. */
 export function StepRow({ n, children }: { n: number; children: ReactNode }) {
   return (
     <li className="flex gap-4">
-      <span className="mk-mono mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-violet-400/30 bg-violet-500/10 font-semibold text-violet-300">
+      <span className="mk-mono mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-sky-400/30 bg-sky-500/10 font-semibold text-sky-300">
         {n}
       </span>
       <span className="mk-body text-slate-300">{children}</span>

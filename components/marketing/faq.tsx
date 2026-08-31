@@ -32,7 +32,7 @@ export function Faq({ items }: { items: readonly { q: string; a: string }[] }) {
                 <span className="mk-h4 text-white">{item.q}</span>
                 <span
                   className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border transition-all duration-300 ${
-                    isOpen ? 'rotate-180 border-violet-400/40 bg-violet-500/15 text-violet-300' : 'border-white/10 text-slate-500'
+                    isOpen ? 'rotate-180 border-sky-400/40 bg-sky-500/15 text-sky-300' : 'border-white/10 text-slate-500'
                   }`}
                 >
                   <Icon name="ChevronDown" className="h-4 w-4" strokeWidth={2.2} />

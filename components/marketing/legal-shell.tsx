@@ -71,7 +71,7 @@ export function LegalShell({
                   <li key={s.id}>
                     <a
                       href={`#${s.id}`}
-                      className="block rounded-lg px-2.5 py-1.5 text-[13px] text-slate-500 transition-colors hover:bg-white/[0.04] hover:text-violet-300"
+                      className="block rounded-lg px-2.5 py-1.5 text-[13px] text-slate-500 transition-colors hover:bg-white/[0.04] hover:text-sky-300"
                     >
                       {s.label}
                     </a>
@@ -90,7 +90,7 @@ export function LegalShell({
                   <Link
                     key={href}
                     href={href}
-                    className="block rounded-lg px-2.5 py-1.5 text-[13px] text-slate-500 transition-colors hover:bg-white/[0.04] hover:text-violet-300"
+                    className="block rounded-lg px-2.5 py-1.5 text-[13px] text-slate-500 transition-colors hover:bg-white/[0.04] hover:text-sky-300"
                   >
                     {label}
                   </Link>

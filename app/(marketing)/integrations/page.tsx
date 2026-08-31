@@ -122,7 +122,7 @@ export default function IntegrationsPage() {
               <ul className="mt-6 space-y-2.5">
                 {API_POINTS.map((p) => (
                   <li key={p} className="flex gap-3">
-                    <Icon name="Check" className="mt-[3px] h-4 w-4 shrink-0 text-violet-400" strokeWidth={2.4} />
+                    <Icon name="Check" className="mt-[3px] h-4 w-4 shrink-0 text-sky-400" strokeWidth={2.4} />
                     <span className="mk-body text-slate-300">{p}</span>
                   </li>
                 ))}

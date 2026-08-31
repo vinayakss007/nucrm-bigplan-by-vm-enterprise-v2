@@ -1,7 +1,7 @@
 # Pre-Launch Issues
 
 Generated: 2026-07-31
-Last verified: 2026-08-31 (code re-audit)
+Last verified: 2026-08-31 (code re-audit; reconciled C3 rate limiting, C4 concurrency guards, and H6 CSP)
 
 > **Status legend:** ✅ Resolved · ⚠️ Partially resolved · 🔴 Open
 
@@ -24,29 +24,36 @@ Last verified: 2026-08-31 (code re-audit)
   it and RLS stays enforced (fix #1615). Detail routes add RBAC ownership checks.
 - Reference: Issue #664.
 
-### 3. ⚠️ PARTIALLY RESOLVED — Rate Limiting on GET/PATCH/DELETE Endpoints
+### 3. ✅ RESOLVED — Rate Limiting on GET/PATCH/DELETE Endpoints
 
-- **Verification (2026-08-31)**: 182 of 314 tenant route files now call
-  `checkRateLimit()` / `rateLimitMutating()`. All mutating PATCH/DELETE routes
-  audited are covered. The remaining uncovered routes are predominantly
-  **read-only GET** analytics/dashboard-widget endpoints (`analytics/*`,
-  `dashboard/widgets/*`).
-- **Remaining**: Decide whether read-only GET endpoints need rate limiting for
-  launch (lower risk: no mutation, still an enumeration/DoS surface).
+- **Verification (2026-08-31, re-audit)**: The global edge limiter in `proxy.ts`
+  covers **all** non-public API paths (120 req/min per user, 300 req/min for
+  API keys, 30 req/min unauthenticated). All mutating PATCH/DELETE routes are
+  additionally covered by in-route `checkRateLimit()` / `rateLimitMutating()`.
+- **Read-only GET analytics endpoints**: A defense-in-depth in-route layer was
+  added for the 6 expensive analytics GET endpoints (`advanced`, `forecast`,
+  `overview`, `scheduled-reports`, `stats`, `usage`) via the new
+  `lib/api/read-rate-limit.ts` helper (`rateLimitRead`, analytics bucket =
+  60 req/min). These endpoints now have **both** edge and in-route rate limiting.
+- The open question ("decide whether read-only GET endpoints need rate limiting")
+  is resolved — they have it.
 - Reference: Issue #652.
 
-### 4. ⚠️ PARTIALLY RESOLVED — Optimistic Concurrency Guard on Entity Updates
+### 4. ✅ RESOLVED — Optimistic Concurrency Guard on Entity Updates
 
-- **Verification (2026-08-31)**: Two guard patterns exist and are applied:
+- **Verification (2026-08-31, re-audit)**: Two guard patterns exist and are applied:
   - `withConcurrencyGuard()` + `updatedAtMs()` — contacts, deals, leads, tasks,
     quotes, products, meetings, email-templates.
-  - `concurrencyGuard(db, table, id, tenantId, expectedUpdatedAt)` (opt-in) —
-    companies, and now custom-entities, custom-entity rows, and data-explorer
-    inline edits.
-- **Remaining**: A number of secondary/config-style routes still rely on
-  last-write-wins by design (upsert/singleton settings). Confirm none of the
-  remaining business entities (e.g. invoices, orders, tickets, contracts) need
-  a guard before launch — several already send `updated_at`/`_version`.
+  - `concurrencyGuard(db, table, id, tenantId, expectedUpdatedAt)` — companies,
+    custom-entities, custom-entity rows, data-explorer inline edits, and the
+    remaining business entities: `invoices/[id]/route.ts` (PUT),
+    `orders/[id]/route.ts` (PUT), `tickets/[id]/route.ts` (PATCH),
+    `contracts/[id]/route.ts` (PUT).
+- **Confirmed**: Sub-resource routes (payments create, replies create, bulk POST,
+  pdf GET, send POST) are create-only/list/pdf/send/bulk/delete actions that
+  legitimately do not need optimistic locking. Config-style/singleton settings
+  routes remain last-write-wins by design. No remaining business entity needs a
+  guard.
 - Reference: Issue #680.
 
 ### 5. ✅ RESOLVED — Secrets in `.env.local` Need Rotation + Secure Deployment
@@ -61,33 +68,66 @@ Last verified: 2026-08-31 (code re-audit)
 
 ## HIGH (significant risk — should fix)
 
-### 6. CSP `unsafe-inline` for Scripts in Production
+### 6. ✅ RESOLVED — CSP `unsafe-inline` for Scripts in Production
 
-- **File**: `next.config.mjs` (line 71)
-- **Risk**: Weakens XSS protection. `script-src 'self' 'unsafe-inline'` allows inline script injection.
-- **Fix**: Implement `NEXT_SCRIPT_NONCE` strategy. Reference: Issue #657.
-- **Effort**: 1-2 days
+- **File**: `proxy.ts` (`buildCsp(nonce)`)
+- **Verification (2026-08-31, re-audit)**: Resolved via the nonce-based CSP in
+  `proxy.ts` `buildCsp(nonce)` (issue #1070). Production `script-src` is
+  `'self' 'nonce-${nonce}'` — no `'unsafe-inline'` for scripts in prod
+  (`'unsafe-eval'` remains only in dev for Fast Refresh). `next.config.mjs`
+  intentionally sets no static CSP. Only `style-src-attr` retains
+  `'unsafe-inline'`, which is unavoidable for React inline styles.
+- Reference: Issue #657, Issue #1070.
 
-### 7. 36 Multi-Table Writes Not in `db.transaction()`
+### 7. ✅ RESOLVED — Multi-Table Writes Not in `db.transaction()`
 
-- **Reference**: Issue #685 (Batch 1 done in PR #714, Batch 2 pending)
-- **Risk**: Partial writes leave DB in inconsistent state if one write succeeds and another fails.
-- **Fix**: Wrap remaining multi-table writes in `db.transaction()`.
-- **Effort**: 3-5 days
+- **Reference**: Issue #685 (Batch 1 in PR #714; Batch 2 here)
+- **Verification (2026-08-31)**: A code re-audit found the remaining
+  multi-table write paths (billing, lead-convert with tenant counters, signup,
+  accept-invite, automation engine, inbound webhooks) already wrapped in
+  `db.transaction()`. Batch 2 wrapped the two genuine gaps that remained:
+  - `app/api/scim/v2/Users/route.ts` POST — the `users` upsert + `tenant_members`
+    upsert (and the role lookup they depend on) are now one transaction, so a
+    failed membership insert can no longer orphan a global `users` row.
+  - `app/api/emergency/recover/route.ts` POST — the password reset (`users`) and
+    session purge (`sessions`) are now atomic, so "reset + revoke" is
+    all-or-nothing.
+- **Risk (resolved)**: Partial writes leaving the DB inconsistent.
 
-### 8. Deal Creation `stage_name` vs `stage` Resolution Bug
+### 8. ✅ RESOLVED — Deal Creation `stage_name` vs `stage` Resolution Bug
 
-- **Files**: `app/api/tenant/deals/route.ts`, `app/api/tenant/deals/[id]/route.ts`
-- **Risk**: Frontend sends `stage_name` (string like "won") but API expects `stage_id` (UUID). Fallback resolution has edge cases that fail silently.
-- **Fix**: Robust `stage_name` → `stageId` resolution with validation. Reference: Issue #658.
-- **Effort**: 1-2 days
+- **Files**: `app/api/tenant/deals/route.ts`, `app/api/tenant/deals/[id]/route.ts`,
+  `lib/deals/resolve-stage.ts`
+- **Verification (2026-08-31)**: Stage resolution is centralized in
+  `resolveDealStage()` (shared by create + update). It escapes LIKE
+  metacharacters (the POST path previously did not, so a `%`/`_` in a stage name
+  could resolve to the wrong stage), validates the resolved stage belongs to the
+  tenant — and to `pipeline_id` when supplied — reports ambiguity instead of
+  silently picking one same-named stage, and adopts the resolved stage's
+  pipeline when `pipeline_id` is omitted so stage/pipeline stay consistent.
+  Covered by `tests/unit/resolve-deal-stage.test.ts`. Reference: Issue #658.
 
-### 9. Audit Filter Bugs + Session Invalidation Gaps
+### 9. ✅ RESOLVED — Audit Filter Bugs + Session Invalidation Gaps
 
 - **Reference**: Issue #661
-- **Risk**: Audit logs may not filter correctly by tenant. Session invalidation after role changes is not immediate (cache gap in `middleware.ts` lines 115-118). Notification delivery may silently fail.
-- **Fix**: Audit filter corrections, immediate session invalidation, notification delivery guarantees.
-- **Effort**: 2-3 days
+- **Verification (2026-08-31)**:
+  - **Session invalidation**: `deleteUserSessions()` now also busts the
+    `auth:context:` (permissions) cache — not just the `session:` cache — so a
+    role change via the members route takes effect on the next request instead
+    of after the 5-minute TTL. A new `invalidateUserContexts()` helper clears
+    only permissions (keeping the user logged in), and the in-place role
+    permission edit (`app/api/tenant/roles/[id]` PATCH) now calls it for every
+    affected member.
+  - **Audit filtering**: the `search` term is escaped with `escapeLike`, `from`/
+    `to` dates are validated (invalid → 400) with a date-only `to` made
+    inclusive of the whole day, and `edit_history` is correlated to the page's
+    exact `(entity_type, entity_id)` pairs instead of two independent
+    `IN (...)` subqueries (a cartesian mismatch).
+  - **Notification delivery**: `createNotification` / `notifyTenantMembers`
+    return a boolean delivery indicator (logged + signaled on retry exhaustion),
+    and realtime push now fires on the retry path and for broadcasts.
+  - Covered by `tests/unit/tenant-audit-filters.test.ts` and additions to
+    `tests/unit/cache-sessions.test.ts`.
 
 ### 10. Migration Journal Duplicate Entries / Gaps
 
@@ -145,12 +185,13 @@ Last verified: 2026-08-31 (code re-audit)
 
 ## Recommended Launch Order
 
-_CRITICAL #1, #2, #5 are resolved. Remaining blockers below._
+_All CRITICAL items (#1–#5) are now resolved. HIGH #6 (CSP) is resolved. Remaining blockers below._
 
-1. ⚠️ Finish rate limiting decision for read-only GET endpoints (CRITICAL #3)
-2. ⚠️ Confirm concurrency-guard coverage for remaining business entities (CRITICAL #4)
-3. Fix deal creation stage resolution (HIGH #8)
-4. Harden CSP policy (HIGH #6)
-5. Merge pending PRs #552 and #553 (MEDIUM #15)
+1. ✅ Rate limiting for read-only GET endpoints — done (edge + in-route analytics limiter) (CRITICAL #3)
+2. ✅ Concurrency-guard coverage for remaining business entities — done (invoices, orders, tickets, contracts) (CRITICAL #4)
+3. ✅ Fix deal creation stage resolution (HIGH #8) — done
+4. ✅ Harden CSP policy — done (nonce-based CSP in `proxy.ts`, #1070) (HIGH #6)
+5. ✅ Merge pending PRs #552 and #553 — done (merged 2026-07-12) (MEDIUM #15)
 6. Fix migration journal (HIGH #10)
-7. Wrap remaining multi-table writes in transactions (HIGH #7) — phased
+7. ✅ Wrap remaining multi-table writes in transactions (HIGH #7) — done
+8. ✅ Audit filter + session invalidation + notification delivery (HIGH #9) — done

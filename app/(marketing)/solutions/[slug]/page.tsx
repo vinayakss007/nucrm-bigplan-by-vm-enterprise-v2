@@ -228,11 +228,11 @@ export default async function SolutionPage({ params }: { params: Promise<{ slug:
               {s.product && (
                 <Reveal className="mk-card mk-edge relative overflow-hidden p-6">
                   <div
-                    className="pointer-events-none absolute -right-16 -top-16 h-44 w-44 rounded-full bg-violet-500/20 blur-3xl"
+                    className="pointer-events-none absolute -right-16 -top-16 h-44 w-44 rounded-full bg-sky-500/22 blur-3xl"
                     aria-hidden
                   />
                   <div className="relative">
-                    <div className="mk-eyebrow text-violet-300/90">Also by abetworks</div>
+                    <div className="mk-eyebrow text-sky-300/90">Also by abetworks</div>
                     <h3 className="mk-h3 mt-3 text-white">{s.product.name}</h3>
                     <p className="mk-body mt-2.5">
                       A focused product built on the same platform, with a workspace shaped entirely around this way of
@@ -253,9 +253,9 @@ export default async function SolutionPage({ params }: { params: Promise<{ slug:
                       <Link
                         key={o.slug}
                         href={`/solutions/${o.slug}`}
-                        className="mk-chip hover:!border-violet-400/30 hover:!text-white"
+                        className="mk-chip hover:!border-sky-400/30 hover:!text-white"
                       >
-                        <Icon name={o.icon} className="h-3.5 w-3.5 text-violet-300" />
+                        <Icon name={o.icon} className="h-3.5 w-3.5 text-sky-300" />
                         {o.name}
                       </Link>
                     ))}

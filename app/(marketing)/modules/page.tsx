@@ -72,7 +72,7 @@ export default function ModulesPage() {
                 t: `${paid.length} available as add-ons`,
                 d: 'Priced per workspace per month, from $10. Add one for a quarter and remove it if it did not earn its keep.',
                 i: 'Blocks',
-                accent: 'from-violet-500 to-indigo-500',
+                accent: 'from-blue-500 to-indigo-500',
               },
               {
                 t: 'All of them on Enterprise',
@@ -100,7 +100,7 @@ export default function ModulesPage() {
             <Container>
               <Reveal className="mb-10 flex items-end justify-between gap-6">
                 <div>
-                  <span className="mk-eyebrow text-violet-300/90">{category}</span>
+                  <span className="mk-eyebrow text-sky-300/90">{category}</span>
                   <h2 className="mk-h2 mt-3 text-white">
                     {items.length} module{items.length === 1 ? '' : 's'}
                   </h2>
@@ -119,7 +119,7 @@ export default function ModulesPage() {
                             className={`mk-mono rounded-md border px-2 py-[2px] text-[11px] ${
                               m.addOn === 0
                                 ? 'border-emerald-400/25 bg-emerald-500/10 text-emerald-300'
-                                : 'border-violet-400/25 bg-violet-500/10 text-violet-300'
+                                : 'border-sky-400/25 bg-sky-500/10 text-sky-300'
                             }`}
                           >
                             {m.addOn === 0 ? 'Included' : `+$${m.addOn}/mo`}
@@ -132,7 +132,7 @@ export default function ModulesPage() {
                     <ul className="mt-5 grid flex-1 gap-1.5 border-t border-white/[0.07] pt-5 sm:grid-cols-2">
                       {m.features.slice(0, 10).map((f) => (
                         <li key={f} className="flex gap-2">
-                          <Icon name="Check" className="mt-[3px] h-3.5 w-3.5 shrink-0 text-violet-400" strokeWidth={2.4} />
+                          <Icon name="Check" className="mt-[3px] h-3.5 w-3.5 shrink-0 text-sky-400" strokeWidth={2.4} />
                           <span className="text-[12.5px] leading-snug text-slate-400">{f}</span>
                         </li>
                       ))}
