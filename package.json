@@ -174,12 +174,12 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@next/bundle-analyzer": "^16.3.2",
+    "@next/bundle-analyzer": "^16.3.3",
     "@playwright/mcp": "^0.0.79",
     "@playwright/test": "^1.62.1",
     "@socket.io/redis-adapter": "^8.3.0",
     "@testing-library/jest-dom": "6.9.1",
-    "@testing-library/react": "16.3.2",
+    "@testing-library/react": "16.3.3",
     "@testing-library/user-event": "14.6.6",
     "@types/bcryptjs": "3.0.0",
     "@types/dompurify": "^3.2.0",
