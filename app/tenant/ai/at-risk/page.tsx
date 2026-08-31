@@ -4,7 +4,8 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useApiQuery } from '@/lib/query/client';
 import {
   AlertTriangle, Loader2, Search, Filter, ArrowUpRight, 
   MessageSquare, Zap, Target, ExternalLink, RefreshCcw
@@ -29,34 +30,15 @@ type AtRiskDeal = {
 };
 
 export default function AIAtRiskPage() {
-  const [deals, setDeals] = useState<AtRiskDeal[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [_error, setError] = useState<string | null>(null);
   const [q, setQ] = useState('');
 
-  function load(signal?: AbortSignal) {
-    setLoading(true);
-    setError(null);
-    fetch('/api/tenant/ai/at-risk', { cache: 'no-store', signal })
-      .then(async r => {
-        if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? `HTTP ${r.status}`);
-        return r.json();
-      })
-      .then(d => setDeals(d.data))
-      .catch(e => {
-        if (e?.name === 'AbortError') return;
-        setError(e.message);
-      })
-      .finally(() => {
-        if (!signal?.aborted) setLoading(false);
-      });
-  }
-
-  useEffect(() => {
-    const controller = new AbortController();
-    load(controller.signal);
-    return () => controller.abort();
-  }, []);
+  // #1328: at-risk deals via TanStack Query (was raw fetch + useEffect).
+  const { data, isLoading: loading, isFetching, refetch } = useApiQuery<{ data?: AtRiskDeal[] }>(
+    ['tenant', 'ai', 'at-risk'],
+    '/api/tenant/ai/at-risk',
+  );
+  const deals: AtRiskDeal[] = data?.data ?? [];
+  const load = () => refetch();
 
   const filtered = deals.filter(d => 
     d.title.toLowerCase().includes(q.toLowerCase()) || 
@@ -82,7 +64,7 @@ export default function AIAtRiskPage() {
             className="p-2 hover:bg-muted rounded-lg transition-colors"
             title="Refresh"
           >
-            <RefreshCcw className={cn("w-4 h-4", loading && "animate-spin")} />
+            <RefreshCcw className={cn("w-4 h-4", isFetching && "animate-spin")} />
           </button>
           <Link
             href="/tenant/settings/at-risk-rules"

@@ -4,8 +4,8 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useApiQuery } from '@/lib/query/client';
 import {
   Sparkles, BrainCircuit, FileEdit, Target, AlertTriangle, Activity,
   ArrowRight, Loader2, MessageSquare, CheckCircle2, AlertCircle, Lock,
@@ -32,24 +32,13 @@ type Status = {
 };
 
 export default function AIHubPage() {
-  const [status, setStatus] = useState<Status | null>(null);
-  const [loading, setLoading] = useState(true);
   const { hasFeature, loaded: featuresLoaded } = usePlanFeatures();
 
-  useEffect(() => {
-    const controller = new AbortController();
-    fetch('/api/tenant/ai/status', { signal: controller.signal })
-      .then(r => r.ok ? r.json() : Promise.reject())
-      .then(setStatus)
-      .catch((e) => {
-        if ((e as Error)?.name === 'AbortError') return;
-        setStatus(null);
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setLoading(false);
-      });
-    return () => controller.abort();
-  }, []);
+  // #1328: status via TanStack Query (was raw fetch + useEffect).
+  const { data: status, isLoading: loading } = useApiQuery<Status>(
+    ['tenant', 'ai', 'status'],
+    '/api/tenant/ai/status',
+  );
 
   if (loading) {
     return <div className="flex items-center justify-center h-48 text-muted-foreground"><Loader2 className="w-5 h-5 animate-spin" /></div>;

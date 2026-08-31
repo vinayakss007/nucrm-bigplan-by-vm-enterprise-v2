@@ -4,7 +4,9 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
+import { useMutation } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import {
   FileEdit, Wand2, AlertCircle, Loader2, Check, Settings as SettingsIcon,
   Copy, Sparkles, ExternalLink,
@@ -50,90 +52,82 @@ const ENTITY_TYPES: { id: EntityHit['entity_type']; label: string; api: string }
   { id: 'company', label: 'Company',  api: '/api/tenant/companies?limit=8&search=' },
 ];
 
+type SearchRow = { id: string; firstName?: string; lastName?: string; email?: string; title?: string; name?: string; companyName?: string };
+type SearchResp = { contacts?: SearchRow[]; deals?: SearchRow[]; companies?: SearchRow[]; data?: SearchRow[] };
+
 export default function AIDraftPage() {
-  const [templates, setTemplates] = useState<Template[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
+  const [templateSeeded, setTemplateSeeded] = useState(false);
   const [entityType, setEntityType] = useState<EntityHit['entity_type']>('contact');
   const [entitySearch, setEntitySearch] = useState('');
-  const [entityHits, setEntityHits] = useState<EntityHit[]>([]);
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [selectedEntity, setSelectedEntity] = useState<EntityHit | null>(null);
   const [customInstructions, setCustomInstructions] = useState('');
-  const [busy, setBusy] = useState<'generate' | null>(null);
   const [draft, setDraft] = useState<DraftResp | null>(null);
   const [editedSubject, setEditedSubject] = useState('');
   const [editedBody, setEditedBody] = useState('');
   const [copied, setCopied] = useState(false);
 
-  // Load templates (db rows + seeds, the API merges them)
+  // #1328: templates via TanStack Query (was raw fetch + useEffect). The API
+  // merges db rows + seeds; for non-admins it 404s, so we fall back to [].
+  const { data: templatesData, isLoading: templatesLoading, isError: templatesError } =
+    useApiQuery<{ templates?: Template[]; seeds?: Template[] }>(
+      ['tenant', 'admin', 'ai-templates'],
+      '/api/tenant/admin/ai-templates',
+      { retry: false },
+    );
+  const templates: Template[] | null = useMemo(() => {
+    if (templatesLoading) return null;
+    if (templatesError) return [];
+    return [...(templatesData?.templates ?? []), ...(templatesData?.seeds ?? [])];
+  }, [templatesData, templatesLoading, templatesError]);
+  // Seed the initial selection once templates arrive.
   useEffect(() => {
-    const controller = new AbortController();
-    fetch('/api/tenant/admin/ai-templates', { signal: controller.signal })
-      .then(async r => {
-        if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? `HTTP ${r.status}`);
-        return r.json();
-      })
-      .then((d: { templates: Template[]; seeds: Template[] }) => {
-        // For non-admins this fails (admin-only endpoint). Fall back to seeds-only via the public draft API.
-        const all = [...(d.templates ?? []), ...(d.seeds ?? [])];
-        setTemplates(all);
-        if (all[0]) setSelectedTemplate(all[0]);
-      })
-      .catch((e) => {
-        if ((e as Error)?.name === 'AbortError') return;
-        // Fallback: empty templates list — the API still has a generic prompt
-        setTemplates([]);
-      });
-    return () => controller.abort();
-  }, []);
-
-  // Search entities as the user types
-  useEffect(() => {
-    const controller = new AbortController();
-    const t = setTimeout(async () => {
-      try {
-        const cfg = ENTITY_TYPES.find(e => e.id === entityType)!;
-        const r = await fetch(cfg.api + encodeURIComponent(entitySearch), { cache: 'no-store', signal: controller.signal });
-        if (!r.ok) { setEntityHits([]); return; }
-        const data = await r.json();
-        const list = data.contacts ?? data.deals ?? data.companies ?? data.data ?? [];
-        type Row = { id: string; firstName?: string; lastName?: string; email?: string; title?: string; name?: string; companyName?: string };
-        const hits: EntityHit[] = list.slice(0, 8).map((row: Row) => {
-          if (entityType === 'contact') {
-            return {
-              id: row.id,
-              entity_type: 'contact',
-              label: `${row.firstName ?? ''} ${row.lastName ?? ''}`.trim() || (row.email ?? '—'),
-              sublabel: row.email ?? row.companyName ?? undefined,
-            };
-          }
-          if (entityType === 'deal') {
-            return { id: row.id, entity_type: 'deal', label: row.title ?? '—' };
-          }
-          return { id: row.id, entity_type: 'company', label: row.name ?? '—' };
-        });
-        setEntityHits(hits);
-      } catch (e) {
-        if ((e as Error)?.name === 'AbortError') return;
-        setEntityHits([]);
-      }
-    }, 250);
-    return () => { clearTimeout(t); controller.abort(); };
-  }, [entityType, entitySearch]);
-
-  async function generate() {
-    if (!selectedEntity) {
-      setError('Pick a contact, deal or company first');
-      return;
+    if (!templateSeeded && templates && templates.length > 0) {
+      setSelectedTemplate(templates[0] ?? null);
+      setTemplateSeeded(true);
     }
-    setBusy('generate');
-    setError(null);
-    try {
+  }, [templates, templateSeeded]);
+
+  // Debounce the entity search (preserves the original 250ms typeahead delay).
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(entitySearch), 250);
+    return () => clearTimeout(t);
+  }, [entitySearch]);
+
+  // #1328: entity typeahead via TanStack Query (was a debounced fetch in an
+  // effect). entityType + debounced search are part of the key.
+  const searchCfg = ENTITY_TYPES.find(e => e.id === entityType)!;
+  const { data: searchData } = useApiQuery<SearchResp>(
+    ['tenant', 'ai', 'draft-search', entityType, debouncedSearch],
+    searchCfg.api + encodeURIComponent(debouncedSearch),
+  );
+  const entityHits: EntityHit[] = useMemo(() => {
+    const list = searchData?.contacts ?? searchData?.deals ?? searchData?.companies ?? searchData?.data ?? [];
+    return list.slice(0, 8).map((row): EntityHit => {
+      if (entityType === 'contact') {
+        return {
+          id: row.id,
+          entity_type: 'contact',
+          label: `${row.firstName ?? ''} ${row.lastName ?? ''}`.trim() || (row.email ?? '—'),
+          sublabel: row.email ?? row.companyName ?? undefined,
+        };
+      }
+      if (entityType === 'deal') {
+        return { id: row.id, entity_type: 'deal', label: row.title ?? '—' };
+      }
+      return { id: row.id, entity_type: 'company', label: row.name ?? '—' };
+    });
+  }, [searchData, entityType]);
+
+  const generateMutation = useMutation({
+    mutationFn: async () => {
       const body = {
         ...(selectedTemplate?.id ? { template_id: selectedTemplate.id } : {}),
         ...(selectedTemplate?.seed ? { template_slug: selectedTemplate.slug } : {}),
-        entity_type: selectedEntity.entity_type,
-        entity_id: selectedEntity.id,
+        entity_type: selectedEntity!.entity_type,
+        entity_id: selectedEntity!.id,
         custom_instructions: customInstructions || undefined,
       };
       const r = await fetch('/api/tenant/ai/draft', {
@@ -143,14 +137,24 @@ export default function AIDraftPage() {
       });
       const data: DraftResp & { error?: string } = await r.json();
       if (!r.ok) throw new Error(data.error ?? `HTTP ${r.status}`);
+      return data as DraftResp;
+    },
+    onMutate: () => setError(null),
+    onSuccess: (data) => {
       setDraft(data);
       setEditedSubject(data.subject ?? '');
       setEditedBody(data.body);
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(null);
+    },
+    onError: (e: Error) => setError(e.message),
+  });
+  const busy: 'generate' | null = generateMutation.isPending ? 'generate' : null;
+
+  function generate() {
+    if (!selectedEntity) {
+      setError('Pick a contact, deal or company first');
+      return;
     }
+    generateMutation.mutate();
   }
 
   async function copy() {

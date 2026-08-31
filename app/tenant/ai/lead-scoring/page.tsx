@@ -4,7 +4,9 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useEffect, useState } from 'react';
+import { useState, useMemo } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import {
   Target, RefreshCw, Sparkles, AlertCircle, Loader2, TrendingUp,
   History, Play, TrendingDown, Minus,
@@ -32,69 +34,54 @@ type Lead = {
   }
 };
 
+const LEADS_QUERY = ['tenant', 'leads', 'scored'] as const;
+
 export default function AILeadScoringPage() {
-  const [leads, setLeads] = useState<Lead[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [running, setRunning] = useState(false);
+  const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState<string | null>(null);
-  const [stats, setStats] = useState({ total: 0, avg: 0, high: 0 });
 
-  function load(signal?: AbortSignal) {
-    setLoading(true);
-    setError(null);
-    fetch('/api/tenant/leads?sort_by=score&sort_order=DESC&limit=100', { cache: 'no-store', signal })
-      .then(async r => {
-        if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? `HTTP ${r.status}`);
-        return r.json();
-      })
-      .then(d => {
-        const data = d.data || d.leads || [];
-        setLeads(data);
-        if (data.length > 0) {
-          const avg = Math.round(data.reduce((acc: number, l: Lead) => acc + (l.score ?? 0), 0) / data.length);
-          const high = data.filter((l: Lead) => (l.score ?? 0) >= 80).length;
-          setStats({ total: data.length, avg, high });
-        }
-      })
-      .catch(e => {
-        if (e?.name === 'AbortError') return;
-        setError(e.message);
-      })
-      .finally(() => {
-        if (!signal?.aborted) setLoading(false);
-      });
-  }
-  useEffect(() => {
-    const controller = new AbortController();
-    load(controller.signal);
-    return () => controller.abort();
-  }, []);
+  // #1328: scored leads via TanStack Query (was raw fetch + useEffect).
+  const { data, isLoading: loading, error: queryError } = useApiQuery<{ data?: Lead[]; leads?: Lead[] }>(
+    LEADS_QUERY,
+    '/api/tenant/leads?sort_by=score&sort_order=DESC&limit=100',
+  );
+  const leads: Lead[] = useMemo(() => data?.data ?? data?.leads ?? [], [data]);
+  const queryErrorMsg = queryError ? (queryError.message || 'Failed to load') : null;
+  const stats = useMemo(() => {
+    if (leads.length === 0) return { total: 0, avg: 0, high: 0 };
+    const avg = Math.round(leads.reduce((acc, l) => acc + (l.score ?? 0), 0) / leads.length);
+    const high = leads.filter(l => (l.score ?? 0) >= 80).length;
+    return { total: leads.length, avg, high };
+  }, [leads]);
 
-  async function runScoring() {
-    setRunning(true);
-    setError(null);
-    try {
+  const load = () => queryClient.invalidateQueries({ queryKey: LEADS_QUERY });
+
+  const runScoringMutation = useMutation({
+    mutationFn: async () => {
       const r = await fetch('/api/tenant/ai/score', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ bulk: true, limit: 5 }),
       });
       if (!r.ok) throw new Error('Scoring run failed');
-      load();
-    } catch (e) { setError((e as Error).message); }
-    finally { setRunning(false); }
-  }
+    },
+    onMutate: () => setError(null),
+    onSuccess: () => load(),
+    onError: (e: Error) => setError(e.message),
+  });
+  const running = runScoringMutation.isPending;
+  const runScoring = () => runScoringMutation.mutate();
 
-  async function recomputeAll() {
-    setBusy('recompute');
-    try {
+  const recomputeMutation = useMutation({
+    mutationFn: async () => {
       const r = await fetch('/api/tenant/admin/lead-scoring/recompute', { method: 'POST' });
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? `HTTP ${r.status}`);
-      load();
-    } catch (e) { setError((e as Error).message); }
-    finally { setBusy(null); }
-  }
+    },
+    onSuccess: () => load(),
+    onError: (e: Error) => setError(e.message),
+  });
+  const busy: string | null = recomputeMutation.isPending ? 'recompute' : null;
+  const recomputeAll = () => recomputeMutation.mutate();
 
   return (
     <div className="space-y-5 animate-fade-in pb-12">
@@ -134,10 +121,10 @@ export default function AILeadScoringPage() {
         </div>
       </div>
 
-      {error && (
+      {(error || queryErrorMsg) && (
         <div className="rounded-xl border border-red-300 bg-red-50 dark:border-red-800/50 dark:bg-red-950/20 px-4 py-3 text-sm text-red-700 dark:text-red-300 flex items-start gap-2">
           <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-          <span className="flex-1">{error}</span>
+          <span className="flex-1">{error || queryErrorMsg}</span>
         </div>
       )}
 
