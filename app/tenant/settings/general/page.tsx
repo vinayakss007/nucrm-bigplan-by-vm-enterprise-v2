@@ -5,6 +5,8 @@
  */
 'use client';
 import { useState, useEffect } from 'react';
+import { useMutation } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import Image from 'next/image';
 import { Save, Globe, Palette, Download, Loader2,
   Link2, CheckCircle, AlertTriangle, Copy } from 'lucide-react';
@@ -14,10 +16,22 @@ const INDUSTRIES = ['','Technology','Healthcare','Finance','Education','Retail',
 const TIMEZONES  = ['UTC','America/New_York','America/Chicago','America/Los_Angeles','Europe/London','Europe/Paris','Europe/Berlin','Asia/Dubai','Asia/Kolkata','Asia/Singapore','Asia/Tokyo','Australia/Sydney'];
 const CURRENCIES = ['USD','EUR','GBP','INR','AED','SGD','AUD','CAD','JPY'];
 
+interface WorkspaceData {
+  name?: string;
+  primary_color?: string;
+  industry?: string;
+  subdomain?: string;
+  custom_domain?: string;
+  logo_url?: string;
+  favicon_url?: string;
+  plan_id?: string;
+  settings?: { timezone?: string; currency?: string };
+  [key: string]: unknown;
+}
+
 export default function TenantGeneralSettings() {
-  const [tenant, setTenant] = useState<Record<string, unknown> | null>(null);
+  const [tenantOverride, setTenantOverride] = useState<WorkspaceData | null>(null);
   const [form, setForm]     = useState({ name:'', primary_color:'#7c3aed', industry:'', subdomain:'', custom_domain:'', settings:{ timezone:'UTC', currency:'USD' } });
-  const [saving, setSaving] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [checkingSubdomain, setCheckingSubdomain] = useState(false);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
@@ -25,22 +39,23 @@ export default function TenantGeneralSettings() {
   const [subdomainAvailable, setSubdomainAvailable] = useState<boolean|null>(null);
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
 
+  // #1328: load workspace via TanStack Query (was raw fetch + useEffect).
+  const { data } = useApiQuery<{ data?: WorkspaceData }>(['tenant', 'workspace'], '/api/tenant/workspace');
+  const fetchedTenant = data?.data ?? null;
+  // Merge locally-saved values (from the save mutation) over the fetched data.
+  const tenant: WorkspaceData | null = fetchedTenant ? { ...fetchedTenant, ...tenantOverride } : tenantOverride;
+
+  // Seed the editable form once the workspace loads.
   useEffect(() => {
-  const controller = new AbortController();
-  let ignore = false;
-    fetch('/api/tenant/workspace', { signal: controller.signal }).then(r=>r.json()).then(d=>{ if (ignore) return;
-      if (d.data) {
-        setTenant(d.data);
-        setForm({
-          name:d.data.name||'', primary_color:d.data.primary_color||'#7c3aed',
-          industry:d.data.industry||'', subdomain:d.data.subdomain||'',
-          custom_domain:d.data.custom_domain||'',
-          settings:{ timezone:d.data.settings?.timezone||'UTC', currency:d.data.settings?.currency||'USD' }
-        });
-      }
-    }).catch(e => { if ((e as Error)?.name === 'AbortError') return; throw e; });
-    return () => { ignore = true; controller.abort(); };
-}, []);
+    if (fetchedTenant) {
+      setForm({
+        name: fetchedTenant.name || '', primary_color: fetchedTenant.primary_color || '#7c3aed',
+        industry: fetchedTenant.industry || '', subdomain: fetchedTenant.subdomain || '',
+        custom_domain: fetchedTenant.custom_domain || '',
+        settings: { timezone: fetchedTenant.settings?.timezone || 'UTC', currency: fetchedTenant.settings?.currency || 'USD' },
+      });
+    }
+  }, [fetchedTenant]);
 
   const checkSubdomain = async (val: string) => {
     if (!val || val.length < 3) { setSubdomainAvailable(null); return; }
@@ -51,13 +66,21 @@ export default function TenantGeneralSettings() {
     setCheckingSubdomain(false);
   };
 
-  const save = async (e: React.FormEvent) => {
-    e.preventDefault(); setSaving(true);
-    const res = await fetch('/api/tenant/workspace', { method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(form) });
-    const data = await res.json();
-    if (res.ok) { toast.success('Settings saved'); setTenant(data.data); }
-    else toast.error(data.error||'Failed to save');
-    setSaving(false);
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch('/api/tenant/workspace', { method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(form) });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || 'Failed to save');
+      return d.data as WorkspaceData;
+    },
+    onSuccess: (d) => { toast.success('Settings saved'); setTenantOverride(prev => ({ ...prev, ...d })); },
+    onError: (e: Error) => toast.error(e.message || 'Failed to save'),
+  });
+  const saving = saveMutation.isPending;
+
+  const save = (e: React.FormEvent) => {
+    e.preventDefault();
+    saveMutation.mutate();
   };
 
   const exportData = async () => {

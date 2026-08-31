@@ -4,7 +4,9 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import { Plus, Map, X, Loader2, Trash2 } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import { cn } from '@/lib/utils';
@@ -28,12 +30,12 @@ interface Territory {
   createdAt: string;
 }
 
+const TERRITORIES_QUERY = ['tenant', 'territories'] as const;
+
 export default function TerritoriesPage() {
-  const [territories, setTerritories] = useState<Territory[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<Territory | null>(null);
-  const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     name: '',
     type: 'geographic' as string,
@@ -54,28 +56,15 @@ export default function TerritoriesPage() {
     return result;
   };
 
-  const load = async (signal?: AbortSignal) => {
-    setLoading(true);
-    try {
-      const res = await fetch('/api/tenant/territories', { signal });
-      if (res.ok) {
-        const d = await res.json();
-        if (signal?.aborted) return;
-        setTerritories(d.data ?? []);
-      }
-    } catch (e) {
-      if ((e as Error)?.name === 'AbortError') return;
-      throw e;
-    } finally {
-      if (!signal?.aborted) setLoading(false);
-    }
-  };
+  // #1328: list via TanStack Query (was raw fetch + useEffect).
+  const { data, isLoading: loading, error } = useApiQuery<{ data?: Territory[] }>(
+    TERRITORIES_QUERY,
+    '/api/tenant/territories',
+  );
+  const territories: Territory[] = data?.data ?? [];
+  if (error) toast.error('Failed to load territories');
 
-  useEffect(() => {
-    const controller = new AbortController();
-    load(controller.signal);
-    return () => controller.abort();
-  }, []);
+  const reload = () => queryClient.invalidateQueries({ queryKey: TERRITORIES_QUERY });
 
   const allTerritories = flattenTree(territories);
 
@@ -96,19 +85,8 @@ export default function TerritoriesPage() {
     setShowModal(true);
   };
 
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSaving(true);
-    try {
-      let geoConfig: Record<string, unknown>;
-      try {
-        geoConfig = JSON.parse(form.geoConfig);
-      } catch {
-        toast.error('Invalid JSON in geo config');
-        setSaving(false);
-        return;
-      }
-
+  const saveTerritory = useMutation({
+    mutationFn: async (geoConfig: Record<string, unknown>) => {
       const payload = {
         ...(editing ? { id: editing.id } : {}),
         name: form.name,
@@ -116,32 +94,48 @@ export default function TerritoriesPage() {
         parentId: form.parentId || null,
         geoConfig,
       };
-
       const res = await fetch('/api/tenant/territories', {
         method: editing ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-      const d = await res.json();
-      if (res.ok) {
-        toast.success(editing ? 'Territory updated' : 'Territory created');
-        setShowModal(false);
-        load();
-      } else {
-        toast.error(d.error || 'Failed to save');
-      }
-    } finally {
-      setSaving(false);
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || 'Failed to save');
+      return Boolean(editing);
+    },
+    onSuccess: (wasEditing) => {
+      toast.success(wasEditing ? 'Territory updated' : 'Territory created');
+      setShowModal(false);
+      reload();
+    },
+    onError: (e: Error) => toast.error(e.message || 'Failed to save'),
+  });
+  const saving = saveTerritory.isPending;
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    let geoConfig: Record<string, unknown>;
+    try {
+      geoConfig = JSON.parse(form.geoConfig);
+    } catch {
+      toast.error('Invalid JSON in geo config');
+      return;
     }
+    saveTerritory.mutate(geoConfig);
   };
+
+  const deleteTerritory = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/tenant/territories?id=${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete');
+    },
+    onSuccess: () => { toast.success('Territory deleted'); reload(); },
+    onError: () => toast.error('Failed to delete'),
+  });
 
   const del = async (id: string) => {
     await confirmThen('Delete this territory?', async () => {
-      const res = await fetch(`/api/tenant/territories?id=${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        toast.success('Territory deleted');
-        load();
-      }
+      deleteTerritory.mutate(id);
     });
   };
 

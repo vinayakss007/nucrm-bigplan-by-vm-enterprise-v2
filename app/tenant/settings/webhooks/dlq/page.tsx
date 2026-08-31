@@ -4,7 +4,9 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import { AlertTriangle, RotateCcw, Trash2, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import toast from 'react-hot-toast';
@@ -22,90 +24,75 @@ interface DLQEntry {
   createdAt: string;
 }
 
+const limit = 20;
+
 export default function WebhookDLQPage() {
-  const [entries, setEntries] = useState<DLQEntry[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
-  const [total, setTotal] = useState(0);
-  const [retrying, setRetrying] = useState<Set<string>>(new Set());
-  const [purging, setPurging] = useState(false);
-  const limit = 20;
 
-  const load = useCallback(async (signal?: AbortSignal) => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams({ page: String(page), limit: String(limit) });
-      const res = await fetch(`/api/tenant/webhooks/dlq?${params}`, { signal });
-      if (res.ok) {
-        const d = await res.json();
-        if (signal?.aborted) return;
-        setEntries(d.data ?? []);
-        setTotal(d.total ?? 0);
-      }
-    } catch (e) {
-      if ((e as Error)?.name === 'AbortError') return;
-      throw e;
-    } finally {
-      if (!signal?.aborted) setLoading(false);
-    }
-  }, [page]);
+  // #1328: DLQ list via TanStack Query (was raw fetch + useEffect). page is part
+  // of the key so paging refetches and caches per page.
+  const { data, isLoading: loading } = useApiQuery<{ data?: DLQEntry[]; total?: number }>(
+    ['tenant', 'webhooks', 'dlq', { page }],
+    `/api/tenant/webhooks/dlq?${new URLSearchParams({ page: String(page), limit: String(limit) })}`,
+  );
+  const entries: DLQEntry[] = data?.data ?? [];
+  const total = data?.total ?? 0;
 
-  useEffect(() => {
-    const controller = new AbortController();
-    load(controller.signal);
-    return () => controller.abort();
-  }, [page, load]);
+  const reload = () => queryClient.invalidateQueries({ queryKey: ['tenant', 'webhooks', 'dlq'] });
 
   const totalPages = Math.max(1, Math.ceil(total / limit));
 
-  const retryEntry = async (id: string) => {
-    setRetrying(prev => new Set(prev).add(id));
-    try {
+  const retryMutation = useMutation({
+    mutationFn: async (id: string) => {
       const res = await fetch('/api/tenant/webhooks/dlq', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'retry', ids: [id] }),
       });
-      const d = await res.json();
-      if (d.succeeded > 0) {
-        toast.success('Retried successfully');
-        load();
-      } else {
-        toast.error(d.failed > 0 ? 'Retry failed' : 'No entry found');
-      }
-    } finally {
-      setRetrying(prev => { const next = new Set(prev); next.delete(id); return next; });
-    }
-  };
+      const d = await res.json().catch(() => ({}));
+      return d as { succeeded?: number; failed?: number };
+    },
+    onSuccess: (d) => {
+      if ((d.succeeded ?? 0) > 0) { toast.success('Retried successfully'); reload(); }
+      else toast.error((d.failed ?? 0) > 0 ? 'Retry failed' : 'No entry found');
+    },
+  });
+  // Track which specific row is retrying so only that button shows a spinner.
+  const retrying = retryMutation.isPending && retryMutation.variables
+    ? new Set([retryMutation.variables])
+    : new Set<string>();
+  const retryEntry = (id: string) => retryMutation.mutate(id);
 
-  const retryAll = async () => {
-    setPurging(true);
-    try {
+  const retryAllMutation = useMutation({
+    mutationFn: async () => {
       const res = await fetch('/api/tenant/webhooks/dlq', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'retry_all' }),
       });
-      const d = await res.json();
-      toast.success(`Retried ${d.succeeded} entries, ${d.failed} failed`);
-      load();
-    } finally {
-      setPurging(false);
-    }
-  };
+      return (await res.json().catch(() => ({}))) as { succeeded?: number; failed?: number };
+    },
+    onSuccess: (d) => { toast.success(`Retried ${d.succeeded ?? 0} entries, ${d.failed ?? 0} failed`); reload(); },
+  });
+  const purging = retryAllMutation.isPending;
+  const retryAll = () => retryAllMutation.mutate();
 
-  const purgeEntry = async (id: string) => {
-    await confirmThen('Permanently delete this DLQ entry?', async () => {
+  const purgeMutation = useMutation({
+    mutationFn: async (id: string) => {
       const res = await fetch('/api/tenant/webhooks/dlq', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'purge', ids: [id] }),
       });
-      const d = await res.json();
-      if (d.purged > 0) {
-        toast.success('Purged');
-        load();
-      }
+      return (await res.json().catch(() => ({}))) as { purged?: number };
+    },
+    onSuccess: (d) => { if ((d.purged ?? 0) > 0) { toast.success('Purged'); reload(); } },
+  });
+
+  const purgeEntry = async (id: string) => {
+    await confirmThen('Permanently delete this DLQ entry?', async () => {
+      purgeMutation.mutate(id);
     });
   };
 

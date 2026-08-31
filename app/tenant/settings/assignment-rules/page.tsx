@@ -4,7 +4,9 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import { Plus, Zap, X, Loader2, Trash2 } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import { cn } from '@/lib/utils';
@@ -31,13 +33,13 @@ interface AssignmentRule {
   createdAt: string;
 }
 
+const RULES_QUERY = ['tenant', 'assignment-rules'] as const;
+const TEAMS_QUERY = ['tenant', 'teams', 'for-assignment-rules'] as const;
+
 export default function AssignmentRulesPage() {
-  const [rules, setRules] = useState<AssignmentRule[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<AssignmentRule | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [teams, setTeams] = useState<{ id: string; name: string; memberCount?: number }[]>([]);
   const [form, setForm] = useState({
     name: '',
     type: 'round_robin' as string,
@@ -49,31 +51,23 @@ export default function AssignmentRulesPage() {
 
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
 
-  const load = async () => {
-    setLoading(true);
-    try {
-      const res = await fetch('/api/tenant/assignment-rules');
-      if (res.ok) {
-        const d = await res.json();
-        setRules(d.data ?? []);
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => { load(); }, []);
+  // #1328: reads via TanStack Query (were raw fetch + useEffect).
+  const { data: rulesData, isLoading: loading, error } = useApiQuery<{ data?: AssignmentRule[] }>(
+    RULES_QUERY,
+    '/api/tenant/assignment-rules',
+  );
+  const rules: AssignmentRule[] = rulesData?.data ?? [];
+  if (error) toast.error('Failed to load assignment rules');
 
   // Teams the rule can route to (config.teamId) — the member pool is then
   // loaded live from the team at assignment time.
-  useEffect(() => {
-    const abort = new AbortController();
-    fetch('/api/tenant/teams', { signal: abort.signal })
-      .then(r => r.ok ? r.json() : { data: [] })
-      .then(d => { if (!abort.signal.aborted) setTeams(d.data ?? []); })
-      .catch(() => {});
-    return () => abort.abort();
-  }, []);
+  const { data: teamsData } = useApiQuery<{ data?: { id: string; name: string; memberCount?: number }[] }>(
+    TEAMS_QUERY,
+    '/api/tenant/teams',
+  );
+  const teams = teamsData?.data ?? [];
+
+  const reload = () => queryClient.invalidateQueries({ queryKey: RULES_QUERY });
 
   const openCreate = () => {
     setEditing(null);
@@ -95,19 +89,8 @@ export default function AssignmentRulesPage() {
     setShowModal(true);
   };
 
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSaving(true);
-    try {
-      let config: Record<string, unknown>;
-      try {
-        config = JSON.parse(form.config);
-      } catch {
-        toast.error('Invalid JSON in config');
-        setSaving(false);
-        return;
-      }
-
+  const saveRule = useMutation({
+    mutationFn: async (config: Record<string, unknown>) => {
       // The Team picker is the easy path: it writes config.teamId, and the
       // engine loads that team's roster live at assignment time. Clearing it
       // removes the key so an explicit members list (advanced JSON) can win.
@@ -122,33 +105,49 @@ export default function AssignmentRulesPage() {
         priority: form.priority,
         entityType: form.entityType,
       };
-
       const res = await fetch('/api/tenant/assignment-rules', {
         method: editing ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-      const d = await res.json();
-      if (res.ok) {
-        toast.success(editing ? 'Rule updated' : 'Rule created');
-        setShowModal(false);
-        load();
-      } else {
-        toast.error(d.error || 'Failed to save');
-      }
-    } finally {
-      setSaving(false);
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || 'Failed to save');
+      return Boolean(editing);
+    },
+    onSuccess: (wasEditing) => {
+      toast.success(wasEditing ? 'Rule updated' : 'Rule created');
+      setShowModal(false);
+      reload();
+    },
+    onError: (e: Error) => toast.error(e.message || 'Failed to save'),
+  });
+  const saving = saveRule.isPending;
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    let config: Record<string, unknown>;
+    try {
+      config = JSON.parse(form.config);
+    } catch {
+      toast.error('Invalid JSON in config');
+      return;
     }
+    saveRule.mutate(config);
   };
+
+  const deleteRule = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/tenant/assignment-rules?id=${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete');
+    },
+    onSuccess: () => { toast.success('Rule deleted'); reload(); },
+    onError: () => toast.error('Failed to delete'),
+  });
 
   const del = async (id: string) => {
     const rule = rules.find(r => r.id === id);
     await confirmThen(`Delete assignment rule "${rule?.name || 'this rule'}"?`, async () => {
-      const res = await fetch(`/api/tenant/assignment-rules?id=${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        setRules(prev => prev.filter(x => x.id !== id));
-        toast.success('Rule deleted');
-      }
+      deleteRule.mutate(id);
     });
   };
 
