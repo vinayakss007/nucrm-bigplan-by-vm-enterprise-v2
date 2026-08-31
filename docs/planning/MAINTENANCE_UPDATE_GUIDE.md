@@ -13,7 +13,8 @@ Sentry is integrated via `@sentry/nextjs`. Configuration files:
 - `sentry.client.config.ts` — Browser-side error capture + replay
 - `sentry.server.config.ts` — Server-side error capture
 - `sentry.edge.config.ts` — Edge runtime capture
-- `_instrumentation.ts` — Performance traces
+- `instrumentation.ts` — Server/edge `register()`: Sentry, env init, graceful shutdown, metrics
+- `instrumentation-client.ts` — Client-side Sentry init + navigation tracing
 - `next.config.mjs` — Source maps upload (when SENTRY_ORG/PROJECT/AUTH_TOKEN set)
 - `app/global-error.tsx` — Catches unhandled React errors → sends to Sentry
 

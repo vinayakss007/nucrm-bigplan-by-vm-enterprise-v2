@@ -104,7 +104,7 @@
     "test:ui": "vitest --ui",
     "logs:watch": "tail -f nucrm.log",
     "logs:errors": "tail -f nucrm.log | grep -i --line-buffered error",
-    "logs:view": "echo '📡 Opening log viewer... && open log-viewer.html || xdg-open log-viewer.html'",
+    "logs:view": "echo '📡 Opening log viewer...' && (open scripts/log-viewer.html || xdg-open scripts/log-viewer.html)",
     "analyze:bundle": "ANALYZE=true npm run build && npx tsx scripts/analyze-bundle.ts",
     "analyze:visual": "ANALYZE=true npm run build",
     "quality:report": "npx tsx scripts/quality-report.ts",

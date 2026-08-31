@@ -23,6 +23,10 @@ export default tseslint.config(
       "next-env.d.ts",
       "**/*.stories.tsx",
       "tests/load/",
+      // k6 load script — runs under the k6 runtime (k6/* imports, __ENV), not Node.
+      "scripts/load-test.js",
+      // Retired / reference-only files; never built or linted.
+      "archive/",
     ],
   },
   ...tseslint.configs.recommended,

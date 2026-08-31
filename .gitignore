@@ -81,3 +81,5 @@ tmp/*
 !tmp/.gitkeep
 tmp_*.sql
 *.log.[0-9]
+# Output of scripts/test_all_pages.sh — a generated report, not source.
+PAGE_TEST_RESULTS.txt
