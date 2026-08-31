@@ -51,13 +51,51 @@ const STATUS_CFG: Record<string, { label: string; color: string }> = {
   cancelled: { label: 'Cancelled', color: 'bg-red-100 text-red-600' },
 };
 
+interface DealDetail {
+  id: string;
+  title: string;
+  /** Aliased from `amount` by the deal page query. */
+  value?: number | string | null;
+  amount?: number | string | null;
+  /** Aliased from the deal-stage name by the deal page query. */
+  stage?: string | null;
+  /** Server column is `close_date` → serialized as `closeDate`. */
+  closeDate?: Date | string | null;
+  probability?: number | string | null;
+  description?: string | null;
+  notes?: string | null;
+  created_at?: Date | string | null;
+  contact_id?: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
+  company_id?: string | null;
+  company_name?: string | null;
+  assigned_name?: string | null;
+}
+
+interface DealTask {
+  id: string;
+  title: string;
+  description?: string | null;
+  priority?: string | null;
+  status?: string | null;
+  due_date?: Date | string | null;
+  completed?: boolean | null;
+}
+
+interface DealActivity {
+  id: string;
+  type?: string | null;
+  action?: string | null;
+  description?: string | null;
+  performed_by_name?: string | null;
+  created_at?: Date | string | null;
+}
+
 interface Props {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  deal: any;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  tasks: any[];
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  activities: any[];
+  deal: DealDetail;
+  tasks: DealTask[];
+  activities: DealActivity[];
   permissions: { canEdit: boolean; canDelete: boolean; canViewValue: boolean };
   tenantId: string;
   userId: string;
@@ -95,7 +133,7 @@ export default function DealDetailClient({ deal, tasks, activities, permissions,
     value: deal.value?.toString() || '0',
     stage: deal.stage || 'lead',
     probability: deal.probability?.toString() || '10',
-    close_date: deal.close_date ? new Date(deal.close_date).toISOString().split('T')[0] : '',
+    close_date: deal.closeDate ? new Date(deal.closeDate).toISOString().split('T')[0] : '',
     description: deal.description || deal.notes || '',
   });
   const [saving, setSaving] = useState(false);
@@ -332,7 +370,7 @@ export default function DealDetailClient({ deal, tasks, activities, permissions,
         </div>
         <div className="admin-card p-4 text-center">
           <Calendar className="w-5 h-5 text-muted-foreground mx-auto mb-1" />
-          <p className="text-xl font-bold">{deal.close_date ? formatDate(deal.close_date) : '—'}</p>
+          <p className="text-xl font-bold">{deal.closeDate ? formatDate(deal.closeDate) : '—'}</p>
           <p className="text-xs text-muted-foreground">Close Date</p>
         </div>
         <div className="admin-card p-4 text-center">
@@ -417,13 +455,13 @@ export default function DealDetailClient({ deal, tasks, activities, permissions,
               ) : (
                 <div className="divide-y divide-border">
                   {tasks.map(t => {
-                    const pCfg = PRIORITY_CFG[t.priority] || { label: t.priority || 'Medium', color: 'text-slate-500' };
-                    const sCfg = STATUS_CFG[t.status] || { label: t.status || 'Pending', color: 'bg-slate-100 text-slate-600' };
+                    const pCfg = (t.priority ? PRIORITY_CFG[t.priority] : undefined) || { label: t.priority || 'Medium', color: 'text-slate-500' };
+                    const sCfg = (t.status ? STATUS_CFG[t.status] : undefined) || { label: t.status || 'Pending', color: 'bg-slate-100 text-slate-600' };
                     return (
                       <div key={t.id} className="flex items-center gap-3 px-5 py-3">
                         <input
                           type="checkbox"
-                          checked={t.completed}
+                          checked={!!t.completed}
                           onChange={() => toggleTaskComplete(t.id, !t.completed)}
                           className="w-4 h-4 rounded border-border"
                         />
@@ -465,7 +503,7 @@ export default function DealDetailClient({ deal, tasks, activities, permissions,
                 <div key={t.id} className="flex items-center gap-3 px-5 py-3">
                   <input
                     type="checkbox"
-                    checked={t.completed}
+                    checked={!!t.completed}
                     onChange={() => toggleTaskComplete(t.id, !t.completed)}
                     className="w-4 h-4 rounded border-border"
                   />
@@ -475,8 +513,8 @@ export default function DealDetailClient({ deal, tasks, activities, permissions,
                     </p>
                     {t.description && <p className="text-xs text-muted-foreground truncate">{t.description}</p>}
                   </div>
-                  <Badge className={cn('text-xs', (STATUS_CFG[t.status] || { color: 'bg-slate-100 text-slate-600' }).color)}>
-                    {(STATUS_CFG[t.status] || { label: 'Unknown' }).label}
+                  <Badge className={cn('text-xs', ((t.status ? STATUS_CFG[t.status] : undefined) || { color: 'bg-slate-100 text-slate-600' }).color)}>
+                    {((t.status ? STATUS_CFG[t.status] : undefined) || { label: 'Unknown' }).label}
                   </Badge>
                 </div>
               ))}
