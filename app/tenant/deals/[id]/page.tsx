@@ -11,13 +11,15 @@ import {
   companies as companiesTable, 
   users as usersTable, 
   tasks as tasksTable, 
-  activities as activitiesTable,
-  dealStages
+  dealStages,
+  followUps as followUpsTable,
+  leads as leadsTable
 } from '@/drizzle/schema';
 import { eq, and, sql, desc } from 'drizzle-orm';
 import { notFound } from 'next/navigation';
 import DealDetailClient from '@/components/tenant/deal-detail-client';
 import { withTenantScope } from '@/lib/api/with-api-route';
+import { getActivityTimeline } from '@/lib/activity/timeline';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -88,6 +90,28 @@ export default async function DealDetailPage({ params }: PageProps) {
     value: dealResult.deal.amount, // Map amount to value
   };
 
+  // #1816: if this deal was created by converting a lead, resolve that lead so
+  // the UI can show a "Converted from Lead →" back-link. The originating lead
+  // id is stored in deals.metadata.source_lead_id by lib/leads/convert.
+  const sourceLeadId = (dealResult.deal.metadata as { source_lead_id?: string } | null)?.source_lead_id;
+  let sourceLead: { id: string; name: string } | null = null;
+  if (sourceLeadId) {
+    const [ld] = await db.select({
+      id: leadsTable.id,
+      full_name: leadsTable.fullName,
+      first_name: leadsTable.firstName,
+      last_name: leadsTable.lastName,
+    })
+    .from(leadsTable)
+    .where(and(eq(leadsTable.id, sourceLeadId), eq(leadsTable.tenantId, ctx.tenantId)))
+    .limit(1)
+    .catch(() => []);
+    if (ld) {
+      const name = ld.full_name || `${ld.first_name ?? ''} ${ld.last_name ?? ''}`.trim() || 'Lead';
+      sourceLead = { id: ld.id, name };
+    }
+  }
+
   // Get related tasks
   const tasks = await db.select({
     id: tasksTable.id,
@@ -107,39 +131,30 @@ export default async function DealDetailPage({ params }: PageProps) {
   ))
   .orderBy(desc(tasksTable.createdAt));
 
-  // Get activities (graceful fallback if query fails)
-  let activities: Array<{
-    id: string;
-    entity_type: string;
-    action: string | null;
-    description: string | null;
-    metadata: unknown;
-    created_at: Date;
-    performed_by_name: string | null;
-    performed_by_avatar: string | null;
-  }> = [];
-  try {
-    activities = await db.select({
-      id: activitiesTable.id,
-      entity_type: activitiesTable.entityType,
-      action: activitiesTable.eventType,
-      description: activitiesTable.description,
-      metadata: activitiesTable.metadata,
-      created_at: activitiesTable.createdAt,
-      performed_by_name: usersTable.fullName,
-      performed_by_avatar: usersTable.avatarUrl
-    })
-    .from(activitiesTable)
-    .leftJoin(usersTable, eq(usersTable.id, activitiesTable.userId))
-    .where(and(
-      eq(activitiesTable.dealId, id),
-      eq(activitiesTable.tenantId, ctx.tenantId)
-    ))
-    .orderBy(desc(activitiesTable.createdAt))
-    .limit(100);
-  } catch {
-    // Failed to load deal activities
-  }
+  // #1815: the deal's follow-ups (followUps.dealId FK already existed but was
+  // never surfaced on the deal). Fallback so a failure never breaks the page.
+  const followUpsList = await db.select({
+    id: followUpsTable.id,
+    title: followUpsTable.title,
+    description: followUpsTable.description,
+    due_date: followUpsTable.dueDate,
+    status: followUpsTable.status,
+    completed_at: followUpsTable.completedAt,
+    assignee_name: usersTable.fullName,
+  })
+  .from(followUpsTable)
+  .leftJoin(usersTable, eq(usersTable.id, followUpsTable.assignedTo))
+  .where(and(
+    eq(followUpsTable.dealId, id),
+    eq(followUpsTable.tenantId, ctx.tenantId),
+  ))
+  .orderBy(desc(followUpsTable.dueDate))
+  .limit(50)
+  .catch(() => []);
+
+  // #1820: unified activity timeline — merges activities + calls + notes for
+  // this deal into one chronological feed.
+  const activities = await getActivityTimeline('deal', id, ctx.tenantId, 100);
 
   const permissions = {
     canEdit: can(ctx, 'deals.edit'),
@@ -152,6 +167,8 @@ export default async function DealDetailPage({ params }: PageProps) {
       deal={deal}
       tasks={tasks}
       activities={activities}
+      followUps={followUpsList}
+      sourceLead={sourceLead}
       permissions={permissions}
       tenantId={ctx.tenantId}
       userId={ctx.userId}

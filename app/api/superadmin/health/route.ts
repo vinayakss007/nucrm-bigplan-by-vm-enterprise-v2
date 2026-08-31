@@ -65,7 +65,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
         status: c.status === 'up' ? 'ok' : 'error',
         latencyMs: c.latency_ms,
         message: c.message,
-      }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
+      }).catch((err) => logError({ error: err, context: 'superadmin/health async side-effect' }));
     }
 
     const history = await db

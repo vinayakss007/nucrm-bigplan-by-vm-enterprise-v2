@@ -122,7 +122,18 @@ export const PATCH = withApiRoute(async (request: NextRequest) => {
     if (body.industry !== undefined) updateData.industry = body.industry;
     if (body.company_size !== undefined) updateData.companySize = body.company_size;
     if (body.country !== undefined) updateData.country = body.country;
-    if (body.settings !== undefined) updateData.settings = body.settings;
+    // Merge `settings` (shallow) into the existing jsonb rather than replacing
+    // it wholesale, so a partial payload (e.g. only { autoInvoiceOnWon }) can
+    // never clobber other keys like timezone/currency.
+    if (body.settings !== undefined && body.settings !== null) {
+      const [current] = await db
+        .select({ settings: tenants.settings })
+        .from(tenants)
+        .where(eq(tenants.id, ctx.tenantId))
+        .limit(1);
+      const existingSettings = (current?.settings as Record<string, unknown> | null) ?? {};
+      updateData.settings = { ...existingSettings, ...(body.settings as Record<string, unknown>) };
+    }
     if (body.logo_url !== undefined) updateData.logoUrl = body.logo_url;
     if (body.subdomain !== undefined) updateData.subdomain = body.subdomain;
     if (body.custom_domain !== undefined) updateData.customDomain = body.custom_domain;

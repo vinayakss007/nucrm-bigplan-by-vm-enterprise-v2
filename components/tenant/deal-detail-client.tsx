@@ -11,7 +11,7 @@ import { useRouter } from 'next/navigation';
 import {
   ArrowLeft, DollarSign, Calendar, User, Building2, TrendingUp,
   Edit, Trash2, Activity, Phone, StickyNote,
-  FileText, Plus, MoreHorizontal
+  FileText, Plus, MoreHorizontal, CheckCircle, Target
 } from 'lucide-react';
 import { cn, formatDate, formatCurrency, formatRelativeTime } from '@/lib/utils';
 import DocumentsPanel from '@/components/documents/documents-panel';
@@ -51,13 +51,63 @@ const STATUS_CFG: Record<string, { label: string; color: string }> = {
   cancelled: { label: 'Cancelled', color: 'bg-red-100 text-red-600' },
 };
 
+interface DealDetail {
+  id: string;
+  title: string;
+  /** Aliased from `amount` by the deal page query. */
+  value?: number | string | null;
+  amount?: number | string | null;
+  /** Aliased from the deal-stage name by the deal page query. */
+  stage?: string | null;
+  /** Server column is `close_date` → serialized as `closeDate`. */
+  closeDate?: Date | string | null;
+  probability?: number | string | null;
+  description?: string | null;
+  notes?: string | null;
+  created_at?: Date | string | null;
+  contact_id?: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
+  company_id?: string | null;
+  company_name?: string | null;
+  assigned_name?: string | null;
+}
+
+interface DealTask {
+  id: string;
+  title: string;
+  description?: string | null;
+  priority?: string | null;
+  status?: string | null;
+  due_date?: Date | string | null;
+  completed?: boolean | null;
+}
+
+interface DealActivity {
+  id: string;
+  type?: string | null;
+  action?: string | null;
+  description?: string | null;
+  performed_by_name?: string | null;
+  created_at?: Date | string | null;
+}
+
+interface DealFollowUp {
+  id: string;
+  title?: string;
+  description?: string | null;
+  due_date?: Date | string | null;
+  status?: string | null;
+  completed_at?: Date | string | null;
+  assignee_name?: string | null;
+}
+
 interface Props {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  deal: any;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  tasks: any[];
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  activities: any[];
+  deal: DealDetail;
+  tasks: DealTask[];
+  activities: DealActivity[];
+  followUps?: DealFollowUp[];
+  sourceLead?: { id: string; name: string } | null;
   permissions: { canEdit: boolean; canDelete: boolean; canViewValue: boolean };
   tenantId: string;
   userId: string;
@@ -65,7 +115,7 @@ interface Props {
   _userId?: string;
 }
 
-export default function DealDetailClient({ deal, tasks, activities, permissions, _tenantId, _userId }: Props) {
+export default function DealDetailClient({ deal, tasks, activities, followUps = [], sourceLead = null, permissions, _tenantId, _userId }: Props) {
   // Fetch dynamic pipeline stages; fall back to defaults if unavailable (#756 item 8).
   const [_STAGES, setSTAGES] = useState(DEFAULT_STAGES);
   useEffect(() => {
@@ -95,7 +145,7 @@ export default function DealDetailClient({ deal, tasks, activities, permissions,
     value: deal.value?.toString() || '0',
     stage: deal.stage || 'lead',
     probability: deal.probability?.toString() || '10',
-    close_date: deal.close_date ? new Date(deal.close_date).toISOString().split('T')[0] : '',
+    close_date: deal.closeDate ? new Date(deal.closeDate).toISOString().split('T')[0] : '',
     description: deal.description || deal.notes || '',
   });
   const [saving, setSaving] = useState(false);
@@ -294,6 +344,15 @@ export default function DealDetailClient({ deal, tasks, activities, permissions,
               {permissions.canViewValue && (
                 <span className="text-sm font-bold text-violet-600">{formatCurrency(Number(deal.value))}</span>
               )}
+              {sourceLead && (
+                <Link
+                  href={`/tenant/leads/${sourceLead.id}`}
+                  className="flex items-center gap-1 text-xs text-violet-600 hover:text-violet-700 hover:underline transition-colors"
+                  title={`Converted from lead: ${sourceLead.name}`}
+                >
+                  <Target className="w-3 h-3" />Converted from Lead: {sourceLead.name}
+                </Link>
+              )}
             </div>
           </div>
         </div>
@@ -332,7 +391,7 @@ export default function DealDetailClient({ deal, tasks, activities, permissions,
         </div>
         <div className="admin-card p-4 text-center">
           <Calendar className="w-5 h-5 text-muted-foreground mx-auto mb-1" />
-          <p className="text-xl font-bold">{deal.close_date ? formatDate(deal.close_date) : '—'}</p>
+          <p className="text-xl font-bold">{deal.closeDate ? formatDate(deal.closeDate) : '—'}</p>
           <p className="text-xs text-muted-foreground">Close Date</p>
         </div>
         <div className="admin-card p-4 text-center">
@@ -417,13 +476,13 @@ export default function DealDetailClient({ deal, tasks, activities, permissions,
               ) : (
                 <div className="divide-y divide-border">
                   {tasks.map(t => {
-                    const pCfg = PRIORITY_CFG[t.priority] || { label: t.priority || 'Medium', color: 'text-slate-500' };
-                    const sCfg = STATUS_CFG[t.status] || { label: t.status || 'Pending', color: 'bg-slate-100 text-slate-600' };
+                    const pCfg = (t.priority ? PRIORITY_CFG[t.priority] : undefined) || { label: t.priority || 'Medium', color: 'text-slate-500' };
+                    const sCfg = (t.status ? STATUS_CFG[t.status] : undefined) || { label: t.status || 'Pending', color: 'bg-slate-100 text-slate-600' };
                     return (
                       <div key={t.id} className="flex items-center gap-3 px-5 py-3">
                         <input
                           type="checkbox"
-                          checked={t.completed}
+                          checked={!!t.completed}
                           onChange={() => toggleTaskComplete(t.id, !t.completed)}
                           className="w-4 h-4 rounded border-border"
                         />
@@ -439,6 +498,44 @@ export default function DealDetailClient({ deal, tasks, activities, permissions,
                         </div>
                         <Badge className={cn('text-[10px] font-semibold', sCfg.color)}>{sCfg.label}</Badge>
                         <span className={cn('text-xs font-semibold', pCfg.color)}>{pCfg.label}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Follow-ups (#1815) */}
+            <div className="admin-card overflow-hidden">
+              <div className="px-5 py-3 border-b border-border flex items-center justify-between">
+                <h2 className="text-sm font-semibold flex items-center gap-2">
+                  <Calendar className="w-4 h-4" /> Follow-ups
+                  <span className="text-xs font-normal text-muted-foreground">
+                    ({followUps.filter(f => f.status !== 'completed' && f.status !== 'done' && !f.completed_at).length} open)
+                  </span>
+                </h2>
+              </div>
+              {!followUps.length ? (
+                <p className="px-5 py-6 text-sm text-muted-foreground text-center">No follow-ups scheduled</p>
+              ) : (
+                <div className="divide-y divide-border">
+                  {followUps.map(f => {
+                    const done = f.status === 'completed' || f.status === 'done' || !!f.completed_at;
+                    const overdue = !done && f.due_date && new Date(f.due_date) < new Date();
+                    return (
+                      <div key={f.id} className="flex items-center gap-3 px-5 py-3">
+                        <span className={cn('shrink-0', done ? 'text-emerald-600' : overdue ? 'text-red-600' : 'text-muted-foreground')}>
+                          {done ? <CheckCircle className="w-4 h-4" /> : <Calendar className="w-4 h-4" />}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <p className={cn('text-sm font-medium truncate', done && 'line-through text-muted-foreground')}>{f.title}</p>
+                          {f.due_date && (
+                            <p className={cn('text-xs', overdue ? 'text-red-600 font-medium' : 'text-muted-foreground')}>
+                              {done ? 'Done' : overdue ? 'Overdue' : 'Due'}: {formatDate(f.due_date)}
+                            </p>
+                          )}
+                        </div>
+                        {f.assignee_name && <span className="text-xs text-muted-foreground shrink-0">{f.assignee_name}</span>}
                       </div>
                     );
                   })}
@@ -465,7 +562,7 @@ export default function DealDetailClient({ deal, tasks, activities, permissions,
                 <div key={t.id} className="flex items-center gap-3 px-5 py-3">
                   <input
                     type="checkbox"
-                    checked={t.completed}
+                    checked={!!t.completed}
                     onChange={() => toggleTaskComplete(t.id, !t.completed)}
                     className="w-4 h-4 rounded border-border"
                   />
@@ -475,8 +572,8 @@ export default function DealDetailClient({ deal, tasks, activities, permissions,
                     </p>
                     {t.description && <p className="text-xs text-muted-foreground truncate">{t.description}</p>}
                   </div>
-                  <Badge className={cn('text-xs', (STATUS_CFG[t.status] || { color: 'bg-slate-100 text-slate-600' }).color)}>
-                    {(STATUS_CFG[t.status] || { label: 'Unknown' }).label}
+                  <Badge className={cn('text-xs', ((t.status ? STATUS_CFG[t.status] : undefined) || { color: 'bg-slate-100 text-slate-600' }).color)}>
+                    {((t.status ? STATUS_CFG[t.status] : undefined) || { label: 'Unknown' }).label}
                   </Badge>
                 </div>
               ))}

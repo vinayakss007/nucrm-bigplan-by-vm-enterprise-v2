@@ -48,7 +48,12 @@ describe('db/request-connection (#1615 pinning primitive)', () => {
       insideClient = getPinnedClient();
     });
 
-    expect(insideClient).toBe(mockClient);
+    // The pinned client is a transparent serialization wrapper over the
+    // acquired client (per-pinned-client query serialization), so it is defined
+    // and delegates to mockClient rather than being it by reference identity.
+    expect(insideClient).toBeDefined();
+    await (insideClient as { query: (sql: string) => Promise<unknown> }).query('SELECT 42');
+    expect(mockClient.query).toHaveBeenCalledWith('SELECT 42');
     expect(getPinnedClient()).toBeUndefined();
     expect(mockPool.connect).toHaveBeenCalledTimes(1);
   });
@@ -91,6 +96,75 @@ describe('db/request-connection (#1615 pinning primitive)', () => {
     // Nested call did not acquire/release a second client; release happens once
     // when the outer scope unwinds.
     expect(mockClient.release).toHaveBeenCalledTimes(1);
+  });
+
+  it('serializes concurrent queries on the pinned client (no overlap)', async () => {
+    // Model node-postgres' one-in-flight-query-per-client rule: track how many
+    // queries are executing simultaneously and fail if it ever exceeds 1.
+    let inFlight = 0;
+    let maxInFlight = 0;
+    const serializedClient = {
+      query: vi.fn(async () => {
+        inFlight++;
+        maxInFlight = Math.max(maxInFlight, inFlight);
+        // Yield to the event loop so a truly-concurrent second query would
+        // overlap here if serialization were absent.
+        await new Promise((r) => setTimeout(r, 5));
+        inFlight--;
+        return { rows: [] };
+      }),
+      release: vi.fn(),
+    };
+    mockPool.connect.mockResolvedValueOnce(serializedClient);
+
+    const { withPinnedConnection, getPinnedClient } = await import('@/lib/db/request-connection');
+
+    await withPinnedConnection(async () => {
+      const client = getPinnedClient() as { query: (sql: string) => Promise<unknown> };
+      // Fire three queries WITHOUT awaiting between them — the fire-and-forget
+      // pattern that caused the pg "already executing a query" warning.
+      const p1 = client.query('SELECT 1');
+      const p2 = client.query('SELECT 2');
+      const p3 = client.query('SELECT 3');
+      await Promise.all([p1, p2, p3]);
+    });
+
+    // If serialization works, no two queries ever ran at once.
+    expect(maxInFlight).toBe(1);
+    // All three data queries executed (plus the teardown GUC reset).
+    expect(serializedClient.query.mock.calls.filter((c) => String(c[0]).startsWith('SELECT ')).length)
+      .toBeGreaterThanOrEqual(3);
+  });
+
+  it('drains in-flight queries before resetting GUCs and releasing (fire-and-forget safe)', async () => {
+    const order: string[] = [];
+    const ffClient = {
+      query: vi.fn(async (sql: string) => {
+        if (String(sql).includes('set_config')) {
+          order.push('reset');
+        } else {
+          await new Promise((r) => setTimeout(r, 10));
+          order.push('detached-query-done');
+        }
+        return { rows: [] };
+      }),
+      release: vi.fn(() => order.push('release')),
+    };
+    mockPool.connect.mockResolvedValueOnce(ffClient);
+
+    const { withPinnedConnection, getPinnedClient } = await import('@/lib/db/request-connection');
+
+    await withPinnedConnection(async () => {
+      const client = getPinnedClient() as { query: (sql: string) => Promise<unknown> };
+      // Launch a detached (never-awaited) query, mimicking fireWebhooks/
+      // evaluateAutomations, then let the handler "return" immediately.
+      void client.query('SELECT detached');
+    });
+
+    // Teardown must wait for the detached query to finish BEFORE the reset and
+    // release — otherwise the reset/release would collide with an in-flight
+    // query on the same connection.
+    expect(order).toEqual(['detached-query-done', 'reset', 'release']);
   });
 
   it('is a no-op under PgBouncer: no client acquired or pinned', async () => {

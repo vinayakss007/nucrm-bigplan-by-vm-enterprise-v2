@@ -4,7 +4,9 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import { Check, Download, Settings, ChevronRight, Loader2, X, Puzzle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
@@ -33,66 +35,70 @@ interface ModuleData {
   settings_schema?: { key: string; label: string; required?: boolean; type?: string; placeholder?: string; help?: string; options?: { value: string; label: string }[] }[];
 }
 
+const MODULES_QUERY = ['tenant', 'modules'] as const;
+
 export default function ModulesPage() {
-  const [modules, setModules]     = useState<ModuleData[]>([]);
-  const [loading, setLoading]     = useState(true);
+  const queryClient = useQueryClient();
   const [category, setCategory]   = useState('all');
   const [selected, setSelected]   = useState<ModuleData | null>(null);
-  const [installing, setInstalling] = useState<string | null>(null);
   const [settingsForm, setSettingsForm] = useState<Record<string,string>>({});
-  const [saving, setSaving]       = useState(false);
 
-  const load = async (signal?: AbortSignal) => {
-    try {
-      const res = await fetch('/api/tenant/modules', { signal });
-      const d = await res.json();
-      if (signal?.aborted) return;
-      setModules(d.data ?? []); setLoading(false);
-    } catch (e) {
-      if ((e as Error)?.name === 'AbortError') return;
-      throw e;
-    }
-  };
-  useEffect(() => {
-    const controller = new AbortController();
-    load(controller.signal);
-    return () => controller.abort();
-  }, []);
+  // #1328: list via TanStack Query (was raw fetch + useEffect).
+  const { data, isLoading: loading } = useApiQuery<{ data?: ModuleData[] }>(
+    MODULES_QUERY,
+    '/api/tenant/modules',
+  );
+  const modules: ModuleData[] = data?.data ?? [];
+  const load = () => queryClient.invalidateQueries({ queryKey: MODULES_QUERY });
 
   const filtered = category === 'all' ? modules : modules.filter(m => m.category === category);
 
-  const install = async (mod: ModuleData) => {
-    setInstalling(mod.id);
-    const res = await fetch('/api/tenant/modules', {
-      method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ module_id: mod.id, settings: settingsForm }),
-    });
-    const d = await res.json();
-    if (res.ok) { toast.success(`${mod.name} installed`); load(); setSelected(null); }
-    else toast.error(d.error);
-    setInstalling(null);
-  };
+  const installMutation = useMutation({
+    mutationFn: async (mod: ModuleData) => {
+      const res = await fetch('/api/tenant/modules', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ module_id: mod.id, settings: settingsForm }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error);
+      return mod;
+    },
+    onSuccess: (mod) => { toast.success(`${mod.name} installed`); load(); setSelected(null); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const installing = installMutation.isPending ? (installMutation.variables?.id ?? null) : null;
+  const install = (mod: ModuleData) => installMutation.mutate(mod);
 
-  const disable = async (mod: ModuleData) => {
-    await confirmThen(`Disable "${mod.name}"? Related data may be affected.`, async () => {
+  const disableMutation = useMutation({
+    mutationFn: async (mod: ModuleData) => {
       const res = await fetch('/api/tenant/modules', {
         method: 'PATCH', headers: {'Content-Type':'application/json'},
         body: JSON.stringify({ module_id: mod.id, action: 'disable' }),
       });
-      if (res.ok) { toast.success(`${mod.name} disabled`); load(); setSelected(null); }
+      if (!res.ok) throw new Error('Failed');
+      return mod;
+    },
+    onSuccess: (mod) => { toast.success(`${mod.name} disabled`); load(); setSelected(null); },
+  });
+  const disable = async (mod: ModuleData) => {
+    await confirmThen(`Disable "${mod.name}"? Related data may be affected.`, async () => {
+      disableMutation.mutate(mod);
     });
   };
 
-  const saveSettings = async (mod: ModuleData) => {
-    setSaving(true);
-    const res = await fetch('/api/tenant/modules', {
-      method: 'PATCH', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ module_id: mod.id, action: 'update_settings', settings: settingsForm }),
-    });
-    if (res.ok) { toast.success('Settings saved'); load(); setSelected(null); }
-    else toast.error('Failed to save');
-    setSaving(false);
-  };
+  const saveSettingsMutation = useMutation({
+    mutationFn: async (mod: ModuleData) => {
+      const res = await fetch('/api/tenant/modules', {
+        method: 'PATCH', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ module_id: mod.id, action: 'update_settings', settings: settingsForm }),
+      });
+      if (!res.ok) throw new Error('Failed to save');
+    },
+    onSuccess: () => { toast.success('Settings saved'); load(); setSelected(null); },
+    onError: () => toast.error('Failed to save'),
+  });
+  const saving = saveSettingsMutation.isPending;
+  const saveSettings = (mod: ModuleData) => saveSettingsMutation.mutate(mod);
 
   // Open modal and pre-fill settings
   const openModule = (mod: ModuleData) => {

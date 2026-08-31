@@ -284,7 +284,7 @@ export async function POST(request: NextRequest) {
     await alertSuperAdmin(
       'CRITICAL: Automated Database Backup FAILED',
       `Time: ${new Date().toISOString()}\nError: ${err.message}\n\nManual backup required immediately:\n1. Check database connection\n2. Check disk space\n3. Run backup manually from superadmin console`
-    ).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
+    ).catch((err) => logError({ error: err, context: 'cron/backup async side-effect' }));
 
     return apiError(err);
   }

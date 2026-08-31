@@ -6,6 +6,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useApiQuery } from '@/lib/query/client';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, Eye, Send, TrendingUp, Loader2, BarChart3, Hash, List, Type, CheckSquare, Star } from 'lucide-react';
 import Link from 'next/link';
@@ -62,27 +63,15 @@ export default function FormAnalyticsPage() {
   const router = useRouter();
   const formId = params.id as string;
 
-  const [data, setData] = useState<AnalyticsData | null>(null);
-  const [loading, setLoading] = useState(true);
   const [days, setDays] = useState(30);
 
-  useEffect(() => {
-    const controller = new AbortController();
-    const { signal } = controller;
-    setLoading(true);
-    fetch(`/api/tenant/forms/${formId}/analytics?days=${days}`, { signal })
-      .then((r) => {
-        if (!r.ok) throw new Error('Failed');
-        return r.json();
-      })
-      .then((d) => { if (signal.aborted) return; setData(d); })
-      .catch((e) => {
-        if ((e as Error)?.name === 'AbortError') return;
-        router.push('/tenant/forms');
-      })
-      .finally(() => { if (signal.aborted) return; setLoading(false); });
-    return () => controller.abort();
-  }, [formId, days, router]);
+  // #1328: analytics via TanStack Query (was raw fetch + useEffect). formId +
+  // days are part of the key. On error, fall back to the forms list (as before).
+  const { data, isLoading: loading, error } = useApiQuery<AnalyticsData>(
+    ['tenant', 'forms', formId, 'analytics', { days }],
+    `/api/tenant/forms/${formId}/analytics?days=${days}`,
+  );
+  useEffect(() => { if (error) router.push('/tenant/forms'); }, [error, router]);
 
   if (loading) {
     return (

@@ -15,6 +15,7 @@ import { analyzeSentiment, updateDealSentiment } from '@/lib/ai/sentiment';
 import { requireAiFeature } from '@/lib/ai/plan-gate';
 import { readJsonBody } from '@/lib/api/validate';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 export const POST = withApiRoute(async (req: NextRequest) => {
   try {
@@ -23,6 +24,9 @@ export const POST = withApiRoute(async (req: NextRequest) => {
 
     const gate = await requireAiFeature(ctx, 'ai_sentiment');
     if (gate) return gate;
+
+    const limited = await checkRateLimit(req, { action: 'ai_sentiment', max: 30, windowMinutes: 60 });
+    if (limited) return limited;
 
     const body = await readJsonBody(req);
     const { text, deal_id } = body;

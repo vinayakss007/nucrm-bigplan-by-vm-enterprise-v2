@@ -19,10 +19,8 @@ export async function trackFieldChange(
   fieldLabel: string | null,
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  oldValue: any,
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  newValue: any,
+  oldValue: unknown,
+  newValue: unknown,
   ipAddress?: string,
   userAgent?: string
 ) {
@@ -76,8 +74,7 @@ export async function createFieldSnapshot(
   snapshotLabel: string,
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  data: Record<string, any>,
+  data: Record<string, unknown>,
   userId?: string
 ) {
   const { fieldSnapshots } = await import('@/drizzle/schema/history');

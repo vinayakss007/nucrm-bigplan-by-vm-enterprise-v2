@@ -4,7 +4,9 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import Link from 'next/link';
 import { FileText, Play, Trash2, Clock, BarChart3, Eye } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
@@ -34,31 +36,22 @@ const REPORT_TYPE_LABELS: Record<string, string> = {
   summary: 'Summary',
 };
 
+const SAVED_REPORTS_QUERY = ['tenant', 'reports', 'saved'] as const;
+
 export default function SavedReportsPage() {
-  const [reports, setReports] = useState<SavedReport[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
 
-  const load = async (signal?: AbortSignal) => {
-    try {
-      const res = await fetch('/api/tenant/reports/saved', { signal });
-      const d = await res.json();
-      if (signal?.aborted) return;
-      setReports(d.data || []);
-    } catch (e) {
-      if ((e as Error)?.name === 'AbortError') return;
-      toast.error('Failed to load reports');
-    }
-    if (signal?.aborted) return;
-    setLoading(false);
-  };
+  // #1328: list via TanStack Query (was raw fetch + useEffect).
+  const { data, isLoading: loading, error } = useApiQuery<{ data?: SavedReport[] }>(
+    SAVED_REPORTS_QUERY,
+    '/api/tenant/reports/saved',
+  );
+  const reports: SavedReport[] = data?.data ?? [];
+  if (error) toast.error('Failed to load reports');
 
-  useEffect(() => {
-    const controller = new AbortController();
-    load(controller.signal);
-    return () => controller.abort();
-  }, []);
+  const reload = () => queryClient.invalidateQueries({ queryKey: SAVED_REPORTS_QUERY });
 
   const filtered = reports.filter(r => {
     const matchesSearch = !search || r.name.toLowerCase().includes(search.toLowerCase()) || r.createdByName?.toLowerCase().includes(search.toLowerCase());
@@ -66,35 +59,39 @@ export default function SavedReportsPage() {
     return matchesSearch && matchesType;
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/tenant/reports/${id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || 'Failed to delete');
+      }
+    },
+    onSuccess: () => { toast.success('Report deleted'); reload(); },
+    onError: (e: Error) => toast.error(e.message || 'Failed to delete'),
+  });
+
   const handleDelete = async (id: string, name: string) => {
     await confirmThen(
       `Delete saved report "${name}"? This cannot be undone.`,
-      async () => {
-        const res = await fetch(`/api/tenant/reports/${id}`, { method: 'DELETE' });
-        if (res.ok) {
-          toast.success('Report deleted');
-          setReports(prev => prev.filter(r => r.id !== id));
-        } else {
-          const data = await res.json();
-          toast.error(data.error || 'Failed to delete');
-        }
-      }
+      async () => { deleteMutation.mutate(id); }
     );
   };
 
-  const handleRun = async (id: string) => {
-    const res = await fetch(`/api/tenant/reports/${id}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ source: 'manual' }),
-    });
-    if (res.ok) {
-      toast.success('Report executed');
-      load();
-    } else {
-      toast.error('Failed to run report');
-    }
-  };
+  const runMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/tenant/reports/${id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ source: 'manual' }),
+      });
+      if (!res.ok) throw new Error('Failed to run report');
+    },
+    onSuccess: () => { toast.success('Report executed'); reload(); },
+    onError: () => toast.error('Failed to run report'),
+  });
+
+  const handleRun = (id: string) => runMutation.mutate(id);
 
   if (loading) {
     return (

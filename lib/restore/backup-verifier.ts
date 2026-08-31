@@ -244,10 +244,9 @@ export async function verifyBackup(
     }
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err: unknown) {
     result.valid = false;
-    result.errors.push(`Failed to parse backup file: ${err.message}`);
+    result.errors.push(`Failed to parse backup file: ${err instanceof Error ? err.message : String(err)}`);
     result.verificationDurationMs = Date.now() - startTime;
     return result;
   }

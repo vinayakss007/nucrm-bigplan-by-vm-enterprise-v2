@@ -101,7 +101,7 @@ export const PATCH = withApiRoute(async (request: NextRequest, { params }: Route
       newData: updateData,
     }).catch(e => logError({ error: e, context: "async-catch:product.update:logAudit" }));
 
-    fireWebhooks(ctx.tenantId, 'product.updated', { id }).catch(e => logError({ error: e, context: "async-catch:[context]" }));
+    fireWebhooks(ctx.tenantId, 'product.updated', { id }).catch(e => logError({ error: e, context: 'tenant/products/:id fireWebhooks product.updated' }));
 
     if (!updated) {
       return NextResponse.json({ error: 'Product not found' }, { status: 404 });
@@ -145,7 +145,7 @@ export const DELETE = withApiRoute(async (request: NextRequest, { params }: Rout
       action: 'delete', entityType: 'product', entityId: id,
     }).catch(e => logError({ error: e, context: "async-catch:product.delete:logAudit" }));
 
-    fireWebhooks(ctx.tenantId, 'product.deleted', { id }).catch(e => logError({ error: e, context: "async-catch:[context]" }));
+    fireWebhooks(ctx.tenantId, 'product.deleted', { id }).catch(e => logError({ error: e, context: 'tenant/products/:id fireWebhooks product.deleted' }));
 
     return NextResponse.json({ success: true });
   } catch (error) {

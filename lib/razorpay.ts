@@ -136,12 +136,10 @@ function getWebhookSecret(): string {
  * Make an authenticated request to the Razorpay REST API.
  * Uses HTTP Basic auth with key_id:key_secret.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function razorpayRequest<T = any>(
+async function razorpayRequest<T = unknown>(
   endpoint: string,
   method: 'GET' | 'POST' | 'DELETE' = 'GET',
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  body?: Record<string, any>,
+  body?: Record<string, unknown>,
 ): Promise<T> {
   const keyId = getKeyId();
   const keySecret = getKeySecret();

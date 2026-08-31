@@ -27,6 +27,15 @@ export interface RateLimitConfig {
   window: number;   // Time window in seconds
 }
 
+/**
+ * #1834: conservative fail-CLOSED default. When a rate-limit config lookup
+ * fails (DB/cache hiccup) we must NOT silently disable limiting — instead we
+ * fall back to this per-identifier ceiling so brute-force/scraping stays
+ * throttled during an outage. Chosen to be generous enough not to break
+ * legitimate bursts, but low enough to blunt abuse.
+ */
+export const FAIL_CLOSED_MAX = 60;
+
 export interface RateLimitResult {
   allowed: boolean;
   remaining: number;
@@ -60,34 +69,39 @@ export function getEndpointWindow(endpoint: string): number {
  * Get global default rate limits from system_settings table
  */
 export async function getGlobalDefaults(): Promise<Record<string, number>> {
-  try {
-    const setting = await db.query.systemSettings.findFirst({
-      where: eq(systemSettings.key, 'global_rate_limits'),
-      columns: { value: true },
-    });
+  // #1834: distinguish "no config" from "lookup failed". A successful query
+  // with no row returns {} (rate limiting genuinely unconfigured); a DB error
+  // now THROWS so callers can fail closed instead of treating it as disabled.
+  const setting = await db.query.systemSettings.findFirst({
+    where: eq(systemSettings.key, 'global_rate_limits'),
+    columns: { value: true },
+  });
 
-    if (setting?.value) {
-      return typeof setting.value === 'string'
-        ? JSON.parse(setting.value)
-        : (setting.value as Record<string, number>);
-    }
-  } catch {
-    // Fall through to empty
+  if (setting?.value) {
+    return typeof setting.value === 'string'
+      ? JSON.parse(setting.value)
+      : (setting.value as Record<string, number>);
   }
   return {};
 }
 
 /**
- * Get rate limit for a specific endpoint
- * Priority: Plan config > Global defaults > 0 (disabled)
+ * Get rate limit for a specific endpoint.
+ * Priority: Plan config > Global defaults > 0 (intentionally disabled).
+ *
+ * #1834: FAIL CLOSED. Previously any DB/cache error was swallowed and the
+ * function returned 0, which the limiter treats as "disabled" — so a transient
+ * hiccup silently turned rate limiting OFF. Now a lookup error returns the
+ * conservative FAIL_CLOSED_MAX ceiling instead of 0, keeping abuse throttled.
+ * A genuine, successful "nothing configured" result still returns 0.
  */
 export async function getRateLimit(
   planId: string | null,
   endpoint: string
 ): Promise<number> {
-  // 1. Try plan-specific config
-  if (planId) {
-    try {
+  try {
+    // 1. Try plan-specific config
+    if (planId) {
       const plan = await db.query.plans.findFirst({
         where: eq(plans.id, planId),
         columns: { rateLimitConfig: true },
@@ -99,19 +113,24 @@ export async function getRateLimit(
           return config[endpoint];
         }
       }
-    } catch {
-      // Fall through
     }
-  }
 
-  // 2. Try global defaults
-  const globals = await getGlobalDefaults();
-  if (globals[endpoint] !== undefined) {
-    return globals[endpoint];
-  }
+    // 2. Try global defaults
+    const globals = await getGlobalDefaults();
+    if (globals[endpoint] !== undefined) {
+      return globals[endpoint];
+    }
 
-  // 3. If nothing configured, return 0 (rate limiting disabled)
-  return 0;
+    // 3. Nothing configured (successful lookups) → 0 (rate limiting disabled).
+    return 0;
+  } catch (err) {
+    // Lookup failed — do NOT fail open. Apply a conservative ceiling.
+    console.error(
+      `[rate-limit] config lookup failed for endpoint "${endpoint}" — failing closed at ${FAIL_CLOSED_MAX}/window:`,
+      err instanceof Error ? err.message : String(err),
+    );
+    return FAIL_CLOSED_MAX;
+  }
 }
 
 /**
@@ -164,6 +183,20 @@ export class RateLimiter {
 
     // Add current request with timestamp
     const current = await cache.incr(windowKey, win);
+
+    // #1834: FAIL CLOSED on store failure. cache.incr() returns 0 when the
+    // Redis backend errors (a real increment is always >= 1). Previously
+    // current=0 made `0 <= max` true, so a cache blip let EVERY request through.
+    // Treat a non-positive counter as a failed store read and DENY instead.
+    if (current <= 0) {
+      console.error(`[rate-limit] counter store failed for key "${key}" — failing closed (deny)`);
+      return {
+        allowed: false,
+        remaining: 0,
+        reset: now + (win * 1000),
+        limit: max,
+      };
+    }
 
     const result: RateLimitResult = {
       allowed: current <= max,
@@ -369,14 +402,13 @@ export default rateLimiter;
  * Accepts max/windowMinutes but fetches from DB when available
  */
 export async function checkRateLimit(
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  request: any,
+  request: Request,
   options: { action?: string; max?: number; windowMinutes?: number } = {}
 ) {
   const { action = 'api', max: fallbackMax, windowMinutes: fallbackWindow } = options;
 
   // #1249: header values only honored when TRUST_PROXY=true (see getClientIp)
-  const ip = request?.headers?.get ? getClientIp(request) : 'unknown';
+  const ip = getClientIp(request);
   const key = `v1_rate:${action}:${ip}`;
 
   // Get limit from DB first, fall back to provided max

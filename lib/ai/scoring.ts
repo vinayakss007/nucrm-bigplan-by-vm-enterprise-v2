@@ -76,8 +76,7 @@ Format: {"score": number, "reason": "brief explanation", "factors": {"factor_nam
   // 5. Parse response
   
   
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let parsed: any;
+  let parsed: { score?: number | string; reason?: string; factors?: Record<string, number> };
   try {
     const jsonMatch = resp.text.match(/\{[\s\S]*\}/);
     if (jsonMatch) {

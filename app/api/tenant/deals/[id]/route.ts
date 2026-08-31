@@ -259,7 +259,7 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params:
         stage_to: updateData.stageId,
         stage_name: resolvedStageName,
         contact_id: row!.contactId,
-      }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
+      }).catch((err) => logError({ error: err, context: 'tenant/deals/:id async side-effect' }));
 
       try {
         const { evaluateAutomations } = await import('@/lib/automation/engine');
@@ -357,7 +357,7 @@ export const DELETE = withApiRoute(async (req: NextRequest, { params }: { params
       entityId: dealId
     });
 
-    fireWebhooks(ctx.tenantId, 'deal.deleted', { id: dealId }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
+    fireWebhooks(ctx.tenantId, 'deal.deleted', { id: dealId }).catch((err) => logError({ error: err, context: 'tenant/deals/:id fireWebhooks deal.deleted' }));
 
     cache.delByPattern(`tenant:${ctx.tenantId}:deals:*`);
     return NextResponse.json({ ok: true, message: 'Moved to trash. Restore within 30 days.' });
@@ -379,7 +379,7 @@ async function handleDealWon(ctx: any, dealId: string, row: any) {
     title: row.title,
     amount: row.amount,
     contact_id: row.contactId,
-  }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
+  }).catch((err) => logError({ error: err, context: 'tenant/deals/:id async side-effect' }));
 
   // Send Email
   if (row.contactId) {
@@ -413,7 +413,7 @@ async function handleDealWon(ctx: any, dealId: string, row: any) {
             <br/>
             <p>Best regards,<br/>${contactData.tenantName} Team</p>
           </div>`,
-        }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
+        }).catch((err) => logError({ error: err, context: 'tenant/deals/:id async side-effect' }));
       }
     } catch (e) {
       await logError({ error: e, context: 'tenant/deals/[id] deal-won email' });
@@ -435,6 +435,20 @@ async function handleDealWon(ctx: any, dealId: string, row: any) {
     // can never touch another tenant's row if reused with an unvalidated id.
     .where(and(eq(deals.id, dealId), eq(deals.tenantId, ctx.tenantId)))
     .catch(err => { void logError({ error: err, context: 'tenant/deals/[id] deal-won won_at update' }); });
+
+  // #1817: optionally create a DRAFT invoice from the won deal (opt-in per
+  // tenant via settings.autoInvoiceOnWon, idempotent, non-fatal). This closes
+  // the sales→billing gap by populating invoices.dealId for revenue attribution.
+  try {
+    const { createInvoiceFromWonDeal } = await import('@/lib/billing/deal-invoice');
+    await createInvoiceFromWonDeal(
+      { tenantId: ctx.tenantId, userId: ctx.userId },
+      dealId,
+      { title: row.title, amount: row.amount, contactId: row.contactId, companyId: row.companyId },
+    );
+  } catch (e) {
+    await logError({ error: e, context: 'tenant/deals/[id] deal-won invoice create' });
+  }
 
   // Trigger Automations
   try {

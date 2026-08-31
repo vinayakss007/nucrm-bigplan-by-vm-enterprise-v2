@@ -5,7 +5,9 @@
  */
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 
 type Tab = 'retention' | 'gdpr' | 'soc2';
 
@@ -27,119 +29,87 @@ interface ComplianceRequest {
 }
 
 export default function ComplianceSettingsPage() {
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<Tab>('retention');
-  const [policies, setPolicies] = useState<RetentionPolicy[]>([]);
-  const [gdprRequests, setGdprRequests] = useState<{ exports: ComplianceRequest[]; deletions: ComplianceRequest[] }>({ exports: [], deletions: [] });
-  const [soc2Reports, setSoc2Reports] = useState<ComplianceRequest[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // New retention policy form
   const [newPolicy, setNewPolicy] = useState({ entityType: 'contacts', retentionDays: 365, action: 'archive' });
 
-  useEffect(() => {
-    const controller = new AbortController();
-    loadData(controller.signal);
-    return () => controller.abort();
-  }, []);
+  // #1328: reads via TanStack Query (were parallel raw fetch + useEffect).
+  const { data: retData, isLoading: retLoading } = useApiQuery<{ data?: RetentionPolicy[] }>(
+    ['tenant', 'compliance', 'retention'],
+    '/api/tenant/compliance/retention',
+  );
+  const { data: gdprData, isLoading: gdprLoading } = useApiQuery<{ data?: { exports: ComplianceRequest[]; deletions: ComplianceRequest[] } }>(
+    ['tenant', 'compliance', 'gdpr'],
+    '/api/tenant/compliance/gdpr',
+  );
+  const { data: soc2Data, isLoading: soc2Loading } = useApiQuery<{ data?: ComplianceRequest[] }>(
+    ['tenant', 'compliance', 'soc2'],
+    '/api/tenant/compliance/soc2',
+  );
+  const policies: RetentionPolicy[] = retData?.data ?? [];
+  const gdprRequests = gdprData?.data ?? { exports: [], deletions: [] };
+  const soc2Reports: ComplianceRequest[] = soc2Data?.data ?? [];
+  const loading = retLoading || gdprLoading || soc2Loading;
 
-  async function loadData(signal?: AbortSignal) {
-    setLoading(true);
-    try {
-      const [retRes, gdprRes, soc2Res] = await Promise.all([
-        fetch('/api/tenant/compliance/retention', { signal }),
-        fetch('/api/tenant/compliance/gdpr', { signal }),
-        fetch('/api/tenant/compliance/soc2', { signal }),
-      ]);
+  const invalidate = (key: string) => queryClient.invalidateQueries({ queryKey: ['tenant', 'compliance', key] });
 
-      if (retRes.ok) {
-        const { data } = await retRes.json();
-        setPolicies(data || []);
-      }
-      if (gdprRes.ok) {
-        const { data } = await gdprRes.json();
-        setGdprRequests(data || { exports: [], deletions: [] });
-      }
-      if (soc2Res.ok) {
-        const { data } = await soc2Res.json();
-        setSoc2Reports(data || []);
-      }
-    } catch (err) {
-      if (err instanceof DOMException && err.name === 'AbortError') return;
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function createRetentionPolicy(e: React.FormEvent) {
-    e.preventDefault();
-    setSaving(true);
-    setMessage(null);
-    try {
+  const retentionMutation = useMutation({
+    mutationFn: async () => {
       const res = await fetch('/api/tenant/compliance/retention', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newPolicy),
       });
-      if (res.ok) {
-        setMessage({ type: 'success', text: 'Retention policy created.' });
-        loadData();
-      } else {
-        const err = await res.json();
-        setMessage({ type: 'error', text: err.error || 'Failed to create policy' });
-      }
-    } catch {
-      setMessage({ type: 'error', text: 'Network error' });
-    } finally {
-      setSaving(false);
-    }
-  }
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Failed to create policy');
+    },
+    onSuccess: () => { setMessage({ type: 'success', text: 'Retention policy created.' }); invalidate('retention'); },
+    onError: (e: Error) => setMessage({ type: 'error', text: e.message || 'Network error' }),
+  });
 
-  async function requestGDPR(type: 'export' | 'delete') {
-    setSaving(true);
-    setMessage(null);
-    try {
+  const gdprMutation = useMutation({
+    mutationFn: async (type: 'export' | 'delete') => {
       const res = await fetch('/api/tenant/compliance/gdpr', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type }),
       });
-      if (res.ok) {
-        setMessage({ type: 'success', text: type === 'export' ? 'Data export initiated.' : 'Deletion request submitted.' });
-        loadData();
-      } else {
-        const err = await res.json();
-        setMessage({ type: 'error', text: err.error || 'Request failed' });
-      }
-    } catch {
-      setMessage({ type: 'error', text: 'Network error' });
-    } finally {
-      setSaving(false);
-    }
-  }
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Request failed');
+      return type;
+    },
+    onSuccess: (type) => { setMessage({ type: 'success', text: type === 'export' ? 'Data export initiated.' : 'Deletion request submitted.' }); invalidate('gdpr'); },
+    onError: (e: Error) => setMessage({ type: 'error', text: e.message || 'Network error' }),
+  });
 
-  async function generateSOC2Report() {
-    setSaving(true);
-    setMessage(null);
-    try {
+  const soc2Mutation = useMutation({
+    mutationFn: async () => {
       const res = await fetch('/api/tenant/compliance/soc2', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ periodDays: 90 }),
       });
-      if (res.ok) {
-        setMessage({ type: 'success', text: 'SOC 2 report generated successfully.' });
-        loadData();
-      } else {
-        const err = await res.json();
-        setMessage({ type: 'error', text: err.error || 'Report generation failed' });
-      }
-    } catch {
-      setMessage({ type: 'error', text: 'Network error' });
-    } finally {
-      setSaving(false);
-    }
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Report generation failed');
+    },
+    onSuccess: () => { setMessage({ type: 'success', text: 'SOC 2 report generated successfully.' }); invalidate('soc2'); },
+    onError: (e: Error) => setMessage({ type: 'error', text: e.message || 'Network error' }),
+  });
+
+  const saving = retentionMutation.isPending || gdprMutation.isPending || soc2Mutation.isPending;
+
+  function createRetentionPolicy(e: React.FormEvent) {
+    e.preventDefault();
+    setMessage(null);
+    retentionMutation.mutate();
+  }
+  function requestGDPR(type: 'export' | 'delete') {
+    setMessage(null);
+    gdprMutation.mutate(type);
+  }
+  function generateSOC2Report() {
+    setMessage(null);
+    soc2Mutation.mutate();
   }
 
   if (loading) {

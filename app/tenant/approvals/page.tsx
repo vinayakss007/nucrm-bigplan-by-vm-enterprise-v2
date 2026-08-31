@@ -4,7 +4,9 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useEffect, useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import Link from 'next/link';
 import {
   ShieldCheck, Check, X, AlertCircle, RefreshCw, Filter, ExternalLink,
@@ -76,11 +78,9 @@ const FILTERS: { id: 'pending' | 'approved' | 'rejected' | 'all'; label: string 
 ];
 
 export default function ApprovalsPage() {
-  const [data, setData] = useState<Resp | null>(null);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [filter, setFilter] = useState<'pending' | 'approved' | 'rejected' | 'all'>('pending');
   const [error, setError] = useState<string | null>(null);
-  const [busyId, setBusyId] = useState<string | null>(null);
   const [rejectModal, setRejectModal] = useState<Row | null>(null);
   const [rejectReason, setRejectReason] = useState('');
 
@@ -91,47 +91,36 @@ export default function ApprovalsPage() {
     return p.toString();
   }, [filter]);
 
-  function load(signal?: AbortSignal) {
-    setLoading(true);
-    setError(null);
-    fetch(`/api/tenant/approvals?${qs}`, { cache: 'no-store', signal })
-      .then(async r => {
-        if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? `HTTP ${r.status}`);
-        return r.json();
-      })
-      .then(d => { if (signal?.aborted) return; setData(d); })
-      .catch(e => {
-        if ((e as Error)?.name === 'AbortError') return;
-        setError(e.message || 'Failed to load');
-      })
-      .finally(() => { if (signal?.aborted) return; setLoading(false); });
-  }
-  useEffect(() => {
-    const controller = new AbortController();
-    load(controller.signal);
-    return () => controller.abort();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [qs]);
+  // #1328: approvals via TanStack Query (was raw fetch + useEffect). filter/qs is
+  // part of the key so each view refetches and caches.
+  const { data, isLoading: loading, isFetching, error: queryError, refetch } = useApiQuery<Resp>(
+    ['tenant', 'approvals', qs],
+    `/api/tenant/approvals?${qs}`,
+  );
+  const queryErrorMsg = queryError ? (queryError.message || 'Failed to load') : null;
+  const load = () => refetch();
 
-  async function decide(row: Row, action: 'approve' | 'reject', reason?: string) {
-    setBusyId(row.id);
-    setError(null);
-    try {
+  const decideMutation = useMutation({
+    mutationFn: async ({ row, action, reason }: { row: Row; action: 'approve' | 'reject'; reason?: string }) => {
       const res = await fetch(`/api/tenant/approvals/${row.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action, reason }),
       });
-      const body = await res.json();
+      const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`);
+    },
+    onMutate: () => setError(null),
+    onSuccess: () => {
       setRejectModal(null);
       setRejectReason('');
-      load();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusyId(null);
-    }
+      queryClient.invalidateQueries({ queryKey: ['tenant', 'approvals'] });
+    },
+    onError: (e: Error) => setError(e.message),
+  });
+  const busyId = decideMutation.isPending ? (decideMutation.variables?.row.id ?? null) : null;
+  function decide(row: Row, action: 'approve' | 'reject', reason?: string) {
+    decideMutation.mutate({ row, action, reason });
   }
 
   const summary = data?.summary ?? { pending: 0, approved: 0, rejected: 0 };
@@ -152,7 +141,7 @@ export default function ApprovalsPage() {
           onClick={() => load()}
           className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border bg-card hover:bg-accent text-sm transition-colors"
         >
-          <RefreshCw className={cn('w-3.5 h-3.5', loading && 'animate-spin')} />
+          <RefreshCw className={cn('w-3.5 h-3.5', isFetching && 'animate-spin')} />
           Refresh
         </button>
       </div>
@@ -190,10 +179,10 @@ export default function ApprovalsPage() {
         })}
       </div>
 
-      {error && (
+      {(error || queryErrorMsg) && (
         <div className="rounded-xl border border-red-300 bg-red-50 dark:border-red-800/50 dark:bg-red-950/20 px-4 py-3 text-sm text-red-700 dark:text-red-300 flex items-start gap-2">
           <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-          <span className="flex-1">{error}</span>
+          <span className="flex-1">{error || queryErrorMsg}</span>
         </div>
       )}
 

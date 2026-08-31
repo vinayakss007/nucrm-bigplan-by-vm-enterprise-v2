@@ -4,11 +4,12 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Book, Search, ChevronRight, Clock, Eye } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
+import { useApiQuery } from '@/lib/query/client';
 
 interface PortalArticle {
   id: string;
@@ -21,8 +22,7 @@ interface PortalArticle {
 
 export default function PortalKBPage() {
   const router = useRouter();
-  const [articles, setArticles] = useState<PortalArticle[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [sessionReady, setSessionReady] = useState(false);
   const [search, setSearch] = useState('');
 
   useEffect(() => {
@@ -31,21 +31,20 @@ export default function PortalKBPage() {
     try {
       const s = JSON.parse(raw);
       if (!s.email) { router.replace('/portal/login'); return; }
+      setSessionReady(true);
     } catch { router.replace('/portal/login'); return; }
-
-    const controller = new AbortController();
-    fetch('/api/public/kb/articles?status=published', { signal: controller.signal }).then(r => r.json()).then(d => {
-      if (controller.signal.aborted) return;
-      setArticles(d.data || []); setLoading(false);
-    }).catch((e) => {
-      if ((e as Error)?.name === 'AbortError') return;
-      setLoading(false);
-    });
-    return () => controller.abort();
   }, [router]);
 
-  const filtered = articles.filter(a =>
-    !search || a.title.toLowerCase().includes(search.toLowerCase())
+  const { data, isLoading } = useApiQuery<{ data: PortalArticle[] }>(
+    ['portal-kb-articles'],
+    '/api/public/kb/articles?status=published',
+    { enabled: sessionReady },
+  );
+  const loading = !sessionReady || isLoading;
+
+  const filtered = useMemo(
+    () => (data?.data ?? []).filter(a => !search || a.title.toLowerCase().includes(search.toLowerCase())),
+    [data, search],
   );
 
   return (

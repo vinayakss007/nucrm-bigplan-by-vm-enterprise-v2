@@ -4,7 +4,9 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useApiQuery, ApiQueryError } from '@/lib/query/client';
 import {
   Bot, Loader2, AlertCircle, CheckCircle2, Info,
 } from 'lucide-react';
@@ -14,46 +16,47 @@ type Settings = {
 };
 
 export default function AIAutoFollowupPage() {
-  const [settings, setSettings] = useState<Settings>({ autoAiEnabled: false });
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
-  useEffect(() => {
-    const controller = new AbortController();
-    fetch('/api/tenant/admin/ai-auto-followup', { cache: 'no-store', signal: controller.signal })
-      .then(async r => {
-        if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? `HTTP ${r.status}`);
-        return r.json();
-      })
-      .then(data => setSettings({ autoAiEnabled: data.autoAiEnabled ?? false }))
-      .catch(e => {
-        if (e?.name === 'AbortError') return;
-        setError(e.message);
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setLoading(false);
-      });
-    return () => controller.abort();
-  }, []);
+  // #1328: load settings via TanStack Query (was raw fetch + useEffect).
+  // retry:false — admin-only endpoint that may 404 / 403.
+  const { data, isLoading: loading, error: loadError } = useApiQuery<Settings>(
+    ['tenant', 'admin', 'ai-auto-followup'],
+    '/api/tenant/admin/ai-auto-followup',
+    { retry: false },
+  );
+  const autoAiEnabled = data?.autoAiEnabled ?? false;
+  const loadErrorMessage = loadError
+    ? ((loadError.info as { error?: string })?.error ?? loadError.message)
+    : null;
+  const displayError = error ?? loadErrorMessage;
 
-  async function toggle() {
-    setSaving(true);
-    setError(null);
-    setSaved(false);
-    try {
+  const toggleMutation = useMutation({
+    mutationFn: async () => {
       const r = await fetch('/api/tenant/admin/ai-auto-followup', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ autoAiEnabled: !settings.autoAiEnabled }),
+        body: JSON.stringify({ autoAiEnabled: !autoAiEnabled }),
       });
-      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? `HTTP ${r.status}`);
-      setSettings(s => ({ ...s, autoAiEnabled: !s.autoAiEnabled }));
+      if (!r.ok) {
+        const info = await r.json().catch(() => ({}));
+        throw new ApiQueryError(info.error ?? `HTTP ${r.status}`, r.status, info);
+      }
+    },
+    onMutate: () => { setError(null); setSaved(false); },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tenant', 'admin', 'ai-auto-followup'] });
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
-    } catch (e) { setError((e as Error).message); }
-    finally { setSaving(false); }
+    },
+    onError: (e: Error) => setError(e.message),
+  });
+  const saving = toggleMutation.isPending;
+
+  function toggle() {
+    toggleMutation.mutate();
   }
 
   return (
@@ -70,10 +73,10 @@ export default function AIAutoFollowupPage() {
         </div>
       </div>
 
-      {error && (
+      {displayError && (
         <div className="rounded-xl border border-red-300 bg-red-50 dark:border-red-800/50 dark:bg-red-950/20 px-4 py-3 text-sm text-red-700 dark:text-red-300 flex items-start gap-2">
           <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-          <span className="flex-1">{error}</span>
+          <span className="flex-1">{displayError}</span>
         </div>
       )}
 
@@ -106,14 +109,14 @@ export default function AIAutoFollowupPage() {
                   relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent
                   transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2
                   disabled:opacity-50
-                  ${settings.autoAiEnabled ? 'bg-violet-600' : 'bg-input'}
+                  ${autoAiEnabled ? 'bg-violet-600' : 'bg-input'}
                 `}
               >
                 <span
                   className={`
                     pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0
                     transition duration-200 ease-in-out
-                    ${settings.autoAiEnabled ? 'translate-x-5' : 'translate-x-0'}
+                    ${autoAiEnabled ? 'translate-x-5' : 'translate-x-0'}
                   `}
                 />
               </button>

@@ -239,8 +239,7 @@ export class ModuleRegistry {
   }
 
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  static async getTenantModules(tenantId: string): Promise<any[]> {
+  static async getTenantModules(tenantId: string) {
     const rows = await db
       .select({
         moduleId: tenantModules.moduleId,
@@ -324,8 +323,7 @@ export class ModuleRegistry {
 
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  static async install(tenantId: string, moduleId: string, installedBy: string, settings: Record<string,any> = {}): Promise<{ok:boolean;error?:string}> {
+  static async install(tenantId: string, moduleId: string, installedBy: string, settings: Record<string, unknown> = {}): Promise<{ok:boolean;error?:string}> {
     const manifest = ModuleRegistry.get(moduleId);
     if (!manifest) return { ok: false, error: 'Module not found' };
 
@@ -364,10 +362,10 @@ export class ModuleRegistry {
       return { ok: true };
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (err: any) {
-      logger.error('[ModuleRegistry] install error', { error: err instanceof Error ? err.message : String(err) });
-      return { ok: false, error: err.message };
+    } catch (err: unknown) {
+      const errMessage = err instanceof Error ? err.message : String(err);
+      logger.error('[ModuleRegistry] install error', { error: errMessage });
+      return { ok: false, error: errMessage };
     }
   }
 
@@ -379,22 +377,19 @@ export class ModuleRegistry {
 
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  static async getSettings(tenantId: string, moduleId: string): Promise<Record<string,any>> {
+  static async getSettings(tenantId: string, moduleId: string): Promise<Record<string, unknown>> {
     const row = await db.query.tenantModules.findFirst({
       where: and(eq(tenantModules.tenantId, tenantId), eq(tenantModules.moduleId, moduleId)),
       columns: { settings: true }
     });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return (row?.settings as Record<string, any>) ?? {};
+    return (row?.settings as Record<string, unknown>) ?? {};
   }
 
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  static async updateSettings(tenantId: string, moduleId: string, settings: Record<string,any>): Promise<void> {
+  static async updateSettings(tenantId: string, moduleId: string, settings: Record<string, unknown>): Promise<void> {
     await db.update(tenantModules)
       .set({ 
         settings, 

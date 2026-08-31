@@ -77,14 +77,11 @@ export interface AuditLogEntry {
   userAgent?: string;
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  oldData?: Record<string, any>;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  newData?: Record<string, any>;
+  oldData?: Record<string, unknown>;
+  newData?: Record<string, unknown>;
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 async function getPreviousSuperAdminHash(): Promise<string | null> {

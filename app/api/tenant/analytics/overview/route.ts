@@ -10,6 +10,7 @@ import { db } from '@/drizzle/db';
 import { contacts, deals, tasks, dealStages } from '@/drizzle/schema';
 import { eq, and, sql, count } from 'drizzle-orm';
 import type { AnyColumn } from 'drizzle-orm';
+import { withApiRoute } from '@/lib/api/with-api-route';
 
 // F4 (#1544): this endpoint used to ship raw row arrays capped at .limit(500)
 // per entity (~143 KB per call) AND silently under-counted once a tenant had
@@ -23,7 +24,10 @@ import type { AnyColumn } from 'drizzle-orm';
 //     timeseries: { weekly: [{ weekStart, contacts, deals }] } // 8 fixed buckets
 //   }
 
-export async function GET(_request: NextRequest) {
+// #1838: wrapped in withApiRoute so requireTenantCtx()'s setTenantContext() and
+// all the aggregate queries below share ONE pinned connection — otherwise RLS
+// sees an empty tenant GUC on these queries and provides no isolation.
+export const GET = withApiRoute(async (_request: NextRequest) => {
   try {
     const ctx = await requireTenantCtx();
     if (ctx instanceof NextResponse) return ctx;
@@ -147,4 +151,4 @@ export async function GET(_request: NextRequest) {
     void logError({ error, context: 'tenant/analytics/overview GET' });
     return NextResponse.json({ error: 'Failed to fetch analytics data' }, { status: 500 });
   }
-}
+});

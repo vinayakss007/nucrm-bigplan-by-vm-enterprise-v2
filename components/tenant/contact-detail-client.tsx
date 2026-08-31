@@ -7,11 +7,12 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  ArrowLeft, Mail, Phone, Globe, Linkedin, Building2, Edit, Save,
+  ArrowLeft, Mail, Phone, Globe, Contact, Building2, Edit, Save, Target,
   MessageSquare, PhoneCall, AtSign, Calendar, Briefcase, X, Trash2,
   CheckCircle, Plus, ChevronDown, Star,
   Clock, User, History,
   FileText, ShoppingCart, FileSignature, RefreshCw, DollarSign,
+  Ticket, ListChecks,
 } from 'lucide-react';
 import { cn, formatCurrency, formatDateTimeShort, formatDate, formatRelativeTime } from '@/lib/utils';
 import { getScoreTier, getScoreTierConfig } from '@/lib/scoring';
@@ -240,6 +241,7 @@ export default function ContactDetailClient({
   tasks: initialTasks, companies, teamMembers, permissions, userId,
   invoices=[], orders=[], contracts=[], subscriptions=[], quotes=[],
   callLogs: initialCallLogs=[],
+  tickets=[], followUps=[], sourceLead=null,
 }: {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   contact: any; initialActivities: any[]; deals: any[]; tasks: any[];
@@ -247,6 +249,9 @@ export default function ContactDetailClient({
   companies: any[]; teamMembers: any[]; permissions: any; userId: string;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   invoices?: any[]; orders?: any[]; contracts?: any[]; subscriptions?: any[]; quotes?: any[]; callLogs?: any[];
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+  tickets?: any[]; followUps?: any[];
+  sourceLead?: { id: string; name: string } | null;
 }) {
   const [contact, setContact]       = useState(initialContact);
   const [activities, setActivities] = useState(initialActivities);
@@ -411,6 +416,16 @@ export default function ContactDetailClient({
             {contact.phone && (
               <a href={`tel:${contact.phone}`} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-violet-600 transition-colors"><Phone className="w-3 h-3" />{contact.phone}</a>
             )}
+            {sourceLead && (
+              <button
+                type="button"
+                onClick={() => router.push(`/tenant/leads/${sourceLead.id}`)}
+                className="flex items-center gap-1 text-xs text-violet-600 hover:text-violet-700 hover:underline transition-colors"
+                title={`Converted from lead: ${sourceLead.name}`}
+              >
+                <Target className="w-3 h-3" />Converted from Lead: {sourceLead.name}
+              </button>
+            )}
           </div>
         </div>
         {/* Status pill */}
@@ -526,7 +541,7 @@ export default function ContactDetailClient({
               {contact.email && <a href={`mailto:${contact.email}`} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-violet-600 transition-colors"><Mail className="w-3.5 h-3.5 shrink-0 text-muted-foreground/50" />{contact.email}</a>}
               {contact.phone && <a href={`tel:${contact.phone}`} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-violet-600 transition-colors"><Phone className="w-3.5 h-3.5 shrink-0 text-muted-foreground/50" />{contact.phone}</a>}
               {contact.website && <a href={contact.website} target="_blank" className="flex items-center gap-2 text-sm text-muted-foreground hover:text-violet-600 transition-colors"><Globe className="w-3.5 h-3.5 shrink-0 text-muted-foreground/50" />{contact.website.replace(/https?:\/\//,'')}</a>}
-              {contact.linkedin_url && <a href={contact.linkedin_url} target="_blank" className="flex items-center gap-2 text-sm text-muted-foreground hover:text-violet-600 transition-colors"><Linkedin className="w-3.5 h-3.5 shrink-0 text-muted-foreground/50" />LinkedIn</a>}
+              {contact.linkedin_url && <a href={contact.linkedin_url} target="_blank" className="flex items-center gap-2 text-sm text-muted-foreground hover:text-violet-600 transition-colors"><Contact className="w-3.5 h-3.5 shrink-0 text-muted-foreground/50" />LinkedIn</a>}
               <div className="pt-2 border-t border-border space-y-1.5">
                 {contact.lead_source && <div className="flex justify-between text-xs"><span className="text-muted-foreground">Source</span><span className="font-medium capitalize">{contact.lead_source.replace(/_/g,' ')}</span></div>}
                 {contact.assigned_name && <div className="flex justify-between text-xs"><span className="text-muted-foreground">Owner</span><span className="font-medium">{contact.assigned_name}</span></div>}
@@ -579,7 +594,9 @@ export default function ContactDetailClient({
               { id:'activity', label:`Activity (${activities.length})` },
               { id:'leads',    label:`Leads${contactLeads.length ? ` (${contactLeads.length})` : ''}` },
               { id:'tasks',    label:`Tasks (${tasks.filter(t=>!t.completed).length} open)` },
+              { id:'followups',label:`Follow-ups (${followUps.filter(f=>f.status!=='completed'&&f.status!=='done').length} open)`, icon: ListChecks },
               { id:'deals',    label:`Deals (${deals.length})` },
+              { id:'tickets',  label:`Tickets (${tickets.filter(t=>t.status!=='closed'&&t.status!=='resolved').length} open)`, icon: Ticket },
               { id:'calls',    label:`Calls (${callLogs.length})`, icon: PhoneCall },
               { id:'billing',  label:`Billing (${invoices.length + orders.length + contracts.length + subscriptions.length + quotes.length})`, icon: DollarSign },
               { id:'history', label:'History', icon: History },
@@ -789,6 +806,96 @@ export default function ContactDetailClient({
                     {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                     <span className="text-sm font-bold">{formatCurrency(deals.filter((d: any)=>!['lost'].includes(d.stage)).reduce((s: any, d: any)=>s+Number(d.value),0))}</span>
                   </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── FOLLOW-UPS TAB (#1814) ── */}
+          {activeTab === 'followups' && (
+            <div className="admin-card overflow-hidden">
+              <div className="px-5 py-3 border-b border-border flex items-center justify-between">
+                <p className="text-sm font-semibold">Follow-ups</p>
+                <span className="text-xs text-muted-foreground">Scheduled next steps for this contact</span>
+              </div>
+              {!followUps.length ? (
+                <div className="px-5 py-10 text-center text-sm text-muted-foreground">No follow-ups scheduled</div>
+              ) : (
+                <div className="divide-y divide-border">
+                  {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                  {followUps.map((f: any) => {
+                    const done = f.status === 'completed' || f.status === 'done' || !!f.completedAt;
+                    const overdue = !done && f.dueDate && new Date(f.dueDate) < new Date();
+                    return (
+                      <div key={f.id} className="flex items-center gap-4 px-5 py-4 hover:bg-accent/20 transition-colors">
+                        <div className={cn('shrink-0', done ? 'text-emerald-600' : overdue ? 'text-red-600' : 'text-muted-foreground')}>
+                          {done ? <CheckCircle className="w-4 h-4" /> : <ListChecks className="w-4 h-4" />}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className={cn('text-sm font-semibold', done && 'line-through text-muted-foreground')}>{f.title}</p>
+                          {f.description && <p className="text-xs text-muted-foreground truncate">{f.description}</p>}
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className={cn('text-[10px] font-semibold px-1.5 py-0.5 rounded-full capitalize',
+                              done ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
+                                   : overdue ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                                             : 'bg-muted text-muted-foreground')}>
+                              {done ? 'done' : overdue ? 'overdue' : f.status}
+                            </span>
+                            {f.assignee_name && <span className="text-xs text-muted-foreground">· {f.assignee_name}</span>}
+                          </div>
+                        </div>
+                        {f.dueDate && (
+                          <div className="text-right shrink-0">
+                            <p className={cn('text-xs flex items-center gap-1', overdue ? 'text-red-600 font-medium' : 'text-muted-foreground')}>
+                              <Calendar className="w-3 h-3" />{formatDate(f.dueDate)}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── TICKETS TAB (#1814) ── */}
+          {activeTab === 'tickets' && (
+            <div className="admin-card overflow-hidden">
+              <div className="px-5 py-3 border-b border-border flex items-center justify-between">
+                <p className="text-sm font-semibold">Support Tickets</p>
+                <span className="text-xs text-muted-foreground">This customer&apos;s support history</span>
+              </div>
+              {!tickets.length ? (
+                <div className="px-5 py-10 text-center text-sm text-muted-foreground">No support tickets for this contact</div>
+              ) : (
+                <div className="divide-y divide-border">
+                  {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                  {tickets.map((t: any) => {
+                    const statusColor: Record<string,string> = {
+                      open: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+                      in_progress: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+                      resolved: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
+                      closed: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-400',
+                    };
+                    return (
+                      <button key={t.id} onClick={() => router.push(`/tenant/tickets/${t.id}`)}
+                        className="w-full text-left flex items-center gap-4 px-5 py-4 hover:bg-accent/20 transition-colors">
+                        <Ticket className="w-4 h-4 text-muted-foreground shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold truncate">{t.subject}</p>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className={cn('text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full', statusColor[t.status] ?? statusColor['open'])}>
+                              {String(t.status).replace('_',' ')}
+                            </span>
+                            {t.priority && <span className={cn('text-[10px] font-semibold uppercase', t.priority==='urgent'?'text-red-600':t.priority==='high'?'text-orange-600':'text-muted-foreground')}>{t.priority}</span>}
+                            {t.category && <span className="text-xs text-muted-foreground">· {t.category}</span>}
+                          </div>
+                        </div>
+                        <p className="text-xs text-muted-foreground shrink-0">{formatRelativeTime(t.createdAt)}</p>
+                      </button>
+                    );
+                  })}
                 </div>
               )}
             </div>

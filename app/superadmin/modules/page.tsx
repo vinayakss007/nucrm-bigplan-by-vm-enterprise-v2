@@ -5,6 +5,7 @@
  */
 'use client';
 import { useState, useEffect } from 'react';
+import { useApiQuery } from '@/lib/query/client';
 import { Package, Users, ToggleRight, ToggleLeft, Save, DollarSign } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
@@ -49,17 +50,19 @@ interface Module {
 
 export default function SuperAdminModulesPage() {
   const [modules, setModules] = useState<Module[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [seeded, setSeeded] = useState(false);
   const [dirty, setDirty] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState('');
 
-  const load = async (signal?: AbortSignal) => {
-    try {
-      const res = await fetch('/api/superadmin/modules', { signal });
-      const d = await res.json();
-      if (signal?.aborted) return;
-      setModules((d.data ?? []).map((m: Record<string, unknown>) => ({
+  // #1328: TanStack Query replaces fetch + useEffect + useState.
+  const { data, isLoading } = useApiQuery<{ data?: Record<string, unknown>[] }>(['superadmin', 'modules'], '/api/superadmin/modules');
+  const loading = isLoading;
+
+  // Seed the editable module list (with pricing→planAccess mapping) once loaded.
+  useEffect(() => {
+    if (!seeded && data?.data) {
+      setModules((data.data ?? []).map((m: Record<string, unknown>) => ({
         ...m,
         planAccess: (m.pricing as Record<string, PlanAccess>) || {
           free: { enabled: false },
@@ -68,18 +71,9 @@ export default function SuperAdminModulesPage() {
           enterprise: { enabled: false },
         }
       } as Module)) as unknown as Module[]);
-      setLoading(false);
-    } catch (e) {
-      if ((e as Error)?.name === 'AbortError') return;
-      throw e;
+      setSeeded(true);
     }
-  };
-
-  useEffect(() => {
-    const controller = new AbortController();
-    load(controller.signal);
-    return () => controller.abort();
-  }, []);
+  }, [seeded, data]);
 
   const markDirty = (moduleId: string) => {
     setDirty(prev => new Set(prev).add(moduleId));

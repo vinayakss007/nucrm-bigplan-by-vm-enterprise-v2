@@ -4,7 +4,9 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import { MessageSquare, CheckCircle, ChevronDown, Search } from 'lucide-react';
 import { cn, formatRelativeTime } from '@/lib/utils';
 import toast from 'react-hot-toast';
@@ -16,67 +18,49 @@ interface Ticket { id: string; subject?: string; message?: string; status?: stri
 interface TicketData { tickets?: Ticket[]; counts?: Record<string, number> }
 
 export default function TicketsPage() {
-  const [data, setData]       = useState<TicketData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [status, setStatus]   = useState('open');
   const [search, setSearch]   = useState('');
   const [expanded, setExpanded] = useState<string|null>(null);
   const [reply, setReply]     = useState('');
-  const [replying, setReplying] = useState<string|null>(null);
 
-  // #1089: check res.ok before parsing and surface errors instead of silently
-  // swallowing them / always claiming success.
-  const load = useCallback(async (signal?: AbortSignal) => {
-    try {
-      const q = status ? `?status=${status}` : '';
-      const res = await fetch('/api/superadmin/tickets' + q, { signal });
-      if (!res.ok) {
-        toast.error('Failed to load tickets');
-        setData(null);
-        return;
-      }
-      const json = await res.json();
-      if (signal?.aborted) return;
-      setData(json);
-    } catch (e) {
-      if ((e as Error)?.name === 'AbortError') return;
-      toast.error('Failed to load tickets');
-      setData(null);
-    } finally {
-      if (!signal?.aborted) setLoading(false);
-    }
-  }, [status]);
+  // #1328: TanStack Query replaces fetch + useEffect + useState.
+  // #1089: surface load errors instead of silently swallowing them.
+  const queryKey = ['superadmin', 'tickets', status] as const;
+  const { data, isLoading, error } = useApiQuery<TicketData>(
+    queryKey,
+    '/api/superadmin/tickets' + (status ? `?status=${status}` : ''),
+    { retry: false },
+  );
+  const loading = isLoading;
+
   useEffect(() => {
-    const controller = new AbortController();
-    load(controller.signal);
-    return () => controller.abort();
-  }, [load]);
+    if (error) toast.error('Failed to load tickets');
+  }, [error]);
 
-  const update = async (id: string, updates: Record<string, unknown>) => {
-    try {
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, updates }: { id: string; updates: Record<string, unknown> }) => {
       const res = await fetch('/api/superadmin/tickets',{ method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id,...updates}) });
-      if (!res.ok) { toast.error('Update failed'); return; }
-      toast.success('Updated');
-      load();
-    } catch {
-      toast.error('Update failed');
-    }
-  };
+      if (!res.ok) throw new Error('Update failed');
+    },
+    onSuccess: () => { toast.success('Updated'); queryClient.invalidateQueries({ queryKey }); },
+    onError: () => toast.error('Update failed'),
+  });
+  const update = (id: string, updates: Record<string, unknown>) => updateMutation.mutate({ id, updates });
 
-  const sendReply = async (id: string) => {
-    if (!reply.trim()) return;
-    setReplying(id);
-    try {
+  const replyMutation = useMutation({
+    mutationFn: async (id: string) => {
       const res = await fetch('/api/superadmin/tickets',{ method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id,status:'in_progress',admin_reply:reply}) });
-      if (!res.ok) { toast.error('Failed to send reply'); return; }
-      toast.success('Reply sent');
-      setReply('');
-      load();
-    } catch {
-      toast.error('Failed to send reply');
-    } finally {
-      setReplying(null);
-    }
+      if (!res.ok) throw new Error('Failed to send reply');
+    },
+    onSuccess: () => { toast.success('Reply sent'); setReply(''); queryClient.invalidateQueries({ queryKey }); },
+    onError: () => toast.error('Failed to send reply'),
+  });
+  const replying = replyMutation.isPending ? (replyMutation.variables ?? null) : null;
+
+  const sendReply = (id: string) => {
+    if (!reply.trim()) return;
+    replyMutation.mutate(id);
   };
 
   const c = data?.counts ?? {};

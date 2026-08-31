@@ -68,8 +68,14 @@ describe('a real converted route runs inside the pinned scope (#1615)', () => {
     );
 
     // The route's body (its requireAuth call) ran while a client was pinned.
-    // FAILS on the pre-fix bare-export route (undefined at that point).
-    expect(pinnedWhenRouteRan).toBe(fakeClient);
+    // FAILS on the pre-fix bare-export route (undefined at that point). The
+    // pinned client is a transparent serialization wrapper over the acquired
+    // client (per-pinned-client query serialization), so assert it is defined
+    // and delegates to the fake rather than being it by reference identity.
+    expect(pinnedWhenRouteRan).toBeDefined();
+    expect(pinnedWhenRouteRan).not.toBe('sentinel');
+    await (pinnedWhenRouteRan as { query: (sql: string) => Promise<unknown> }).query('SELECT 7');
+    expect(fakeClient.query).toHaveBeenCalledWith('SELECT 7');
     // Response is preserved unchanged by the wrapper.
     expect(res).toBeDefined();
     const body = await (res as Response).json();

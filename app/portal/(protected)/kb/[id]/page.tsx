@@ -8,6 +8,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Book, ArrowLeft, ThumbsUp, ThumbsDown, Clock, Eye } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
+import { useApiQuery } from '@/lib/query/client';
 
 interface KBArticle {
   id: string;
@@ -22,8 +23,7 @@ interface KBArticle {
 export default function PortalKBArticlePage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
-  const [article, setArticle] = useState<KBArticle | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [sessionReady, setSessionReady] = useState(false);
   const [helpful, setHelpful] = useState<boolean | null>(null);
 
   useEffect(() => {
@@ -32,18 +32,17 @@ export default function PortalKBArticlePage() {
     try {
       const s = JSON.parse(raw);
       if (!s.email) { router.replace('/portal/login'); return; }
+      setSessionReady(true);
     } catch { router.replace('/portal/login'); return; }
+  }, [router]);
 
-    const controller = new AbortController();
-    fetch(`/api/public/kb/articles/${params.id}`, { signal: controller.signal }).then(r => r.json()).then(d => {
-      if (controller.signal.aborted) return;
-      setArticle(d.data); setLoading(false);
-    }).catch((e) => {
-      if ((e as Error)?.name === 'AbortError') return;
-      setLoading(false);
-    });
-    return () => controller.abort();
-  }, [params.id, router]);
+  const { data, isLoading } = useApiQuery<{ data: KBArticle }>(
+    ['portal-kb-article', params.id],
+    `/api/public/kb/articles/${params.id}`,
+    { enabled: sessionReady },
+  );
+  const article = data?.data ?? null;
+  const loading = !sessionReady || isLoading;
 
   if (loading) return (
     <div className="space-y-4 animate-fade-in max-w-3xl">

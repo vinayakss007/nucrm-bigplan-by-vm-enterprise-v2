@@ -4,7 +4,9 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useEffect, useState, useMemo, useCallback } from 'react';
+import { useState, useMemo } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import {
   Activity, RefreshCw, ChevronLeft, ChevronRight, AlertCircle,
   Clock, Sparkles, ThumbsUp, ThumbsDown, Filter,
@@ -80,8 +82,7 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 export default function AIActivityPage() {
-  const [data, setData] = useState<Resp | null>(null);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
   const [filters, setFilters] = useState({ action: '', provider: '', status: '' });
   const [error, setError] = useState<string | null>(null);
@@ -96,45 +97,37 @@ export default function AIActivityPage() {
     return p.toString();
   }, [page, filters]);
 
-  const load = useCallback((signal?: AbortSignal) => {
-    setLoading(true);
-    setError(null);
-    fetch(`/api/tenant/ai/activity?${qs}`, { cache: 'no-store', signal })
-      .then(async r => {
-        if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? `HTTP ${r.status}`);
-        return r.json();
-      })
-      .then(setData)
-      .catch(e => {
-        if (e?.name === 'AbortError') return;
-        setError(e.message || 'Failed to load');
-      })
-      .finally(() => {
-        if (!signal?.aborted) setLoading(false);
-      });
-  }, [qs]);
-  useEffect(() => {
-    const controller = new AbortController();
-    load(controller.signal);
-    return () => controller.abort();
-  }, [load]);
+  // #1328: activity via TanStack Query (was raw fetch + useEffect). filters/page
+  // are part of the key so each view refetches and caches independently.
+  const AI_ACTIVITY_KEY = ['tenant', 'ai', 'activity', qs] as const;
+  const { data, isLoading: loading, isFetching, error: queryError, refetch } = useApiQuery<Resp>(
+    AI_ACTIVITY_KEY,
+    `/api/tenant/ai/activity?${qs}`,
+  );
+  const queryErrorMsg = queryError ? (queryError.message || 'Failed to load') : null;
+  const load = () => refetch();
 
-  async function rate(id: string, accepted: boolean) {
-    try {
+  const rateMutation = useMutation({
+    mutationFn: async ({ id, accepted }: { id: string; accepted: boolean }) => {
       const r = await fetch('/api/tenant/ai/activity', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id, accepted }),
       });
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? 'Failed');
-      // Optimistic update
-      setData(prev => prev ? {
+    },
+    onSuccess: (_data, { id, accepted }) => {
+      // Optimistically patch the cached page in place.
+      queryClient.setQueryData<Resp>(AI_ACTIVITY_KEY, prev => prev ? {
         ...prev,
         rows: prev.rows.map(row => row.id === id ? { ...row, accepted } : row),
       } : prev);
-    } catch (e) {
-      setError((e as Error).message);
-    }
+    },
+    onError: (e: Error) => setError(e.message),
+  });
+  function rate(id: string, accepted: boolean) {
+    setError(null);
+    rateMutation.mutate({ id, accepted });
   }
 
   const summary = data?.summary_30d;
@@ -159,7 +152,7 @@ export default function AIActivityPage() {
           onClick={() => load()}
           className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border bg-card hover:bg-accent text-sm transition-colors"
         >
-          <RefreshCw className={cn('w-3.5 h-3.5', loading && 'animate-spin')} />
+          <RefreshCw className={cn('w-3.5 h-3.5', isFetching && 'animate-spin')} />
           Refresh
         </button>
       </div>
@@ -198,10 +191,10 @@ export default function AIActivityPage() {
         )}
       </div>
 
-      {error && (
+      {(error || queryErrorMsg) && (
         <div className="rounded-xl border border-red-300 bg-red-50 dark:border-red-800/50 dark:bg-red-950/20 px-4 py-3 text-sm text-red-700 dark:text-red-300 flex items-start gap-2">
           <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-          <span className="flex-1">{error}</span>
+          <span className="flex-1">{error || queryErrorMsg}</span>
         </div>
       )}
 

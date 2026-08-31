@@ -5,12 +5,13 @@
  */
 import { requireTenantCtx } from '@/lib/tenant/context';
 import { db } from '@/drizzle/db';
-import { leads, users, leadActivities, contacts, tenantMembers, products, services, teams } from '@/drizzle/schema';
+import { leads, users, contacts, tenantMembers, products, services, teams, followUps } from '@/drizzle/schema';
 import { eq, and, sql, desc, or, ilike } from 'drizzle-orm';
 import { notFound } from 'next/navigation';
 import LeadDetailClient from '@/components/tenant/lead-detail-client';
 import type { Lead, Activity, RelatedContact } from '@/components/tenant/lead-detail-client';
 import { withTenantScope } from '@/lib/api/with-api-route';
+import { getActivityTimeline } from '@/lib/activity/timeline';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -86,27 +87,10 @@ export default async function LeadDetailPage({ params }: PageProps) {
   // build a new typed object with the extra field.
   const leadWithCreator = { ...lead, created_by_name: creator?.fullName ?? null };
   
-  // Get activities
-  const activities = await db.select({
-    id: leadActivities.id,
-    lead_id: leadActivities.leadId,
-    tenant_id: leadActivities.tenantId,
-    performed_by: leadActivities.performedBy,
-    activity_type: leadActivities.activityType,
-    description: leadActivities.description,
-    activity_data: leadActivities.activityData,
-    performed_at: leadActivities.performedAt,
-    performed_by_name: users.fullName,
-    performed_by_avatar: users.avatarUrl,
-  })
-  .from(leadActivities)
-  .leftJoin(users, eq(users.id, leadActivities.performedBy))
-  .where(and(
-    eq(leadActivities.leadId, id),
-    eq(leadActivities.tenantId, ctx.tenantId)
-  ))
-  .orderBy(desc(leadActivities.performedAt))
-  .limit(100);
+  // #1820: unified activity timeline — merges lead_activities + activities +
+  // notes for this lead into one chronological feed (previously the lead page
+  // only read lead_activities, so cross-module history was invisible here).
+  const activities = await getActivityTimeline('lead', id, ctx.tenantId, 100);
   
   // Get related contacts
   const relatedContacts = await db.select({
@@ -144,13 +128,35 @@ export default async function LeadDetailPage({ params }: PageProps) {
     eq(tenantMembers.status, 'active')
   ))
   .orderBy(users.fullName);
-  
+
+  // #1815: the lead's follow-ups (FK already existed but was never surfaced on
+  // the record). Wrapped in a fallback so a failure never breaks the page.
+  const followUpsList = await db.select({
+    id: followUps.id,
+    title: followUps.title,
+    description: followUps.description,
+    due_date: followUps.dueDate,
+    status: followUps.status,
+    completed_at: followUps.completedAt,
+    assignee_name: users.fullName,
+  })
+  .from(followUps)
+  .leftJoin(users, eq(users.id, followUps.assignedTo))
+  .where(and(
+    eq(followUps.leadId, id),
+    eq(followUps.tenantId, ctx.tenantId),
+  ))
+  .orderBy(desc(followUps.dueDate))
+  .limit(50)
+  .catch(() => []);
+
   return (
     <LeadDetailClient
       lead={stripNulls(leadWithCreator) as unknown as Lead}
-      activities={activities.map(a => stripNulls(a) as unknown as Activity)}
+      activities={activities as unknown as Activity[]}
       relatedContacts={relatedContacts.map(c => stripNulls(c) as unknown as RelatedContact)}
       teamMembers={teamMembers}
+      followUps={followUpsList}
       tenantId={ctx.tenantId}
       userId={ctx.userId}
     />

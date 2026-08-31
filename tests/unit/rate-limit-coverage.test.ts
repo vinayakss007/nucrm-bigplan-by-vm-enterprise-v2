@@ -155,6 +155,70 @@ describe('lib/api/mutating-rate-limit', () => {
     expect(results[3]!.status).toBe(429);
   });
 
+  it('returns null (allowed) then 429 over limit for impersonate (post limit=5)', async () => {
+    const { rateLimitMutating } = await import('@/lib/api/mutating-rate-limit');
+
+    const request = new Request('http://localhost/api/superadmin/impersonate', {
+      method: 'POST',
+      headers: { 'x-forwarded-for': '203.0.113.1' },
+    });
+
+    const results = [];
+    for (let i = 0; i < 6; i++) {
+      results.push(await rateLimitMutating(request, 'impersonate', 'post'));
+    }
+
+    // First 5 allowed
+    expect(results[0]).toBeNull();
+    expect(results[4]).toBeNull();
+    // 6th over limit
+    expect(results[5]).not.toBeNull();
+    expect(results[5]!.status).toBe(429);
+  });
+
+  it('returns null (allowed) then 429 over limit for joinTenant (post limit=5)', async () => {
+    const { rateLimitMutating } = await import('@/lib/api/mutating-rate-limit');
+
+    const request = new Request('http://localhost/api/superadmin/join-tenant', {
+      method: 'POST',
+      headers: { 'x-forwarded-for': '203.0.113.2' },
+    });
+
+    const results = [];
+    for (let i = 0; i < 6; i++) {
+      results.push(await rateLimitMutating(request, 'joinTenant', 'post'));
+    }
+
+    // First 5 allowed
+    expect(results[0]).toBeNull();
+    expect(results[4]).toBeNull();
+    // 6th over limit
+    expect(results[5]).not.toBeNull();
+    expect(results[5]!.status).toBe(429);
+  });
+
+  it('returns null (allowed) then 429 over limit for selectiveRestore (post limit=3)', async () => {
+    const { rateLimitMutating } = await import('@/lib/api/mutating-rate-limit');
+
+    const request = new Request('http://localhost/api/superadmin/selective-restore/execute', {
+      method: 'POST',
+      headers: { 'x-forwarded-for': '203.0.113.3' },
+    });
+
+    const results = [];
+    for (let i = 0; i < 4; i++) {
+      results.push(await rateLimitMutating(request, 'selectiveRestore', 'post'));
+    }
+
+    // First 3 allowed
+    expect(results[0]).toBeNull();
+    expect(results[1]).toBeNull();
+    expect(results[2]).toBeNull();
+    // 4th over limit
+    expect(results[3]).not.toBeNull();
+    expect(results[3]!.status).toBe(429);
+  });
+
   it('applies DEFAULT_LIMITS for unknown entities', async () => {
     const { rateLimitMutating } = await import('@/lib/api/mutating-rate-limit');
 

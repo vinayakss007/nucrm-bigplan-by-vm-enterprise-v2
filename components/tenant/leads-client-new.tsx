@@ -11,7 +11,7 @@ import { clientLogWarn } from '@/lib/client-logger';
 import {
   Target, Plus, Filter, Upload, Search, MoreHorizontal, Trash2,
   Phone, Mail, Building2, TrendingUp, User, Star, Archive, RotateCcw,
-  ChevronDown, CheckCircle, XCircle, Clock, Zap, Eye, Activity, Globe, Linkedin, DollarSign,
+  ChevronDown, CheckCircle, XCircle, Clock, Zap, Eye, Activity, Globe, Contact, DollarSign,
   BarChart3, Users, X, Kanban, List, Flame
 } from 'lucide-react';
 import { cn, formatDate, formatCurrency, getInitials } from '@/lib/utils';
@@ -826,7 +826,7 @@ export default function LeadsClientNew({ permissions, teamMembers, companies, co
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem onClick={()=>router.push(`/tenant/leads/${lead.id}`)}><Eye className="w-4 h-4 mr-2"/>View Details</DropdownMenuItem>
                           <DropdownMenuItem onClick={()=>router.push(`/tenant/leads/${lead.id}?tab=activities`)}><Activity className="w-4 h-4 mr-2"/>Log Activity</DropdownMenuItem>
-                          {lead.linkedin_url&&<DropdownMenuItem onClick={()=>openExternalUrl(lead.linkedin_url)}><Linkedin className="w-4 h-4 mr-2"/>LinkedIn</DropdownMenuItem>}
+                          {lead.linkedin_url&&<DropdownMenuItem onClick={()=>openExternalUrl(lead.linkedin_url)}><Contact className="w-4 h-4 mr-2"/>LinkedIn</DropdownMenuItem>}
                           <DropdownMenuSeparator/>
                           <DropdownMenuItem onClick={()=>deleteLead(lead.id,`${lead.first_name} ${lead.last_name}`)} className="text-red-600 focus:text-red-600"><Trash2 className="w-4 h-4 mr-2"/>Delete</DropdownMenuItem>
                         </DropdownMenuContent>

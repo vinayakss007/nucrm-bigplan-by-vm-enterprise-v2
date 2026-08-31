@@ -5,12 +5,10 @@
  */
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useApiQuery } from '@/lib/query/client';
 import { Building2, Users, CreditCard, TrendingUp, AlertCircle, Clock, Crown, Settings, Shield } from 'lucide-react';
 import { cn, formatDate, formatCurrency } from '@/lib/utils';
-import toast from 'react-hot-toast';
 import Link from 'next/link';
-import { getFromCache, setInCache } from '@/lib/client-cache';
 import SettingsEmptyState from '@/components/shared/settings-empty-state';
 
 interface OrgTenant {
@@ -42,79 +40,24 @@ interface Usage {
   current_contacts?: number;
   current_deals?: number;
 }
-interface AdminOverview {
-  org: Org | null;
-  plan: Plan | null;
-  members: Member[];
-  usage: Usage;
-}
 
 export default function OrganizationAdminPage() {
-  const cacheKey = 'org:admin:overview';
-  
-  // Initialize from cache for instant loading
-  const cachedData = typeof window !== 'undefined' ? getFromCache<AdminOverview>(cacheKey) : null;
-  
-  const [loading, setLoading] = useState(!cachedData);
-  const [org, setOrg] = useState<Org | null>(cachedData?.org || null);
-  const [plan, setPlan] = useState<Plan | null>(cachedData?.plan || null);
-  const [members, setMembers] = useState<Member[]>(cachedData?.members || []);
-  const [usage, setUsage] = useState<Usage>(cachedData?.usage || {});
+  // #1328: load org overview + members via TanStack Query (was raw fetch +
+  // useEffect + manual client cache + interval refetch).
+  const { data: orgData, isLoading: orgLoading } = useApiQuery<Org & { plan?: Plan; usage?: Usage }>(
+    ['tenant', 'workspace'],
+    '/api/tenant/workspace',
+  );
+  const { data: membersData, isLoading: membersLoading } = useApiQuery<{ data?: Member[] }>(
+    ['tenant', 'members'],
+    '/api/tenant/members',
+  );
 
-  const load = useCallback(async (signal?: AbortSignal) => {
-    try {
-      const [orgRes, membersRes] = await Promise.all([
-        fetch('/api/tenant/workspace', { signal }),
-        fetch('/api/tenant/members', { signal })
-      ]);
-
-      const orgData = await orgRes.json();
-      const membersData = await membersRes.json();
-
-      if (signal?.aborted) return;
-
-      const data = {
-        org: orgData,
-        plan: orgData.plan || {},
-        members: membersData.data || [],
-        usage: orgData.usage || {},
-      };
-      
-      setOrg(data.org);
-      setPlan(data.plan);
-      setMembers(data.members);
-      setUsage(data.usage);
-      
-      // Cache for 5 minutes
-      setInCache(cacheKey, data, { ttl: 5 * 60 * 1000 });
-      setLoading(false);
-    } catch (e) {
-      if ((e as Error)?.name === 'AbortError') return;
-      toast.error('Failed to load organization data');
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    load(controller.signal);
-    
-    // Auto-refresh every 3 minutes
-    const interval = setInterval(() => {
-      const cached = getFromCache<AdminOverview>(cacheKey);
-      if (cached) {
-        setOrg(cached.org);
-        setPlan(cached.plan);
-        setMembers(cached.members);
-        setUsage(cached.usage);
-      }
-    }, 3 * 60 * 1000);
-    
-    return () => {
-      controller.abort();
-      clearInterval(interval);
-    };
-  }, [load]);
+  const loading = orgLoading || membersLoading;
+  const org: Org | null = orgData ?? null;
+  const plan: Plan | null = orgData?.plan ?? {};
+  const members: Member[] = membersData?.data ?? [];
+  const usage: Usage = orgData?.usage ?? {};
 
   if (loading) {
     return (

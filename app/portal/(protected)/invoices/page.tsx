@@ -8,6 +8,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { FileText, Download } from 'lucide-react';
 import { cn, formatDate, formatCurrency } from '@/lib/utils';
+import { useApiQuery } from '@/lib/query/client';
 
 interface PortalSession { email: string; name: string; permissions: { quotes: boolean; invoices: boolean; cases: boolean }; }
 
@@ -22,26 +23,25 @@ interface PortalInvoice {
 
 export default function PortalInvoicesPage() {
   const router = useRouter();
-  const [invoices, setInvoices] = useState<PortalInvoice[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [session, setSession] = useState<PortalSession | null>(null);
 
   useEffect(() => {
     const raw = localStorage.getItem('portal_session');
     if (!raw) { router.replace('/portal/login'); return; }
-    const controller = new AbortController();
     try {
       const s = JSON.parse(raw) as PortalSession;
       if (!s.email) { router.replace('/portal/login'); return; }
-      fetch(`/api/public/invoices?email=${encodeURIComponent(s.email)}`, { signal: controller.signal }).then(r => r.json()).then(d => {
-        if (controller.signal.aborted) return;
-        setInvoices(d.data || []); setLoading(false);
-      }).catch((e) => {
-        if ((e as Error)?.name === 'AbortError') return;
-        setLoading(false);
-      });
+      setSession(s);
     } catch { router.replace('/portal/login'); }
-    return () => controller.abort();
   }, [router]);
+
+  const { data, isLoading } = useApiQuery<{ data: PortalInvoice[] }>(
+    ['portal-invoices', session?.email],
+    `/api/public/invoices?email=${encodeURIComponent(session?.email ?? '')}`,
+    { enabled: !!session?.email },
+  );
+  const invoices = data?.data ?? [];
+  const loading = !session || isLoading;
 
   const statusColor: Record<string, string> = {
     paid: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',

@@ -76,7 +76,7 @@ vi.mock('@/drizzle/schema', () => ({
     roleSlug: 'tenant_members.role_slug',
     createdAt: 'tenant_members.created_at',
   },
-  roles: { id: 'roles.id', permissions: 'roles.permissions' },
+  roles: { id: 'roles.id', permissions: 'roles.permissions', updatedAt: 'roles.updated_at' },
 }));
 
 vi.mock('drizzle-orm', () => ({
@@ -662,6 +662,89 @@ describe('requireAuth — cached context path', () => {
     expect(ctx.roleSlug).toBe('member');
     expect(ctx.isAdmin).toBe(false);
     expect(m.rc.invalidate).toHaveBeenCalledWith(TOKEN_HASH);
+  });
+
+  it('#1836: keeps trusting the cache when the role version is unchanged', async () => {
+    const t = Date.now();
+    m.rc.getCached.mockResolvedValue(cachedCtx({ roleVersion: t }));
+    queueSelects(
+      [{ count: 1 }],                                            // session live
+      [{ status: 'active', roleSlug: 'member', roleId: 'role-1' }], // membership ok
+      [{ updatedAt: new Date(t) }],                              // role unchanged (same version)
+    );
+
+    const result = await requireAuth(makeRequest({ token: TOKEN }));
+
+    expect(isContext(result)).toBe(true);
+    expect((result as AuthContext).tenantId).toBe('cached-tenant');
+    expect(m.rc.invalidate).not.toHaveBeenCalled();
+  });
+
+  it('#1836: invalidates the cache when the role permissions were edited in place (version advanced)', async () => {
+    const cachedAt = Date.now() - 60_000;
+    m.rc.getCached.mockResolvedValue(cachedCtx({ roleVersion: cachedAt, roleSlug: 'member' }));
+    queueSelects(
+      [{ count: 1 }],                                             // session live
+      [{ status: 'active', roleSlug: 'member', roleId: 'role-1' }], // same role slug
+      [{ updatedAt: new Date(cachedAt + 30_000) }],               // role updated AFTER cache → stale
+    );
+    // rebuild path
+    m.db.query.sessions.findFirst.mockResolvedValue({ id: 'sess-1' });
+    queueSelects(
+      [userRow()],
+      [memberRow({ tenantId: 'cached-tenant', roleSlug: 'member', permissions: { 'contacts.view': true, 'contacts.edit': true }, roleUpdatedAt: new Date(cachedAt + 30_000) })],
+    );
+
+    const result = await requireAuth(makeRequest({ token: TOKEN }));
+
+    expect(isContext(result)).toBe(true);
+    // Rebuilt context carries the freshly-edited permissions, not the stale set.
+    expect((result as AuthContext).permissions).toEqual({ 'contacts.view': true, 'contacts.edit': true });
+    expect(m.rc.invalidate).toHaveBeenCalledWith(TOKEN_HASH);
+  });
+
+  it('#1836: re-validates a cached context that has NO roleVersion stamp (null treated as 0)', async () => {
+    // Contexts cached before the version stamp existed (e.g. across a deploy)
+    // have roleVersion == null. Previously the version check was skipped for
+    // them, so an in-place permission edit stayed effective for the full TTL.
+    // Now null is treated as 0, so any real role (updated_at > 0) forces a
+    // re-validation on the next hit.
+    m.rc.getCached.mockResolvedValue(cachedCtx({ roleVersion: undefined, roleSlug: 'member' }));
+    queueSelects(
+      [{ count: 1 }],                                              // session live
+      [{ status: 'active', roleSlug: 'member', roleId: 'role-1' }], // membership ok, has roleId
+      [{ updatedAt: new Date() }],                                 // live role has a real updated_at (> 0)
+    );
+    // rebuild path (cache was treated as stale)
+    m.db.query.sessions.findFirst.mockResolvedValue({ id: 'sess-1' });
+    queueSelects(
+      [userRow()],
+      [memberRow({ tenantId: 'cached-tenant', roleSlug: 'member', roleUpdatedAt: new Date() })],
+    );
+
+    const result = await requireAuth(makeRequest({ token: TOKEN }));
+
+    expect(isContext(result)).toBe(true);
+    // The unstamped cache was NOT trusted — it was invalidated and rebuilt.
+    expect(m.rc.invalidate).toHaveBeenCalledWith(TOKEN_HASH);
+  });
+
+  it('#1836: stamps roleVersion from the role updated_at when building a fresh context', async () => {
+    const roleUpdated = new Date('2026-08-01T00:00:00Z');
+    m.db.query.sessions.findFirst.mockResolvedValue({ id: 'sess-1' });
+    queueSelects(
+      [userRow()],
+      [memberRow({ tenantId: 'tenant-1', roleSlug: 'member', roleUpdatedAt: roleUpdated })],
+    );
+
+    const result = await requireAuth(makeRequest({ token: TOKEN }));
+
+    expect(isContext(result)).toBe(true);
+    // The cached copy must carry the version stamp for later staleness checks.
+    expect(m.rc.cache).toHaveBeenCalledWith(
+      TOKEN_HASH,
+      expect.objectContaining({ roleVersion: roleUpdated.getTime() }),
+    );
   });
 
   it('skips the membership check for a cached super admin, which has no membership row', async () => {

@@ -4,7 +4,9 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import { Megaphone, Plus, Trash2, Eye, EyeOff } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
 import { confirmThen } from '@/components/ui/confirm-dialog';
@@ -28,49 +30,57 @@ interface Announcement {
 }
 
 export default function AnnouncementsPage() {
-  const [items, setItems]   = useState<Announcement[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [form, setForm]     = useState({ title:'', content:'', type:'info', target:'all', is_active:true, ends_at:'' });
-  const [saving, setSaving] = useState(false);
   const inp = "w-full px-3 py-2 rounded-lg border border-white/10 bg-white/5 text-sm text-white placeholder-white/20 focus:outline-none focus:border-violet-500";
 
-  const load = async (signal?: AbortSignal) => {
-    try {
-      const d = await fetch('/api/superadmin/announcements', { signal }).then(r=>r.json());
-      if (signal?.aborted) return;
-      setItems(d.data||[]); setLoading(false);
-    } catch (e) {
-      if ((e as Error)?.name === 'AbortError') return;
-      throw e;
-    }
-  };
-  useEffect(() => {
-    const controller = new AbortController();
-    load(controller.signal);
-    return () => controller.abort();
-  }, []);
+  // #1328: TanStack Query replaces fetch + useEffect + useState.
+  const queryKey = ['superadmin', 'announcements'] as const;
+  const { data, isLoading } = useApiQuery<{ data?: Announcement[] }>(queryKey, '/api/superadmin/announcements');
+  const items: Announcement[] = data?.data ?? [];
+  const loading = isLoading;
 
-  const save = async (e: React.FormEvent) => {
-    e.preventDefault(); setSaving(true);
-    const res = await fetch('/api/superadmin/announcements',{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(form) });
-    const d = await res.json();
-    if (res.ok) { toast.success('Announcement created'); setShowForm(false); setForm({title:'',content:'',type:'info',target:'all',is_active:true,ends_at:''}); load(); }
-    else toast.error(d.error||'Failed');
-    setSaving(false);
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch('/api/superadmin/announcements',{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(form) });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || 'Failed');
+    },
+    onSuccess: () => {
+      toast.success('Announcement created');
+      setShowForm(false);
+      setForm({title:'',content:'',type:'info',target:'all',is_active:true,ends_at:''});
+      queryClient.invalidateQueries({ queryKey });
+    },
+    onError: (e: Error) => toast.error(e.message || 'Failed'),
+  });
+  const saving = saveMutation.isPending;
+
+  const save = (e: React.FormEvent) => {
+    e.preventDefault();
+    saveMutation.mutate();
   };
 
-  const toggle = async (id: string, is_active: boolean) => {
-    await fetch('/api/superadmin/announcements',{ method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id,is_active}) });
-    setItems(prev => prev.map(a => a.id===id?{...a,is_active}:a));
-  };
+  const toggleMutation = useMutation({
+    mutationFn: async ({ id, is_active }: { id: string; is_active: boolean }) => {
+      await fetch('/api/superadmin/announcements',{ method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id,is_active}) });
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey }),
+  });
+  const toggle = (id: string, is_active: boolean) => toggleMutation.mutate({ id, is_active });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await fetch('/api/superadmin/announcements',{ method:'DELETE', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id}) });
+    },
+    onSuccess: () => { toast.success('Deleted'); queryClient.invalidateQueries({ queryKey }); },
+  });
 
   const del = async (id: string) => {
     const announcement = items.find(a => a.id === id);
     await confirmThen(`Delete announcement "${announcement?.title || 'this announcement'}"?`, async () => {
-      await fetch('/api/superadmin/announcements',{ method:'DELETE', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id}) });
-      setItems(prev => prev.filter(a => a.id!==id));
-      toast.success('Deleted');
+      await deleteMutation.mutateAsync(id);
     });
   };
 

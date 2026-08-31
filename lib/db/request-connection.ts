@@ -88,13 +88,102 @@ const RESET_TENANT_GUCS_SQL =
   "SELECT set_config('app.current_tenant', '', false), set_config('app.current_user', '', false)";
 
 /**
+ * Per-pinned-client query serialization (#pinned-client-query-serialization).
+ *
+ * WHY
+ * ---
+ * withApiRoute() pins ONE PoolClient for the whole request and the `db` proxy
+ * (drizzle/db.ts) routes EVERY db.* call to it. node-postgres allows only ONE
+ * in-flight query per client. Handlers routinely launch fire-and-forget work
+ * (e.g. `fireWebhooks(...).catch(...)`, `evaluateAutomations(...).catch(...)`)
+ * that is NOT awaited before the handler returns. Those detached promises still
+ * run inside the pinned async scope, so their db queries land on the SAME
+ * pinned client — concurrently with each other and with the teardown reset —
+ * violating the one-query-per-client rule. That surfaces as:
+ *   "Calling client.query() when the client is already executing a query is
+ *    deprecated and will be removed in pg@9.0"
+ * and, worse, can collide with the client.release() at scope exit.
+ *
+ * FIX (primitive-level, zero route edits)
+ * ---------------------------------------
+ * Wrap the pinned client so every `.query()` is chained onto a per-client tail
+ * promise. Overlapping callers are transparently serialized (queued) instead of
+ * racing the single connection. Teardown waits for the queue to drain before
+ * resetting GUCs and releasing the client, so no detached query can outlive the
+ * connection. This covers ALL routes that use withApiRoute without touching any
+ * handler. The PgBouncer path is unaffected (it never pins).
+ *
+ * Ordering note: chaining preserves submission order for queries issued from
+ * the same synchronous tick (the normal request flow). It intentionally does
+ * NOT change transaction semantics — db.transaction() already issues its
+ * BEGIN/…/COMMIT sequentially on the one client; serialization only prevents an
+ * unrelated fire-and-forget query from interleaving mid-transaction.
+ */
+const clientQueryTail = new WeakMap<PoolClient, Promise<unknown>>();
+
+/**
+ * Return a Proxy over `client` whose `.query(...)` calls are serialized through
+ * a per-client promise chain. All other properties/methods pass through to the
+ * real client unchanged. Idempotent-safe: the tail is keyed on the underlying
+ * client, so wrapping the same client twice shares one queue.
+ */
+function serializeClientQueries(client: PoolClient): PoolClient {
+  return new Proxy(client, {
+    get(target, prop, receiver) {
+      if (prop === 'query') {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        return (...args: any[]) => {
+          const prior = clientQueryTail.get(target) ?? Promise.resolve();
+          // Chain on the SETTLED prior query (success OR failure) so one
+          // rejected query never poisons the queue for later ones.
+          const run = prior
+            .catch(() => undefined)
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            .then(() => (target.query as (...a: any[]) => Promise<unknown>)(...args));
+          // The tail tracks completion (settled) so the next query waits for
+          // this one; swallow here to avoid an unhandled rejection on the tail
+          // itself — the real result/rejection is returned to the caller via
+          // `run`.
+          clientQueryTail.set(target, run.catch(() => undefined));
+          return run;
+        };
+      }
+      const value = Reflect.get(target, prop, receiver);
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  }) as PoolClient;
+}
+
+/**
+ * Await the pinned client's outstanding serialized queries (queue drain), so
+ * teardown never resets GUCs or releases the client while a detached
+ * fire-and-forget query is still in flight on it.
+ */
+async function drainClientQueries(client: PoolClient): Promise<void> {
+  // Loop because a draining query may itself enqueue another (rare, but the
+  // tail can advance while we await). Bounded by a small iteration cap so a
+  // pathological self-perpetuating chain can't hang teardown forever.
+  for (let i = 0; i < 100; i++) {
+    const tail = clientQueryTail.get(client);
+    if (!tail) return;
+    await tail.catch(() => undefined);
+    // If no new work was enqueued while awaiting, we're drained.
+    if (clientQueryTail.get(client) === tail) {
+      clientQueryTail.delete(client);
+      return;
+    }
+  }
+}
+
+/**
  * Run `fn` with a single PoolClient pinned to the async request scope.
  *
- * - Acquires ONE client from getPool() and enters an AsyncLocalStorage scope so
+ * - Acquires ONE client from getPool(), wraps it so its queries are serialized
+ *   (see serializeClientQueries), and enters an AsyncLocalStorage scope so
  *   getPinnedClient() (and therefore the `db` proxy) route queries to it.
- * - In a finally block, resets the tenant GUCs on the client (defense-in-depth,
- *   in addition to the pool's own release handler) and releases the client back
- *   to the pool.
+ * - In a finally block, DRAINS any outstanding serialized queries, resets the
+ *   tenant GUCs on the client (defense-in-depth, in addition to the pool's own
+ *   release handler) and releases the client back to the pool.
  * - If acquiring the client fails, the error is propagated and no scope is
  *   entered (the request falls back to the pool-bound db, which is fail-closed
  *   under RLS).
@@ -117,21 +206,35 @@ export async function withPinnedConnection<T>(fn: () => Promise<T>): Promise<T> 
     return fn();
   }
 
-  const client = await getPool().connect();
+  const rawClient = await getPool().connect();
+  // Store the serialized wrapper as the pinned client so every db.* call in the
+  // request (including detached fire-and-forget queries) queues on one chain.
+  const client = serializeClientQueries(rawClient);
 
   try {
     return await pinnedConnectionStorage.run({ client }, fn);
   } finally {
+    // Wait for any still-in-flight serialized queries (e.g. fire-and-forget
+    // webhook/automation work launched by the handler) to finish before we
+    // touch the connection, so the reset/release below can never collide with
+    // a query on the same client.
+    try {
+      await drainClientQueries(rawClient);
+    } catch {
+      // Drain best-effort; the reset below and the pool's release handler are
+      // the safety net.
+    }
     // Reset the tenant GUCs before returning the client to the pool so no stale
     // context can leak to the next checkout. The pool's own 'release' handler
     // also does this; doing it here too is cheap defense-in-depth and keeps the
-    // reset even if the pool handler wiring ever changes.
+    // reset even if the pool handler wiring ever changes. Go through the raw
+    // client directly (queue is already drained).
     try {
-      await client.query(RESET_TENANT_GUCS_SQL);
+      await rawClient.query(RESET_TENANT_GUCS_SQL);
     } catch {
       // Client may be tearing down; the next checkout re-resets. Swallow to
       // avoid masking the original error / unhandled rejections.
     }
-    client.release();
+    rawClient.release();
   }
 }

@@ -4,7 +4,9 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import { Plus, Globe, Check, X, Trash2, Loader2, ChevronDown, CheckCircle, XCircle, Clock, Copy, Play, ExternalLink } from 'lucide-react';
 import Link from 'next/link';
 import { AlertTriangle } from 'lucide-react';
@@ -42,37 +44,28 @@ interface Delivery {
   created_at: string;
 }
 
+const WEBHOOKS_QUERY = ['tenant', 'webhooks'] as const;
+
 export default function WebhooksPage() {
-  const [webhooks, setWebhooks]   = useState<Webhook[]>([]);
-  const [loading, setLoading]     = useState(true);
+  const queryClient = useQueryClient();
   const [showCreate, setShowCreate] = useState(false);
   const [showEdit, setShowEdit]   = useState(false);
   const [editingWebhook, setEditingWebhook] = useState<Webhook|null>(null);
   const [expanded, setExpanded]   = useState<string|null>(null);
   const [deliveries, setDeliveries] = useState<Record<string,Delivery[]>>({});
-  const [saving, setSaving]       = useState(false);
   const [form, setForm]           = useState({ name:'', url:'', events:[] as string[] });
   const [secretVisible, setSecretVisible] = useState<Record<string,string>>({});
-  const [testing, setTesting] = useState<string|null>(null);
   const [testResult, setTestResult] = useState<Record<string,{status:string; statusCode:number|null; duration:number; errorMessage?:string|null}>>({});
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
 
-  const load = async (signal?: AbortSignal) => {
-    setLoading(true);
-    try {
-      const res = await fetch('/api/tenant/webhooks', { signal });
-      if (res.ok) { const d = await res.json(); if (signal?.aborted) return; setWebhooks(d.data ?? []); }
-      setLoading(false);
-    } catch (e) {
-      if ((e as Error)?.name === 'AbortError') return;
-      throw e;
-    }
-  };
-  useEffect(() => {
-    const controller = new AbortController();
-    load(controller.signal);
-    return () => controller.abort();
-  }, []);
+  // #1328: list read via TanStack Query (was fetch + useEffect + AbortController).
+  const { data: webhooksData, isLoading: loading } = useApiQuery<{ data?: Webhook[] }>(
+    WEBHOOKS_QUERY,
+    '/api/tenant/webhooks',
+  );
+  const webhooks = webhooksData?.data ?? [];
+
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: WEBHOOKS_QUERY });
 
   const loadDeliveries = async (id: string) => {
     if (deliveries[id]) return;
@@ -86,6 +79,79 @@ export default function WebhooksPage() {
     if (next) loadDeliveries(next);
   };
 
+  const createMutation = useMutation({
+    mutationFn: async (payload: { name: string; url: string; events: string[] }) => {
+      const res = await fetch('/api/tenant/webhooks', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(payload),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error);
+      return d;
+    },
+    onSuccess: (d) => {
+      toast.success('Webhook created');
+      if (d.data?.signing_secret) {
+        setSecretVisible(p => ({...p, [d.data.id]: d.data.signing_secret}));
+      }
+      setShowCreate(false); setForm({ name:'', url:'', events:[] });
+      invalidate();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const editMutation = useMutation({
+    mutationFn: async ({ id, payload }: { id: string; payload: { name: string; url: string; events: string[] } }) => {
+      const res = await fetch(`/api/tenant/webhooks/${id}`, {
+        method:'PATCH', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(payload),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error);
+    },
+    onSuccess: () => {
+      toast.success('Webhook updated');
+      setShowEdit(false); setEditingWebhook(null); setForm({ name:'', url:'', events:[] });
+      invalidate();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const toggleMutation = useMutation({
+    mutationFn: async ({ id, current }: { id: string; current: boolean }) => {
+      await fetch(`/api/tenant/webhooks/${id}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ is_active: !current }) });
+    },
+    onSuccess: invalidate,
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await fetch(`/api/tenant/webhooks/${id}`, { method:'DELETE' });
+    },
+    onSuccess: () => { toast.success('Deleted'); invalidate(); },
+  });
+
+  const testMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/tenant/webhooks/${id}/test`, { method: 'POST' });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error);
+      return { id, data: d.data };
+    },
+    onSuccess: ({ id, data: d }) => {
+      setTestResult(p => ({...p, [id]: d}));
+      if (d.status === 'delivered') {
+        toast.success(`Test delivered in ${d.duration}ms (${d.statusCode})`);
+      } else {
+        toast.error(`Test failed: ${d.errorMessage || d.statusCode}`);
+      }
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const saving = createMutation.isPending || editMutation.isPending;
+  const testing = testMutation.isPending ? testMutation.variables : null;
+
   const create = async (e: React.FormEvent) => {
     e.preventDefault();
     const validation = validateForm(webhookFormSchema, form);
@@ -93,20 +159,7 @@ export default function WebhooksPage() {
       toast.error(validation.errors._form || Object.values(validation.errors)[0] || 'Please check the form and try again.');
       return;
     }
-    setSaving(true);
-    const res = await fetch('/api/tenant/webhooks', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify(form),
-    });
-    const d = await res.json();
-    if (res.ok) {
-      toast.success('Webhook created');
-      if (d.data?.signing_secret) {
-        setSecretVisible(p => ({...p, [d.data.id]: d.data.signing_secret}));
-      }
-      setShowCreate(false); setForm({ name:'', url:'', events:[] }); load();
-    } else toast.error(d.error);
-    setSaving(false);
+    createMutation.mutate(form);
   };
 
   const edit = async (e: React.FormEvent) => {
@@ -116,17 +169,7 @@ export default function WebhooksPage() {
       toast.error(validation.errors._form || Object.values(validation.errors)[0] || 'Please check the form and try again.');
       return;
     }
-    setSaving(true);
-    const res = await fetch(`/api/tenant/webhooks/${editingWebhook.id}`, {
-      method:'PATCH', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify(form),
-    });
-    const d = await res.json();
-    if (res.ok) {
-      toast.success('Webhook updated');
-      setShowEdit(false); setEditingWebhook(null); setForm({ name:'', url:'', events:[] }); load();
-    } else toast.error(d.error);
-    setSaving(false);
+    editMutation.mutate({ id: editingWebhook.id, payload: form });
   };
 
   const startEdit = (wh: Webhook) => {
@@ -138,16 +181,11 @@ export default function WebhooksPage() {
   const toggleEvent = (event: string) =>
     setForm(f => ({...f, events: f.events.includes(event) ? f.events.filter(e => e !== event) : [...f.events, event]}));
 
-  const toggleActive = async (id: string, current: boolean) => {
-    await fetch(`/api/tenant/webhooks/${id}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ is_active: !current }) });
-    setWebhooks(w => w.map(x => x.id === id ? {...x, is_active: !current} : x));
-  };
+  const toggleActive = (id: string, current: boolean) => toggleMutation.mutate({ id, current });
 
-  const del = async (id: string) => {
-    await confirmThen('Delete this webhook?', async () => {
-      await fetch(`/api/tenant/webhooks/${id}`, { method:'DELETE' });
-      setWebhooks(w => w.filter(x => x.id !== id));
-      toast.success('Deleted');
+  const del = (id: string) => {
+    void confirmThen('Delete this webhook?', async () => {
+      deleteMutation.mutate(id);
     });
   };
 
@@ -157,25 +195,7 @@ export default function WebhooksPage() {
     toast.success('Signing secret copied');
   };
 
-  const testWebhook = async (id: string) => {
-    setTesting(id);
-    try {
-      const res = await fetch(`/api/tenant/webhooks/${id}/test`, { method: 'POST' });
-      const d = await res.json();
-      if (res.ok) {
-        setTestResult(p => ({...p, [id]: d.data}));
-        if (d.data.status === 'delivered') {
-          toast.success(`Test delivered in ${d.data.duration}ms (${d.data.statusCode})`);
-        } else {
-          toast.error(`Test failed: ${d.data.errorMessage || d.data.statusCode}`);
-        }
-      } else {
-        toast.error(d.error);
-      }
-    } finally {
-      setTesting(null);
-    }
-  };
+  const testWebhook = (id: string) => testMutation.mutate(id);
 
   return (
     <div className="space-y-6 animate-fade-in">

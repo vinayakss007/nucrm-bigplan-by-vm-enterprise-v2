@@ -4,12 +4,14 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useEffect, useState, use } from 'react';
+import { useState, use } from 'react';
 import {
   CheckCircle2, XCircle, Clock, AlertCircle, Loader2,
   ShieldCheck, FileText, Eye,
 } from 'lucide-react';
 import { OptimizedImage } from '@/components/ui/optimized-image';
+import { useQuery } from '@tanstack/react-query';
+import { ApiQueryError } from '@/lib/query/client';
 
 interface OfferData {
   offer: {
@@ -52,10 +54,7 @@ function fmtCurrency(amt: string | number | null | undefined): string {
 
 export default function PublicOfferPage({ params }: { params: Promise<{ publicToken: string }> }) {
   const { publicToken } = use(params);
-  const [data, setData] = useState<OfferData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [errorStatus, setErrorStatus] = useState<number | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [busy, setBusy] = useState<'accept' | 'decline' | null>(null);
   const [showAccept, setShowAccept] = useState(false);
   const [showDecline, setShowDecline] = useState(false);
@@ -63,36 +62,25 @@ export default function PublicOfferPage({ params }: { params: Promise<{ publicTo
   const [declineForm, setDeclineForm] = useState({ email: '', reason: '' });
   const [submittedStatus, setSubmittedStatus] = useState<'accepted' | 'declined' | null>(null);
 
-  function load(signal?: AbortSignal) {
-    setLoading(true);
-    setError(null);
-    setErrorStatus(null);
-    fetch(`/api/public/offers/${publicToken}`, { cache: 'no-store', signal })
-      .then(async r => {
-        if (!r.ok) {
-          const body = await r.json().catch(() => ({}));
-          throw Object.assign(new Error(body.error ?? `Unable to load offer (${r.status})`), { status: r.status });
-        }
-        return r.json();
-      })
-      .then(d => { if (signal?.aborted) return; setData(d); })
-      .catch((e: Error & { status?: number }) => {
-        if (e?.name === 'AbortError') return;
-        setError(e.message);
-        setErrorStatus(e.status ?? null);
-      })
-      .finally(() => { if (signal?.aborted) return; setLoading(false); });
-  }
-  useEffect(() => {
-    const controller = new AbortController();
-    load(controller.signal);
-    return () => controller.abort();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [publicToken]);
+  const { data, isLoading, error } = useQuery<OfferData, ApiQueryError>({
+    queryKey: ['public-offer', publicToken],
+    enabled: !!publicToken,
+    retry: false,
+    queryFn: async () => {
+      const res = await fetch(`/api/public/offers/${publicToken}`, { cache: 'no-store' });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new ApiQueryError(body.error ?? `Unable to load offer (${res.status})`, res.status, body);
+      }
+      return res.json();
+    },
+  });
+  const loading = isLoading;
+  const errorStatus = error?.status ?? null;
 
   async function accept() {
     setBusy('accept');
-    setError(null);
+    setActionError(null);
     try {
       const res = await fetch(`/api/public/offers/${publicToken}/accept`, {
         method: 'POST',
@@ -104,7 +92,7 @@ export default function PublicOfferPage({ params }: { params: Promise<{ publicTo
       setSubmittedStatus('accepted');
       setShowAccept(false);
     } catch (e) {
-      setError((e as Error).message);
+      setActionError((e as Error).message);
     } finally {
       setBusy(null);
     }
@@ -112,7 +100,7 @@ export default function PublicOfferPage({ params }: { params: Promise<{ publicTo
 
   async function decline() {
     setBusy('decline');
-    setError(null);
+    setActionError(null);
     try {
       const res = await fetch(`/api/public/offers/${publicToken}/decline`, {
         method: 'POST',
@@ -124,7 +112,7 @@ export default function PublicOfferPage({ params }: { params: Promise<{ publicTo
       setSubmittedStatus('declined');
       setShowDecline(false);
     } catch (e) {
-      setError((e as Error).message);
+      setActionError((e as Error).message);
     } finally {
       setBusy(null);
     }
@@ -212,10 +200,10 @@ export default function PublicOfferPage({ params }: { params: Promise<{ publicTo
           </div>
         )}
 
-        {error && !showAccept && !showDecline && (
+        {actionError && !showAccept && !showDecline && (
           <div className="rounded-xl border border-red-300 bg-red-50 dark:border-red-800/50 dark:bg-red-950/20 px-4 py-3 text-sm text-red-700 dark:text-red-300 flex items-start gap-2">
             <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-            <span className="flex-1">{error}</span>
+            <span className="flex-1">{actionError}</span>
           </div>
         )}
 
@@ -315,7 +303,7 @@ export default function PublicOfferPage({ params }: { params: Promise<{ publicTo
           <p className="text-sm text-muted-foreground mb-3">
             By accepting, you confirm the terms above and authorise {seller.name} to proceed.
           </p>
-          {error && <ErrorBlurb message={error} />}
+          {actionError && <ErrorBlurb message={actionError} />}
           <label className="block text-sm">
             <span className="block text-xs font-semibold text-muted-foreground mb-1">Your email</span>
             <input
@@ -357,7 +345,7 @@ export default function PublicOfferPage({ params }: { params: Promise<{ publicTo
           <p className="text-sm text-muted-foreground mb-3">
             We'll let {seller.name} know you've passed. A short reason helps them improve.
           </p>
-          {error && <ErrorBlurb message={error} />}
+          {actionError && <ErrorBlurb message={actionError} />}
           <label className="block text-sm">
             <span className="block text-xs font-semibold text-muted-foreground mb-1">Reason (optional)</span>
             <textarea

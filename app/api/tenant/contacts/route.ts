@@ -202,7 +202,9 @@ export const POST = withApiRoute(async (request: NextRequest) => {
 
       if (!c) throw new Error('Failed to create contact');
 
-      // Activity log
+      // Activity log — part of the transaction. #1837: do NOT swallow; a
+      // failure here must roll back the whole create so we never persist a
+      // contact without its audit trail.
       await tx.insert(activities)
         .values({
           tenantId: ctx.tenantId,
@@ -213,14 +215,15 @@ export const POST = withApiRoute(async (request: NextRequest) => {
           eventType: 'contact_created',
           action: 'create',
           description: `Created contact ${c.firstName} ${c.lastName}`.trim(),
-        })
-        .catch(err => { void logError({ error: err, context: 'tenant/contacts POST activity log' }); });
+        });
 
-      // Increment contact counter
+      // Increment contact counter — part of the transaction. #1837: previously
+      // swallowed its error (and logged a useless placeholder context), which
+      // let the contact commit while the tenant counter silently drifted.
+      // Letting it propagate keeps the row count and the counter atomic.
       await tx.update(tenants)
         .set({ currentContacts: sql`${tenants.currentContacts} + 1` })
-        .where(eq(tenants.id, ctx.tenantId))
-        .catch((err) => logError({ error: err, context: "async-catch:[context]" }));
+        .where(eq(tenants.id, ctx.tenantId));
 
       return c;
     });
@@ -255,7 +258,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       userId: ctx.userId,
       event: 'contact.created', 
       data: { ...contact },
-    }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
+    }).catch((err) => logError({ error: err, context: 'tenant/contacts POST evaluateAutomations' }));
 
     return NextResponse.json({ data: contact }, { status: 201 });
  

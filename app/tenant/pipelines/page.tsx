@@ -4,7 +4,9 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useMemo } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import { Plus, Trash2, X, Loader2, ChevronDown, ChevronRight, GitBranch, Layers } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
@@ -30,10 +32,10 @@ interface Pipeline {
 
 type PipelineType = 'sales' | 'support' | 'custom';
 
+const PIPELINES_QUERY = ['tenant', 'pipelines', 'full'] as const;
+
 export default function PipelinesPage() {
-  const [pipelines, setPipelines] = useState<Pipeline[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   // Create pipeline dialog state
@@ -44,39 +46,23 @@ export default function PipelinesPage() {
     type: 'sales' as PipelineType,
     is_active: true,
   });
-  const [saving, setSaving] = useState(false);
 
   // Add stage dialog state
   const [addStagePipelineId, setAddStagePipelineId] = useState<string | null>(null);
   const [stageForm, setStageForm] = useState({ name: '', order: 0, color: '#6366f1' });
-  const [savingStage, setSavingStage] = useState(false);
 
   // Delete state
   const [deleteTarget, setDeleteTarget] = useState<Pipeline | null>(null);
 
-  const loadPipelines = useCallback(async (signal?: AbortSignal) => {
-    try {
-      setLoading(true);
-      setError(null);
-      const res = await fetch('/api/tenant/pipelines', { signal });
-      if (!res.ok) throw new Error('Failed to fetch pipelines');
-      const json = await res.json();
-      if (signal?.aborted) return;
-      setPipelines(json.data ?? []);
-    } catch (err) {
-      if ((err as Error)?.name === 'AbortError') return;
-      setError(err instanceof Error ? err.message : 'Failed to load pipelines');
-    } finally {
-      if (signal?.aborted) return;
-      setLoading(false);
-    }
-  }, []);
+  // #1328: list via TanStack Query (was raw fetch + useEffect + useCallback).
+  const { data, isLoading: loading, error: queryError, refetch } = useApiQuery<{ data?: Pipeline[] }>(
+    PIPELINES_QUERY,
+    '/api/tenant/pipelines',
+  );
+  const pipelines: Pipeline[] = useMemo(() => data?.data ?? [], [data]);
+  const error = queryError ? 'Failed to load pipelines' : null;
 
-  useEffect(() => {
-    const controller = new AbortController();
-    loadPipelines(controller.signal);
-    return () => controller.abort();
-  }, [loadPipelines]);
+  const loadPipelines = () => queryClient.invalidateQueries({ queryKey: PIPELINES_QUERY });
 
   const toggleExpand = (id: string) => {
     setExpanded(prev => {
@@ -87,11 +73,8 @@ export default function PipelinesPage() {
     });
   };
 
-  const handleCreatePipeline = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!createForm.name.trim()) return;
-    setSaving(true);
-    try {
+  const createMutation = useMutation({
+    mutationFn: async () => {
       const res = await fetch('/api/tenant/pipelines', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -104,60 +87,77 @@ export default function PipelinesPage() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Failed to create pipeline');
+    },
+    onSuccess: () => {
       toast.success('Pipeline created');
       setShowCreate(false);
       setCreateForm({ name: '', description: '', type: 'sales', is_active: true });
       loadPipelines();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to create pipeline');
-    } finally {
-      setSaving(false);
-    }
+    },
+    onError: (err: Error) => toast.error(err.message || 'Failed to create pipeline'),
+  });
+  const saving = createMutation.isPending;
+
+  const handleCreatePipeline = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!createForm.name.trim()) return;
+    createMutation.mutate();
   };
 
-  const handleDeletePipeline = async () => {
-    if (!deleteTarget) return;
-    try {
-      const res = await fetch(`/api/tenant/pipelines/${deleteTarget.id}`, { method: 'DELETE' });
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/tenant/pipelines/${id}`, { method: 'DELETE' });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Failed to delete pipeline');
+      return id;
+    },
+    onSuccess: () => {
       toast.success('Pipeline deleted');
-      setPipelines(prev => prev.filter(p => p.id !== deleteTarget.id));
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to delete pipeline');
-    } finally {
       setDeleteTarget(null);
-    }
+      loadPipelines();
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || 'Failed to delete pipeline');
+      setDeleteTarget(null);
+    },
+  });
+
+  const handleDeletePipeline = () => {
+    if (!deleteTarget) return;
+    deleteMutation.mutate(deleteTarget.id);
   };
 
-  const handleAddStage = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!addStagePipelineId || !stageForm.name.trim()) return;
-    setSavingStage(true);
-    try {
-      const pipeline = pipelines.find(p => p.id === addStagePipelineId);
-      if (!pipeline) return;
+  const addStageMutation = useMutation({
+    mutationFn: async (pipelineId: string) => {
+      const pipeline = pipelines.find(p => p.id === pipelineId);
+      if (!pipeline) throw new Error('Pipeline not found');
 
       // Use PATCH to update the pipeline with the new stage appended
       const existingStages = pipeline.stages.map(s => ({ name: s.name, order: s.order }));
       const newStages = [...existingStages, { name: stageForm.name.trim(), order: stageForm.order }];
 
-      const res = await fetch(`/api/tenant/pipelines/${addStagePipelineId}`, {
+      const res = await fetch(`/api/tenant/pipelines/${pipelineId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ stages: newStages }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Failed to add stage');
+    },
+    onSuccess: () => {
       toast.success('Stage added');
       setAddStagePipelineId(null);
       setStageForm({ name: '', order: 0, color: '#6366f1' });
       loadPipelines();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to add stage');
-    } finally {
-      setSavingStage(false);
-    }
+    },
+    onError: (err: Error) => toast.error(err.message || 'Failed to add stage'),
+  });
+  const savingStage = addStageMutation.isPending;
+
+  const handleAddStage = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!addStagePipelineId || !stageForm.name.trim()) return;
+    addStageMutation.mutate(addStagePipelineId);
   };
 
   const inp = 'w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500';
@@ -182,7 +182,7 @@ export default function PipelinesPage() {
         <div className="text-center py-16 border border-dashed border-border rounded-2xl">
           <p className="text-red-500 font-medium">{error}</p>
           <button
-            onClick={() => loadPipelines()}
+            onClick={() => refetch()}
             className="mt-4 px-4 py-2 rounded-xl bg-violet-600 text-white text-sm font-semibold hover:bg-violet-700"
           >
             Retry

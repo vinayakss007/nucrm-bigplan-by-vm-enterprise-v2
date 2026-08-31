@@ -1037,7 +1037,7 @@ export async function POST(request: NextRequest) {
         // Fire outgoing webhooks for created records (outside transaction — uses own db)
         if (result.action === 'created') {
           const eventType = `${item.entity}.created` as WebhookEvent;
-          fireWebhooks(currentKey.tenantId, eventType, { id: result.id }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
+          fireWebhooks(currentKey.tenantId, eventType, { id: result.id }).catch((err) => logError({ error: err, context: 'webhooks/inbound async side-effect' }));
         }
 
         // Log audit entry (outside transaction — uses own db)
@@ -1048,7 +1048,7 @@ export async function POST(request: NextRequest) {
           entityType: item.entity,
           entityId: result.id as string,
           newData: { source: 'inbound_webhook', api_key: currentKey.name },
-        }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
+        }).catch((err) => logError({ error: err, context: 'webhooks/inbound async side-effect' }));
 
  
 
@@ -1097,7 +1097,7 @@ export async function POST(request: NextRequest) {
       entityType: 'api',
       entityId: 'batch',
       newData: { processed: results.length, succeeded: results.filter(r => r.status === 'ok').length, failed: results.filter(r => r.status === 'error').length, duration_ms: duration },
-    }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
+    }).catch((err) => logError({ error: err, context: 'webhooks/inbound async side-effect' }));
 
     // Dev log
     devLogger.request('POST', request.nextUrl.pathname, statusCode, duration);

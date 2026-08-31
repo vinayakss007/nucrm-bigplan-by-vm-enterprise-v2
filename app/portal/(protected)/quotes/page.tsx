@@ -9,6 +9,8 @@ import { useRouter } from 'next/navigation';
 import { FileText, ChevronDown, ChevronUp, CheckCircle, XCircle, Clock, Loader2 } from 'lucide-react';
 import { cn, formatDate, formatCurrency } from '@/lib/utils';
 import toast from 'react-hot-toast';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { ApiQueryError } from '@/lib/query/client';
 
 interface PortalSession {
   email: string;
@@ -58,11 +60,9 @@ const STATUS_STYLE: Record<string, string> = {
 
 export default function PortalQuotesPage() {
   const router = useRouter();
-  const [quotes, setQuotes] = useState<PortalQuote[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [session, setSession] = useState<PortalSession | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [actingId, setActingId] = useState<string | null>(null);
 
   useEffect(() => {
     const s = getStoredSession();
@@ -71,65 +71,72 @@ export default function PortalQuotesPage() {
       return;
     }
     setSession(s);
-
-    const controller = new AbortController();
-    fetch('/api/public/quotes', {
-      headers: { 'x-portal-email': s.email },
-      signal: controller.signal,
-    })
-      .then(r => r.json())
-      .then(d => {
-        if (controller.signal.aborted) return;
-        setQuotes(d.data || []); setLoading(false);
-      })
-      .catch((e) => {
-        if ((e as Error)?.name === 'AbortError') return;
-        setLoading(false);
-      });
-    return () => controller.abort();
   }, [router]);
 
-  const acceptQuote = async (quoteId: string) => {
-    setActingId(quoteId);
-    try {
+  const { data, isLoading } = useQuery<{ data: PortalQuote[] }, ApiQueryError>({
+    queryKey: ['portal-quotes', session?.email],
+    enabled: !!session?.email,
+    queryFn: async () => {
+      const res = await fetch('/api/public/quotes', { headers: { 'x-portal-email': session!.email } });
+      if (!res.ok) {
+        const info = await res.json().catch(() => ({}));
+        throw new ApiQueryError(`Request failed (${res.status})`, res.status, info);
+      }
+      return res.json();
+    },
+  });
+  const quotes = data?.data ?? [];
+  const loading = !session || isLoading;
+
+  const acceptMutation = useMutation<void, Error, string>({
+    mutationFn: async (quoteId: string) => {
       const res = await fetch(`/api/public/quotes/${quoteId}/accept`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-portal-email': session?.email || '' },
         body: JSON.stringify({ email: session?.email }),
       });
-      if (res.ok) {
-        toast.success('Quote accepted!');
-        setQuotes(prev => prev.map(q => q.id === quoteId ? { ...q, status: 'accepted', accepted_at: new Date().toISOString() } : q));
-      } else {
-        const d = await res.json();
-        toast.error(d.error || 'Failed to accept');
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || 'Failed to accept');
       }
-    } catch {
-      toast.error('Failed to accept quote');
-    }
-    setActingId(null);
-  };
+    },
+    onSuccess: (_data, quoteId) => {
+      toast.success('Quote accepted!');
+      queryClient.setQueryData<{ data: PortalQuote[] }>(['portal-quotes', session?.email], (old) =>
+        old ? { ...old, data: old.data.map(q => q.id === quoteId ? { ...q, status: 'accepted', accepted_at: new Date().toISOString() } : q) } : old,
+      );
+    },
+    onError: (err) => {
+      toast.error(err.message || 'Failed to accept quote');
+    },
+  });
 
-  const declineQuote = async (quoteId: string) => {
-    setActingId(quoteId);
-    try {
+  const declineMutation = useMutation<void, Error, string>({
+    mutationFn: async (quoteId: string) => {
       const res = await fetch(`/api/public/quotes/${quoteId}/decline`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-portal-email': session?.email || '' },
         body: JSON.stringify({ email: session?.email }),
       });
-      if (res.ok) {
-        toast.success('Quote declined');
-        setQuotes(prev => prev.map(q => q.id === quoteId ? { ...q, status: 'declined', declined_at: new Date().toISOString() } : q));
-      } else {
-        const d = await res.json();
-        toast.error(d.error || 'Failed');
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || 'Failed');
       }
-    } catch {
-      toast.error('Failed to decline quote');
-    }
-    setActingId(null);
-  };
+    },
+    onSuccess: (_data, quoteId) => {
+      toast.success('Quote declined');
+      queryClient.setQueryData<{ data: PortalQuote[] }>(['portal-quotes', session?.email], (old) =>
+        old ? { ...old, data: old.data.map(q => q.id === quoteId ? { ...q, status: 'declined', declined_at: new Date().toISOString() } : q) } : old,
+      );
+    },
+    onError: (err) => {
+      toast.error(err.message || 'Failed to decline quote');
+    },
+  });
+
+  const acceptQuote = (quoteId: string) => acceptMutation.mutate(quoteId);
+  const declineQuote = (quoteId: string) => declineMutation.mutate(quoteId);
+  const actingId = acceptMutation.isPending ? acceptMutation.variables : declineMutation.isPending ? declineMutation.variables : null;
 
   if (loading) {
     return (

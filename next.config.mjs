@@ -65,7 +65,14 @@ let nextConfig = {
         { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
         { key: 'X-Content-Type-Options', value: 'nosniff' },
         { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
-        { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
+        // #1839: deny sensitive browser features by default (empty allowlist).
+        // Extended beyond camera/mic/geo to also block payment, USB, sensors,
+        // and FLoC/Topics interest-cohort tracking.
+        { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), payment=(), usb=(), magnetometer=(), gyroscope=(), accelerometer=(), interest-cohort=()' },
+        // #1839: cross-origin isolation hardening — mitigates cross-window
+        // attacks / XS-Leaks by severing the opener relationship with
+        // cross-origin windows.
+        { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
         { key: 'X-DNS-Prefetch-Control', value: 'on' },
         ...(process.env.NODE_ENV === 'production' ? [{ key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' }] : []),
         // Content-Security-Policy is intentionally NOT set here. It is emitted

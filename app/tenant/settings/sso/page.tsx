@@ -6,6 +6,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 
 interface SSOProvider {
   id: string;
@@ -16,11 +18,10 @@ interface SSOProvider {
 }
 
 export default function SSOSettingsPage() {
-  const [providers, setProviders] = useState<SSOProvider[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const queryClient = useQueryClient();
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [providerType, setProviderType] = useState<'saml' | 'oidc'>('oidc');
+  const [seeded, setSeeded] = useState(false);
 
   // Form state
   const [form, setForm] = useState({
@@ -39,72 +40,65 @@ export default function SSOSettingsPage() {
     redirectUri: '',
   });
 
+  // #1328: load SSO providers via TanStack Query (was raw fetch + useEffect).
+  // retry:false — the endpoint may 404 for tenants without SSO configured.
+  const { data, isLoading: loading } = useApiQuery<{ data?: SSOProvider[] }>(
+    ['tenant', 'sso'],
+    '/api/tenant/sso',
+    { retry: false },
+  );
+  const providers: SSOProvider[] = data?.data ?? [];
+
+  // Seed the editable form once from the first existing provider.
   useEffect(() => {
-    const controller = new AbortController();
-    loadProviders(controller.signal);
-    return () => controller.abort();
-  }, []);
+    if (seeded || !data) return;
+    const list = data.data ?? [];
+    if (list.length > 0) {
+      const p = list[0]!;
+      const cfg = (p.config ?? {}) as Record<string, unknown>;
+      const str = (k: string) => (typeof cfg[k] === 'string' ? (cfg[k] as string) : '');
+      setProviderType(p.providerType);
+      setForm({
+        name: p.name || '',
+        entityId: str('entityId'),
+        ssoUrl: str('ssoUrl'),
+        certificate: str('certificate'),
+        clientId: str('clientId'),
+        clientSecret: str('clientSecret'),
+        issuer: str('issuer'),
+        authorizationEndpoint: str('authorizationEndpoint'),
+        tokenEndpoint: str('tokenEndpoint'),
+        userinfoEndpoint: str('userinfoEndpoint'),
+        redirectUri: str('redirectUri'),
+      });
+    }
+    setSeeded(true);
+  }, [data, seeded]);
 
-  async function loadProviders(signal?: AbortSignal) {
-    try {
-      const res = await fetch('/api/tenant/sso', { signal });
-      if (res.ok) {
-        const { data } = await res.json();
-        setProviders(data || []);
-        // Populate form if existing provider
-        if (data && data.length > 0) {
-          const p = data[0];
-          setProviderType(p.providerType);
-          setForm({
-            name: p.name || '',
-            entityId: p.config?.entityId || '',
-            ssoUrl: p.config?.ssoUrl || '',
-            certificate: p.config?.certificate || '',
-            clientId: p.config?.clientId || '',
-            clientSecret: p.config?.clientSecret || '',
-            issuer: p.config?.issuer || '',
-            authorizationEndpoint: p.config?.authorizationEndpoint || '',
-            tokenEndpoint: p.config?.tokenEndpoint || '',
-            userinfoEndpoint: p.config?.userinfoEndpoint || '',
-            redirectUri: p.config?.redirectUri || '',
-          });
-        }
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      const config: Record<string, string> = {};
+      if (providerType === 'saml') {
+        config['entityId'] = form.entityId;
+        config['ssoUrl'] = form.ssoUrl;
+        config['certificate'] = form.certificate;
+      } else {
+        config['clientId'] = form.clientId;
+        config['clientSecret'] = form.clientSecret;
+        config['issuer'] = form.issuer;
+        config['authorizationEndpoint'] = form.authorizationEndpoint;
+        config['tokenEndpoint'] = form.tokenEndpoint;
+        config['userinfoEndpoint'] = form.userinfoEndpoint;
+        config['redirectUri'] = form.redirectUri;
       }
-    } catch (err) {
-      if (err instanceof DOMException && err.name === 'AbortError') return;
-    } finally {
-      setLoading(false);
-    }
-  }
 
-  async function handleSave(e: React.FormEvent) {
-    e.preventDefault();
-    setSaving(true);
-    setMessage(null);
+      const payload = {
+        providerType,
+        name: form.name,
+        config,
+        isActive: true,
+      };
 
-    const config: Record<string, string> = {};
-    if (providerType === 'saml') {
-      config['entityId'] = form.entityId;
-      config['ssoUrl'] = form.ssoUrl;
-      config['certificate'] = form.certificate;
-    } else {
-      config['clientId'] = form.clientId;
-      config['clientSecret'] = form.clientSecret;
-      config['issuer'] = form.issuer;
-      config['authorizationEndpoint'] = form.authorizationEndpoint;
-      config['tokenEndpoint'] = form.tokenEndpoint;
-      config['userinfoEndpoint'] = form.userinfoEndpoint;
-      config['redirectUri'] = form.redirectUri;
-    }
-
-    const payload = {
-      providerType,
-      name: form.name,
-      config,
-      isActive: true,
-    };
-
-    try {
       const isUpdate = providers.length > 0;
       const method = isUpdate ? 'PUT' : 'POST';
       const body = isUpdate ? { ...payload, id: providers[0]!.id } : payload;
@@ -115,18 +109,25 @@ export default function SSOSettingsPage() {
         body: JSON.stringify(body),
       });
 
-      if (res.ok) {
-        setMessage({ type: 'success', text: 'SSO configuration saved successfully.' });
-        loadProviders();
-      } else {
-        const err = await res.json();
-        setMessage({ type: 'error', text: err.error || 'Failed to save SSO config' });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(typeof err.error === 'string' ? err.error : 'Failed to save SSO config');
       }
-    } catch {
-      setMessage({ type: 'error', text: 'Network error. Please try again.' });
-    } finally {
-      setSaving(false);
-    }
+    },
+    onSuccess: () => {
+      setMessage({ type: 'success', text: 'SSO configuration saved successfully.' });
+      queryClient.invalidateQueries({ queryKey: ['tenant', 'sso'] });
+    },
+    onError: (err: Error) => {
+      setMessage({ type: 'error', text: err.message || 'Network error. Please try again.' });
+    },
+  });
+  const saving = saveMutation.isPending;
+
+  function handleSave(e: React.FormEvent) {
+    e.preventDefault();
+    setMessage(null);
+    saveMutation.mutate();
   }
 
   if (loading) {

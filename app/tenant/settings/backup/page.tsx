@@ -4,7 +4,9 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import {
   HardDrive, Database, Play, CheckCircle, XCircle, Clock, RefreshCw,
   Save, Loader2, Eye, EyeOff, AlertTriangle, Settings,
@@ -75,8 +77,12 @@ const STATUS_MAP: Record<string, { icon: LucideIcon; color: string; bg: string }
 
 const inp = 'w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500';
 
+const CONFIG_QUERY = ['tenant', 'backup', 'config'] as const;
+const BACKUPS_QUERY = ['tenant', 'backup', 'history'] as const;
+
 // ── Page ───────────────────────────────────────────────────────
 export default function TenantBackupSettingsPage() {
+  const queryClient = useQueryClient();
   const [config, setConfig] = useState<BackupConfig>({
     tenant_id: '',
     endpoint_url: '',
@@ -90,84 +96,51 @@ export default function TenantBackupSettingsPage() {
     retention_days: 30,
     point_in_time_recovery: false,
   });
-  const [loaded, setLoaded] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const [seeded, setSeeded] = useState(false);
   const [showSecret, setShowSecret] = useState(false);
   const [showAccessKey, setShowAccessKey] = useState(false);
-
-  const [backups, setBackups] = useState<BackupRecord[]>([]);
-  const [loadingBackups, setLoadingBackups] = useState(true);
-  const [runningBackup, setRunningBackup] = useState(false);
   const [bkType, setBkType] = useState<'full' | 'schema'>('full');
 
-  // Load config
-  const loadConfig = useCallback(async (signal?: AbortSignal) => {
-    try {
-      const res = await fetch('/api/tenant/backup/config', { signal });
-      if (res.ok) {
-        const d = await res.json();
-        if (d.data) {
-          setConfig({
-            tenant_id: d.data.tenant_id || '',
-            endpoint_url: d.data.endpoint_url || '',
-            bucket: d.data.bucket || '',
-            access_key: d.data.access_key || '',
-            secret_key: '', // never returned on read
-            region: d.data.region || 'us-east-1',
-            backup_type: d.data.backup_type || 'full',
-            enabled: d.data.enabled ?? true,
-            schedule: d.data.schedule || '0 2 * * *',
-            retention_days: d.data.retention_days || 30,
-            point_in_time_recovery: d.data.point_in_time_recovery ?? false,
-          });
-          setBkType(d.data.backup_type || 'full');
-        }
-      }
-    } catch (err) {
-      if (err instanceof DOMException && err.name === 'AbortError') return;
-    }
-    setLoaded(true);
-  }, []);
+  // #1328: load config + history via TanStack Query (was raw fetch + useEffect).
+  const { data: configData, isLoading: configLoading } = useApiQuery<{ data?: Partial<BackupConfig> }>(
+    CONFIG_QUERY,
+    '/api/tenant/backup/config',
+  );
+  const { data: backupsData, isLoading: loadingBackups } = useApiQuery<{ data?: BackupRecord[]; backups?: BackupRecord[] }>(
+    BACKUPS_QUERY,
+    '/api/tenant/backup',
+  );
 
-  // Load backup history
-  const loadBackups = useCallback(async (signal?: AbortSignal) => {
-    try {
-      const res = await fetch('/api/tenant/backup', { signal });
-      if (res.ok) {
-        const d = await res.json();
-        // #1300: prefer standardized { data } envelope, fall back to legacy key.
-        setBackups(d.data ?? d.backups ?? []);
-      }
-    } catch (err) {
-      if (err instanceof DOMException && err.name === 'AbortError') return;
-    }
-    setLoadingBackups(false);
-  }, []);
+  const loaded = !configLoading;
+  // #1300: prefer standardized { data } envelope, fall back to legacy key.
+  const backups: BackupRecord[] = backupsData?.data ?? backupsData?.backups ?? [];
 
+  // Seed the editable config once, guarded so a background refetch never
+  // clobbers in-progress edits.
   useEffect(() => {
-    const controller = new AbortController();
-    loadConfig(controller.signal);
-    loadBackups(controller.signal);
-    return () => controller.abort();
-  }, [loadConfig, loadBackups]);
+    const d = configData?.data;
+    if (d && !seeded) {
+      setConfig({
+        tenant_id: d.tenant_id || '',
+        endpoint_url: d.endpoint_url || '',
+        bucket: d.bucket || '',
+        access_key: d.access_key || '',
+        secret_key: '', // never returned on read
+        region: d.region || 'us-east-1',
+        backup_type: d.backup_type || 'full',
+        enabled: d.enabled ?? true,
+        schedule: d.schedule || '0 2 * * *',
+        retention_days: d.retention_days || 30,
+        point_in_time_recovery: d.point_in_time_recovery ?? false,
+      });
+      setBkType(d.backup_type || 'full');
+      setSeeded(true);
+    }
+  }, [configData, seeded]);
 
   // Save config
-  const saveConfig = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const validation = validateForm(backupConfigSchema, {
-      bucket: config.bucket,
-      endpoint_url: config.endpoint_url,
-      access_key: config.access_key,
-      secret_key: config.secret_key,
-      region: config.region,
-      retention_days: config.retention_days,
-    });
-    if (!validation.success) {
-      toast.error(validation.errors._form || Object.values(validation.errors)[0] || 'Please check the form and try again.');
-      return;
-    }
-    setSaving(true);
-    try {
+  const saveMutation = useMutation({
+    mutationFn: async () => {
       const res = await fetch('/api/tenant/backup/config', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -184,41 +157,56 @@ export default function TenantBackupSettingsPage() {
           point_in_time_recovery: config.point_in_time_recovery,
         }),
       });
-      const d = await res.json();
-      if (res.ok) {
-        toast.success('Backup configuration saved');
-        setConfig(prev => ({ ...prev, secret_key: '' })); // clear after save
-        loadConfig();
-      } else {
-        toast.error(d.error || 'Failed to save');
-      }
-    } catch {
-      toast.error('Network error');
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || 'Failed to save');
+    },
+    onSuccess: () => {
+      toast.success('Backup configuration saved');
+      setConfig(prev => ({ ...prev, secret_key: '' })); // clear after save
+      queryClient.invalidateQueries({ queryKey: CONFIG_QUERY });
+    },
+    onError: (e: Error) => toast.error(e.message || 'Network error'),
+  });
+  const saving = saveMutation.isPending;
+
+  const saveConfig = (e: React.FormEvent) => {
+    e.preventDefault();
+    const validation = validateForm(backupConfigSchema, {
+      bucket: config.bucket,
+      endpoint_url: config.endpoint_url,
+      access_key: config.access_key,
+      secret_key: config.secret_key,
+      region: config.region,
+      retention_days: config.retention_days,
+    });
+    if (!validation.success) {
+      toast.error(validation.errors._form || Object.values(validation.errors)[0] || 'Please check the form and try again.');
+      return;
     }
-    setSaving(false);
+    saveMutation.mutate();
   };
 
   // Trigger manual backup
-  const triggerBackup = async () => {
-    setRunningBackup(true);
-    try {
+  const triggerMutation = useMutation({
+    mutationFn: async () => {
       const res = await fetch('/api/tenant/backup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ backup_type: bkType }),
       });
-      const d = await res.json();
-      if (res.ok) {
-        toast.success('Backup started');
-        loadBackups();
-      } else {
-        toast.error(d.error || 'Backup failed');
-      }
-    } catch {
-      toast.error('Network error');
-    }
-    setRunningBackup(false);
-  };
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || 'Backup failed');
+    },
+    onSuccess: () => {
+      toast.success('Backup started');
+      queryClient.invalidateQueries({ queryKey: BACKUPS_QUERY });
+    },
+    onError: (e: Error) => toast.error(e.message || 'Network error'),
+  });
+  const runningBackup = triggerMutation.isPending;
+  const triggerBackup = () => triggerMutation.mutate();
+
+  const reloadBackups = () => queryClient.invalidateQueries({ queryKey: BACKUPS_QUERY });
 
   const hasConfig = !!(config.endpoint_url || config.bucket || config.access_key);
 
@@ -508,7 +496,7 @@ export default function TenantBackupSettingsPage() {
         <div className="flex items-center justify-between px-5 py-3 border-b border-border">
           <p className="text-sm font-semibold">Backup History</p>
           <button
-            onClick={() => void loadBackups()}
+            onClick={reloadBackups}
             className="text-muted-foreground hover:text-foreground transition-colors"
           >
             <RefreshCw className="w-3.5 h-3.5" />

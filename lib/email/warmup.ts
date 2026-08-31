@@ -164,14 +164,14 @@ export async function processWarmUp(): Promise<WarmUpResult> {
             result.emailsSent++;
   
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-          } catch (err: any) {
+          } catch (err: unknown) {
+            const errMessage = err instanceof Error ? err.message : String(err);
             await db.transaction(async (tx) => {
               await tx.update(emailWarmupLogs)
-                .set({ status: 'failed', errorMessage: err.message })
+                .set({ status: 'failed', errorMessage: errMessage })
                 .where(eq(emailWarmupLogs.id, log.id));
             }).catch((_e) => { /* best-effort */ });
-            result.errors.push(`Failed to send to ${participant.participantEmail}: ${err.message}`);
+            result.errors.push(`Failed to send to ${participant.participantEmail}: ${errMessage}`);
           }
         }
 
@@ -189,16 +189,14 @@ export async function processWarmUp(): Promise<WarmUpResult> {
         result.tenantsProcessed++;
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } catch (err: any) {
-        result.errors.push(`Config ${config.id} error: ${err.message}`);
+      } catch (err: unknown) {
+        result.errors.push(`Config ${config.id} error: ${err instanceof Error ? err.message : String(err)}`);
       }
     }
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
-    result.errors.push(`Global error: ${err.message}`);
+  } catch (err: unknown) {
+    result.errors.push(`Global error: ${err instanceof Error ? err.message : String(err)}`);
   }
 
   return result;
@@ -206,8 +204,10 @@ export async function processWarmUp(): Promise<WarmUpResult> {
 
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function calculateDailyLimit(config: any, daysElapsed: number): Promise<number> {
+async function calculateDailyLimit(
+  config: { dailyLimitStart?: number | null; dailyLimitMax?: number | null; rampUpDays?: number | null },
+  daysElapsed: number
+): Promise<number> {
   // Simple linear ramp-up if database function not available
   const start = config.dailyLimitStart || 5;
   const max = config.dailyLimitMax || 50;
@@ -249,8 +249,7 @@ export async function recordWarmUpReply(logId: string): Promise<void> {
 
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function getWarmUpStats(tenantId: string): Promise<any> {
+export async function getWarmUpStats(tenantId: string) {
   return await db.query.emailWarmupConfigs.findFirst({
     where: eq(emailWarmupConfigs.tenantId, tenantId)
   });

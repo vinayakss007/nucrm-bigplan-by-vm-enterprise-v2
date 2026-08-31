@@ -50,8 +50,7 @@ export async function fireWebhooks(
   event: WebhookEvent,
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  data: Record<string, any>
+  data: Record<string, unknown>
 ) {
   try {
     const hooks = await db.select()
@@ -184,16 +183,14 @@ export async function fireWebhooks(
           
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } catch (err: any) {
-        logger.warn(`[webhook] ${hook.name} delivery error: ${err.message}`);
+      } catch (err: unknown) {
+        logger.warn(`[webhook] ${hook.name} delivery error: ${err instanceof Error ? err.message : String(err)}`);
       }
     }
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
-    logger.error(`[webhooks] ${err.message}`);
+  } catch (err: unknown) {
+    logger.error(`[webhooks] ${err instanceof Error ? err.message : String(err)}`);
   }
 }
 
@@ -279,18 +276,20 @@ async function retryWebhookItem(item: typeof webhookQueue.$inferSelect): Promise
       return false;
     }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err: unknown) {
     const nextAttempt = item.attempt + 1;
     const retryDelay = getRetryDelay(nextAttempt);
     const blocked = err instanceof SsrfBlockedError;
     // A blocked target will never become deliverable — dead letter it now.
     const isDeadLetter = blocked || retryDelay < 0 || nextAttempt > MAX_RETRIES;
+    const errorMessage = blocked
+      ? `Blocked by SSRF protection: ${err.reason}`
+      : (err instanceof Error ? err.message : String(err));
 
     await db.update(webhookQueue)
       .set({
         attempt: nextAttempt,
-        errorMessage: blocked ? `Blocked by SSRF protection: ${err.reason}` : err.message,
+        errorMessage,
         status: isDeadLetter ? 'dead_letter' : 'failed',
         nextRetryAt: isDeadLetter ? null : new Date(Date.now() + retryDelay),
       })

@@ -5,7 +5,9 @@
  */
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import {
   Plus,
   Trash2,
@@ -71,94 +73,80 @@ interface FieldFormData {
 // ── Main Page ────────────────────────────────────────────────────────────────
 
 export default function TenantCustomFields() {
+  const queryClient = useQueryClient();
   const [entityType, setEntityType] = useState('contact');
-  const [fields, setFields] = useState<CustomField[]>([]);
-  const [features, setFeatures] = useState<Feature[]>([]);
-  const [loading, setLoading] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingField, setEditingField] = useState<CustomField | null>(null);
   const [showPreview, setShowPreview] = useState(false);
 
-  const loadFields = useCallback(async (signal?: AbortSignal) => {
-    setLoading(true);
-    try {
-      const res = await fetch(`/api/tenant/custom-fields?entityType=${entityType}`, { signal });
-      const data = await res.json();
-      if (data.fields) setFields(data.fields);
-    } catch (err) {
-      if (err instanceof DOMException && err.name === 'AbortError') return;
-      toast.error('Failed to load fields');
-    } finally {
-      setLoading(false);
-    }
-  }, [entityType])
+  // #1328: load fields (per entityType) + features via TanStack Query
+  // (was raw fetch + useEffect). The list URL depends on the active tab, so
+  // entityType is part of the query key.
+  const { data: fieldsData, isLoading: loading } = useApiQuery<{ fields?: CustomField[] }>(
+    ['tenant', 'custom-fields', entityType],
+    `/api/tenant/custom-fields?entityType=${entityType}`,
+  );
+  const { data: featuresData } = useApiQuery<{ features?: Feature[] }>(
+    ['tenant', 'custom-fields', 'features'],
+    '/api/tenant/custom-fields?action=features',
+    { retry: false },
+  );
 
-  const loadFeatures = useCallback(async (signal?: AbortSignal) => {
-    try {
-      const res = await fetch('/api/tenant/custom-fields?action=features', { signal });
-      const data = await res.json();
-      if (data.features) setFeatures(data.features);
-    } catch (err) {
-      if (err instanceof DOMException && err.name === 'AbortError') return;
-    }
-  }, []);
+  const fields: CustomField[] = fieldsData?.fields ?? [];
+  const features: Feature[] = featuresData?.features ?? [];
 
-  useEffect(() => {
-    const controller = new AbortController();
-    loadFields(controller.signal);
-    loadFeatures(controller.signal);
-    return () => controller.abort();
-  }, [entityType, loadFields, loadFeatures]);
+  const reloadFields = () =>
+    queryClient.invalidateQueries({ queryKey: ['tenant', 'custom-fields', entityType] });
 
-  const handleCreate = async (fieldData: FieldFormData) => {
-    try {
+  const createMutation = useMutation({
+    mutationFn: async (fieldData: FieldFormData) => {
       const res = await fetch('/api/tenant/custom-fields', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ entityType, ...fieldData }),
       });
       const data = await res.json();
-      if (data.field) {
-        setShowAddModal(false);
-        loadFields();
-      }
-    } catch (err) {
-      if (err instanceof DOMException && err.name === 'AbortError') return;
-      toast.error('Failed to create field');
-    }
-  };
+      if (!data.field) throw new Error('Failed to create field');
+    },
+    onSuccess: () => { setShowAddModal(false); reloadFields(); },
+    onError: () => toast.error('Failed to create field'),
+  });
 
-  const handleUpdate = async (fieldData: FieldFormData) => {
-    if (!editingField) return;
-    try {
+  const updateMutation = useMutation({
+    mutationFn: async (fieldData: FieldFormData) => {
+      if (!editingField) throw new Error('No field selected');
       const res = await fetch('/api/tenant/custom-fields', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fieldId: editingField.id, ...fieldData }),
       });
       const data = await res.json();
-      if (data.field) {
-        setShowEditModal(false);
-        setEditingField(null);
-        loadFields();
-      }
-    } catch (err) {
-      if (err instanceof DOMException && err.name === 'AbortError') return;
-      toast.error('Failed to update field');
-    }
+      if (!data.field) throw new Error('Failed to update field');
+    },
+    onSuccess: () => { setShowEditModal(false); setEditingField(null); reloadFields(); },
+    onError: () => toast.error('Failed to update field'),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (fieldId: string) => {
+      await fetch(`/api/tenant/custom-fields?fieldId=${fieldId}`, { method: 'DELETE' });
+    },
+    onSuccess: () => reloadFields(),
+    onError: () => toast.error('Failed to delete field'),
+  });
+
+  const handleCreate = (fieldData: FieldFormData) => createMutation.mutate(fieldData);
+
+  const handleUpdate = (fieldData: FieldFormData) => {
+    if (!editingField) return;
+    updateMutation.mutate(fieldData);
   };
 
   const handleDelete = async (fieldId: string) => {
     const field = fields?.find(f => f.id === fieldId);
     await confirmThen(`Delete custom field "${field?.field_label || fieldId}"?`, async () => {
-      try {
-        await fetch(`/api/tenant/custom-fields?fieldId=${fieldId}`, { method: 'DELETE' });
-        loadFields();
-      } catch (err) {
-        if (err instanceof DOMException && err.name === 'AbortError') return;
-        toast.error('Failed to delete field');
-      }
+      deleteMutation.mutate(fieldId);
     });
   };
 

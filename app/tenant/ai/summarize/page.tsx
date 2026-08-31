@@ -4,7 +4,9 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { useMutation } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import {
   MessageSquare, Sparkles, AlertCircle, Loader2, Check, Copy, ExternalLink,
 } from 'lucide-react';
@@ -35,76 +37,78 @@ const ENTITY_TYPES: { id: EntityHit['entity_type']; label: string; api: string }
   { id: 'company', label: 'Company',  api: '/api/tenant/companies?limit=8&search=' },
 ];
 
+type SearchRow = { id: string; firstName?: string; lastName?: string; email?: string; title?: string; name?: string; companyName?: string };
+type SearchResp = { contacts?: SearchRow[]; deals?: SearchRow[]; companies?: SearchRow[]; data?: SearchRow[] };
+
 export default function AISummarizePage() {
   const [entityType, setEntityType] = useState<EntityHit['entity_type']>('contact');
   const [entitySearch, setEntitySearch] = useState('');
-  const [entityHits, setEntityHits] = useState<EntityHit[]>([]);
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [selectedEntity, setSelectedEntity] = useState<EntityHit | null>(null);
   const [customInstructions, setCustomInstructions] = useState('');
-  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<SummarizeResp | null>(null);
   const [copied, setCopied] = useState(false);
 
+  // Debounce the search term (preserves the original 250ms typeahead delay).
   useEffect(() => {
-    const controller = new AbortController();
-    const t = setTimeout(async () => {
-      try {
-        const cfg = ENTITY_TYPES.find(e => e.id === entityType)!;
-        const r = await fetch(cfg.api + encodeURIComponent(entitySearch), { cache: 'no-store', signal: controller.signal });
-        if (!r.ok) { setEntityHits([]); return; }
-        const data = await r.json();
-        const list = data.contacts ?? data.deals ?? data.companies ?? data.data ?? [];
-        type Row = { id: string; firstName?: string; lastName?: string; email?: string; title?: string; name?: string; companyName?: string };
-        const hits: EntityHit[] = list.slice(0, 8).map((row: Row) => {
-          if (entityType === 'contact') {
-            return {
-              id: row.id,
-              entity_type: 'contact',
-              label: `${row.firstName ?? ''} ${row.lastName ?? ''}`.trim() || (row.email ?? '—'),
-              sublabel: row.email ?? row.companyName ?? undefined,
-            };
-          }
-          if (entityType === 'deal') {
-            return { id: row.id, entity_type: 'deal', label: row.title ?? '—' };
-          }
-          return { id: row.id, entity_type: 'company', label: row.name ?? '—' };
-        });
-        setEntityHits(hits);
-      } catch (e) {
-        if ((e as Error)?.name === 'AbortError') return;
-        setEntityHits([]);
-      }
-    }, 250);
-    return () => { clearTimeout(t); controller.abort(); };
-  }, [entityType, entitySearch]);
+    const t = setTimeout(() => setDebouncedSearch(entitySearch), 250);
+    return () => clearTimeout(t);
+  }, [entitySearch]);
 
-  async function generate() {
-    if (!selectedEntity) {
-      setError('Pick a contact, deal or company first');
-      return;
-    }
-    setBusy(true);
-    setError(null);
-    setResult(null);
-    try {
+  // #1328: entity typeahead via TanStack Query (was a debounced fetch in an
+  // effect). entityType + debounced search are part of the key so results are
+  // cached per query and stale requests are superseded automatically.
+  const searchCfg = ENTITY_TYPES.find(e => e.id === entityType)!;
+  const { data: searchData } = useApiQuery<SearchResp>(
+    ['tenant', 'ai', 'summarize-search', entityType, debouncedSearch],
+    searchCfg.api + encodeURIComponent(debouncedSearch),
+  );
+  const entityHits: EntityHit[] = useMemo(() => {
+    const list = searchData?.contacts ?? searchData?.deals ?? searchData?.companies ?? searchData?.data ?? [];
+    return list.slice(0, 8).map((row): EntityHit => {
+      if (entityType === 'contact') {
+        return {
+          id: row.id,
+          entity_type: 'contact',
+          label: `${row.firstName ?? ''} ${row.lastName ?? ''}`.trim() || (row.email ?? '—'),
+          sublabel: row.email ?? row.companyName ?? undefined,
+        };
+      }
+      if (entityType === 'deal') {
+        return { id: row.id, entity_type: 'deal', label: row.title ?? '—' };
+      }
+      return { id: row.id, entity_type: 'company', label: row.name ?? '—' };
+    });
+  }, [searchData, entityType]);
+
+  const generateMutation = useMutation({
+    mutationFn: async () => {
       const r = await fetch('/api/tenant/ai/summarize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          entity_type: selectedEntity.entity_type,
-          entity_id: selectedEntity.id,
+          entity_type: selectedEntity!.entity_type,
+          entity_id: selectedEntity!.id,
           custom_instructions: customInstructions || undefined,
         }),
       });
       const data: SummarizeResp & { error?: string } = await r.json();
       if (!r.ok) throw new Error(data.error ?? `HTTP ${r.status}`);
-      setResult(data);
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
+      return data as SummarizeResp;
+    },
+    onMutate: () => { setError(null); setResult(null); },
+    onSuccess: (data) => setResult(data),
+    onError: (e: Error) => setError(e.message),
+  });
+  const busy = generateMutation.isPending;
+
+  function generate() {
+    if (!selectedEntity) {
+      setError('Pick a contact, deal or company first');
+      return;
     }
+    generateMutation.mutate();
   }
 
   async function copy() {

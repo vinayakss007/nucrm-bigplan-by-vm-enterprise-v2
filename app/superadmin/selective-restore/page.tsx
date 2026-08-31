@@ -9,7 +9,9 @@ import { logError } from '@/lib/errors-client';
 import { clientLogError } from '@/lib/client-logger';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import toast from 'react-hot-toast';
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import {
   Database,
   Upload,
@@ -102,8 +104,8 @@ type Step = 'upload' | 'preview' | 'user-select' | 'select' | 'scope' | 'execute
 // ── Main Page ────────────────────────────────────────────────────────────────
 
 export default function SelectiveRestorePage() {
+  const queryClient = useQueryClient();
   const [step, setStep] = useState<Step>('upload');
-  const [backups, setBackups] = useState<BackupFile[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedBackup, setSelectedBackup] = useState<BackupFile | null>(null);
   const [selectedTenant, setSelectedTenant] = useState<TenantInfo | null>(null);
@@ -128,44 +130,29 @@ export default function SelectiveRestorePage() {
 
   const [restoreProgress, setRestoreProgress] = useState<RestoreProgressData | null>(null);
   const [restoreResult, setRestoreResult] = useState<RestoreResultData | null>(null);
-  const [restoreLogs, setRestoreLogs] = useState<RestoreLog[]>([]);
   const [showLogs, setShowLogs] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [tenantUsers, setTenantUsers] = useState<TenantUser[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Load data on mount
-  useEffect(() => {
-    const controller = new AbortController();
-    loadBackups(controller.signal);
-    loadRestoreLogs(controller.signal);
-    return () => controller.abort();
-  }, []);
+  // #1328: on-mount list reads via TanStack Query (were raw fetch + useEffect).
+  // The multi-step wizard (upload/poll/preview/scope/users/execute-SSE) stays on
+  // plain fetch; mutations and imperative reloads invalidate these keys.
+  const BACKUPS_QUERY = ['superadmin', 'selective-restore', 'backups'] as const;
+  const LOGS_QUERY = ['superadmin', 'selective-restore', 'logs'] as const;
 
-  const loadBackups = async (signal?: AbortSignal) => {
-    try {
-      const res = await fetch('/api/superadmin/selective-restore/backups', { signal });
-      const data = await res.json();
-      if (signal?.aborted) return;
-      if (data.backups) setBackups(data.backups);
-    } catch (err) {
-      if ((err as Error)?.name === 'AbortError') return;
-      clientLogError('selective-restore:load-backups', err);
-    }
-  };
+  const backupsQuery = useApiQuery<{ backups?: BackupFile[] }>(
+    BACKUPS_QUERY, '/api/superadmin/selective-restore/backups',
+  );
+  const logsQuery = useApiQuery<{ logs?: RestoreLog[] }>(
+    LOGS_QUERY, '/api/superadmin/selective-restore/logs',
+  );
+  const backups: BackupFile[] = backupsQuery.data?.backups ?? [];
+  const restoreLogs: RestoreLog[] = logsQuery.data?.logs ?? [];
 
-  const loadRestoreLogs = async (signal?: AbortSignal) => {
-    try {
-      const res = await fetch('/api/superadmin/selective-restore/logs', { signal });
-      const data = await res.json();
-      if (signal?.aborted) return;
-      if (data.logs) setRestoreLogs(data.logs);
-    } catch (err) {
-      if ((err as Error)?.name === 'AbortError') return;
-      clientLogError('selective-restore:load-logs', err);
-    }
-  };
+  const loadBackups = async () => { await queryClient.invalidateQueries({ queryKey: BACKUPS_QUERY }); };
+  const loadRestoreLogs = () => { queryClient.invalidateQueries({ queryKey: LOGS_QUERY }); };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -384,14 +371,17 @@ export default function SelectiveRestorePage() {
     setRestoreResult(null);
   };
 
+  const deleteBackupMutation = useMutation({
+    mutationFn: async (backupId: string) => {
+      await fetch(`/api/superadmin/selective-restore/backups?id=${backupId}`, { method: 'DELETE' });
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: BACKUPS_QUERY }); },
+    onError: (err) => clientLogError('selective-restore:delete', err),
+  });
+
   const handleDeleteBackup = async (backupId: string) => {
     await confirmThen('Delete this backup permanently? This cannot be undone.', async () => {
-      try {
-        await fetch(`/api/superadmin/selective-restore/backups?id=${backupId}`, { method: 'DELETE' });
-        loadBackups();
-      } catch (err) {
-        clientLogError('selective-restore:delete', err);
-      }
+      deleteBackupMutation.mutate(backupId);
     });
   };
 

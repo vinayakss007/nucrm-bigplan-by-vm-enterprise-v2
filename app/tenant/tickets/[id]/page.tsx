@@ -8,11 +8,41 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
-import { ArrowLeft, User, Clock, MessageSquare, Trash2, Send
+import { ArrowLeft, User, Clock, MessageSquare, Trash2, Send,
+  Building2, Briefcase, Receipt, Mail, ExternalLink
 } from 'lucide-react';
+import Link from 'next/link';
 import { cn, formatDate, formatRelativeTime } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import { confirmThen } from '@/components/ui/confirm-dialog';
+
+interface CustomerDeal {
+  id: string;
+  title: string;
+  amount: string | null;
+  stage_name: string | null;
+  created_at: string;
+}
+
+interface CustomerInvoice {
+  id: string;
+  invoice_number: string;
+  status: string;
+  total_amount: string | null;
+  currency: string | null;
+  issue_date: string | null;
+  due_date: string | null;
+}
+
+interface CustomerHistory {
+  contact_id: string | null;
+  contact_name: string | null;
+  contact_email: string | null;
+  company_id: string | null;
+  company_name: string | null;
+  deals: CustomerDeal[];
+  invoices: CustomerInvoice[];
+}
 
 interface TicketDetail {
   id: string;
@@ -26,6 +56,7 @@ interface TicketDetail {
   last_name: string | null;
   assigned_name: string | null;
   replies?: { id: string; body: string; created_at: string; author_name: string; is_internal: boolean }[];
+  customer?: CustomerHistory;
 }
 
 interface TicketResponse { data: TicketDetail }
@@ -122,8 +153,29 @@ export default function TicketDetailPage() {
     closed: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-400',
   };
 
+  const fmtMoney = (amount: string | null, currency: string | null) => {
+    const n = Number(amount ?? 0);
+    if (!Number.isFinite(n)) return String(amount ?? '');
+    try {
+      return new Intl.NumberFormat(undefined, { style: 'currency', currency: currency || 'USD' }).format(n);
+    } catch {
+      return `${currency || ''} ${n.toLocaleString()}`.trim();
+    }
+  };
+
+  const invoiceStatusColor: Record<string, string> = {
+    paid: 'text-emerald-600',
+    overdue: 'text-red-600',
+    draft: 'text-muted-foreground',
+    sent: 'text-blue-600',
+  };
+
+  const customer = ticket.customer;
+  const hasCustomer = !!(customer && (customer.contact_id || customer.company_id));
+
   return (
-    <div className="space-y-6 animate-fade-in max-w-4xl">
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fade-in items-start">
+      <div className="lg:col-span-2 space-y-6">
       {/* Back button + actions */}
       <div className="flex items-center justify-between">
         <button onClick={() => router.push('/tenant/tickets')}
@@ -207,6 +259,105 @@ export default function TicketDetailPage() {
           </button>
         </div>
       </div>
+      </div>
+
+      {/* Customer History panel (#1813) — surfaces the customer's company,
+          deals and invoices so support has sales/billing context inline. */}
+      <aside className="lg:col-span-1 space-y-4 lg:sticky lg:top-6">
+        <div className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden">
+          <div className="p-4 border-b border-border">
+            <h2 className="font-semibold text-sm flex items-center gap-2">
+              <User className="w-4 h-4" /> Customer History
+            </h2>
+          </div>
+
+          {!hasCustomer ? (
+            <div className="p-6 text-center text-xs text-muted-foreground">
+              This ticket isn&apos;t linked to a contact or company.
+            </div>
+          ) : (
+            <div className="divide-y divide-border">
+              {/* Contact + company */}
+              <div className="p-4 space-y-2">
+                {customer?.contact_id && (
+                  <Link href={`/tenant/contacts/${customer.contact_id}`}
+                    className="flex items-center gap-2 text-sm hover:text-violet-600 transition-colors group">
+                    <User className="w-3.5 h-3.5 text-muted-foreground" />
+                    <span className="font-medium">{customer.contact_name || 'Contact'}</span>
+                    <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </Link>
+                )}
+                {customer?.contact_email && (
+                  <a href={`mailto:${customer.contact_email}`}
+                    className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors">
+                    <Mail className="w-3.5 h-3.5" />{customer.contact_email}
+                  </a>
+                )}
+                {customer?.company_id && (
+                  <Link href={`/tenant/companies/${customer.company_id}`}
+                    className="flex items-center gap-2 text-sm hover:text-violet-600 transition-colors group">
+                    <Building2 className="w-3.5 h-3.5 text-muted-foreground" />
+                    <span className="font-medium">{customer.company_name || 'Company'}</span>
+                    <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </Link>
+                )}
+              </div>
+
+              {/* Deals */}
+              <div className="p-4">
+                <h3 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5">
+                  <Briefcase className="w-3.5 h-3.5" /> Deals ({customer?.deals.length || 0})
+                </h3>
+                {(customer?.deals.length || 0) === 0 ? (
+                  <p className="text-xs text-muted-foreground">No deals for this customer.</p>
+                ) : (
+                  <ul className="space-y-1.5">
+                    {customer?.deals.map((d) => (
+                      <li key={d.id}>
+                        <Link href={`/tenant/deals/${d.id}`}
+                          className="flex items-center justify-between gap-2 text-xs rounded-lg px-2 py-1.5 hover:bg-accent transition-colors group">
+                          <span className="truncate">
+                            <span className="font-medium">{d.title}</span>
+                            {d.stage_name && <span className="text-muted-foreground"> · {d.stage_name}</span>}
+                          </span>
+                          <span className="shrink-0 font-semibold tabular-nums">{fmtMoney(d.amount, null)}</span>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              {/* Invoices */}
+              <div className="p-4">
+                <h3 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5">
+                  <Receipt className="w-3.5 h-3.5" /> Invoices ({customer?.invoices.length || 0})
+                </h3>
+                {(customer?.invoices.length || 0) === 0 ? (
+                  <p className="text-xs text-muted-foreground">No invoices for this customer.</p>
+                ) : (
+                  <ul className="space-y-1.5">
+                    {customer?.invoices.map((inv) => (
+                      <li key={inv.id}>
+                        <Link href={`/tenant/invoices/${inv.id}`}
+                          className="flex items-center justify-between gap-2 text-xs rounded-lg px-2 py-1.5 hover:bg-accent transition-colors">
+                          <span className="truncate">
+                            <span className="font-medium">{inv.invoice_number}</span>
+                            <span className={cn('ml-1.5 capitalize', invoiceStatusColor[inv.status] || 'text-muted-foreground')}>
+                              · {inv.status}
+                            </span>
+                          </span>
+                          <span className="shrink-0 font-semibold tabular-nums">{fmtMoney(inv.total_amount, inv.currency)}</span>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </aside>
     </div>
   );
 }

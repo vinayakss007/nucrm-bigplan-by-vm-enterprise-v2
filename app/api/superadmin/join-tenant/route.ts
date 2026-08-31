@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { requireAuth } from '@/lib/auth/middleware';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { db } from '@/drizzle/db';
 import { tenants, tenantMembers, roles, pipelines, dealStages } from '@/drizzle/schema';
 import { and, eq, sql } from 'drizzle-orm';
@@ -29,6 +30,9 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     if (!ctx.isSuperAdmin) {
       return NextResponse.json({ error: 'Super admin only' }, { status: 403 });
     }
+
+    const limited = await rateLimitMutating(request, 'joinTenant', 'post');
+    if (limited) return limited;
 
     // Parse optional tenantId from request body. A missing/empty/invalid body
     // is tolerated and falls back to default behavior (join first active tenant).

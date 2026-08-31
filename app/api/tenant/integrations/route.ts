@@ -5,7 +5,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth, requireCsrf } from '@/lib/auth/middleware';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { createIntegrationSchema } from '@/lib/api/schemas';
 import { db } from '@/drizzle/db';
@@ -38,6 +38,8 @@ export const POST = withApiRoute(async (request: NextRequest) => {
 
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+    const csrf = requireCsrf(request); // #1835: in-handler CSRF defense-in-depth (after auth)
+    if (csrf) return csrf;
     if (!ctx.isAdmin) {
       return NextResponse.json({ error: 'Admin required' }, { status: 403 });
     }

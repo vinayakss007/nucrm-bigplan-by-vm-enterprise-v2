@@ -221,10 +221,10 @@ export const POST = withApiRoute(async (request: NextRequest) => {
         entity_type: 'deal',
         entity_id: deal.id,
         link: `/tenant/deals/${deal.id}`,
-      }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
+      }).catch((err) => logError({ error: err, context: 'tenant/deals async side-effect' }));
     }
 
-    fireWebhooks(ctx.tenantId, 'deal.created', { id: deal.id, title: deal.title, amount }).catch((err) => logError({ error: err, context: "async-catch:[context]" }));
+    fireWebhooks(ctx.tenantId, 'deal.created', { id: deal.id, title: deal.title, amount }).catch((err) => logError({ error: err, context: 'tenant/deals fireWebhooks deal.created' }));
 
     try {
       const { evaluateAutomations } = await import('@/lib/automation/engine');

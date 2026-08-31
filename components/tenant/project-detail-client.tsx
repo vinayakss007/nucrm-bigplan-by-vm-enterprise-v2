@@ -47,10 +47,8 @@ interface ProjectData {
   end_date: string | null;
   owner_id: string | null;
   owner_name: string | null;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  created_at: any;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  updated_at: any;
+  created_at: Date | string | null;
+  updated_at: Date | string | null;
 }
 
 interface Milestone {
@@ -58,8 +56,7 @@ interface Milestone {
   title: string;
   due_date: string | null;
   completed: boolean;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  completed_at: any;
+  completed_at: Date | string | null;
 }
 
 interface LinkedTask {

@@ -4,8 +4,8 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { logError } from '@/lib/errors-client';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
+import { useApiQuery } from '@/lib/query/client';
 import Link from 'next/link';
 import {
   Search, X, Settings as SettingsIcon, ArrowRight,
@@ -34,23 +34,31 @@ const STATUS_META: Record<StatusValue, { color: string; label: string; icon: Luc
   unknown:    { color: 'text-muted-foreground/40',                label: '',            icon: CircleDashed },
 };
 
-export default function SettingsIndex() {
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [query, setQuery] = useState('');
-  const [statuses, setStatuses] = useState<Record<string, StatusEntry>>({});
-  const [summary, setSummary] = useState<{ configured: number; default: number; attention: number; unknown: number }>({ configured: 0, default: 0, attention: 0, unknown: 0 });
+const EMPTY_SUMMARY = { configured: 0, default: 0, attention: 0, unknown: 0 };
 
-  useEffect(() => {
-  const controller = new AbortController();
-    fetch('/api/tenant/me', { signal: controller.signal }).then(r => r.ok ? r.json() : Promise.reject())
-      .then(d => { if (controller.signal.aborted) return; setIsAdmin(d.is_admin ?? false); })
-      .catch((err) => { if ((err as Error)?.name === 'AbortError') return; logError({ error: err, context: "async-catch:[context]" }); });
-    fetch('/api/tenant/settings-status', { signal: controller.signal }).then(r => r.ok ? r.json() : null)
-      .then(d => { if (d && !controller.signal.aborted) { setStatuses(d.statuses ?? {}); setSummary(d.summary ?? { configured: 0, default: 0, attention: 0, unknown: 0 }); } })
-      .catch((err) => { if ((err as Error)?.name === 'AbortError') return; logError({ error: err, context: "async-catch:[context]" }); });
-     
-    return () => { controller.abort(); };
-}, []);
+export default function SettingsIndex() {
+  const [query, setQuery] = useState('');
+
+  // #1328: reads via TanStack Query (were parallel raw fetch + useEffect). Both
+  // endpoints are optional/admin-aware so failures fall back to safe defaults
+  // (retry disabled to avoid retrying expected 403/404s).
+  const { data: meData } = useApiQuery<{ is_admin?: boolean }>(
+    ['tenant', 'me'],
+    '/api/tenant/me',
+    { retry: false },
+  );
+  const { data: statusData } = useApiQuery<{
+    statuses?: Record<string, StatusEntry>;
+    summary?: { configured: number; default: number; attention: number; unknown: number };
+  }>(
+    ['tenant', 'settings-status'],
+    '/api/tenant/settings-status',
+    { retry: false },
+  );
+
+  const isAdmin = meData?.is_admin ?? false;
+  const statuses = useMemo(() => statusData?.statuses ?? {}, [statusData]);
+  const summary = statusData?.summary ?? EMPTY_SUMMARY;
 
   const q = query.trim().toLowerCase();
   const visible = useMemo(() => visibleForRole(isAdmin), [isAdmin]);

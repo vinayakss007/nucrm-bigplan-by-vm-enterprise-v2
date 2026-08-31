@@ -4,7 +4,9 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import { clientLogError } from '@/lib/client-logger';
 import { AlertTriangle, CheckCheck, RefreshCw, X, ChevronDown, ChevronRight, Search, Book, Copy, Check } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
@@ -57,58 +59,42 @@ function CopyButton({ text }: { text: string }) {
 }
 
 export default function ErrorsPage() {
-  const [data, setData]     = useState<ErrorsApiData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [fetchError, setFetchError] = useState<string|null>(null);
+  const queryClient = useQueryClient();
   const [level, setLevel]   = useState('');
   const [resolved, setResolved] = useState('false');
   const [search, setSearch] = useState('');
   const [expanded, setExpanded] = useState<string|null>(null);
-  const [resolving, setResolving] = useState<string|null>(null);
 
-  const load = useCallback(async (abortSignal?: AbortSignal) => {
-    setLoading(true);
-    setFetchError(null);
+  // #1328: TanStack Query replaces fetch + useEffect + useState.
+  const buildUrl = () => {
     const q = new URLSearchParams({ resolved });
     if (level) q.set('level', level);
-    try {
-      const res = await fetch('/api/superadmin/errors?' + q, { signal: abortSignal });
-      if (!res.ok) {
-        const errBody = await res.json().catch((err) => { clientLogError('errors:parse-error-body', err); return { error: `HTTP ${res.status}` }; });
-        throw new Error(errBody.error || `Request failed (${res.status})`);
-      }
-      const d = await res.json();
-      setData(d);
-    } catch (err: unknown) {
-      if (err instanceof DOMException && err.name === 'AbortError') return;
-      setFetchError(err instanceof Error ? err.message : 'Failed to load errors');
-      setData(null);
-    } finally {
-      setLoading(false);
-    }
-  }, [level, resolved]);
-  useEffect(() => {
-    const abort = new AbortController();
-    load(abort.signal);
-    return () => abort.abort();
-  }, [load]);
+    return '/api/superadmin/errors?' + q;
+  };
+  const queryKey = ['superadmin', 'errors', resolved, level] as const;
+  const { data, isLoading, error, refetch } = useApiQuery<ErrorsApiData>(queryKey, buildUrl(), { retry: false });
+  const loading = isLoading;
+  const fetchError = error
+    ? ((error.info as { error?: string } | undefined)?.error || error.message || 'Failed to load errors')
+    : null;
 
-  const resolve = async (id?: string, resolveAll?: boolean, lvl?: string) => {
-    if (id) setResolving(id);
-    try {
+  const resolveMutation = useMutation({
+    mutationFn: async ({ id, resolveAll, lvl }: { id?: string; resolveAll?: boolean; lvl?: string }) => {
       const res = await fetch('/api/superadmin/errors', {
         method:'PATCH', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ id, resolveAll, level: lvl }),
       });
       if (!res.ok) throw new Error((await res.json().catch((err) => { clientLogError('errors:parse-resolve', err); return {}; })).error || 'Resolve failed');
-      toast.success(resolveAll ? 'All resolved' : 'Marked resolved');
-      load();
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to resolve');
-    } finally {
-      setResolving(null);
-    }
-  };
+      return !!resolveAll;
+    },
+    onSuccess: (wasResolveAll) => {
+      toast.success(wasResolveAll ? 'All resolved' : 'Marked resolved');
+      queryClient.invalidateQueries({ queryKey });
+    },
+    onError: (err: Error) => toast.error(err.message || 'Failed to resolve'),
+  });
+  const resolving = resolveMutation.isPending ? (resolveMutation.variables?.id ?? null) : null;
+  const resolve = (id?: string, resolveAll?: boolean, lvl?: string) => resolveMutation.mutate({ id, resolveAll, lvl });
 
   const s = data?.summary ?? {};
   const errors = (data?.errors ?? []).filter((e) =>
@@ -123,7 +109,7 @@ export default function ErrorsPage() {
           <p className="text-xs text-muted-foreground">Application errors, API failures, and exceptions</p>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={() => load()} className="p-2 rounded-lg border border-border text-muted-foreground hover:text-foreground transition-colors"><RefreshCw className="w-3.5 h-3.5"/></button>
+          <button onClick={() => refetch()} className="p-2 rounded-lg border border-border text-muted-foreground hover:text-foreground transition-colors"><RefreshCw className="w-3.5 h-3.5"/></button>
           {resolved==='false' && (
             <button onClick={() => confirmThen('Mark all unresolved errors as resolved?', () => resolve(undefined, true))}
               className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-600/20 border border-emerald-500/30 text-emerald-400 text-xs font-medium hover:bg-emerald-600/30 transition-colors">
@@ -178,7 +164,7 @@ export default function ErrorsPage() {
             <AlertTriangle className="w-10 h-10 text-red-500/60 mx-auto mb-3"/>
             <p className="text-red-400/80 text-sm font-medium mb-1">Failed to load errors</p>
             <p className="text-muted-foreground text-xs mb-4">{fetchError}</p>
-            <button onClick={() => load()} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-violet-600/20 border border-violet-500/30 text-violet-400 text-xs font-medium hover:bg-violet-600/30 transition-colors mx-auto">
+            <button onClick={() => refetch()} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-violet-600/20 border border-violet-500/30 text-violet-400 text-xs font-medium hover:bg-violet-600/30 transition-colors mx-auto">
               <RefreshCw className="w-3 h-3"/>Retry
             </button>
           </div>

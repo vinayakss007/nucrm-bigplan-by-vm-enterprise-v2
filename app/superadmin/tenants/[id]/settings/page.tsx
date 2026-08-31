@@ -4,10 +4,11 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import Link from 'next/link';
-import { clientLogError } from '@/lib/client-logger';
 import {
   Crown, Loader2, Globe, Lock, ListChecks, ArrowLeft, Clock, ShieldCheck, KeyRound, AlertCircle, Eye, Save, Pencil,
 } from 'lucide-react';
@@ -51,56 +52,54 @@ interface TenantSettingsData {
 
 export default function TenantSettingsAuditPage() {
   const params = useParams<{ id: string }>();
-  const [data, setData] = useState<TenantSettingsData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+  const tenantId = params?.id;
   const [editing, setEditing] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [editedSettings, setEditedSettings] = useState<TenantSettingsData['settings'] | null>(null);
 
-  const loadData = useCallback((signal?: AbortSignal) => {
-    if (!params?.id) return;
-    setLoading(true);
-    fetch(`/api/superadmin/tenant-settings?tenant_id=${params.id}`, { signal })
-      .then(r => r.ok ? r.json() : Promise.reject(r))
-      .then((d) => {
-        if (signal?.aborted) return;
-        setData(d);
-        setEditedSettings(JSON.parse(JSON.stringify(d.settings)));
-      })
-      .catch((err) => {
-        if ((err as Error)?.name === 'AbortError') return;
-        clientLogError('tenant-settings:fetch', err); setData({ tenant: { name: '', slug: '', plan_id: '', status: '', active_members: 0, current_users: 0, current_contacts: 0, current_deals: 0 }, settings: {}, error: true });
-      })
-      .finally(() => { if (!signal?.aborted) setLoading(false); });
-  }, [params?.id]);
+  // #1328: read via TanStack Query (was fetch + useEffect). Route-id page uses
+  // useParams(); id in the query key and URL; enabled once id is known.
+  const settingsQuery = useApiQuery<TenantSettingsData>(
+    ['superadmin', 'tenant-settings', tenantId],
+    `/api/superadmin/tenant-settings?tenant_id=${tenantId}`,
+    { enabled: !!tenantId, retry: false },
+  );
+  const loading = settingsQuery.isLoading;
+  const data: TenantSettingsData | null = settingsQuery.data
+    ?? (settingsQuery.isError
+      ? { tenant: { name: '', slug: '', plan_id: '', status: '', active_members: 0, current_users: 0, current_contacts: 0, current_deals: 0 }, settings: {}, error: true }
+      : null);
 
+  // Seed the editable settings snapshot whenever fresh data arrives.
   useEffect(() => {
-    const controller = new AbortController();
-    loadData(controller.signal);
-    return () => controller.abort();
-  }, [loadData]);
+    if (settingsQuery.data) {
+      setEditedSettings(JSON.parse(JSON.stringify(settingsQuery.data.settings)));
+    }
+  }, [settingsQuery.data]);
 
-  const handleSave = async () => {
-    if (!params?.id || !editedSettings) return;
-    setSaving(true);
-    try {
+  const saveMutation = useMutation({
+    mutationFn: async () => {
       const res = await fetch('/api/superadmin/tenant-settings', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tenant_id: params.id, settings: editedSettings }),
+        body: JSON.stringify({ tenant_id: tenantId, settings: editedSettings }),
       });
-      const d = await res.json();
-      if (res.ok) {
-        toast.success('Settings saved successfully');
-        setEditing(false);
-        loadData();
-      } else {
-        toast.error(d.error || 'Failed to save settings');
-      }
-    } catch {
-      toast.error('Failed to save settings');
-    }
-    setSaving(false);
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || 'Failed to save settings');
+      return d;
+    },
+    onSuccess: () => {
+      toast.success('Settings saved successfully');
+      setEditing(false);
+      queryClient.invalidateQueries({ queryKey: ['superadmin', 'tenant-settings', tenantId] });
+    },
+    onError: (e: Error) => toast.error(e.message || 'Failed to save settings'),
+  });
+  const saving = saveMutation.isPending;
+
+  const handleSave = async () => {
+    if (!tenantId || !editedSettings) return;
+    saveMutation.mutate();
   };
 
   const updateLocalization = (key: string, value: string | number) => {

@@ -4,7 +4,9 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import {
   FileEdit, Plus, Save, X, Sparkles, AlertCircle, Loader2, Trash2, Eye, RefreshCw,
 } from 'lucide-react';
@@ -67,40 +69,20 @@ const EMPTY_TEMPLATE: Template = {
   active: true,
 };
 
+const TEMPLATES_QUERY = ['tenant', 'admin', 'ai-templates'] as const;
+
 export default function AITemplatesPage() {
-  const [data, setData] = useState<Resp | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
   const [editing, setEditing] = useState<Template | null>(null);
-  const [busy, setBusy] = useState<string | null>(null);
 
-  function load(signal?: AbortSignal) {
-    setLoading(true);
-    setError(null);
-    fetch('/api/tenant/admin/ai-templates', { cache: 'no-store', signal })
-      .then(async r => {
-        if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? `HTTP ${r.status}`);
-        return r.json();
-      })
-      .then(setData)
-      .catch(e => {
-        if (e?.name === 'AbortError') return;
-        setError(e.message);
-      })
-      .finally(() => {
-        if (!signal?.aborted) setLoading(false);
-      });
-  }
-  useEffect(() => {
-    const controller = new AbortController();
-    load(controller.signal);
-    return () => controller.abort();
-  }, []);
+  // #1328: list read via TanStack Query (was fetch + useEffect + AbortController).
+  const { data, isLoading: loading, error: queryError, refetch, isFetching } =
+    useApiQuery<Resp>(TEMPLATES_QUERY, '/api/tenant/admin/ai-templates');
 
-  async function installSeed(slug: string) {
-    setBusy('install:' + slug);
-    setError(null);
-    try {
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: TEMPLATES_QUERY });
+
+  const installMutation = useMutation({
+    mutationFn: async (slug: string) => {
       const r = await fetch('/api/tenant/admin/ai-templates', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -108,15 +90,12 @@ export default function AITemplatesPage() {
       });
       const body = await r.json();
       if (!r.ok) throw new Error(body.error ?? `HTTP ${r.status}`);
-      load();
-    } catch (e) { setError((e as Error).message); }
-    finally { setBusy(null); }
-  }
+    },
+    onSuccess: invalidate,
+  });
 
-  async function save(t: Template) {
-    setBusy('save');
-    setError(null);
-    try {
+  const saveMutation = useMutation({
+    mutationFn: async (t: Template) => {
       const url = t.id
         ? `/api/tenant/admin/ai-templates/${t.id}`
         : '/api/tenant/admin/ai-templates';
@@ -139,23 +118,41 @@ export default function AITemplatesPage() {
       });
       const body = await r.json();
       if (!r.ok) throw new Error(body.error ?? `HTTP ${r.status}`);
-      setEditing(null);
-      load();
-    } catch (e) { setError((e as Error).message); }
-    finally { setBusy(null); }
-  }
+    },
+    onSuccess: () => { setEditing(null); invalidate(); },
+  });
 
-  async function remove(t: Template) {
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const r = await fetch(`/api/tenant/admin/ai-templates/${id}`, { method: 'DELETE' });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? `HTTP ${r.status}`);
+    },
+    onSuccess: invalidate,
+  });
+
+  // Surface whichever error is active (query load or a failed mutation), keeping
+  // the existing single error banner.
+  const error =
+    (queryError as Error | null)?.message ??
+    installMutation.error?.message ??
+    saveMutation.error?.message ??
+    deleteMutation.error?.message ??
+    null;
+
+  // Preserve the old `busy` string contract the Card/SeedCard/Editor props expect.
+  const busy =
+    saveMutation.isPending ? 'save' :
+    installMutation.isPending ? 'install:' + installMutation.variables :
+    deleteMutation.isPending ? 'delete:' + deleteMutation.variables :
+    null;
+
+  const installSeed = (slug: string) => installMutation.mutate(slug);
+  const save = (t: Template) => saveMutation.mutate(t);
+  function remove(t: Template) {
     if (!t.id) return;
-    await confirmThen(`Delete "${t.name}"? This soft-deletes the template (draft history is preserved).`, async () => {
-      setBusy('delete:' + t.id);
-      setError(null);
-      try {
-        const r = await fetch(`/api/tenant/admin/ai-templates/${t.id}`, { method: 'DELETE' });
-        if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? `HTTP ${r.status}`);
-        load();
-      } catch (e) { setError((e as Error).message); }
-      finally { setBusy(null); }
+    const id = t.id;
+    void confirmThen(`Delete "${t.name}"? This soft-deletes the template (draft history is preserved).`, async () => {
+      deleteMutation.mutate(id);
     });
   }
 
@@ -174,8 +171,8 @@ export default function AITemplatesPage() {
             Prompts for the AI Auto-Draft surface. The picker on <code>/tenant/ai/draft</code> lets reps choose a template, an entity, and the AI fills in the gaps using <code>{`{{contact.first_name}}`}</code> style tokens you put in the prompts.
           </p>
         </div>
-        <button onClick={() => load()} className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border bg-card hover:bg-accent text-sm">
-          <RefreshCw className={cn('w-3.5 h-3.5', loading && 'animate-spin')} />Refresh
+        <button onClick={() => refetch()} className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border bg-card hover:bg-accent text-sm">
+          <RefreshCw className={cn('w-3.5 h-3.5', isFetching && 'animate-spin')} />Refresh
         </button>
         <button
           onClick={() => setEditing({ ...EMPTY_TEMPLATE })}

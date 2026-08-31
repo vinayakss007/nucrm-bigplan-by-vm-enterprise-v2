@@ -148,8 +148,5 @@ export interface ModulePlugin {
   /** Called when module is uninstalled */
   onUninstall?: (tenantId: string) => Promise<void>;
   /** Called on every request to check access */
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  middleware?: (req: any) => Promise<boolean>;
+  middleware?: (req: Request) => Promise<boolean>;
 }
