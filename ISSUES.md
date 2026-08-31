@@ -2,46 +2,31 @@
 
 ---
 
-## Issue 1: CI/CD not implemented
+## Issue 1: ✅ RESOLVED — CI/CD not implemented
 
 **Labels:** `infrastructure`, `high-priority`
 
 ### Description
 
-README documents GitHub Actions for "Lint, typecheck, tests, security scan, build" but `.github/workflows/` directory does not exist. CI/CD is not implemented.
+This issue previously claimed the README documented GitHub Actions but `.github/workflows/` did not exist. That is no longer accurate: CI/CD is now fully implemented via `.github/workflows/ci.yml` and `.github/workflows/deploy.yml`.
 
-### Current State
+### Current State (RESOLVED)
 
-- No `.github/` directory in the repository
-- README claims CI/CD exists but it's aspirational
-- Lint, typecheck, tests, security scanning are all manual local operations
-- No automated build/deploy pipeline
-
-### Impact
-
-- No automated quality gates on PRs
-- No automated builds or deployments
-- Changes can be merged without any CI validation
-- Security scans only run manually via npm scripts
-
-### Proposed Solution
-
-Create `.github/workflows/ci.yml` with:
-
-1. **Lint** — `npm run lint` (ESLint)
-2. **Typecheck** — `npx tsc --noEmit`
-3. **Tests** — `npx vitest run`
-4. **Security scan** — Semgrep or CodeQL
-5. **Build** — `npm run build`
-6. **Docker build** — verify Dockerfile builds successfully
-
-And `.github/workflows/deploy.yml` for production deployment via SSH.
+- `.github/workflows/ci.yml` and `.github/workflows/deploy.yml` both exist.
+- `ci.yml` is triggered on `pull_request` and `push` to `main`, and runs comprehensive jobs:
+  - **`lint-typecheck`** — `npm run lint`, `npm run typecheck`, plus four guards: `guard:rls` (#1838), `guard:schemas` (#1883), `guard:boundaries` (#1840), `guard:filesize` (#1843)
+  - **`test-unit`** — `postgres:16` + `redis:7` service containers, `db:sync`, `npm run test:unit` with coverage
+  - **`test-integration`** — `postgres` + `redis` services, `npm run test:integration`
+  - **`secret-scan`** — gitleaks
+  - **`security-scan`** — `npm audit`, gitleaks path scan, Semgrep SAST with SARIF upload
+  - **`build`** — `npm run build` plus bundle-size check
+  - **`lockfile-guard`** — rejects foreign pnpm/yarn lockfiles
+- Automated quality gates now run on every PR; security scanning is no longer manual-only.
 
 ### References
 
-- `AGENTS.md` mentions "CI should run: lint, typecheck, tests, security scan"
-- `deploy/scripts/deploy.sh` exists but is not triggered by CI
-- `.github/workflows/deploy.yml` is referenced in deploy docs but doesn't exist
+- `AGENTS.md` mentions "CI should run: lint, typecheck, tests, security scan" — now satisfied by `ci.yml`.
+- `.github/workflows/deploy.yml` handles production deployment.
 
 ---
 
