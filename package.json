@@ -45,6 +45,7 @@
     "start": "next start",
     "lint": "eslint .",
     "guard:rls": "node scripts/check-rls-route-coverage.mjs",
+    "guard:boundaries": "node scripts/check-route-boundaries.mjs",
     "typecheck": "npx tsc --noEmit --pretty",
     "check": "npm run typecheck && npm run lint && npm run test:unit && echo '✅ All checks passed'",
     "premerge": "bash scripts/pre-merge-check.sh",
