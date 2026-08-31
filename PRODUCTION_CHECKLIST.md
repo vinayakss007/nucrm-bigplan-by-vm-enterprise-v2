@@ -3,30 +3,41 @@
 **Repo:** https://github.com/vinayakss007/nucrm-bigplan-by-vm-enterprise-v2
 **Branch workflow:** fix/<item> → PR → merge to main
 
-## STATUS: ~85% READY FOR PRODUCTION
+## STATUS: ~90% READY FOR PRODUCTION
+
+> **Note (reconciled with PRE-LAUNCH-ISSUES.md 2026-08-31 re-audit — source of truth):**
+> CSP hardening (nonce-based CSP in `proxy.ts`, #1070), optimistic concurrency
+> guards on business entities (invoices, orders, tickets, contracts), and
+> analytics GET rate limiting (edge limiter in `proxy.ts` plus in-route
+> `rateLimitRead`) are all resolved. The old C1/C3/C4/H2/H4 item numbers below
+> predate that re-audit and refer to a different issue set.
 
 ---
 
 ## DONE — verified fixed (checklist was stale)
 
-| Item | What was claimed | Actual status |
-|------|-----------------|---------------|
-| C1 | `.env.local` secrets tracked in git | Already in `.gitignore`, NOT tracked |
-| C3 | `require()` in csrf.ts ESM | Already uses `import crypto from 'crypto'` |
-| C4 | `.env.local` not in `.gitignore` | Already on line 29 of `.gitignore` |
-| H2 | Dockerfile hardcodes JWT_SECRET | Uses `ARG JWT_SECRET` — not hardcoded |
-| H4 | CSRF non-crypto hash | Fixed by commit `7fba712` |
+| Item | What was claimed                    | Actual status                              |
+| ---- | ----------------------------------- | ------------------------------------------ |
+| C1   | `.env.local` secrets tracked in git | Already in `.gitignore`, NOT tracked       |
+| C3   | `require()` in csrf.ts ESM          | Already uses `import crypto from 'crypto'` |
+| C4   | `.env.local` not in `.gitignore`    | Already on line 29 of `.gitignore`         |
+| H2   | Dockerfile hardcodes JWT_SECRET     | Uses `ARG JWT_SECRET` — not hardcoded      |
+| H4   | CSRF non-crypto hash                | Fixed by commit `7fba712`                  |
 
 ## FIXED TODAY (PR needed)
 
-| Item | Fix | Files |
-|------|-----|-------|
-| C2 (partial) | Added `console.error` to 10 critical empty catch blocks | PR #241 (needs your review) |
-| M3 | CSRF rate limit 30→10 req/min | `app/api/auth/csrf-token/route.ts:6` |
-| H1 | Docker compose default DATABASE_SSL=false→true | `deploy/docker-compose.production.yml:123` |
-| M1 | Notification SSE stream: fixed empty catch + TDZ bug | `app/api/tenant/notifications/stream/route.ts` |
+| Item         | Fix                                                     | Files                                          |
+| ------------ | ------------------------------------------------------- | ---------------------------------------------- |
+| C2 (partial) | Added `console.error` to 10 critical empty catch blocks | PR #241 (needs your review)                    |
+| M3           | CSRF rate limit 30→10 req/min                           | `app/api/auth/csrf-token/route.ts:6`           |
+| H1           | Docker compose default DATABASE_SSL=false→true          | `deploy/docker-compose.production.yml:123`     |
+| M1           | Notification SSE stream: fixed empty catch + TDZ bug    | `app/api/tenant/notifications/stream/route.ts` |
 
 ## STILL PENDING (before launch)
+
+> Security-hardening items tracked separately in PRE-LAUNCH-ISSUES.md are now
+> resolved and are **not** blockers here: CSP hardening (H6), optimistic
+> concurrency guards (C4), and analytics GET rate limiting (C3).
 
 ### HIGH PRIORITY (fix in remaining time)
 
