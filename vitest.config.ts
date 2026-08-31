@@ -72,6 +72,11 @@ export default defineConfig({
     alias: {
       '@': path.resolve(__dirname, './'),
       'server-only': path.resolve(__dirname, './lib/server-only-shim.ts'),
+      // Sentry must not initialize during unit tests. Its orchestrion bundler
+      // instrumentation (as of @sentry/nextjs 10.72) is loaded eagerly and
+      // crashes under the jsdom environment ("The URL must be of scheme file").
+      // Alias the whole package to a no-op stub — see lib/sentry-test-shim.ts.
+      '@sentry/nextjs': path.resolve(__dirname, './lib/sentry-test-shim.ts'),
     },
   },
 });
