@@ -5,6 +5,8 @@
  */
 'use client';
 import { useState, useEffect } from 'react';
+import { useMutation } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import { Send, Bell, BellOff, TestTube, Shield, Lock, KeyRound, LogIn, UserPlus, Eye, EyeOff, Save } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { cn } from '@/lib/utils';
@@ -31,51 +33,38 @@ export default function TelegramSettingsPage() {
     telegram_notify_2fa_change: true,
     telegram_notify_security_alerts: true,
   });
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [testing, setTesting] = useState(false);
+  const [seeded, setSeeded] = useState(false);
   const [showToken, setShowToken] = useState(false);
 
+  // #1328: settings via TanStack Query (was raw fetch + useEffect). The form is
+  // seeded once from the query result.
+  const { data, isLoading: loading, error } = useApiQuery<{ ok?: boolean; settings?: TelegramSettings }>(
+    ['tenant', 'telegram'],
+    '/api/user/telegram',
+  );
   useEffect(() => {
-  const controller = new AbortController();
-  let ignore = false;
-    fetch('/api/user/telegram', { signal: controller.signal })
-      .then(r => r.json())
-      .then(d => { if (ignore) return;
-        if (d.ok) setSettings(d.settings);
-      })
-      .catch((e) => { if ((e as Error)?.name === 'AbortError') return; toast.error('Failed to load Telegram settings'); })
-      .finally(() => { if (!ignore) setLoading(false); });
-    return () => { ignore = true; controller.abort(); };
-}, []);
+    if (data?.ok && data.settings && !seeded) { setSettings(data.settings); setSeeded(true); }
+  }, [data, seeded]);
+  useEffect(() => { if (error) toast.error('Failed to load Telegram settings'); }, [error]);
 
-  const save = async () => {
-    setSaving(true);
-    try {
+  const saveMutation = useMutation({
+    mutationFn: async () => {
       const res = await fetch('/api/user/telegram', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(settings),
       });
-      const d = await res.json();
-      if (d.ok) {
-        toast.success('Telegram settings saved');
-      } else {
-        toast.error(d.error || 'Failed to save');
-      }
-    } catch {
-      toast.error('Failed to save settings');
-    }
-    setSaving(false);
-  };
+      const d = await res.json().catch(() => ({}));
+      if (!d.ok) throw new Error(d.error || 'Failed to save');
+    },
+    onSuccess: () => toast.success('Telegram settings saved'),
+    onError: (e: Error) => toast.error(e.message || 'Failed to save settings'),
+  });
+  const saving = saveMutation.isPending;
+  const save = () => saveMutation.mutate();
 
-  const testBot = async () => {
-    if (!settings.telegram_bot_token || !settings.telegram_chat_id) {
-      toast.error('Enter bot token and chat ID first');
-      return;
-    }
-    setTesting(true);
-    try {
+  const testMutation = useMutation({
+    mutationFn: async () => {
       const res = await fetch('/api/user/telegram', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -85,16 +74,19 @@ export default function TelegramSettingsPage() {
           telegram_chat_id: settings.telegram_chat_id,
         }),
       });
-      const d = await res.json();
-      if (d.ok) {
-        toast.success('Test message sent! Check Telegram');
-      } else {
-        toast.error(d.error || 'Test failed');
-      }
-    } catch {
-      toast.error('Test failed');
+      const d = await res.json().catch(() => ({}));
+      if (!d.ok) throw new Error(d.error || 'Test failed');
+    },
+    onSuccess: () => toast.success('Test message sent! Check Telegram'),
+    onError: (e: Error) => toast.error(e.message || 'Test failed'),
+  });
+  const testing = testMutation.isPending;
+  const testBot = () => {
+    if (!settings.telegram_bot_token || !settings.telegram_chat_id) {
+      toast.error('Enter bot token and chat ID first');
+      return;
     }
-    setTesting(false);
+    testMutation.mutate();
   };
 
   if (loading) {

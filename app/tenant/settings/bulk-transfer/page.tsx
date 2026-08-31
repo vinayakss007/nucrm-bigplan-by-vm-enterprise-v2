@@ -4,7 +4,9 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useApiQuery } from '@/lib/query/client';
 import {
   ArrowRightLeft, AlertCircle, ArrowRight, Loader2, RefreshCw,
   UserCheck, Users, TrendingUp, CheckSquare, LifeBuoy, ShieldX,
@@ -30,55 +32,43 @@ const RESOURCE_META: { key: keyof Counts; label: string; icon: LucideIcon }[] = 
 ];
 
 export default function BulkTransferPage() {
-  const [members, setMembers] = useState<Member[]>([]);
-  const [me, setMe] = useState<{ id: string; is_admin: boolean } | null>(null);
-  const [loadingMembers, setLoadingMembers] = useState(true);
-
+  const queryClient = useQueryClient();
   const [fromUser, setFromUser] = useState<string>('');
   const [toUser, setToUser]     = useState<string>('');
   const [toTeam, setToTeam]     = useState<string>('');
-  const [teams, setTeams]       = useState<{ id: string; name: string }[]>([]);
   const [onlyOpen, setOnlyOpen] = useState(true);
   const [enabledResources, setEnabledResources] = useState<Set<keyof Counts>>(
     new Set(['leads', 'contacts', 'deals', 'tasks', 'tickets'])
   );
-
-  const [counts, setCounts] = useState<Counts | null>(null);
-  const [previewLoading, setPreviewLoading] = useState(false);
-  const [executing, setExecuting] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
-  // Initial loads
-  useEffect(() => {
-  const controller = new AbortController();
-  let ignore = false;
-    Promise.all([
-      fetch('/api/tenant/members', { signal: controller.signal }).then(r => r.ok ? r.json() as Promise<MembersResponse> : { data: [] }),
-      fetch('/api/tenant/me', { signal: controller.signal }).then(r => r.ok ? r.json() as Promise<MeResponse> : {} as MeResponse),
-      fetch('/api/tenant/teams', { signal: controller.signal }).then(r => r.ok ? r.json() as Promise<TeamsResponse> : { data: [] }),
-    ]).then(([mem, me, tms]) => { if (ignore) return;
-      setMembers((mem.data ?? []).map((m) => ({
-        user_id: m.userId, full_name: m.fullName ?? m.email, email: m.email, role_slug: m.roleSlug ?? '',
-       } )));
-      setMe({ id: me?.user?.id ?? '', is_admin: me?.is_admin ?? false });
-      setTeams(tms.data ?? []);
-    }).catch(e => { if ((e as Error)?.name === 'AbortError') return; throw e; })
-      .finally(() => { if (!ignore) setLoadingMembers(false); });
-    return () => { ignore = true; controller.abort(); };
-}, []);
+  // #1328: reads via TanStack Query (were parallel raw fetch + useEffect).
+  const { data: membersData, isLoading: loadingMembers } = useApiQuery<MembersResponse>(
+    ['tenant', 'members', 'for-bulk-transfer'],
+    '/api/tenant/members',
+  );
+  const { data: meData } = useApiQuery<MeResponse>(['tenant', 'me'], '/api/tenant/me');
+  const { data: teamsData } = useApiQuery<TeamsResponse>(
+    ['tenant', 'teams', 'for-bulk-transfer'],
+    '/api/tenant/teams',
+  );
+  const members: Member[] = useMemo(
+    () => (membersData?.data ?? []).map((m) => ({
+      user_id: m.userId, full_name: m.fullName ?? m.email, email: m.email, role_slug: m.roleSlug ?? '',
+    })),
+    [membersData],
+  );
+  const me = meData ? { id: meData.user?.id ?? '', is_admin: meData.is_admin ?? false } : null;
+  const teams = teamsData?.data ?? [];
 
-  // Preview counts whenever from-user / only-open changes
-  useEffect(() => {
-    if (!fromUser) { setCounts(null); return; }
-    const controller = new AbortController();
-    setPreviewLoading(true);
-    fetch(`/api/tenant/admin/bulk-transfer?from_user_id=${fromUser}&only_open=${onlyOpen}`, { signal: controller.signal })
-      .then(r => r.ok ? r.json() : { counts: null })
-      .then(d => { if (controller.signal.aborted) return; setCounts(d.counts ?? null); })
-      .catch(e => { if ((e as Error)?.name === 'AbortError') return; throw e; })
-      .finally(() => { if (!controller.signal.aborted) setPreviewLoading(false); });
-    return () => controller.abort();
-  }, [fromUser, onlyOpen]);
+  // Preview counts keyed on from-user + only-open (was a fetch in an effect).
+  const PREVIEW_KEY = ['tenant', 'admin', 'bulk-transfer', 'preview', { fromUser, onlyOpen }] as const;
+  const { data: previewData, isFetching: previewLoading } = useApiQuery<{ counts?: Counts | null }>(
+    PREVIEW_KEY,
+    `/api/tenant/admin/bulk-transfer?from_user_id=${fromUser}&only_open=${onlyOpen}`,
+    { enabled: !!fromUser },
+  );
+  const counts: Counts | null = fromUser ? (previewData?.counts ?? null) : null;
 
   const totalSelected = useMemo(() => {
     if (!counts) return 0;
@@ -92,33 +82,38 @@ export default function BulkTransferPage() {
 
   const valid = fromUser && toUser && fromUser !== toUser && enabledResources.size > 0 && totalSelected > 0;
 
-  const execute = async () => {
-    if (!valid) return;
-    setExecuting(true);
-    setConfirmOpen(false);
-    const res = await fetch('/api/tenant/admin/bulk-transfer', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        from_user_id: fromUser,
-        to_user_id: toUser,
-        to_team_id: toTeam || undefined,
-        resources: Array.from(enabledResources),
-        only_open: onlyOpen,
-      }),
-    });
-    const d = await res.json();
-    if (res.ok) {
-      toast.success(`Transferred ${d.total ?? 0} record(s) to ${toMember?.full_name ?? 'teammate'}`);
-      // Refresh counts
+  const refreshPreview = () => queryClient.invalidateQueries({ queryKey: PREVIEW_KEY });
+
+  const executeMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch('/api/tenant/admin/bulk-transfer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          from_user_id: fromUser,
+          to_user_id: toUser,
+          to_team_id: toTeam || undefined,
+          resources: Array.from(enabledResources),
+          only_open: onlyOpen,
+        }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error ?? 'Failed to transfer');
+      return d.total ?? 0;
+    },
+    onSuccess: (total) => {
+      toast.success(`Transferred ${total} record(s) to ${toMember?.full_name ?? 'teammate'}`);
       setEnabledResources(new Set(['leads', 'contacts', 'deals', 'tasks', 'tickets']));
-      const refresh = await fetch(`/api/tenant/admin/bulk-transfer?from_user_id=${fromUser}&only_open=${onlyOpen}`);
-      const r2 = await refresh.json();
-      setCounts(r2.counts ?? null);
-    } else {
-      toast.error(d.error ?? 'Failed to transfer');
-    }
-    setExecuting(false);
+      refreshPreview();
+    },
+    onError: (e: Error) => toast.error(e.message || 'Failed to transfer'),
+  });
+  const executing = executeMutation.isPending;
+
+  const execute = () => {
+    if (!valid) return;
+    setConfirmOpen(false);
+    executeMutation.mutate();
   };
 
   if (!loadingMembers && me && !me.is_admin) {
@@ -202,12 +197,7 @@ export default function BulkTransferPage() {
           <div className="flex items-center justify-between flex-wrap gap-2">
             <p className="text-sm font-semibold">Records owned by {fromMember?.full_name ?? '…'}</p>
             <button
-              onClick={() => {
-                setPreviewLoading(true);
-                fetch(`/api/tenant/admin/bulk-transfer?from_user_id=${fromUser}&only_open=${onlyOpen}`)
-                  .then(r => r.json()).then(d => setCounts(d.counts ?? null))
-                  .finally(() => setPreviewLoading(false));
-              }}
+              onClick={refreshPreview}
               className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-border text-xs hover:bg-accent transition-colors">
               <RefreshCw className={cn('w-3.5 h-3.5', previewLoading && 'animate-spin')} />
               Refresh
