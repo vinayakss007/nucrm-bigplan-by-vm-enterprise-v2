@@ -7,7 +7,6 @@ import { requireTenantCtx, can } from '@/lib/tenant/context';
 import { db } from '@/drizzle/db';
 import { 
   contacts as contactsTable, 
-  activities as activitiesTable, 
   deals as dealsTable, 
   tasks as tasksTable, 
   companies as companiesTable, 
@@ -28,6 +27,7 @@ import { eq, and, sql, desc, isNull } from 'drizzle-orm';
 import { notFound } from 'next/navigation';
 import ContactDetailClient from '@/components/tenant/contact-detail-client';
 import { withTenantScope } from '@/lib/api/with-api-route';
+import { getActivityTimeline } from '@/lib/activity/timeline';
 
 export default async function ContactDetailPage({ params }: { params: Promise<{ id: string }> }) {
   return withTenantScope(async () => {
@@ -52,21 +52,10 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
     ))
     .limit(1),
 
-    db.select({
-      id: activitiesTable.id,
-      entityType: activitiesTable.entityType,
-      entityId: activitiesTable.entityId,
-      eventType: activitiesTable.eventType,
-      metadata: activitiesTable.metadata,
-      createdAt: activitiesTable.createdAt,
-      full_name: usersTable.fullName,
-      avatar_url: usersTable.avatarUrl
-    })
-    .from(activitiesTable)
-    .leftJoin(usersTable, eq(usersTable.id, activitiesTable.userId))
-    .where(and(eq(activitiesTable.contactId, contactId), eq(activitiesTable.tenantId, ctx.tenantId)))
-    .orderBy(desc(activitiesTable.createdAt))
-    .limit(100),
+    // #1820: unified activity timeline — merges activities + calls + notes for
+    // this contact into one chronological feed (previously the Activity tab
+    // read only the `activities` table; calls were shown in a separate tab).
+    getActivityTimeline('contact', contactId, ctx.tenantId, 100),
 
     db.select({
       id: dealsTable.id,
