@@ -21,6 +21,11 @@ const MAX_WAITING_CLIENTS = 50;
 // already guard against hangs, and idle capacity may free up.
 let lastExhaustionWarnAt = 0;
 
+// #1837: throttle the RLS-reset-on-release failure log so a persistently
+// failing (e.g. tearing-down) client can't flood the logs while still making
+// the failure observable rather than fully silent.
+let lastRlsResetWarnAt = 0;
+
 function warnPoolSaturation(waitingCount: number): void {
   const now = Date.now();
   if (now - lastExhaustionWarnAt >= 30_000) {
@@ -212,12 +217,23 @@ export function getPool(): Pool {
     // issues the same reset in its finally block; keeping both is intentional.
     if (!pgBouncer) {
       global.__pgPool.on('release', (_err: Error | undefined, client: PoolClient) => {
-        // Fire-and-forget: RESET cannot fail meaningfully, and any error is
-        // surfaced via the pool 'error' handler. Swallow to avoid unhandled
-        // rejections on a client that may be tearing down.
+        // Fire-and-forget reset — keep it non-blocking so we never create an
+        // unhandled rejection on a client that may be tearing down. The next
+        // checkout also re-resets the GUCs, so a one-off failure is harmless.
+        // #1837: make a *persistent* failure observable instead of fully silent
+        // — log at most once every 60s so a tearing-down client can't flood.
         void client
           .query("SELECT set_config('app.current_tenant', '', false), set_config('app.current_user', '', false)")
-          .catch(() => { /* client removed/ending — next checkout re-resets */ });
+          .catch((err: unknown) => {
+            const now = Date.now();
+            if (now - lastRlsResetWarnAt >= 60_000) {
+              lastRlsResetWarnAt = now;
+              console.error(
+                '[db-pool] WARNING: RLS GUC reset on release failed (next checkout will re-reset):',
+                err instanceof Error ? err.message : String(err),
+              );
+            }
+          });
       });
     }
 
