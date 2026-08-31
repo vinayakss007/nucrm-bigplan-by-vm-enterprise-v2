@@ -8,6 +8,7 @@ import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
 import * as dlq from '@/lib/webhooks/dlq';
 import { readJsonBody } from '@/lib/api/validate';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 /**
@@ -51,6 +52,9 @@ export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+
+    const limited = await rateLimitMutating(request, 'webhooks', 'post');
+    if (limited) return limited;
 
     const body = await readJsonBody(request);
     const { action, ids, days } = body;

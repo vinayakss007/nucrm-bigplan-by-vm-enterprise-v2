@@ -11,6 +11,7 @@ import { scheduledReports } from '@/drizzle/schema';
 import { eq, desc } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
 import { readJsonBody } from '@/lib/api/validate';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 // #1838: wrapped in withApiRoute so requireTenantCtx()'s setTenantContext() and
@@ -35,6 +36,9 @@ export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireTenantCtx();
     if (ctx instanceof NextResponse) return ctx;
+
+    const limited = await rateLimitMutating(request, 'analytics', 'post');
+    if (limited) return limited;
 
     const body = await readJsonBody(request);
     const { name, type, frequency, recipients, config } = body;

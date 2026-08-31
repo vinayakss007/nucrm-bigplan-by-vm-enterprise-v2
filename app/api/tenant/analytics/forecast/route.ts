@@ -12,6 +12,7 @@ import { dealForecasts } from '@/drizzle/schema';
 import { revenueForecastSummary } from '@/drizzle/schema';
 import { eq, desc, sql } from 'drizzle-orm';
 import { readJsonBody } from '@/lib/api/validate';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 /**
@@ -56,6 +57,10 @@ export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+
+    const limited = await rateLimitMutating(request, 'analytics', 'post');
+    if (limited) return limited;
+
     if (!can(ctx, 'deals.edit')) {
       return NextResponse.json({ error: 'Permission denied' }, { status: 403 });
     }

@@ -23,6 +23,7 @@ import { getSignedPutUrl } from '@/lib/storage/s3';
 import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { logError } from '@/lib/errors-server';
 
@@ -62,6 +63,9 @@ const BLOCKED_EXTENSIONS = new Set([
 export const POST = withApiRoute(async (request: NextRequest) => {
   const ctx = await requireAuth(request);
   if (ctx instanceof NextResponse) return ctx;
+
+  const limited = await rateLimitMutating(request, 'documentsUpload', 'post');
+  if (limited) return limited;
 
   let raw;
   try { raw = await readJsonBody(request); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }

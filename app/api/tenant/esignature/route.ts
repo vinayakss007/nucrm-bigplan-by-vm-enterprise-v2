@@ -12,6 +12,7 @@ import { db } from '@/drizzle/db';
 import { signingRequests } from '@/drizzle/schema/esignature';
 import { eq, and, desc } from 'drizzle-orm';
 import { readJsonBody } from '@/lib/api/validate';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 /**
@@ -64,6 +65,10 @@ export const POST = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
+
+    const limited = await rateLimitMutating(req, 'esignature', 'post');
+    if (limited) return limited;
+
     const gate = await requireModule(ctx.tenantId, 'sales-quotes', ctx.isSuperAdmin);
     if (gate) return gate;
 

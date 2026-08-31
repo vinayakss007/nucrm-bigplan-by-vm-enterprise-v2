@@ -11,6 +11,7 @@ import { eq, and, isNull } from 'drizzle-orm';
 import { readJsonBody } from '@/lib/api/validate';
 import { apiError } from '@/lib/api-error';
 import { concurrencyGuard } from '@/lib/api/concurrency';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 export const GET = withApiRoute(async (request: NextRequest, { params }: { params: Promise<{ id: string; rowId: string }> }) => {
@@ -36,6 +37,9 @@ export const PATCH = withApiRoute(async (request: NextRequest, { params }: { par
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+
+    const limited = await rateLimitMutating(request, 'customEntities', 'patch');
+    if (limited) return limited;
 
     const { id, rowId } = await params;
 
@@ -110,6 +114,9 @@ export const DELETE = withApiRoute(async (request: NextRequest, { params }: { pa
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+
+    const limited = await rateLimitMutating(request, 'customEntities', 'delete');
+    if (limited) return limited;
 
     const { id, rowId } = await params;
     const [row] = await db

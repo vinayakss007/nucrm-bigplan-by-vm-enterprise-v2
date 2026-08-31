@@ -11,6 +11,7 @@ import { customPlugins } from '@/drizzle/schema';
 import { eq, and, isNull } from 'drizzle-orm';
 import { testPluginConnection } from '@/lib/plugins/engine';
 import type { PluginDefinition, PluginAction, PluginAuthConfig } from '@/lib/plugins/types';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 interface RouteContext {
@@ -21,6 +22,9 @@ export const POST = withApiRoute(async (request: NextRequest, context: RouteCont
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+
+    const limited = await rateLimitMutating(request, 'pluginExec', 'post');
+    if (limited) return limited;
 
     const { id } = await context.params;
 

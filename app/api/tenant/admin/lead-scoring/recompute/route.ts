@@ -12,12 +12,17 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { apiError } from '@/lib/api-error';
 import { logAudit } from '@/lib/audit';
 import { recomputeAllLeads } from '@/lib/ai/lead-scoring';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 export const POST = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
+
+    const limited = await rateLimitMutating(req, 'aiTemplates', 'post');
+    if (limited) return limited;
+
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
 
     const result = await recomputeAllLeads(ctx.tenantId, ctx.userId);

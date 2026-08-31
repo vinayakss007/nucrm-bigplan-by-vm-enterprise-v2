@@ -12,6 +12,7 @@ import { forms } from '@/drizzle/schema';
 import { eq, and, desc, sql } from 'drizzle-orm';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { createFormSchema } from '@/lib/api/schemas';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 export const GET = withApiRoute(async (req: NextRequest) => {
@@ -64,6 +65,9 @@ export const POST = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
+
+    const limited = await rateLimitMutating(req, 'forms', 'post');
+    if (limited) return limited;
 
     const modErr = await requireModule(ctx, 'forms-builder');
     if (modErr) return modErr;

@@ -13,6 +13,7 @@ import { db } from '@/drizzle/db';
 import { workflows } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
 import { executeWorkflow } from '@/lib/automation/workflow-executor';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 /**
@@ -24,6 +25,10 @@ export const POST = withApiRoute(async (request: NextRequest,
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+
+    const limited = await rateLimitMutating(request, 'workflows', 'post');
+    if (limited) return limited;
+
     if (!can(ctx, 'automations.manage')) {
       return NextResponse.json({ error: 'Permission denied' }, { status: 403 });
     }

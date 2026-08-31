@@ -10,6 +10,7 @@ import { db } from '@/drizzle/db';
 import { contacts, companies, deals, tasks, leads } from '@/drizzle/schema';
 import { eq, and, desc, sql, gt, lt } from 'drizzle-orm';
 import { readJsonBody } from '@/lib/api/validate';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { logError } from '@/lib/errors-server';
 
@@ -56,6 +57,9 @@ export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+
+    const limited = await rateLimitMutating(request, 'reportRun', 'post');
+    if (limited) return limited;
 
     const { report_type, filters, limit = 100 } = await readJsonBody(request);
 

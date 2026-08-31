@@ -13,12 +13,16 @@ import { users } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
 import { verifyPassword } from '@/lib/auth/session';
 import { verifyTOTP } from '@/lib/auth/totp';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+
+    const limited = await rateLimitMutating(request, 'twoFactor', 'post');
+    if (limited) return limited;
 
     // readJsonBody turns a malformed body into a 400 (not a 500);
     // validateBody then enforces password presence and TOTP shape.

@@ -25,6 +25,7 @@ import { apiError } from '@/lib/api-error';
 import { logAudit } from '@/lib/audit';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { tagActionSchema } from '@/lib/api/schemas';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 type Counts = { leads: number; contacts: number; companies: number; total: number };
@@ -131,6 +132,10 @@ export const POST = withApiRoute(async (req: NextRequest) => {
   try {
     ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
+
+    const limited = await rateLimitMutating(req, 'settings', 'post');
+    if (limited) return limited;
+
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
 
     const body = await readJsonBody(req);

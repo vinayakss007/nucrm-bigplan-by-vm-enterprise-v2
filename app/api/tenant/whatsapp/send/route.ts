@@ -15,6 +15,7 @@ import { db } from '@/drizzle/db';
 import { integrations, whatsappConversations, whatsappMessages } from '@/drizzle/schema';
 import { eq, and, desc, sql } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { logError } from '@/lib/errors-server';
 
@@ -22,6 +23,9 @@ export const POST = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
+
+    const limited = await rateLimitMutating(req, 'whatsapp', 'post');
+    if (limited) return limited;
 
     const rawBody = await readJsonBody(req);
     const validated = validateBody(sendWhatsAppSchema, rawBody);

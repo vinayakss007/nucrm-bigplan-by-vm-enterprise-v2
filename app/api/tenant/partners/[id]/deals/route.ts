@@ -12,6 +12,7 @@ import {
   getPartnerById,
   checkConflict,
 } from '@/lib/partners';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { logError } from '@/lib/errors-server';
 
@@ -51,6 +52,9 @@ export const POST = withApiRoute(async (request: NextRequest,
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+
+    const limited = await rateLimitMutating(request, 'partners', 'post');
+    if (limited) return limited;
 
     const partnerId = (await params).id;
     const body = await request.json();

@@ -10,6 +10,7 @@ import { markOnboardingComplete, recordOnboardingStep } from '@/lib/onboarding/c
 import { ModuleRegistry } from '@/lib/modules/registry';
 import { readJsonBody } from '@/lib/api/validate';
 import { db } from '@/drizzle/db';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { logError } from '@/lib/errors-server';
 
@@ -30,6 +31,9 @@ export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+
+    const limited = await rateLimitMutating(request, 'onboarding', 'post');
+    if (limited) return limited;
 
     const body = await readJsonBody(request);
     const { product_id, modules = [], company_name, pipeline_name } = body;

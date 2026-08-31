@@ -13,6 +13,7 @@ import { eq, and, desc, ne, sql } from 'drizzle-orm';
 import { createChatSession } from '@/lib/chat';
 import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 const createSessionSchema = z.object({
@@ -67,6 +68,9 @@ export const POST = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
+
+    const limited = await rateLimitMutating(req, 'chat', 'post');
+    if (limited) return limited;
 
     const moduleGate = await requireModule(ctx.tenantId, 'service-helpdesk', ctx.isSuperAdmin);
     if (moduleGate) return moduleGate;

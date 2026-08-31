@@ -14,6 +14,7 @@ import {
   getPartnersByTenant,
 } from '@/lib/partners';
 import type { PartnerStatus } from '@/lib/partners';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 // Mirrors the fields the POST handler consumes and its previous manual checks:
@@ -56,6 +57,9 @@ export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+
+    const limited = await rateLimitMutating(request, 'partners', 'post');
+    if (limited) return limited;
 
     const deny = requirePerm(ctx, 'partners.create');
     if (deny) return deny;

@@ -9,6 +9,7 @@ import { forms, formSubmissions } from '@/drizzle/schema';
 import { eq, sql, and, gte } from 'drizzle-orm';
 import { requireAuth } from '@/lib/auth/middleware';
 import { readJsonBody } from '@/lib/api/validate';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 interface FormField {
@@ -139,6 +140,10 @@ export const POST = withApiRoute(async (req: NextRequest,
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
+
+    const limited = await rateLimitMutating(req, 'analytics', 'post');
+    if (limited) return limited;
+
     const { id } = await params;
 
     // Only track analytics for forms owned by the caller's tenant

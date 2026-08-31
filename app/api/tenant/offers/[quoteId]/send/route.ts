@@ -36,6 +36,7 @@ import {
   canTransition,
 } from '@/lib/offers';
 import { readJsonBody } from '@/lib/api/validate';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { logError } from '@/lib/errors-server';
 
@@ -49,6 +50,9 @@ export const POST = withApiRoute(async (req: NextRequest, { params }: { params: 
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
+
+    const limited = await rateLimitMutating(req, 'send', 'post');
+    if (limited) return limited;
 
     const { quoteId } = await params;
     if (!quoteId) return NextResponse.json({ error: 'quoteId required' }, { status: 400 });

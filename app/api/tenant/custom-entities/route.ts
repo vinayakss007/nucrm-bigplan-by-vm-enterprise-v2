@@ -12,6 +12,7 @@ import { eq, and, isNull, ilike, desc } from 'drizzle-orm';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { apiError } from '@/lib/api-error';
 import { z } from 'zod';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 const createEntitySchema = z.object({
@@ -67,6 +68,9 @@ export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+
+    const limited = await rateLimitMutating(request, 'customEntities', 'post');
+    if (limited) return limited;
 
     const rawBody = await readJsonBody(request);
     const validated = validateBody(createEntitySchema, rawBody);

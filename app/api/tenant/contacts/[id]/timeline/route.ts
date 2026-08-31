@@ -13,6 +13,7 @@ import { db } from '@/drizzle/db';
 import { activities, users, contacts } from '@/drizzle/schema';
 import { eq, and, desc, count } from 'drizzle-orm';
 import { parseLimitOffset } from '@/lib/api/query-params';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 /**
@@ -89,6 +90,10 @@ export const POST = withApiRoute(async (request: NextRequest,
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+
+    const limited = await rateLimitMutating(request, 'contacts', 'post');
+    if (limited) return limited;
+
     if (!can(ctx, 'contacts.edit')) {
       return NextResponse.json({ error: 'Permission denied' }, { status: 403 });
     }

@@ -11,12 +11,16 @@ import { integrations } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
 import { executeAction } from '@/lib/integrations/registry';
 import { readJsonBody } from '@/lib/api/validate';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+
+    const limited = await rateLimitMutating(request, 'pluginExec', 'post');
+    if (limited) return limited;
 
     const body = await readJsonBody(request);
     if (!body.instance_id || !body.action) {

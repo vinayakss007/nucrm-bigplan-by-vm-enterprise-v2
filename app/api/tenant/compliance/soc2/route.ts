@@ -13,6 +13,7 @@ import { complianceRequests } from '@/drizzle/schema/compliance';
 import { eq, and, desc } from 'drizzle-orm';
 import { generateSOC2Report } from '@/lib/compliance/soc2';
 import { readJsonBody } from '@/lib/api/validate';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 export const GET = withApiRoute(async (req: NextRequest) => {
@@ -46,6 +47,10 @@ export const POST = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
+
+    const limited = await rateLimitMutating(req, 'compliance', 'post');
+    if (limited) return limited;
+
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
 
     const moduleGate = await requireModule(ctx.tenantId, 'compliance', ctx.isSuperAdmin);

@@ -11,6 +11,7 @@ import { db } from '@/drizzle/db';
 import { ticketReplies, supportTickets, contacts } from '@/drizzle/schema';
 import { eq, and, isNull } from 'drizzle-orm';
 import { readJsonBody } from '@/lib/api/validate';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { interpolateTemplate } from '@/lib/sms';
 
@@ -18,6 +19,10 @@ export const POST = withApiRoute(async (request: NextRequest, { params }: { para
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+
+    const limited = await rateLimitMutating(request, 'tickets', 'post');
+    if (limited) return limited;
+
     const { id } = await params;
 
     const permErr = requirePerm(ctx, 'tickets.manage');

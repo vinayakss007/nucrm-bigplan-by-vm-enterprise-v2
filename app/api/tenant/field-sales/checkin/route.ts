@@ -13,6 +13,7 @@ import {
   createCheckIn,
   getUserCheckIns,
 } from '@/lib/field-sales/geo-checkin';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 const createCheckInSchema = z.object({
@@ -34,6 +35,9 @@ export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+
+    const limited = await rateLimitMutating(request, 'fieldSales', 'post');
+    if (limited) return limited;
 
     const raw = await readJsonBody(request);
     const parsed = validateBody(createCheckInSchema, raw);

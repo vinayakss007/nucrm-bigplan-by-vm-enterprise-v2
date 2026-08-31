@@ -13,6 +13,7 @@ import {
 } from '@/lib/currency';
 import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 const setCurrencySchema = z.object({
@@ -70,6 +71,9 @@ export const POST = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
+
+    const limited = await rateLimitMutating(req, 'currency', 'post');
+    if (limited) return limited;
 
     const raw = await readJsonBody(req);
     const parsed = validateBody(setCurrencySchema, raw);

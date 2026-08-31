@@ -28,6 +28,7 @@ import { logAudit } from '@/lib/audit';
 import { createNotification } from '@/lib/notifications';
 import { apiError } from '@/lib/api-error';
 import { logError } from '@/lib/errors-server';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 const assignSchema = z.object({
@@ -39,6 +40,9 @@ export const POST = withApiRoute(async (request: NextRequest, { params }: { para
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+
+    const limited = await rateLimitMutating(request, 'leads', 'post');
+    if (limited) return limited;
 
     if (!can(ctx, 'leads.edit')) {
       return NextResponse.json({ error: 'Permission denied' }, { status: 403 });

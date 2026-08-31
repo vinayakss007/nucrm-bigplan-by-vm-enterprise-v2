@@ -7,12 +7,17 @@ import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { requireAuth, can } from '@/lib/auth/middleware';
 import { readJsonBody } from '@/lib/api/validate';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+
+    const limited = await rateLimitMutating(request, 'permissions', 'post');
+    if (limited) return limited;
+
     const { permission } = await readJsonBody(request);
     if (!permission) return NextResponse.json({ error: 'permission required' }, { status: 400 });
     return NextResponse.json({ allowed: can(ctx, permission), roleSlug: ctx.roleSlug });

@@ -11,12 +11,16 @@ import { users } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
 import { randomBytes, createHash } from 'crypto';
 import * as QRCode from 'qrcode';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+
+    const limited = await rateLimitMutating(request, 'twoFactor', 'post');
+    if (limited) return limited;
 
     // Generate TOTP secret (20 bytes = 32 base32 chars)
     // For real TOTP, we should use a base32 encoded string.

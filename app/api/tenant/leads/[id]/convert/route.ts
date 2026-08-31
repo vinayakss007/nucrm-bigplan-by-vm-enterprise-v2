@@ -17,6 +17,7 @@ import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { convertLeadSchema } from '@/lib/api/schemas';
 import { requireAuth, can } from '@/lib/auth/middleware';
 import { convertLeadCore } from '@/lib/leads/convert';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 export const POST = withApiRoute(async (request: NextRequest, 
@@ -24,6 +25,9 @@ export const POST = withApiRoute(async (request: NextRequest,
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+
+    const limited = await rateLimitMutating(request, 'leads', 'post');
+    if (limited) return limited;
 
     if (!can(ctx, 'leads.edit')) {
       return NextResponse.json({ error: 'Permission denied' }, { status: 403 });

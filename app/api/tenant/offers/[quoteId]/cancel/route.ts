@@ -19,12 +19,16 @@ import { eq, and, isNull, sql } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { logAudit } from '@/lib/audit';
 import { canTransition } from '@/lib/offers';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 export const POST = withApiRoute(async (req: NextRequest, { params }: { params: Promise<{ quoteId: string }> }) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
+
+    const limited = await rateLimitMutating(req, 'quotes', 'post');
+    if (limited) return limited;
 
     const { quoteId } = await params;
     if (!quoteId) return NextResponse.json({ error: 'quoteId required' }, { status: 400 });

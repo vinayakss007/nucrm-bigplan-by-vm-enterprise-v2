@@ -10,6 +10,7 @@ import { customEntities, customEntityData } from '@/drizzle/schema';
 import { eq, and, isNull, desc, sql } from 'drizzle-orm';
 import { readJsonBody } from '@/lib/api/validate';
 import { apiError } from '@/lib/api-error';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 export const GET = withApiRoute(async (request: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
@@ -52,6 +53,9 @@ export const POST = withApiRoute(async (request: NextRequest, { params }: { para
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+
+    const limited = await rateLimitMutating(request, 'customEntities', 'post');
+    if (limited) return limited;
 
     const entityId = (await params).id;
 

@@ -15,6 +15,7 @@ import { db } from '@/drizzle/db';
 import { leadWarmingCampaigns } from '@/drizzle/schema/lead-warming';
 import { eq, and, desc, isNull } from 'drizzle-orm';
 import { readJsonBody } from '@/lib/api/validate';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 export const GET = withApiRoute(async (req: NextRequest) => {
@@ -58,6 +59,9 @@ export const POST = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
+
+    const limited = await rateLimitMutating(req, 'leadWarming', 'post');
+    if (limited) return limited;
 
     const gate = await requireAiFeature(ctx, 'ai_lead_warming');
     if (gate) return gate;

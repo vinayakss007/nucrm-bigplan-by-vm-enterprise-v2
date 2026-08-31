@@ -22,6 +22,7 @@ import {
   stripeFetch,
   type StripeBillingPortalSession,
 } from '@/lib/stripe';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { logError } from '@/lib/errors-server';
 
@@ -29,6 +30,10 @@ export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+
+    const limited = await rateLimitMutating(request, 'billing', 'post');
+    if (limited) return limited;
+
     if (!ctx.isAdmin) {
       return NextResponse.json({ error: 'Only workspace admins can manage billing.' }, { status: 403 });
     }

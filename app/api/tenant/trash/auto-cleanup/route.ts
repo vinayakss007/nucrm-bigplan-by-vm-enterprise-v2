@@ -9,6 +9,7 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { contacts, companies, deals, tasks, leads, platformSettings } from '@/drizzle/schema';
 import { eq, and, isNotNull, lt, sql } from 'drizzle-orm';
+import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { logError } from '@/lib/errors-server';
 
@@ -30,6 +31,10 @@ export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+
+    const limited = await rateLimitMutating(request, 'trash', 'post');
+    if (limited) return limited;
+
     if (!ctx.isAdmin) {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }

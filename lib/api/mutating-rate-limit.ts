@@ -79,6 +79,35 @@ const MUTATING_LIMITS: Record<string, { post: number; patch: number; delete: num
   impersonate: { post: 5, patch: 5, delete: 5 },
   joinTenant: { post: 5, patch: 5, delete: 5 },
   selectiveRestore: { post: 3, patch: 3, delete: 3 },
+  // Auth / account security — very strict (brute-force & abuse surface)
+  twoFactor: { post: 5, patch: 5, delete: 5 },
+  invite: { post: 10, patch: 10, delete: 10 },
+  onboarding: { post: 5, patch: 5, delete: 5 },
+  permissions: { post: 20, patch: 20, delete: 20 },
+  // Outbound messaging / external sends — strict (cost + spam/abuse surface)
+  sms: { post: 10, patch: 10, delete: 10 },
+  whatsapp: { post: 10, patch: 10, delete: 10 },
+  esignature: { post: 10, patch: 10, delete: 10 },
+  send: { post: 10, patch: 10, delete: 10 },
+  telegramTest: { post: 5, patch: 5, delete: 5 },
+  // AI / chat — expensive compute
+  chat: { post: 20, patch: 20, delete: 20 },
+  // Plugin execution — arbitrary/expensive server-side work
+  pluginExec: { post: 10, patch: 10, delete: 10 },
+  // Expensive analytics / report execution
+  reportRun: { post: 20, patch: 20, delete: 10 },
+  analytics: { post: 20, patch: 20, delete: 10 },
+  // Config-ish / low-frequency admin
+  customEntities: { post: 10, patch: 20, delete: 10 },
+  partners: { post: 10, patch: 20, delete: 10 },
+  leadWarming: { post: 15, patch: 30, delete: 10 },
+  fieldSales: { post: 30, patch: 30, delete: 10 },
+  compliance: { post: 5, patch: 5, delete: 5 },
+  currency: { post: 5, patch: 10, delete: 5 },
+  industryTemplates: { post: 5, patch: 10, delete: 5 },
+  tax: { post: 30, patch: 30, delete: 10 },
+  documentsUpload: { post: 20, patch: 20, delete: 10 },
+  settings: { post: 15, patch: 20, delete: 10 },
 };
 
 const DEFAULT_LIMITS = { post: 15, patch: 30, delete: 10 };
