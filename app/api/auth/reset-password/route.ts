@@ -36,50 +36,57 @@ export async function POST(request: NextRequest) {
 
     const tokenHash = createHash('sha256').update(token).digest('hex');
 
-    const [reset] = await db
-      .select()
-      .from(passwordResets)
-      .where(and(
-        eq(passwordResets.token, tokenHash),
-        isNull(passwordResets.deletedAt),
-        gt(passwordResets.expiresAt, new Date())
-      ))
-      .limit(1);
-
-    if (!reset) return NextResponse.json({ error: 'Invalid or expired reset link' }, { status: 400 });
-
     const newPasswordHash = await hashPassword(password);
-    const sessionToken = await createToken(reset.userId);
-    const sessionTokenHash = await hashToken(sessionToken);
 
-    await db.transaction(async (tx) => {
+    // Atomically CLAIM the reset token before doing anything else. Previously
+    // this route did a plain SELECT and only marked the token deleted later in
+    // the transaction, so two concurrent requests with the same valid token
+    // could both pass the SELECT and each reset the password / mint a session
+    // (TOCTOU double-use). The conditional UPDATE ... WHERE deleted_at IS NULL
+    // RETURNING lets exactly one request win: the row is claimed in a single
+    // atomic statement, and a second request gets zero rows back.
+    const claimed = await db.transaction(async (tx) => {
+      const [reset] = await tx
+        .update(passwordResets)
+        .set({ deletedAt: new Date() })
+        .where(and(
+          eq(passwordResets.token, tokenHash),
+          isNull(passwordResets.deletedAt),
+          gt(passwordResets.expiresAt, new Date())
+        ))
+        .returning({ id: passwordResets.id, userId: passwordResets.userId });
+
+      if (!reset) return null;
+
+      const sessionToken = await createToken(reset.userId);
+      const sessionTokenHash = await hashToken(sessionToken);
+
       // Update password
       await tx.update(users)
         .set({ passwordHash: newPasswordHash, updatedAt: new Date() })
         .where(eq(users.id, reset.userId));
-      
-      // Mark token used (deleted)
-      await tx.update(passwordResets)
-        .set({ deletedAt: new Date() })
-        .where(eq(passwordResets.id, reset.id));
-      
+
       // Invalidate all existing sessions
       await tx.delete(sessions)
         .where(eq(sessions.userId, reset.userId));
-      
+
       // Create new session
       await tx.insert(sessions).values({
         userId: reset.userId,
         tokenHash: sessionTokenHash,
         expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
       });
+
+      return { userId: reset.userId, sessionToken };
     });
 
-    await setSessionCookie(sessionToken);
+    if (!claimed) return NextResponse.json({ error: 'Invalid or expired reset link' }, { status: 400 });
+
+    await setSessionCookie(claimed.sessionToken);
 
     // Send Telegram password change alert
     sendTelegramToUser({
-      userId: reset.userId,
+      userId: claimed.userId,
       title: '🔑 Password Changed',
       message: 'Your account password has been successfully changed. If this wasn\'t you, contact support immediately.',
       icon: '⚠️',
