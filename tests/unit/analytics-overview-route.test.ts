@@ -52,6 +52,15 @@ vi.mock('@/lib/tenant/context', () => ({
 vi.mock('@/drizzle/db', () => ({ db: mockDb }));
 vi.mock('server-only', () => ({}));
 
+// #1615: the route runs inside withPinnedConnection (via withApiRoute). In unit
+// tests there is no real pool, so stub the primitive to run the callback
+// directly — otherwise getPool().connect() throws ECONNREFUSED 127.0.0.1:5432.
+// (matches tests/unit/conversion-funnel.test.ts, data-explorer.test.ts, etc.)
+vi.mock('@/lib/db/request-connection', () => ({
+  withPinnedConnection: <T>(fn: () => Promise<T>): Promise<T> => fn(),
+  getPinnedClient: () => undefined,
+}));
+
 // Recursively search a drizzle SQL/predicate object for a bound string value,
 // guarding against the circular table<->column references drizzle builds.
 function containsValue(node: unknown, target: string, seen = new Set<unknown>()): boolean {
