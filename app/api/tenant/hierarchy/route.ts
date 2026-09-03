@@ -82,16 +82,19 @@ export const POST = withApiRoute(async (req: NextRequest) => {
       if (!row) throw new Error('Failed to create hierarchy entry');
 
       // Add permissions if provided
-      if (parsed.data.permissions && parsed.data.permissions.length > 0 && row) {
+      if (parsed.data.permissions && parsed.data.permissions.length > 0) {
+        const hierarchyId = row.id;
         const allowedPerms = ['view_data', 'manage_users', 'share_contacts', 'aggregate_reports'] as const;
-        for (const perm of parsed.data.permissions) {
-          if (allowedPerms.includes(perm as typeof allowedPerms[number])) {
-            await tx.insert(hierarchyPermissions).values({
-              tenantId: ctx.tenantId,
-              hierarchyId: row.id,
-              permission: perm as typeof allowedPerms[number],
-            });
-          }
+        const valuesToInsert = parsed.data.permissions
+          .filter((perm) => allowedPerms.includes(perm as typeof allowedPerms[number]))
+          .map((perm) => ({
+            tenantId: ctx.tenantId,
+            hierarchyId: hierarchyId, // We just inserted the hierarchy row
+            permission: perm as typeof allowedPerms[number],
+          }));
+
+        if (valuesToInsert.length > 0) {
+          await tx.insert(hierarchyPermissions).values(valuesToInsert);
         }
       }
     });
