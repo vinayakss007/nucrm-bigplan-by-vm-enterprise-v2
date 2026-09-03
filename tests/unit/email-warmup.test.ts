@@ -120,7 +120,7 @@ describe('Email Warmup Engine', () => {
       (db.select as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
         from: vi.fn(() => ({
           innerJoin: vi.fn(() => ({
-            where: vi.fn(() => Promise.resolve([{ config: mockConfig, sentToday: 0 }])),
+            where: vi.fn(() => Promise.resolve([{ config: mockConfig, sentToday: 0, bouncesLast7Days: 0, sendsLast7Days: 10 }])),
           })),
         })),
       });
@@ -164,7 +164,7 @@ describe('Email Warmup Engine', () => {
       (db.select as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
         from: vi.fn(() => ({
           innerJoin: vi.fn(() => ({
-            where: vi.fn(() => Promise.resolve([{ config: mockConfig, sentToday: 0 }])),
+            where: vi.fn(() => Promise.resolve([{ config: mockConfig, sentToday: 0, bouncesLast7Days: 0, sendsLast7Days: 10 }])),
           })),
         })),
       });
