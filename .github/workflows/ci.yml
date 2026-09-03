@@ -19,6 +19,7 @@ env:
   SETUP_KEY: ${{ secrets.SETUP_KEY || 'ci-setup-key-safe-value-that-is-32characters-long' }}
   ALLOWED_ORIGINS: http://localhost:3000
   DATABASE_SSL: "false"
+  NODE_OPTIONS: "--max-old-space-size=8192"
 
 jobs:
   lint-typecheck:
