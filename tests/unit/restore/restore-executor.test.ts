@@ -269,8 +269,8 @@ describe('rollbackToSnapshot', () => {
     });
 
     await rollbackToSnapshot('snap-1', TENANT_A);
-    // 1 DELETE + 2 INSERTs
-    expect(mocks.txExecute).toHaveBeenCalledTimes(3);
+    // 1 DELETE + 1 chunked INSERT
+    expect(mocks.txExecute).toHaveBeenCalledTimes(2);
   });
 
   it('still deletes current rows for a table whose snapshot is empty', async () => {
