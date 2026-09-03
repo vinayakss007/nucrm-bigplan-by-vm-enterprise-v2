@@ -313,7 +313,6 @@ async function performTenantBackup(backupId: string, tenantId: string, includeTa
       })
       .where(eq(tenantBackupRecords.id, backupId));
 
-    console.log(`[Tenant Backup ${backupId}] Completed: ${result.tableCount} tables, ${result.totalRecords} records, ${result.dataSize} bytes`);
   } catch (err: unknown) {
     const duration = Date.now() - startTime;
     const errorMessage = err instanceof Error ? err.message : String(err);
@@ -391,7 +390,6 @@ async function runTenantRestore(restoreId: string, backupId: string, tenantId: s
       })
       .where(eq(tenantRestoreRecords.id, restoreId));
 
-    console.log(`[Tenant Restore ${restoreId}] Completed: ${result.tablesRestored} tables, ${result.recordsRestored} records restored`);
   } catch (err: unknown) {
     const duration = Date.now() - startTime;
     const errorMessage = err instanceof Error ? err.message : String(err);
