@@ -219,12 +219,19 @@ export async function rollbackToSnapshot(snapshotId: string, tenantId: string): 
       // Restore from snapshot
       if (Array.isArray(rows) && rows.length > 0) {
         const columns = Object.keys(rows[0]);
-        for (const row of rows) {
-          const colIdents = columns.map(c => sql.identifier(c));
-          const valParams = columns.map(c => sql`${row[c]}`);
+        const colIdents = columns.map(c => sql.identifier(c));
+
+        const chunkSize = 1000;
+        for (let i = 0; i < rows.length; i += chunkSize) {
+          const chunk = rows.slice(i, i + chunkSize);
+          const valueFragments = chunk.map(row => {
+            const valParams = columns.map(c => sql`${row[c]}`);
+            return sql`(${sql.join(valParams, sql`, `)})`;
+          });
+
           await tx.execute(sql`
             INSERT INTO ${sql.identifier(safeTable)} (${sql.join(colIdents, sql`, `)})
-            VALUES (${sql.join(valParams, sql`, `)})
+            VALUES ${sql.join(valueFragments, sql`, `)}
           `);
         }
       }
