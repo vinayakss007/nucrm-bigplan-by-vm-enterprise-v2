@@ -258,3 +258,25 @@ describe('getIpWhitelistEnabled', () => {
     expect(result).toBe(true);
   });
 });
+
+describe('getTenantWhitelist', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('handles corrupted storage data gracefully and returns empty array', async () => {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (db.select as any).mockReturnValue({
+      from: vi.fn(() => ({
+        where: vi.fn(() => ({
+          limit: vi.fn(() => Promise.resolve([{ value: '{invalid' }])),
+        })),
+      })),
+    });
+
+    const { getTenantWhitelist } = await import('@/lib/ip-whitelist');
+    const result = await getTenantWhitelist('tenant-1');
+
+    expect(result).toEqual([]);
+  });
+});
