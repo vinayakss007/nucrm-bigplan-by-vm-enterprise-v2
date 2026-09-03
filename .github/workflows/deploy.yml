@@ -74,7 +74,7 @@ jobs:
             npm ci --no-audit --no-fund
 
             echo "Building..."
-            npm run build
+            NODE_OPTIONS="--max-old-space-size=8192" npm run build
 
             echo "Restarting app (pm2)..."
             pm2 restart web --update-env
@@ -98,7 +98,7 @@ jobs:
             if [ -z "$HEALTHY" ]; then
               echo "ERROR: app did not become healthy. Rolling back to previous commit."
               git checkout --force ${{ github.event.workflow_run.head_sha }}^
-              npm run build
+              NODE_OPTIONS="--max-old-space-size=8192" npm run build
               pm2 restart web --update-env
               pm2 save
               git checkout main
