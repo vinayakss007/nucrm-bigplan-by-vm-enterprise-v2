@@ -3,6 +3,8 @@
  * Copyright (c) 2026 abetworks.in. All Rights Reserved.
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
+import { WIDGET_REGISTRY } from '@/components/tenant/dashboard/widget-registry'
+
 interface CacheEntry {
   data: unknown
   expiresAt: number
@@ -55,7 +57,8 @@ export async function withCache(
 }
 
 export function invalidateWidgetCache(tenantId: string, ...widgetKeys: string[]) {
-  widgetKeys.forEach(key => cache.delete(`${tenantId}:${key}`))
+  const keys = widgetKeys.length ? widgetKeys : Object.keys(WIDGET_REGISTRY)
+  keys.forEach(key => cache.delete(`${tenantId}:${key}`))
 }
 
 export function getCacheStats() {

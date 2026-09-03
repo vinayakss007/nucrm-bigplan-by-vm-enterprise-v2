@@ -86,6 +86,45 @@ describe('widget-cache', () => {
     expect(callCount).toBe(3);
   });
 
+  it('invalidates all cache entries for a tenant when no keys are specified', async () => {
+    let callCount = 0;
+    const fetcher = async () => {
+      callCount++;
+      return jsonResponse({ value: callCount });
+    };
+
+    // We import this just for the test to grab known widget keys
+    const { WIDGET_REGISTRY } = await import('@/components/tenant/dashboard/widget-registry');
+    const defaultWidgets = Object.keys(WIDGET_REGISTRY).slice(0, 3);
+
+    // Populate t1
+    for (const widget of defaultWidgets) {
+      await withCache('t1', widget, 60, fetcher);
+    }
+
+    // Populate t2
+    for (const widget of defaultWidgets) {
+      await withCache('t2', widget, 60, fetcher);
+    }
+
+    expect(callCount).toBe(6);
+
+    // Invalidate all for t1
+    invalidateWidgetCache('t1');
+
+    // Fetch for t1 (cache miss, callCount should increase by 3)
+    for (const widget of defaultWidgets) {
+      await withCache('t1', widget, 60, fetcher);
+    }
+    expect(callCount).toBe(9);
+
+    // Fetch for t2 (cache hit, callCount remains 9)
+    for (const widget of defaultWidgets) {
+      await withCache('t2', widget, 60, fetcher);
+    }
+    expect(callCount).toBe(9);
+  });
+
   it('reports cache stats', () => {
     expect(getCacheStats()).toEqual({ size: 0, maxEntries: 500 });
   });

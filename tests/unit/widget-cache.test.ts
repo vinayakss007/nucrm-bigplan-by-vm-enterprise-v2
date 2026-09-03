@@ -138,6 +138,45 @@ describe('widget-cache', () => {
     expect(fetcher).toHaveBeenCalledTimes(3);
   });
 
+  it('invalidateWidgetCache removes all widget entries for a tenant if no keys are provided', async () => {
+    const fetcher = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({}), { headers: { 'content-type': 'application/json' } }),
+    );
+    const { withCache, invalidateWidgetCache, clearCache } = await import('@/lib/dashboard/widget-cache');
+    const { WIDGET_REGISTRY } = await import('@/components/tenant/dashboard/widget-registry');
+
+    clearCache();
+
+    // Populate cache for target tenant with some default widgets
+    const defaultWidgets = Object.keys(WIDGET_REGISTRY).slice(0, 3);
+    for (const widget of defaultWidgets) {
+      await withCache('t1', widget, 60, fetcher);
+    }
+
+    // Populate cache for another tenant with the same widgets
+    for (const widget of defaultWidgets) {
+      await withCache('t2', widget, 60, fetcher);
+    }
+
+    // Should be 6 calls initially
+    expect(fetcher).toHaveBeenCalledTimes(6);
+
+    // Invalidate all for t1
+    invalidateWidgetCache('t1');
+
+    // Fetch again for t1 (should cache miss, causing 3 new calls)
+    for (const widget of defaultWidgets) {
+      await withCache('t1', widget, 60, fetcher);
+    }
+    expect(fetcher).toHaveBeenCalledTimes(9);
+
+    // Fetch again for t2 (should cache hit, no new calls)
+    for (const widget of defaultWidgets) {
+      await withCache('t2', widget, 60, fetcher);
+    }
+    expect(fetcher).toHaveBeenCalledTimes(9);
+  });
+
   it('getCacheStats returns size and maxEntries', async () => {
     const fetcher = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({}), { headers: { 'content-type': 'application/json' } }),
