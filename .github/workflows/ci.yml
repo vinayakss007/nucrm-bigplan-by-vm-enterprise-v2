@@ -36,9 +36,13 @@ jobs:
 
       - name: Lint
         run: npm run lint
+        env:
+          NODE_OPTIONS: "--max-old-space-size=6144"
 
       - name: Typecheck
         run: npm run typecheck
+        env:
+          NODE_OPTIONS: "--max-old-space-size=6144"
 
       - name: RLS route-coverage guard (#1838)
         run: npm run guard:rls
