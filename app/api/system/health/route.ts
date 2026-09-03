@@ -139,35 +139,27 @@ export const GET = withApiRoute(async (request: NextRequest) => {
 
   // 3. Disk space (backup directory)
   try {
-    const { execFileSync } = await import('child_process');
+    const { statfs } = await import('fs/promises');
     const backupDir = process.env['BACKUP_DIR'] || '/tmp/backups';
-    // Validate directory path to prevent command injection
-    if (!/^[a-zA-Z0-9_\-/.~]+$/.test(backupDir)) {
-      health.disk = { status: 'degraded', error: 'Invalid BACKUP_DIR path' };
-    } else {
-      let dfOutput: string;
-      try {
-        dfOutput = execFileSync('df', ['-B1', backupDir], { encoding: 'utf-8' });
-      } catch {
-        // Fallback to root filesystem
-        dfOutput = execFileSync('df', ['-B1', '/'], { encoding: 'utf-8' });
-      }
-      const lines = dfOutput.trim().split('\n');
-      const parts = lines[1]?.split(/\s+/);
-      if (parts && parts.length >= 4) {
-        const total = parseInt(parts[1] || '0', 10);
-        const available = parseInt(parts[3] || '0', 10);
-        const usagePercent = total > 0 ? Math.round(((total - available) / total) * 100) : 0;
-        health.disk = {
-          status: usagePercent > 90 ? 'unhealthy' : usagePercent > 75 ? 'degraded' : 'healthy',
-          freeBytes: available,
-          totalBytes: total,
-          usagePercent,
-        };
-      } else {
-        health.disk = { status: 'healthy' };
-      }
+
+    let stats;
+    try {
+      stats = await statfs(backupDir);
+    } catch {
+      // Fallback to root filesystem
+      stats = await statfs('/');
     }
+
+    const total = Number(stats.blocks) * Number(stats.bsize);
+    const available = Number(stats.bavail) * Number(stats.bsize);
+    const usagePercent = total > 0 ? Math.round(((total - available) / total) * 100) : 0;
+
+    health.disk = {
+      status: usagePercent > 90 ? 'unhealthy' : usagePercent > 75 ? 'degraded' : 'healthy',
+      freeBytes: available,
+      totalBytes: total,
+      usagePercent,
+    };
   } catch {
     health.disk = { status: 'degraded', error: 'Unable to check disk space' };
   }
