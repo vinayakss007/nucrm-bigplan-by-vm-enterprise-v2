@@ -50,4 +50,28 @@ describe('Cache (memory fallback)', () => {
     expect(fresh).toEqual({ data: 'fresh' });
     expect(calls).toBe(1);
   }, 5000);
+
+  it('evicts correctly based on LRU and size limits', async () => {
+    // Fill up to the limit MAX_CACHE_ENTRIES=1000
+    for (let i = 0; i < 1000; i++) {
+      await cacheSet(`lru:test:${i}`, `value${i}`);
+    }
+
+    // Ensure the first items are still present
+    const firstItem = await cacheGet('lru:test:0');
+    expect(firstItem).toBe('value0'); // This also moves it to the end (MRU)
+
+    // Add one more item to exceed 1000 items
+    await cacheSet('lru:test:1000', 'value1000');
+
+    // The least recently used item should now be 'lru:test:1' because 'lru:test:0' was accessed and moved to the end.
+    const evictedItem = await cacheGet('lru:test:1');
+    expect(evictedItem).toBeNull(); // Should be evicted
+
+    const mruItem = await cacheGet('lru:test:0');
+    expect(mruItem).toBe('value0'); // Should still be present
+
+    const newestItem = await cacheGet('lru:test:1000');
+    expect(newestItem).toBe('value1000');
+  });
 });
