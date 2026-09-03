@@ -9,6 +9,7 @@ on:
 
 env:
   NODE_ENV: test
+  NODE_OPTIONS: --max-old-space-size=8192
   DATABASE_URL: postgresql://postgres:postgres@localhost:5432/nucrm_test
   JWT_SECRET: ${{ secrets.JWT_SECRET || 'ci-jwt-secret-not-weak-at-all-32chars-long-enough' }}
   SESSION_SECRET: ${{ secrets.SESSION_SECRET || 'ci-session-secret-safe-value-32chars-long-enough' }}
