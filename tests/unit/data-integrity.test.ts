@@ -244,6 +244,14 @@ describe('verifyTenantBoundaries', () => {
     expect(result.clean).toBe(false);
     expect(result.errors[0]).toContain('Tenant-boundary discovery failed');
   });
+
+  it('handles non-Error objects thrown during discovery', async () => {
+    mocks.query.mockRejectedValue('string error');
+    const result = await verifyTenantBoundaries();
+    expect(result.checked).toBe(0);
+    expect(result.clean).toBe(false);
+    expect(result.errors[0]).toContain('string error');
+  });
 });
 
 describe('verifyAuditChainIntegrity', () => {
