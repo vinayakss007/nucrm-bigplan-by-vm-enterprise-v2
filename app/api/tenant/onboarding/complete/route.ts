@@ -39,19 +39,22 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     // than throwing, so a single module failing does not abort onboarding — the
     // intended product behavior. We surface how many succeeded in the response.
     let modulesInstalled = 0;
-    for (const moduleId of modules) {
-      try {
-        const result = await ModuleRegistry.install(ctx.tenantId, moduleId, ctx.userId);
-        if (result.ok) {
-          modulesInstalled++;
-        } else {
-          await logError({ error: result.error, context: 'Onboarding module install', requestMethod: 'POST', tenantId: ctx.tenantId, userId: ctx.userId, metadata: { moduleId } });
+
+    await Promise.allSettled(
+      modules.map(async (moduleId: string) => {
+        try {
+          const result = await ModuleRegistry.install(ctx.tenantId, moduleId, ctx.userId);
+          if (result.ok) {
+            modulesInstalled++;
+          } else {
+            await logError({ error: result.error, context: 'Onboarding module install', requestMethod: 'POST', tenantId: ctx.tenantId, userId: ctx.userId, metadata: { moduleId } });
+          }
+        } catch (err) {
+          await logError({ error: err, context: 'Onboarding module install', requestMethod: 'POST', tenantId: ctx.tenantId, userId: ctx.userId, metadata: { moduleId } });
+          // Don't fail the whole onboarding for one module
         }
-      } catch (err) {
-        await logError({ error: err, context: 'Onboarding module install', requestMethod: 'POST', tenantId: ctx.tenantId, userId: ctx.userId, metadata: { moduleId } });
-        // Don't fail the whole onboarding for one module
-      }
-    }
+      })
+    );
 
     // Record onboarding-progress writes atomically (#1049). Previously these ran
     // sequentially without a transaction, so a failure partway (e.g. after
