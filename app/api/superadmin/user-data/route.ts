@@ -316,23 +316,31 @@ export const POST = withApiRoute(async (request: NextRequest) => {
 
     const results: Record<string, { restored: number; errors: number }> = {};
 
+    const CHUNK_SIZE = 100;
+
     // Restore contacts
     if (records.contacts?.length) {
       let restored = 0;
       let errors = 0;
-      for (const contact of records.contacts) {
+      for (let i = 0; i < records.contacts.length; i += CHUNK_SIZE) {
+        const chunk = records.contacts.slice(i, i + CHUNK_SIZE);
         try {
-          const { id: _id, ...rest } = contact as Record<string, unknown>;
-          await db.insert(contacts).values({
-            ...rest,
-            tenantId: tenant_id,
-            assignedTo: user_id,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-            deletedAt: null,
-          } as typeof contacts.$inferInsert).onConflictDoNothing();
-          restored++;
-        } catch { errors++; }
+          const values = chunk.map((contact) => {
+            const { id: _id, ...rest } = contact as Record<string, unknown>;
+            return {
+              ...rest,
+              tenantId: tenant_id,
+              assignedTo: user_id,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+              deletedAt: null,
+            } as typeof contacts.$inferInsert;
+          });
+          await db.insert(contacts).values(values).onConflictDoNothing();
+          restored += chunk.length;
+        } catch {
+          errors += chunk.length;
+        }
       }
       results['contacts'] = { restored, errors };
     }
@@ -341,19 +349,25 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     if (records.deals?.length) {
       let restored = 0;
       let errors = 0;
-      for (const deal of records.deals) {
+      for (let i = 0; i < records.deals.length; i += CHUNK_SIZE) {
+        const chunk = records.deals.slice(i, i + CHUNK_SIZE);
         try {
-          const { id: _id, ...rest } = deal as Record<string, unknown>;
-          await db.insert(deals).values({
-            ...rest,
-            tenantId: tenant_id,
-            assignedTo: user_id,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-            deletedAt: null,
-          } as typeof deals.$inferInsert).onConflictDoNothing();
-          restored++;
-        } catch { errors++; }
+          const values = chunk.map((deal) => {
+            const { id: _id, ...rest } = deal as Record<string, unknown>;
+            return {
+              ...rest,
+              tenantId: tenant_id,
+              assignedTo: user_id,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+              deletedAt: null,
+            } as typeof deals.$inferInsert;
+          });
+          await db.insert(deals).values(values).onConflictDoNothing();
+          restored += chunk.length;
+        } catch {
+          errors += chunk.length;
+        }
       }
       results['deals'] = { restored, errors };
     }
@@ -362,18 +376,24 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     if (records.tasks?.length) {
       let restored = 0;
       let errors = 0;
-      for (const task of records.tasks) {
+      for (let i = 0; i < records.tasks.length; i += CHUNK_SIZE) {
+        const chunk = records.tasks.slice(i, i + CHUNK_SIZE);
         try {
-          const { id: _id, ...rest } = task as Record<string, unknown>;
-          await db.insert(tasks).values({
-            ...rest,
-            tenantId: tenant_id,
-            assignedTo: user_id,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-          } as typeof tasks.$inferInsert).onConflictDoNothing();
-          restored++;
-        } catch { errors++; }
+          const values = chunk.map((task) => {
+            const { id: _id, ...rest } = task as Record<string, unknown>;
+            return {
+              ...rest,
+              tenantId: tenant_id,
+              assignedTo: user_id,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            } as typeof tasks.$inferInsert;
+          });
+          await db.insert(tasks).values(values).onConflictDoNothing();
+          restored += chunk.length;
+        } catch {
+          errors += chunk.length;
+        }
       }
       results['tasks'] = { restored, errors };
     }
