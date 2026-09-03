@@ -53,45 +53,50 @@ export const POST = withApiRoute(async (req: NextRequest) => {
 
     await db.transaction(async (tx) => {
       // 1. Insert Custom Fields
-      for (const field of template.custom_fields) {
-        await tx.insert(customFieldDefs).values({
+      if (template.custom_fields && template.custom_fields.length > 0) {
+        const customFieldsToInsert = template.custom_fields.map((field) => ({
           tenantId: ctx.tenantId,
           entityType: field.entity,
           fieldKey: field.key,
           fieldLabel: field.label,
           fieldType: field.type
-        }).onConflictDoNothing();
+        }));
+        await tx.insert(customFieldDefs).values(customFieldsToInsert).onConflictDoNothing();
       }
 
       // 2. Insert Pipelines & Stages
-      for (const pipe of template.pipelines) {
-        const pipelineRows = await tx.insert(pipelines).values({
-          tenantId: ctx.tenantId,
-          name: pipe.name,
-        }).returning({ id: pipelines.id });
-        const firstRow = pipelineRows[0];
-        if (!firstRow) continue;
-        const pipelineId: string = firstRow.id;
-
-        for (const [i, stageName] of pipe.stages.entries()) {
-          await tx.insert(dealStages).values({
+      if (template.pipelines && template.pipelines.length > 0) {
+        for (const pipe of template.pipelines) {
+          const pipelineRows = await tx.insert(pipelines).values({
             tenantId: ctx.tenantId,
-            pipelineId: pipelineId,
-            name: stageName,
-            order: i,
-          });
+            name: pipe.name,
+          }).returning({ id: pipelines.id });
+          const firstRow = pipelineRows[0];
+          if (!firstRow) continue;
+          const pipelineId: string = firstRow.id;
+
+          if (pipe.stages && pipe.stages.length > 0) {
+            const stagesToInsert = pipe.stages.map((stageName, i) => ({
+              tenantId: ctx.tenantId,
+              pipelineId: pipelineId,
+              name: stageName,
+              order: i,
+            }));
+            await tx.insert(dealStages).values(stagesToInsert);
+          }
         }
       }
 
       // 3. Insert Automations
-      for (const auto of template.automations) {
-        await tx.insert(automations).values({
+      if (template.automations && template.automations.length > 0) {
+        const automationsToInsert = template.automations.map((auto) => ({
           tenantId: ctx.tenantId,
           name: auto.name,
           triggerType: auto.trigger,
           actions: [{ type: auto.action, config: auto.config }],
           isActive: true
-        }).onConflictDoNothing();
+        }));
+        await tx.insert(automations).values(automationsToInsert).onConflictDoNothing();
       }
     });
 
