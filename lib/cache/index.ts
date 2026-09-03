@@ -176,28 +176,25 @@ const MAX_CACHE_ENTRIES = 1000;
 const memoryCache = new Map<string, { value: any; expires: number; lastAccessed: number }>();
 
 function evictIfNecessary() {
-  if (memoryCache.size <= MAX_CACHE_ENTRIES) return;
+  if (memoryCache.size < MAX_CACHE_ENTRIES) return;
   
   // Evict oldest expired entries first
   const now = Date.now();
   for (const [key, item] of memoryCache.entries()) {
     if (now > item.expires) {
       memoryCache.delete(key);
-      if (memoryCache.size <= MAX_CACHE_ENTRIES) return;
+      if (memoryCache.size < MAX_CACHE_ENTRIES) return;
     }
   }
   
-  // If still over limit, evict least recently used
-  if (memoryCache.size > MAX_CACHE_ENTRIES) {
-    let oldestKey: string | null = null;
-    let oldestTime = Infinity;
-    for (const [key, item] of memoryCache.entries()) {
-      if (item.lastAccessed < oldestTime) {
-        oldestTime = item.lastAccessed;
-        oldestKey = key;
-      }
+  // If still at or over limit, evict least recently used (first item in map)
+  while (memoryCache.size >= MAX_CACHE_ENTRIES) {
+    const oldestKey = memoryCache.keys().next().value;
+    if (oldestKey !== undefined) {
+      memoryCache.delete(oldestKey);
+    } else {
+      break;
     }
-    if (oldestKey) memoryCache.delete(oldestKey);
   }
 }
 
@@ -222,6 +219,7 @@ export async function set(
       console.error('[Cache] Set error:', error);
       recordRedisFailure();
       // Fall through to memory cache
+      memoryCache.delete(`nucrm:${key}`);
       evictIfNecessary();
       memoryCache.set(`nucrm:${key}`, {
         value,
@@ -231,6 +229,7 @@ export async function set(
     }
   } else {
     // Fallback to memory cache
+    memoryCache.delete(`nucrm:${key}`);
     evictIfNecessary();
     memoryCache.set(`nucrm:${key}`, {
       value,
@@ -265,6 +264,11 @@ export async function get<T = any>(key: string): Promise<T | null> {
         return null;
       }
       item.lastAccessed = Date.now();
+
+      // Move to end of Map to maintain insertion order (LRU)
+      memoryCache.delete(`nucrm:${key}`);
+      memoryCache.set(`nucrm:${key}`, item);
+
       return item.value as T;
     }
   } else {
@@ -279,6 +283,10 @@ export async function get<T = any>(key: string): Promise<T | null> {
 
     // Update last accessed time for LRU
     item.lastAccessed = Date.now();
+
+    // Move to end of Map to maintain insertion order (LRU)
+    memoryCache.delete(`nucrm:${key}`);
+    memoryCache.set(`nucrm:${key}`, item);
 
     return item.value as T;
   }
