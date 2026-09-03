@@ -58,6 +58,24 @@ describe('record links service', () => {
     selectRows = [];
   });
 
+  describe('type guards', () => {
+    it('isLinkRelation correctly identifies valid and invalid relations', async () => {
+      const { isLinkRelation } = await import('@/lib/record-links');
+
+      // Valid relations based on LINK_RELATIONS
+      expect(isLinkRelation('related')).toBe(true);
+      expect(isLinkRelation('blocks')).toBe(true);
+      expect(isLinkRelation('blocked_by')).toBe(true);
+
+      // Invalid relations
+      expect(isLinkRelation('vibes')).toBe(false);
+      expect(isLinkRelation('invalid')).toBe(false);
+      expect(isLinkRelation('')).toBe(false);
+      // @ts-expect-error - testing invalid type
+      expect(isLinkRelation(null)).toBe(false);
+    });
+  });
+
   describe('input validation', () => {
     it('rejects an unknown entity type', async () => {
       const { linkRecords, RecordLinkError } = await import('@/lib/record-links');
