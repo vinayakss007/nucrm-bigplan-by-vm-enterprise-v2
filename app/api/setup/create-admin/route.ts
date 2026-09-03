@@ -151,14 +151,14 @@ export async function POST(request: NextRequest) {
         { name: 'Lost', order: 6 },
       ];
 
-      for (const s of defaultStages) {
-        await tx.insert(dealStages).values({
+      await tx.insert(dealStages).values(
+        defaultStages.map(s => ({
           tenantId: t.id,
           pipelineId: pipeline.id,
           name: s.name,
           order: s.order,
-        });
-      }
+        }))
+      );
 
       // 3. Create Default Roles (beyond admin)
       await tx.insert(roles).values({
