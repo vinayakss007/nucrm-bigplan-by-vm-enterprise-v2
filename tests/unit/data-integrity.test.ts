@@ -146,6 +146,17 @@ describe('verifyReferentialIntegrity', () => {
     expect(result.errors[0]).toContain('permission denied');
   });
 
+  it('surfaces non-Error objects thrown during discovery', async () => {
+    mocks.query.mockRejectedValue('connection timeout');
+
+    const result = await verifyReferentialIntegrity();
+
+    expect(result.checked).toBe(0);
+    expect(result.clean).toBe(false);
+    expect(result.errors).toHaveLength(1);
+    expect(result.errors[0]).toContain('Foreign-key discovery failed: connection timeout');
+  });
+
   it('is NOT clean when an individual relationship cannot be checked', async () => {
     mocks.query.mockRejectedValue(new Error('relation "ghost" does not exist'));
 
@@ -154,6 +165,16 @@ describe('verifyReferentialIntegrity', () => {
     expect(result.violations).toEqual([]);
     expect(result.clean).toBe(false);
     expect(result.errors[0]).toContain('invoices.quote_id -> quotes.id');
+  });
+
+  it('is NOT clean when an individual relationship cannot be checked due to a non-Error', async () => {
+    mocks.query.mockRejectedValue('unknown failure');
+
+    const result = await verifyReferentialIntegrity([rel]);
+
+    expect(result.violations).toEqual([]);
+    expect(result.clean).toBe(false);
+    expect(result.errors[0]).toContain('invoices.quote_id -> quotes.id: unknown failure');
   });
 });
 
@@ -243,6 +264,26 @@ describe('verifyTenantBoundaries', () => {
     expect(result.checked).toBe(0);
     expect(result.clean).toBe(false);
     expect(result.errors[0]).toContain('Tenant-boundary discovery failed');
+  });
+
+  it('is NOT clean when discovery fails with a non-Error object', async () => {
+    mocks.query.mockRejectedValue('database unavailable');
+
+    const result = await verifyTenantBoundaries();
+
+    expect(result.checked).toBe(0);
+    expect(result.clean).toBe(false);
+    expect(result.errors[0]).toContain('Tenant-boundary discovery failed: database unavailable');
+  });
+
+  it('is NOT clean when an individual relationship check fails with a non-Error object', async () => {
+    mocks.query.mockRejectedValue('unknown failure');
+
+    const result = await verifyTenantBoundaries([check]);
+
+    expect(result.checked).toBe(1);
+    expect(result.clean).toBe(false);
+    expect(result.errors[0]).toContain('tasks.contact_id -> contacts: unknown failure');
   });
 });
 
@@ -382,6 +423,15 @@ describe('verifyAuditChainIntegrity', () => {
     expect(result.clean).toBe(false);
     expect(result.errors[0]).toContain('Could not walk the audit chain');
     expect(result.errors[0]).toContain('audit_logs');
+  });
+
+  it('handles non-Error objects thrown during chain walk', async () => {
+    mocks.query.mockRejectedValue('timeout');
+
+    const result = await verifyAuditChainIntegrity();
+
+    expect(result.clean).toBe(false);
+    expect(result.errors[0]).toContain('Could not walk the audit chain in "audit_logs": timeout');
   });
 
   it('reports no errors on a successful walk', async () => {
