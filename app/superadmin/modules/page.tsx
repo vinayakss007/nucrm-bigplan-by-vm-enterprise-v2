@@ -106,16 +106,29 @@ export default function SuperAdminModulesPage() {
       id: m.id,
       pricing: m.planAccess,
     }));
-    for (const update of updates) {
-      const res = await fetch('/api/superadmin/modules', {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ module_id: update.id, pricing: update.pricing }),
-      });
-      if (!res.ok) { toast.error(`Failed to update ${update.id}`); break; }
+
+    let hasError = false;
+    await Promise.all(updates.map(async (update) => {
+      try {
+        const res = await fetch('/api/superadmin/modules', {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ module_id: update.id, pricing: update.pricing }),
+        });
+        if (!res.ok) {
+          hasError = true;
+          toast.error(`Failed to update ${update.id}`);
+        }
+      } catch (_err) {
+        hasError = true;
+        toast.error(`Error updating ${update.id}`);
+      }
+    }));
+
+    if (!hasError) {
+      setDirty(new Set());
+      toast.success('Plan configurations saved');
     }
-    setDirty(new Set());
     setSaving(false);
-    toast.success('Plan configurations saved');
   };
 
   const filtered = modules.filter(m =>
