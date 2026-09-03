@@ -15,7 +15,7 @@ interface _ClientInfo {
   tenantId: string;
 }
 
-async function getTenantWhitelist(tenantId: string): Promise<string[]> {
+export async function getTenantWhitelist(tenantId: string): Promise<string[]> {
   const [setting] = await db
     .select({ value: platformSettings.value })
     .from(platformSettings)
