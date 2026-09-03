@@ -29,14 +29,15 @@ export const POST = withApiRoute(async (req: NextRequest) => {
 
     await db.transaction(async (tx) => {
       // 1. Create Custom Fields
-      for (const field of template.custom_fields) {
-        await tx.insert(customFieldDefs).values({
+      if (template.custom_fields.length > 0) {
+        const customFieldValues = template.custom_fields.map(field => ({
           tenantId: ctx.tenantId,
           entityType: field.entity,
           fieldKey: field.key,
           fieldLabel: field.label,
           fieldType: field.type,
-        }).onConflictDoNothing();
+        }));
+        await tx.insert(customFieldDefs).values(customFieldValues).onConflictDoNothing();
       }
 
       // 2. Create Pipelines & Stages
@@ -64,15 +65,16 @@ export const POST = withApiRoute(async (req: NextRequest) => {
       }
 
       // 3. Create Automations
-      for (const auto of template.automations) {
-        await tx.insert(automations).values({
+      if (template.automations.length > 0) {
+        const automationValues = template.automations.map(auto => ({
           tenantId: ctx.tenantId,
           name: auto.name,
           triggerType: auto.trigger,
           actions: [{ type: auto.action, config: auto.config }],
           createdBy: ctx.userId,
           isActive: true,
-        });
+        }));
+        await tx.insert(automations).values(automationValues);
       }
     });
 
