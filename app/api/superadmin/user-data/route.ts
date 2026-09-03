@@ -320,19 +320,36 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     if (records.contacts?.length) {
       let restored = 0;
       let errors = 0;
-      for (const contact of records.contacts) {
-        try {
+      const CHUNK_SIZE = 100;
+
+      for (let i = 0; i < records.contacts.length; i += CHUNK_SIZE) {
+        const chunk = records.contacts.slice(i, i + CHUNK_SIZE);
+        const values = chunk.map(contact => {
           const { id: _id, ...rest } = contact as Record<string, unknown>;
-          await db.insert(contacts).values({
+          return {
             ...rest,
             tenantId: tenant_id,
             assignedTo: user_id,
             createdAt: new Date(),
             updatedAt: new Date(),
             deletedAt: null,
-          } as typeof contacts.$inferInsert).onConflictDoNothing();
-          restored++;
-        } catch { errors++; }
+          } as typeof contacts.$inferInsert;
+        });
+
+        try {
+          await db.insert(contacts).values(values).onConflictDoNothing();
+          restored += chunk.length;
+        } catch {
+          // Fallback to sequential for this chunk on failure to maintain exact error skipping
+          for (const val of values) {
+            try {
+              await db.insert(contacts).values(val).onConflictDoNothing();
+              restored++;
+            } catch {
+              errors++;
+            }
+          }
+        }
       }
       results['contacts'] = { restored, errors };
     }
@@ -341,19 +358,36 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     if (records.deals?.length) {
       let restored = 0;
       let errors = 0;
-      for (const deal of records.deals) {
-        try {
+      const CHUNK_SIZE = 100;
+
+      for (let i = 0; i < records.deals.length; i += CHUNK_SIZE) {
+        const chunk = records.deals.slice(i, i + CHUNK_SIZE);
+        const values = chunk.map(deal => {
           const { id: _id, ...rest } = deal as Record<string, unknown>;
-          await db.insert(deals).values({
+          return {
             ...rest,
             tenantId: tenant_id,
             assignedTo: user_id,
             createdAt: new Date(),
             updatedAt: new Date(),
             deletedAt: null,
-          } as typeof deals.$inferInsert).onConflictDoNothing();
-          restored++;
-        } catch { errors++; }
+          } as typeof deals.$inferInsert;
+        });
+
+        try {
+          await db.insert(deals).values(values).onConflictDoNothing();
+          restored += chunk.length;
+        } catch {
+          // Fallback to sequential for this chunk
+          for (const val of values) {
+            try {
+              await db.insert(deals).values(val).onConflictDoNothing();
+              restored++;
+            } catch {
+              errors++;
+            }
+          }
+        }
       }
       results['deals'] = { restored, errors };
     }
@@ -362,18 +396,35 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     if (records.tasks?.length) {
       let restored = 0;
       let errors = 0;
-      for (const task of records.tasks) {
-        try {
+      const CHUNK_SIZE = 100;
+
+      for (let i = 0; i < records.tasks.length; i += CHUNK_SIZE) {
+        const chunk = records.tasks.slice(i, i + CHUNK_SIZE);
+        const values = chunk.map(task => {
           const { id: _id, ...rest } = task as Record<string, unknown>;
-          await db.insert(tasks).values({
+          return {
             ...rest,
             tenantId: tenant_id,
             assignedTo: user_id,
             createdAt: new Date(),
             updatedAt: new Date(),
-          } as typeof tasks.$inferInsert).onConflictDoNothing();
-          restored++;
-        } catch { errors++; }
+          } as typeof tasks.$inferInsert;
+        });
+
+        try {
+          await db.insert(tasks).values(values).onConflictDoNothing();
+          restored += chunk.length;
+        } catch {
+          // Fallback to sequential for this chunk
+          for (const val of values) {
+            try {
+              await db.insert(tasks).values(val).onConflictDoNothing();
+              restored++;
+            } catch {
+              errors++;
+            }
+          }
+        }
       }
       results['tasks'] = { restored, errors };
     }
