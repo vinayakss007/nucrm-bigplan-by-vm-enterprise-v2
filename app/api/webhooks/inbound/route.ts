@@ -887,15 +887,13 @@ export async function POST(request: NextRequest) {
   let body: any;
 
   try {
-    // 1. Extract API key
-    const authHeader = request.headers.get('x-api-key');
-    const url = new URL(request.url);
-    const queryKey = url.searchParams.get('api_key');
-    const rawKey = authHeader || queryKey;
+    // 1. Extract API key — header ONLY. ?api_key= query params leak into
+    // access logs, browser history and referers, so they are rejected.
+    const rawKey = request.headers.get('x-api-key');
 
     if (!rawKey) {
       return NextResponse.json(
-        { error: 'API key required. Provide via X-API-Key header or ?api_key= query parameter.' },
+        { error: 'API key required. Provide via X-API-Key header.' },
         { status: 401 }
       );
     }
@@ -1148,10 +1146,8 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    const authHeader = request.headers.get('x-api-key');
-    const url = new URL(request.url);
-    const queryKey = url.searchParams.get('api_key');
-    const rawKey = authHeader || queryKey;
+    // Header ONLY — ?api_key= query params leak into logs/history.
+    const rawKey = request.headers.get('x-api-key');
 
     if (!rawKey) {
       return NextResponse.json({ error: 'API key required.' }, { status: 401 });
