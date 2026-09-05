@@ -40,107 +40,122 @@ export async function POST(request: NextRequest) {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    for (const days of REMINDER_DAYS) {
-      const targetDate = new Date(today);
-      targetDate.setDate(targetDate.getDate() + days);
-      const targetStr = targetDate.toISOString().split('T')[0];
+    const targetStrs = REMINDER_DAYS.map((days) => {
+      const d = new Date(today);
+      d.setDate(d.getDate() + days);
+      return d.toISOString().split('T')[0] as string;
+    });
 
-      // Find active contracts ending on exactly `days` from now
-      const endingSoon = await db.select({
-        id: contracts.id,
-        title: contracts.title,
-        contractNumber: contracts.contractNumber,
-        endDate: contracts.endDate,
-        totalValue: contracts.totalValue,
-        tenantId: contracts.tenantId,
-        contactId: contracts.contactId,
+    // ONE query for all reminder windows (was 4 serial day-queries).
+    const endingSoon = await db.select({
+      id: contracts.id,
+      title: contracts.title,
+      contractNumber: contracts.contractNumber,
+      endDate: contracts.endDate,
+      totalValue: contracts.totalValue,
+      tenantId: contracts.tenantId,
+      contactId: contracts.contactId,
+    })
+    .from(contracts)
+    .where(and(
+      eq(contracts.status, 'active'),
+      isNull(contracts.deletedAt),
+      sql`(${contracts.endDate})::date IN (${sql.join(targetStrs.map(s => sql`${s}::date`), sql`, `)})`,
+    ));
+
+    // Batch dedup: one query for all (contract, days) combos (was N).
+    const sentRows = endingSoon.length > 0 ? await db.select({
+      entityId: activities.entityId,
+      metadata: activities.metadata,
+    })
+    .from(activities)
+    .where(and(
+      eq(activities.entityType, 'contract'),
+      eq(activities.eventType, 'contract_renewal_reminder'),
+      sql`${activities.entityId} IN (${sql.join(endingSoon.map(c => sql`${c.id}`), sql`, `)})`,
+    )) : [];
+    const sentSet = new Set(sentRows.map(r =>
+      `${r.entityId}:${(r.metadata as { reminder_days?: unknown } | null)?.reminder_days}`
+    ));
+
+    // Batch members per tenant (was N contract-scoped queries).
+    const tenantIds = [...new Set(endingSoon.map(c => c.tenantId))];
+    const membersByTenant = new Map<string, { userId: string; email: string | null; fullName: string | null }[]>();
+    await Promise.all(tenantIds.map(async (tid) => {
+      const members = await db.select({
+        userId: users.id,
+        email: users.email,
+        fullName: users.fullName,
       })
-      .from(contracts)
-      .where(and(
-        eq(contracts.status, 'active'),
-        isNull(contracts.deletedAt),
-        sql`(${contracts.endDate})::date = ${targetStr}::date`,
-      ));
+      .from(users)
+      .innerJoin(
+        sql`(SELECT user_id FROM tenant_members WHERE tenant_id = ${tid} AND status = 'active') tm`,
+        sql`tm.user_id = ${users.id}`
+      )
+      .where(eq(users.isSuperAdmin, false))
+      .limit(5);
+      membersByTenant.set(tid, members);
+    }));
 
-      for (const contract of endingSoon) {
-        // Deduplication: check if we already sent a reminder for this contract + days combo
-        const alreadySent = await db.select({ id: activities.id })
-          .from(activities)
-          .where(and(
-            eq(activities.tenantId, contract.tenantId),
-            eq(activities.entityType, 'contract'),
-            eq(activities.entityId, contract.id),
-            eq(activities.eventType, 'contract_renewal_reminder'),
-            sql`${activities.metadata}->>'reminder_days' = ${String(days)}`,
-          ))
-          .limit(1);
+    for (const contract of endingSoon) {
+      const endDate = new Date(contract.endDate ?? new Date());
+      const days = Math.round((new Date(endDate.toDateString()).getTime() - today.getTime()) / 86400000);
+      if (!REMINDER_DAYS.includes(days)) continue;
 
-        if (alreadySent.length > 0) continue;
+      // Deduplication: skip (contract + days) combos already reminded
+      if (sentSet.has(`${contract.id}:${days}`)) continue;
 
-        // Find tenant owner/ admins to notify
-        const members = await db.select({
-          userId: users.id,
-          email: users.email,
-          fullName: users.fullName,
-        })
-        .from(users)
-        .innerJoin(
-          sql`(SELECT user_id FROM tenant_members WHERE tenant_id = ${contract.tenantId} AND status = 'active') tm`,
-          sql`tm.user_id = ${users.id}`
-        )
-        .where(eq(users.isSuperAdmin, false))
-        .limit(5);
+      const members = membersByTenant.get(contract.tenantId) ?? [];
+      const expiryDate = new Date(contract.endDate ?? new Date());
+      const dateStr = expiryDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 
-        const expiryDate = new Date(contract.endDate ?? new Date());
-        const dateStr = expiryDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-
-        for (const member of members) {
-          // In-app notification
-          await createNotification({
-            userId: member.userId,
-            tenantId: contract.tenantId,
-            type: 'contract_renewal',
-            title: `Contract "${contract.title}" expires in ${days} days`,
-            body: `${contract.contractNumber || 'Contract'} expires on ${dateStr}. Total value: $${Number(contract.totalValue || 0).toFixed(2)}`,
-            link: `/tenant/contracts/${contract.id}`,
-            entity_type: 'contract',
-            entity_id: contract.id,
-            metadata: { contract_id: contract.id, reminder_days: days, end_date: contract.endDate },
-          }).catch((err) => logError({ error: err, context: 'contract-renewal-notification' }));
-
-          // Email
-          if (member.email) {
-            await sendEmail({
-              to: member.email,
-              subject: `Contract "${contract.title}" expires in ${days} days`,
-              html: `<div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px">
-                <h2 style="color:#111827">Contract Renewal Reminder</h2>
-                <p style="color:#6b7280">Hi ${member.fullName || 'there'},</p>
-                <p style="color:#6b7280">The contract <strong>${contract.title}</strong> (${contract.contractNumber || 'N/A'}) expires on <strong>${dateStr}</strong> (${days} days).</p>
-                <p style="color:#6b7280">Total value: $${Number(contract.totalValue || 0).toFixed(2)}</p>
-                <a href="${process.env.NEXT_PUBLIC_APP_URL}/tenant/contracts/${contract.id}" style="display:inline-block;background:#7c3aed;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;margin-top:16px">View Contract →</a>
-              </div>`,
-              text: `Contract "${contract.title}" expires on ${dateStr} (${days} days). Total value: $${Number(contract.totalValue || 0).toFixed(2)}. View: ${process.env.NEXT_PUBLIC_APP_URL}/tenant/contracts/${contract.id}`,
-            }).catch((err) => logError({ error: err, context: 'contract-renewal-email' }));
-          }
-        }
-
-        // Log activity for deduplication
-        await db.insert(activities).values({
+      // Member sends run concurrently (each guarded); DB reads above are done.
+      await Promise.allSettled(members.map(async (member) => {
+        // In-app notification
+        await createNotification({
+          userId: member.userId,
           tenantId: contract.tenantId,
-          entityType: 'contract',
-          entityId: contract.id,
-          eventType: 'contract_renewal_reminder',
-          description: `Renewal reminder sent: ${contract.title} expires in ${days} days`,
-          metadata: { reminder_days: days, end_date: contract.endDate },
-        }).catch((err) => {
-          logger.warn('[cron-contract] Failed to log activity', {
-            contractId: contract.id, error: err instanceof Error ? err.message : String(err),
-          });
-        });
+          type: 'contract_renewal',
+          title: `Contract "${contract.title}" expires in ${days} days`,
+          body: `${contract.contractNumber || 'Contract'} expires on ${dateStr}. Total value: $${Number(contract.totalValue || 0).toFixed(2)}`,
+          link: `/tenant/contracts/${contract.id}`,
+          entity_type: 'contract',
+          entity_id: contract.id,
+          metadata: { contract_id: contract.id, reminder_days: days, end_date: contract.endDate },
+        }).catch((err) => logError({ error: err, context: 'contract-renewal-notification' }));
 
-        remindersSent++;
-      }
+        // Email
+        if (member.email) {
+          await sendEmail({
+            to: member.email,
+            subject: `Contract "${contract.title}" expires in ${days} days`,
+            html: `<div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px">
+              <h2 style="color:#111827">Contract Renewal Reminder</h2>
+              <p style="color:#6b7280">Hi ${member.fullName || 'there'},</p>
+              <p style="color:#6b7280">The contract <strong>${contract.title}</strong> (${contract.contractNumber || 'N/A'}) expires on <strong>${dateStr}</strong> (${days} days).</p>
+              <p style="color:#6b7280">Total value: $${Number(contract.totalValue || 0).toFixed(2)}</p>
+              <a href="${process.env.NEXT_PUBLIC_APP_URL}/tenant/contracts/${contract.id}" style="display:inline-block;background:#7c3aed;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;margin-top:16px">View Contract →</a>
+            </div>`,
+            text: `Contract "${contract.title}" expires on ${dateStr} (${days} days). Total value: $${Number(contract.totalValue || 0).toFixed(2)}. View: ${process.env.NEXT_PUBLIC_APP_URL}/tenant/contracts/${contract.id}`,
+          }).catch((err) => logError({ error: err, context: 'contract-renewal-email' }));
+        }
+      }));
+
+      // Log activity for deduplication
+      await db.insert(activities).values({
+        tenantId: contract.tenantId,
+        entityType: 'contract',
+        entityId: contract.id,
+        eventType: 'contract_renewal_reminder',
+        description: `Renewal reminder sent: ${contract.title} expires in ${days} days`,
+        metadata: { reminder_days: days, end_date: contract.endDate },
+      }).catch((err) => {
+        logger.warn('[cron-contract] Failed to log activity', {
+          contractId: contract.id, error: err instanceof Error ? err.message : String(err),
+        });
+      });
+
+      remindersSent++;
     }
 
     // Expire contracts past their end date

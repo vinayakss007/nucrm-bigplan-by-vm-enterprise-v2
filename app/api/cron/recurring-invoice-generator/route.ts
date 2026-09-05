@@ -31,7 +31,7 @@ import { acquireLock } from '@/lib/cache';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { invoices, invoiceLineItems } from '@/drizzle/schema';
-import { eq, and, isNull, lte, ne, sql } from 'drizzle-orm';
+import { eq, and, isNull, lte, ne, sql, inArray } from 'drizzle-orm';
 import { logger } from '@/lib/logger';
 import { apiError } from '@/lib/api-error';
 import { logError } from '@/lib/errors-server';
@@ -108,16 +108,28 @@ export async function POST(request: NextRequest) {
     let generated = 0;
     const errors: Array<{ invoiceId: string; error: string }> = [];
 
+    // Batch: line items for ALL due templates in one query (was one fetch
+    // per template). Per-template transactions below stay serial per tenant
+    // for invoice-number correctness (#1462) — only the reads are batched.
+    const templateIds = dueTemplates.map(t => t.id);
+    const allItems = templateIds.length > 0 ? await db
+      .select()
+      .from(invoiceLineItems)
+      .where(inArray(invoiceLineItems.invoiceId, templateIds))
+      .orderBy(invoiceLineItems.sortOrder) : [];
+    const itemsByTemplate = new Map<string, typeof allItems>();
+    for (const it of allItems) {
+      const list = itemsByTemplate.get(it.invoiceId);
+      if (list) list.push(it);
+      else itemsByTemplate.set(it.invoiceId, [it]);
+    }
+
     for (const template of dueTemplates) {
       try {
         const tenantId = template.tenantId;
 
-        // Line items to clone for this template.
-        const items = await db
-          .select()
-          .from(invoiceLineItems)
-          .where(eq(invoiceLineItems.invoiceId, template.id))
-          .orderBy(invoiceLineItems.sortOrder);
+        // Line items to clone for this template (prefetched above).
+        const items = itemsByTemplate.get(template.id) ?? [];
 
         // The series root: point every child at the top of the series so the
         // whole chain is reachable from one id. If the template is itself a
