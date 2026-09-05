@@ -37,6 +37,8 @@ jobs:
         run: npm run lint
 
       - name: Typecheck
+        env:
+          NODE_OPTIONS: "--max-old-space-size=8192"
         run: npm run typecheck
         env:
           NODE_OPTIONS: "--max-old-space-size=8192"
@@ -237,7 +239,7 @@ jobs:
       - name: Build
         run: npm run build
         env:
-          NODE_OPTIONS: "--max-old-space-size=6144"
+          NODE_OPTIONS: "--max-old-space-size=8192"
 
       - name: Check bundle size thresholds
         run: npx tsx scripts/analyze-bundle.ts

@@ -181,8 +181,6 @@ async function backupSingleTenant(
        WHERE id = $5`,
       [result.dataSize, result.tableCount, result.totalRecords, JSON.stringify(result.tables), backupRecord.id]
     );
-
-    console.log(`[Auto Backup] Tenant ${tenantId}: ${result.tableCount} tables, ${result.totalRecords} records backed up`);
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -219,10 +217,6 @@ async function cleanupExpiredBackups(pool: Pool) {
      RETURNING id, tenant_id`
   );
 
-  if (result.rows.length > 0) {
-    console.log(`[Auto Backup] Cleaned up ${result.rows.length} expired backups`);
-  }
-
   return { cleaned: result.rows.length };
 }
 
@@ -234,10 +228,6 @@ async function purgeExpiredCriticalBackups(pool: Pool) {
      WHERE retained_until < NOW()
      RETURNING id, tenant_id, table_name, record_id`
   );
-
-  if (result.rows.length > 0) {
-    console.log(`[Auto Backup] Purged ${result.rows.length} expired critical backups (past 90 days)`);
-  }
 
   return { purged: result.rows.length };
 }
