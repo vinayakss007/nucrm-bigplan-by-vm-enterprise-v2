@@ -8,7 +8,7 @@ import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { contacts, deals, tasks, supportTickets, companies, activities, emailLog } from '@/drizzle/schema';
-import { eq, and, sql, gte, isNull } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { rateLimitRead } from '@/lib/api/read-rate-limit';
 
@@ -24,40 +24,36 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
 
-    // Current month counts
-    const [thisMonthContacts] = await db.select({ count: sql<number>`count(*)::int` })
-      .from(contacts).where(and(eq(contacts.tenantId, ctx.tenantId), gte(contacts.createdAt, thisMonthStart), isNull(contacts.deletedAt)));
-    const [thisMonthDeals] = await db.select({ count: sql<number>`count(*)::int` })
-      .from(deals).where(and(eq(deals.tenantId, ctx.tenantId), gte(deals.createdAt, thisMonthStart), isNull(deals.deletedAt)));
-    const [thisMonthTasks] = await db.select({ count: sql<number>`count(*)::int` })
-      .from(tasks).where(and(eq(tasks.tenantId, ctx.tenantId), gte(tasks.createdAt, thisMonthStart), isNull(tasks.deletedAt)));
-    const [thisMonthTickets] = await db.select({ count: sql<number>`count(*)::int` })
-      .from(supportTickets).where(and(eq(supportTickets.tenantId, ctx.tenantId), gte(supportTickets.createdAt, thisMonthStart)));
-    const [thisMonthCompanies] = await db.select({ count: sql<number>`count(*)::int` })
-      .from(companies).where(and(eq(companies.tenantId, ctx.tenantId), gte(companies.createdAt, thisMonthStart), isNull(companies.deletedAt)));
-    const [thisMonthEmails] = await db.select({ count: sql<number>`count(*)::int` })
-      .from(emailLog).where(and(eq(emailLog.tenantId, ctx.tenantId), gte(emailLog.createdAt, thisMonthStart)));
-
-    // Last month counts
-    const [lastMonthContacts] = await db.select({ count: sql<number>`count(*)::int` })
-      .from(contacts).where(and(eq(contacts.tenantId, ctx.tenantId), gte(contacts.createdAt, lastMonthStart), sql`${contacts.createdAt} < ${lastMonthEnd}`));
-    const [lastMonthDeals] = await db.select({ count: sql<number>`count(*)::int` })
-      .from(deals).where(and(eq(deals.tenantId, ctx.tenantId), gte(deals.createdAt, lastMonthStart), sql`${deals.createdAt} < ${lastMonthEnd}`));
-    const [lastMonthTasks] = await db.select({ count: sql<number>`count(*)::int` })
-      .from(tasks).where(and(eq(tasks.tenantId, ctx.tenantId), gte(tasks.createdAt, lastMonthStart), sql`${tasks.createdAt} < ${lastMonthEnd}`));
-
-    // Total counts
-    const [totalContacts] = await db.select({ count: sql<number>`count(*)::int` }).from(contacts).where(and(eq(contacts.tenantId, ctx.tenantId), isNull(contacts.deletedAt)));
-    const [totalDeals] = await db.select({ count: sql<number>`count(*)::int` }).from(deals).where(and(eq(deals.tenantId, ctx.tenantId), isNull(deals.deletedAt)));
-    const [totalTasks] = await db.select({ count: sql<number>`count(*)::int` }).from(tasks).where(and(eq(tasks.tenantId, ctx.tenantId), isNull(tasks.deletedAt)));
-    const [totalTickets] = await db.select({ count: sql<number>`count(*)::int` }).from(supportTickets).where(eq(supportTickets.tenantId, ctx.tenantId));
-    const [totalCompanies] = await db.select({ count: sql<number>`count(*)::int` }).from(companies).where(and(eq(companies.tenantId, ctx.tenantId), isNull(companies.deletedAt)));
-
-    // Deal value
-    const [thisMonthDealValue] = await db.select({ total: sql<string>`coalesce(sum(${deals.amount})::numeric, 0)` })
-      .from(deals).where(and(eq(deals.tenantId, ctx.tenantId), gte(deals.createdAt, thisMonthStart), isNull(deals.deletedAt)));
-    const [totalDealValue] = await db.select({ total: sql<string>`coalesce(sum(${deals.amount})::numeric, 0)` })
-      .from(deals).where(and(eq(deals.tenantId, ctx.tenantId), isNull(deals.deletedAt)));
+    // Single round-trip aggregate: 17 serial counts used to cost ~17x WAN
+    // RTT (~4s against a remote DB) while holding a pinned pool connection.
+    // One statement with scalar subselects returns the identical shape.
+    const aggRes = await db.execute<{
+      thisMonthContacts: number; thisMonthDeals: number; thisMonthTasks: number;
+      thisMonthTickets: number; thisMonthCompanies: number; thisMonthEmails: number;
+      lastMonthContacts: number; lastMonthDeals: number; lastMonthTasks: number;
+      totalContacts: number; totalDeals: number; totalTasks: number;
+      totalTickets: number; totalCompanies: number;
+      thisMonthDealValue: string; totalDealValue: string;
+    }>(sql`
+      SELECT
+        (SELECT count(*)::int FROM ${contacts} WHERE ${contacts.tenantId} = ${ctx.tenantId} AND ${contacts.createdAt} >= ${thisMonthStart} AND ${contacts.deletedAt} IS NULL) AS "thisMonthContacts",
+        (SELECT count(*)::int FROM ${deals} WHERE ${deals.tenantId} = ${ctx.tenantId} AND ${deals.createdAt} >= ${thisMonthStart} AND ${deals.deletedAt} IS NULL) AS "thisMonthDeals",
+        (SELECT count(*)::int FROM ${tasks} WHERE ${tasks.tenantId} = ${ctx.tenantId} AND ${tasks.createdAt} >= ${thisMonthStart} AND ${tasks.deletedAt} IS NULL) AS "thisMonthTasks",
+        (SELECT count(*)::int FROM ${supportTickets} WHERE ${supportTickets.tenantId} = ${ctx.tenantId} AND ${supportTickets.createdAt} >= ${thisMonthStart}) AS "thisMonthTickets",
+        (SELECT count(*)::int FROM ${companies} WHERE ${companies.tenantId} = ${ctx.tenantId} AND ${companies.createdAt} >= ${thisMonthStart} AND ${companies.deletedAt} IS NULL) AS "thisMonthCompanies",
+        (SELECT count(*)::int FROM ${emailLog} WHERE ${emailLog.tenantId} = ${ctx.tenantId} AND ${emailLog.createdAt} >= ${thisMonthStart}) AS "thisMonthEmails",
+        (SELECT count(*)::int FROM ${contacts} WHERE ${contacts.tenantId} = ${ctx.tenantId} AND ${contacts.createdAt} >= ${lastMonthStart} AND ${contacts.createdAt} < ${lastMonthEnd}) AS "lastMonthContacts",
+        (SELECT count(*)::int FROM ${deals} WHERE ${deals.tenantId} = ${ctx.tenantId} AND ${deals.createdAt} >= ${lastMonthStart} AND ${deals.createdAt} < ${lastMonthEnd}) AS "lastMonthDeals",
+        (SELECT count(*)::int FROM ${tasks} WHERE ${tasks.tenantId} = ${ctx.tenantId} AND ${tasks.createdAt} >= ${lastMonthStart} AND ${tasks.createdAt} < ${lastMonthEnd}) AS "lastMonthTasks",
+        (SELECT count(*)::int FROM ${contacts} WHERE ${contacts.tenantId} = ${ctx.tenantId} AND ${contacts.deletedAt} IS NULL) AS "totalContacts",
+        (SELECT count(*)::int FROM ${deals} WHERE ${deals.tenantId} = ${ctx.tenantId} AND ${deals.deletedAt} IS NULL) AS "totalDeals",
+        (SELECT count(*)::int FROM ${tasks} WHERE ${tasks.tenantId} = ${ctx.tenantId} AND ${tasks.deletedAt} IS NULL) AS "totalTasks",
+        (SELECT count(*)::int FROM ${supportTickets} WHERE ${supportTickets.tenantId} = ${ctx.tenantId}) AS "totalTickets",
+        (SELECT count(*)::int FROM ${companies} WHERE ${companies.tenantId} = ${ctx.tenantId} AND ${companies.deletedAt} IS NULL) AS "totalCompanies",
+        (SELECT coalesce(sum(${deals.amount})::numeric, 0) FROM ${deals} WHERE ${deals.tenantId} = ${ctx.tenantId} AND ${deals.createdAt} >= ${thisMonthStart} AND ${deals.deletedAt} IS NULL) AS "thisMonthDealValue",
+        (SELECT coalesce(sum(${deals.amount})::numeric, 0) FROM ${deals} WHERE ${deals.tenantId} = ${ctx.tenantId} AND ${deals.deletedAt} IS NULL) AS "totalDealValue"
+    `);
+    const agg = aggRes.rows[0];
 
     // Recent activity
     const recentActivity = await db.select({
@@ -75,26 +71,26 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     return NextResponse.json({
       data: {
         thisMonth: {
-          contacts: thisMonthContacts?.count ?? 0,
-          deals: thisMonthDeals?.count ?? 0,
-          tasks: thisMonthTasks?.count ?? 0,
-          tickets: thisMonthTickets?.count ?? 0,
-          companies: thisMonthCompanies?.count ?? 0,
-          emails: thisMonthEmails?.count ?? 0,
-          dealValue: Number(thisMonthDealValue?.total ?? 0),
+          contacts: agg?.thisMonthContacts ?? 0,
+          deals: agg?.thisMonthDeals ?? 0,
+          tasks: agg?.thisMonthTasks ?? 0,
+          tickets: agg?.thisMonthTickets ?? 0,
+          companies: agg?.thisMonthCompanies ?? 0,
+          emails: agg?.thisMonthEmails ?? 0,
+          dealValue: Number(agg?.thisMonthDealValue ?? 0),
         },
         lastMonth: {
-          contacts: lastMonthContacts?.count ?? 0,
-          deals: lastMonthDeals?.count ?? 0,
-          tasks: lastMonthTasks?.count ?? 0,
+          contacts: agg?.lastMonthContacts ?? 0,
+          deals: agg?.lastMonthDeals ?? 0,
+          tasks: agg?.lastMonthTasks ?? 0,
         },
         totals: {
-          contacts: totalContacts?.count ?? 0,
-          deals: totalDeals?.count ?? 0,
-          tasks: totalTasks?.count ?? 0,
-          tickets: totalTickets?.count ?? 0,
-          companies: totalCompanies?.count ?? 0,
-          dealValue: Number(totalDealValue?.total ?? 0),
+          contacts: agg?.totalContacts ?? 0,
+          deals: agg?.totalDeals ?? 0,
+          tasks: agg?.totalTasks ?? 0,
+          tickets: agg?.totalTickets ?? 0,
+          companies: agg?.totalCompanies ?? 0,
+          dealValue: Number(agg?.totalDealValue ?? 0),
         },
         recentActivity,
       },

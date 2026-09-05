@@ -34,6 +34,13 @@ export const GET = withApiRoute(async (req: NextRequest) => {
     .groupBy(automationRuns.automationId)
     .as('runs');
 
+    // Paginated: an unbounded list joined against a full-table GROUP BY
+    // over automation_runs previously scanned everything per request.
+    const params = req.nextUrl.searchParams;
+    const limit = Math.min(Math.max(parseInt(params.get('limit') || '50', 10) || 50, 1), 200);
+    const page = Math.max(parseInt(params.get('page') || '1', 10) || 1, 1);
+    const offset = (page - 1) * limit;
+
     const data = await db.select({
       id: automations.id,
       name: automations.name,
@@ -49,15 +56,18 @@ export const GET = withApiRoute(async (req: NextRequest) => {
       createdBy: automations.createdBy,
       createdByName: users.fullName,
       successCount: sql<number>`COALESCE(${runCounts.successCount}, 0)`,
-      failCount: sql<number>`COALESCE(${runCounts.failCount}, 0)`
+      failCount: sql<number>`COALESCE(${runCounts.failCount}, 0)`,
+      totalCount: sql<number>`COUNT(*) OVER()::int`,
     })
     .from(automations)
     .leftJoin(users, eq(users.id, automations.createdBy))
     .leftJoin(runCounts, eq(runCounts.automationId, automations.id))
     .where(and(eq(automations.tenantId, ctx.tenantId), isNull(automations.deletedAt)))
-    .orderBy(desc(automations.createdAt));
+    .orderBy(desc(automations.createdAt))
+    .limit(limit)
+    .offset(offset);
 
-    return NextResponse.json({ data });
+    return NextResponse.json({ data, meta: { page, limit, total: data[0]?.totalCount ?? 0 } });
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
