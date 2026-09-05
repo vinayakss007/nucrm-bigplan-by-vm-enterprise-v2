@@ -1009,6 +1009,8 @@ export const followUps = pgTable('follow_ups', {
     assignedIdx: index('idx_follow_ups_assigned').on(table.assignedTo),
     dueDateIdx: index('idx_follow_ups_due_date').on(table.dueDate),
     statusIdx: index('idx_follow_ups_status').on(table.tenantId, table.status),
+    // Hot path: widget filters (tenant, status, dueDate range) + sorts dueDate.
+    tenantStatusDueIdx: index('idx_follow_ups_tenant_status_due').on(table.tenantId, table.status, table.dueDate),
     leadIdx: index('idx_follow_ups_lead').on(table.leadId),
     contactIdx: index('idx_follow_ups_contact').on(table.contactId),
     dealIdx: index('idx_follow_ups_deal').on(table.dealId),

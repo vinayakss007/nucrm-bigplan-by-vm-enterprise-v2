@@ -589,6 +589,13 @@
       "when": 1788782400000,
       "tag": "0084_deals_won_at",
       "breakpoints": true
+    },
+    {
+      "idx": 84,
+      "version": "7",
+      "when": 1788782400001,
+      "tag": "0085_dashboard_hot_path_indexes",
+      "breakpoints": true
     }
   ]
 }

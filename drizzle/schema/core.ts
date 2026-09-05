@@ -345,6 +345,8 @@ export const notifications = pgTable('notifications', {
   return {
     tenantIdx: utils.tenantIdx(table),
     userIdx: index('idx_notifications_user').on(table.userId),
+    // Hot path: widget filters (tenant, user, unread) + sorts createdAt DESC.
+    tenantUserCreatedIdx: index('idx_notifications_tenant_user_created').on(table.tenantId, table.userId, table.createdAt),
     metadataGinIdx: utils.metadataIdx(table),
   };
 });

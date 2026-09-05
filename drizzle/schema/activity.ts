@@ -35,6 +35,9 @@ export const activities = pgTable('activities', {
 }, (table) => {
   return {
     tenantIdx: utils.tenantIdx(table),
+    // Hot path: dashboard/usage poll filters tenant + sorts createdAt DESC.
+    // B-tree serves DESC via backward scan.
+    tenantCreatedIdx: index('idx_activities_tenant_created').on(table.tenantId, table.createdAt),
     entityIdx: index('idx_activities_entity').on(table.entityType, table.entityId),
     contactIdx: index('idx_activities_contact').on(table.contactId),
     dealIdx: index('idx_activities_deal').on(table.dealId),
