@@ -77,23 +77,22 @@ export default async function LeadDetailPage({ params }: PageProps) {
     notFound();
   }
 
+  // All five are independent once `lead` is resolved — fire together
+  // (was 5 serial WAN round-trips).
+  const [[creator], activities, relatedContacts, teamMembers, followUpsList] = await Promise.all([
   // Get created_by_name (separate join for multiple user references)
-  const [creator] = await db.select({ fullName: users.fullName })
+  db.select({ fullName: users.fullName })
     .from(users)
     .where(eq(users.id, lead.created_by as string))
-    .limit(1);
-  
-  // Attach created_by_name without mutating (and casting) the query row:
-  // build a new typed object with the extra field.
-  const leadWithCreator = { ...lead, created_by_name: creator?.fullName ?? null };
-  
+    .limit(1),
+
   // #1820: unified activity timeline — merges lead_activities + activities +
   // notes for this lead into one chronological feed (previously the lead page
   // only read lead_activities, so cross-module history was invisible here).
-  const activities = await getActivityTimeline('lead', id, ctx.tenantId, 100);
-  
+  getActivityTimeline('lead', id, ctx.tenantId, 100),
+
   // Get related contacts
-  const relatedContacts = await db.select({
+  db.select({
     id: contacts.id,
     first_name: contacts.firstName,
     last_name: contacts.lastName,
@@ -110,10 +109,10 @@ export default async function LeadDetailPage({ params }: PageProps) {
       lead.phone ? eq(contacts.phone, lead.phone as string) : sql`false`
     )
   ))
-  .limit(5);
-  
+  .limit(5),
+
   // Get team members for assignment
-  const teamMembers = await db.select({
+  db.select({
     user_id: tenantMembers.userId,
     // COALESCE so full_name is a non-null string, matching the client's
     // TeamMemberOpt type (avoids the previous `as any` cast).
@@ -127,11 +126,11 @@ export default async function LeadDetailPage({ params }: PageProps) {
     eq(tenantMembers.tenantId, ctx.tenantId),
     eq(tenantMembers.status, 'active')
   ))
-  .orderBy(users.fullName);
+  .orderBy(users.fullName),
 
   // #1815: the lead's follow-ups (FK already existed but was never surfaced on
   // the record). Wrapped in a fallback so a failure never breaks the page.
-  const followUpsList = await db.select({
+  db.select({
     id: followUps.id,
     title: followUps.title,
     description: followUps.description,
@@ -148,7 +147,12 @@ export default async function LeadDetailPage({ params }: PageProps) {
   ))
   .orderBy(desc(followUps.dueDate))
   .limit(50)
-  .catch(() => []);
+  .catch(() => []),
+  ]);
+
+  // Attach created_by_name without mutating (and casting) the query row:
+  // build a new typed object with the extra field.
+  const leadWithCreator = { ...lead, created_by_name: creator?.fullName ?? null };
 
   return (
     <LeadDetailClient

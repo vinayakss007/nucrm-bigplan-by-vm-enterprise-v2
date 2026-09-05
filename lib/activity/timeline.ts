@@ -79,7 +79,17 @@ export async function getActivityTimeline(
     : entityType === 'company' ? eq(activities.companyId, entityId)
     : eq(activities.leadId, entityId);
 
-  const activityRows = await safe(
+  // ── callLogs (contact/deal/company) ─────────────────────────────────────────
+  const callFkMatch =
+    entityType === 'contact' ? eq(callLogs.contactId, entityId)
+    : entityType === 'deal' ? eq(callLogs.dealId, entityId)
+    : entityType === 'company' ? eq(callLogs.companyId, entityId)
+    : null;
+
+  // All four sources are independent — fire together (was 4 serial WAN
+  // round-trips). Same Promise.all pattern already used by dashboard stats.
+  const [activityRows, leadActivityRows, callRows, noteRows] = await Promise.all([
+  safe(
     db
       .select({
         id: activities.id,
@@ -103,11 +113,11 @@ export async function getActivityTimeline(
       )
       .orderBy(desc(activities.createdAt))
       .limit(limit),
-  );
+  ),
 
   // ── leadActivities (leads only) ─────────────────────────────────────────────
-  const leadActivityRows = isLead
-    ? await safe(
+  isLead
+    ? safe(
         db
           .select({
             id: leadActivities.id,
@@ -127,17 +137,11 @@ export async function getActivityTimeline(
           .orderBy(desc(leadActivities.performedAt))
           .limit(limit),
       )
-    : [];
+    : Promise.resolve([]),
 
   // ── callLogs (contact/deal/company) ─────────────────────────────────────────
-  const callFkMatch =
-    entityType === 'contact' ? eq(callLogs.contactId, entityId)
-    : entityType === 'deal' ? eq(callLogs.dealId, entityId)
-    : entityType === 'company' ? eq(callLogs.companyId, entityId)
-    : null;
-
-  const callRows = callFkMatch
-    ? await safe(
+  callFkMatch
+    ? safe(
         db
           .select({
             id: callLogs.id,
@@ -156,10 +160,10 @@ export async function getActivityTimeline(
           .orderBy(desc(callLogs.createdAt))
           .limit(limit),
       )
-    : [];
+    : Promise.resolve([]),
 
   // ── notes (polymorphic) ──────────────────────────────────────────────────────
-  const noteRows = await safe(
+  safe(
     db
       .select({
         id: notes.id,
@@ -174,7 +178,8 @@ export async function getActivityTimeline(
       .where(and(eq(notes.entityType, entityType), eq(notes.entityId, entityId), eq(notes.tenantId, tenantId), isNull(notes.deletedAt)))
       .orderBy(desc(notes.createdAt))
       .limit(limit),
-  );
+  ),
+  ]);
 
   // ── normalize ────────────────────────────────────────────────────────────────
   const items: TimelineItem[] = [];
