@@ -7,6 +7,7 @@ import crypto from 'crypto';
 import { logger } from '@/lib/logger';
 import { escapeHtml } from '@/lib/email/escape-html';
 import { generateUnsubscribeToken } from '@/lib/email/unsubscribe-token';
+import type * as Nodemailer from 'nodemailer';
 
 /**
  * A single file attachment for an outgoing email.
@@ -128,13 +129,10 @@ async function sendViaResend(payload: EmailPayload): Promise<SendResult> {
   }
 }
 
-// FIX MEDIUM-09: Cache transporter to avoid recreating it on every email send
-// #1205: cache key includes the password (sha256) so credential rotation
+// Cache transporter to avoid recreating it on every email send
+// cache key includes the password (sha256) so credential rotation
 // creates a fresh transporter instead of reusing one with stale auth.
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let smtpTransporter: any = null;
+let smtpTransporter: Nodemailer.Transporter | null = null;
 let smtpConfig: string | null = null;
 
 async function sendViaSMTP(payload: EmailPayload): Promise<SendResult> {
@@ -147,7 +145,7 @@ async function sendViaSMTP(payload: EmailPayload): Promise<SendResult> {
     const port = parseInt(process.env.SMTP_PORT ?? '587', 10);
     const secure = port === 465;
 
-    // FIX MEDIUM-09 / #1205: Reuse transporter only when host|port|user|pass unchanged
+    // Reuse transporter only when host|port|user|pass unchanged
     const currentConfig = crypto
       .createHash('sha256')
       .update(`${host}|${port}|${process.env.SMTP_USER ?? ''}|${process.env.SMTP_PASS ?? ''}`)
