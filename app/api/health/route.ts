@@ -46,15 +46,16 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    const healthy = dbStatus === 'connected' && schemaReady;
     return NextResponse.json({
-      status: 'ok',
+      status: healthy ? 'ok' : 'error',
       db: dbStatus,
       schema_ready: schemaReady,
       service: 'nucrm-app',
       version: process.env['npm_package_version'] || '1.0.0',
       sentry: process.env['SENTRY_DSN'] ? 'configured' : 'not configured',
       timestamp: new Date().toISOString(),
-    });
+    }, { status: healthy ? 200 : 503 });
   } catch (err) {
     Sentry.captureException(err);
     return NextResponse.json({
