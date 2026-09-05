@@ -214,6 +214,8 @@ export const emailLog = pgTable('email_log', {
   return {
     tenantIdx: utils.tenantIdx(table),
     contactIdx: index('idx_email_log_contact').on(table.contactId, table.createdAt),
+    // Hot path: usage counts filter (tenant, createdAt range).
+    tenantCreatedIdx: index('idx_email_log_tenant_created').on(table.tenantId, table.createdAt),
     statusIdx: index('idx_email_log_status').on(table.status, table.createdAt),
   };
 });
