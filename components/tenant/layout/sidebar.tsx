@@ -291,10 +291,10 @@ export default function TenantSidebar({ tenant, _profile, _roleSlug, permissions
   const hasPerm = useCallback((item: NavItem) => {
     if (item.adminOnly && !isAdmin) return false;
     if (hiddenItems.includes(item.href)) return false;
-    if (item.module && modulesLoaded && !hasModule(item.module)) return false;
+    if (item.module && !hasModule(item.module)) return false;
     if (!item.perm) return true;
     return isAdmin || permissions?.['all'] || permissions?.[item.perm];
-  }, [isAdmin, hiddenItems, permissions, modulesLoaded, hasModule]);
+  }, [isAdmin, hiddenItems, permissions, hasModule]);
 
   const isActive = (href: string, exact?: boolean) =>
     exact ? pathname === href : href !== '/tenant/dashboard' && pathname.startsWith(href);
