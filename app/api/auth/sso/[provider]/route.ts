@@ -97,13 +97,15 @@ export async function POST(
       expectedState,
     });
 
-    // Clear SSO state cookies and set session cookie directly on the response
+    // Clear SSO state cookies and set session cookie directly on the response.
+    // NOTE: the bearer token is deliberately NOT echoed in the JSON body —
+    // the httpOnly cookie is the sole session carrier. Returning it here
+    // would let any XSS/client code lift the session.
     const response = NextResponse.json({
       data: {
         user_id: result.userId,
         session_id: result.sessionId,
         email: result.email,
-        token: result.token,
       },
     });
     response.cookies.delete('sso_state');

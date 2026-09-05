@@ -8,7 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, can } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { savedReports, reportExecutions, users } from '@/drizzle/schema';
-import { eq, and, or, desc, sql } from 'drizzle-orm';
+import { eq, and, desc, sql } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
 import { concurrencyGuard } from '@/lib/api/concurrency';
@@ -48,7 +48,9 @@ export const GET = withApiRoute(async (request: NextRequest,
     .leftJoin(users, eq(users.id, savedReports.createdBy))
     .where(and(
       eq(savedReports.id, id),
-      or(eq(savedReports.tenantId, ctx.tenantId), eq(savedReports.isPublic, true))
+      // NOTE: tenant match required even for isPublic reports — a public
+      // flag must never expose one tenant's report to another tenant.
+      eq(savedReports.tenantId, ctx.tenantId)
     ))
     .limit(1);
 
@@ -56,7 +58,9 @@ export const GET = withApiRoute(async (request: NextRequest,
       return NextResponse.json({ error: 'Report not found' }, { status: 404 });
     }
 
-    // Get recent executions
+    // Get recent executions — scoped to this tenant's report (the report
+    // lookup above already enforced the tenant match, so reportId alone
+    // cannot leak another tenant's executions).
     const executions = await db.query.reportExecutions.findMany({
       where: eq(reportExecutions.reportId, id),
       orderBy: [desc(reportExecutions.executedAt)],

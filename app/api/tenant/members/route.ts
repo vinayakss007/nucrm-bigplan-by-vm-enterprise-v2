@@ -33,7 +33,9 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     const rawBody = await readJsonBody(request);
     const validated = validateBody(inviteMemberSchema, rawBody);
     if (validated instanceof NextResponse) return validated;
-    const { email, password, full_name, role_slug = 'sales_rep' } = rawBody;
+    // NOTE: take values from the VALIDATED payload, never rawBody —
+    // password/full_name/role_slug previously bypassed Zod entirely.
+    const { email, password, full_name, role_slug = 'sales_rep' } = validated.data;
 
     if (!email || !password || !full_name) {
       return NextResponse.json({ error: 'email, password, and full_name are required' }, { status: 400 });
