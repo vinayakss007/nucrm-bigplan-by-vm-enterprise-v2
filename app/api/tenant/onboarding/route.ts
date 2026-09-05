@@ -61,8 +61,10 @@ export const POST = withApiRoute(async (request: NextRequest) => {
 
     const template = INDUSTRY_TEMPLATES[v.templateId];
 
-    // Install modules for the tenant based on the selected template
-    await installTemplateModules(ctx.tenantId, v.templateId);
+    // Install modules for the tenant based on the selected template.
+    // Best-effort per module; report ACTUAL counts (never the template size).
+    const { installed: modulesInstalled, failed: modulesFailed } =
+      await installTemplateModules(ctx.tenantId, v.templateId);
 
     // Create the primary pipeline with stages from the template
     const pipelineStages = template?.pipelines[0]?.stages ?? [
@@ -203,7 +205,8 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     return NextResponse.json({
       ok: true,
       pipelineId: newPipeline?.id ?? null,
-      modulesInstalled: v.modules.length,
+      modulesInstalled,
+      ...(modulesFailed.length > 0 ? { modulesFailed } : {}),
     }, { status: 201 });
   } catch (err: unknown) {
     return apiError(err);

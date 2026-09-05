@@ -248,8 +248,12 @@ export const POST = withApiRoute(async (request: NextRequest) => {
 
     // Invalidate dashboard widget caches + the cached list count (#1544 F2) so
     // the new contact reflects in list totals immediately, not after the TTL.
+    // Awaited: a dropped invalidation serves stale totals (failures logged,
+    // never thrown, so a Redis blip can't 500 the write).
     invalidateWidgetCache(ctx.tenantId, 'stats-contacts', 'contacts-recent', 'activity');
-    void invalidateTenantCache(ctx.tenantId).catch(() => { /* cache best-effort */ });
+    await invalidateTenantCache(ctx.tenantId).catch((e: unknown) =>
+      logError({ error: e as Error, context: 'contacts cache invalidate' })
+    );
 
     // WORKFLOW-C: trigger automation rules (non-blocking)
     const { evaluateAutomations } = await import('@/lib/automation/engine');
