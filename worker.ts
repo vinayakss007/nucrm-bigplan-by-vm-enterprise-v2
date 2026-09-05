@@ -469,6 +469,24 @@ const webhookWorker = new Worker(
   { connection: createRedisConnection(), concurrency: 5, ...JOB_RETENTION }
 );
 
+const tenantCleanupWorker = new Worker(
+  'tenant-cleanup',
+  async (job) => {
+    const { tenantId } = job.data;
+    console.log(`[Tenant Cleanup Worker] Processing job: ${job.id} - Cleaning up tenant ${tenantId}`);
+    try {
+      const { processTenantCleanup } = await import('@/lib/tenant-cleanup');
+      await processTenantCleanup(tenantId);
+      return { cleaned: true, tenantId };
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } catch (error: any) {
+      console.error(`[Tenant Cleanup Worker] Failed to clean up tenant:`, error.message);
+      throw error;
+    }
+  },
+  { connection: createRedisConnection(), concurrency: 1, ...JOB_RETENTION }
+);
+
 // Health check heartbeat — writes worker status to Redis every 30s
 const heartbeatInterval = setInterval(async () => {
   try {
@@ -486,6 +504,7 @@ const heartbeatInterval = setInterval(async () => {
         leadWarming: leadWarmingWorker.isRunning(),
         webhook: webhookWorker.isRunning(),
         whatsappWebhook: whatsappWebhookWorker.isRunning(),
+        tenantCleanup: tenantCleanupWorker.isRunning(),
       },
       timestamp: new Date().toISOString(),
     };
@@ -521,6 +540,7 @@ async function shutdown(signal: 'SIGTERM' | 'SIGINT') {
     leadWarmingWorker.close(),
     webhookWorker.close(),
     whatsappWebhookWorker.close(),
+    tenantCleanupWorker.close(),
   ]);
   await Promise.allSettled(
     redisConnections.map((conn) =>

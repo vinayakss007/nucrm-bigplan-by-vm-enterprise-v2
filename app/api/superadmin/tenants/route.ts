@@ -16,6 +16,7 @@ import { eq, and, sql, ilike, desc, or } from 'drizzle-orm';
 import { hashPassword } from '@/lib/auth/session';
 import { logSuperAdminAction } from '@/lib/audit/super-admin';
 import { invalidateTenantCache } from '@/lib/cache';
+import { addJob } from '@/lib/queue';
 import { concurrencyGuard } from '@/lib/api/concurrency';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { logError } from '@/lib/errors-server';
@@ -362,14 +363,15 @@ export const DELETE = withApiRoute(async (request: NextRequest) => {
         // Best-effort: if Redis is down the keys will expire via TTL
       }
 
-      // TODO(P1): Tenant hard-deletion leaves orphaned resources that need
-      // async cleanup via a background job or admin queue:
+      // Tenant hard-deletion leaves orphaned resources that need
+      // async cleanup via a background job:
       //   - S3 objects (uploaded files, avatars, document attachments)
       //   - External cron/scheduler registrations (e.g. cron-job.org entries)
       //   - Stripe subscriptions & customer objects (cancel via Stripe API)
       //   - Third-party integrations (WhatsApp, Twilio, SendGrid contacts)
       //   - Calendar sync OAuth tokens (Google, Outlook)
       //   - Queued webhook deliveries that reference this tenant
+      await addJob('tenant-cleanup', { tenantId: id });
     } else {
       await db
         .update(tenants)
