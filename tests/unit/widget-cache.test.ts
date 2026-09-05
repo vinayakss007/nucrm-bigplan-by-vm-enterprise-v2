@@ -139,13 +139,22 @@ describe('widget-cache', () => {
   });
 
   it('getCacheStats returns size and maxEntries', async () => {
-    const { getCacheStats, clearCache } = await import('@/lib/dashboard/widget-cache');
+    const fetcher = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({}), { headers: { 'content-type': 'application/json' } }),
+    );
+    const { getCacheStats, clearCache, withCache } = await import('@/lib/dashboard/widget-cache');
     clearCache();
     const stats = getCacheStats();
     expect(stats).toHaveProperty('size');
     expect(stats).toHaveProperty('maxEntries');
     expect(stats.maxEntries).toBe(500);
     expect(stats.size).toBe(0);
+
+    await withCache('t1', 'k1', 60, fetcher);
+    await withCache('t1', 'k2', 60, fetcher);
+
+    const statsAfter = getCacheStats();
+    expect(statsAfter.size).toBe(2);
   });
 
   it('clearCache clears all entries', async () => {
