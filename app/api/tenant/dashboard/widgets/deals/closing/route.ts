@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { deals, dealStages, pipelines } from '@/drizzle/schema';
-import { eq, and, isNull, notInArray, asc, sql } from 'drizzle-orm';
+import { eq, and, isNull, asc, sql } from 'drizzle-orm';
 import { withCache } from '@/lib/dashboard/widget-cache';
 import { logError, tenantMeta } from '@/lib/errors-server';
 import { withApiRoute } from '@/lib/api/with-api-route';
@@ -20,14 +20,9 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     const tid = ctx.tenantId;
 
     return withCache(tid, 'deals-closing', 300, async () => {
-      const terminalStages = await db
-        .select({ id: dealStages.id })
-        .from(dealStages)
-        .innerJoin(pipelines, eq(pipelines.id, dealStages.pipelineId))
-        .where(and(eq(pipelines.tenantId, tid), sql`lower(${dealStages.name}) IN ('won', 'lost')`));
-
-      const terminalIds = terminalStages.map(s => s.id);
-
+      // Single round-trip: terminal-stage filter inlined as a subselect
+      // (previously a stages query followed by the items query). NOT IN over
+      // an empty set matches everything, preserving the old fallback.
       const items = await db
         .select({
           id: deals.id,
@@ -41,7 +36,11 @@ export const GET = withApiRoute(async (request: NextRequest) => {
         .where(and(
           eq(deals.tenantId, tid),
           isNull(deals.deletedAt),
-          ...(terminalIds.length > 0 ? [notInArray(deals.stageId, terminalIds)] : []),
+          sql`${deals.stageId} NOT IN (
+            SELECT ds.id FROM ${dealStages} ds
+            INNER JOIN ${pipelines} p ON p.id = ds.pipeline_id
+            WHERE p.tenant_id = ${tid} AND lower(ds.name) IN ('won', 'lost')
+          )`,
         ))
         .orderBy(asc(deals.closeDate))
         .limit(5);

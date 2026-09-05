@@ -22,7 +22,9 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     return withCache(tid, 'follow-ups-list', 120, async () => {
       const now = new Date();
 
-      const items = await db
+      // Single round-trip: items + aggregate stats as scalar subselects
+      // (previously two serial queries, each a full WAN RTT).
+      const rows = await db
         .select({
           id: followUps.id,
           title: followUps.title,
@@ -30,6 +32,9 @@ export const GET = withApiRoute(async (request: NextRequest) => {
           status: followUps.status,
           missedDays: followUps.missedDays,
           autoAiEnabled: followUps.autoAiEnabled,
+          todayCount: sql<number>`(SELECT count(*)::int FROM ${followUps} f WHERE f.tenant_id = ${tid} AND f.deleted_at IS NULL AND f.status IN ('pending', 'missed') AND f.due_date::date = CURRENT_DATE)`,
+          overdueCount: sql<number>`(SELECT count(*)::int FROM ${followUps} f WHERE f.tenant_id = ${tid} AND f.deleted_at IS NULL AND f.status IN ('pending', 'missed') AND f.due_date::date < CURRENT_DATE)`,
+          totalPending: sql<number>`(SELECT count(*)::int FROM ${followUps} f WHERE f.tenant_id = ${tid} AND f.deleted_at IS NULL AND f.status IN ('pending', 'missed'))`,
         })
         .from(followUps)
         .where(and(
@@ -41,24 +46,23 @@ export const GET = withApiRoute(async (request: NextRequest) => {
         .orderBy(asc(followUps.dueDate))
         .limit(5);
 
-      const [stats] = await db.select({
-        todayCount: sql<number>`count(*) filter (where ${followUps.dueDate}::date = CURRENT_DATE and ${followUps.status} in ('pending', 'missed'))::int`,
-        overdueCount: sql<number>`count(*) filter (where ${followUps.dueDate}::date < CURRENT_DATE and ${followUps.status} in ('pending', 'missed'))::int`,
-        totalPending: sql<number>`count(*) filter (where ${followUps.status} in ('pending', 'missed'))::int`,
-      })
-      .from(followUps)
-      .where(and(
-        eq(followUps.tenantId, tid),
-        isNull(followUps.deletedAt),
-      ));
+      const first = rows[0];
+      const items = rows.map((r) => ({
+        id: r.id,
+        title: r.title,
+        dueDate: r.dueDate,
+        status: r.status,
+        missedDays: r.missedDays,
+        autoAiEnabled: r.autoAiEnabled,
+      }));
 
       return NextResponse.json({
         data: {
           items,
           stats: {
-            todayCount: stats?.todayCount ?? 0,
-            overdueCount: stats?.overdueCount ?? 0,
-            totalPending: stats?.totalPending ?? 0,
+            todayCount: first?.todayCount ?? 0,
+            overdueCount: first?.overdueCount ?? 0,
+            totalPending: first?.totalPending ?? 0,
           },
         },
       });

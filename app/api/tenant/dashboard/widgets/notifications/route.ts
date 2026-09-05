@@ -21,7 +21,9 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     const uid = ctx.userId;
 
     return withCache(tid, 'notifications-list', 60, async () => {
-      const notifs = await db
+      // Single round-trip: items + unread count as scalar subselect
+      // (previously two serial queries).
+      const rows = await db
         .select({
           id: notifications.id,
           title: notifications.title,
@@ -30,6 +32,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
           link: notifications.link,
           readAt: notifications.readAt,
           createdAt: notifications.createdAt,
+          unreadCount: sql<number>`(SELECT count(*)::int FROM ${notifications} n WHERE n.tenant_id = ${tid} AND n.user_id = ${uid} AND n.deleted_at IS NULL AND n.read_at IS NULL)`,
         })
         .from(notifications)
         .where(and(
@@ -40,22 +43,21 @@ export const GET = withApiRoute(async (request: NextRequest) => {
         .orderBy(desc(notifications.createdAt))
         .limit(5);
 
-      const [unreadResult] = await db.select({
-        count: sql<number>`count(*)::int`,
-      })
-        .from(notifications)
-        .where(and(
-          eq(notifications.tenantId, tid),
-          eq(notifications.userId, uid),
-          isNull(notifications.deletedAt),
-          isNull(notifications.readAt),
-        ));
-
-      const unreadCount = unreadResult?.count ?? 0;
+      const first = rows[0];
+      const unreadCount = first?.unreadCount ?? 0;
+      const items = rows.map((r) => ({
+        id: r.id,
+        title: r.title,
+        body: r.body,
+        type: r.type,
+        link: r.link,
+        readAt: r.readAt,
+        createdAt: r.createdAt,
+      }));
 
       return NextResponse.json({
         data: {
-          items: notifs,
+          items,
           stats: {
             unreadCount,
             totalCount: unreadCount,

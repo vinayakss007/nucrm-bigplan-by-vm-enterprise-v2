@@ -15,7 +15,7 @@ import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { createEmailTemplateSchema } from '@/lib/api/schemas';
 import { db } from '@/drizzle/db';
 import { emailTemplates } from '@/drizzle/schema';
-import { eq, and, isNull, asc } from 'drizzle-orm';
+import { eq, and, isNull, asc, sql } from 'drizzle-orm';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 export const GET = withApiRoute(async (request: NextRequest) => {
@@ -23,6 +23,12 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
     
+    // Paginated: bodyHtml blobs previously shipped unbounded per request.
+    const params = request.nextUrl.searchParams;
+    const limit = Math.min(Math.max(parseInt(params.get('limit') || '50', 10) || 50, 1), 200);
+    const page = Math.max(parseInt(params.get('page') || '1', 10) || 1, 1);
+    const offset = (page - 1) * limit;
+
     const data = await db.select({
       id: emailTemplates.id,
       name: emailTemplates.name,
@@ -31,15 +37,18 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       category: emailTemplates.category,
       createdAt: emailTemplates.createdAt,
       updatedAt: emailTemplates.updatedAt,
+      totalCount: sql<number>`COUNT(*) OVER()::int`,
     })
     .from(emailTemplates)
     .where(and(
       eq(emailTemplates.tenantId, ctx.tenantId),
       isNull(emailTemplates.deletedAt)
     ))
-    .orderBy(asc(emailTemplates.category), asc(emailTemplates.name));
+    .orderBy(asc(emailTemplates.category), asc(emailTemplates.name))
+    .limit(limit)
+    .offset(offset);
 
-    return NextResponse.json({ data });
+    return NextResponse.json({ data, meta: { page, limit, total: data[0]?.totalCount ?? 0 } });
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -41,7 +41,17 @@ export const GET = withApiRoute(async (request: NextRequest) => {
           ) AS deals_this_month_value,
           (SELECT COUNT(*)::int FROM ${contacts}
            WHERE tenant_id = ${tid} AND deleted_at IS NULL AND created_at >= date_trunc('month', now())
-          ) AS new_contacts_this_month
+          ) AS new_contacts_this_month,
+          -- Folded here (was a trailing 8th query): won-stage ids resolved
+          -- inline so this stays a single round-trip.
+          (SELECT COALESCE(SUM(${deals.amount}), 0)::float FROM ${deals}
+           WHERE tenant_id = ${tid} AND deleted_at IS NULL AND created_at >= date_trunc('month', now())
+           AND stage_id IN (
+             SELECT ds.id FROM ${dealStages} ds
+             INNER JOIN ${pipelines} p ON p.id = ds.pipeline_id
+             WHERE p.tenant_id = ${tid} AND lower(ds.name) = 'won'
+           )
+          ) AS won_this_month
       `),
 
       // Deals by stage in a single query
@@ -63,7 +73,6 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       .orderBy(asc(dealStages.order)),
     ]);
 
-    const wonStageIds = terminalStages.filter(s => s.name.toLowerCase() === 'won').map(s => s.id);
     const terminalStageIds = terminalStages.map(s => s.id);
     const counts = combinedStats.rows?.[0] || {};
 
@@ -121,14 +130,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       totalDeals: Number(counts['total_deals'] ?? 0),
       dealsThisMonthValue: Number(counts['deals_this_month_value'] ?? 0),
       newContactsThisMonth: Number(counts['new_contacts_this_month'] ?? 0),
-      wonThisMonth: wonStageIds.length > 0
-        ? Number((await db.execute(sql`
-            SELECT COALESCE(SUM(amount), 0)::float FROM ${deals}
-            WHERE tenant_id = ${tid} AND deleted_at IS NULL
-            AND stage_id IN (${sql.join(wonStageIds.map(id => sql`${id}`), sql`, `)})
-            AND created_at >= date_trunc('month', now())
-          `)).rows?.[0]?.['sum'] ?? 0)
-        : 0,
+      wonThisMonth: Number(counts['won_this_month'] ?? 0),
       activities: recentActivities,
       tasks: pendingTasksList,
       dealsByStage: dealsByStage.map(s => ({ stage: s.stageName, count: s.count, total: s.total })),
