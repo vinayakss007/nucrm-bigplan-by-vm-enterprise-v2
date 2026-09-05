@@ -274,7 +274,11 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params:
       }
     }
 
-    cache.delByPattern(`tenant:${ctx.tenantId}:deals:*`);
+    // Awaited: a dropped invalidation serves stale deal data until TTL.
+    // Failures are logged (not thrown) so a Redis blip never 500s the write.
+    await cache.delByPattern(`tenant:${ctx.tenantId}:deals:*`).catch((e: unknown) =>
+      logError({ error: e as Error, context: 'deals cache invalidate' })
+    );
     return NextResponse.json({ data: row });
   
 

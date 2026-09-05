@@ -32,6 +32,9 @@ export interface GDPRExportData {
   metadata: {
     totalRecords: number;
     dataCategories: string[];
+    // Categories whose queries failed. Never silently return [] for a
+    // failed category — an incomplete "complete" export violates Article 15.
+    failedCategories: string[];
   };
 }
 
@@ -73,11 +76,15 @@ export async function exportTenantData(tenantId: string): Promise<GDPRExportData
 
   const results = await Promise.all(
     queries.map(q =>
-      db.execute(q.sql).then(r => ({ key: q.key, rows: r.rows })).catch(() => ({ key: q.key, rows: [] }))
+      db.execute(q.sql)
+        .then(r => ({ key: q.key, rows: r.rows, failed: false as boolean }))
+        .catch(() => ({ key: q.key, rows: [], failed: true as boolean }))
     )
   );
 
-  for (const { key, rows } of results) {
+  const failedCategories: string[] = [];
+  for (const { key, rows, failed } of results) {
+    if (failed) failedCategories.push(key);
     categories[key] = rows as GDPRDataCategory;
   }
 
@@ -90,6 +97,7 @@ export async function exportTenantData(tenantId: string): Promise<GDPRExportData
     metadata: {
       totalRecords,
       dataCategories: (Object.keys(categories) as Array<keyof typeof categories>).filter(k => categories[k].length > 0),
+      failedCategories,
     },
   };
 }
