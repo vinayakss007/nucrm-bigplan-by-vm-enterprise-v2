@@ -113,15 +113,17 @@ export function getTemplateModules(templateId: string): string[] {
 export async function installTemplateModules(
   tenantId: string,
   templateId: string
-): Promise<void> {
+): Promise<{ installed: number; failed: string[] }> {
   const moduleIds = getTemplateModules(templateId);
 
-  if (moduleIds.length === 0) return;
+  if (moduleIds.length === 0) return { installed: 0, failed: [] };
 
-  try {
-    for (const moduleId of moduleIds) {
+  let installed = 0;
+  const failed: string[] = [];
+  for (const moduleId of moduleIds) {
+    try {
       const manifest = BUILTIN_MODULES.find(m => m.id === moduleId);
-      if (!manifest) continue;
+      if (!manifest) { failed.push(moduleId); continue; }
 
       // Ensure module exists in registry table
       await db
@@ -148,10 +150,13 @@ export async function installTemplateModules(
           settings: {},
         })
         .onConflictDoNothing();
+      installed++;
+    } catch (error) {
+      logger.error('[auto-install] Failed to install template module', { moduleId, error: error instanceof Error ? error.message : String(error) });
+      failed.push(moduleId);
     }
-  } catch (error) {
-    logger.error('[auto-install] Failed to install template modules', { error: error instanceof Error ? error.message : String(error) });
   }
+  return { installed, failed };
 }
 
 /**
