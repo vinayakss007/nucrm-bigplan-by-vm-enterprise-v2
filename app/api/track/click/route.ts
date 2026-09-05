@@ -23,9 +23,13 @@ export async function GET(req: NextRequest) {
   const trackId  = searchParams.get('t');
   const rawUrl   = searchParams.get('url');
 
-  // Validate destination URL
+  // Validate destination URL. External redirects are only honored when the
+  // request carries a plausible tracking id (uuid): without one this endpoint
+  // would be an open redirector turning our domain into phishing cover.
+  // Anything else falls back to '/'.
+  const trackIdIsPlausible = !!trackId && /^[0-9a-fA-F-]{8,64}$/.test(trackId);
   let destination = '/';
-  if (rawUrl) {
+  if (rawUrl && trackIdIsPlausible) {
     try {
       const decoded = decodeURIComponent(rawUrl);
       if (/^https?:\/\//i.test(decoded)) {
@@ -93,5 +97,7 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  return NextResponse.redirect(destination, { status: 302 });
+  // NextResponse.redirect requires an absolute URL — '/' alone throws
+  // ERR_INVALID_URL (previously a latent 500 on every fallback).
+  return NextResponse.redirect(new URL(destination, req.url), { status: 302 });
 }

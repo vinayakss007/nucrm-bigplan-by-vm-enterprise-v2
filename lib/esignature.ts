@@ -137,8 +137,9 @@ export class DocuSignAdapter implements SigningProviderAdapter {
 
     const webhookSecret = process.env['DOCUSIGN_WEBHOOK_SECRET'];
     if (!webhookSecret) {
-      // Fall back to presence check if no secret is configured
-      return !!signature;
+      // Fail CLOSED: without a secret there is nothing to verify against,
+      // so any signature must be rejected (a presence check proves nothing).
+      return false;
     }
 
     // Compute HMAC-SHA256 and compare
@@ -211,8 +212,8 @@ export class HelloSignAdapter implements SigningProviderAdapter {
 
     const webhookSecret = process.env['HELLOSIGN_WEBHOOK_SECRET'];
     if (!webhookSecret) {
-      // Fall back to presence check if no secret is configured
-      return !!eventHash;
+      // Fail CLOSED (see DocuSign adapter above).
+      return false;
     }
 
     // Compute HMAC-SHA256 and compare

@@ -19,6 +19,10 @@ const publicTicketSchema = z.object({
   body: z.string().max(10000).optional().default(''),
   category: z.string().max(100).optional().default('general'),
   priority: z.enum(['low', 'medium', 'high', 'urgent']).optional().default('medium'),
+  // Optional tenant context (uuid). When supplied, the contact lookup is
+  // scoped to (tenantId, email) so the same email in two tenants cannot file
+  // into the wrong workspace. Embeds should pass their tenant id.
+  tenant_id: z.string().uuid().optional(),
 });
 
 /**
@@ -73,12 +77,17 @@ export async function POST(request: NextRequest) {
     const raw = await readJsonBody(request);
     const parsed = validateBody(publicTicketSchema, raw);
     if (parsed instanceof NextResponse) return parsed;
-    const { email, subject, body, category, priority } = parsed.data;
+    const { email, subject, body, category, priority, tenant_id } = parsed.data;
 
-    // Find or create contact
-    const contact = await db.query.contacts.findFirst({
-      where: eq(contacts.email, email),
-    });
+    // Find or create contact — scoped to (tenantId, email) when the caller
+    // passes tenant context; a bare email lookup can match another tenant.
+    const contact = tenant_id
+      ? await db.query.contacts.findFirst({
+          where: and(eq(contacts.tenantId, tenant_id), eq(contacts.email, email)),
+        })
+      : await db.query.contacts.findFirst({
+          where: eq(contacts.email, email),
+        });
 
     if (!contact) return NextResponse.json({ error: 'No account found with this email' }, { status: 404 });
 
