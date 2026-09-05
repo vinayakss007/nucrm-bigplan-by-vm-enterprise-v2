@@ -191,6 +191,15 @@ async function main() {
 
     // Delete API key usage first (FK to tenants)
     await db.execute(sql`DELETE FROM api_key_usage WHERE tenant_id = ${IDS.tenant}`);
+    // Children before parents (FK order). Covers every fixed-ID seed table —
+    // previously leads/pipelines/stages/companies/contacts/deals were NOT
+    // cleaned, so a re-run crashed on duplicate PK after users were deleted.
+    await db.delete(schema.deals).where(sql`tenant_id = ${IDS.tenant}`);
+    await db.delete(schema.contacts).where(sql`tenant_id = ${IDS.tenant}`);
+    await db.delete(schema.companies).where(sql`tenant_id = ${IDS.tenant}`);
+    await db.delete(schema.dealStages).where(sql`tenant_id = ${IDS.tenant}`);
+    await db.delete(schema.pipelines).where(sql`tenant_id = ${IDS.tenant}`);
+    await db.delete(schema.leads).where(sql`tenant_id = ${IDS.tenant}`);
     await db.delete(schema.tenantMembers).where(sql`tenant_id = ${IDS.tenant}`);
     await db.delete(schema.roles).where(sql`tenant_id = ${IDS.tenant}`);
     await db.delete(schema.tenants).where(sql`id = ${IDS.tenant}`);

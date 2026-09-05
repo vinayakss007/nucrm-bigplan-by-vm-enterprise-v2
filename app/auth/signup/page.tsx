@@ -113,7 +113,11 @@ export default function SignupPage() {
       }
       track('signup', { method: 'password' });
       toast.success('Workspace created! Welcome to NuCRM.');
-      setTimeout(() => router.push('/tenant/dashboard'), 1500);
+      // Navigate immediately — the old 1500ms timer plus the heavy first
+      // dashboard load left users staring at a spinner for up to a minute
+      // (looked broken; retries minted duplicate workspaces). The toast
+      // survives navigation; onboarding has its own skeleton.
+      router.push('/tenant/dashboard');
     } catch {
       setError('Connection error. Please try again.');
       setLoading(false);

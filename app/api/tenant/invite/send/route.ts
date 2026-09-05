@@ -114,7 +114,12 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     const accent = tenantRow?.primaryColor ?? '#7c3aed';
     const roleName = roleSlug.replace(/_/g, ' ');
 
-    await sendEmail({
+    // Email is best-effort: the invitation row is already committed, so an
+    // SMTP failure must NOT 500 (a retry would rotate the token and invalidate
+    // the first emailed link). Report delivery status instead.
+    let emailFailed = false;
+    try {
+      await sendEmail({
       to: emailLower,
       subject: `${inviter?.fullName ?? 'Someone'} invited you to join ${tenantRow?.name} on NuCRM`,
       html: `
@@ -141,6 +146,10 @@ export const POST = withApiRoute(async (request: NextRequest) => {
         </div>`,
       text: `${inviter?.fullName} invited you to ${tenantRow?.name} on NuCRM. Accept: ${inviteUrl}`,
     });
+    } catch (emailErr) {
+      emailFailed = true;
+      await logError({ error: emailErr, context: 'invite email delivery' });
+    }
 
     await logAudit({ 
       tenantId: ctx.tenantId, 
@@ -150,7 +159,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       newData: { email: emailLower, role: roleSlug } 
     });
 
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, email_failed: emailFailed });
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
