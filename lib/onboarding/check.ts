@@ -61,8 +61,14 @@ export async function hasCompletedOnboarding(tenantId: string, _userId: string):
 
 /**
  * Mark onboarding as complete for a tenant.
- * Uses a sentinel userId ('__tenant__') so completion is shared across all users.
- * Also records per-user completion for the completing user specifically.
+ *
+ * NOTE: an earlier revision also wrote a sentinel row with
+ * userId '__tenant__' for "tenant-wide" completion, but user_id is a
+ * uuid FK to users(id), so that insert always 500s with
+ * `invalid input syntax for type uuid: "__tenant__"` and rolls back the
+ * whole onboarding transaction. It is also redundant: hasCompletedOnboarding()
+ * matches on tenantId+stepName only, so the completing user's own row already
+ * marks the tenant complete for everyone. Only the per-user row is written.
  *
  * Accepts an optional `tx` client so callers can make this write part of a
  * larger transaction (see POST /api/tenant/onboarding/complete). Any error is
@@ -74,23 +80,9 @@ export async function markOnboardingComplete(
   userId: string,
   tx: DbOrTx = db
 ): Promise<void> {
-  // Mark tenant-wide completion (sentinel user ID)
-  await tx.insert(onboardingProgress).values({
-    tenantId,
-    userId: '__tenant__',
-    stepName: ONBOARDING_COMPLETE_STEP,
-    isCompleted: true,
-    completedAt: new Date(),
-  }).onConflictDoUpdate({
-    target: [onboardingProgress.tenantId, onboardingProgress.userId, onboardingProgress.stepName],
-    set: {
-      isCompleted: true,
-      completedAt: new Date(),
-      updatedAt: new Date(),
-    },
-  });
-
-  // Also mark per-user completion for the completing user
+  // Per-user completion row. hasCompletedOnboarding() matches on
+  // tenantId+stepName alone, so this single row marks the tenant complete
+  // for every user (no sentinel row — user_id is a uuid FK).
   await tx.insert(onboardingProgress).values({
     tenantId,
     userId,
