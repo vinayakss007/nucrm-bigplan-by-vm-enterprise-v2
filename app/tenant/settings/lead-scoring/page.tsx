@@ -85,13 +85,15 @@ export default function LeadScoringRulesPage() {
 
   const startersMutation = useMutation({
     mutationFn: async () => {
-      for (const s of STARTER_RULES) {
-        await fetch('/api/tenant/admin/lead-scoring', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(s),
-        });
-      }
+      await Promise.all(
+        STARTER_RULES.map((s) =>
+          fetch('/api/tenant/admin/lead-scoring', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(s),
+          })
+        )
+      );
     },
     onSuccess: () => load(),
     onError: () => setError('Failed to install some starters'),
