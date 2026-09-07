@@ -108,7 +108,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
 
       const resolvePipeline = async (name?: string): Promise<string | null> => {
         const key = (name || '').toLowerCase().trim();
-        if (key && pipelineCache[key]) return pipelineCache[key];
+        if (key && pipelineCache[key]) return pipelineCache[key] || null;
 
         const [pipeline] = key
           ? await tx.select({ id: pipelines.id })
@@ -127,7 +127,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       const resolveStage = async (pipelineId: string, stageName?: string): Promise<string | null> => {
         if (!stageName?.trim()) return null;
         const key = `${pipelineId}:${stageName.toLowerCase().trim()}`;
-        if (stageCache[key]) return stageCache[key];
+        if (stageCache[key]) return stageCache[key] || null;
 
         const [stage] = await tx
           .select({ id: dealStages.id })
@@ -143,7 +143,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       const resolveContact = async (email?: string): Promise<string | null> => {
         if (!email?.trim()) return null;
         const key = email.toLowerCase().trim();
-        if (contactCache[key]) return contactCache[key];
+        if (contactCache[key]) return contactCache[key] || null;
 
         const [contact] = await tx
           .select({ id: contacts.id })
@@ -159,7 +159,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       const resolveCompany = async (name?: string): Promise<string | null> => {
         if (!name?.trim()) return null;
         const key = name.toLowerCase().trim();
-        if (companyCache[key]) return companyCache[key];
+        if (companyCache[key]) return companyCache[key] || null;
 
         const [company] = await tx
           .select({ id: companies.id })
@@ -175,7 +175,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       const resolveUser = async (email?: string): Promise<string | null> => {
         if (!email?.trim()) return null;
         const key = email.toLowerCase().trim();
-        if (userCache[key]) return userCache[key];
+        if (userCache[key]) return userCache[key] || null;
 
         // #1122: only resolve users who are ACTIVE members of THIS tenant.
         // A bare `WHERE lower(email) = ...` matched users across all tenants,

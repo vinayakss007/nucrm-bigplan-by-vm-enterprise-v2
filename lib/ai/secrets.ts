@@ -370,7 +370,7 @@ export async function listProviderKeyMeta(
     if (!rowKey) continue;
 
     const rowPriority = keyPriority[row.keyType as KeyType] ?? 0;
-    const currentPriority = out[rid]?.keyType ? keyPriority[out[rid].keyType!] : -1;
+    const currentPriority = out[rid]?.keyType ? keyPriority[out[rid]!.keyType!] : -1;
 
     if (row.keyType === 'personal' && userId && row.userId !== userId) continue;
 

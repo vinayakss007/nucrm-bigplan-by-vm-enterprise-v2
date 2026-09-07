@@ -110,7 +110,7 @@ export const GET = withApiRoute(async (req: NextRequest) => {
 
     const result: Record<PicklistCategory, PicklistEntry[]> = { ...DEFAULTS };
     for (const cat of CATEGORIES) {
-      if (Array.isArray(stored[cat])) result[cat] = stored[cat];
+      if (Array.isArray(stored[cat])) result[cat] = stored[cat] as PicklistEntry[];
     }
     return NextResponse.json({ picklists: result, categories: CATEGORIES });
  

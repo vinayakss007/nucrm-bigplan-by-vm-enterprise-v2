@@ -95,7 +95,7 @@ export const GET = withApiRoute(async (req: NextRequest) => {
         key_type: keys[id]?.keyType ?? null,
         model_override: keys[id]?.modelOverride ?? null,
         // base_url from secrets table takes precedence
-        ...(keys[id]?.baseUrl ? { base_url: keys[id].baseUrl } : {}),
+        ...(keys[id]?.baseUrl ? { base_url: keys[id]!.baseUrl } : {}),
       };
     }
 

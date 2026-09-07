@@ -71,8 +71,11 @@ export default function TenantAnalyticsPage() {
     dealsByStage.forEach(d => {
       const stageName = d.stageName || 'Other';
       if (!groups[stageName]) groups[stageName] = { count: 0, value: 0 };
-      groups[stageName].count += Number(d.count || 0);
-      groups[stageName].value += Number(d.revenue || 0);
+      const group = groups[stageName];
+      if (group) {
+        group.count += Number(d.count || 0);
+        group.value += Number(d.revenue || 0);
+      }
     });
     return Object.entries(STAGE_COLORS)
       .map(([stageName, color]) => ({
