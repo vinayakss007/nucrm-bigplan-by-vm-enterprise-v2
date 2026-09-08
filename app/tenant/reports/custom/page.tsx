@@ -343,7 +343,7 @@ export default function CustomReportBuilder() {
                         {selectedColumns.map(col => (
                           <td key={col} className="px-4 py-2 text-xs text-muted-foreground max-w-[200px] truncate">
                             {row[col] === null || row[col] === undefined ? '—' :
-                              typeof row[col] === 'number' && row[col] > 1000 ? `$${row[col].toLocaleString()}` :
+                              typeof row[col] === 'number' && (row[col] as number) > 1000 ? `$${(row[col] as number).toLocaleString()}` :
                               typeof row[col] !== 'boolean' && String(row[col]).includes('T') ? formatDate(String(row[col])) :
                               String(row[col])}
                           </td>

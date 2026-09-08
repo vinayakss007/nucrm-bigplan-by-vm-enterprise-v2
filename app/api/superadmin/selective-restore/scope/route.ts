@@ -90,7 +90,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     let totalFromBackup = 0;
     for (const table of tables) {
       backupCounts[table] = tenantSQL[table]?.length || 0;
-      totalFromBackup += backupCounts[table];
+      totalFromBackup += (backupCounts[table] || 0);
     }
 
     const existingCounts = await countExistingRecords(tenant_id, tables);

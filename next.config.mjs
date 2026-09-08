@@ -10,23 +10,16 @@ if (distDir !== '.next' && !fs.existsSync(distDir)) {
   console.log(`[next.config] Created distDir: ${distDir}`);
 }
 
-// allowedDevOrigins — auto-detect external IP so dev server works from any network
+// allowedDevOrigins — from env only (no blocking network calls at import).
+// Previously this ran `curl ifconfig.me` / `dig` via execSync on every config
+// load, stalling dev/build/test startup on network timeouts. Set EXTERNAL_IP
+// explicitly when remote dev access is needed.
 const origins = ['localhost:3000'];
-let externalIp = process.env.EXTERNAL_IP;
-if (!externalIp) {
-  try {
-    externalIp = (await import('node:child_process')).execSync('curl -s ifconfig.me --connect-timeout 5').toString().trim();
-  } catch {
-    try {
-      externalIp = (await import('node:child_process')).execSync('dig +short myip.opendns.com @resolver1.opendns.com -4 2>/dev/null').toString().trim();
-    } catch {}
-  }
-}
+const externalIp = (process.env.EXTERNAL_IP || '').trim();
 if (externalIp) {
   origins.push(externalIp, `${externalIp}:3000`);
-  console.log(`[next.config] External IP detected: ${externalIp}`);
-} else {
-  console.warn('[next.config] Could not detect external IP — add EXTERNAL_IP env var if needed');
+} else if (process.env.NODE_ENV !== 'production') {
+  console.warn('[next.config] EXTERNAL_IP not set — remote dev access disabled (set EXTERNAL_IP to enable)');
 }
 
 /** @type {import('next').NextConfig} */
@@ -37,7 +30,7 @@ let nextConfig = {
   devIndicators: { buildActivity: false },
   cacheMaxMemorySize: 50 * 1024 * 1024,
   experimental: {
-    optimizePackageImports: ['lucide-react', '@radix-ui/react-*', '@dnd-kit/core', '@dnd-kit/sortable'],
+    optimizePackageImports: ['lucide-react', '@radix-ui/react-*', '@dnd-kit/core', '@dnd-kit/sortable', 'recharts', 'date-fns', '@tanstack/react-table', '@tanstack/react-query'],
   },
   images: {
     remotePatterns: [
@@ -49,8 +42,8 @@ let nextConfig = {
       { protocol: 'https', hostname: 'images.unsplash.com' },
     ],
     formats: ['image/avif', 'image/webp'],
-    minimumCacheTTL: 60,
-    deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
+    minimumCacheTTL: 86400,
+    deviceSizes: [640, 750, 828, 1080, 1200, 1920],
     imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
   },
   compress: true,
