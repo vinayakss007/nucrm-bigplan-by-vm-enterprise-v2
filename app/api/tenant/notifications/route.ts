@@ -34,30 +34,31 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       filters.push(isNull(notifications.readAt));
     }
 
-    const [countResult] = await db.select({ count: sql<number>`count(*)::int` })
-      .from(notifications)
-      .where(and(...filters));
-
-    const data = await db.select()
-      .from(notifications)
-      .where(and(...filters))
-      .orderBy(desc(notifications.createdAt))
-      .limit(limit)
-      .offset(offset);
-
-    const unreadCount = await db.select({ count: sql<number>`count(*)::int` })
-      .from(notifications)
-      .where(and(
-        eq(notifications.tenantId, ctx.tenantId),
-        eq(notifications.userId, ctx.userId),
-        isNull(notifications.deletedAt),
-        isNull(notifications.readAt),
-      ));
+    // Perf: count + page + unread badge in parallel (was 3 serial round-trips).
+    const [countResult, data, unreadCount] = await Promise.all([
+      db.select({ count: sql<number>`count(*)::int` })
+        .from(notifications)
+        .where(and(...filters)).then((r) => r[0]),
+      db.select()
+        .from(notifications)
+        .where(and(...filters))
+        .orderBy(desc(notifications.createdAt))
+        .limit(limit)
+        .offset(offset),
+      db.select({ count: sql<number>`count(*)::int` })
+        .from(notifications)
+        .where(and(
+          eq(notifications.tenantId, ctx.tenantId),
+          eq(notifications.userId, ctx.userId),
+          isNull(notifications.deletedAt),
+          isNull(notifications.readAt),
+        )).then((r) => r[0]),
+    ]);
 
     return NextResponse.json({
       data,
       total: countResult?.count ?? 0,
-      unread: unreadCount[0]?.count ?? 0,
+      unread: unreadCount?.count ?? 0,
       limit,
       offset,
       hasMore: offset + data.length < (countResult?.count ?? 0),

@@ -110,7 +110,7 @@ export async function getRateLimit(
       if (plan?.rateLimitConfig) {
         const config = plan.rateLimitConfig as Record<string, number>;
         if (config[endpoint] !== undefined) {
-          return config[endpoint];
+          return config[endpoint] || 0;
         }
       }
     }
@@ -118,7 +118,7 @@ export async function getRateLimit(
     // 2. Try global defaults
     const globals = await getGlobalDefaults();
     if (globals[endpoint] !== undefined) {
-      return globals[endpoint];
+      return globals[endpoint] || 0;
     }
 
     // 3. Nothing configured (successful lookups) → 0 (rate limiting disabled).

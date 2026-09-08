@@ -60,37 +60,39 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     if (pipeline_id) filters.push(eq(deals.pipelineId, pipeline_id));
     if (q) filters.push(ilike(deals.title, `%${escapeLike(q)}%`));
 
-    const [countResult] = await db.select({ count: sql<number>`count(*)::int` })
+    // Perf: count + page fetch in parallel (was 2 serial WAN round-trips).
+    const [countResult, data] = await Promise.all([
+      db.select({ count: sql<number>`count(*)::int` })
+        .from(deals)
+        .where(and(...filters)).then((r) => r[0]),
+      db.select({
+        id: deals.id,
+        title: deals.title,
+        amount: deals.amount,
+        stageId: deals.stageId,
+        closeDate: deals.closeDate,
+        contactId: deals.contactId,
+        assignedTo: deals.assignedTo,
+        createdBy: deals.createdBy,
+        createdAt: deals.createdAt,
+        updatedAt: deals.updatedAt,
+        firstName: contacts.firstName,
+        lastName: contacts.lastName,
+        companyName: companies.name,
+        assignedName: users.fullName,
+        stageName: dealStages.name,
+        stageOrder: dealStages.order,
+      })
       .from(deals)
-      .where(and(...filters));
-
-    const data = await db.select({
-      id: deals.id,
-      title: deals.title,
-      amount: deals.amount,
-      stageId: deals.stageId,
-      closeDate: deals.closeDate,
-      contactId: deals.contactId,
-      assignedTo: deals.assignedTo,
-      createdBy: deals.createdBy,
-      createdAt: deals.createdAt,
-      updatedAt: deals.updatedAt,
-      firstName: contacts.firstName,
-      lastName: contacts.lastName,
-      companyName: companies.name,
-      assignedName: users.fullName,
-      stageName: dealStages.name,
-      stageOrder: dealStages.order,
-    })
-    .from(deals)
-    .leftJoin(contacts, eq(contacts.id, deals.contactId))
-    .leftJoin(companies, eq(companies.id, deals.companyId))
-    .leftJoin(dealStages, eq(dealStages.id, deals.stageId))
-    .leftJoin(users, eq(users.id, deals.assignedTo))
-    .where(and(...filters))
-    .orderBy(desc(deals.createdAt))
-    .limit(limit)
-    .offset(offset);
+      .leftJoin(contacts, eq(contacts.id, deals.contactId))
+      .leftJoin(companies, eq(companies.id, deals.companyId))
+      .leftJoin(dealStages, eq(dealStages.id, deals.stageId))
+      .leftJoin(users, eq(users.id, deals.assignedTo))
+      .where(and(...filters))
+      .orderBy(desc(deals.createdAt))
+      .limit(limit)
+      .offset(offset),
+    ]);
 
     const response = { data, total: countResult?.count ?? 0 };
     return NextResponse.json(response);

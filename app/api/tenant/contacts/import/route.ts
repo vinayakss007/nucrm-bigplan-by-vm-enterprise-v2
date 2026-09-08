@@ -116,7 +116,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       const getOrCreateCompany = async (name: string): Promise<string | null> => {
         if (!name?.trim()) return null;
         const key = name.toLowerCase().trim();
-        if (companyCache[key]) return companyCache[key];
+        if (companyCache[key]) return companyCache[key] || null;
         
         const cacheKeys = Object.keys(companyCache);
         if (cacheKeys.length >= MAX_COMPANY_CACHE && cacheKeys[0]) {
