@@ -1,6 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { buildInsert, buildUpdate } from '@/lib/db/client';
+import { buildInsert, buildUpdate, countRows } from '@/lib/db/client';
 import { dbCache, invalidateCache } from '@/lib/db/cache';
+
+describe('countRows', () => {
+  it('rejects invalid table names', async () => {
+    await expect(countRows('invalid_table', { id: '1' })).rejects.toThrow('Invalid table name');
+  });
+});
 
 describe('buildInsert', () => {
   it('generates correct INSERT query', () => {
