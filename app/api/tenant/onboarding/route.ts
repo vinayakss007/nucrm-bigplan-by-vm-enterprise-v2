@@ -137,35 +137,37 @@ export const POST = withApiRoute(async (request: NextRequest) => {
 
         // Remove any additional duplicate default pipelines (keep only the primary)
         if (existingDefaults.length > 1) {
-          for (const extra of existingDefaults.slice(1)) {
-            const extraStages = await tx.select({ id: dealStages.id })
+          const extraPipelineIds = existingDefaults.slice(1).map(p => p.id);
+
+          const extraStages = await tx.select({ id: dealStages.id })
+            .from(dealStages)
+            .where(and(eq(dealStages.tenantId, ctx.tenantId), inArray(dealStages.pipelineId, extraPipelineIds)));
+
+          if (extraStages.length > 0) {
+            const extraStageIds = extraStages.map(s => s.id);
+            // Reassign deals from extra pipeline stages to the first new stage
+            const firstStage = await tx.select({ id: dealStages.id })
               .from(dealStages)
-              .where(and(eq(dealStages.tenantId, ctx.tenantId), eq(dealStages.pipelineId, extra.id)));
+              .where(and(eq(dealStages.tenantId, ctx.tenantId), eq(dealStages.pipelineId, pipelineId)))
+              .limit(1);
 
-            if (extraStages.length > 0) {
-              const extraStageIds = extraStages.map(s => s.id);
-              // Reassign deals from extra pipeline stages to the first new stage
-              const firstStage = await tx.select({ id: dealStages.id })
-                .from(dealStages)
-                .where(and(eq(dealStages.tenantId, ctx.tenantId), eq(dealStages.pipelineId, pipelineId)))
-                .limit(1);
-
-              if (firstStage[0]) {
-                await tx.update(deals)
-                  .set({ stageId: firstStage[0].id })
-                  .where(and(
-                    eq(deals.tenantId, ctx.tenantId),
-                    inArray(deals.stageId, extraStageIds)
-                  ));
-              }
-
-              await tx.delete(dealStages).where(
-                and(eq(dealStages.tenantId, ctx.tenantId), inArray(dealStages.id, extraStageIds))
-              );
+            if (firstStage[0]) {
+              await tx.update(deals)
+                .set({ stageId: firstStage[0].id })
+                .where(and(
+                  eq(deals.tenantId, ctx.tenantId),
+                  inArray(deals.stageId, extraStageIds)
+                ));
             }
 
-            await tx.delete(pipelines).where(eq(pipelines.id, extra.id));
+            await tx.delete(dealStages).where(
+              and(eq(dealStages.tenantId, ctx.tenantId), inArray(dealStages.id, extraStageIds))
+            );
           }
+
+          await tx.delete(pipelines).where(
+            and(eq(pipelines.tenantId, ctx.tenantId), inArray(pipelines.id, extraPipelineIds))
+          );
         }
       } else {
         // No existing default pipeline, create a new one
