@@ -73,13 +73,15 @@ export const POST = withApiRoute(async (req: NextRequest) => {
         if (!firstRow) continue;
         const pipelineId: string = firstRow.id;
 
-        for (const [i, stageName] of pipe.stages.entries()) {
-          await tx.insert(dealStages).values({
-            tenantId: ctx.tenantId,
-            pipelineId: pipelineId,
-            name: stageName,
-            order: i,
-          });
+        const stageValues = pipe.stages.map((stageName, i) => ({
+          tenantId: ctx.tenantId,
+          pipelineId: pipelineId,
+          name: stageName,
+          order: i,
+        }));
+
+        if (stageValues.length > 0) {
+          await tx.insert(dealStages).values(stageValues);
         }
       }
 
