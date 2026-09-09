@@ -34,13 +34,23 @@ import { checkTokenAndLimits, recordUsage } from '@/lib/ai/common';
 import { logError } from '@/lib/errors-server';
 import { chat, GatewayError, type GatewayRequest } from '@/lib/ai/gateway';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import sanitizeHtml from 'sanitize-html';
 
 // FIX HIGH-03: Sanitize inputs to prevent prompt injection
-function sanitizeInput(input: string, maxLength: number = 500): string {
+export function sanitizeInput(input: string, maxLength: number = 500): string {
   if (!input) return '';
-  return String(input)
+
+  // Strip all HTML tags
+  const sanitized = sanitizeHtml(String(input), {
+    allowedTags: [],
+    allowedAttributes: {},
+    disallowedTagsMode: 'discard'
+  });
+
+  return sanitized
     .slice(0, maxLength)
-    .replace(/[<>]/g, '') // Remove angle brackets
+    .replace(/[<>]/g, '') // Extra safety against angle brackets
+    .replace(/(&lt;|&gt;)/g, '') // Remove encoded angle brackets that might have been escaped
     .replace(/(ignore previous|system prompt|you are now|disregard)/gi, '[FILTERED]')
     .trim();
 }
