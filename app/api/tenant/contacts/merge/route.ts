@@ -78,9 +78,13 @@ export const POST = withApiRoute(async (request: NextRequest) => {
         .from(contactTags)
         .where(eq(contactTags.contactId, duplicate_id));
 
-      for (const row of dupContactTags) {
+      if (dupContactTags.length > 0) {
+        const insertValues = dupContactTags.map(row => ({
+          contactId: primary_id,
+          tagId: row.tagId,
+        }));
         await tx.insert(contactTags)
-          .values({ contactId: primary_id, tagId: row.tagId })
+          .values(insertValues)
           .onConflictDoNothing();
       }
 
