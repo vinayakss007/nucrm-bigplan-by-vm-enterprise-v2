@@ -1,6 +1,7 @@
 import { test, expect, describe, vi } from 'vitest';
 import { POST } from '@/app/api/tenant/whatsapp/templates/route';
 import { NextRequest } from 'next/server';
+import type { RouteHandler } from '@/lib/api/with-api-route';
 
 vi.mock('@/lib/auth/middleware', () => ({
   requireAuth: () => ({ tenantId: 'test-tenant' })
@@ -45,7 +46,7 @@ global.fetch = vi.fn().mockResolvedValue({
 });
 
 vi.mock('@/lib/api/with-api-route', () => ({
-  withApiRoute: (fn: any) => fn
+  withApiRoute: (fn: RouteHandler<unknown>) => fn
 }));
 
 describe('WhatsApp Templates Sync Benchmark', () => {
@@ -53,7 +54,7 @@ describe('WhatsApp Templates Sync Benchmark', () => {
         const req = new NextRequest('http://localhost/api/tenant/whatsapp/templates', { method: 'POST' });
 
         const start = performance.now();
-        await POST(req as any, {} as any);
+        await POST(req, undefined);
         const end = performance.now();
 
         console.log(`Sync execution time: ${end - start} ms`);
