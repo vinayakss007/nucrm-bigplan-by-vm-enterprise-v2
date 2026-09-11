@@ -38,3 +38,20 @@ export interface Workflow {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   config?: Record<string, any>;
 }
+
+export interface AutomationCondition {
+  field: string;
+  operator: 'equals' | 'not_equals' | 'contains' | 'not_contains' | 'greater_than' | 'less_than' | 'is_empty' | 'is_not_empty';
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  value: any;
+}
+
+export interface AutomationActionConfig {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  [key: string]: any;
+}
+
+export interface AutomationAction {
+  type: string;
+  config?: AutomationActionConfig;
+}

@@ -35,6 +35,7 @@ import { sendEmail } from '@/lib/email/service';
 import { escapeHtml } from '@/lib/email/escape-html';
 import { createNotification } from '@/lib/notifications';
 import { captureError } from '@/lib/capture-error';
+import type { AutomationCondition, AutomationAction } from './types';
 
 export type TriggerEvent =
   | 'contact.created' | 'contact.updated'
@@ -81,12 +82,10 @@ export async function evaluateAutomations(payload: TriggerPayload): Promise<void
           deal_id: payload.dealId ?? payload.data?.['deal_id'],
         };
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        if (!meetsConditions(automation.conditions as any[], enrichedData)) continue;
+        if (!meetsConditions(automation.conditions as AutomationCondition[], enrichedData)) continue;
 
         await db.transaction(async (tx) => {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          for (const action of (automation.actions as any[] ?? [])) {
+          for (const action of (automation.actions as AutomationAction[] ?? [])) {
             await executeAction(tx, action, payload, enrichedData);
           }
 
@@ -128,7 +127,7 @@ export async function evaluateAutomations(payload: TriggerPayload): Promise<void
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function meetsConditions(conditions: any[], data: Record<string, any>): boolean {
+function meetsConditions(conditions: AutomationCondition[], data: Record<string, any>): boolean {
   if (!Array.isArray(conditions) || conditions.length === 0) return true;
 
   return conditions.every((cond) => {
@@ -157,7 +156,7 @@ function getNestedValue(obj: Record<string, any>, path: string): any {
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function executeAction(dbOrTx: NodePgDatabase | typeof db, action: any, payload: TriggerPayload, enrichedData: Record<string, any>): Promise<void> {
+async function executeAction(dbOrTx: NodePgDatabase | typeof db, action: AutomationAction, payload: TriggerPayload, enrichedData: Record<string, any>): Promise<void> {
   const { type, config = {} } = action;
 
   switch (type) {
