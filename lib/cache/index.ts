@@ -176,19 +176,19 @@ const MAX_CACHE_ENTRIES = 1000;
 const memoryCache = new Map<string, { value: any; expires: number; lastAccessed: number }>();
 
 function evictIfNecessary() {
-  if (memoryCache.size <= MAX_CACHE_ENTRIES) return;
+  if (memoryCache.size < MAX_CACHE_ENTRIES) return;
   
   // Evict oldest expired entries first
   const now = Date.now();
   for (const [key, item] of memoryCache.entries()) {
     if (now > item.expires) {
       memoryCache.delete(key);
-      if (memoryCache.size <= MAX_CACHE_ENTRIES) return;
+      if (memoryCache.size < MAX_CACHE_ENTRIES) return;
     }
   }
   
   // If still over limit, evict least recently used
-  if (memoryCache.size > MAX_CACHE_ENTRIES) {
+  while (memoryCache.size >= MAX_CACHE_ENTRIES) {
     let oldestKey: string | null = null;
     let oldestTime = Infinity;
     for (const [key, item] of memoryCache.entries()) {
@@ -197,7 +197,11 @@ function evictIfNecessary() {
         oldestKey = key;
       }
     }
-    if (oldestKey) memoryCache.delete(oldestKey);
+    if (oldestKey) {
+      memoryCache.delete(oldestKey);
+    } else {
+      break;
+    }
   }
 }
 
