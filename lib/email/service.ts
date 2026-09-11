@@ -148,17 +148,27 @@ async function sendViaSMTP(payload: EmailPayload): Promise<SendResult> {
     // Reuse transporter only when host|port|user|pass unchanged
     const currentConfig = crypto
       .createHash('sha256')
-      .update(`${host}|${port}|${process.env.SMTP_USER ?? ''}|${process.env.SMTP_PASS ?? ''}`)
+      .update(JSON.stringify({
+        host,
+        port,
+        user: process.env.SMTP_USER ?? '',
+        pass: process.env.SMTP_PASS ?? ''
+      }))
       .digest('hex');
+
     if (!smtpTransporter || smtpConfig !== currentConfig) {
+      const auth = process.env.SMTP_USER || process.env.SMTP_PASS
+        ? {
+            user: process.env.SMTP_USER,
+            pass: process.env.SMTP_PASS,
+          }
+        : undefined;
+
       smtpTransporter = nodemailer.default.createTransport({
         host,
         port,
         secure,
-        auth: {
-          user: process.env.SMTP_USER,
-          pass: process.env.SMTP_PASS,
-        },
+        ...(auth ? { auth } : {}),
       });
       smtpConfig = currentConfig;
     }
