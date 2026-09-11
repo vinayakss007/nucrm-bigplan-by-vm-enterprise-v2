@@ -53,14 +53,15 @@ export const POST = withApiRoute(async (req: NextRequest) => {
 
     await db.transaction(async (tx) => {
       // 1. Insert Custom Fields
-      for (const field of template.custom_fields) {
-        await tx.insert(customFieldDefs).values({
+      if (template.custom_fields.length > 0) {
+        const customFieldValues = template.custom_fields.map((field) => ({
           tenantId: ctx.tenantId,
           entityType: field.entity,
           fieldKey: field.key,
           fieldLabel: field.label,
           fieldType: field.type
-        }).onConflictDoNothing();
+        }));
+        await tx.insert(customFieldDefs).values(customFieldValues).onConflictDoNothing();
       }
 
       // 2. Insert Pipelines & Stages
