@@ -65,10 +65,16 @@ export async function processWarmUp(): Promise<WarmUpResult> {
                    AND l.direction = 'outbound'
                    AND l.created_at >= CURRENT_DATE
                    AND l.status = 'sent')`,
-      totalBounced: sql<number>`(SELECT count(*)::int FROM ${emailWarmupLogs} l
+      bouncesLast7Days: sql<number>`(SELECT count(*)::int FROM ${emailWarmupLogs} l
                  WHERE l.config_id = ${emailWarmupConfigs.id}
                    AND l.direction = 'outbound'
-                   AND l.status = 'failed')`
+                   AND l.status = 'failed'
+                   AND l.created_at >= CURRENT_DATE - INTERVAL '7 days')`,
+      sendsLast7Days: sql<number>`(SELECT count(*)::int FROM ${emailWarmupLogs} l
+                 WHERE l.config_id = ${emailWarmupConfigs.id}
+                   AND l.direction = 'outbound'
+                   AND l.status = 'sent'
+                   AND l.created_at >= CURRENT_DATE - INTERVAL '7 days')`
     })
     .from(emailWarmupConfigs)
     .innerJoin(tenants, eq(tenants.id, emailWarmupConfigs.tenantId))
@@ -77,15 +83,10 @@ export async function processWarmUp(): Promise<WarmUpResult> {
       eq(tenants.status, 'active')
     ));
 
-    for (const { config, sentToday, totalBounced } of configsWithSentToday) {
+    for (const { config, sentToday, bouncesLast7Days, sendsLast7Days } of configsWithSentToday) {
       try {
         // Defense-in-depth: check bounce rate before processing even if isActive is true
-        // TODO: This uses all-time totalBounced / totalSent counters. A config with early
-        // deliverability issues will carry that bounce rate forever, even if recent sends
-        // are clean. Consider switching to a rolling window (e.g., bounces in last 7 days /
-        // sends in last 7 days) to match the soft-bounce escalation window and allow
-        // recovery after transient reputation problems.
-        const bounceRate = calculateBounceRate(totalBounced, config.totalSent || 0);
+        const bounceRate = calculateBounceRate(bouncesLast7Days, sendsLast7Days);
         if (bounceRate > WARMUP_BOUNCE_RATE_THRESHOLD) {
           console.warn(
             `[email-warmup] CRITICAL: Bounce rate ${(bounceRate * 100).toFixed(1)}% exceeds ${WARMUP_BOUNCE_RATE_THRESHOLD * 100}% threshold for config ${config.id}. Pausing warmup.`
