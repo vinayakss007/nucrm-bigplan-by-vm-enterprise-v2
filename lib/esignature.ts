@@ -315,14 +315,15 @@ export async function createSigningRequest(input: CreateSigningRequestInput): Pr
     if (!row) throw new Error('Failed to create signing request');
 
     // Record the sent event for each signer
-    for (const signer of signers) {
-      await tx.insert(signingEvents).values({
+    if (signers.length > 0) {
+      const eventValues = signers.map(signer => ({
         requestId: row.id,
         tenantId: input.tenantId,
         signerEmail: signer.email,
-        event: 'sent',
+        event: 'sent' as const,
         metadata: {},
-      });
+      }));
+      await tx.insert(signingEvents).values(eventValues);
     }
 
     return row;
