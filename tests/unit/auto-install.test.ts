@@ -207,7 +207,8 @@ describe('installTemplateModules', () => {
     mockOnConflictDoNothing.mockRejectedValueOnce(new Error('DB failure'));
     mockLoggerError.mockClear();
     const { installTemplateModules } = await import('@/lib/modules/auto-install');
-    await expect(installTemplateModules('tenant-1', 'real_estate')).resolves.toBeUndefined();
+    // Per-module summary: failed module is reported, install continues
+    await expect(installTemplateModules('tenant-1', 'real_estate')).resolves.toMatchObject({ failed: ['core-crm'] });
     expect(mockLoggerError).toHaveBeenCalled();
   });
 });

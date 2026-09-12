@@ -100,7 +100,22 @@ describe('Cache Module - Extended', () => {
       expect(result).toBe('fresh-value');
     });
 
-    it('warm only sets if key missing', async () => {
+    it('warm skips without a lock in memory fallback (fail-closed, #M3)', async () => {
+      const { cache } = await import('@/lib/cache');
+      delete process.env['LOCK_FAIL_OPEN'];
+      let called = false;
+      await cache.warm('warm-test', async () => {
+        called = true;
+        return 'warm-value';
+      }, 60);
+      // No Redis available so the distributed lock cannot be acquired and
+      // fail-closed warming must not run the fallback.
+      expect(called).toBe(false);
+      expect(await cache.get('warm-test')).toBeNull();
+    });
+
+    it('warm only sets if key missing (fail-open legacy mode)', async () => {
+      process.env['LOCK_FAIL_OPEN'] = 'true';
       const { cache } = await import('@/lib/cache');
       await cache.warm('warm-test', async () => 'warm-value', 60);
       expect(await cache.get('warm-test')).toBe('warm-value');

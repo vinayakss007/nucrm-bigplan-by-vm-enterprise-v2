@@ -60,7 +60,7 @@ describe('checkFileExists / deleteFile', () => {
 
 describe('downloadFromS3', () => {
   const backup = { id: 'abc123', storagePath: 'backups/tenant/abc123.dump' };
-  const tempPath = `/tmp/restore_${backup.id}.dump`;
+  const tempPath = join(tmpdir(), `restore_${backup.id}.dump`);
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -70,7 +70,7 @@ describe('downloadFromS3', () => {
     if (existsSync(tempPath)) unlinkSync(tempPath);
   });
 
-  it('writes the downloaded bytes to /tmp/restore_<id>.dump and returns that path', async () => {
+  it('writes the downloaded bytes to restore_<id>.dump in the OS temp dir and returns that path', async () => {
     const payload = Buffer.from('INSERT INTO contacts (id) VALUES (1);');
     awsMocks.send.mockResolvedValue({
       Body: { transformToByteArray: async () => new Uint8Array(payload) },

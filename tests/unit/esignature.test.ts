@@ -267,11 +267,13 @@ describe('E-Signature - DocuSignAdapter', () => {
     expect(adapter.validateWebhook({}, {})).toBe(false);
   });
 
-  it('validateWebhook falls back to presence check when no secret', async () => {
+  it('validateWebhook fails closed (rejects) when no secret is configured', async () => {
+    delete process.env['DOCUSIGN_WEBHOOK_SECRET'];
     const { DocuSignAdapter } = await import('@/lib/esignature');
     const adapter = new DocuSignAdapter();
 
-    expect(adapter.validateWebhook('payload', { 'x-docusign-signature-1': 'abc123' })).toBe(true);
+    // A presence check proves nothing without a secret to verify against.
+    expect(adapter.validateWebhook('payload', { 'x-docusign-signature-1': 'abc123' })).toBe(false);
   });
 
   it('validateWebhook verifies HMAC when secret is set', async () => {
@@ -347,11 +349,13 @@ describe('E-Signature - HelloSignAdapter', () => {
     expect(adapter.validateWebhook({}, {})).toBe(false);
   });
 
-  it('validateWebhook falls back to presence check when no secret', async () => {
+  it('validateWebhook fails closed (rejects) when no secret is configured', async () => {
+    delete process.env['HELLOSIGN_WEBHOOK_SECRET'];
     const { HelloSignAdapter } = await import('@/lib/esignature');
     const adapter = new HelloSignAdapter();
 
-    expect(adapter.validateWebhook('payload', { 'x-hellosign-event-hash': 'abc123' })).toBe(true);
+    // A presence check proves nothing without a secret to verify against.
+    expect(adapter.validateWebhook('payload', { 'x-hellosign-event-hash': 'abc123' })).toBe(false);
   });
 
   it('validateWebhook verifies HMAC when secret is set', async () => {

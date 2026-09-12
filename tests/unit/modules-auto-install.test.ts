@@ -277,8 +277,8 @@ describe('auto-install', () => {
         })),
       }));
 
-      await expect(installTemplateModules('tenant-1', 'real_estate')).resolves.toBeUndefined();
-      expect(mockLoggerError).toHaveBeenCalledWith('[auto-install] Failed to install template modules', { error: error.message });
+      await expect(installTemplateModules('tenant-1', 'real_estate')).resolves.toMatchObject({ failed: expect.any(Array) });
+      expect(mockLoggerError).toHaveBeenCalledWith('[auto-install] Failed to install template module', expect.objectContaining({ error: error.message }));
     });
 
     it('installs saas template modules (including analytics-pro that gets skipped)', async () => {
