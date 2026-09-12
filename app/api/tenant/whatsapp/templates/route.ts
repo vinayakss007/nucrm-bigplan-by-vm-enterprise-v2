@@ -12,7 +12,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { integrations, whatsappTemplates } from '@/drizzle/schema';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, sql } from 'drizzle-orm';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 export const GET = withApiRoute(async (req: NextRequest) => {
@@ -111,24 +111,27 @@ export const POST = withApiRoute(async (req: NextRequest) => {
     const templates = data.data || [];
 
     // Store templates in DB
-    for (const t of templates) {
+    if (templates.length > 0) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const values = templates.map((t: any) => ({
+        tenantId: ctx.tenantId,
+        name: t.name,
+        language: t.language,
+        category: t.category,
+        status: t.status,
+        components: t.components || [],
+        metaData: t,
+      }));
+
       await db.insert(whatsappTemplates)
-        .values({
-          tenantId: ctx.tenantId,
-          name: t.name,
-          language: t.language,
-          category: t.category,
-          status: t.status,
-          components: t.components || [],
-          metaData: t,
-        })
+        .values(values)
         .onConflictDoUpdate({
           target: [whatsappTemplates.tenantId, whatsappTemplates.name, whatsappTemplates.language],
           set: {
-            category: t.category,
-            status: t.status,
-            components: t.components || [],
-            metaData: t,
+            category: sql`EXCLUDED.category`,
+            status: sql`EXCLUDED.status`,
+            components: sql`EXCLUDED.components`,
+            metaData: sql`EXCLUDED.meta_data`,
             updatedAt: new Date(),
           }
         });
