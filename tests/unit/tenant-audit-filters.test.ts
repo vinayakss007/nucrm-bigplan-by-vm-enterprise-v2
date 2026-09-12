@@ -97,7 +97,8 @@ describe('audit filters — search escaping (#661)', () => {
     const params = collectStrings(h.wheres[0]);
     expect(params.some((p) => p.includes('a\\_b\\%c'))).toBe(true);
     expect(params.some((p) => p === '%a_b%c%')).toBe(false);
-  });
+    // The route import chain is heavy; allow headroom on slow/loaded runners.
+  }, 30000);
 });
 
 describe('audit filters — date validation (#661)', () => {

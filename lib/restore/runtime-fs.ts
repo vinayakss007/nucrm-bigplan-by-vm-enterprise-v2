@@ -4,6 +4,8 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { existsSync, unlinkSync } from 'fs';
+import { tmpdir } from 'os';
+import { join } from 'path';
 
 const MAX_RESTORE_SIZE_BYTES = 500 * 1024 * 1024; // 500 MB safety limit
 
@@ -11,7 +13,7 @@ export async function downloadFromS3(backup: { storagePath: string; id: string }
   const { S3Client, GetObjectCommand } = await import('@aws-sdk/client-s3');
   const { writeFile } = await import('fs/promises');
 
-  const tempPath = `/tmp/restore_${backup.id}.dump`;
+  const tempPath = join(tmpdir(), `restore_${backup.id}.dump`);
   const s3Client = new S3Client({
     region: s3Options.region || 'us-east-1',
     endpoint: s3Options.endpoint || undefined,

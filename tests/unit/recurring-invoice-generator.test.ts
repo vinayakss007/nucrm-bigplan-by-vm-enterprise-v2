@@ -65,6 +65,7 @@ vi.mock('drizzle-orm', () => ({
   isNull: vi.fn(() => true),
   lte: vi.fn(() => true),
   ne: vi.fn(() => true),
+  inArray: vi.fn(() => true),
   sql: Object.assign(
     vi.fn((_s: TemplateStringsArray, ...v: unknown[]) => `SQL(${v.join(',')})`),
     {},
@@ -147,6 +148,7 @@ describe('recurring-invoice-generator cron', () => {
       createdBy: 'user-1',
     }];
     lineItems = [{
+      invoiceId: 'tmpl-1',
       productId: null, serviceId: null, description: 'Retainer', itemType: 'custom',
       quantity: '1', unitPrice: '100.00', discountType: 'percentage', discountValue: '0',
       discountAmount: '0', taxRate: '18', taxAmount: '18.00', total: '100.00', sortOrder: 0,

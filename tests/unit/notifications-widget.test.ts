@@ -36,18 +36,17 @@ describe('Notifications Dashboard Widget API', () => {
   });
 
   it('returns notifications for the current user', async () => {
+    // Route performs a SINGLE query with unreadCount as a scalar subselect.
     const mockRows = [
-      { id: 'n1', title: 'Task assigned', body: 'Review proposal', type: 'task_assigned', link: '/tasks/1', readAt: null, createdAt: new Date().toISOString() },
-      { id: 'n2', title: 'Deal moved', body: null, type: 'deal_stage', link: null, readAt: new Date().toISOString(), createdAt: new Date().toISOString() },
+      { id: 'n1', title: 'Task assigned', body: 'Review proposal', type: 'task_assigned', link: '/tasks/1', readAt: null, createdAt: new Date().toISOString(), unreadCount: 1 },
+      { id: 'n2', title: 'Deal moved', body: null, type: 'deal_stage', link: null, readAt: new Date().toISOString(), createdAt: new Date().toISOString(), unreadCount: 1 },
     ];
 
     const limitFn = vi.fn().mockResolvedValue(mockRows);
     const orderByFn = vi.fn(() => ({ limit: limitFn }));
     const mockItems = { where: vi.fn(() => ({ orderBy: orderByFn })) };
-    const mockCount = { where: vi.fn(() => Promise.resolve([{ count: 1 }])) };
 
     vi.mocked(db.select).mockReturnValueOnce({ from: vi.fn(() => mockItems) });
-    vi.mocked(db.select).mockReturnValueOnce({ from: vi.fn(() => mockCount) });
 
     const { GET } = await import('@/app/api/tenant/dashboard/widgets/notifications/route');
     const req = new Request('http://localhost/api/tenant/dashboard/widgets/notifications');
@@ -63,10 +62,8 @@ describe('Notifications Dashboard Widget API', () => {
     const limitFn = vi.fn().mockResolvedValue([]);
     const orderByFn = vi.fn(() => ({ limit: limitFn }));
     const mockItems = { where: vi.fn(() => ({ orderBy: orderByFn })) };
-    const mockCount = { where: vi.fn(() => Promise.resolve([{ count: 0 }])) };
 
     vi.mocked(db.select).mockReturnValueOnce({ from: vi.fn(() => mockItems) });
-    vi.mocked(db.select).mockReturnValueOnce({ from: vi.fn(() => mockCount) });
 
     const { GET } = await import('@/app/api/tenant/dashboard/widgets/notifications/route');
     const req = new Request('http://localhost/api/tenant/dashboard/widgets/notifications');
@@ -96,10 +93,8 @@ describe('Notifications Dashboard Widget API', () => {
         return { orderBy: orderByFn };
       }),
     };
-    const mockCount = { where: vi.fn(() => Promise.resolve([{ count: 0 }])) };
 
     vi.mocked(db.select).mockReturnValueOnce({ from: vi.fn(() => mockItems) });
-    vi.mocked(db.select).mockReturnValueOnce({ from: vi.fn(() => mockCount) });
 
     const { GET } = await import('@/app/api/tenant/dashboard/widgets/notifications/route');
     const req = new Request('http://localhost/api/tenant/dashboard/widgets/notifications');

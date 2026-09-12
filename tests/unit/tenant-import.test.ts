@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { tmpdir } from 'os';
+import { join } from 'path';
 
 const mockExecute = vi.fn(async () => ({ rows: [], rowCount: 0 }));
 
@@ -32,7 +34,7 @@ describe('TenantDataImporter junction table deletes', () => {
 
     // Create a temp file with no valid entities
     const fs = await import('fs');
-    const tmpFile = `/tmp/test-import-${Date.now()}.jsonl`;
+    const tmpFile = join(tmpdir(), `test-import-${Date.now()}.jsonl`);
     fs.writeFileSync(tmpFile, '');
 
     try {
