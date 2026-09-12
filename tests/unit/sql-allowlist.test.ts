@@ -43,5 +43,9 @@ describe('sql-allowlist', () => {
     it('throws an error for SQL injection attempts', () => {
       expect(() => validateTableName('contacts; DROP TABLE users;')).toThrow('Invalid table name: "contacts; DROP TABLE users;"');
     });
+
+    it('throws an error for an empty table name', () => {
+      expect(() => validateTableName('')).toThrow('Invalid table name: ""');
+    });
   });
 });
