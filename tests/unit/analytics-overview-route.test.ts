@@ -51,6 +51,9 @@ vi.mock('@/lib/tenant/context', () => ({
 }));
 vi.mock('@/drizzle/db', () => ({ db: mockDb }));
 vi.mock('server-only', () => ({}));
+vi.mock('@/lib/api/with-api-route', () => ({
+  withApiRoute: <C>(fn: (request: import("next/server").NextRequest, context: C) => unknown) => fn,
+}));
 
 // #1615: the route runs inside withPinnedConnection (via withApiRoute). In unit
 // tests there is no real pool, so stub the primitive to run the callback
