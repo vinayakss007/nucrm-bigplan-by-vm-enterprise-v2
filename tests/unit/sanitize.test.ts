@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { sanitizeHTMLServer } from '@/lib/sanitize';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { sanitizeHTMLServer, sanitizeHTML } from '@/lib/sanitize';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
@@ -25,7 +25,8 @@ describe('dompurify version guard (#CRIT-1)', () => {
 describe('sanitizeHTMLServer', () => {
   it('strips all HTML tags', () => {
     expect(sanitizeHTMLServer('<b>bold</b>')).toBe('bold');
-    expect(sanitizeHTMLServer('<script>alert("xss")</script>')).toBe('alert("xss")');
+    // DOMPurify correctly scrubs <script> entirely rather than leaving its contents
+    expect(sanitizeHTMLServer('<script>alert("xss")</script>')).toBe('');
     expect(sanitizeHTMLServer('<a href="evil.com">click</a>')).toBe('click');
   });
 
@@ -63,58 +64,32 @@ describe('sanitizeHTML', () => {
     vi.resetModules();
   });
 
-  it('uses server-side fallback when no window and no windowRef', async () => {
+  it('sanitizes properly on the server side instead of insecure regex fallback', async () => {
     const { sanitizeHTML } = await import('@/lib/sanitize');
-
     const result = sanitizeHTML('<b>bold</b><script>evil</script>');
-
-    expect(result).toBe('boldevil');
+    expect(result).toBe('<b>bold</b>');
   });
 
   it('returns empty for empty html server-side', async () => {
     const { sanitizeHTML } = await import('@/lib/sanitize');
-
     expect(sanitizeHTML('')).toBe('');
   });
 
   it('returns plain text unchanged server-side', async () => {
     const { sanitizeHTML } = await import('@/lib/sanitize');
-
     expect(sanitizeHTML('just text')).toBe('just text');
   });
-});
 
-describe('sanitizeHTML with DOMPurify', () => {
-  beforeEach(() => {
-    vi.resetModules();
-    vi.mock('dompurify', () => ({
-      default: vi.fn(() => ({
-        sanitize: vi.fn((html: string) => `<p>${html}</p>`),
-      })),
-    }));
-  });
-
-  afterEach(() => {
-    vi.unstubAllGlobals();
-    vi.resetModules();
-  });
-
-  it('sanitizes HTML using DOMPurify when window is available', async () => {
-    vi.stubGlobal('window', {});
-
+  it('sanitizes properly bypassing window checks', async () => {
     const { sanitizeHTML } = await import('@/lib/sanitize');
-
     const result = sanitizeHTML('<b>safe</b>');
-
-    expect(result).toBe('<p><b>safe</b></p>');
+    expect(result).toBe('<b>safe</b>');
   });
 
-  it('sanitizes HTML using provided windowRef', async () => {
+  it('sanitizes HTML using provided windowRef gracefully', async () => {
     const { sanitizeHTML } = await import('@/lib/sanitize');
-
     const fakeWindow = {} as Window;
     const result = sanitizeHTML('<i>italic</i>', fakeWindow);
-
-    expect(result).toBe('<p><i>italic</i></p>');
+    expect(result).toBe('<i>italic</i>');
   });
 });

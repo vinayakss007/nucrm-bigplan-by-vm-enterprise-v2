@@ -154,6 +154,7 @@
     "drizzle-orm": "^0.45.2",
     "exceljs": "^4.4.0",
     "ioredis": "5.11.1",
+    "isomorphic-dompurify": "^3.19.0",
     "jose": "6.2.10",
     "lucide-react": "1.40.0",
     "mathjs": "^15.2.0",
