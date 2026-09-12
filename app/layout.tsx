@@ -21,6 +21,20 @@ import { QueryProvider } from '@/lib/query/client';
 import Script from 'next/script';
 import './globals.css';
 
+/**
+ * Force dynamic rendering for every page (#1968).
+ *
+ * proxy.ts sends a per-request CSP nonce (#1070) that Next stamps into
+ * scripts/styles ONLY when a page renders dynamically. Any statically
+ * prerendered page would serve build-time HTML whose inline scripts predate
+ * the request nonce, so the browser blocks them and production shows a
+ * white screen. Forcing dynamic rendering here guarantees the response CSP
+ * nonce always matches the rendered markup. Cost: marketing pages lose
+ * static prerendering (acceptable for an authenticated SaaS app; revisit
+ * with per-route static policies if marketing TTFB ever matters).
+ */
+export const dynamic = 'force-dynamic';
+
 const inter = Inter({
   subsets: ['latin'],
   weight: ['400', '500', '600', '700', '800', '900'],
