@@ -54,6 +54,7 @@
 
 import type { NextRequest } from 'next/server';
 import { withPinnedConnection } from '@/lib/db/request-connection';
+import { trackRequestStart, trackRequestEnd } from '@/lib/db/graceful-shutdown';
 
 /**
  * A Next.js App Router route handler: receives the request and an optional
@@ -85,8 +86,18 @@ export type RouteHandler<C = unknown> = (
 export function withApiRoute<C = unknown>(
   handler: RouteHandler<C>
 ): (request: NextRequest, context: C) => Promise<Response | undefined | void> {
-  return (request: NextRequest, context: C) => {
-    return withPinnedConnection(async () => handler(request, context));
+  return async (request: NextRequest, context: C) => {
+    // #H3: register this request as in-flight for the duration of the handler
+    // so graceful shutdown actually waits for it to finish before draining the
+    // pool. Previously trackRequestStart/End were never called in production,
+    // making the drain loop a no-op (inFlightCount stayed 0). The counter is
+    // decremented in finally so it can never leak on error/early-return.
+    trackRequestStart();
+    try {
+      return await withPinnedConnection(async () => handler(request, context));
+    } finally {
+      trackRequestEnd();
+    }
   };
 }
 

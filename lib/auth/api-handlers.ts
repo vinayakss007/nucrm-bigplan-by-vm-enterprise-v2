@@ -20,6 +20,7 @@ import { randomBytes, createHash } from 'crypto';
 import { verifyTOTP } from '@/lib/auth/totp';
 import { installDefaultModules } from '@/lib/modules/auto-install';
 import { isBlocked, recordFailedAttempt, recordSuccessfulLogin } from '@/lib/security/brute-force';
+import { getClientIp } from '@/lib/client-ip';
 import { validateBody } from '@/lib/api/validate';
 import { loginSchema, signupSchema } from '@/lib/api/schemas';
 import { redactEmail } from '@/lib/logger/pii';
@@ -52,7 +53,11 @@ export async function POST_login(request: NextRequest) {
   const contentType = request.headers.get('content-type') || '';
   const isForm = contentType.includes('application/x-www-form-urlencoded');
   try {
-    const ip = request.headers.get('x-forwarded-for')?.split(',')[0] ?? 'unknown';
+    // #M1: key brute-force lockout on the trusted client IP. getClientIp()
+    // only honours x-forwarded-for when TRUST_PROXY=true (behind a trusted
+    // proxy); otherwise it returns 'unknown'. Reading the raw header directly
+    // let an attacker rotate X-Forwarded-For to evade the per-IP login lockout.
+    const ip = getClientIp(request);
     const userAgent = request.headers.get('user-agent') ?? undefined;
 
     let email: string, password: string, remember_me = false;
@@ -360,7 +365,9 @@ export async function POST_signup(request: NextRequest) {
     });
 
     // Session + email verification (atomic)
-    const ip = request.headers.get('x-forwarded-for')?.split(',')[0] ?? 'unknown';
+    // #M1: use the trusted client IP (TRUST_PROXY-gated) for the session audit
+    // record rather than the spoofable raw X-Forwarded-For header.
+    const ip = getClientIp(request);
     const userAgent = request.headers.get('user-agent') ?? undefined;
     const token = await createToken(user.id);
     const tokenHash = await hashToken(token);

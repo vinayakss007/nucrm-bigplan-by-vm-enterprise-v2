@@ -317,13 +317,13 @@ const REFRESH_SCRIPT = `
 
 export async function acquireLock(key: string, ttlSeconds: number = LOCK_TTL): Promise<{ acquired: boolean; value: string }> {
   const redis = getRedisClient();
-  // DESIGN NOTE: Fail-open when Redis is unavailable. This means distributed locks
-  // provide NO protection in memory-only deployments or during Redis outages.
-  // For safety-critical locks (e.g., sequence deduplication, pipeline reorder),
-  // consider a database advisory lock fallback if Redis availability cannot be
-  // guaranteed. Acceptable for current scope since these operations are idempotent
-  // or have other concurrency guards (SELECT FOR UPDATE, unique constraints).
-  if (!redis || redis.status !== 'ready') return { acquired: true, value: '' };
+  // #M3: on Redis unavailability, fail CLOSED by default (acquired:false) so
+  // getOrSet takes its retry/stale path instead of every replica running the
+  // fallback at once (the stampede this lock prevents); it still returns a
+  // value, so throughput degrades, not correctness. LOCK_FAIL_OPEN=true restores legacy fail-open for idempotent/guarded callers.
+  if (!redis || redis.status !== 'ready') {
+    return { acquired: process.env['LOCK_FAIL_OPEN'] === 'true', value: '' };
+  }
   const value = makeLockValue();
   try {
     const result = await redis.call('SET', `nucrm:lock:${key}`, value, 'EX', ttlSeconds, 'NX');

@@ -183,6 +183,33 @@ async function isCachedContextStillAuthorized(
 
 export async function requireAuth(request: NextRequest): Promise<AuthContext | NextResponse> {
   const requestId = request.headers.get('x-request-id') || requestContext.generateId();
+
+  // #C2: central CSRF backstop. Historically CSRF was only checked where a
+  // route explicitly called requireCsrf() — only a handful of the ~360 mutating
+  // routes did, so a forgotten call left a state-changing endpoint
+  // CSRF-vulnerable. Enforcing it here means EVERY route that authenticates via
+  // requireAuth() is covered by default.
+  //
+  // Scope: this only guards AMBIENT (cookie) credentials, which is what CSRF is
+  // about. Bearer-token / API-key clients send an explicit header and are not
+  // subject to CSRF; needsCsrfValidation() already exempts api_key + the
+  // webhook/cron/forms/pre-auth allowlist and safe methods (GET/HEAD/OPTIONS).
+  //
+  // Rollout: gated by CSRF_ENFORCE_CENTRAL to avoid surprising an existing
+  // deployment. When 'true' (recommended), a cookie-authenticated mutation with
+  // a missing/invalid CSRF token is rejected here. When unset/'false', behaviour
+  // is unchanged (routes that call requireCsrf() themselves still enforce it).
+  // The frontend's apiFetch() (lib/utils.ts) already attaches X-CSRF-Token, so
+  // enabling this is safe once all mutating callers go through it.
+  if (process.env['CSRF_ENFORCE_CENTRAL'] === 'true') {
+    const usesCookieCredential =
+      !request.headers.get('authorization') && !!request.cookies.get('nucrm_session');
+    if (usesCookieCredential) {
+      const csrfDenied = requireCsrf(request);
+      if (csrfDenied) return csrfDenied;
+    }
+  }
+
   // #1615: pin ONE PoolClient for this scope so setTenantContext() (session GUC)
   // and the subsequent auth/context queries all run on the SAME connection.
   // No-op under PgBouncer. See lib/db/request-connection.ts for the mechanism and
