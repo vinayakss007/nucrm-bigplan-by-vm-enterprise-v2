@@ -89,7 +89,12 @@ export async function tryApiKeyAuth(request: NextRequest): Promise<AuthContext |
     roleSlug: 'api',
     permissions,
     isAdmin: scopes.includes('all') || scopes.includes('*') || scopes.some((s: string) => s.endsWith(':all')),
-    isSuperAdmin: row.isSuperAdmin || false,
+    // #1918: API keys NEVER inherit the owner's isSuperAdmin. A key is
+    // tenant-scoped by construction (apiKeys.tenantId); letting a
+    // super-admin-owned key authenticate as super-admin would bypass every
+    // scope check (see hasScope) and expose cross-tenant admin routes on key
+    // leak. Super-admin automation must use a session, not a key.
+    isSuperAdmin: false,
   };
 }
 
