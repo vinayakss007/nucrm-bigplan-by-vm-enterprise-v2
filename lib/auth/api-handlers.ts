@@ -314,14 +314,14 @@ export async function POST_signup(request: NextRequest) {
         { name: 'Lost', order: 5 },
       ];
 
-      for (const s of defaultStages) {
-        await tx.insert(dealStages).values({
+      await tx.insert(dealStages).values(
+        defaultStages.map((s) => ({
           tenantId: t.id,
           pipelineId: pipeline.id,
           name: s.name,
           order: s.order,
-        });
-      }
+        }))
+      );
 
       // 3. Create Default Roles (beyond admin) - with conflict handling
       const [existingSalesRep] = await tx.select({ id: roles.id })
