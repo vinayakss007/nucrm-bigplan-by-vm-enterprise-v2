@@ -31,6 +31,10 @@ let nextConfig = {
   cacheMaxMemorySize: 50 * 1024 * 1024,
   experimental: {
     optimizePackageImports: ['lucide-react', '@radix-ui/react-*', '@dnd-kit/core', '@dnd-kit/sortable', 'recharts', 'date-fns', '@tanstack/react-table', '@tanstack/react-query'],
+    // SLIM_BUILD=1 (scripts/start-slim.sh --build): cap build workers to one so
+    // `next build` stays under ~1.5GB on 2-CPU / low-RAM boxes. Slower, but it
+    // finishes instead of the worker being killed. Unset = Next default.
+    ...(process.env.SLIM_BUILD ? { cpus: 1 } : {}),
   },
   images: {
     remotePatterns: [

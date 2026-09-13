@@ -94,6 +94,8 @@
     "worker:dev": "tsx watch worker.ts",
     "dev:all": "concurrently \"npm run dev\" \"npm run worker:dev\" -c \"blue,bold.yellow\" -n \"APP,WORKER\"",
     "start:app": "next start",
+    "start:slim": "bash scripts/start-slim.sh",
+    "start:slim:prod": "bash scripts/start-slim.sh --prod",
     "test": "vitest run",
     "test:unit": "vitest run tests/unit tests/dashboard",
     "test:billing": "tsx scripts/billing-lifecycle-test.ts",
