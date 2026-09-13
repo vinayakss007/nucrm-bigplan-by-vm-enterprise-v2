@@ -5,6 +5,14 @@
 # PRODUCTION does NOT use this file — production runs the app under PM2 and uses
 # deploy/docker-compose.production.yml for infra/monitoring only.
 # See deploy/DEPLOYMENT_PATHS.md.
+#
+# The app images (nucrm-enterprise-web / nucrm-enterprise-worker) are BUILT FROM
+# THIS CHECKOUT — there is no registry and no published tag to pull, so build
+# from the exact commit you want to run:
+#   docker compose build && docker compose up -d
+# (equivalently: docker compose up -d --build)
+# Running a bare `docker compose up` would try to pull the two app image names
+# from a public registry and fail, because they exist only locally.
 ##############################################################################
 
 services:
@@ -15,6 +23,10 @@ services:
   # ── Web Frontend (Next.js) ───────────────────────────────────────────────
   web:
     image: nucrm-enterprise-web:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runner
     container_name: nucrm-app
     environment:
       - NODE_ENV=production
@@ -60,6 +72,10 @@ services:
   # ── Background Worker ───────────────────────────────────────────────────
   worker:
     image: nucrm-enterprise-worker:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runner
     container_name: nucrm-worker
     command: ["node", "--import", "tsx", "worker.ts"]
     environment:
