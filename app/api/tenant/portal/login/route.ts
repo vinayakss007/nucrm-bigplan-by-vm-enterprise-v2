@@ -37,7 +37,14 @@ async function getPortalConfig(tenantId: string) {
     ))
     .limit(1);
 
-  return setting?.value ? JSON.parse(String(setting.value)) : { enabled: false };
+  // platform_settings.value is jsonb: the pg driver already returns a parsed
+  // object. Older rows may hold a JSON string — handle both (#1982).
+  const rawValue = setting?.value;
+  if (typeof rawValue === 'object' && rawValue !== null) return rawValue as Record<string, unknown>;
+  if (typeof rawValue === 'string' && rawValue) {
+    try { return JSON.parse(rawValue) as Record<string, unknown>; } catch { /* fall through */ }
+  }
+  return { enabled: false };
 }
 
 export async function POST(request: NextRequest) {

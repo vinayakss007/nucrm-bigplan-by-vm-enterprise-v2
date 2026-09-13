@@ -5,7 +5,7 @@
  */
 import type { NextRequest } from 'next/server';
 import { db } from '@/drizzle/db';
-import { portalClients } from '@/drizzle/schema';
+import { contacts, portalClients } from '@/drizzle/schema';
 import { eq, and, gt } from 'drizzle-orm';
 import { getPortalSession } from '@/lib/portal-session';
 
@@ -49,4 +49,26 @@ export async function resolvePortalIdentity(request: NextRequest): Promise<Porta
   const session = await getPortalSession();
   if (!session) return null;
   return { email: session.email, tenantId: session.tenantId };
+}
+
+export interface PortalContact {
+  id: string;
+  tenantId: string;
+}
+
+/**
+ * Resolve the CRM contact for an authenticated portal identity, always
+ * scoped to (email, tenantId) so one tenant's email can never resolve
+ * another tenant's contact (#1913 / #1982).
+ */
+export async function resolvePortalContact(identity: PortalIdentity): Promise<PortalContact | null> {
+  const [contact] = await db
+    .select({ id: contacts.id, tenantId: contacts.tenantId })
+    .from(contacts)
+    .where(and(
+      eq(contacts.email, identity.email),
+      eq(contacts.tenantId, identity.tenantId),
+    ))
+    .limit(1);
+  return contact ?? null;
 }

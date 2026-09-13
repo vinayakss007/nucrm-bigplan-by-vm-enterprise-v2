@@ -11,9 +11,12 @@ import { eq, and } from 'drizzle-orm';
 import { z } from 'zod';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
+import { resolvePortalIdentity, resolvePortalContact } from '@/lib/portal-auth';
 
 const replySchema = z.object({
-  portalToken: z.string().min(16, 'Valid portal token required'),
+  // Per-ticket token for anonymous/embed callers. Logged-in portal callers
+  // (session cookie) omit it — ownership is verified from their identity.
+  portalToken: z.string().min(16, 'Valid portal token required').optional(),
   body: z.string().min(1, 'Reply cannot be empty').max(10000),
 });
 
@@ -32,17 +35,51 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const { id } = await params;
 
     // Validate token and verify ticket ownership
+    if (portalToken) {
+      const [ticket] = await db
+        .select({ id: supportTickets.id, status: supportTickets.status, contactId: supportTickets.contactId, tenantId: supportTickets.tenantId })
+        .from(supportTickets)
+        .where(and(
+          eq(supportTickets.id, id),
+          eq(supportTickets.portalToken, portalToken),
+        ))
+        .limit(1);
+
+      if (!ticket) return NextResponse.json({ error: 'Ticket not found' }, { status: 404 });
+      return insertReply(id, ticket, body);
+    }
+
+    // Cookie-session path (portal UI): the ticket must belong to the caller's
+    // own contact — no cross-contact writes (#1982).
+    const identity = await resolvePortalIdentity(request);
+    if (!identity) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+    const contact = await resolvePortalContact(identity);
+    if (!contact) return NextResponse.json({ error: 'Ticket not found' }, { status: 404 });
+
     const [ticket] = await db
       .select({ id: supportTickets.id, status: supportTickets.status, contactId: supportTickets.contactId, tenantId: supportTickets.tenantId })
       .from(supportTickets)
       .where(and(
         eq(supportTickets.id, id),
-        eq(supportTickets.portalToken, portalToken),
+        eq(supportTickets.tenantId, contact.tenantId),
+        eq(supportTickets.contactId, contact.id),
       ))
       .limit(1);
 
     if (!ticket) return NextResponse.json({ error: 'Ticket not found' }, { status: 404 });
+    return insertReply(id, ticket, body);
+  } catch (err) {
+    return apiError(err);
+  }
+}
 
+async function insertReply(
+  id: string,
+  ticket: { id: string; status: string | null; contactId: string | null; tenantId: string },
+  body: string,
+) {
     if (ticket.status === 'closed') {
       return NextResponse.json({ error: 'Cannot reply to a closed ticket' }, { status: 409 });
     }
@@ -66,7 +103,4 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     });
 
     return NextResponse.json({ data: reply }, { status: 201 });
-  } catch (err) {
-    return apiError(err);
-  }
 }
