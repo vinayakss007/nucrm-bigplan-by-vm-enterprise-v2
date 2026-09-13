@@ -362,6 +362,100 @@ export async function updateSubscription(subscriptionId: string, params: {
   return stripeRequest(`/subscriptions/${subscriptionId}`, 'POST', body);
 }
 
+// ── Subscription Schedules (downgrades at period end) ────────────────────────
+
+export interface StripeSchedule {
+  id: string;
+  status?: string;
+  current_phase?: { end_date?: number | null } | null;
+  [key: string]: unknown;
+}
+
+export interface StripeSchedulePhase {
+  items: { price: string; quantity?: number }[];
+  start_date?: number | 'now';
+  end_date?: number;
+  proration_behavior?: 'none' | 'create_prorations' | 'always_invoice';
+  metadata?: Record<string, string>;
+}
+
+/**
+ * Period end of a subscription, resilient to Stripe API version differences
+ * (#1915): on newer API versions the period fields moved from the
+ * subscription root onto the subscription items. Prefer the root, fall back
+ * to the first item, else 0 (caller decides how to handle unknown).
+ */
+export function getSubscriptionPeriodEnd(sub: StripeSubscription): number {
+  if (typeof sub.current_period_end === 'number' && sub.current_period_end > 0) {
+    return sub.current_period_end;
+  }
+  const item = sub.items?.data?.[0] as { current_period_end?: unknown } | undefined;
+  if (item && typeof item.current_period_end === 'number' && item.current_period_end > 0) {
+    return item.current_period_end;
+  }
+  return 0;
+}
+
+export async function createScheduleFromSubscription(subscriptionId: string): Promise<StripeSchedule> {
+  return stripeRequest('/subscription_schedules', 'POST', {
+    from_subscription: subscriptionId,
+  });
+}
+
+export async function updateSchedulePhases(
+  scheduleId: string,
+  phases: StripeSchedulePhase[],
+  metadata?: Record<string, string>,
+): Promise<StripeSchedule> {
+  const body: Record<string, unknown> = { phases };
+  if (metadata) body['metadata'] = metadata;
+  return stripeRequest(`/subscription_schedules/${scheduleId}`, 'POST', body);
+}
+
+/**
+ * Schedule a downgrade to take effect at the end of the current billing
+ * period (#1914). The old code only wrote `metadata` on the subscription —
+ * the price change was never applied in Stripe, so customers kept paying the
+ * old price while the DB claimed a downgrade was scheduled.
+ *
+ * Uses a Stripe subscription schedule with two phases:
+ *   phase 0 — current price until current_period_end (unchanged billing)
+ *   phase 1 — new price, ongoing, no proration
+ * When phase 1 starts, Stripe emits customer.subscription.updated and the
+ * existing webhook handler flips the plan via determinePlanFromPriceId.
+ */
+export async function scheduleDowngradeAtPeriodEnd(
+  subscriptionId: string,
+  newPriceId: string,
+  metadata: Record<string, string>,
+): Promise<{ scheduleId: string; effectiveAt: number }> {
+  const sub = await getSubscription(subscriptionId);
+  const currentItem = sub.items?.data?.[0];
+  const currentPriceId = currentItem?.price?.id;
+  if (!currentPriceId) {
+    throw new StripeApiError('Current subscription has no price to schedule from');
+  }
+  const periodEnd = getSubscriptionPeriodEnd(sub);
+  if (!periodEnd) {
+    throw new StripeApiError('Could not determine current period end');
+  }
+
+  const schedule = await createScheduleFromSubscription(subscriptionId);
+  await updateSchedulePhases(schedule.id, [
+    {
+      items: [{ price: currentPriceId, quantity: 1 }],
+      end_date: periodEnd,
+    },
+    {
+      items: [{ price: newPriceId, quantity: 1 }],
+      proration_behavior: 'none',
+      metadata,
+    },
+  ], metadata);
+
+  return { scheduleId: schedule.id, effectiveAt: periodEnd };
+}
+
 // ── Customer Portal ──────────────────────────────────────────────────────────
 
 export async function createPortalSession(customerId: string, returnUrl?: string): Promise<{ url: string }> {

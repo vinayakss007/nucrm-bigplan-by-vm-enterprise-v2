@@ -189,4 +189,71 @@ describe('lib/stripe', () => {
       expect(err.name).toBe('StripeError');
     });
   });
+
+  describe('getSubscriptionPeriodEnd (#1915)', () => {
+    it('reads the root field on classic API versions', async () => {
+      const { getSubscriptionPeriodEnd } = await import('@/lib/stripe');
+      expect(getSubscriptionPeriodEnd({ id: 'sub_1', current_period_end: 1700000000 } as never)).toBe(1700000000);
+    });
+
+    it('falls back to the first item on API 2025+ where root is absent', async () => {
+      const { getSubscriptionPeriodEnd } = await import('@/lib/stripe');
+      const sub = {
+        id: 'sub_1',
+        items: { data: [{ id: 'si_1', price: { id: 'price_new' }, current_period_end: 1700000060 }] },
+      };
+      expect(getSubscriptionPeriodEnd(sub as never)).toBe(1700000060);
+    });
+
+    it('returns 0 when no period end is present anywhere', async () => {
+      const { getSubscriptionPeriodEnd } = await import('@/lib/stripe');
+      expect(getSubscriptionPeriodEnd({ id: 'sub_1' } as never)).toBe(0);
+    });
+  });
+
+  describe('scheduleDowngradeAtPeriodEnd (#1914)', () => {
+    it('creates a two-phase schedule: current price until period end, new price after', async () => {
+      restoreFetch = mockStripeFetch({
+        '/subscriptions/sub_123': {
+          id: 'sub_123',
+          status: 'active',
+          current_period_end: 1700000000,
+          items: { data: [{ id: 'si_old', price: { id: 'price_pro_monthly' } }] },
+        },
+        '/subscription_schedules': { id: 'sub_sched_123', status: 'active' },
+      });
+      const { scheduleDowngradeAtPeriodEnd } = await import('@/lib/stripe');
+
+      const result = await scheduleDowngradeAtPeriodEnd('sub_123', 'price_starter_monthly', {
+        tenant_id: 'tenant-1',
+        pending_plan_id: 'starter',
+      });
+
+      expect(result).toEqual({ scheduleId: 'sub_sched_123', effectiveAt: 1700000000 });
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const calls = (global.fetch as any).mock.calls;
+      const scheduleUpdate = calls.find((c: unknown[]) => String(c[0]).endsWith('/subscription_schedules/sub_sched_123'));
+      expect(scheduleUpdate).toBeDefined();
+      const body = String(scheduleUpdate[1].body);
+      // Phase 0 keeps the current price until period end…
+      expect(body).toContain(encodeURIComponent('phases[0][items][0][price]') + '=price_pro_monthly');
+      expect(body).toContain(encodeURIComponent('phases[0][end_date]') + '=1700000000');
+      // …phase 1 switches to the new price with no proration.
+      expect(body).toContain(encodeURIComponent('phases[1][items][0][price]') + '=price_starter_monthly');
+      expect(body).toContain(encodeURIComponent('phases[1][proration_behavior]') + '=none');
+      expect(body).toContain(encodeURIComponent('metadata[pending_plan_id]') + '=starter');
+    });
+
+    it('throws when the subscription has no current price', async () => {
+      restoreFetch = mockStripeFetch({
+        '/subscriptions/sub_empty': { id: 'sub_empty', status: 'active', current_period_end: 1700000000, items: { data: [] } },
+      });
+      const { scheduleDowngradeAtPeriodEnd } = await import('@/lib/stripe');
+
+      await expect(
+        scheduleDowngradeAtPeriodEnd('sub_empty', 'price_starter_monthly', {})
+      ).rejects.toThrow('no price');
+    });
+  });
 });
