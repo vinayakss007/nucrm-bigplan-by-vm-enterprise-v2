@@ -62,10 +62,19 @@ export async function GET(req: NextRequest) {
   // unguessable server-minted uuid, so only genuine email links redirect
   // externally; forged/unknown ids fall back to '/'.
   let destination = '/';
-  let row: { id: string; contactId: string | null; tenantId: string } | null = null;
+  // Explicit row type: `as typeof row` used to be used here, but inside this
+  // scope `row` is control-flow-narrowed to `null`, so that cast made the row
+  // `null` (and every later `tracked.*` access `never`) — 6 type errors.
+  type TrackingRow = {
+    id: string;
+    contactId: string | null;
+    tenantId: string;
+    clickCount: number | null;
+  };
+  let row: TrackingRow | null = null;
   if (trackId && trackIdIsPlausible) {
     try {
-      row = (await db.query.emailTracking.findFirst({
+      const found = await db.query.emailTracking.findFirst({
         where: and(eq(emailTracking.id, trackId), isNull(emailTracking.deletedAt)),
         columns: {
           id: true,
@@ -73,7 +82,8 @@ export async function GET(req: NextRequest) {
           tenantId: true,
           clickCount: true
         }
-      })) as typeof row;
+      });
+      row = found ?? null;
     } catch (err) {
       void logError({ error: err, context: 'track/click lookup', level: 'warning' });
     }
@@ -92,7 +102,7 @@ export async function GET(req: NextRequest) {
               clickCount: sql`${emailTracking.clickCount} + 1`,
               updatedAt: new Date(),
             })
-            .where(eq(emailTracking.id, trackId));
+            .where(eq(emailTracking.id, tracked.id));
 
           // Log activity
           if (tracked.contactId) {
@@ -101,7 +111,7 @@ export async function GET(req: NextRequest) {
               contactId: tracked.contactId,
               eventType: 'email',
               description: 'Email link clicked',
-              metadata: { tracking_id: trackId, url: destination, event: 'click' },
+              metadata: { tracking_id: tracked.id, url: destination, event: 'click' },
               entityType: 'contact',
               entityId: tracked.contactId,
               action: 'email_click'
