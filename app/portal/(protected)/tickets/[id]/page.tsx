@@ -42,7 +42,8 @@ export default function PortalTicketDetailPage() {
     queryKey: ['portal-ticket', ticketId, session?.email],
     enabled: !!session?.email && !!ticketId,
     queryFn: async () => {
-      const res = await fetch(`/api/public/tickets/${ticketId}`, { headers: { 'x-portal-email': session!.email } });
+      // #1982: session cookie authenticates (see tickets list page).
+      const res = await fetch(`/api/public/tickets/${ticketId}`);
       if (!res.ok) {
         const info = await res.json().catch(() => ({}));
         throw new ApiQueryError('not found', res.status, info);
@@ -82,7 +83,8 @@ export default function PortalTicketDetailPage() {
       const res = await fetch(`/api/public/tickets/${ticketId}/replies`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: session.email, body: replyText.trim() }),
+        // #1982: ownership is verified from the session cookie server-side.
+        body: JSON.stringify({ body: replyText.trim() }),
       });
       if (res.ok) {
         const d = await res.json();

@@ -43,7 +43,10 @@ export default function PortalTicketsPage() {
     queryKey: ['portal-tickets', session?.email],
     enabled: !!session?.email,
     queryFn: async () => {
-      const res = await fetch('/api/public/tickets', { headers: { 'x-portal-email': session!.email } });
+      // #1982: auth rides the httpOnly portal session cookie (same-origin
+      // fetch sends it automatically). Never send identity headers — the old
+      // x-portal-email header was spoofable and is no longer accepted.
+      const res = await fetch('/api/public/tickets');
       if (!res.ok) {
         const info = await res.json().catch(() => ({}));
         throw new ApiQueryError(`Request failed (${res.status})`, res.status, info);

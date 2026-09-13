@@ -53,9 +53,8 @@ vi.mock('@/lib/portal-session', async (importOriginal) => {
   };
 });
 
-import { resolvePortalIdentity } from '@/lib/portal-auth';
+import { resolvePortalContact, resolvePortalIdentity } from '@/lib/portal-auth';
 import { getPortalSession } from '@/lib/portal-session';
-
 function reqWithHeaders(headers: Record<string, string>): NextRequest {
   return new NextRequest('http://localhost/api/public/quotes/x/accept', { headers });
 }
@@ -97,5 +96,23 @@ describe('resolvePortalIdentity (#1913)', () => {
   it('returns null when neither credential is present', async () => {
     vi.mocked(getPortalSession).mockResolvedValueOnce(null);
     expect(await resolvePortalIdentity(reqWithHeaders({}))).toBeNull();
+  });
+});
+
+describe('resolvePortalContact (#1982)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('returns the contact scoped to (email, tenantId)', async () => {
+    tokenLookupResult = [{ id: 'contact-9', tenantId: 'tenant-cookie' }];
+    const contact = await resolvePortalContact({ email: 'cookie-client@example.com', tenantId: 'tenant-cookie' });
+    expect(contact).toEqual({ id: 'contact-9', tenantId: 'tenant-cookie' });
+  });
+
+  it('returns null when no contact matches the scoped lookup', async () => {
+    tokenLookupResult = [];
+    const contact = await resolvePortalContact({ email: 'nobody@example.com', tenantId: 'tenant-cookie' });
+    expect(contact).toBeNull();
   });
 });
