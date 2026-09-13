@@ -247,4 +247,14 @@ describe('CSP single-source-of-truth file assertions (#1070)', () => {
     expect(content).not.toContain("script-src 'self' 'unsafe-inline'");
     expect(content).not.toContain("style-src 'self' 'unsafe-inline'");
   });
+
+  it('root layout forces dynamic rendering so the per-request nonce always matches (#1968)', async () => {
+    // A statically prerendered page would serve build-time HTML whose inline
+    // scripts predate the request nonce -> browser blocks them -> white
+    // screen in production. force-dynamic in the root layout guarantees every
+    // page renders per request with the request nonce stamped in.
+    const fs = await import('fs');
+    const content = fs.readFileSync('app/layout.tsx', 'utf-8');
+    expect(content).toContain("export const dynamic = 'force-dynamic'");
+  });
 });
