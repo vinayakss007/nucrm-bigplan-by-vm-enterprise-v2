@@ -32,6 +32,15 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 /** Quote statuses that must never be auto-flipped to 'accepted'. */
 const QUOTE_TERMINAL_STATUSES = new Set(['accepted', 'declined', 'expired', 'cancelled']);
 
+/**
+ * True when err is a Postgres unique-violation (SQLSTATE 23505) — the
+ * #1916 idempotency backstop firing. Drizzle surfaces the pg driver error
+ * with `.code`, so duck-type instead of importing pg types here.
+ */
+function isUniqueViolation(err: unknown): boolean {
+  return typeof err === 'object' && err !== null && (err as { code?: unknown }).code === '23505';
+}
+
 interface ProcessResult {
   processed: boolean;
   alreadyProcessed?: boolean;
@@ -176,15 +185,25 @@ export async function POST(request: NextRequest) {
 
             // Append-only ledger entry; the invoice summary below is derived
             // from it (amount_paid / balance_due / status / paid_at).
-            await tx.insert(invoicePayments).values({
-              tenantId: quote.tenantId,
-              invoiceId: invoice.id,
-              amount: paidAmount.toFixed(2),
-              paymentDate: now.toISOString().slice(0, 10),
-              paymentMethod: 'payu',
-              reference: txnid,
-              notes: `PayU online payment (${email})`,
-            });
+            // #1916: the SELECT above races under concurrent callbacks, so the
+            // partial unique index uq_invoice_payments_tenant_reference is the
+            // real arbiter — a 23505 loser is a duplicate, not an error.
+            try {
+              await tx.insert(invoicePayments).values({
+                tenantId: quote.tenantId,
+                invoiceId: invoice.id,
+                amount: paidAmount.toFixed(2),
+                paymentDate: now.toISOString().slice(0, 10),
+                paymentMethod: 'payu',
+                reference: txnid,
+                notes: `PayU online payment (${email})`,
+              });
+            } catch (err) {
+              if (isUniqueViolation(err)) {
+                return { processed: false, alreadyProcessed: true };
+              }
+              throw err;
+            }
 
             // Recomputes status ('paid' + paid_at when fully settled) inside
             // this same transaction so the summary cannot drift from the ledger.
