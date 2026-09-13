@@ -185,8 +185,11 @@ If you must start despite a failure (emergency only): `PREFLIGHT_SKIP=true`.
    # Check for missing env vars
    docker compose config | grep -i "required"
 
-   # Roll back to previous image
-   docker compose pull web
+   # Roll back to the previous good commit and rebuild the app image.
+   # There is no registry for the app image (it is built locally from this
+   # checkout), so `docker compose pull web` cannot work — rebuild instead.
+   git checkout <previous-good-commit>
+   docker compose build web
    docker compose up -d web
    ```
 
