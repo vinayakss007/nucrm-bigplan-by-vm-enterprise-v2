@@ -46,5 +46,8 @@ jobs:
 
       # Semantic validation actionlint cannot do (it never cross-checks a
       # workflow_run filter against the workflow names that actually exist).
+      # `always()` so one run reports BOTH facts even when step 1 fails: the job
+      # still fails, but you immediately know whether the wiring is also broken.
       - name: Assert deploy trigger matches the CI workflow name
+        if: always()
         run: node scripts/check-deploy-trigger.mjs
