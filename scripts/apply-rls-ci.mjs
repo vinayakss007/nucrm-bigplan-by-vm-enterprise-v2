@@ -67,16 +67,15 @@ function main() {
     }
 
     try {
-      const sql = readFileSync(upPath, 'utf8');
       // Run the full SQL file as a single psql call
       execSync(
         `psql "${databaseUrl}" -v ON_ERROR_STOP=1 -f "${upPath}"`,
         { stdio: 'pipe', timeout: 30000 }
       );
       results.push({ tag, status: 'applied', detail: 'migration executed' });
-    } catch (e) {
+    } catch (_e) {
       // Some migrations reference tables/columns that don't exist after db:sync
-      results.push({ tag, status: 'skipped', detail: e.message.slice(0, 80) });
+      results.push({ tag, status: "skipped", detail: _e.message.slice(0, 80) });
     }
   }
 
@@ -102,7 +101,7 @@ function main() {
         console.log(`  FAIL: ${table} — RLS disabled`);
         allOk = false;
       }
-    } catch (e) {
+    } catch (_e) {
       console.log(`  FAIL: ${table} — could not verify`);
       allOk = false;
     }
