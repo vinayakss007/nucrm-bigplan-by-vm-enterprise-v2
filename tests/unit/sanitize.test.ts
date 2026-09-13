@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { sanitizeHTMLServer, sanitizeHTML } from '@/lib/sanitize';
+import { sanitizeHTMLServer } from '@/lib/sanitize';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
