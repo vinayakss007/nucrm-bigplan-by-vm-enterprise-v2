@@ -191,6 +191,14 @@ export const invoicePayments = pgTable('invoice_payments', {
 }, (table) => ({
   invoiceIdx: index('idx_invoice_payments_invoice').on(table.invoiceId),
   dateIdx: index('idx_invoice_payments_date').on(table.paymentDate),
+  // #1916: DB-level idempotency backstop. Application-level SELECT-then-INSERT
+  // races under concurrent callbacks/retries (double-credit risk), so the
+  // INSERT itself must be the arbiter. Partial: NULL references (manual
+  // payments without one) never collide, and soft-deleted (voided) rows don't
+  // block re-recording the same reference.
+  tenantRefUidIdx: uniqueIndex('uq_invoice_payments_tenant_reference')
+    .on(table.tenantId, table.reference)
+    .where(sql`${table.deletedAt} IS NULL AND ${table.reference} IS NOT NULL`),
 }));
 
 // ── ORDERS MODULE ─────────────────────────────────────
