@@ -205,20 +205,35 @@ export async function recordInvoicePayment(
       }
     }
 
-    const [payment] = await tx
-      .insert(invoicePayments)
-      .values({
-        tenantId: input.tenantId,
-        invoiceId: input.invoiceId,
-        amount: amount.toFixed(2),
-        paymentDate: input.paymentDate,
-        paymentMethod: input.paymentMethod ?? null,
-        reference: input.reference ?? null,
-        notes: input.notes ?? null,
-        recordedBy: input.userId,
-        createdBy: input.userId,
-      })
-      .returning();
+    let payment: typeof invoicePayments.$inferSelect;
+    try {
+      const [inserted] = await tx
+        .insert(invoicePayments)
+        .values({
+          tenantId: input.tenantId,
+          invoiceId: input.invoiceId,
+          amount: amount.toFixed(2),
+          paymentDate: input.paymentDate,
+          paymentMethod: input.paymentMethod ?? null,
+          reference: input.reference ?? null,
+          notes: input.notes ?? null,
+          recordedBy: input.userId,
+          createdBy: input.userId,
+        })
+        .returning();
+      if (!inserted) throw new PaymentError('Failed to record payment', 500);
+      payment = inserted;
+    } catch (err: unknown) {
+      // #1916: the pre-insert checks above race under double-submits, so the
+      // partial unique index is the arbiter — surface a 409, not a 500.
+      if (typeof err === 'object' && err !== null && (err as { code?: unknown }).code === '23505') {
+        throw new PaymentError(
+          `A payment with reference '${input.reference}' already exists for this workspace`,
+          409,
+        );
+      }
+      throw err;
+    }
 
     const totals = await recalculateInvoicePayments(tx, input.invoiceId, input.tenantId);
     return { payment: payment as Record<string, unknown>, totals };

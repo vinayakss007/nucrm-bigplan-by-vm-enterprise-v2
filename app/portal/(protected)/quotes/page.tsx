@@ -77,7 +77,10 @@ export default function PortalQuotesPage() {
     queryKey: ['portal-quotes', session?.email],
     enabled: !!session?.email,
     queryFn: async () => {
-      const res = await fetch('/api/public/quotes', { headers: { 'x-portal-email': session!.email } });
+      // #1913: auth rides the httpOnly portal session cookie (same-origin
+      // fetch sends it automatically). Never send identity headers — the old
+      // x-portal-email header was spoofable and is no longer accepted.
+      const res = await fetch('/api/public/quotes');
       if (!res.ok) {
         const info = await res.json().catch(() => ({}));
         throw new ApiQueryError(`Request failed (${res.status})`, res.status, info);
@@ -92,7 +95,7 @@ export default function PortalQuotesPage() {
     mutationFn: async (quoteId: string) => {
       const res = await fetch(`/api/public/quotes/${quoteId}/accept`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-portal-email': session?.email || '' },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: session?.email }),
       });
       if (!res.ok) {
@@ -115,7 +118,7 @@ export default function PortalQuotesPage() {
     mutationFn: async (quoteId: string) => {
       const res = await fetch(`/api/public/quotes/${quoteId}/decline`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-portal-email': session?.email || '' },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: session?.email }),
       });
       if (!res.ok) {

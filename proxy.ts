@@ -161,6 +161,10 @@ const PUBLIC_PATHS = [
   '/api/flags', '/api/openapi',
   '/api/setup/check', '/api/setup/create-admin', '/api/lead-capture', '/api/lead-capture/submit',
   '/api/public/tickets', '/api/public/invoices', '/api/public/kb', '/api/public/offers',
+  '/api/public/quotes',
+  // Customer-portal login mints the httpOnly session cookie — it must be
+  // reachable without an existing session (#1982 portal-auth hardening).
+  '/api/tenant/portal/login',
   '/sw.js', '/manifest.json', '/robots.txt', '/sitemap.xml',
 ];
 

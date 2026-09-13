@@ -1,0 +1,104 @@
+##############################################################################
+# NuCRM — Docker Compose SLIM (low-RAM: Codespaces / 2GB VMs / laptops)
+#
+# Only the bare minimum to run the app:
+#   postgres (tuned to ~60-100MB) + redis (no persistence, ~10-20MB)
+# The Next.js app itself runs on the HOST (not in Docker) — this skips the
+# multi-GB image build and ~500MB Docker overhead.
+#
+# What is EXCLUDED vs docker-compose.yml (saves ~3GB RAM):
+#   worker, realtime, pgbouncer, minio x2, all monitoring (prometheus,
+#   grafana, loki, promtail, alertmanager, exporters x3)
+#
+# Total RAM budget: ~500-600MB (pg ~100 + redis ~20 + next ~400)
+#
+# Usage:
+#   bash scripts/start-slim.sh          # one command: infra + migrate + app
+#   # or manually:
+#   docker compose -f docker-compose.slim.yml up -d
+#   npm run start:slim
+##############################################################################
+
+services:
+  # ── PostgreSQL (slim) ──────────────────────────────────────────────────
+  # Tiny buffers for dev: shared_buffers=32MB, 20 conns max.
+  # Logging trimmed to errors/slow queries only.
+  postgres:
+    image: postgres:16-alpine
+    container_name: nucrm-db-slim
+    command:
+      - "postgres"
+      - "-c"
+      - "shared_buffers=32MB"
+      - "-c"
+      - "effective_cache_size=128MB"
+      - "-c"
+      - "work_mem=2MB"
+      - "-c"
+      - "maintenance_work_mem=16MB"
+      - "-c"
+      - "wal_buffers=4MB"
+      - "-c"
+      - "max_connections=20"
+      - "-c"
+      - "max_wal_size=256MB"
+      - "-c"
+      - "min_wal_size=32MB"
+      - "-c"
+      - "checkpoint_completion_target=0.9"
+      - "-c"
+      - "log_min_duration_statement=500"
+      - "-c"
+      - "log_statement=none"
+      - "-c"
+      - "log_duration=off"
+      - "-c"
+      - "log_lock_waits=on"
+      - "-c"
+      - "max_parallel_workers_per_gather=0"
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-nucrm}
+      - POSTGRES_USER=${POSTGRES_USER:-nucrm}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-nucrm}
+    volumes:
+      - pgdata-slim:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    mem_limit: 256m
+    mem_reservation: 64m
+    cpus: "1.0"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-nucrm}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ── Redis (slim) ───────────────────────────────────────────────────────
+  # No password, NO persistence (--save "" + appendonly no): data is ephemeral
+  # but RAM stays ~10-20MB and there is zero disk IO. Do NOT use for prod.
+  redis:
+    image: redis:7-alpine
+    container_name: nucrm-redis-slim
+    command: >
+      redis-server
+      --maxmemory 64mb
+      --maxmemory-policy allkeys-lru
+      --save ""
+      --appendonly no
+      --hz 10
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
+    mem_limit: 96m
+    mem_reservation: 32m
+    cpus: "0.5"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  pgdata-slim:
+    driver: local
