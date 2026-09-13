@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { quotes, contacts, activities } from '@/drizzle/schema';
 import { eq, and, isNull } from 'drizzle-orm';
+import { resolvePortalIdentity } from '@/lib/portal-auth';
 import { apiError } from '@/lib/api-error';
 import { logAudit } from '@/lib/audit';
 import { checkRateLimit } from '@/lib/rate-limit';
@@ -16,11 +17,20 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const limited = await checkRateLimit(request, { action: 'public-quote-accept', max: 10, windowMinutes: 1 });
     if (limited) return limited;
 
-    const email = request.headers.get('x-portal-email');
-    if (!email) return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    // #1913 (same class as #1133): the old x-portal-email header was spoofable
+    // — anyone could accept any customer's quotes by setting it. Identity now
+    // comes from resolvePortalIdentity(): a validated x-portal-token header
+    // or the httpOnly portal session cookie. The contact lookup is scoped to
+    // (email, tenantId) so one tenant's email can't resolve another's contact.
+    const identity = await resolvePortalIdentity(request);
+    if (!identity) return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
 
+    const email = identity.email;
     const contact = await db.query.contacts.findFirst({
-      where: eq(contacts.email, email),
+      where: and(
+        eq(contacts.email, identity.email),
+        eq(contacts.tenantId, identity.tenantId),
+      ),
       columns: { id: true, tenantId: true },
     });
     if (!contact) return NextResponse.json({ error: 'Not found' }, { status: 404 });
