@@ -192,7 +192,7 @@ describe('tryApiKeyAuth', () => {
     expect(result!.isAdmin).toBe(true);
   });
 
-  it('returns isSuperAdmin from user record', async () => {
+  it('NEVER inherits isSuperAdmin from the key owner (#1918)', async () => {
     mockQueryResult = [{
       apiKey: {
         id: 'k4',
@@ -203,7 +203,7 @@ describe('tryApiKeyAuth', () => {
       },
       isSuperAdmin: true,
     }];
-    const { tryApiKeyAuth } = await import('@/lib/auth/api-key');
+    const { tryApiKeyAuth, hasScope } = await import('@/lib/auth/api-key');
     const req = {
       headers: {
         get: (h: string) => {
@@ -216,7 +216,11 @@ describe('tryApiKeyAuth', () => {
     } as any;
     const result = await tryApiKeyAuth(req);
     expect(result).not.toBeNull();
-    expect(result!.isSuperAdmin).toBe(true);
+    // Even though the owning user is a super-admin, the key context must not
+    // be: leaked keys stay contained to their declared scopes.
+    expect(result!.isSuperAdmin).toBe(false);
+    expect(hasScope(result!, 'contacts:read')).toBe(true);
+    expect(hasScope(result!, 'deals:write')).toBe(false);
   });
 
   it('sets isAdmin when scope ends with :all', async () => {

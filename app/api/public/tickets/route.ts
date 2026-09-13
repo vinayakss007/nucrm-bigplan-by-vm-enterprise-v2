@@ -19,10 +19,10 @@ const publicTicketSchema = z.object({
   body: z.string().max(10000).optional().default(''),
   category: z.string().max(100).optional().default('general'),
   priority: z.enum(['low', 'medium', 'high', 'urgent']).optional().default('medium'),
-  // Optional tenant context (uuid). When supplied, the contact lookup is
-  // scoped to (tenantId, email) so the same email in two tenants cannot file
-  // into the wrong workspace. Embeds should pass their tenant id.
-  tenant_id: z.string().uuid().optional(),
+  // Tenant context is REQUIRED (#1982). A bare email lookup can match a
+  // contact in another tenant, filing the ticket (and issuing a portal
+  // token) under the wrong workspace. Embeds must pass their tenant id.
+  tenant_id: z.string().uuid('tenant_id is required'),
 });
 
 /**
@@ -79,15 +79,10 @@ export async function POST(request: NextRequest) {
     if (parsed instanceof NextResponse) return parsed;
     const { email, subject, body, category, priority, tenant_id } = parsed.data;
 
-    // Find or create contact — scoped to (tenantId, email) when the caller
-    // passes tenant context; a bare email lookup can match another tenant.
-    const contact = tenant_id
-      ? await db.query.contacts.findFirst({
-          where: and(eq(contacts.tenantId, tenant_id), eq(contacts.email, email)),
-        })
-      : await db.query.contacts.findFirst({
-          where: eq(contacts.email, email),
-        });
+    // Find or create contact — ALWAYS scoped to (tenantId, email) (#1982).
+    const contact = await db.query.contacts.findFirst({
+      where: and(eq(contacts.tenantId, tenant_id), eq(contacts.email, email)),
+    });
 
     if (!contact) return NextResponse.json({ error: 'No account found with this email' }, { status: 404 });
 
