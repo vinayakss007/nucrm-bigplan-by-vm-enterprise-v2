@@ -12,6 +12,12 @@ name: Deploy
 # The deploy is a git-based update on the VM: fetch the exact commit CI
 # tested, install deps, build, restart pm2, gate on the health endpoint,
 # and roll back to the previous commit if the new build is unhealthy.
+#
+# MAIN IS THE ONLY SOURCE OF TRUTH: the job checks out the exact commit CI
+# verified on main. It never deploys a git tag, a GitHub release asset, or a
+# Docker image, so the VM always runs the latest code on main. Release tags
+# (v0.9.x) and the local-dev docker-compose.slim.yml have no effect on what
+# gets deployed.
 on:
   workflow_dispatch:
   workflow_run:
@@ -20,27 +26,39 @@ on:
     branches: [main]
 
 concurrency:
-  group: deploy-${{ github.event.workflow_run.head_branch }}
+  group: deploy-${{ github.event.workflow_run.head_branch || github.ref_name }}
   cancel-in-progress: false
 
 env:
   HEALTH_CHECK_RETRIES: 12
   HEALTH_CHECK_INTERVAL: 10
+  # Health endpoints to try, in order: 3099 is the production 'nucrm-prod'
+  # port, 3000 is the ecosystem.config.cjs 'web' port. Trying both keeps the
+  # gate honest if the live port ever moves.
+  HEALTH_PORTS: 3099 3000
+  # The commit to deploy. Normal path: the exact commit CI verified on main.
+  # Manual path: a workflow_dispatch run has no workflow_run payload, so fall
+  # back to github.sha — the head of the branch dispatched (main by default).
+  DEPLOY_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
 
 jobs:
   deploy:
     name: Deploy
-    # workflow_run fires on failure too, so this guard is what makes the gate real.
-    if: github.event.workflow_run.conclusion == 'success'
+    # workflow_run fires on failure too, so this guard is what makes the gate
+    # real. A manual workflow_dispatch has no workflow_run payload (null
+    # conclusion), so it must pass the guard explicitly instead of being
+    # skipped — otherwise "Run workflow" from the Actions tab does nothing.
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: read
 
     steps:
-      # github.sha is not the commit CI tested, so pin everything to head_sha.
+      # github.sha is not the commit CI tested, so pin everything to DEPLOY_SHA
+      # (workflow_run.head_sha, falling back to github.sha for manual runs).
       - uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ env.DEPLOY_SHA }}
 
       # NOTE (#1425): production runs the app under PM2 via a git-based update
       # (below), NOT from a Docker image. The previous ghcr build/push steps
@@ -65,10 +83,63 @@ jobs:
             export NVM_DIR="$HOME/.nvm"
             [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
 
+            SHA="${{ env.DEPLOY_SHA }}"
+            if [ -z "$SHA" ]; then
+              echo "ERROR: no deploy SHA resolved (DEPLOY_SHA is empty)."
+              exit 1
+            fi
+            echo "Deploying main commit: $SHA"
+
+            # The pm2 app name is not stable across hosts/rewrites: production
+            # has been 'nucrm-prod' (next start -p 3099) while
+            # ecosystem.config.cjs declares 'web' (PORT=3000). Restart whichever
+            # process actually exists; a name mismatch used to fail the deploy.
+            PM2_APP=""
+            for candidate in nucrm-prod web; do
+              if pm2 describe "$candidate" >/dev/null 2>&1; then
+                PM2_APP="$candidate"
+                break
+              fi
+            done
+            if [ -z "$PM2_APP" ]; then
+              echo "No pm2 app found — starting it from ecosystem.config.cjs"
+              pm2 start ecosystem.config.cjs --only web
+              pm2 save
+              PM2_APP="web"
+            fi
+            echo "Using pm2 app: $PM2_APP"
+
+            # Probe both known ports so a port move (3000 <-> 3099) can never
+            # turn a healthy deploy into a false rollback.
+            HEALTH_PORTS="${{ env.HEALTH_PORTS }}"
+
+            # Restart + wait for the health endpoint. Gate on the endpoint, not
+            # on process existence: pm2 can report "online" while the app fails
+            # to serve.
+            restart_and_wait() {
+              pm2 restart "$PM2_APP" --update-env
+              pm2 save
+              LAST_STATUS="no response"
+              for i in $(seq 1 ${{ env.HEALTH_CHECK_RETRIES }}); do
+                for PORT in $HEALTH_PORTS; do
+                  STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 \
+                    "http://127.0.0.1:$PORT/api/health" || echo "000")
+                  if [ "$STATUS" = "200" ]; then
+                    echo "App healthy on port $PORT after ${i}x${{ env.HEALTH_CHECK_INTERVAL }}s"
+                    return 0
+                  fi
+                  LAST_STATUS="port $PORT returned $STATUS"
+                done
+                echo "Attempt $i: $LAST_STATUS"
+                sleep ${{ env.HEALTH_CHECK_INTERVAL }}
+              done
+              return 1
+            }
+
             echo "Fetching latest code..."
             git fetch origin main
-            git checkout --force ${{ github.event.workflow_run.head_sha }}
-            echo "Checked out ${{ github.event.workflow_run.head_sha }}"
+            git checkout --force "$SHA"
+            echo "Checked out $SHA"
 
             echo "Installing dependencies..."
             npm ci --no-audit --no-fund
@@ -76,38 +147,23 @@ jobs:
             echo "Building..."
             NODE_OPTIONS="--max-old-space-size=8192" npm run build
 
-            echo "Restarting app (pm2)..."
-            pm2 restart web --update-env
-            pm2 save
-
-            echo "Waiting for app health check..."
-            HEALTHY=""
-            for i in $(seq 1 ${{ env.HEALTH_CHECK_RETRIES }}); do
-              STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 http://127.0.0.1:3000/api/health || echo "000")
-              if [ "$STATUS" = "200" ]; then
-                HEALTHY="yes"
-                echo "App healthy after ${i}x${{ env.HEALTH_CHECK_INTERVAL }}s"
-                break
-              fi
-              echo "Attempt $i: health endpoint returned $STATUS"
-              sleep ${{ env.HEALTH_CHECK_INTERVAL }}
-            done
-
-            # Gate on the health endpoint, not on process existence. pm2 can
-            # report "online" while the app fails to serve.
-            if [ -z "$HEALTHY" ]; then
-              echo "ERROR: app did not become healthy. Rolling back to previous commit."
-              git checkout --force ${{ github.event.workflow_run.head_sha }}^
-              NODE_OPTIONS="--max-old-space-size=8192" npm run build
-              pm2 restart web --update-env
-              pm2 save
+            echo "Restarting app (pm2: $PM2_APP)..."
+            if restart_and_wait; then
+              # The deploy host is also the dev host; leave the repo on main
+              # instead of a detached HEAD. The running app keeps serving the
+              # built artifacts from the deployed commit.
               git checkout main
-              exit 1
+              echo "Deploy complete: $SHA (pm2 app: $PM2_APP)"
+              exit 0
             fi
 
-            # The deploy host is also the dev host; leave the repo on main
-            # instead of a detached HEAD. The running app keeps serving the
-            # built artifacts from the deployed commit.
+            echo "ERROR: app did not become healthy. Rolling back to previous commit."
+            git checkout --force "$SHA"^
+            NODE_OPTIONS="--max-old-space-size=8192" npm run build
+            if restart_and_wait; then
+              echo "Rollback healthy."
+            else
+              echo "WARNING: rollback did not pass the health gate either."
+            fi
             git checkout main
-
-            echo "Deploy complete: ${{ github.event.workflow_run.head_sha }}"
+            exit 1
