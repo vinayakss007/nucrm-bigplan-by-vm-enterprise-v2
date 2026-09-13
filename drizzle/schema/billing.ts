@@ -392,6 +392,30 @@ export const billingEvents = pgTable('billing_events', {
   };
 });
 
+// ── WEBHOOK EVENTS (provider delivery ledger) ──
+export const webhookEvents = pgTable('webhook_events', {
+  id: utils.pk(),
+  // stripe | razorpay | payu — part of the dedup key.
+  provider: text('provider').notNull(),
+  // Provider's delivery/event id (evt_*, Razorpay event/payment id, txnid).
+  // Globally unique per provider, hence the cross-tenant unique key.
+  eventId: text('event_id').notNull(),
+  eventType: text('event_type'),
+  tenantId: uuid('tenant_id'),
+  // claimed → being processed; processed → side effects applied;
+  // failed → processing threw (kept for audit; the claim row is deleted on
+  // failure so provider retries re-process — see lib/webhooks/idempotency).
+  status: text('status').notNull().default('claimed'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  processedAt: timestamp('processed_at', { withTimezone: true }),
+}, (table) => {
+  return {
+    providerEventUidIdx: uniqueIndex('uq_webhook_events_provider_event').on(table.provider, table.eventId),
+    tenantIdx: index('idx_webhook_events_tenant').on(table.tenantId),
+    statusIdx: index('idx_webhook_events_status').on(table.status, table.createdAt),
+  };
+});
+
 // ── SERVICE SUBSCRIPTIONS (product/service subscriptions) ──
 export const serviceSubscriptions = pgTable('service_subscriptions', {
   id: utils.pk(),
