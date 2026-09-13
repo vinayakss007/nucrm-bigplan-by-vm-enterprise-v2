@@ -11,7 +11,7 @@ import { subscriptions, plans, billingEvents } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
-import { updateSubscription, getPriceId, isStripeConfigured } from '@/lib/stripe';
+import { getPriceId, isStripeConfigured, scheduleDowngradeAtPeriodEnd } from '@/lib/stripe';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
@@ -82,17 +82,21 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       return NextResponse.json({ error: `Price not configured for ${planId}. Contact support.` }, { status: 500 });
     }
 
-    // Schedule the downgrade at period end
-    // In Stripe, this means updating the subscription with proration_behavior: 'none'
-    // and setting the new price to take effect at period end
-    const stripeSub = await updateSubscription(currentSub.stripeSubscriptionId, {
-      metadata: {
+    // Schedule the downgrade at period end via a Stripe subscription
+    // schedule (#1914). The old code only wrote `metadata` on the
+    // subscription — the price change was never applied in Stripe, so the
+    // customer kept paying the old price while the DB claimed a downgrade.
+    const { scheduleId, effectiveAt } = await scheduleDowngradeAtPeriodEnd(
+      currentSub.stripeSubscriptionId,
+      priceId,
+      {
         tenant_id: ctx.tenantId,
         pending_plan_id: planId,
         scheduled_downgrade: 'true',
         downgraded_by: ctx.userId,
       },
-    });
+    );
+    const effectiveAtIso = new Date(effectiveAt * 1000).toISOString();
 
     // Update subscription in database to reflect pending downgrade
     await db.transaction(async (tx) => {
@@ -101,7 +105,8 @@ export const POST = withApiRoute(async (request: NextRequest) => {
           ...(currentSub.metadata as Record<string, unknown> || {}),
           pending_plan_id: planId,
           scheduled_downgrade: true,
-          scheduled_downgrade_at: new Date(stripeSub.current_period_end * 1000).toISOString(),
+          scheduled_downgrade_at: effectiveAtIso,
+          stripe_schedule_id: scheduleId,
           downgraded_by: ctx.userId,
         },
       }).where(eq(subscriptions.id, currentSub.id));
@@ -116,7 +121,8 @@ export const POST = withApiRoute(async (request: NextRequest) => {
         metadata: {
           previous_plan_id: currentSub.planId || 'none',
           new_plan_id: planId,
-          effective_at: new Date(stripeSub.current_period_end * 1000).toISOString(),
+          stripe_schedule_id: scheduleId,
+          effective_at: effectiveAtIso,
           downgraded_by: ctx.userId,
         },
       });
@@ -128,7 +134,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
         currentPlanId: currentSub.planId,
         pendingPlanId: planId,
         pendingPlanName: newPlan.name,
-        effectiveAt: new Date(stripeSub.current_period_end * 1000).toISOString(),
+        effectiveAt: effectiveAtIso,
         message: `Downgrade to ${newPlan.name} scheduled for end of current billing period`,
       },
     });
