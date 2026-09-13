@@ -11,6 +11,7 @@ import { eq } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { sendAdminTelegram } from '@/lib/telegram-admin';
 import { acquireLock, releaseLock } from '@/lib/cache/index';
+import { claimWebhookEvent, completeWebhookEvent, releaseWebhookEvent } from '@/lib/webhooks/idempotency';
 import { fireWebhooks } from '@/lib/webhooks';
 import { logError } from '@/lib/errors-server';
 
@@ -74,6 +75,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ received: true, duplicate: true });
   }
 
+  // #1908: the Redis lock fails OPEN without Redis, so it cannot be the only
+  // dedup. The DB claim is the source of truth — exactly one concurrent
+  // delivery wins, with or without Redis.
+  const claimed = await claimWebhookEvent({ provider: 'stripe', eventId, eventType });
+  if (!claimed) {
+    console.log(`[Stripe Webhook] Duplicate event ${eventId} (ledger) — skipping`);
+    return NextResponse.json({ received: true, duplicate: true });
+  }
+
   console.log(`[Stripe Webhook] Processing event: ${eventType} (${eventId})`);
 
   try {
@@ -107,15 +117,17 @@ export async function POST(request: NextRequest) {
         console.log(`[Stripe Webhook] Unhandled event: ${eventType}`);
     }
 
+    await completeWebhookEvent('stripe', eventId);
     return NextResponse.json({ received: true });
- 
- 
+
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     void logError({ error: err, context: 'webhooks/stripe event processing', metadata: { eventType } });
-    // Release the idempotency lock so Stripe's retry of THIS failed event is
-    // processed instead of being dropped as a duplicate. Then return 500 so
-    // Stripe retries — critical for subscription activations.
+    // Release both the Redis lock and the DB claim so Stripe's retry of THIS
+    // failed event is processed instead of being dropped as a duplicate.
+    // Then return 500 so Stripe retries — critical for subscription activations.
+    await releaseWebhookEvent('stripe', eventId);
     await releaseLock(lockKey, lockValue);
     return NextResponse.json({ error: 'Processing failed' }, { status: 500 });
   }

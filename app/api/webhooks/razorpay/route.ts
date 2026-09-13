@@ -16,6 +16,7 @@ import { tenants } from '@/drizzle/schema';
 import { eq, sql } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { acquireLock, releaseLock } from '@/lib/cache/index';
+import { claimWebhookEvent, completeWebhookEvent, releaseWebhookEvent } from '@/lib/webhooks/idempotency';
 
 /** Idempotency window: how long a processed event id blocks re-processing. */
 const IDEMPOTENCY_TTL = 24 * 60 * 60; // 24h
@@ -83,6 +84,17 @@ export async function POST(request: NextRequest) {
     lockValue = lock.value;
   }
 
+  // #1908: DB claim is the source of truth when Redis is down (see Stripe
+  // handler). Skipped only when there is no event id to dedup on.
+  let claimedDb = false;
+  if (razorpayEventId) {
+    claimedDb = await claimWebhookEvent({ provider: 'razorpay', eventId: razorpayEventId, eventType });
+    if (!claimedDb) {
+      console.log(`[Razorpay Webhook] Duplicate event ${razorpayEventId} (ledger) — skipping`);
+      return NextResponse.json({ received: true, duplicate: true });
+    }
+  }
+
   console.log(`[Razorpay Webhook] Processing event: ${eventType}`);
 
   try {
@@ -111,17 +123,20 @@ export async function POST(request: NextRequest) {
         console.log(`[Razorpay Webhook] Unhandled event: ${eventType}`);
     }
 
+    if (claimedDb && razorpayEventId) await completeWebhookEvent('razorpay', razorpayEventId);
     return NextResponse.json({ received: true });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     void logError({ error: err, context: 'webhooks/razorpay event processing', metadata: { eventType } });
-    // Release the idempotency lock so Razorpay's retry of THIS failed event is
-    // processed instead of being dropped as a duplicate, then return 500 so
-    // Razorpay retries. Previously this returned 200 ("we logged the error"),
-    // which told Razorpay never to retry — a transient failure (e.g. DB blip)
-    // in handlePaymentCaptured/handleSubscriptionActivated permanently lost the
-    // event, leaving the tenant un-activated/not-downgraded. Mirrors the Stripe
-    // handler's retry-safe behavior.
+    // Release both the Redis lock and the DB claim so Razorpay's retry of
+    // THIS failed event is processed instead of being dropped as a duplicate,
+    // then return 500 so Razorpay retries. Previously this returned 200
+    // ("we logged the error"), which told Razorpay never to retry — a
+    // transient failure (e.g. DB blip) in handlePaymentCaptured/
+    // handleSubscriptionActivated permanently lost the event, leaving the
+    // tenant un-activated/not-downgraded. Mirrors the Stripe handler's
+    // retry-safe behavior.
+    if (claimedDb && razorpayEventId) await releaseWebhookEvent('razorpay', razorpayEventId);
     if (lockKey) await releaseLock(lockKey, lockValue);
     return NextResponse.json({ error: 'Processing failed' }, { status: 500 });
   }
