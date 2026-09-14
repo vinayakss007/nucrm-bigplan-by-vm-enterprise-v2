@@ -18,7 +18,6 @@ env:
   SETUP_KEY: ${{ secrets.SETUP_KEY || 'ci-setup-key-safe-value-that-is-32characters-long' }}
   ALLOWED_ORIGINS: http://localhost:3000
   DATABASE_SSL: "false"
-  NODE_OPTIONS: "--max-old-space-size=8192"
 
 jobs:
   lint-typecheck:
@@ -38,8 +37,6 @@ jobs:
         run: npm run lint
 
       - name: Typecheck
-        env:
-          NODE_OPTIONS: "--max-old-space-size=8192"
         run: npm run typecheck
         env:
           NODE_OPTIONS: "--max-old-space-size=8192"
@@ -142,6 +139,11 @@ jobs:
 
       - name: Sync database schema
         run: npm run db:sync
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/nucrm_test
+
+      - name: Apply RLS migrations
+        run: node scripts/apply-rls-ci.mjs
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/nucrm_test
 

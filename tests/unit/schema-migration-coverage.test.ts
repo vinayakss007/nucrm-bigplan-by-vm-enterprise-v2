@@ -52,9 +52,11 @@ describe('Schema Migration Coverage (Issue #219)', () => {
   // 225 -> 223: dropped dead tenant_backups + tenant_restores (0078, #1337/#1378).
   // 223 -> 222: dropped duplicate pipeline_stages, consolidated to deal_stages (0080, #1337).
   // 222 -> 223: analytics_events (0082_analytics_events) — product-usage analytics.
-  it('should have exactly 223 tables defined in schema', () => {
+  // 223 -> 224: webhook_events (0087_webhook_events, #1908) — DB-level
+  //             provider-webhook idempotency ledger.
+  it('should have exactly 224 tables defined in schema', () => {
     const schemaTables = extractPgTables(schemaDir);
-    expect(schemaTables.size).toBe(223);
+    expect(schemaTables.size).toBe(224);
   });
 
   it('migration 0036 should create all 4 missing tables', () => {

@@ -80,6 +80,11 @@ describe.skipIf(!dbAvailable)('Backup Integrity', () => {
     _restoreDb = drizzle(restorePool, { schema });
 
     backupFile = path.join(__dirname, '../../tmp/backup-test.sql');
+    // tmp/ is gitignored (only tmp/.gitkeep is tracked) and therefore absent on
+    // a fresh CI checkout, which made the corrupted-backup test below fail with
+    // ENOENT instead of exercising the corruption check. Create it here so the
+    // suite is self-contained.
+    fs.mkdirSync(path.dirname(backupFile), { recursive: true });
   });
 
   afterAll(async () => {

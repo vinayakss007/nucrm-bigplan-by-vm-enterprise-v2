@@ -15,8 +15,24 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// ── Mock DB: record update().set() payloads and control the tenant lookup. ──
+// ── Mock DB: record tenant update().set() payloads, support the #1908 ledger. ──
 const m = vi.hoisted(() => {
+  const tenantTable = {
+    id: 'tenants.id',
+    stripeCustomerId: 'tenants.stripe_customer_id',
+    status: 'tenants.status',
+  };
+  // #1908: lib/webhooks/idempotency.ts claims a webhook_events row before the
+  // handler runs and completes/releases it afterwards, so the schema mock has to
+  // expose that table and the db mock the insert/update/delete chain it uses.
+  const webhookEventsTable = {
+    id: 'webhookEvents.id',
+    provider: 'webhookEvents.provider',
+    eventId: 'webhookEvents.event_id',
+    status: 'webhookEvents.status',
+    createdAt: 'webhookEvents.created_at',
+    processedAt: 'webhookEvents.processed_at',
+  };
   const updateSet = vi.fn();
   const whereAfterUpdate = vi.fn();
   // Tenant returned by db.query.tenants.findFirst for the *customer-id* lookup.
@@ -26,11 +42,26 @@ const m = vi.hoisted(() => {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const db: any = {
-    update: vi.fn(() => ({
-      set: (values: unknown) => {
-        updateSet(values);
-        return { where: (pred: unknown) => { whereAfterUpdate(pred); return Promise.resolve({ rowCount: 1 }); } };
-      },
+    // The claim wins: a returned row means this delivery is the one that processes.
+    insert: vi.fn(() => ({
+      values: () => ({
+        onConflictDoNothing: () => ({ returning: async () => [{ id: 'webhook-event-1' }] }),
+      }),
+    })),
+    // Ledger release path (handler failure) — the lock tests exercise this.
+    delete: vi.fn(() => ({ where: async () => ({ rowCount: 1 }) })),
+    // Table-aware: the ledger also calls update().set().where() to mark an event
+    // processed, so only writes against `tenants` count as tenant updates.
+    update: vi.fn((table: unknown) => ({
+      set: (values: unknown) => ({
+        where: (pred: unknown) => {
+          if (table === tenantTable) {
+            updateSet(values);
+            whereAfterUpdate(pred);
+          }
+          return Promise.resolve({ rowCount: 1 });
+        },
+      }),
     })),
     query: {
       tenants: {
@@ -46,6 +77,8 @@ const m = vi.hoisted(() => {
 
   return {
     db,
+    tenantTable,
+    webhookEventsTable,
     updateSet,
     whereAfterUpdate,
     setCustomerLookupTenant: (t: { id: string } | null) => { customerLookupTenant = t; },
@@ -58,14 +91,14 @@ const verifyWebhookSignature = vi.fn(async (body: string) => JSON.parse(body));
 
 vi.mock('@/drizzle/db', () => ({ db: m.db }));
 vi.mock('@/drizzle/schema', () => ({
-  tenants: {
-    id: 'tenants.id',
-    stripeCustomerId: 'tenants.stripe_customer_id',
-    status: 'tenants.status',
-  },
+  tenants: m.tenantTable,
+  webhookEvents: m.webhookEventsTable,
 }));
 vi.mock('drizzle-orm', () => ({
   eq: vi.fn((a: unknown, b: unknown) => ({ eq: [a, b] })),
+  // Used by the #1908 ledger's claim-steal / completion predicates.
+  and: vi.fn((...conditions: unknown[]) => ({ and: conditions })),
+  lt: vi.fn((a: unknown, b: unknown) => ({ lt: [a, b] })),
 }));
 vi.mock('@/lib/stripe', () => ({
   isStripeConfigured: () => true,
@@ -172,7 +205,10 @@ describe('#1640 subscription.updated tenant resolution', () => {
     const res = await POST(makeRequest(updatedEvent({ customer: 'cus_nonexistent_999' })));
 
     expect(res.status).toBe(200);
-    expect(m.db.update).not.toHaveBeenCalled();
+    // No tenant write. db.update itself is still called — by the #1908 ledger
+    // marking its own webhook_events row processed — so assert on the tenant
+    // payloads the mock records.
+    expect(m.updateSet).not.toHaveBeenCalled();
   });
 });
 
@@ -227,6 +263,7 @@ describe('#1640 subscription.deleted tenant resolution', () => {
     const res = await POST(makeRequest(deletedEvent({ customer: 'cus_nonexistent_999' })));
 
     expect(res.status).toBe(200);
-    expect(m.db.update).not.toHaveBeenCalled();
+    // Same as the updated() case: no tenant write, ledger bookkeeping excluded.
+    expect(m.updateSet).not.toHaveBeenCalled();
   });
 });
