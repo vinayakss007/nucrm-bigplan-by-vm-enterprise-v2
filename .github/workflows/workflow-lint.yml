@@ -1,0 +1,53 @@
+name: Workflow Lint
+
+# Guards the pipeline's own wiring. On 2026-09-05 (commit 48efd68c) a duplicate
+# YAML key made ci.yml unparseable; GitHub then registered that workflow under
+# its file path instead of its `name: CI`, so deploy.yml's
+# `on.workflow_run.workflows: ["CI"]` filter stopped matching and NO Deploy run
+# was created for 8 days — silently, because every CI run was already red.
+#
+# The two steps below fail loudly on the offending commit instead:
+#   1. actionlint  — YAML parse errors (duplicate keys), bad contexts, bad refs.
+#   2. the wiring guard — the workflow NAME deploy.yml waits for is still the
+#      name ci.yml declares, and the trigger is still scoped to branches [main].
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/**"
+      - "scripts/check-deploy-trigger.mjs"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/**"
+      - "scripts/check-deploy-trigger.mjs"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: workflow-lint-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  workflow-lint:
+    name: Lint workflow YAML + assert deploy wiring
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      # Parse-level validation. Pinned to the same actionlint the guard was
+      # validated with locally (1.7.12) so a new actionlint release can't turn
+      # this job red on an unrelated main commit.
+      - name: Lint .github/workflows with actionlint
+        run: docker run --rm -v "$PWD":/repo -w /repo rhysd/actionlint:1.7.12 -no-color
+
+      # Semantic validation actionlint cannot do (it never cross-checks a
+      # workflow_run filter against the workflow names that actually exist).
+      # `always()` so one run reports BOTH facts even when step 1 fails: the job
+      # still fails, but you immediately know whether the wiring is also broken.
+      - name: Assert deploy trigger matches the CI workflow name
+        if: always()
+        run: node scripts/check-deploy-trigger.mjs
