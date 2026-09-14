@@ -1,62 +1,24 @@
-/*!
- * NuCRM Enterprise — Property of abetworks.in
- * Copyright (c) 2026 abetworks.in. All Rights Reserved.
- * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
- */
-
 /**
- * Apply the RLS migrations in CI — the half of the schema `db:sync` cannot create.
+ * Apply RLS migrations in CI (#2038).
  *
- * The integration job provisions its database with `npm run db:sync`
- * (drizzle-kit push), which only creates the Drizzle schema. Row-Level Security
- * is enabled by HAND-WRITTEN SQL migrations (ENABLE ROW LEVEL SECURITY +
- * CREATE POLICY — 0015_rls_policies.sql, 0031_..., 0037_..., 0054_...), so RLS
- * is OFF in CI by construction and tests/integration/tenant-isolation.test.ts
- * fails with `RLS should be enabled on "contacts": expected false to be true`.
+ * CI provisions the schema with `npm run db:sync` (drizzle-kit push),
+ * which syncs only the TABLE structure. It does NOT run the hand-written
+ * SQL migration files that create RLS objects. This script applies those
+ * RLS up-migrations in journal order so integration tests can verify
+ * row-level security.
  *
- * This closes that gap without switching CI to the full migration chain (the
- * journal drift tracked in #682 makes that unsafe today):
- *
- *   1. Reads drizzle/migrations/meta/_journal.json and takes every UP migration
- *      whose filename mentions RLS, in journal order.
- *   2. Applies each file as-is. Files that also alter column definitions (e.g.
- *      0060_add_tenantid_rls adds tenant_id columns that push already created)
- *      cannot re-run on a pushed schema; those are reported as skipped instead
- *      of failing the build.
- *   3. Asserts RLS is actually ON for the core tenant tables — the invariant CI
- *      depends on — and exits non-zero when it is not.
- *
- * Safe for the suite: CI connects as the throwaway database superuser, and
- * PostgreSQL exempts superusers from RLS, so this changes what the assertions
- * read in pg_class without changing any test query result.
- *
- * Usage: DATABASE_URL=postgresql://... node scripts/apply-rls-ci.mjs
+ * Files that cannot re-run on a pushed schema are reported as skipped,
+ * not fatal. It then asserts RLS is ON for the core tenant-scoped
+ * tables and exits non-zero if it is not.
  */
-import { readFileSync, existsSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { execSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import pg from 'pg';
 
-const MIGRATIONS_DIR = join(
-  dirname(fileURLToPath(import.meta.url)),
-  '..',
-  'drizzle',
-  'migrations'
-);
-const JOURNAL_PATH = join(MIGRATIONS_DIR, 'meta', '_journal.json');
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const migrationsDir = join(__dirname, '..', 'drizzle', 'migrations');
 
-/** Tables the integration suite asserts RLS on (tenant-isolation.test.ts). */
-const CORE_TABLES = ['contacts', 'companies', 'deals', 'tasks'];
-
-/**
- * Migrations that enable/harden RLS, applied in journal order.
- *
- * Mixed migrations that create tables AND enable RLS on them (0038, 0041,
- * 0059) are deliberately excluded: `db:sync` already created those tables, so
- * re-running the CREATE TABLE half would fail. Their tables are therefore not
- * RLS-enabled in CI, which is why CORE_TABLES is asserted below rather than a
- * table count.
- */
 const RLS_MIGRATION_TAGS = [
   '0015_rls_policies',
   '0019_fix_rls_notifications',
@@ -68,67 +30,80 @@ const RLS_MIGRATION_TAGS = [
   '0068_force_rls_owner',
 ];
 
-/** The RLS up-migrations that exist on disk, in journal order. */
-function rlsMigrations() {
-  const journal = JSON.parse(readFileSync(JOURNAL_PATH, 'utf8'));
-  return journal.entries
-    .map((entry) => ({ idx: entry.idx, file: `${entry.tag}.sql` }))
-    .filter(
-      ({ file }) => RLS_MIGRATION_TAGS.includes(file.replace(/\.sql$/, '')) && existsSync(join(MIGRATIONS_DIR, file))
-    )
-    .sort((a, b) => a.idx - b.idx);
-}
-
-async function main() {
+function main() {
   const databaseUrl = process.env.DATABASE_URL;
   if (!databaseUrl) {
-    console.error('DATABASE_URL is not set — refusing to run.');
+    console.error('DATABASE_URL is required');
     process.exit(1);
   }
 
-  const migrations = rlsMigrations();
-  console.log(`Applying ${migrations.length} RLS migration(s) ...`);
+  const results = [];
 
-  const client = new pg.Client({ connectionString: databaseUrl });
-  await client.connect();
+  for (const tag of RLS_MIGRATION_TAGS) {
+    const upPath = join(migrationsDir, `${tag}.sql`);
 
-  let applied = 0;
-  let skipped = 0;
-  try {
-    for (const { idx, file } of migrations) {
-      const sql = readFileSync(join(MIGRATIONS_DIR, file), 'utf8');
-      try {
-        await client.query(sql);
-        applied += 1;
-        console.log(`  ✓ ${String(idx).padStart(3)} ${file}`);
-      } catch (err) {
-        skipped += 1;
-        const reason = String(err instanceof Error ? err.message : err).split('\n')[0];
-        console.warn(`  ⚠ skipped ${file}: ${reason}`);
-      }
+    // Check if the up migration file exists
+    try {
+      readFileSync(upPath, 'utf8');
+    } catch {
+      results.push({ tag, status: 'missing', detail: 'SQL file not found' });
+      continue;
     }
 
-    const { rows } = await client.query(
-      `SELECT c.relname AS table_name, c.relrowsecurity AS rls_enabled
-         FROM pg_class c
-         JOIN pg_namespace n ON n.oid = c.relnamespace
-        WHERE n.nspname = 'public' AND c.relname = ANY($1::text[])`,
-      [CORE_TABLES]
-    );
+    // NOTE: do NOT skip tags listed in meta/_journal.json — the journal
+    // describes migrations that exist in the repo, not migrations already
+    // applied to this database. CI provisions a fresh DB via `db:sync`
+    // (drizzle-kit push), which creates no migration history, so every RLS
+    // file must be attempted. Files that cannot re-run on a pushed schema
+    // fail below and are reported as skipped instead of fatal.
 
-    const enabled = new Map(rows.map((row) => [row.table_name, row.rls_enabled === true]));
-    const missing = CORE_TABLES.filter((table) => enabled.get(table) !== true);
-
-    console.log(`RLS migrations applied: ${applied}; skipped: ${skipped}`);
-    if (missing.length > 0) {
-      console.error(`FAIL: RLS is not enabled on: ${missing.join(', ')}`);
-      process.exitCode = 1;
-      return;
+    try {
+      // Run the full SQL file as a single psql call
+      execSync(
+        `psql "${databaseUrl}" -v ON_ERROR_STOP=1 -f "${upPath}"`,
+        { stdio: 'pipe', timeout: 30000 }
+      );
+      results.push({ tag, status: 'applied', detail: 'migration executed' });
+    } catch (_e) {
+      // Some migrations reference tables/columns that don't exist after db:sync
+      results.push({ tag, status: "skipped", detail: _e.message.slice(0, 80) });
     }
-    console.log(`OK: RLS enabled on ${CORE_TABLES.join(', ')}`);
-  } finally {
-    await client.end();
   }
+
+  // Report results
+  console.log('\nRLS migration results:');
+  for (const r of results) {
+    console.log(`  ${r.status.toUpperCase()}: ${r.tag} — ${r.detail}`);
+  }
+
+  // Assert RLS is ON for core tables
+  const coreTables = ['contacts', 'companies', 'deals', 'tasks'];
+  let allOk = true;
+  console.log('\nRLS verification:');
+  for (const table of coreTables) {
+    try {
+      const result = execSync(
+        `psql "${databaseUrl}" -t -c "SELECT relrowsecurity FROM pg_class WHERE relname = '${table}'"`,
+        { stdio: 'pipe', timeout: 10000 }
+      ).toString().trim();
+      if (result === 't') {
+        console.log(`  OK: ${table} — RLS enabled`);
+      } else {
+        console.log(`  FAIL: ${table} — RLS disabled`);
+        allOk = false;
+      }
+    } catch (_e) {
+      console.log(`  FAIL: ${table} — could not verify`);
+      allOk = false;
+    }
+  }
+
+  if (!allOk) {
+    console.error('\nERROR: RLS not enabled on all core tables');
+    process.exit(1);
+  }
+
+  console.log('\n✅ RLS migrations applied and verified');
 }
 
-await main();
+main();

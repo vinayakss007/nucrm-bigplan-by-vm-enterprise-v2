@@ -142,9 +142,6 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/nucrm_test
 
-      # db:sync (drizzle-kit push) only creates the Drizzle schema, while RLS is
-      # enabled by hand-written SQL migrations — without this step RLS is OFF in
-      # CI and tests/integration/tenant-isolation.test.ts fails.
       - name: Apply RLS migrations
         run: node scripts/apply-rls-ci.mjs
         env:
