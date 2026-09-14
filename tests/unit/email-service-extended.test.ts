@@ -1,5 +1,23 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
+// NOTE: these mocks MUST stay at module top level. Vitest hoists vi.mock
+// to the top of the file regardless of where it is written, and vitest 5
+// turns a nested vi.mock into a hard error ("defined outside of the
+// module's top level scope"). They were previously nested inside the
+// sendTelegramToUser test but executed file-wide even on vitest 4, so
+// hoisting them changes no runtime semantics.
+vi.mock('@/drizzle/db', () => ({
+  db: {
+    query: {
+      users: {
+        findFirst: vi.fn().mockResolvedValue(null),
+      },
+    },
+  },
+}));
+vi.mock('@/drizzle/schema', () => ({ users: {} }));
+vi.mock('drizzle-orm', () => ({ eq: vi.fn() }));
+
 describe('email/service - Extended', () => {
   const originalEnv = { ...process.env };
 
@@ -188,18 +206,6 @@ describe('email/service - Extended', () => {
 
   describe('sendTelegramToUser', () => {
     it('does nothing when user has no Telegram enabled', async () => {
-      vi.mock('@/drizzle/db', () => ({
-        db: {
-          query: {
-            users: {
-              findFirst: vi.fn().mockResolvedValue(null),
-            },
-          },
-        },
-      }));
-      vi.mock('@/drizzle/schema', () => ({ users: {} }));
-      vi.mock('drizzle-orm', () => ({ eq: vi.fn() }));
-
       const { sendTelegramToUser } = await import('@/lib/email/service');
       await expect(sendTelegramToUser({
         userId: 'user-1',

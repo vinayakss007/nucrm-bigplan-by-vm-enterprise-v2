@@ -24,7 +24,13 @@ const m = vi.hoisted(() => {
   chain.then = (ok: any, err: any) => Promise.resolve(next()).then(ok, err);
 
   const updateSet = vi.fn();
-  const insertReturning = vi.fn();
+  /**
+   * Plain ledger of inserted payment rows. (Do NOT record these via
+   * `insertReturning.mock.calls.push`: vitest 5 changed mock-call storage so
+   * manually pushed entries survive `vi.clearAllMocks()` and leak across
+   * tests. A plain array cleared in beforeEach behaves identically on v4+v5.)
+   */
+  const inserts: unknown[] = [];
 
   chain.update = vi.fn(() => ({
     set: (values: unknown) => {
@@ -34,14 +40,14 @@ const m = vi.hoisted(() => {
   }));
   chain.insert = vi.fn(() => ({
     values: (values: unknown) => {
-      insertReturning.mock.calls.push([values]);
+      inserts.push(values);
       return { returning: () => Promise.resolve([{ id: 'pay-new', ...(values as object) }]) };
     },
   }));
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   chain.transaction = vi.fn(async (cb: any) => cb(chain));
 
-  return { db: chain, selects, updateSet, insertReturning };
+  return { db: chain, selects, updateSet, inserts };
 });
 
 vi.mock('@/drizzle/db', () => ({ db: m.db }));
@@ -118,6 +124,7 @@ function queueRecordPayment(opts: {
 beforeEach(() => {
   vi.clearAllMocks();
   m.selects.length = 0;
+  m.inserts.length = 0;
 });
 
 describe('recordInvoicePayment', () => {
@@ -170,7 +177,7 @@ describe('recordInvoicePayment', () => {
       amount: 10, paymentDate: '2026-07-27', paymentMethod: 'bank_transfer', reference: 'TX-9',
     });
 
-    const inserted = m.insertReturning.mock.calls.at(-1)?.[0] as Record<string, unknown>;
+    const inserted = m.inserts.at(-1) as Record<string, unknown>;
     expect(inserted).toMatchObject({
       tenantId: TENANT,
       invoiceId: INVOICE,
@@ -208,7 +215,7 @@ describe('recordInvoicePayment', () => {
     expect(err).toBeInstanceOf(PaymentError);
     expect((err as PaymentError).status).toBe(422);
     expect((err as Error).message).toContain('10.00');
-    expect(m.insertReturning.mock.calls).toHaveLength(0);
+    expect(m.inserts).toHaveLength(0);
   });
 
   it('permits overpayment when explicitly allowed, and skips the balance query', async () => {
@@ -248,7 +255,7 @@ describe('recordInvoicePayment', () => {
     }).catch((e: unknown) => e);
 
     expect((err as PaymentError).status).toBe(409);
-    expect(m.insertReturning.mock.calls).toHaveLength(0);
+    expect(m.inserts).toHaveLength(0);
   });
 
   it('does not resurrect a non-payment status such as cancelled during recalc', async () => {

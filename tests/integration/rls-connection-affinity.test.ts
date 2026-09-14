@@ -116,6 +116,11 @@ const RLS_TEST_ROLE = 'rls_affinity_test_role';
 // grants below are applied to exactly these.
 const RLS_TABLES = ['contacts'] as const;
 
+// Snapshot of RLS state captured before the test modifies anything.
+// Used in afterAll to restore the original state instead of
+// unconditionally disabling RLS.
+let rlsSnapshot: Record<string, { enabled: boolean; forced: boolean; hadPolicy: boolean }> = {};
+
 /**
  * Idempotently establish, on the connected database, the RLS preconditions that
  * production migrations create but `db:sync` (drizzle-kit push, what CI runs)
@@ -275,6 +280,37 @@ describe.skipIf(!dbAvailable)('RLS connection affinity (#1615)', () => {
     // Establish the RLS objects + non-superuser role the assertions rely on.
     // CI's db:sync does not apply the RLS migrations, so we (re)create them
     // here; this is idempotent when the real migrations already ran.
+    //
+    // NOTE: pg_class.relforcerls only exists on PostgreSQL 18+. CI runs
+    // postgres:16, so probe for the column once and only select it when
+    // present — otherwise this snapshot query fails with
+    // `column "relforcerls" does not exist` and the whole file errors.
+    const { rows: forceColRows } = await db.execute(sql`
+      SELECT 1 FROM pg_attribute
+      WHERE attrelid = 'pg_class'::regclass AND attname = 'relforcerls'
+    `);
+    const hasForceColumn = forceColRows.length > 0;
+    rlsSnapshot = {};
+    for (const table of RLS_TABLES) {
+      const row = hasForceColumn
+        ? await db.execute(sql`
+          SELECT relrowsecurity AS enabled, relforcerls AS forced
+          FROM pg_class WHERE relname = ${table}
+        `)
+        : await db.execute(sql`
+          SELECT relrowsecurity AS enabled, false AS forced
+          FROM pg_class WHERE relname = ${table}
+        `);
+      const { rows: policyRows } = await db.execute(sql`
+        SELECT 1 FROM pg_policies WHERE tablename = ${table} AND policyname = 'tenant_isolation'
+      `);
+      const result = (row as { rows: Array<{ enabled: boolean; forced: boolean }> }).rows?.[0];
+      rlsSnapshot[table] = {
+        enabled: result?.enabled ?? false,
+        forced: result?.forced ?? false,
+        hadPolicy: policyRows.length > 0,
+      };
+    }
     await ensureRlsPreconditions();
   });
 
@@ -295,18 +331,28 @@ describe.skipIf(!dbAvailable)('RLS connection affinity (#1615)', () => {
       });
     }
 
-    // Revert the RLS preconditions we established so this suite does not change
-    // the shared DB state other integration test files observe. db:sync leaves
-    // these tables with RLS OFF; restore that. (If the real migrations had RLS
-    // on, a later db:migrate re-applies it — tests never run after migrate.)
+    // Restore the original RLS state so this suite does not change
+    // the shared DB state other integration test files observe.
     for (const table of RLS_TABLES) {
       const tbl = sql.raw(`"${table}"`);
-      await db.execute(sql`DROP POLICY IF EXISTS tenant_isolation ON ${tbl}`).catch(() => {});
-      await db.execute(sql`ALTER TABLE ${tbl} NO FORCE ROW LEVEL SECURITY`).catch(() => {});
-      await db.execute(sql`ALTER TABLE ${tbl} DISABLE ROW LEVEL SECURITY`).catch(() => {});
-      await db
-        .execute(sql`REVOKE ALL ON ${tbl} FROM rls_affinity_test_role`)
-        .catch(() => {});
+      const snap = rlsSnapshot[table];
+      if (snap) {
+        if (snap.hadPolicy) {
+          await db.execute(sql`DROP POLICY IF EXISTS tenant_isolation ON ${tbl}`).catch(() => {});
+          if (snap.enabled) {
+            await db.execute(sql`CREATE POLICY tenant_isolation ON ${tbl}
+              FOR ALL USING (tenant_id::text = current_setting('app.current_tenant'))
+              WITH CHECK (tenant_id::text = current_setting('app.current_tenant'))`).catch(() => {});
+          }
+        } else {
+          await db.execute(sql`DROP POLICY IF EXISTS tenant_isolation ON ${tbl}`).catch(() => {});
+        }
+        if (!snap.enabled) {
+          await db.execute(sql`ALTER TABLE ${tbl} NO FORCE ROW LEVEL SECURITY`).catch(() => {});
+          await db.execute(sql`ALTER TABLE ${tbl} DISABLE ROW LEVEL SECURITY`).catch(() => {});
+        }
+      }
+      await db.execute(sql`REVOKE ALL ON ${tbl} FROM rls_affinity_test_role`).catch(() => {});
     }
     await db.execute(sql`REVOKE USAGE ON SCHEMA public FROM rls_affinity_test_role`).catch(() => {});
     await db.execute(sql`DROP ROLE IF EXISTS rls_affinity_test_role`).catch(() => {});
