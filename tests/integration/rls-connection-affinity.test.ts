@@ -280,13 +280,28 @@ describe.skipIf(!dbAvailable)('RLS connection affinity (#1615)', () => {
     // Establish the RLS objects + non-superuser role the assertions rely on.
     // CI's db:sync does not apply the RLS migrations, so we (re)create them
     // here; this is idempotent when the real migrations already ran.
+    //
+    // NOTE: pg_class.relforcerls only exists on PostgreSQL 18+. CI runs
+    // postgres:16, so probe for the column once and only select it when
+    // present — otherwise this snapshot query fails with
+    // `column "relforcerls" does not exist` and the whole file errors.
+    const { rows: forceColRows } = await db.execute(sql`
+      SELECT 1 FROM pg_attribute
+      WHERE attrelid = 'pg_class'::regclass AND attname = 'relforcerls'
+    `);
+    const hasForceColumn = forceColRows.length > 0;
     rlsSnapshot = {};
     for (const table of RLS_TABLES) {
-      const row = await db.execute(sql`
-        SELECT relrowsecurity AS enabled, relforcerls AS forced
-        FROM pg_class WHERE relname = ${table}
-      `);
-      const [{ rows: policyRows }] = await db.execute(sql`
+      const row = hasForceColumn
+        ? await db.execute(sql`
+          SELECT relrowsecurity AS enabled, relforcerls AS forced
+          FROM pg_class WHERE relname = ${table}
+        `)
+        : await db.execute(sql`
+          SELECT relrowsecurity AS enabled, false AS forced
+          FROM pg_class WHERE relname = ${table}
+        `);
+      const { rows: policyRows } = await db.execute(sql`
         SELECT 1 FROM pg_policies WHERE tablename = ${table} AND policyname = 'tenant_isolation'
       `);
       const result = (row as { rows: Array<{ enabled: boolean; forced: boolean }> }).rows?.[0];
