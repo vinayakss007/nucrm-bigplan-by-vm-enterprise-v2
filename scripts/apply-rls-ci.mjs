@@ -30,16 +30,6 @@ const RLS_MIGRATION_TAGS = [
   '0068_force_rls_owner',
 ];
 
-function readJournal() {
-  const journalPath = join(migrationsDir, 'meta', '_journal.json');
-  return JSON.parse(readFileSync(journalPath, 'utf8'));
-}
-
-function getAppliedTags() {
-  const journal = readJournal();
-  return new Set(journal.entries.map((e) => e.tag));
-}
-
 function main() {
   const databaseUrl = process.env.DATABASE_URL;
   if (!databaseUrl) {
@@ -47,7 +37,6 @@ function main() {
     process.exit(1);
   }
 
-  const appliedTags = getAppliedTags();
   const results = [];
 
   for (const tag of RLS_MIGRATION_TAGS) {
@@ -61,10 +50,12 @@ function main() {
       continue;
     }
 
-    if (appliedTags.has(tag)) {
-      results.push({ tag, status: 'skipped', detail: 'already applied' });
-      continue;
-    }
+    // NOTE: do NOT skip tags listed in meta/_journal.json — the journal
+    // describes migrations that exist in the repo, not migrations already
+    // applied to this database. CI provisions a fresh DB via `db:sync`
+    // (drizzle-kit push), which creates no migration history, so every RLS
+    // file must be attempted. Files that cannot re-run on a pushed schema
+    // fail below and are reported as skipped instead of fatal.
 
     try {
       // Run the full SQL file as a single psql call
