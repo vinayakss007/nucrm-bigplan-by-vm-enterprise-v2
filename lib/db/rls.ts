@@ -85,6 +85,136 @@ export async function withTenantContext<T>(
 }
 
 /**
+ * Name of the GUC that marks a connection as running with platform-security
+ * privileges. Postgres-side policies key off this name — see migration
+ * 0054 (and 0088, which broadens it to the pre-auth bootstrap paths).
+ */
+export const SUPER_ADMIN_GUC = 'app.is_super_admin';
+
+/**
+ * Mark the current transaction (or, without `tx`, the current connection
+ * checkout) as a platform-security context.
+ *
+ * WHY THIS EXISTS
+ * ---------------
+ * RLS on this database is deny-by-default for anything that is not
+ * tenant-scoped, and several categories of work are legitimately
+ * *pre-tenant*: they run before a user or tenant exists, or they maintain
+ * platform-wide security state. Without a context they fail with
+ * `row-level security` violations, which is what broke first-admin
+ * bootstrap, signup, login and the brute-force store in pre-prod
+ * (PP-010 / PP-011 / PP-012).
+ *
+ * IMPORTANT — this is NOT a request-scoped privilege.
+ * `SET LOCAL` is transaction-scoped, so it must wrap the *shortest possible*
+ * sequence of statements, never a whole request and never a code path that
+ * also runs tenant-authored SQL. Callers must use `withSecurityContext()` or
+ * pass a `tx`; a bare `setSuperAdminContext()` without `tx` is session-scoped
+ * and is only safe on a connection the caller pins and resets.
+ *
+ * The corresponding reset on connection release (`lib/db/pool.ts` and
+ * `lib/db/request-connection.ts`) clears this GUC too, so a leaked context
+ * cannot survive a checkout under PgBouncer.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function setSuperAdminContext(tx?: any): Promise<void> {
+  const client = tx || db;
+  const isLocal = tx ? sql`true` : sql`false`;
+  await client.execute(sql`SELECT set_config('app.is_super_admin', 'true', ${isLocal})`);
+}
+
+/**
+ * Run `fn` inside a single transaction that carries the platform-security
+ * context for its full duration.
+ *
+ * Used by the pre-auth bootstrap flows (first super admin, self-service
+ * signup, SSO provisioning) and by the login brute-force store. All
+ * statements inside `fn` share one connection, so the `SET LOCAL` context
+ * cannot leak to unrelated queries and is dropped at COMMIT/ROLLBACK.
+ */
+export async function withSecurityContext<T>(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  fn: (tx: any) => Promise<T>
+): Promise<T> {
+  return await db.transaction(async (tx) => {
+    await setSuperAdminContext(tx);
+    return fn(tx);
+  });
+}
+
+/**
+ * Set ONLY the acting-user half of the tenant context.
+ *
+ * For paths where an identity has been *proven* but no workspace has been
+ * selected yet — the moment right after a password verifies. The session and
+ * `*_own` policies key off app.current_user, so they apply to the proven
+ * identity; tenant-scoped tables stay closed because app.current_tenant is
+ * still empty. That is exactly the reach a fresh login should have.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function setUserContext(userId: string, tx?: any): Promise<void> {
+  if (!userId) {
+    throw new Error('[RLS] setUserContext called with empty userId — refusing to set empty context');
+  }
+  const client = tx || db;
+  const isLocal = tx ? sql`true` : sql`false`;
+  await client.execute(sql`SELECT set_config('app.current_user', ${userId}, ${isLocal})`);
+}
+
+/**
+ * Mark the transaction as performing a pre-auth credential lookup.
+ *
+ * `users` has no SELECT policy that an unauthenticated connection can satisfy
+ * (read_self needs app.current_user; super_admin_read needs the security
+ * context), so `handleLogin`'s `SELECT ... WHERE email = ?` matched zero rows
+ * and every login attempt returned "Invalid email or password" no matter what
+ * was typed. This GUC admits SELECT on users for exactly that lookup.
+ *
+ * It is deliberately separate from app.is_super_admin: it grants a single
+ * read, never UPDATE or DELETE, so a login request cannot mutate anyone's
+ * account beyond what the *_own policies already allow.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function setAuthLookupContext(tx?: any): Promise<void> {
+  const client = tx || db;
+  const isLocal = tx ? sql`true` : sql`false`;
+  await client.execute(sql`SELECT set_config('app.auth_lookup', 'true', ${isLocal})`);
+}
+
+/**
+ * Run a pre-auth credential lookup (login, SSO subject match) with the minimum
+ * read privilege it needs. Keep the callback to the lookup itself.
+ */
+export async function withAuthLookupContext<T>(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  fn: (tx: any) => Promise<T>
+): Promise<T> {
+  return await db.transaction(async (tx) => {
+    await setAuthLookupContext(tx);
+    return fn(tx);
+  });
+}
+
+/**
+ * Run `fn` inside a transaction scoped to a proven user, with no tenant
+ * selected. Used by login/2FA paths that must write their own session or
+ * profile rows before a workspace context exists.
+ */
+export async function withUserContext<T>(
+  userId: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  fn: (tx: any) => Promise<T>
+): Promise<T> {
+  if (!userId) {
+    throw new Error('[RLS] withUserContext called with empty userId');
+  }
+  return await db.transaction(async (tx) => {
+    await setUserContext(userId, tx);
+    return fn(tx);
+  });
+}
+
+/**
  * Verify RLS is enabled on a table
  */
 export async function verifyRLSEnabled(tableName: string): Promise<boolean> {

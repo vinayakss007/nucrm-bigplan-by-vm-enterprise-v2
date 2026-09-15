@@ -21,6 +21,7 @@
  *       provider's retry re-processes instead of being dropped as a dup.
  */
 import { db } from '@/drizzle/db';
+import { withSecurityContext } from '@/lib/db/rls';
 import { webhookEvents } from '@/drizzle/schema';
 import { eq, and, lt } from 'drizzle-orm';
 import { logger } from '@/lib/logger';
@@ -41,7 +42,12 @@ export async function claimWebhookEvent(opts: {
   eventType?: string;
   tenantId?: string | null;
 }): Promise<boolean> {
-  const [row] = await db
+  // 0088 put RLS on webhook_events. A delivery claim is made before the tenant
+  // is resolved (tenant_id is NULL on the row) and must then be readable and
+  // stealable by the worker, so the whole claim is one security-context
+  // transaction. An ordinary tenant context sees none of it.
+  return await withSecurityContext(async (tx) => {
+  const [row] = await tx
     .insert(webhookEvents)
     .values({
       provider: opts.provider,
@@ -58,7 +64,7 @@ export async function claimWebhookEvent(opts: {
   // older than STALE_CLAIM_MS means the worker died mid-processing (crash,
   // deploy, OOM) without releasing. Steal it so the retry still processes;
   // the UPDATE's WHERE makes the steal atomic under concurrency.
-  const [stolen] = await db
+  const [stolen] = await tx
     .update(webhookEvents)
     .set({ createdAt: new Date() })
     .where(and(
@@ -69,14 +75,15 @@ export async function claimWebhookEvent(opts: {
     ))
     .returning({ id: webhookEvents.id });
   return !!stolen;
+  });
 }
 
 /** Mark a claimed event processed (audit trail; row is kept). */
 export async function completeWebhookEvent(provider: WebhookProvider, eventId: string): Promise<void> {
-  await db
+  await withSecurityContext(async (tx) => tx
     .update(webhookEvents)
     .set({ status: 'processed', processedAt: new Date() })
-    .where(and(eq(webhookEvents.provider, provider), eq(webhookEvents.eventId, eventId)));
+    .where(and(eq(webhookEvents.provider, provider), eq(webhookEvents.eventId, eventId))));
 }
 
 /**
@@ -85,9 +92,9 @@ export async function completeWebhookEvent(provider: WebhookProvider, eventId: s
  */
 export async function releaseWebhookEvent(provider: WebhookProvider, eventId: string): Promise<void> {
   try {
-    await db
+    await withSecurityContext(async (tx) => tx
       .delete(webhookEvents)
-      .where(and(eq(webhookEvents.provider, provider), eq(webhookEvents.eventId, eventId)));
+      .where(and(eq(webhookEvents.provider, provider), eq(webhookEvents.eventId, eventId))));
   } catch (err) {
     // Best-effort: the retry will simply be treated as a duplicate and can
     // be recovered from Stripe/Razorpay dashboards. Never mask the real error.

@@ -19,6 +19,7 @@ import { logger } from '@/lib/logger';
 import { randomBytes, createHash } from 'crypto';
 import { verifyTOTP } from '@/lib/auth/totp';
 import { installDefaultModules } from '@/lib/modules/auto-install';
+import { withSecurityContext, withTenantContext, withUserContext, withAuthLookupContext, setTenantContext } from '@/lib/db/rls';
 import { isBlocked, recordFailedAttempt, recordSuccessfulLogin } from '@/lib/security/brute-force';
 import { getClientIp } from '@/lib/client-ip';
 import { validateBody } from '@/lib/api/validate';
@@ -116,10 +117,13 @@ export async function POST_login(request: NextRequest) {
       }, 429);
     }
 
-    const [user] = await db.select()
-      .from(users)
-      .where(eq(users.email, email))
-      .limit(1);
+    // PP-012: no SELECT policy on `users` is satisfiable by an unauthenticated
+    // connection, so this lookup matched zero rows and every login answered
+    // "Invalid email or password" regardless of what was typed. The auth-lookup
+    // context grants exactly this read — never UPDATE or DELETE.
+    const [user] = await withAuthLookupContext(async (tx) =>
+      await tx.select().from(users).where(eq(users.email, email)).limit(1)
+    );
 
     if (!user || !user.passwordHash || !await verifyPassword(password, user.passwordHash)) {
       await recordFailedAttempt(email, ip, userAgent, 'Invalid credentials');
@@ -152,10 +156,14 @@ export async function POST_login(request: NextRequest) {
         const codes: string[] = typeof user.totpBackupCodes === 'string' ? JSON.parse(user.totpBackupCodes) : (user.totpBackupCodes as string[]);
         if (codes.includes(hash)) {
           valid = true;
-          await db.update(users)
-            .set({ totpBackupCodes: codes.filter((x:string)=>x!==hash) })
-            .where(eq(users.id, user.id))
-            .catch((e) => devLogger.warn('[Auth] Failed to update backup codes', e));
+          // `users_update_own` is keyed on app.current_user, which a pre-auth
+          // connection does not have — so consuming a backup code silently
+          // failed and the code stayed reusable.
+          await withUserContext(user.id, async (tx) =>
+            await tx.update(users)
+              .set({ totpBackupCodes: codes.filter((x:string)=>x!==hash) })
+              .where(eq(users.id, user.id))
+          ).catch((e) => devLogger.warn('[Auth] Failed to update backup codes', e));
         }
       }
       if (!valid) return loginRespond(request, isForm, { error:'Invalid 2FA code', requires_2fa:true }, 401);
@@ -165,7 +173,11 @@ export async function POST_login(request: NextRequest) {
     const sessionDays = remember_me ? 30 : 1; // 30 days if remember me, 1 day otherwise
     const token = await createToken(user.id, sessionDays);
     const tokenHash = await hashToken(token);
-    await db.transaction(async (tx) => {
+    // `sessions_user_own` is FOR ALL with no WITH CHECK, so Postgres reuses its
+    // USING clause (user_id = app.current_user) to validate new rows: with no
+    // context both the DELETE and the INSERT were denied and login could never
+    // issue the session it had just authenticated. Scope it to that identity.
+    await withUserContext(user.id, async (tx) => {
       // Invalidate any existing sessions for this user before issuing a new one.
       // This remediates session fixation: an attacker who planted a session
       // token cannot have it survive a legitimate login. Tradeoff: logging in
@@ -216,11 +228,17 @@ export async function POST_signup(request: NextRequest) {
     // Check if signups are allowed at platform level
     let allowSignups = true;
     try {
-      const [allowSignupsSetting] = await db
-        .select({ value: platformSettings.value })
-        .from(platformSettings)
-        .where(and(eq(platformSettings.key, 'allow_signups'), isNull(platformSettings.tenantId)))
-        .limit(1);
+      // 0088 makes the platform-wide (tenant_id IS NULL) row visible only to a
+      // security context. This read has to run in one: the `catch` below
+      // defaults to OPEN, so silently reading nothing after an operator set
+      // allow_signups=false would re-enable registration behind their back.
+      const [allowSignupsSetting] = await withSecurityContext(async (tx) =>
+        await tx
+          .select({ value: platformSettings.value })
+          .from(platformSettings)
+          .where(and(eq(platformSettings.key, 'allow_signups'), isNull(platformSettings.tenantId)))
+          .limit(1)
+      );
       allowSignups = allowSignupsSetting?.value !== 'false';
     } catch {
       // Silently skip during migration/setup when tables may not exist yet
@@ -239,14 +257,22 @@ export async function POST_signup(request: NextRequest) {
     const passwordError = validatePassword(password);
     if (passwordError) return NextResponse.json({ error: passwordError }, { status: 400 });
 
-    const [existing] = await db.select({ id: users.id }).from(users).where(eq(users.email, email)).limit(1);
+    // Same RLS lookup gap as login: without the auth-lookup context this read
+    // returned nothing, so the duplicate-account 409 could never fire.
+    const [existing] = await withAuthLookupContext(async (tx) =>
+      await tx.select({ id: users.id }).from(users).where(eq(users.email, email)).limit(1)
+    );
     if (existing) {
       return NextResponse.json({ error: 'An account with this email already exists' }, { status: 409 });
     }
 
     const trialDays = parseInt(process.env.DEFAULT_TRIAL_DAYS ?? '14');
     
-    const { user, tenant } = await db.transaction(async (tx) => {
+    // PP-011: the first two rows of any new workspace are created before a user
+    // or tenant exists, so `users_insert_auth` / `tenants_authenticated_insert`
+    // could never be satisfied. They run under the narrow bootstrap INSERT
+    // policies added by 0088 instead.
+    const { user, tenant } = await withSecurityContext(async (tx) => {
       const [u] = await tx.insert(users).values({
         email,
         passwordHash: await hashPassword(password),
@@ -268,6 +294,12 @@ export async function POST_signup(request: NextRequest) {
       }).returning();
 
       if (!t) throw new Error('Failed to create tenant');
+
+      // Everything below is tenant-scoped (roles, tenant_members, pipelines,
+      // deal_stages, onboarding_progress, tenant_modules). Those policies key
+      // off app.current_tenant, which cannot exist before this row does — so
+      // the context is set here, on this connection, for the rest of the tx.
+      await setTenantContext(t.id, u.id, tx);
 
       // CRITICAL: Create tenant_member row — user is ADMIN of their own org
       let adminRole;
@@ -350,7 +382,9 @@ export async function POST_signup(request: NextRequest) {
       }
 
       // 4. Install plan-based default modules (covers core-crm, automation-basic, etc.)
-      await installDefaultModules(t.id, 'free');
+      // Must share this transaction: on a separate pooled connection it would
+      // carry no tenant context, and tenant_modules is RLS-protected.
+      await installDefaultModules(t.id, 'free', undefined, tx);
       
       // Normalized onboarding progress
       await tx.insert(onboardingProgress).values({
@@ -372,7 +406,7 @@ export async function POST_signup(request: NextRequest) {
     const token = await createToken(user.id);
     const tokenHash = await hashToken(token);
 
-    await db.transaction(async (tx) => {
+    await withTenantContext(tenant.id, user.id, async (tx) => {
       await tx.insert(sessions).values({
         userId: user.id,
         tokenHash,

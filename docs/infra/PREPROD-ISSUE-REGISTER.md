@@ -34,10 +34,10 @@ Severity: **S1** blocks go-live · **S2** broken feature or security weakness ·
 | PP-007 | S1  | Build         | `realtime.ts` (socket.io server) shipped in **no** image                            | ✅ FIXED & VERIFIED |
 | PP-008 | S1  | Compose       | Undeclared `alertmanagerdata` volume aborted the whole compose project              | ✅ FIXED & VERIFIED |
 | PP-009 | S1  | Compose       | `minio/minio:latest`, `minio/mc:latest`, `edoburu/pgbouncer:1.23` no longer resolve | ✅ FIXED & VERIFIED |
-| PP-010 | S1  | RLS / Setup   | **First super-admin insert is rejected by RLS** — even with a correct setup key     | 🚨 OPEN           |
-| PP-011 | S1  | RLS / Signup  | **Public signup is rejected by RLS** (`users_insert_auth` unsatisfiable pre-auth)   | 🚨 OPEN           |
-| PP-012 | S1  | RLS / Auth    | `login_attempts` write+read blocked → brute-force lockout silently inert            | 🚨 OPEN           |
-| PP-013 | S1  | RLS           | Tenant-isolation gate FAILED — 5 RLS-disabled, 10 policy-less, 6 NULL-tenant leaky  | 🚨 OPEN           |
+| PP-010 | S1  | RLS / Setup   | **First super-admin insert is rejected by RLS** — even with a correct setup key     | 🔧 FIXED IN TREE   |
+| PP-011 | S1  | RLS / Signup  | **Public signup is rejected by RLS** (`users_insert_auth` unsatisfiable pre-auth)   | 🔧 FIXED IN TREE   |
+| PP-012 | S1  | RLS / Auth    | `login_attempts` write+read blocked → brute-force lockout silently inert            | 🔧 FIXED IN TREE   |
+| PP-013 | S1  | RLS           | Tenant-isolation gate FAILED — 5 RLS-disabled, 10 policy-less, 6 NULL-tenant leaky  | ✅ FIXED & VERIFIED |
 | PP-014 | S1  | Backups       | `pg_dump` fails as the app role (`FORCE ROW LEVEL SECURITY` + `row_security=off`)   | 🚨 OPEN           |
 | PP-015 | S1  | Backups       | `BACKUP_DATABASE_URL` still points at the RLS-bound `nucrm` role                    | 🚨 OPEN           |
 | PP-016 | S3  | Observability | Sentry events carry no `environment`/`release` (should be `preprod`)                | ⏸️ BLOCKED        |
@@ -191,6 +191,36 @@ driver `error`, once wrapped as `Error: Failed query: …`), which is why each p
 - **Verification.** Repro recipe in [`PREPROD-FIXES-LESSONS.md`](./PREPROD-FIXES-LESSONS.md).
 - **Files.** `drizzle/migrations/0054_rls_phase0.sql`, `lib/db/rls.ts`, `lib/db/pool.ts`
 
+
+### ✅ Resolution (0088 + this PR)
+
+**Root cause, corrected by measurement.** The register recorded this as "`users_insert_auth` is
+unsatisfiable pre-auth", which is only half of it. That policy is `FOR INSERT` (`polcmd = 'a'`), so
+it gates writes and never filtered reads — a hypothesis that it also leaked `users` to every
+authenticated user was tested against `pg_policy.polcmd` and **disproven**.
+
+The real chain is longer than one policy. `POST /api/setup/create-admin` writes, in a single
+transaction: `users` → `tenants` → (roles / tenant_members / pipelines / deal_stages /
+onboarding_progress / tenant_modules) → `users.last_tenant_id` → `sessions`. Three separate RLS
+walls sat on that path, and one of them was invisible to any single-statement probe:
+
+| # | Statement | Blocking policy | Fix |
+| - | --------- | --------------- | --- |
+| 1 | `INSERT users`, `INSERT tenants` | `*_insert_auth` needs `app.current_user`, which cannot exist yet | `users_bootstrap_insert` / `tenants_bootstrap_insert` (INSERT-only, `app.is_super_admin`) |
+| 2 | `INSERT roles/tenant_members/...` | `tenant_isolation` needs `app.current_tenant` | handler calls `setTenantContext(t.id, u.id, tx)` as soon as the tenant exists |
+| 3 | `INSERT sessions` | `sessions_user_own` is `FOR ALL` with no `WITH CHECK`, so its `USING` also validates new rows | same transaction, now carrying `app.current_user` |
+| 4 | `installDefaultModules()` | ran on a **second** connection (`db`), outside the tx, with no GUCs — and `modules` had no INSERT policy at all | threads `tx`; adds `modules_registry_insert` |
+
+A probe that tests only "can I INSERT INTO users?" finds wall 1 and stops. This is why the fix is
+accompanied by `scripts/simulate-preprod-flows.ts`, which replays all thirteen statements in order.
+
+Also fixed here: the route's "only one super admin" guard counted `users` under RLS with no context,
+so it always counted **zero** and would happily have created unlimited platform admins. It now runs
+in a security context and can actually see what it is guarding against.
+
+**Status.** Policies applied to the managed DB and verified live (91/91 in the simulator). The
+handler changes are in this branch — status moves to ✅ once deployed and the setup form is
+observed completing end to end.
 ## PP-011 — 🚨 Public signup is rejected by RLS *(S1 · RLS / Signup)*
 
 - **Sentry.** `NUCRM-3` / `NUCRM-2` — `POST /api/auth/signup`, `insert into "users" (…)`.
@@ -204,6 +234,17 @@ driver `error`, once wrapped as `Error: Failed query: …`), which is why each p
 - **Fix.** Same decision as PP-010 — the bootstrap INSERT policy must cover signup too, or signup must
   be routed through an audited privileged path.
 
+
+### ✅ Resolution (0088 + this PR)
+
+Signup hits walls 1–4 above identically, plus one of its own: it reads the platform-wide
+`platform_settings` row `allow_signups` (tenant_id IS NULL) *and* defaults to
+`allowSignups = true` inside a `catch`. 0088 makes that global row visible only to a security
+context, so leaving the read untouched would have meant an operator flipping the switch to
+`false` silently re-opened registration. The read now runs in `withSecurityContext`, and the
+duplicate-email 409 check runs under `app.auth_lookup` (it previously always found no user).
+
+The simulator asserts the switch is honoured; see `S1` and `S4 :: platform_settings`.
 ## PP-012 — 🚨 `login_attempts` write+read blocked → brute-force lockout is inert *(S1 · RLS / Auth)*
 
 - **Sentry.** `NUCRM-5` / `NUCRM-4` — `POST /api/auth/login`, raised from
@@ -237,6 +278,33 @@ driver `error`, once wrapped as `Error: Failed query: …`), which is why each p
   context that sets `app.is_super_admin` — needs an image rebuild.
 - **Files.** `drizzle/migrations/0054_rls_phase0.sql`, `lib/security/brute-force.ts`
 
+
+### ✅ Resolution (0088 + this PR)
+
+**The recorded symptom was misleading.** "`login_attempts` write+read blocked" is true but is not
+why login failed: `handleLogin`'s credential lookup is
+`SELECT ... FROM users WHERE email = ?`, executed with no GUC at all. No `users` SELECT policy is
+satisfiable by an unauthenticated connection, so the query matched zero rows and **every sign-in
+answered "Invalid email or password" whatever was typed** — correct passwords included. The
+`login_attempts` failure was a secondary symptom, swallowed by the module's own `catch`.
+
+Two more causes surfaced only when the flows were replayed statement-by-statement:
+
+1. **`sessions` could never be issued.** `sessions_user_own` is `FOR ALL` without `WITH CHECK`.
+   Postgres reuses `USING` to validate new rows, so the insert of a brand-new session — made
+   before any identity context exists — was rejected. Fixed in code: the transaction that deletes
+   and re-inserts sessions now runs under `withUserContext(user.id, …)`, i.e. the *proven*
+   identity, which is exactly the reach it should have. 2FA backup-code consumption was fixed the
+   same way (previously it failed silently, leaving a consumed code reusable).
+2. **A pre-existing 22P02 bug — see PP-023.** With `app.current_user` set to `''` (what the pool
+   writes on release), the old `(x <> '') AND (id = x::uuid)` policies did not short-circuit and
+   raised *an error* rather than filtering to zero rows. Since permissive policies are OR-ed, one
+   raising predicate fails the whole query.
+
+Fix: `app.auth_lookup` (a SELECT-only privilege on `users`, deliberately narrower than
+`app.is_super_admin`), plus `withSecurityContext` around every `login_attempts` / `login_blocks`
+statement. Because the store's insert → window-COUNT → block now share one transaction, the
+read-then-block race that existed when each statement took its own pooled connection is gone too.
 ## PP-013 — 🚨 Tenant-isolation gate FAILED *(S1 · RLS)*
 
 - **Gate.** `npx tsx scripts/verify-tenant-isolation.ts` — the pre-prod hard gate, exit code non-zero.
@@ -280,6 +348,27 @@ driver `error`, once wrapped as `Error: Failed query: …`), which is why each p
 - **Files.** `drizzle/migrations/0054_rls_phase0.sql` … `0087_webhook_events.sql`,
   `scripts/verify-tenant-isolation.ts`
 
+
+### ✅ Resolution (0088, applied and verified live)
+
+| Gap | Count | Fix |
+| --- | ----- | --- |
+| RLS disabled on a table with `tenant_id` | 5 | `ENABLE` + `FORCE ROW LEVEL SECURITY` on `analytics_events`, `custom_entities`, `custom_entity_data`, `webhook_events`, `webhook_field_mappings` |
+| Policy named something other than `tenant_isolation` (no coverage reported) | 7 | renamed to the canonical name; `contact_tags`, `email_warmup_logs`, `email_warmup_pool`, `lead_tags` additionally gained cast-safe expressions |
+| `(tenant_id IS NULL) OR …` exposed global rows to **every** tenant | 6 | `tenant_isolation` → strict tenant match `OR app.is_super_admin`; global rows are now the platform's, not nobody's |
+| `*_read_all` SELECT policies (`USING (true)`) | 2 | dropped (`usage_alerts`, `hierarchy_permissions`) — see PP-024 for the one deliberately left in place |
+| Telemetry would break under strict writes | 2 | `error_logs` / `security_events` keep an explicit permissive **INSERT** policy; reads stay strict. An unauthenticated request has no tenant to attribute a failure to, and losing those rows would blind us to exactly this class of incident |
+| `usage_alerts` / `hierarchy_permissions` writes | 2 | their `tenant_isolation` was SELECT-only while the write gate demanded `app.is_super_admin`, so a tenant could not create its own rows — now `FOR ALL` on a strict tenant match |
+
+**Verified the only way it can be verified**: `scripts/simulate-preprod-flows.ts` provisions two
+synthetic tenants and, for 12 tables × 4 contexts, checks that A sees its own row and never B's,
+that no global row is visible to an ordinary tenant, that an empty context sees nothing, and that
+a platform context still reaches global config — then rolls the whole thing back.
+
+```text
+91/91 checks passed
+RESULT: bootstrap, login, brute-force and tenant isolation all behave as specified
+```
 ## PP-014 — 🚨 `pg_dump` cannot run as the app role *(S1 · Backups)*
 
 - **Symptom.** `deploy/scripts/backup.sh` failed:
@@ -368,6 +457,70 @@ driver `error`, once wrapped as `Error: Failed query: …`), which is why each p
    `npx tsx scripts/verify-tenant-isolation.ts` to clean.
 5. Phase 7 observability (PP-016, PP-017); Phase 8 hardening (PP-020) once approved; supply the
    credentials for PP-018/PP-019.
+
+## PP-023 — ✅ RLS predicates raised errors instead of filtering *(S1 · RLS)*
+
+- **Discovered by.** Replaying the login transaction in `simulate-preprod-flows.ts`: a plain
+  `SELECT count(*) FROM users` with `app.current_user = ''` raised
+  `invalid input syntax for type boolean: ""` / `… for type uuid: ""`.
+- **Cause.** 0054 wrote guards as `current_setting(x) <> '' AND col = current_setting(x)::uuid`,
+  relying on short-circuit evaluation. Postgres does **not** guarantee the order in which boolean
+  subexpressions are evaluated, so the cast can run on `''`. RLS policies are combined with OR, so
+  a single raising predicate fails the entire query — the statement errors instead of returning no
+  rows. The pool's release reset writes exactly that empty value.
+- **Fix.** 35 policies restated with `NULLIF(current_setting(...), '')::type`, which yields NULL
+  (→ filtered) rather than an error. Semantics otherwise byte-identical: same command, same
+  visibility, generated mechanically from `pg_get_expr` of the live definitions and applied to the
+  managed DB. Verified: `0` remaining policies match `\(current_setting(…)\)::(uuid|boolean)`.
+- **Follow-up.** Any *new* policy must use the `NULLIF` form; `tenant_isolation` created by the
+  CASE-rendered path is already safe.
+
+## PP-024 — 🚨 `tenants_read_all` exposes every workspace to unauthenticated reads *(S2 · RLS)*
+
+- **Evidence.** `tenants` carries `CREATE POLICY tenants_read_all FOR SELECT USING (true)`, so any
+  connection — including an unauthenticated one — can list every tenant's name, slug, plan and
+  status.
+- **Why it was NOT fixed in 0088.** The policy is load-bearing. `app/api/webhooks/stripe/route.ts`
+  updates `tenants` before any tenant context exists (it resolves the tenant *from* the event),
+  `app/api/webhooks/telegram/bot/route.ts` selects tenants by id, `/api/metrics` counts them, and
+  `app/api/auth/accept-invite` + `invite-details` read by slug pre-auth. Dropping `USING (true)`
+  would have broken billing, the Telegram integration, metrics and public invites.
+- **Correct fix, deliberately deferred.** Give each of those call sites an explicit narrow context
+  (an ops/`withSecurityContext` transaction for webhooks and metrics; a slug-lookup GUC mirroring
+  `app.auth_lookup` for invites) and then replace the policy with a strict tenant match. That is a
+  change to four payment/integration paths and needs its own testing; folding it into an RLS PR
+  would have traded one outage for another.
+
+## PP-025 — 🚨 `verify-tenant-isolation` reports coverage it cannot see *(S3 · Guards)*
+
+- **Cause.** Its catalogue query keeps only `pg_policy.polname = 'tenant_isolation'`; a correctly
+  scoped policy under any other name counts as absent. It also only *reads* the catalogue — it
+  never executes a statement — so PP-023 (policies that error rather than filter) and the
+  thirteen-statement bootstrap chain were both undetectable by it, despite it passing.
+- **Consequence.** "No gaps reported" does not mean "isolation works". That gap is why this PR adds
+  `scripts/simulate-preprod-flows.ts` as the behavioural counterpart, and why the register's PP-013
+  counts should be read as *at least* (it found 11; measurement found 16 tables needing policy work,
+  then 35 policies needing the cast fix and 7 more needing renames).
+- **Fix.** Narrow the query to "a policy whose expression enforces a tenant predicate" rather than
+  matching a name, or report misnamed-but-correct policies as a separate advisory class.
+
+## Running the pre-prod flow simulator
+
+It is the verification step for every RLS or auth change in this repo, and it is safe against a
+live database because **nothing commits** — each scenario is one explicit transaction ending in
+`ROLLBACK`, and it refuses to run at all unless the database is empty (or `--allow-nonempty`).
+
+```bash
+# against pre-prod, through PgBouncer (never local 5432)
+ssh <preprod> 'cd /srv/nucrm && npm run simulate:flows'
+
+# inside the app container, using the app's own DATABASE_URL
+docker exec -w /app nucrm-app node --experimental-strip-types scripts/simulate-preprod-flows.ts
+```
+
+Exit code is non-zero on any failed check, so it can gate a deploy once CI has a database service
+(CI today has none — `ci.yml` runs only the static guards, and `db:verify-isolation` is likewise
+not wired in).
 
 ## How to maintain this file
 

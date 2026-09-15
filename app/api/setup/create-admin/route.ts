@@ -7,6 +7,7 @@ import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { db } from '@/drizzle/db';
+import { withSecurityContext, setTenantContext } from '@/lib/db/rls';
 import { users, tenants, tenantMembers, plans, roles, onboardingProgress, sessions, pipelines, dealStages } from '@/drizzle/schema';
 import { eq, count } from 'drizzle-orm';
 import { hashPassword, createToken, hashToken, setSessionCookie, validatePassword } from '@/lib/auth/session';
@@ -38,11 +39,12 @@ export async function POST(request: NextRequest) {
     const { full_name, email, password, workspace_name } = validated.data;
 
     // Only works if zero super admin users exist
-    const [existing] = await db.select({ 
-      count: count() 
-    })
-    .from(users)
-    .where(eq(users.isSuperAdmin, true));
+    const [existing] = await withSecurityContext(async (tx) =>
+      await tx
+        .select({ count: count() })
+        .from(users)
+        .where(eq(users.isSuperAdmin, true))
+    );
 
     if ((existing?.count ?? 0) > 0) {
       return NextResponse.json({ error: 'Platform Super Admin already exists. Only one is allowed.' }, { status: 403 });
@@ -65,7 +67,14 @@ export async function POST(request: NextRequest) {
     const emailLower = email.trim().toLowerCase();
     const fullNameTrim = full_name.trim();
 
-    const result = await db.transaction(async (tx) => {
+    // PP-010: this whole sequence creates a user and a tenant before any
+    // identity exists, so `users_insert_auth` and `tenants_authenticated_insert`
+    // (both requiring app.current_user) could never be satisfied — the route
+    // 423'd with `row-level security` on its very first write. The security
+    // context also makes the pre-check above able to SEE a super admin, which
+    // it never could before: under RLS that count was always 0, so the
+    // "only one super admin" guard silently allowed an unlimited number.
+    const result = await withSecurityContext(async (tx) => {
       // 1. Create super admin user
       const [u] = await tx.insert(users).values({
         email: emailLower,
@@ -94,7 +103,13 @@ export async function POST(request: NextRequest) {
         status: 'active'
       }).returning();
       if (!t) throw new Error('Failed to create tenant');
-      
+
+      // Roles, tenant_members, pipelines, deal_stages, tenant_modules and
+      // onboarding_progress are all protected by tenant_isolation, which
+      // cannot be satisfied before this tenant row exists — so the context is
+      // set here, on this connection, for the remainder of the transaction.
+      await setTenantContext(t.id, u.id, tx);
+
       // 4. Create admin role first for the new tenant
       const [adminRole] = await tx.insert(roles).values({
         tenantId: t.id,
@@ -173,7 +188,7 @@ export async function POST(request: NextRequest) {
       }).onConflictDoNothing();
 
       // 4. Install plan-based default modules (covers core-crm, automation-basic, etc.)
-      await installDefaultModules(t.id, planId);
+      await installDefaultModules(t.id, planId, undefined, tx);
 
       // 7. Initialize onboarding progress
       await tx.insert(onboardingProgress).values({
