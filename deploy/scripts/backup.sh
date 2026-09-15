@@ -12,8 +12,12 @@
 #    deploy/docker-compose.production.yml. So this script does NOT
 #    `docker exec` into a Postgres container. It runs pg_dump/pg_restore against
 #    $DATABASE_URL directly: it uses a local pg client if present, otherwise a
-#    one-shot postgres:16-alpine container on the compose network. This works in
+#    one-shot postgres:18-alpine container on the compose network. This works in
 #    both the host-Postgres (prod) and containerised-Postgres (dev) layouts.
+#    The client's MAJOR version must be >= the server's: pg_dump refuses to run
+#    against a newer server ("server version 18.6; pg_dump version 16.x ...
+#    aborting because of server version mismatch"). The managed instance reports
+#    server_version 18.6, so both the local client and the fallback image are 18.
 #
 #  Automated backups: the app's own scheduler (app/api/cron/auto-backup) writes
 #  per-tenant logical backups into the DB and the cron container triggers it
@@ -26,11 +30,21 @@ cd "$(dirname "$0")/.."
 # shellcheck disable=SC1091
 source ../.env 2>/dev/null || true
 
+# Topology override. In the pre-prod/managed-DB layout DATABASE_URL points at
+# PgBouncer (`pgbouncer:6432`), a Docker-network hostname that does NOT resolve
+# from the host this script runs on — and this script prefers the host's local
+# pg_dump. BACKUP_DATABASE_URL lets a deployment aim the dump straight at the
+# real server. It MUST be applied after `source` above, which would otherwise
+# clobber an exported value. Unset (the default) changes nothing.
+if [[ -n "${BACKUP_DATABASE_URL:-}" ]]; then
+  DATABASE_URL="$BACKUP_DATABASE_URL"
+fi
+
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 BACKUP_DIR="${BACKUP_DIR:-/var/backups/nucrm}"
 BACKUP_FILE="nucrm_backup_${TIMESTAMP}.dump"
 KEEP_LOCAL="${BACKUP_KEEP_LOCAL:-7}"
-PG_IMAGE="${PG_IMAGE:-postgres:16-alpine}"
+PG_IMAGE="${PG_IMAGE:-postgres:18-alpine}"
 COMPOSE_NETWORK="${BACKUP_DOCKER_NETWORK:-deploy_nucrm-net}"
 
 log()  { echo "[BACKUP $(date +%H:%M:%S)] $*"; }
@@ -70,9 +84,20 @@ pg_restore_run() {
 backup_local() {
   log "Creating PostgreSQL dump (custom format, compressed)..."
   # --format=custom lets pg_restore do selective, parallel restores later.
+  #
+  # A failed pg_dump can still leave a PARTIAL file behind: the run against this
+  # schema wrote 1.2 MB before dying on
+  #   ERROR: query would be affected by row-level security policy for table
+  #   "activities"
+  # Such a file is worse than no backup at all — it is non-empty, so the sanity
+  # check below passes, and a restore would silently rebuild a TRUNCATED
+  # database. Remove it before reporting the failure.
   pg_dump_run --format=custom --compress=6 --no-owner --no-privileges \
     --file=/dev/stdout > "${BACKUP_DIR}/${BACKUP_FILE}" \
-    || err "pg_dump failed — check DATABASE_URL and connectivity."
+    || {
+      rm -f "${BACKUP_DIR}/${BACKUP_FILE}"
+      err "pg_dump failed — check DATABASE_URL, connectivity, and the role's RLS rights."
+    }
 
   local size
   size=$(du -h "${BACKUP_DIR}/${BACKUP_FILE}" | cut -f1)

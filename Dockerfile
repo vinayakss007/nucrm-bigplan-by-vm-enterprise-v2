@@ -19,6 +19,17 @@ ARG SENTRY_DSN=""
 ARG NEXT_PUBLIC_SENTRY_DSN=""
 ARG SENTRY_ORG=""
 ARG SENTRY_PROJECT=""
+# Added for pre-prod deploys. Defaults reproduce the original behaviour exactly,
+# so upstream builds are unaffected when these are not passed.
+#   NEXT_PUBLIC_APP_URL — was hardcoded to http://localhost:3000 below, which
+#     bakes a wrong absolute URL into the bundle for any non-localhost deploy
+#     (breaks password-reset emails, OAuth redirects and invites via
+#     lib/app-url.ts::getAppUrl()).
+#   NODE_OPTIONS — the `Running TypeScript ...` step of `next build` exceeds
+#     Node's ~2GB default heap on this codebase and dies with
+#     "Ineffective mark-compacts near heap limit". Raise max-old-space-size here.
+ARG NEXT_PUBLIC_APP_URL="http://localhost:3000"
+ARG NODE_OPTIONS=""
 # Sensitive values passed via BuildKit secret mounts (not in image history)
 # --mount=type=secret requires: DOCKER_BUILDKIT=1 or docker buildx build
 RUN --mount=type=secret,id=jwt_secret \
@@ -30,7 +41,8 @@ RUN --mount=type=secret,id=jwt_secret \
     SENTRY_ORG=$SENTRY_ORG \
     SENTRY_PROJECT=$SENTRY_PROJECT \
     SENTRY_AUTH_TOKEN=$(cat /run/secrets/sentry_auth_token 2>/dev/null) \
-    NEXT_PUBLIC_APP_URL=http://localhost:3000 \
+    NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL \
+    NODE_OPTIONS="$NODE_OPTIONS" \
     npm run build && \
     echo "build-$(date +%s)" > /app/.next/BUILD_ID
 
@@ -55,6 +67,12 @@ COPY --from=builder /app/tsconfig.json ./
 COPY --from=builder /app/lib ./lib
 COPY --from=builder /app/scripts ./scripts
 COPY --from=builder /app/worker.ts ./worker.ts
+# realtime.ts is the socket.io server that nginx proxies /socket.io/ to
+# (`upstream nucrm_realtime { server realtime:4001; }` in nginx-production.conf).
+# It was shipped to no image at all: the dev compose starts it from the repo, and
+# this runner stage copied worker.ts but not realtime.ts, so a `docker run
+# nucrm-app:preprod node --import tsx realtime.ts` fails with MODULE_NOT_FOUND.
+COPY --from=builder /app/realtime.ts ./realtime.ts
 
 # Set ownership of app directory to the non-root user
 RUN chown -R nextjs:nodejs /app
