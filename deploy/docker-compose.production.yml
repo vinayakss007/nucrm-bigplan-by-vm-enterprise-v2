@@ -315,7 +315,11 @@ services:
   #  MINIO — S3-Compatible Object Storage
   # ═══════════════════════════════════════════════════════════════════════════
   minio:
-    image: minio/minio:latest
+    # Docker Hub removed the minio/* repositories (now 404); MinIO publishes to
+    # quay.io instead. Pinned to an explicit release rather than :latest so the
+    # pre-prod build is reproducible. This is the last stable release that still
+    # bundles the embedded web Console that `--console-address` below binds to.
+    image: quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z
     container_name: nucrm-minio
     command: server /data --console-address ":9001"
     environment:
@@ -343,7 +347,9 @@ services:
 
   # MinIO bucket initialization
   minio-init:
-    image: minio/mc:latest
+    # See the note on the `minio` service: quay.io is now the canonical registry
+    # for MinIO images, and the release is pinned for reproducibility.
+    image: quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z
     container_name: nucrm-minio-init
     depends_on:
       minio:
@@ -366,7 +372,7 @@ services:
   #  DATABASE PROXY — PgBouncer (connection pooling)
   # ═══════════════════════════════════════════════════════════════════════════
   pgbouncer:
-    image: edoburu/pgbouncer:1.23
+    image: edoburu/pgbouncer:v1.23.1-p3
     container_name: nucrm-pgbouncer
     environment:
       - DB_USER=${POSTGRES_USER:-nucrm}
@@ -616,6 +622,13 @@ volumes:
   letsencrypt:
     driver: local
   certbot-webroot:
+    driver: local
+  # Referenced by the alertmanager mount (`alertmanagerdata:/alertmanager`) but
+  # never declared upstream, which aborted the entire project with:
+  #   service "alertmanager" refers to undefined volume alertmanagerdata
+  # Declared here so this base file is self-consistent and any script that
+  # invokes it alone (deploy/scripts/setup-ssl.sh, backup.sh, ...) can run.
+  alertmanagerdata:
     driver: local
 
 # ═══════════════════════════════════════════════════════════════════════════

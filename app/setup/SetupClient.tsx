@@ -28,7 +28,19 @@ export default function SetupClient() {
     setLoading(true);
     const res = await fetch('/api/setup/create-admin', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        // In production the route authenticates first-run setup with the
+        // `x-setup-key` HEADER (see app/api/setup/create-admin/route.ts:53-59,
+        // and app/api/test-email/route.ts for the same convention). The value
+        // used to be sent only inside the JSON body, where the route never
+        // reads it — so on any NODE_ENV=production install the form always
+        // failed with 403 "Valid x-setup-key header required" even with a
+        // correct key, leaving the first-run admin impossible to create from
+        // the UI. Send it in both places; the body field stays for backwards
+        // compatibility, and omitting it in dev still works (dev is open).
+        ...(form.setup_key ? { 'x-setup-key': form.setup_key } : {}),
+      },
       body: JSON.stringify({
         full_name: form.full_name,
         email: form.email,
