@@ -50,6 +50,7 @@ security, backups/DR, and incident response. Treat this as internal/confidential
 | [⚠️ Pre-Prod Issue Register](./infra/PREPROD-ISSUE-REGISTER.md)               | Every issue found during pre-prod bring-up: evidence, root cause, status |
 | [Pre-Prod Fix Log & Lessons](./infra/PREPROD-FIXES-LESSONS.md)               | What was changed and the transferable lessons behind each bug  |
 | [GitHub Push Access](./infra/github-push-access.md)                          | Deploy-key state and how to grant write access for CI/agent pushes |
+| [Pre-Prod Issue Payloads](./infra/issues/README.md)                          | The 13 open findings, pre-written as GitHub issues + filing script |
 | [S3 Backup Lifecycle](./infra/s3-backup-lifecycle.md)                        | Backup bucket setup, versioning and lifecycle policy           |
 
 ---
@@ -84,6 +85,7 @@ docs/
 │   ├── PREPROD-ISSUE-REGISTER.md
 │   ├── PREPROD-FIXES-LESSONS.md
 │   ├── github-push-access.md
+│   ├── issues/            ← one file per open finding, ready to file on GitHub
 │   └── s3-backup-lifecycle.md
 ├── adr/                   ← Architecture Decision Records (engineering history)
 ├── runbooks/              ← Original operational runbooks (linked from admin/runbooks.md)

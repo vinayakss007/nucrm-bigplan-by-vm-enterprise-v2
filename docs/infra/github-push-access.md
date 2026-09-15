@@ -66,3 +66,30 @@ See [`../runbooks/branch-protection.md`](../runbooks/branch-protection.md).
 - Never commit partial build/dump artefacts (`/var/backups/nucrm/*.sql`, `.next/`, `node_modules/`).
 - Reference the register entry in the commit body (e.g. `Refs PP-003, PP-004`) so the fix log and the
   code history stay linked.
+
+## Filing the issues
+
+The pre-prod findings in [`PREPROD-ISSUE-REGISTER.md`](./PREPROD-ISSUE-REGISTER.md) are also prepared as
+GitHub-issue payloads in [`issues/`](./issues/), one file per open item (`PP-010` … `PP-022`). Filing is
+a single command:
+
+```bash
+cd /srv/nucrm
+scripts/create-preprod-issues.sh --dry-run      # no token, no network: prints titles/bodies/labels
+scripts/create-preprod-issues.sh                # files everything, prints each issue URL
+```
+
+What that needs from the repository owner:
+
+1. **A token with `Issues: Read and write`** (plus `Contents: Read and write` if you also want the push).
+   - *Fine-grained PAT:* repo scope = this repository; permissions = **Contents: RW** + **Issues: RW**.
+     Then `GITHUB_TOKEN=github_pat_…` in `/root/all-keys` (or the environment) is enough for both the
+     push and the issue filing.
+   - *Deploy key:* granting **Allow write access** (Option 1 above) unblocks `git push` but **not** the
+     REST API — a deploy key cannot create issues. Issues still need a PAT.
+2. Labels used: `bug` (already exists) and `preprod` (the script creates it if missing).
+3. Nothing else — no `gh` CLI is required; `curl` + `jq` are already installed on the VM.
+
+The script is idempotent: it lists existing issues first and skips any title that is already filed, so a
+retry after a partial run will not create duplicates. A token that lacks the permission fails fast with
+the API's own message rather than filing nothing and exiting 0.

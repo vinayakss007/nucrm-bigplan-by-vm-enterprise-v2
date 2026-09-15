@@ -25,6 +25,9 @@ Fixes for the UpCloud pre-prod stack, plus the issue register that tracks the wo
   project) and pinned MinIO to `quay.io` releases plus `pgbouncer:v1.23.1-p3` (PP-008, PP-009)
 - **Docs**: new pre-prod issue register (22 tracked issues), fix log + lessons learned, and a
   GitHub push-access note under `docs/infra/`
+- **GitHub filing**: the 13 open findings are pre-written as issue payloads in
+  [`docs/infra/issues/`](infra/issues/README.md) (in `bug_report.yml` shape) and filed with
+  `scripts/create-preprod-issues.sh` — idempotent, `--dry-run` needs no token
 - **Still open**: RLS policies reject the pre-auth bootstrap paths (signup, first super-admin,
   login-attempt logging → brute-force lockout silently disabled), `pg_dump` needs a `BYPASSRLS`
   role, and the tenant-isolation gate reports 21 table gaps (PP-010 … PP-015)
