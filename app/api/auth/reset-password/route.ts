@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { db } from '@/drizzle/db';
+import { withSecurityContext } from '@/lib/db/rls';
 import { users, passwordResets, sessions } from '@/drizzle/schema';
 import { eq, and, gt, isNull } from 'drizzle-orm';
 import { createHash } from 'crypto';
@@ -45,7 +46,12 @@ export async function POST(request: NextRequest) {
     // (TOCTOU double-use). The conditional UPDATE ... WHERE deleted_at IS NULL
     // RETURNING lets exactly one request win: the row is claimed in a single
     // atomic statement, and a second request gets zero rows back.
-    const claimed = await db.transaction(async (tx) => {
+    // Pre-auth by construction: the holder of a reset token has proven nothing
+    // that RLS recognises, and this transaction reads the token row, rewrites
+    // `users`, and deletes+inserts `sessions`. Those are platform-level writes
+    // authorised by a signed single-use token, so they run in a security
+    // context rather than pretending to be a tenant request.
+    const claimed = await withSecurityContext(async (tx) => {
       const [reset] = await tx
         .update(passwordResets)
         .set({ deletedAt: new Date() })

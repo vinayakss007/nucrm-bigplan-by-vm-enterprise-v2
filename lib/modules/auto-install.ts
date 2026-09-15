@@ -168,8 +168,16 @@ export async function installTemplateModules(
 export async function installDefaultModules(
   tenantId: string,
   planId: string,
-  industryTemplate?: string
+  industryTemplate?: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  tx?: any
 ): Promise<void> {
+  // Bootstrap callers must pass their transaction. This writes `modules`
+  // (registry INSERT gated on app.is_super_admin) and `tenant_modules`
+  // (tenant_isolation); neither GUC exists on a fresh pooled connection, so
+  // running it on `db` installed nothing while the catch below logged the
+  // failure as non-fatal.
+  const client = tx ?? db;
   const moduleIds = getModulesForPlanAndTemplate(planId, industryTemplate);
 
   if (moduleIds.length === 0) return;
@@ -180,7 +188,7 @@ export async function installDefaultModules(
       if (!manifest) continue;
 
       // Ensure module exists in registry table
-      await db
+      await client
         .insert(modules)
         .values({
           id: moduleId,
@@ -194,7 +202,7 @@ export async function installDefaultModules(
         .onConflictDoNothing();
 
       // Install for tenant (skip if already installed)
-      await db
+      await client
         .insert(tenantModules)
         .values({
           tenantId,

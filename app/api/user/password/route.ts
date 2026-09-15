@@ -7,6 +7,7 @@ import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
+import { withUserContext } from '@/lib/db/rls';
 import { users, sessions } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
 import { verifyPassword, hashPassword, createToken, hashToken, setSessionCookie } from '@/lib/auth/session';
@@ -48,7 +49,10 @@ export const PATCH = withApiRoute(async (request: NextRequest) => {
     const sessionToken = await createToken(ctx.userId);
     const sessionTokenHash = await hashToken(sessionToken);
 
-    await db.transaction(async (tx) => {
+    // Middleware set the tenant GUCs session-scoped on the PINNED client; this
+    // transaction runs on its own connection, so the context has to be re-set
+    // here or the sessions delete/insert below are denied by RLS.
+    await withUserContext(ctx.userId, async (tx) => {
       // 1. Update password
       await tx.update(users)
         .set({ 

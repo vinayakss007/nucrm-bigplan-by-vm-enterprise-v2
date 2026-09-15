@@ -10,6 +10,7 @@ import { eq, and } from 'drizzle-orm';
 import { randomUUID } from 'crypto';
 import { createToken, hashToken } from '@/lib/auth/session';
 import { logger } from '@/lib/logger';
+import { withSecurityContext, withTenantContext, withAuthLookupContext } from '@/lib/db/rls';
 
 export interface SSOProviderConfig {
   id: string;
@@ -238,18 +239,23 @@ export async function handleSSOCallback(
   email = normalizedEmail;
 
   // Find or create user by email
-  const existingUsers = await db.select()
-    .from(users)
-    .where(eq(users.email, email));
+  // RLS admits no unauthenticated SELECT on `users` (see 0088), so without the
+  // lookup context SSO would never match an existing account and would mint a
+  // duplicate user on every assertion.
+  const existingUsers = await withAuthLookupContext(async (tx) =>
+    await tx.select().from(users).where(eq(users.email, email))
+  );
 
   let userId: string;
   if (existingUsers[0]) {
     userId = existingUsers[0].id;
   } else {
-    const [newUser] = await db.insert(users).values({
-      email,
-      emailVerified: true,
-    }).returning();
+    const [newUser] = await withSecurityContext(async (tx) =>
+      await tx.insert(users).values({
+        email,
+        emailVerified: true,
+      }).returning()
+    );
     userId = newUser!.id;
   }
 
@@ -258,7 +264,9 @@ export async function handleSSOCallback(
   const token = await createToken(userId);
   const tokenHash = await hashToken(token);
 
-  await db.transaction(async (tx) => {
+  // sso_sessions is tenant-scoped and sessions is user-scoped; both need the
+  // context on the connection that writes them.
+  await withTenantContext(tenantId, userId, async (tx) => {
     const [session] = await tx.insert(ssoSessions).values({
       userId,
       tenantId,
