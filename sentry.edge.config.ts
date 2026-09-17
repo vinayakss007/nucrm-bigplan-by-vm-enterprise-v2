@@ -9,9 +9,15 @@ import { scrubPii } from './sentry-pii-scrub';
 
 const SENTRY_DSN = process.env['SENTRY_DSN'];
 
+const SENTRY_ENVIRONMENT = process.env['SENTRY_ENVIRONMENT'] || process.env['NODE_ENV'] || 'development';
+const SENTRY_RELEASE =
+  process.env['SENTRY_RELEASE'] || process.env['NEXT_PUBLIC_SENTRY_RELEASE'] || undefined;
+
 if (SENTRY_DSN) {
   Sentry.init({
     dsn: SENTRY_DSN,
+    environment: SENTRY_ENVIRONMENT,
+    ...(SENTRY_RELEASE ? { release: SENTRY_RELEASE } : {}),
 
     // GDPR: never send PII by default
     sendDefaultPii: false,
