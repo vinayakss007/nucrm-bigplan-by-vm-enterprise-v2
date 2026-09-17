@@ -16,6 +16,31 @@ host at once — they both bind port 3000.
 
 The two paths are described below for reference.
 
+## Queue Redis memory policy
+
+The full local, scale, production, and pre-production Compose stacks use Redis
+for BullMQ jobs as well as cache data. These stacks must use
+`--maxmemory-policy noeviction`: an eviction policy can delete pending job data.
+At the memory limit, writes fail visibly instead of silently removing jobs.
+Existing AOF persistence settings and volumes are unchanged; this policy is not
+a substitute for backups or a tested restore procedure.
+
+Monitor Redis memory usage, rejected writes, queue age and failed jobs. Before
+reaching the limit, increase the memory budget with container/host headroom or
+separate the cache and queue Redis instances. Never use `FLUSHDB` to recover
+capacity on a queue instance. The slim stack remains ephemeral, development-only
+and unsuitable for durable jobs.
+
+Validate this contract without starting services:
+
+```bash
+npx vitest run tests/unit/docker-compose-scale.test.ts
+```
+
+The existing CI unit-test job includes this regression test. Roll out the Redis
+configuration separately during an approved maintenance window; creating or
+merging a PR does not prove that the running server has picked up the policy.
+
 ## Path A — PM2 on the VM (git-based updates)
 
 The app + worker (+ optional cron) run as PM2 processes directly on the host;

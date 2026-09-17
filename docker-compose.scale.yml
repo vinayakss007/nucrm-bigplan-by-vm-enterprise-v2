@@ -181,7 +181,7 @@ services:
     command: >
       redis-server
       --maxmemory ${REDIS_MAXMEMORY:-256mb}
-      --maxmemory-policy allkeys-lru
+      --maxmemory-policy noeviction
       --save 60 1000
       --appendonly yes
     volumes:
