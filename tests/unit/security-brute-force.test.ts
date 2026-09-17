@@ -5,6 +5,8 @@ const mockExecute = vi.fn();
 vi.mock('@/drizzle/db', () => ({
   db: {
     execute: mockExecute,
+    transaction: vi.fn(async (fn: (tx: { execute: ReturnType<typeof vi.fn> }) => Promise<unknown>) =>
+      fn({ execute: vi.fn((...args: unknown[]) => mockExecute(...args)).mockResolvedValueOnce({ rows: [] }) })),
   },
 }));
 

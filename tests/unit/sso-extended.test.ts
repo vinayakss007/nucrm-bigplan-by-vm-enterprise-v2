@@ -4,9 +4,11 @@ vi.mock('@/drizzle/db', () => ({
   db: {
     select: vi.fn(),
     insert: vi.fn(),
-    transaction: vi.fn((cb: (tx: unknown) => Promise<unknown>) => cb({
-      insert: vi.fn(() => ({ values: vi.fn(() => ({ returning: vi.fn().mockResolvedValue([{ id: 'user-1' }]) })) })),
-    })),
+    execute: vi.fn().mockResolvedValue({ rows: [] }),
+    transaction: vi.fn(async (cb: (tx: unknown) => Promise<unknown>) => {
+      const { db } = await import('@/drizzle/db');
+      return cb(db);
+    }),
     query: {
       users: { findFirst: vi.fn() },
     },
@@ -23,7 +25,8 @@ vi.mock('@/drizzle/schema/core', () => ({
   sessions: {},
 }));
 
-vi.mock('drizzle-orm', () => ({
+vi.mock('drizzle-orm', async (importOriginal) => ({
+  ...await importOriginal<typeof import('drizzle-orm')>(),
   eq: vi.fn((...args) => args),
   and: vi.fn((...args) => args),
 }));
@@ -177,6 +180,11 @@ describe('SSO - Extended Coverage', () => {
           }])),
         })),
       });
+      const select = vi.mocked(db.select);
+      const providerRows = select.getMockImplementation()!;
+      select.mockReturnValueOnce(providerRows()).mockReturnValue({
+        from: vi.fn(() => ({ where: vi.fn(async () => []) })),
+      } as unknown as ReturnType<typeof db.select>);
       (db.query.users.findFirst as ReturnType<typeof vi.fn>).mockResolvedValue(null);
       (db.insert as ReturnType<typeof vi.fn>).mockReturnValue({
         values: vi.fn(() => ({

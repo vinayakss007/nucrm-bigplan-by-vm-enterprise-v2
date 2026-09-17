@@ -3,7 +3,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const mockExecute = vi.fn();
 vi.mock('@/drizzle/db', () => ({
-  db: { execute: (...args: any[]) => mockExecute(...args) },
+  db: {
+    execute: (...args: any[]) => mockExecute(...args),
+    transaction: vi.fn(async (fn: (tx: { execute: ReturnType<typeof vi.fn> }) => Promise<unknown>) =>
+      fn({ execute: vi.fn((...args: unknown[]) => mockExecute(...args)).mockResolvedValueOnce({ rows: [] }) })),
+  },
 }));
 vi.mock('@/lib/logger', () => ({ logger: { warn: vi.fn(), error: vi.fn() } }));
 vi.mock('@/lib/dev-logger', () => ({ devLogger: { error: vi.fn() } }));

@@ -6,6 +6,8 @@ let updateRows: unknown[] = [];
 
 vi.mock('@/drizzle/db', () => ({
   db: {
+    execute: vi.fn().mockResolvedValue({ rows: [] }),
+    transaction: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn(db)),
     insert: vi.fn(() => ({
       values: vi.fn(() => ({
         onConflictDoNothing: vi.fn(() => ({

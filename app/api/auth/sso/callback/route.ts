@@ -13,6 +13,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
+import { withUserContext } from '@/lib/db/rls';
 import {
   ssoProviders,
   ssoSessions,
@@ -124,7 +125,11 @@ export async function GET(request: NextRequest) {
   const tokenHash = await hashToken(sessionToken);
   const expiresAt = new Date(Date.now() + SESSION_TTL_DAYS * 24 * 60 * 60 * 1000);
 
-  await db.transaction(async (tx) => {
+  // Identity was just proven by the IdP assertion; scope the session write to
+  // it. `sessions_user_own` validates new rows with its USING clause, so with
+  // no context the callback could authenticate successfully and still not be
+  // able to create a session.
+  await withUserContext(userId, async (tx) => {
     await tx.insert(sessions).values({
       userId,
       tokenHash,

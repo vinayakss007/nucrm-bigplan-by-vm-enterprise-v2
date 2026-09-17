@@ -76,6 +76,54 @@ describe('db/rls', () => {
     });
   });
 
+  describe.each([
+    ['security', 'app.is_super_admin'],
+    ['lookup', 'app.auth_lookup'],
+    ['user', 'app.current_user'],
+  ] as const)('%s transaction context', (kind, guc) => {
+    async function run(fn: (tx: unknown) => Promise<unknown>) {
+      const rls = await import('@/lib/db/rls');
+      if (kind === 'security') return rls.withSecurityContext(fn);
+      if (kind === 'lookup') return rls.withAuthLookupContext(fn);
+      return rls.withUserContext('user-123', fn);
+    }
+
+    it('sets transaction-local context before invoking the callback', async () => {
+      const { db } = await import('@/drizzle/db');
+      const { PgDialect } = await import('drizzle-orm/pg-core');
+      const execute = vi.fn().mockResolvedValue({ rows: [] });
+      const tx = { execute };
+      vi.mocked(db.transaction).mockImplementationOnce(async (fn) =>
+        fn(tx as unknown as Parameters<typeof fn>[0]));
+      const callback = vi.fn(async (client) => {
+        expect(client).toBe(tx);
+        expect(execute).toHaveBeenCalledTimes(1);
+        const query = new PgDialect().sqlToQuery(execute.mock.calls[0]![0]);
+        expect(query.sql).toContain(guc);
+        expect(query.sql).toContain('true)');
+        return 'complete';
+      });
+      await expect(run(callback)).resolves.toBe('complete');
+      expect(callback).toHaveBeenCalledTimes(1);
+      expect(mockExecute).not.toHaveBeenCalled();
+    });
+
+    it('never runs the callback when context initialization fails', async () => {
+      const { db } = await import('@/drizzle/db');
+      const tx = { execute: vi.fn().mockRejectedValue(new Error('context failed')) };
+      vi.mocked(db.transaction).mockImplementationOnce(async (fn) =>
+        fn(tx as unknown as Parameters<typeof fn>[0]));
+      const callback = vi.fn();
+      await expect(run(callback)).rejects.toThrow('context failed');
+      expect(callback).not.toHaveBeenCalled();
+    });
+
+    it('propagates callback failures to the transaction', async () => {
+      const callback = vi.fn().mockRejectedValue(new Error('write failed'));
+      await expect(run(callback)).rejects.toThrow('write failed');
+    });
+  });
+
   describe('verifyRLSEnabled', () => {
     it('returns true when RLS is enabled', async () => {
       mockExecute.mockResolvedValueOnce({ rows: [{ rowsecurity: true }] });

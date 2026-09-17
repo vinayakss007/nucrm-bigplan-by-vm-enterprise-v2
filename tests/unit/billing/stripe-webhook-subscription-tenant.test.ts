@@ -42,6 +42,8 @@ const m = vi.hoisted(() => {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const db: any = {
+    execute: vi.fn().mockResolvedValue({ rows: [] }),
+    transaction: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn(db)),
     // The claim wins: a returned row means this delivery is the one that processes.
     insert: vi.fn(() => ({
       values: () => ({
@@ -94,7 +96,8 @@ vi.mock('@/drizzle/schema', () => ({
   tenants: m.tenantTable,
   webhookEvents: m.webhookEventsTable,
 }));
-vi.mock('drizzle-orm', () => ({
+vi.mock('drizzle-orm', async (importOriginal) => ({
+  ...await importOriginal<typeof import('drizzle-orm')>(),
   eq: vi.fn((a: unknown, b: unknown) => ({ eq: [a, b] })),
   // Used by the #1908 ledger's claim-steal / completion predicates.
   and: vi.fn((...conditions: unknown[]) => ({ and: conditions })),
