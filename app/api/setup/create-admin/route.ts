@@ -6,7 +6,6 @@
 import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { db } from '@/drizzle/db';
 import { withSecurityContext, setTenantContext } from '@/lib/db/rls';
 import { users, tenants, tenantMembers, plans, roles, onboardingProgress, sessions, pipelines, dealStages } from '@/drizzle/schema';
 import { eq, count } from 'drizzle-orm';
@@ -197,7 +196,7 @@ export async function POST(request: NextRequest) {
         stepName: 'admin_created',
         isCompleted: true,
         completedAt: new Date(),
-      }).onConflictDoNothing().catch((err) => logError({ error: err, context: 'setup/create-admin async side-effect' }));
+      }).onConflictDoNothing().catch((err: unknown) => logError({ error: err, context: 'setup/create-admin async side-effect' }));
 
       // 8. Create session
       const token = await createToken(u.id);

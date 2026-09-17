@@ -28,7 +28,8 @@ const mockDb = {
     mockDbSelect(...args);
     return makeSelectBuilder(existingCountRows);
   },
-  transaction: vi.fn(),
+  execute: vi.fn().mockResolvedValue({ rows: [] }),
+  transaction: vi.fn(async (fn: (tx: unknown) => Promise<unknown>): Promise<unknown> => fn(mockDb)),
 };
 
 vi.mock('@/drizzle/db', () => ({ db: mockDb }));
@@ -37,7 +38,8 @@ vi.mock('@/drizzle/schema', () => ({
   tenants: {}, tenantMembers: {}, plans: {}, roles: {},
   onboardingProgress: {}, sessions: {}, pipelines: {}, dealStages: {},
 }));
-vi.mock('drizzle-orm', () => ({
+vi.mock('drizzle-orm', async (importOriginal) => ({
+  ...await importOriginal<typeof import('drizzle-orm')>(),
   eq: (...a: unknown[]) => a,
   count: () => 'count',
 }));

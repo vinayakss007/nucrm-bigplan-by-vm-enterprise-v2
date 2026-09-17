@@ -20,7 +20,6 @@
  *   4b. Failure → `releaseWebhookEvent(...)` (claim row deleted) so the
  *       provider's retry re-processes instead of being dropped as a dup.
  */
-import { db } from '@/drizzle/db';
 import { withSecurityContext } from '@/lib/db/rls';
 import { webhookEvents } from '@/drizzle/schema';
 import { eq, and, lt } from 'drizzle-orm';

@@ -433,7 +433,7 @@ export async function POST_signup(request: NextRequest) {
                    <a href="${verifyUrl}">${verifyUrl}</a>
                    <p>This link expires in 24 hours.</p>`,
           }).catch((err) => devLogger.error(err as Error, '[auth/signup] Failed to send verification email'));
-        }).catch((err) => devLogger.error(err as Error, '[auth/signup] Failed to create verification token'));
+        }).catch((err: unknown) => devLogger.error(err as Error, '[auth/signup] Failed to create verification token'));
       }
     });
 
