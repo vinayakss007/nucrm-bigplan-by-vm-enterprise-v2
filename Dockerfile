@@ -17,6 +17,8 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ARG DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy"
 ARG SENTRY_DSN=""
 ARG NEXT_PUBLIC_SENTRY_DSN=""
+ARG SENTRY_ENVIRONMENT="production"
+ARG SENTRY_RELEASE=""
 ARG SENTRY_ORG=""
 ARG SENTRY_PROJECT=""
 # Added for pre-prod deploys. Defaults reproduce the original behaviour exactly,
@@ -38,6 +40,10 @@ RUN --mount=type=secret,id=jwt_secret \
     JWT_SECRET=$(cat /run/secrets/jwt_secret 2>/dev/null || echo "build-only-not-runtime") \
     SENTRY_DSN=$SENTRY_DSN \
     NEXT_PUBLIC_SENTRY_DSN=$NEXT_PUBLIC_SENTRY_DSN \
+    SENTRY_ENVIRONMENT="$SENTRY_ENVIRONMENT" \
+    NEXT_PUBLIC_SENTRY_ENVIRONMENT="$SENTRY_ENVIRONMENT" \
+    SENTRY_RELEASE="$SENTRY_RELEASE" \
+    NEXT_PUBLIC_SENTRY_RELEASE="$SENTRY_RELEASE" \
     SENTRY_ORG=$SENTRY_ORG \
     SENTRY_PROJECT=$SENTRY_PROJECT \
     SENTRY_AUTH_TOKEN=$(cat /run/secrets/sentry_auth_token 2>/dev/null) \

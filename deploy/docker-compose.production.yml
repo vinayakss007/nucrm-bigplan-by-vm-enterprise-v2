@@ -133,6 +133,8 @@ services:
         NEXT_PUBLIC_SENTRY_DSN: "${NEXT_PUBLIC_SENTRY_DSN:-}"
         SENTRY_ORG: "${SENTRY_ORG:-}"
         SENTRY_PROJECT: "${SENTRY_PROJECT:-}"
+        SENTRY_ENVIRONMENT: "${SENTRY_ENVIRONMENT:-production}"
+        SENTRY_RELEASE: "${SENTRY_RELEASE:-}"
       secrets:
         - jwt_secret
         - sentry_auth_token
@@ -157,6 +159,7 @@ services:
       - SENTRY_DISABLE=${SENTRY_DISABLE:-false}
       - SENTRY_TRACES_SAMPLE_RATE=${SENTRY_TRACES_SAMPLE_RATE:-0.1}
       - SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT:-production}
+      - SENTRY_RELEASE=${SENTRY_RELEASE:-}
       - RESEND_API_KEY=${RESEND_API_KEY:-}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
