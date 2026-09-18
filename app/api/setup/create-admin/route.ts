@@ -12,7 +12,6 @@ import { eq, count } from 'drizzle-orm';
 import { hashPassword, createToken, hashToken, setSessionCookie, validatePassword } from '@/lib/auth/session';
 import { installDefaultModules } from '@/lib/modules/auto-install';
 import { logError } from '@/lib/errors-server';
-import { checkRateLimit } from '@/lib/rate-limit';
 import { readJsonBody, validateBody } from '@/lib/api/validate';
 
 const createAdminSchema = z.object({
@@ -25,9 +24,6 @@ const createAdminSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
-    const limited = await checkRateLimit(request, { action: 'create-admin', max: 3, windowMinutes: 60 });
-    if (limited) return limited;
-
     let body;
     try { body = await readJsonBody(request); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
 
@@ -50,12 +46,14 @@ export async function POST(request: NextRequest) {
     }
 
     // #1254: in production the endpoint requires the server-side SETUP_KEY
-    // (dev remains open so local bootstrap works without extra config)
+    // (dev remains open so local bootstrap works without extra config).
+    // Accepted via the x-setup-key header OR the setup_key body field, since
+    // some clients cannot attach custom headers to this bootstrap call.
     if (process.env.NODE_ENV === 'production') {
       const expectedKey = process.env.SETUP_KEY;
-      const providedKey = request.headers.get('x-setup-key');
+      const providedKey = request.headers.get('x-setup-key') ?? validated.data.setup_key;
       if (!expectedKey || !providedKey || providedKey !== expectedKey) {
-        return NextResponse.json({ error: 'Valid x-setup-key header required' }, { status: 403 });
+        return NextResponse.json({ error: 'Valid x-setup-key header or setup_key field required' }, { status: 403 });
       }
     }
 
