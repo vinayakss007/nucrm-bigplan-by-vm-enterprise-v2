@@ -5,7 +5,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { logError } from '@/lib/errors-server';
-import { db } from '@/drizzle/db';
+import { withSecurityContext } from '@/lib/db/rls';
 import { users } from '@/drizzle/schema';
 import { eq, count } from 'drizzle-orm';
 import { checkRateLimit } from '@/lib/rate-limit';
@@ -17,11 +17,11 @@ export async function GET(request: NextRequest) {
   if (limited) return limited;
 
   try {
-    const [row] = await db.select({ 
-      count: count() 
-    })
-    .from(users)
-    .where(eq(users.isSuperAdmin, true));
+    const [row] = await withSecurityContext(async (tx) =>
+      tx.select({ count: count() })
+        .from(users)
+        .where(eq(users.isSuperAdmin, true))
+    );
 
     return NextResponse.json({ setup_done: (row?.count ?? 0) > 0 });
   } catch (err) {
