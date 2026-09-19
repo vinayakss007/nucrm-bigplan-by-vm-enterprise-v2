@@ -3,20 +3,15 @@
  * Copyright (c) 2026 abetworks.in. All Rights Reserved.
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
-import { BrandingConfig, generateCSSVariables } from '@/lib/branding';
-import { headers } from 'next/headers';
+import { BrandingConfig, brandingToCssVars } from '@/lib/branding';
 import Image from 'next/image';
 
 interface BrandedHeaderProps {
   branding: BrandingConfig;
 }
 
-export async function BrandedHeader({ branding }: BrandedHeaderProps) {
-  const cssVars = generateCSSVariables(branding);
-
-  // Per-request CSP nonce set by proxy.ts (#1070). REQUIRED: style-src is
-  // nonce-based, so this inline <style> must carry the nonce or be blocked.
-  const nonce = (await headers()).get('x-nonce') ?? undefined;
+export function BrandedHeader({ branding }: BrandedHeaderProps) {
+  const vars = brandingToCssVars(branding);
 
   const layoutClasses: Record<string, string> = {
     default: 'justify-between',
@@ -28,10 +23,9 @@ export async function BrandedHeader({ branding }: BrandedHeaderProps) {
 
   return (
     <>
-      <style nonce={nonce} dangerouslySetInnerHTML={{ __html: cssVars }} />
       <header
         className={`flex items-center px-6 py-4 border-b ${layoutClass}`}
-        style={{ backgroundColor: branding.primaryColor, color: '#ffffff' }}
+        style={{ backgroundColor: branding.primaryColor, color: '#ffffff', ...(vars as any) }}
       >
         <div className="flex items-center gap-3">
           {branding.logoUrl && (
