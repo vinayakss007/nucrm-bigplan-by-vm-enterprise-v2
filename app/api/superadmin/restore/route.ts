@@ -39,17 +39,44 @@ async function runPgRestore(inputPath: string): Promise<void> {
     throw new Error('Restore path not in allowed directories');
   }
 
+  // Prevent injection of unintended characters (e.g. metacharacters, spaces)
+  if (!/^[a-zA-Z0-9\/._-]+$/.test(inputPath)) {
+    throw new Error('Restore path contains invalid characters');
+  }
+
+  // Parse the connection string and pass credentials to pg_restore via the
+  // environment (libpq PG* vars) rather than as a positional CLI argument.
+  // This prevents leaking user:password to `ps aux` and /proc/<pid>/cmdline.
+  let parsed: URL;
+  try {
+    parsed = new URL(dbUrl);
+  } catch {
+    throw new Error('Invalid DATABASE_URL format');
+  }
+
+  const pgEnv: Record<string, string> = {};
+  if (parsed.hostname) pgEnv.PGHOST = decodeURIComponent(parsed.hostname);
+  if (parsed.port) pgEnv.PGPORT = parsed.port;
+  if (parsed.username) pgEnv.PGUSER = decodeURIComponent(parsed.username);
+  if (parsed.password) pgEnv.PGPASSWORD = decodeURIComponent(parsed.password);
+  const database = parsed.pathname.replace(/^\//, '');
+  if (database) pgEnv.PGDATABASE = decodeURIComponent(database);
+
+  const sslmode = parsed.searchParams.get('sslmode');
+  if (sslmode) pgEnv.PGSSLMODE = sslmode;
+
   return new Promise((resolve, reject) => {
     const child = spawn('pg_restore', [
-      `--dbname=${dbUrl}`,
       '--no-owner',
       '--no-acl',
       '--clean',
       '--if-exists',
+      '--',
       inputPath,
     ], {
       timeout: 600_000,
       stdio: ['pipe', 'pipe', 'pipe'],
+      env: { ...process.env, ...pgEnv },
     });
 
     let stderr = '';
