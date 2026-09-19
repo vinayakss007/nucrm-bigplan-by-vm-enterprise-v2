@@ -225,7 +225,7 @@ async function handleSearch(searchParams: URLSearchParams) {
         LEFT JOIN public.plans p ON p.id = t.plan_id
         LEFT JOIN users u ON t.owner_id = u.id
         ${where}
-        ORDER BY ${sql.identifier('t')}.${sql.identifier(safeSort)} ${sql.raw(safeOrder)}
+        ORDER BY ${sql.identifier('t')}.${sql.identifier(safeSort)} ${safeOrder === 'ASC' ? sql`ASC` : sql`DESC`}
         LIMIT ${limit} OFFSET ${offset}
       `);
 
@@ -254,7 +254,7 @@ async function handleSearch(searchParams: URLSearchParams) {
         JOIN tenants t ON c.tenant_id = t.id
         LEFT JOIN companies co ON c.company_id = co.id
         ${where}
-        ORDER BY ${sql.identifier('c')}.${sql.identifier(safeSort)} ${sql.raw(safeOrder)}
+        ORDER BY ${sql.identifier('c')}.${sql.identifier(safeSort)} ${safeOrder === 'ASC' ? sql`ASC` : sql`DESC`}
         LIMIT ${limit} OFFSET ${offset}
       `);
 
@@ -280,7 +280,7 @@ async function handleSearch(searchParams: URLSearchParams) {
         FROM leads l
         JOIN tenants t ON l.tenant_id = t.id
         ${where}
-        ORDER BY ${sql.identifier('l')}.${sql.identifier(safeSort)} ${sql.raw(safeOrder)}
+        ORDER BY ${sql.identifier('l')}.${sql.identifier(safeSort)} ${safeOrder === 'ASC' ? sql`ASC` : sql`DESC`}
         LIMIT ${limit} OFFSET ${offset}
       `);
 
@@ -305,7 +305,7 @@ async function handleSearch(searchParams: URLSearchParams) {
         JOIN tenants t ON d.tenant_id = t.id
         LEFT JOIN contacts c ON d.contact_id = c.id
         ${where}
-        ORDER BY ${sql.identifier('d')}.${sql.identifier(safeSort === 'value' ? 'amount' : safeSort)} ${sql.raw(safeOrder)}
+        ORDER BY ${sql.identifier('d')}.${sql.identifier(safeSort === 'value' ? 'amount' : safeSort)} ${safeOrder === 'ASC' ? sql`ASC` : sql`DESC`}
         LIMIT ${limit} OFFSET ${offset}
       `);
 
@@ -329,7 +329,7 @@ async function handleSearch(searchParams: URLSearchParams) {
         FROM companies co
         JOIN tenants t ON co.tenant_id = t.id
         ${where}
-        ORDER BY ${sql.identifier('co')}.${sql.identifier(safeSort)} ${sql.raw(safeOrder)}
+        ORDER BY ${sql.identifier('co')}.${sql.identifier(safeSort)} ${safeOrder === 'ASC' ? sql`ASC` : sql`DESC`}
         LIMIT ${limit} OFFSET ${offset}
       `);
 
@@ -353,7 +353,7 @@ async function handleSearch(searchParams: URLSearchParams) {
         LEFT JOIN tenant_members tm ON tm.user_id = u.id
         LEFT JOIN tenants t ON tm.tenant_id = t.id
         ${where}
-        ORDER BY ${sql.identifier('u')}.${sql.identifier(safeSort)} ${sql.raw(safeOrder)}
+        ORDER BY ${sql.identifier('u')}.${sql.identifier(safeSort)} ${safeOrder === 'ASC' ? sql`ASC` : sql`DESC`}
         LIMIT ${limit} OFFSET ${offset}
       `);
 
