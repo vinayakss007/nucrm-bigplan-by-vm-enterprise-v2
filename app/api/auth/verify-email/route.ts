@@ -7,11 +7,11 @@ import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
-import { db } from '@/drizzle/db';
 import { users, emailVerifications } from '@/drizzle/schema';
 import { eq, and, gt, isNull } from 'drizzle-orm';
 import { createHash } from 'crypto';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { withAuthLookupContext, withSecurityContext } from '@/lib/db/rls';
 
 const schema = z.object({ token: z.string().min(1) });
 
@@ -27,7 +27,11 @@ export async function POST(request: NextRequest) {
     
     const hash = createHash('sha256').update(token).digest('hex');
     
-    const result = await db.select({
+    // PP-026: redeeming a verification link is a pre-auth read — the holder has
+  // proven nothing RLS recognises yet, so this needs the narrow auth_lookup
+  // privilege (email_verifications_auth_select + users_auth_lookup in 0088).
+  const result = await withAuthLookupContext(async (tx) =>
+      await tx.select({
       id: emailVerifications.id,
       userId: emailVerifications.userId,
       email: users.email,
@@ -39,12 +43,15 @@ export async function POST(request: NextRequest) {
       isNull(emailVerifications.usedAt),
       gt(emailVerifications.expiresAt, new Date())
     ))
-    .limit(1);
+    .limit(1)
+    );
 
     const row = result[0];
     if (!row) return NextResponse.json({ error: 'Invalid or expired verification link' }, { status: 400 });
     
-    await db.transaction(async (tx) => {
+    // The write is authorised by the token itself, so it runs in the platform
+  // security context rather than pretending to be a tenant request.
+  await withSecurityContext(async (tx) => {
       await tx.update(users)
         .set({ emailVerified: true })
         .where(eq(users.id, row.userId));

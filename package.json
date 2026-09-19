@@ -71,6 +71,7 @@
     "db:drop": "npx tsx scripts/drop-all.ts",
     "db:verify-isolation": "npx tsx scripts/verify-tenant-isolation.ts",
     "simulate:flows": "npx tsx scripts/simulate-preprod-flows.ts",
+    "e2e:preprod": "tsx scripts/preprod-api-e2e.ts",
     "db:verify-integrity": "npx tsx scripts/verify-data-integrity.ts",
     "db:diagnose": "npx tsx scripts/diagnose-production.ts",
     "db:verify-chain": "npx tsx scripts/verify-migration-chain.ts",

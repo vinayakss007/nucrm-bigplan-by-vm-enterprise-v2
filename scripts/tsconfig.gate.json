@@ -1,0 +1,10 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "paths": {
+      "@/*": ["../*"],
+      "server-only": ["../lib/server-only-shim.ts"]
+    }
+  },
+  "include": ["../lib/**/*", "../app/**/*", "../drizzle/**/*", "./preprod-api-e2e-gate.ts"]
+}
