@@ -22,6 +22,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Download, FileText, Loader2, Trash2, Upload } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import toast from 'react-hot-toast';
+import pLimit from 'p-limit';
 
 export type DocumentEntityType = 'contact' | 'deal' | 'company' | 'lead' | 'ticket';
 
@@ -76,60 +77,67 @@ export default function DocumentsPanel({ entityType, entityId, readOnly = false 
   }, [load]);
 
   const uploadFile = async (file: File) => {
-    setUploading(true);
-    const id = toast.loading(`Uploading ${file.name}…`);
-    try {
-      const signRes = await fetch('/api/tenant/documents/upload-url', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: file.name,
-          mime_type: file.type || 'application/octet-stream',
-          size_bytes: file.size,
-        }),
-      });
-      const sign = await signRes.json();
-      if (!signRes.ok) throw new Error(sign.error || 'Could not start upload');
+    const signRes = await fetch('/api/tenant/documents/upload-url', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: file.name,
+        mime_type: file.type || 'application/octet-stream',
+        size_bytes: file.size,
+      }),
+    });
+    const sign = await signRes.json();
+    if (!signRes.ok) throw new Error(sign.error || 'Could not start upload');
 
-      const putRes = await fetch(sign.upload_url, {
-        method: 'PUT',
-        headers: sign.required_headers ?? {},
-        body: file,
-      });
-      if (!putRes.ok) throw new Error(`Upload failed (${putRes.status})`);
+    const putRes = await fetch(sign.upload_url, {
+      method: 'PUT',
+      headers: sign.required_headers ?? {},
+      body: file,
+    });
+    if (!putRes.ok) throw new Error(`Upload failed (${putRes.status})`);
 
-      const metaRes = await fetch('/api/tenant/documents', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: file.name,
-          storage_key: sign.storage_key,
-          mime_type: file.type || 'application/octet-stream',
-          size_bytes: file.size,
-          // Pre-link to the parent record so the panel filter picks it up.
-          linked_entity_type: entityType,
-          linked_entity_id: entityId,
-        }),
-      });
-      const meta = await metaRes.json();
-      if (!metaRes.ok) throw new Error(meta.error || 'Could not record document');
-
-      toast.success(`Uploaded ${file.name}`, { id });
-      load();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Upload failed', { id });
-    } finally {
-      setUploading(false);
-    }
+    const metaRes = await fetch('/api/tenant/documents', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: file.name,
+        storage_key: sign.storage_key,
+        mime_type: file.type || 'application/octet-stream',
+        size_bytes: file.size,
+        // Pre-link to the parent record so the panel filter picks it up.
+        linked_entity_type: entityType,
+        linked_entity_id: entityId,
+      }),
+    });
+    const meta = await metaRes.json();
+    if (!metaRes.ok) throw new Error(meta.error || 'Could not record document');
   };
 
   const onFiles = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
-    for (const file of Array.from(files)) {
-      // Sequential to keep toast UX clean; matches the standalone page.
-      await uploadFile(file);
+    setUploading(true);
+    const toastId = toast.loading(`Uploading ${files.length} file(s)…`);
+
+    try {
+      const limit = pLimit(5);
+      const results = await Promise.allSettled(
+        Array.from(files).map((file) => limit(() => uploadFile(file)))
+      );
+
+      const failures = results.filter((r) => r.status === 'rejected');
+      if (failures.length === 0) {
+        toast.success(`Uploaded ${files.length} file(s)`, { id: toastId });
+      } else if (failures.length === files.length) {
+        toast.error(`Failed to upload ${files.length} file(s)`, { id: toastId });
+      } else {
+        toast.success(`Uploaded ${files.length - failures.length} file(s) (${failures.length} failed)`, { id: toastId });
+      }
+
+      load();
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
-    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const downloadDocument = async (doc: DocumentRow) => {
