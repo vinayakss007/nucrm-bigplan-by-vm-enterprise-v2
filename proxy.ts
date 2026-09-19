@@ -316,7 +316,7 @@ export async function proxy(request: NextRequest) {
   const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
   const token = cookieToken || bearerToken;
 
-  // FIX: API keys (ak_*) are not JWTs — skip JWT verification and pass through
+  // NOTE: API keys (ak_*) are not JWTs — skip JWT verification and pass through
   // to route handlers where tryApiKeyAuth() handles them properly.
   if (bearerToken?.startsWith('ak_')) {
     const response = nextWithRequestId(request, requestId);
