@@ -13,7 +13,7 @@ import { acquireLock } from '@/lib/cache';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { serviceSubscriptions, users, activities } from '@/drizzle/schema';
-import { eq, and, isNull, lte, sql } from 'drizzle-orm';
+import { eq, and, isNull, lte, sql, inArray } from 'drizzle-orm';
 import { logger } from '@/lib/logger';
 import { sendEmail } from '@/lib/email/service';
 import { createNotification } from '@/lib/notifications';
@@ -64,20 +64,24 @@ export async function POST(request: NextRequest) {
         sql`(${serviceSubscriptions.currentPeriodEnd})::date = ${targetStr}::date`,
       ));
 
+      if (endingSoon.length === 0) continue;
+
+      const endingSoonIds = endingSoon.map(sub => sub.id);
+
+      const allAlreadySent = await db.select({ entityId: activities.entityId })
+        .from(activities)
+        .where(and(
+          eq(activities.entityType, 'subscription'),
+          inArray(activities.entityId, endingSoonIds),
+          eq(activities.eventType, 'subscription_renewal_reminder'),
+          sql`${activities.metadata}->>'reminder_days' = ${String(days)}`,
+        ));
+
+      const sentSet = new Set(allAlreadySent.map(a => a.entityId));
+
       for (const sub of endingSoon) {
         // Deduplication
-        const alreadySent = await db.select({ id: activities.id })
-          .from(activities)
-          .where(and(
-            eq(activities.tenantId, sub.tenantId),
-            eq(activities.entityType, 'subscription'),
-            eq(activities.entityId, sub.id),
-            eq(activities.eventType, 'subscription_renewal_reminder'),
-            sql`${activities.metadata}->>'reminder_days' = ${String(days)}`,
-          ))
-          .limit(1);
-
-        if (alreadySent.length > 0) continue;
+        if (sentSet.has(sub.id)) continue;
 
         // Find tenant members to notify
         const members = await db.select({
