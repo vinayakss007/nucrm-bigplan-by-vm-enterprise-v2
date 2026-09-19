@@ -10,7 +10,7 @@ import { backupConfigSchema } from '@/lib/api/schemas';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { platformSettings } from '@/drizzle/schema';
-import { eq, and, like } from 'drizzle-orm';
+import { eq, and, like, sql } from 'drizzle-orm';
 import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from 'crypto';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { concurrencyGuard } from '@/lib/api/concurrency';
@@ -241,31 +241,30 @@ export const PUT = withApiRoute(async (request: NextRequest) => {
     if (guard) return guard;
 
     await db.transaction(async (tx) => {
-      for (const [field, value] of Object.entries(fields)) {
-        await tx
-          .insert(platformSettings)
-          .values({
-            tenantId: ctx.tenantId,
-            key: `${prefix}:${field}`,
-            value: value,
-          })
-          .onConflictDoUpdate({
-            target: [platformSettings.key, platformSettings.tenantId],
-            set: { value: value, updatedAt: new Date() },
-          });
-      }
+      const settingsToInsert = Object.entries(fields).map(([field, value]) => ({
+        tenantId: ctx.tenantId,
+        key: `${prefix}:${field}`,
+        value: value,
+      }));
 
       if (secretValue) {
+        settingsToInsert.push({
+          tenantId: ctx.tenantId,
+          key: `${prefix}:secret_key`,
+          value: secretValue,
+        });
+      }
+
+      if (settingsToInsert.length > 0) {
         await tx
           .insert(platformSettings)
-          .values({
-            tenantId: ctx.tenantId,
-            key: `${prefix}:secret_key`,
-            value: secretValue,
-          })
+          .values(settingsToInsert)
           .onConflictDoUpdate({
             target: [platformSettings.key, platformSettings.tenantId],
-            set: { value: secretValue, updatedAt: new Date() },
+            set: {
+              value: sql`EXCLUDED.value`,
+              updatedAt: new Date()
+            },
           });
       }
     });
