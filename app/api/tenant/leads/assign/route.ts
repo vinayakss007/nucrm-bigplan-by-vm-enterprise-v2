@@ -73,11 +73,25 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     // If these are contacts, we use sql to keep contact_id if the underlying table supports it, 
     // or map to leadId if they are used interchangeably in the new schema.
     // Based on the legacy code, we'll use sql to ensure we hit the right column.
-    for (const cid of contact_ids) {
-      await db.execute(sql`
-        INSERT INTO public.lead_assignments (tenant_id, contact_id, assigned_to, assigned_by, reason)
-        VALUES (${ctx.tenantId}, ${cid}, ${assign_to}, ${ctx.userId}, ${reason || null})
-      `).catch((err) => { void logError({ error: err, context: 'tenant/leads/assign history log' }); });
+    if (contact_ids.length > 0) {
+      const CHUNK_SIZE = 1000;
+      for (let i = 0; i < contact_ids.length; i += CHUNK_SIZE) {
+        const chunk = contact_ids.slice(i, i + CHUNK_SIZE);
+        const values = chunk.map(cid => sql`(${ctx.tenantId}, ${cid}, ${assign_to}, ${ctx.userId}, ${reason || null})`);
+
+        await db.execute(sql`
+          INSERT INTO public.lead_assignments (tenant_id, contact_id, assigned_to, assigned_by, reason)
+          VALUES ${sql.join(values, sql`, `)}
+        `).catch(async () => {
+          // Fallback to sequential inserts for this chunk if batch fails
+          for (const cid of chunk) {
+            await db.execute(sql`
+              INSERT INTO public.lead_assignments (tenant_id, contact_id, assigned_to, assigned_by, reason)
+              VALUES (${ctx.tenantId}, ${cid}, ${assign_to}, ${ctx.userId}, ${reason || null})
+            `).catch((err) => { void logError({ error: err, context: 'tenant/leads/assign history log' }); });
+          }
+        });
+      }
     }
 
     // Notify assignee
