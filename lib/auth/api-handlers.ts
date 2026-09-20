@@ -395,6 +395,17 @@ export async function POST_signup(request: NextRequest) {
         completedAt: new Date(),
       }).onConflictDoNothing();
 
+      // Onboarding wizard removed: signup already provisions pipeline +
+      // default modules, so mark onboarding complete immediately and send
+      // new users straight to the dashboard (no post-signup setup page).
+      await tx.insert(onboardingProgress).values({
+        tenantId: t.id,
+        userId: u.id,
+        stepName: 'onboarding_complete',
+        isCompleted: true,
+        completedAt: new Date(),
+      }).onConflictDoNothing();
+
       return { user: u, tenant: t };
     });
 
