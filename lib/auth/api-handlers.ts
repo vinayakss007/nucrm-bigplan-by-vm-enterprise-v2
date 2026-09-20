@@ -386,14 +386,13 @@ export async function POST_signup(request: NextRequest) {
       // carry no tenant context, and tenant_modules is RLS-protected.
       await installDefaultModules(t.id, 'free', undefined, tx);
       
-      // Normalized onboarding progress
-      await tx.insert(onboardingProgress).values({
-        tenantId: t.id,
-        userId: u.id,
-        stepName: 'account_created',
-        isCompleted: true,
-        completedAt: new Date(),
-      }).onConflictDoNothing();
+      // Onboarding wizard removed: signup already provisions the pipeline +
+      // default modules, so both progress rows are written here and new
+      // users land straight on the dashboard (no post-signup setup page).
+      await tx.insert(onboardingProgress).values([
+        { tenantId: t.id, userId: u.id, stepName: 'account_created', isCompleted: true, completedAt: new Date() },
+        { tenantId: t.id, userId: u.id, stepName: 'onboarding_complete', isCompleted: true, completedAt: new Date() },
+      ]).onConflictDoNothing();
 
       return { user: u, tenant: t };
     });

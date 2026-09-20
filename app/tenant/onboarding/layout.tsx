@@ -3,24 +3,12 @@
  * Copyright (c) 2026 abetworks.in. All Rights Reserved.
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
-import { requireTenantCtx } from '@/lib/tenant/context';
 import { redirect } from 'next/navigation';
-import { hasCompletedOnboarding } from '@/lib/onboarding/check';
-import { withTenantScope } from '@/lib/api/with-api-route';
 
+// Onboarding wizard removed: signup already provisions the workspace,
+// pipeline, and default modules. Any visit to /tenant/onboarding goes
+// straight to the dashboard.
 export default async function OnboardingLayout({ children }: { children: React.ReactNode }) {
-  return withTenantScope(async () => {
-  try {
-    const ctx = await requireTenantCtx();
-    const completed = await hasCompletedOnboarding(ctx.tenantId, ctx.userId);
-    if (completed) {
-      redirect('/tenant/dashboard');
-    }
-  } catch {
-    // If tenant context or DB check fails, redirect to dashboard (fail-safe)
-    redirect('/tenant/dashboard');
-  }
+  redirect('/tenant/dashboard');
   return <>{children}</>;
-
-  });
 }
