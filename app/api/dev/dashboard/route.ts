@@ -201,9 +201,15 @@ export async function GET_ERRORS(request: NextRequest) {
  * POST /api/dev/clear
  * Clear all logs
  */
-export async function POST(_request: NextRequest) {
+export async function POST(request: NextRequest) {
   if (process.env.NODE_ENV !== 'development') {
     return NextResponse.json({ error: 'Development only' }, { status: 403 });
+  }
+
+  // Same super-admin gate as GET above — clearing logs is privileged too.
+  const admin = await requireSuperAdmin(request);
+  if (!admin) {
+    return NextResponse.json({ error: 'Super admin access required' }, { status: 403 });
   }
 
   devLogger.clear();
