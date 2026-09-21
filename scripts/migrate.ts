@@ -7,7 +7,6 @@ import * as schema from '../drizzle/schema';
 import * as fs from 'fs';
 import * as path from 'path';
 import { createInterface } from 'readline';
-import { pgSslConfig } from '../lib/db/ssl-config';
 
 /**
  * Execute SQL statements from a migration file with error tolerance.
@@ -249,9 +248,10 @@ async function main() {
     }
   }
 
+  const cleanUrl = databaseUrl.replace(/[?&]sslmode=[^&]+/, '');
   const pool = new Pool({
-    connectionString: databaseUrl,
-    ssl: pgSslConfig(),
+    connectionString: cleanUrl,
+    ssl: { rejectUnauthorized: false },
     connectionTimeoutMillis: 10_000,
   });
 

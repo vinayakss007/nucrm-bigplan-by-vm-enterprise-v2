@@ -49,6 +49,8 @@ module.exports = {
       env: {
         NODE_ENV: 'production',
         PORT: process.env.NUCRM_PORT || 3000,
+        DATABASE_SSL: 'true',
+        DATABASE_SSL_REJECT_UNAUTHORIZED: 'false',
       },
 
       max_memory_restart: `${process.env.NUCRM_MAX_MEMORY || 512}M`,
@@ -82,6 +84,8 @@ module.exports = {
       env_file: '.env.local',
       env: {
         NODE_ENV: 'production',
+        DATABASE_SSL: 'true',
+        DATABASE_SSL_REJECT_UNAUTHORIZED: 'false',
       },
 
       // Workers hold more in memory (job payloads).
@@ -115,6 +119,8 @@ module.exports = {
       env_file: '.env.local',
       env: {
         NODE_ENV: 'production',
+        DATABASE_SSL: 'true',
+        DATABASE_SSL_REJECT_UNAUTHORIZED: 'false',
       },
 
       max_memory_restart: '256M',

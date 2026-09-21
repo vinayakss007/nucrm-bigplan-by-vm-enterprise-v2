@@ -24,7 +24,8 @@ export async function GET(request: NextRequest) {
       const res = await db.execute(sql`SELECT tablename FROM pg_tables WHERE schemaname='public' AND tablename='users'`);
       dbStatus = 'connected';
       schemaReady = res.rowCount! > 0;
-    } catch {
+    } catch (err) {
+      console.error('[health] DB check failed:', err);
       dbStatus = 'error';
     }
 
