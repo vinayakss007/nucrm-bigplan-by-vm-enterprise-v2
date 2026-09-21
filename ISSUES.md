@@ -30,15 +30,19 @@ This issue previously claimed the README documented GitHub Actions but `.github/
 
 ---
 
-## Issue 2: Multiple conflicting database passwords
+## Issue 2: ✅ RESOLVED — Multiple conflicting database passwords
 
 **Labels:** `security`, `medium-priority`
 
 ### Description
 
-Multiple different PostgreSQL passwords are scattered across configuration files, creating confusion and potential security gaps.
+Multiple different PostgreSQL passwords were scattered across configuration files, creating confusion and potential security gaps.
 
-### Current State
+### Current State (RESOLVED)
+
+All hardcoded passwords have been removed from configs, scripts, and documentation. Scripts such as `scripts/deploy-vm.sh` now generate passwords securely and dynamically using `openssl`. Configurations such as `drizzle.config.ts` enforce the presence of environment variables instead of providing hardcoded fallbacks.
+
+### Previous State
 
 | File                         | Password Value                     |
 | ---------------------------- | ---------------------------------- |
@@ -54,13 +58,13 @@ Multiple different PostgreSQL passwords are scattered across configuration files
 - No single source of truth for database credentials
 - Risk of hardcoding stale passwords
 
-### Proposed Solution
+### Proposed Solution (Completed)
 
 1. **Single source of truth**: Use `deploy/generate-secrets.sh` to generate and store the production password
-2. **Remove hardcoded passwords** from `scripts/start_nucrm.sh`, `AGENTS.md`, `drizzle.config.ts`
+2. **Remove hardcoded passwords** from `scripts/start_nucrm.sh`, `AGENTS.md`, `drizzle.config.ts`, and `scripts/deploy-vm.sh`
 3. **All configs reference env vars only** — no inline passwords
-4. **Add `.env.local` to `.gitignore`** (verify it's already there)
-5. **Rotate all passwords** after consolidation
+4. **Add `.env.local` to `.gitignore`** (verified it's already there)
+5. **Rotate all passwords** after consolidation (users must now rotate their passwords)
 
 ---
 
