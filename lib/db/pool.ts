@@ -171,9 +171,10 @@ export function getPool(): Pool {
     }
 
     // Append pgbouncer=true to connection string when PgBouncer is active
+    const cleanCs = cs.replace(/[?&]sslmode=[^&]+/, '');
     const connectionString = pgBouncer
-      ? cs + (cs.includes('?') ? '&' : '?') + 'pgbouncer=true'
-      : cs;
+      ? cleanCs + (cleanCs.includes('?') ? '&' : '?') + 'pgbouncer=true'
+      : cleanCs;
 
     const poolConfig: PoolConfig = {
       connectionString,

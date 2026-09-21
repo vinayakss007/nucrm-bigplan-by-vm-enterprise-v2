@@ -4,8 +4,6 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { requireTenantCtx } from '@/lib/tenant/context';
-import { redirect } from 'next/navigation';
-import { hasCompletedOnboarding } from '@/lib/onboarding/check';
 import DashboardClient from '@/components/tenant/dashboard-client';
 import { withTenantScope } from '@/lib/api/with-api-route';
 
@@ -15,12 +13,8 @@ export default async function DashboardPage() {
   return withTenantScope(async () => {
   const ctx = await requireTenantCtx();
 
-  // Redirect first-time users to onboarding
-  const onboarded = await hasCompletedOnboarding(ctx.tenantId, ctx.userId);
-  if (!onboarded) {
-    redirect('/tenant/onboarding');
-  }
-
+  // Onboarding wizard removed: signup already creates the workspace,
+  // pipeline, and default modules, so new users land straight here.
   return (
     <DashboardClient
       tenantId={ctx.tenantId}
