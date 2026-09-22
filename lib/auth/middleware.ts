@@ -9,7 +9,7 @@ import { db } from '@/drizzle/db';
 import { tenants, users, sessions, tenantMembers, roles } from '@/drizzle/schema';
 import { eq, and, gt, or, sql, desc, asc } from 'drizzle-orm';
 import { verifyToken, hashToken } from '@/lib/auth/session';
-import { setTenantContext } from '@/lib/db/rls';
+import { setTenantContext, withUserContext } from '@/lib/db/rls';
 import { tryApiKeyAuth } from '@/lib/auth/api-key';
 import { requestContext, withRequestId } from '@/lib/tenant/request-context';
 import { withPinnedConnection } from '@/lib/db/request-connection';
@@ -131,54 +131,60 @@ async function isCachedContextStillAuthorized(
   tokenHash: string,
   cached: AuthContext
 ): Promise<boolean> {
-  const sessionExists = await db.select({ count: sql`count(*)` })
-    .from(sessions)
-    .where(and(eq(sessions.tokenHash, tokenHash), gt(sessions.expiresAt, new Date())));
+  // The JWT was signature-verified before this context was cached, so
+  // cached.userId is a proven identity. Scope every read below to it:
+  // without a context the fail-closed RLS policies match zero rows, so a
+  // valid session looks expired and an active membership looks missing.
+  return withUserContext(cached.userId, async (tx) => {
+    const sessionExists = await tx.select({ count: sql`count(*)` })
+      .from(sessions)
+      .where(and(eq(sessions.tokenHash, tokenHash), gt(sessions.expiresAt, new Date())));
 
-  if (!(Number(sessionExists[0]?.count) > 0)) return false;
+    if (!(Number(sessionExists[0]?.count) > 0)) return false;
 
-  // Super admins have no tenant_members row to validate against.
-  if (cached.isSuperAdmin) return true;
+    // Super admins have no tenant_members row to validate against.
+    if (cached.isSuperAdmin) return true;
 
-  const [membership] = await db.select({
-    status: tenantMembers.status,
-    roleSlug: tenantMembers.roleSlug,
-    roleId: tenantMembers.roleId,
-  })
-    .from(tenantMembers)
-    .where(and(
-      eq(tenantMembers.userId, cached.userId),
-      eq(tenantMembers.tenantId, cached.tenantId)
-    ))
-    .limit(1);
-
-  if (!membership || membership.status !== 'active') return false;
-
-  // A role change must invalidate the cached permission set.
-  if ((membership.roleSlug ?? '') !== cached.roleSlug) return false;
-
-  // #1836: detect in-place permission edits (same roleSlug but permissions
-  // object changed). The role's `updated_at` serves as a cheap version stamp:
-  // if it advanced past what was cached, the permission set may have changed.
-  //
-  // Treat a missing stamp (roleVersion null/undefined) as 0 rather than
-  // skipping the check. Contexts cached before this stamp existed (e.g. across
-  // a deploy) or by any path that didn't set it would otherwise NEVER be
-  // re-validated against the current role and could serve stale permissions
-  // for the full cache TTL. With `0`, the first hit after such a context is
-  // cached re-validates against the live role.updatedAt (which is > 0),
-  // refreshing it once, after which it carries a proper numeric stamp.
-  if (membership.roleId) {
-    const cachedVersion = cached.roleVersion ?? 0;
-    const [role] = await db.select({ updatedAt: roles.updatedAt })
-      .from(roles)
-      .where(eq(roles.id, membership.roleId))
+    const [membership] = await tx.select({
+      status: tenantMembers.status,
+      roleSlug: tenantMembers.roleSlug,
+      roleId: tenantMembers.roleId,
+    })
+      .from(tenantMembers)
+      .where(and(
+        eq(tenantMembers.userId, cached.userId),
+        eq(tenantMembers.tenantId, cached.tenantId)
+      ))
       .limit(1);
-    const currentVersion = role?.updatedAt ? new Date(role.updatedAt).getTime() : 0;
-    if (currentVersion > cachedVersion) return false;
-  }
 
-  return true;
+    if (!membership || membership.status !== 'active') return false;
+
+    // A role change must invalidate the cached permission set.
+    if ((membership.roleSlug ?? '') !== cached.roleSlug) return false;
+
+    // #1836: detect in-place permission edits (same roleSlug but permissions
+    // object changed). The role's `updated_at` serves as a cheap version stamp:
+    // if it advanced past what was cached, the permission set may have changed.
+    //
+    // Treat a missing stamp (roleVersion null/undefined) as 0 rather than
+    // skipping the check. Contexts cached before this stamp existed (e.g. across
+    // a deploy) or by any path that didn't set it would otherwise NEVER be
+    // re-validated against the current role and could serve stale permissions
+    // for the full cache TTL. With `0`, the first hit after such a context is
+    // cached re-validates against the live role.updatedAt (which is > 0),
+    // refreshing it once, after which it carries a proper numeric stamp.
+    if (membership.roleId) {
+      const cachedVersion = cached.roleVersion ?? 0;
+      const [role] = await tx.select({ updatedAt: roles.updatedAt })
+        .from(roles)
+        .where(eq(roles.id, membership.roleId))
+        .limit(1);
+      const currentVersion = role?.updatedAt ? new Date(role.updatedAt).getTime() : 0;
+      if (currentVersion > cachedVersion) return false;
+    }
+
+    return true;
+  });
 }
 
 export async function requireAuth(request: NextRequest): Promise<AuthContext | NextResponse> {
@@ -268,39 +274,76 @@ export async function requireAuth(request: NextRequest): Promise<AuthContext | N
       await requestContext.invalidate(tokenHash);
     }
 
-    // Cache miss - fetch from database
-    const session = await db.query.sessions.findFirst({
-      where: and(eq(sessions.tokenHash, tokenHash), gt(sessions.expiresAt, new Date()))
+    // Cache miss - fetch from database. The JWT signature already verified
+    // above, so payload.userId is a proven identity: scope every read below
+    // to it. Without a context the fail-closed RLS policies match zero rows
+    // and a perfectly valid session is reported as "Session expired".
+    const loaded = await withUserContext(payload.userId, async (tx) => {
+      const session = await tx.query.sessions.findFirst({
+        where: and(eq(sessions.tokenHash, tokenHash), gt(sessions.expiresAt, new Date()))
+      });
+
+      if (!session) return null;
+
+      // First check if user is a super admin
+      const [userRecord] = await tx.select({
+        id: users.id,
+        email: users.email,
+        fullName: users.fullName,
+        isSuperAdmin: users.isSuperAdmin,
+        lastTenantId: users.lastTenantId,
+      })
+      .from(users)
+      .where(eq(users.id, payload.userId))
+      .limit(1);
+
+      if (!userRecord) return { userRecord: null as null, member: null as null };
+
+      if (userRecord.isSuperAdmin) return { userRecord, member: 'superadmin' as const };
+
+      // Fetch tenant membership for non-super-admin users
+      const results = await tx.select({
+        id: users.id,
+        email: users.email,
+        fullName: users.fullName,
+        isSuperAdmin: users.isSuperAdmin,
+        lastTenantId: users.lastTenantId,
+        tenantId: tenantMembers.tenantId,
+        roleSlug: tenantMembers.roleSlug,
+        permissions: sql`COALESCE(${roles.permissions}, '{}'::jsonb)`,
+        roleUpdatedAt: roles.updatedAt,
+      })
+      .from(users)
+      .innerJoin(tenantMembers, and(eq(tenantMembers.userId, users.id), eq(tenantMembers.status, 'active')))
+      .leftJoin(roles, eq(roles.id, tenantMembers.roleId))
+      .where(eq(users.id, payload.userId))
+      .orderBy(
+        desc(sql`(${tenantMembers.tenantId} = ${users.lastTenantId})::int`), 
+        asc(tenantMembers.createdAt)
+      )
+      .limit(1);
+
+      return { userRecord, member: results[0] ?? null };
     });
-    
-    if (!session) {
+
+    if (!loaded) {
       return NextResponse.json(
         { error: 'Session expired' },
         { status: 401 }
       );
     }
 
-    // First check if user is a super admin
-    const [userRecord] = await db.select({
-      id: users.id,
-      email: users.email,
-      fullName: users.fullName,
-      isSuperAdmin: users.isSuperAdmin,
-      lastTenantId: users.lastTenantId,
-    })
-    .from(users)
-    .where(eq(users.id, payload.userId))
-    .limit(1);
-
-    if (!userRecord) {
+    if (!loaded.userRecord) {
       return NextResponse.json(
         { error: 'User not found' },
         { status: 401 }
       );
     }
 
+    const userRecord = loaded.userRecord;
+
     // Super admin context — bypass tenant membership lookup
-    if (userRecord.isSuperAdmin) {
+    if (loaded.member === 'superadmin') {
       const ctx: AuthContext = {
         userId: userRecord.id,
         tenantId: userRecord.lastTenantId || '__superadmin_no_tenant__',
@@ -315,29 +358,7 @@ export async function requireAuth(request: NextRequest): Promise<AuthContext | N
       return ctx;
     }
 
-    // Fetch tenant membership for non-super-admin users
-    const results = await db.select({
-      id: users.id,
-      email: users.email,
-      fullName: users.fullName,
-      isSuperAdmin: users.isSuperAdmin,
-      lastTenantId: users.lastTenantId,
-      tenantId: tenantMembers.tenantId,
-      roleSlug: tenantMembers.roleSlug,
-      permissions: sql`COALESCE(${roles.permissions}, '{}'::jsonb)`,
-      roleUpdatedAt: roles.updatedAt,
-    })
-    .from(users)
-    .innerJoin(tenantMembers, and(eq(tenantMembers.userId, users.id), eq(tenantMembers.status, 'active')))
-    .leftJoin(roles, eq(roles.id, tenantMembers.roleId))
-    .where(eq(users.id, payload.userId))
-    .orderBy(
-      desc(sql`(${tenantMembers.tenantId} = ${users.lastTenantId})::int`), 
-      asc(tenantMembers.createdAt)
-    )
-    .limit(1);
-
-    const userWithMember = results[0];
+    const userWithMember = loaded.member;
 
     if (!userWithMember) {
       return NextResponse.json(
