@@ -122,7 +122,7 @@ export default function TenantHeader({ tenant, profile, roleSlug, onToggleSideba
     }, 'danger_only', 'Log out');
   };
 
-  const total = results ? (results.contacts?.length??0)+(results.deals?.length??0)+(results.companies?.length??0) : 0;
+  const total = results ? (results.contacts?.length??0)+(results.leads?.length??0)+(results.deals?.length??0)+(results.companies?.length??0)+(results.tasks?.length??0) : 0;
   const initials = getInitials(profile?.full_name || profile?.email || 'U');
 
   return (
@@ -150,7 +150,7 @@ export default function TenantHeader({ tenant, profile, roleSlug, onToggleSideba
               if (e.key==='Enter') { setShowDrop(true); }
               if (e.key==='Escape') { setShowDrop(false); setQuery(''); setResults(null); }
             }}
-            placeholder="Search contacts, deals, companies..."
+            placeholder="Search leads, contacts, deals, companies..."
             data-testid="search-input"
             data-search
             className="w-full pl-8 pr-8 py-1.5 text-sm bg-muted/40 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500 focus:bg-background transition-colors"
