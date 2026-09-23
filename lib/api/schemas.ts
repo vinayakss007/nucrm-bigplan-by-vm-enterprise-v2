@@ -345,7 +345,9 @@ export const createMeetingSchema = z.object({
   title: requiredString.max(200),
   description: z.string().trim().max(2000).nullable().optional(),
   start_time: z.string().datetime(),
-  end_time: z.string().datetime(),
+  // Optional: the route defaults it to start_time + 1h. Required here would
+  // reject the UI's create form whenever End is left blank ("can't add").
+  end_time: z.string().datetime().optional(),
   location: z.string().trim().max(500).nullable().optional(),
   meeting_url: urlField,
   contact_id: uuid,
