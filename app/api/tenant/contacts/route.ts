@@ -288,7 +288,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       data: { ...contact },
     }).catch((err) => logError({ error: err, context: 'tenant/contacts POST evaluateAutomations' }));
 
-    return NextResponse.json({ data: contact }, { status: 201 });
+    return NextResponse.json({ data: { id: contact.id, first_name: contact.firstName, last_name: contact.lastName, email: contact.email, phone: contact.phone, job_title: contact.jobTitle, company_id: contact.companyId, lead_status: contact.leadStatus, lead_source: contact.leadSource, notes: contact.notes, tags: contact.tags, score: contact.score, city: contact.city, country: contact.country, website: contact.website, linkedin_url: contact.linkedinUrl, twitter_url: contact.twitterUrl, custom_fields: contact.customFields, created_at: contact.createdAt.toISOString(), updated_at: contact.updatedAt?.toISOString(), tenant_id: contact.tenantId, user_id: contact.createdBy } }, { status: 201 });
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
