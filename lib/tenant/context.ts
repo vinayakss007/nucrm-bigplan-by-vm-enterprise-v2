@@ -9,7 +9,7 @@ import { verifyToken } from '@/lib/auth/session';
 import { db } from '@/drizzle/db';
 import { tenants, users, plans, tenantMembers, roles } from '@/drizzle/schema';
 import { eq, and, or, sql, desc } from 'drizzle-orm';
-import { setTenantContext } from '@/lib/db/rls';
+import { setTenantContext, withUserContext } from '@/lib/db/rls';
 import { withPinnedConnection } from '@/lib/db/request-connection';
 import type { TenantContext, TenantStatus, TenantSettings } from '@/types';
 
@@ -89,7 +89,19 @@ async function requireTenantCtxInner(): Promise<TenantContext> {
   const payload = await verifyToken(token);
   if (!payload) redirect('/auth/login');
 
-  const row = await db
+  // PP-026: turning a cookie into an identity is a PRE-AUTH READ, but every
+  // policy on users / tenant_members / tenants keys off app.current_user —
+  // a value this very lookup is supposed to establish. With no context set the
+  // fail-closed RLS policies matched zero rows, so `row` was always undefined
+  // and every freshly signed-up (and every logged-in) user was bounced to
+  // /auth/no-workspace, i.e. the "Set Up Your Workspace / Workspace Name *"
+  // page, despite already owning a tenant.
+  //
+  // Run the lookup scoped to the verified token's user id. setUserContext only
+  // admits self-scoped reads (own memberships + the roles of tenants you belong
+  // to); app.current_tenant stays empty, so no other tenant's rows are
+  // reachable from here.
+  const row = await withUserContext(payload.userId, (tx: any) => tx
     .select({
       user_id: users.id,
       is_super_admin: users.isSuperAdmin,
@@ -119,13 +131,18 @@ async function requireTenantCtxInner(): Promise<TenantContext> {
     .where(eq(users.id, payload.userId))
     .orderBy(desc(sql`${tenantMembers.tenantId} = ${users.lastTenantId}`), tenantMembers.createdAt)
     .limit(1)
-    .then(res => res[0]);
+    .then((res: any) => res[0])) as any;
 
   if (!row) {
-    const user = await db.query.users.findFirst({
-      where: eq(users.id, payload.userId),
-      columns: { isSuperAdmin: true }
-    });
+    // Same chicken-and-egg: the super-admin probe also needs the proven-user
+    // context to see its own row. Without it a first-run super admin would be
+    // sent to /auth/no-workspace instead of /superadmin/dashboard.
+    const user = await withUserContext(payload.userId, (tx: any) => tx
+      .select({ isSuperAdmin: users.isSuperAdmin })
+      .from(users)
+      .where(eq(users.id, payload.userId))
+      .limit(1)
+      .then((res: any) => res[0])) as any;
     if (user?.isSuperAdmin) redirect('/superadmin/dashboard');
     redirect('/auth/no-workspace');
   }

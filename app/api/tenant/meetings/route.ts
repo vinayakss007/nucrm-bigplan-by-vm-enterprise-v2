@@ -72,8 +72,25 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     .limit(limit)
     .offset(offset);
 
+    // Map camelCase to snake_case for frontend compatibility
     return NextResponse.json({
-      data,
+      data: data.map(m => ({
+        id: m.id,
+        tenant_id: m.tenantId,
+        user_id: m.userId,
+        contact_id: m.contactId,
+        deal_id: m.dealId,
+        title: m.title,
+        description: m.description,
+        start_time: m.startTime,
+        end_time: m.endTime,
+        location: m.location,
+        meeting_url: m.meetingUrl,
+        status: m.status,
+        created_at: m.createdAt,
+        updated_at: m.updatedAt,
+        contact_name: m.contact_name,
+      })),
       total: countResult?.count ?? 0,
       limit,
       offset,

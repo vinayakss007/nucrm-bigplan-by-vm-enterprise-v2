@@ -150,6 +150,15 @@ services:
       # bucket from S3_BUCKET alone. Without this the app logs "S3 storage not
       # configured" and every upload / signed URL silently no-ops.
       - S3_BUCKET=${S3_BUCKET:-nucrm-documents}
+      # The base compose passes RESEND_API_KEY but no SMTP_* at all, so the
+      # SMTP fallback lib/email/service.ts implements could never trigger in
+      # Docker. Pass the whole SMTP group through from .env.
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASS=${SMTP_PASS:-}
+      - SMTP_FROM_EMAIL=${SMTP_FROM_EMAIL:-}
+      - SMTP_FROM_NAME=${SMTP_FROM_NAME:-NuCRM}
     # ── Bind all interfaces — REQUIRED for nginx and cron ────────────────────
     # The image's CMD is `npm run prod:start:custom`, i.e.
     #   node ... node_modules/next/dist/bin/next start -H 127.0.0.1
@@ -231,6 +240,15 @@ services:
       # from another made retention pruning a silent no-op. Both processes must
       # agree on which bucket holds backups.
       - BACKUP_BUCKET=${BACKUP_BUCKET:-nucrm-backups}
+      # The base compose passes RESEND_API_KEY but no SMTP_* at all, so the
+      # SMTP fallback lib/email/service.ts implements could never trigger in
+      # Docker. The worker sends mail too (billing, notifications, backups).
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASS=${SMTP_PASS:-}
+      - SMTP_FROM_EMAIL=${SMTP_FROM_EMAIL:-}
+      - SMTP_FROM_NAME=${SMTP_FROM_NAME:-NuCRM}
     # The Dockerfile bakes in HEALTHCHECK wget http://127.0.0.1:3000/api/health,
     # and app + worker share one image — so the worker inherited a probe for an
     # HTTP server it does not run. `command: node worker.ts` starts a BullMQ

@@ -254,6 +254,18 @@ export async function proxy(request: NextRequest) {
     return response;
   }
 
+  // Post-signup onboarding wizard removed: signup already provisions the
+  // workspace, pipeline and default modules, so any visit to
+  // /tenant/onboarding goes straight to the dashboard. Enforced here (not
+  // just in the page component) so it holds even while streaming.
+  if (pathname === '/tenant/onboarding' || pathname.startsWith('/tenant/onboarding/')) {
+    const url = request.nextUrl.clone();
+    url.pathname = '/tenant/dashboard';
+    const redirect = NextResponse.redirect(url);
+    redirect.headers.set('x-request-id', requestId);
+    return redirect;
+  }
+
   // Public API routes: apply rate limiting or pass through
   if (isApiRequest(pathname) && isPublic(pathname)) {
     if (shouldBypassRateLimit(pathname)) {
