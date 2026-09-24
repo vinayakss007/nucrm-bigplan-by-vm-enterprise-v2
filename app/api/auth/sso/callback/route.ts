@@ -12,6 +12,7 @@
  * to the provider's tenant, and create a session cookie.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { db } from '@/drizzle/db';
 import { withUserContext, withSecurityContext } from '@/lib/db/rls';
 import {
   ssoProviders,

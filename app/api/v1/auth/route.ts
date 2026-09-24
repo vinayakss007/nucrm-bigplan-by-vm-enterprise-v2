@@ -15,6 +15,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { db } from '@/drizzle/db';
 import { users } from '@/drizzle/schema';
 import { eq, and, sql } from 'drizzle-orm';
 import { hashPassword, verifyPassword, createToken, setSessionCookie, clearSessionCookie, validatePassword, getCurrentUser } from '@/lib/auth/session';
