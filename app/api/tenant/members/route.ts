@@ -121,7 +121,10 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       newData: { email: emailLower, role: role_slug }
     });
 
-    return NextResponse.json({ ok: true, data: result }, { status: 201 });
+    // Never serialize secrets: the inserted row carries passwordHash (and
+    // potentially totp material). Return a public projection instead.
+    const { passwordHash: _ph, totpSecret: _ts, totpBackupCodes: _tb, ...publicUser } = result.user!;
+    return NextResponse.json({ ok: true, data: { user: publicUser, member: result.member } }, { status: 201 });
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -207,7 +210,23 @@ export const PATCH = withApiRoute(async (request: NextRequest) => {
     .limit(1);
 
     if (!target) return NextResponse.json({ error: 'Member not found' }, { status: 404 });
-    if (target.roleSlug === 'admin' && !ctx.isSuperAdmin) return NextResponse.json({ error: 'Cannot modify another admin' }, { status: 403 });
+    // Admin-vs-admin guard: touching another admin requires platform
+    // super-admin — EXCEPT the workspace owner, who must always retain a
+    // management path (no super-admin is provisioned in production, so
+    // without this exception a rogue admin could never be demoted/removed).
+    // Self role-changes stay blocked for everyone (use ownership transfer).
+    if (target.roleSlug === 'admin' && !ctx.isSuperAdmin) {
+      if (target.userId === ctx.userId) {
+        return NextResponse.json({ error: 'Cannot modify your own admin role — transfer ownership first' }, { status: 403 });
+      }
+      const [t] = await db.select({ ownerId: tenants.ownerId })
+        .from(tenants)
+        .where(eq(tenants.id, ctx.tenantId))
+        .limit(1);
+      if (!t || t.ownerId !== ctx.userId) {
+        return NextResponse.json({ error: 'Cannot modify another admin' }, { status: 403 });
+      }
+    }
     if (target.userId === ctx.userId && action === 'remove') return NextResponse.json({ error: 'Cannot remove yourself — transfer ownership first' }, { status: 400 });
 
     if (action === 'change_role') {
