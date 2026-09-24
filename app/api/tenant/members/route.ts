@@ -23,6 +23,11 @@ import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { deleteUserSessions } from '@/lib/cache/sessions';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { logError } from '@/lib/errors-server';
+// Member creation inserts into the platform-wide `users` table, which no
+// tenant context can satisfy (fail-closed RLS). The admin gate above
+// authorizes this; run the provisioning transaction under the security
+// context like signup does — without it every invite 500s.
+import { withSecurityContext } from '@/lib/db/rls';
 
 export const POST = withApiRoute(async (request: NextRequest) => {
   try {
@@ -43,7 +48,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
 
     const emailLower = email.trim().toLowerCase();
 
-    const result = await db.transaction(async (tx) => {
+    const result = await withSecurityContext(async (tx) => {
       // Check if user already exists
       let [user] = await tx.select()
         .from(users)

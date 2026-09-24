@@ -12,8 +12,7 @@
  * to the provider's tenant, and create a session cookie.
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/drizzle/db';
-import { withUserContext } from '@/lib/db/rls';
+import { withUserContext, withSecurityContext } from '@/lib/db/rls';
 import {
   ssoProviders,
   ssoSessions,
@@ -171,7 +170,10 @@ async function upsertUserAndMembership(args: {
   // The user upsert and the tenant-membership upsert must succeed or fail
   // together: a created/updated user with no membership row (or vice versa)
   // leaves the account in an inconsistent, un-loginable state.
-  return db.transaction(async (tx) => {
+  // Pre-auth provisioning runs under the security context (same as signup):
+  // a bare connection cannot satisfy the fail-closed `users` policies and
+  // every first-time SSO login would 500.
+  return withSecurityContext(async (tx) => {
     // 1. user
     const [existingUser] = await tx
       .select({ id: users.id })
