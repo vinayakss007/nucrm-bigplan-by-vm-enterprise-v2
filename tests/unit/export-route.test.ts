@@ -31,6 +31,8 @@ describe('POST /api/tenant/export route - F6 ergonomics & streaming', () => {
 
     vi.doMock('@/lib/api/validate', () => ({
       readJsonBody: vi.fn().mockResolvedValue({ entity: 'contacts', format: 'csv' }),
+      // apiError() instanceof-checks this export on every error path.
+      InvalidJsonBodyError: class InvalidJsonBodyError extends Error {},
     }));
   });
 
@@ -40,7 +42,15 @@ describe('POST /api/tenant/export route - F6 ergonomics & streaming', () => {
         select: vi.fn().mockReturnValue({
           from: vi.fn().mockReturnValue({
             where: vi.fn().mockReturnValue({
-              limit: vi.fn().mockResolvedValue(rows),
+              // #1987: the CSV/JSON paths defer execution and page the query
+              // via orderBy(...).limit(...).offset(...), so the builder stub
+              // must expose orderBy before resolving.
+              orderBy: vi.fn().mockReturnValue({
+                limit: vi.fn().mockReturnValue({
+                  offset: vi.fn().mockResolvedValue(rows),
+                  then: (resolve: (v: unknown[]) => void) => resolve(rows),
+                }),
+              }),
             }),
           }),
         }),

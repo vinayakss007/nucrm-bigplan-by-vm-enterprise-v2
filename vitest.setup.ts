@@ -20,6 +20,11 @@ if (existsSync(envFile)) {
 if (!process.env.DATABASE_URL) {
   process.env.DATABASE_URL = 'postgresql://postgres:postgres@localhost:5432/nucrm_test';
 }
+// pgSslConfig() defaults TLS to on; the local test database speaks plaintext,
+// so a suite pointed at localhost must not attempt SSL unless told otherwise.
+if (!process.env.DATABASE_SSL && /@localhost|@127\.0\.0\.1/.test(process.env.DATABASE_URL)) {
+  process.env.DATABASE_SSL = 'false';
+}
 if (!process.env['JWT_SECRET']) {
   process.env['JWT_SECRET'] = 'a0b1c2d3e4f5g6h7i8j9k0l1m2n3o4p5q6r7s8t9u0v1w2x3y4z5';
 }
