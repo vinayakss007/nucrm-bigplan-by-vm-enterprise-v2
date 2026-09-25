@@ -165,7 +165,7 @@ const PUBLIC_PATHS = [
   '/api/auth/csrf-token', '/api/auth/sso',
   '/api/forms/submit', '/api/leads/public',
   '/api/webhooks/stripe', '/api/webhooks/resend', '/api/webhooks/whatsapp', '/api/webhooks/inbound',
-  '/api/health', '/api/track/click', '/api/track/open', '/api/unsubscribe',
+  '/api/health', '/api/track/click', '/api/track/open', '/api/track/event', '/api/unsubscribe',
   '/api/keepalive', '/api/test-email', '/api/cron', '/api/metrics', '/api/embed', '/api/emergency',
   '/api/flags', '/api/openapi',
   '/api/setup/check', '/api/setup/create-admin', '/api/lead-capture', '/api/lead-capture/submit',
