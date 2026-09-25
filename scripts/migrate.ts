@@ -4,6 +4,7 @@ import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import { sql } from 'drizzle-orm';
 import { Pool } from 'pg';
 import * as schema from '../drizzle/schema';
+import { pgSslConfig } from '../lib/db/ssl-config';
 import * as fs from 'fs';
 import * as path from 'path';
 import { createInterface } from 'readline';
@@ -251,7 +252,7 @@ async function main() {
   const cleanUrl = databaseUrl.replace(/[?&]sslmode=[^&]+/, '');
   const pool = new Pool({
     connectionString: cleanUrl,
-    ssl: { rejectUnauthorized: false },
+    ssl: pgSslConfig(),
     connectionTimeoutMillis: 10_000,
   });
 
