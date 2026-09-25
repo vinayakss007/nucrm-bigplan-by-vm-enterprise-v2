@@ -187,6 +187,8 @@ describe('BYPASS_PREFIXES', () => {
     expect(BYPASS_PREFIXES).toContain('/api/metrics');
     expect(BYPASS_PREFIXES).toContain('/api/keepalive');
     expect(BYPASS_PREFIXES).toContain('/api/cron');
+    // #1972: anonymous analytics ingest self-limits (120/min/IP) in the route.
+    expect(BYPASS_PREFIXES).toContain('/api/track/event');
   });
 });
 

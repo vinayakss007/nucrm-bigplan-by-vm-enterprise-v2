@@ -73,7 +73,7 @@ vi.mock('@/lib/rate-limit-edge', () => ({
     'Retry-After': r.allowed ? '0' : '30',
   })),
   shouldBypassRateLimit: vi.fn((p: string) =>
-    ['/api/webhooks/', '/api/health', '/api/metrics', '/api/keepalive', '/api/cron'].some(x => p.startsWith(x))
+    ['/api/webhooks/', '/api/health', '/api/metrics', '/api/keepalive', '/api/cron', '/api/track/event'].some(x => p.startsWith(x))
   ),
 }));
 
@@ -134,6 +134,16 @@ describe('proxy middleware', () => {
       const { proxy } = await import('@/proxy');
       const res = await proxy(makeReq('/auth/login'));
       expect(res._isNext || res._isResponse).toBeTruthy();
+    });
+
+    // #1972: /api/track/event is an intentionally anonymous ingest endpoint
+    // (always 204, self rate-limited at 120/min/IP). The proxy must let it
+    // through without JWT auth and without the 30/min public edge limiter.
+    it('passes anonymous POST /api/track/event without auth or edge rate limit', async () => {
+      const { proxy } = await import('@/proxy');
+      const res = await proxy(makeReq('/api/track/event', { method: 'POST' }));
+      expect(res._isNext).toBe(true);
+      expect(edgeCheckMock).not.toHaveBeenCalled();
     });
   });
 
