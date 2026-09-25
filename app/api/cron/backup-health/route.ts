@@ -9,8 +9,9 @@ import { verifySecret } from '@/lib/crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { alertSuperAdmin } from '@/lib/email/service';
 import { db } from '@/drizzle/db';
-import { backupRecords, backupAlerts } from '@/drizzle/schema';
-import { eq, and, desc, gt } from 'drizzle-orm';
+import { sql } from 'drizzle-orm';
+import { backupAlerts } from '@/drizzle/schema';
+import { eq, and, gt } from 'drizzle-orm';
 // backup_alerts INSERT requires the super-admin context and backupRecords
 // reads must see across tenants: without a context this job 500s (NUCRM-E)
 // or reports a bogus "no backup ever". withApiRoute pins one client and
@@ -36,10 +37,17 @@ export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     await setSuperAdminContext();
     {
-    const lastBackup = await db.query.backupRecords.findFirst({
-      where: eq(backupRecords.status, 'completed'),
-      orderBy: [desc(backupRecords.completedAt)],
-    });
+    // Health is measured against tenant_backup_records (the table the
+    // auto-backup cron actually writes). The legacy backupRecords table is
+    // no longer written, so checking it would always raise a false alarm.
+    const latest = await db.execute(sql`
+      SELECT completed_at, data_size FROM tenant_backup_records
+      WHERE status = 'completed' ORDER BY completed_at DESC NULLS LAST LIMIT 1`
+    );
+    const latestRow = latest.rows[0] as { completed_at: string | null; data_size: string | null } | undefined;
+    const lastBackup = latestRow?.completed_at
+      ? { completedAt: new Date(latestRow.completed_at), dataSize: latestRow.data_size }
+      : undefined;
 
     const now = Date.now();
     const alertThresholdHours = 25; // Alert if no backup in 25 hours
@@ -83,7 +91,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
         });
         await alertSuperAdmin(
           `WARNING: No backup in ${Math.floor(hoursSinceBackup)} hours`,
-          `Last successful backup: ${lastBackup.completedAt.toISOString()}\nStorage: ${lastBackup.storagePath}\nSize: ${lastBackup.sizeBytes ? (lastBackup.sizeBytes/1024/1024).toFixed(1)+'MB' : 'unknown'}\n\nPlease check the backup cron job.`
+          `Last successful backup: ${lastBackup.completedAt.toISOString()}\nSize: ${lastBackup.dataSize ?? 'unknown'}\n\nPlease check the backup cron job.`
         );
       }
       return NextResponse.json({ ok: false, hours_since_backup: hoursSinceBackup });
