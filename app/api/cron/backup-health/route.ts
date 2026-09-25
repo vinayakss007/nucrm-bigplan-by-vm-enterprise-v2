@@ -11,9 +11,16 @@ import { alertSuperAdmin } from '@/lib/email/service';
 import { db } from '@/drizzle/db';
 import { backupRecords, backupAlerts } from '@/drizzle/schema';
 import { eq, and, desc, gt } from 'drizzle-orm';
+// backup_alerts INSERT requires the super-admin context and backupRecords
+// reads must see across tenants: without a context this job 500s (NUCRM-E)
+// or reports a bogus "no backup ever". withApiRoute pins one client and
+// setSuperAdminContext (session-scoped, no tx) marks it, so the plain `db`
+// calls below inherit the context via the pin (same pattern as auto-backup).
+import { withApiRoute } from '@/lib/api/with-api-route';
+import { setSuperAdminContext } from '@/lib/db/rls';
 
 // Runs every 6 hours — checks backup health and alerts if backup is overdue
-export async function POST(request: NextRequest) {
+export const POST = withApiRoute(async (request: NextRequest) => {
   const secret = request.headers.get('x-cron-secret');
   if (!verifySecret(secret, process.env.CRON_SECRET)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -27,6 +34,8 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    await setSuperAdminContext();
+    {
     const lastBackup = await db.query.backupRecords.findFirst({
       where: eq(backupRecords.status, 'completed'),
       orderBy: [desc(backupRecords.completedAt)],
@@ -85,10 +94,11 @@ export async function POST(request: NextRequest) {
       last_backup: lastBackup.completedAt,
       hours_since: Math.round(hoursSinceBackup * 10) / 10,
     });
- 
- 
+    }
+
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
     return apiError(err);
   }
-}
+});

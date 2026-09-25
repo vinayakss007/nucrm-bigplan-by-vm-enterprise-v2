@@ -8,6 +8,8 @@ import { db } from '@/drizzle/db';
 import { contacts, leads, deals, companies, tasks, activities, tenants, users, dealStages, pipelines } from '@/drizzle/schema';
 import { eq, and, isNull, gte, sql, count, sum, ilike } from 'drizzle-orm';
 import { exportPrometheusMetrics as exportAppMetrics } from '@/lib/metrics';
+import { withApiRoute } from '@/lib/api/with-api-route';
+import { setSuperAdminContext } from '@/lib/db/rls';
 import IORedis from 'ioredis';
 
 export const dynamic = 'force-dynamic';
@@ -15,13 +17,19 @@ export const dynamic = 'force-dynamic';
 const METRICS_SECRET = process.env['METRICS_SECRET'] || '';
 const REDIS_URL = process.env['REDIS_URL'] || 'redis://localhost:6379';
 
+// Prometheus scrapes every 15-30s; the counts below cost ~17 WAN roundtrips
+// each (NUCRM-1 N+1 + NUCRM-F slow-query noise, plus needless DB load).
+// Gauges stay useful at 60s resolution, so serve a short-lived cache.
+const CACHE_TTL_MS = 60_000;
+let cached: { at: number; body: string } | null = null;
+
 function push(metrics: string[], name: string, help: string, type: string, value: number, labels = '') {
   if (help) metrics.push(`# HELP ${name} ${help}`);
   if (type) metrics.push(`# TYPE ${name} ${type}`);
   metrics.push(labels ? `${name}${labels} ${value}` : `${name} ${value}`);
 }
 
-export async function GET(request: NextRequest) {
+export const GET = withApiRoute(async (request: NextRequest) => {
   // Fail closed: in production, metrics require an explicit METRICS_SECRET.
   if (!METRICS_SECRET && process.env['NODE_ENV'] === 'production') {
     return new Response('# metrics disabled: METRICS_SECRET not configured\n', {
@@ -38,6 +46,16 @@ export async function GET(request: NextRequest) {
       return new Response('# Unauthorized\n', { status: 401, headers: { 'Content-Type': 'text/plain' } });
     }
   }
+
+  if (cached && Date.now() - cached.at < CACHE_TTL_MS) {
+    return new Response(cached.body, {
+      headers: { 'Content-Type': 'text/plain; version=0.0.4; charset=utf-8' },
+    });
+  }
+
+  // Platform-wide counts need the super-admin context: under fail-closed RLS
+  // a context-less connection matches zero rows and every gauge reports 0.
+  await setSuperAdminContext();
 
   const metrics: string[] = [];
   try {
@@ -192,11 +210,13 @@ export async function GET(request: NextRequest) {
     metrics.push('\n# App Metrics (in-memory collector)\n');
     metrics.push(exportAppMetrics());
 
-    return new Response(metrics.join('\n') + '\n', {
+    const body = metrics.join('\n') + '\n';
+    cached = { at: Date.now(), body };
+    return new Response(body, {
       headers: { 'Content-Type': 'text/plain; version=0.0.4; charset=utf-8' },
     });
- 
- 
+
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (_err: any) {
     return new Response("# ERROR\\n", {
@@ -204,4 +224,4 @@ export async function GET(request: NextRequest) {
       headers: { 'Content-Type': 'text/plain' },
     });
   }
-}
+});

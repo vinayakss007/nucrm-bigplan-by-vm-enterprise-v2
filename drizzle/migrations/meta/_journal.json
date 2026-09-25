@@ -631,6 +631,13 @@
       "when": 1788782400006,
       "tag": "0090_backup_tables_superadmin_bypass",
       "breakpoints": true
+    },
+    {
+      "idx": 90,
+      "version": "7",
+      "when": 1788782400007,
+      "tag": "0091_usage_snapshots_superadmin_bypass",
+      "breakpoints": true
     }
   ]
 }
