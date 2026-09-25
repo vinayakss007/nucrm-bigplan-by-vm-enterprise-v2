@@ -17,14 +17,7 @@ import { Icon } from '@/components/marketing/icon';
 import { AnimatedNumber, MagneticButton, Reveal, StaggerText, TiltCard } from '@/components/marketing/reveal';
 import { Faq } from '@/components/marketing/faq';
 import { ProductTour, type TourTab } from '@/components/marketing/product-tour';
-import {
-  AiDraftMock,
-  AnalyticsMock,
-  AppPreview,
-  AutomationMock,
-  ConversationMock,
-  QuoteMock,
-} from '@/components/marketing/mocks';
+import { AppPreview } from '@/components/marketing/mocks';
 import {
   Aurora,
   CheckList,
@@ -99,7 +92,7 @@ const TOUR: TourTab[] = [
       'Bring your own provider key, with per-workspace credit budgets',
     ],
     href: '/features/ai',
-    visual: <AiDraftMock />,
+    visual: 'ai',
   },
   {
     id: 'automation',
@@ -115,7 +108,7 @@ const TOUR: TourTab[] = [
       'Outbound events retry, log, and land in a queue you can replay',
     ],
     href: '/features/automation',
-    visual: <AutomationMock />,
+    visual: 'automation',
   },
   {
     id: 'conversations',
@@ -131,7 +124,7 @@ const TOUR: TourTab[] = [
       'Embeddable forms and chat that create records instantly',
     ],
     href: '/features/conversations',
-    visual: <ConversationMock />,
+    visual: 'conversations',
   },
   {
     id: 'revenue',
@@ -147,7 +140,7 @@ const TOUR: TourTab[] = [
       'Contracts, subscriptions and renewal reminders',
     ],
     href: '/features/quote-to-cash',
-    visual: <QuoteMock />,
+    visual: 'revenue',
   },
   {
     id: 'analytics',
@@ -163,7 +156,7 @@ const TOUR: TourTab[] = [
       'Delivered as PDF or CSV on a schedule you set',
     ],
     href: '/features/analytics',
-    visual: <AnalyticsMock />,
+    visual: 'analytics',
   },
 ];
 
