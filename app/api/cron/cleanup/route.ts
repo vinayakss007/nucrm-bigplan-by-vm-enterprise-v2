@@ -13,6 +13,7 @@ import { db } from '@/drizzle/db';
 import { sessions, invitations, passwordResets } from '@/drizzle/schema';
 import { lt, and, isNull, sql } from 'drizzle-orm';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { reconcileStaleImpersonations } from '@/lib/auth/impersonation-reconcile';
 
 export const POST = withApiRoute(async (request: NextRequest) => {
   // Two ways to authorize this job:
@@ -86,6 +87,18 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     } catch (err) {
       void logError({ error: err, context: 'cron/cleanup purge-trash', level: 'warning' });
       r['trash_purged'] = 0;
+    }
+
+    // 5. Reconcile stale impersonation memberships (#1911): impersonation
+    // sessions past the 24h token TTL whose stop never ran get their
+    // tenant_members upgrade reverted and are marked ended.
+    try {
+      const { reconciled, failed } = await reconcileStaleImpersonations();
+      r['impersonations_reconciled'] = reconciled;
+      if (failed > 0) r['impersonations_failed'] = failed;
+    } catch (err) {
+      void logError({ error: err, context: 'cron/cleanup impersonation-reconcile', level: 'warning' });
+      r['impersonations_reconciled'] = 0;
     }
 
     return NextResponse.json({ ok: true, cleaned: r });
