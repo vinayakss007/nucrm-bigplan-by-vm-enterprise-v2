@@ -195,6 +195,11 @@ const PUBLIC_PATHS = [
   '/api/forms/submit', '/api/leads/public',
   '/api/webhooks/stripe', '/api/webhooks/resend', '/api/webhooks/whatsapp', '/api/webhooks/inbound',
   '/api/health', '/api/track/click', '/api/track/open', '/api/unsubscribe',
+  // Product analytics ingest is unauthenticated by design (anonymous page
+  // views are valid events; identity is resolved from the cookie server-side
+  // and it rate-limits per IP). Listed publicly so anonymous POSTs stop
+  // getting a blanket 401 from this proxy (#1972).
+  '/api/track/event',
   '/api/keepalive', '/api/test-email', '/api/cron', '/api/metrics', '/api/embed', '/api/emergency',
   '/api/flags', '/api/openapi',
   '/api/setup/check', '/api/setup/create-admin', '/api/lead-capture', '/api/lead-capture/submit',

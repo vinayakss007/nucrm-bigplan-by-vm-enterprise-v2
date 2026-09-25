@@ -14,20 +14,41 @@ function _timeout(ms: number): Promise<never> {
   );
 }
 
+/**
+ * #1972: the DB + pg_tables probe is ~1.7s over a WAN database and deploy
+ * gates poll this endpoint in a tight loop. Cache the probe briefly so only
+ * one caller per window pays the cost; every other poll gets the same verdict
+ * instantly. `?fresh=true` bypasses the cache (used by deploy gates right
+ * after a migration, where a stale 'ok' must never mask a broken schema).
+ */
+const HEALTH_CACHE_TTL_MS = 5_000;
+let healthProbe: { dbStatus: string; schemaReady: boolean; checkedAt: number } | null = null;
+
+async function probeDb(): Promise<{ dbStatus: string; schemaReady: boolean }> {
+  const now = Date.now();
+  if (healthProbe && now - healthProbe.checkedAt < HEALTH_CACHE_TTL_MS) {
+    return healthProbe;
+  }
+  let dbStatus = 'disconnected';
+  let schemaReady = false;
+  try {
+    const res = await db.execute(sql`SELECT tablename FROM pg_tables WHERE schemaname='public' AND tablename='users'`);
+    dbStatus = 'connected';
+    schemaReady = res.rowCount! > 0;
+  } catch (err) {
+    console.error('[health] DB check failed:', err);
+    dbStatus = 'error';
+  }
+  healthProbe = { dbStatus, schemaReady, checkedAt: now };
+  return healthProbe;
+}
+
 export async function GET(request: NextRequest) {
   const testErrorParam = request.nextUrl.searchParams.get('test_error');
+  if (request.nextUrl.searchParams.get('fresh') === 'true') healthProbe = null;
 
   try {
-    let dbStatus = 'disconnected';
-    let schemaReady = false;
-    try {
-      const res = await db.execute(sql`SELECT tablename FROM pg_tables WHERE schemaname='public' AND tablename='users'`);
-      dbStatus = 'connected';
-      schemaReady = res.rowCount! > 0;
-    } catch (err) {
-      console.error('[health] DB check failed:', err);
-      dbStatus = 'error';
-    }
+    const { dbStatus, schemaReady } = await probeDb();
 
     if (testErrorParam === 'true') {
       try {
