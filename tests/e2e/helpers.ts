@@ -23,4 +23,4 @@ export async function loginWithApi(page: Page, context: BrowserContext) {
     { name: 'nucrm_csrf_token', value: csrf, domain: 'localhost', path: '/' },
     { name: 'nucrm_session', value: session, domain: 'localhost', path: '/' },
   ]);
-} EOF
+}
