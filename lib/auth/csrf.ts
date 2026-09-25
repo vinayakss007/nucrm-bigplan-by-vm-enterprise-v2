@@ -3,20 +3,23 @@
  * Copyright (c) 2026 abetworks.in. All Rights Reserved.
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
-import crypto from 'crypto';
-
 /**
  * CSRF Protection Module
- * 
+ *
  * Implements Double Submit Cookie pattern for CSRF protection
+ *
+ * #1992: this module is imported by proxy.ts (edge runtime), so it must not
+ * pull in Node's 'crypto'. The WebCrypto global is available in both the
+ * edge runtime and Node 18+, and the double-submit comparison is done
+ * directly on the tokens in constant time — the previous SHA-256 pre-hash
+ * added no security for attacker-controlled values, it only forced the
+ * Node crypto dependency into the edge bundle.
  */
 
 function getRandomValues(length: number): Uint8Array {
-  return crypto.randomBytes(length);
-}
-
-function createHashSha256(data: string): string {
-  return crypto.createHash('sha256').update(data).digest('hex');
+  const bytes = new Uint8Array(length);
+  globalThis.crypto.getRandomValues(bytes);
+  return bytes;
 }
 
 const CSRF_COOKIE_NAME = 'nucrm_csrf_token';
@@ -28,13 +31,6 @@ const CSRF_HEADER_NAME = 'x-csrf-token';
 export function generateCsrfToken(): string {
   const bytes = getRandomValues(32);
   return Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
-}
-
-/**
- * Hash a CSRF token for secure storage
- */
-function hashToken(token: string): string {
-  return createHashSha256(token);
 }
 
 /**
@@ -116,17 +112,15 @@ export function validateCsrfToken(
     return false;
   }
   
-  // Constant-time comparison to prevent timing attacks
-  const cookieHash = hashToken(cookieToken);
-  const headerHash = hashToken(headerToken);
-  
-  if (cookieHash.length !== headerHash.length) {
+  // Constant-time comparison to prevent timing attacks (#1992: direct
+  // compare — no Node-crypto hashing needed for the double-submit check).
+  if (cookieToken.length !== headerToken.length) {
     return false;
   }
   
   let result = 0;
-  for (let i = 0; i < cookieHash.length; i++) {
-    result |= cookieHash.charCodeAt(i) ^ headerHash.charCodeAt(i);
+  for (let i = 0; i < cookieToken.length; i++) {
+    result |= cookieToken.charCodeAt(i) ^ headerToken.charCodeAt(i);
   }
   
   return result === 0;
