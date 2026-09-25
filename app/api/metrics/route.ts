@@ -6,7 +6,7 @@
 import { NextRequest } from 'next/server';
 import { db } from '@/drizzle/db';
 import { contacts, leads, deals, companies, tasks, activities, tenants, users, dealStages, pipelines } from '@/drizzle/schema';
-import { eq, and, isNull, gte, sql, count, sum, ilike } from 'drizzle-orm';
+import { eq, and, isNull, sql, sum } from 'drizzle-orm';
 import { exportPrometheusMetrics as exportAppMetrics } from '@/lib/metrics';
 import IORedis from 'ioredis';
 
@@ -44,56 +44,51 @@ export async function GET(request: NextRequest) {
     const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
     // ── CRM Counts ─────────────────────────────────────────────
-    const [
-      contactsCount, leadsCount, dealsCount, companiesCount,
-      pendingTasks, activitiesCount, activeTenants, usersCount,
-      tasksCompleted,
-      contactsCreated, leadsCreated, dealsCreated
-    ] = await Promise.all([
-      db.select({ value: count() }).from(contacts).where(isNull(contacts.deletedAt)).then(r => r[0]!.value),
-      db.select({ value: count() }).from(leads).where(isNull(leads.deletedAt)).then(r => r[0]!.value),
-      db.select({ value: count() }).from(deals).where(isNull(deals.deletedAt)).then(r => r[0]!.value),
-      db.select({ value: count() }).from(companies).where(isNull(companies.deletedAt)).then(r => r[0]!.value),
-      db.select({ value: count() }).from(tasks).where(and(eq(tasks.status, 'pending'), isNull(tasks.deletedAt))).then(r => r[0]!.value),
-      db.select({ value: count() }).from(activities).then(r => r[0]!.value),
-      db.select({ value: count() }).from(tenants).where(eq(tenants.status, 'active')).then(r => r[0]!.value),
-      db.select({ value: count() }).from(users).then(r => r[0]!.value),
-      db.select({ value: count() }).from(tasks).where(and(eq(tasks.status, 'completed'), isNull(tasks.deletedAt))).then(r => r[0]!.value),
-      db.select({ value: count() }).from(contacts).where(and(gte(contacts.createdAt, yesterday), isNull(contacts.deletedAt))).then(r => r[0]!.value),
-      db.select({ value: count() }).from(leads).where(and(gte(leads.createdAt, yesterday), isNull(leads.deletedAt))).then(r => r[0]!.value),
-      db.select({ value: count() }).from(deals).where(and(gte(deals.createdAt, yesterday), isNull(deals.deletedAt))).then(r => r[0]!.value),
-    ]);
+    // #2057: these 12 counters used to be 12 round-trips; collapse them into
+    // a single query of scalar subqueries.
+    const counts = (await db.execute(sql`
+      SELECT
+        (SELECT count(*) FROM ${contacts}  WHERE ${contacts.deletedAt} IS NULL)  AS contacts_total,
+        (SELECT count(*) FROM ${leads}     WHERE ${leads.deletedAt} IS NULL)     AS leads_total,
+        (SELECT count(*) FROM ${deals}     WHERE ${deals.deletedAt} IS NULL)     AS deals_total,
+        (SELECT count(*) FROM ${companies} WHERE ${companies.deletedAt} IS NULL) AS companies_total,
+        (SELECT count(*) FROM ${tasks} WHERE ${tasks.status} = 'pending'   AND ${tasks.deletedAt} IS NULL) AS tasks_pending,
+        (SELECT count(*) FROM ${tasks} WHERE ${tasks.status} = 'completed' AND ${tasks.deletedAt} IS NULL) AS tasks_completed,
+        (SELECT count(*) FROM ${activities}) AS activities_total,
+        (SELECT count(*) FROM ${tenants} WHERE ${tenants.status} = 'active') AS tenants_active,
+        (SELECT count(*) FROM ${users})      AS users_total,
+        (SELECT count(*) FROM ${contacts} WHERE ${contacts.deletedAt} IS NULL AND ${contacts.createdAt} >= ${yesterday}) AS contacts_created,
+        (SELECT count(*) FROM ${leads}    WHERE ${leads.deletedAt} IS NULL    AND ${leads.createdAt} >= ${yesterday})    AS leads_created,
+        (SELECT count(*) FROM ${deals}    WHERE ${deals.deletedAt} IS NULL    AND ${deals.createdAt} >= ${yesterday})    AS deals_created
+    `)).rows[0] as Record<string, string>;
 
-    push(metrics, 'nucrm_contacts_total', 'Total contacts in CRM', 'gauge', Number(contactsCount));
-    push(metrics, 'nucrm_leads_total', 'Total leads (not deleted)', 'gauge', Number(leadsCount));
-    push(metrics, 'nucrm_deals_total', 'Total deals (not deleted)', 'gauge', Number(dealsCount));
-    push(metrics, 'nucrm_companies_total', 'Total companies (not deleted)', 'gauge', Number(companiesCount));
-    push(metrics, 'nucrm_tasks_pending_total', 'Pending incomplete tasks', 'gauge', Number(pendingTasks));
-    push(metrics, 'nucrm_activities_total', 'Total activities logged', 'gauge', Number(activitiesCount));
-    push(metrics, 'nucrm_tenants_total', 'Active tenants', 'gauge', Number(activeTenants));
-    push(metrics, 'nucrm_users_total', 'Total users', 'gauge', Number(usersCount));
-    push(metrics, 'nucrm_tasks_completed_total', 'Completed tasks', 'counter', Number(tasksCompleted));
-    push(metrics, 'nucrm_contacts_created_total', 'Contacts created in last 24h', 'counter', Number(contactsCreated));
-    push(metrics, 'nucrm_leads_created_total', 'Leads created in last 24h', 'counter', Number(leadsCreated));
-    push(metrics, 'nucrm_deals_created_total', 'Deals created in last 24h', 'counter', Number(dealsCreated));
+    push(metrics, 'nucrm_contacts_total', 'Total contacts in CRM', 'gauge', Number(counts?.contacts_total ?? 0));
+    push(metrics, 'nucrm_leads_total', 'Total leads (not deleted)', 'gauge', Number(counts?.leads_total ?? 0));
+    push(metrics, 'nucrm_deals_total', 'Total deals (not deleted)', 'gauge', Number(counts?.deals_total ?? 0));
+    push(metrics, 'nucrm_companies_total', 'Total companies (not deleted)', 'gauge', Number(counts?.companies_total ?? 0));
+    push(metrics, 'nucrm_tasks_pending_total', 'Pending incomplete tasks', 'gauge', Number(counts?.tasks_pending ?? 0));
+    push(metrics, 'nucrm_activities_total', 'Total activities logged', 'gauge', Number(counts?.activities_total ?? 0));
+    push(metrics, 'nucrm_tenants_total', 'Active tenants', 'gauge', Number(counts?.tenants_active ?? 0));
+    push(metrics, 'nucrm_users_total', 'Total users', 'gauge', Number(counts?.users_total ?? 0));
+    push(metrics, 'nucrm_tasks_completed_total', 'Completed tasks', 'counter', Number(counts?.tasks_completed ?? 0));
+    push(metrics, 'nucrm_contacts_created_total', 'Contacts created in last 24h', 'counter', Number(counts?.contacts_created ?? 0));
+    push(metrics, 'nucrm_leads_created_total', 'Leads created in last 24h', 'counter', Number(counts?.leads_created ?? 0));
+    push(metrics, 'nucrm_deals_created_total', 'Deals created in last 24h', 'counter', Number(counts?.deals_created ?? 0));
 
     // ── Deal Stage Counts ─────────────────────────────────────────
-    const [dealsWon] = await db
-      .select({ value: count() })
-      .from(deals)
-      .innerJoin(dealStages, eq(dealStages.id, deals.stageId))
-      .innerJoin(pipelines, eq(pipelines.id, deals.pipelineId))
-      .where(and(isNull(deals.deletedAt), ilike(dealStages.name, 'won')));
+    // #2057: one scan instead of two; ilike(name,'won') ≡ lower(name) = 'won'.
+    const stages = (await db.execute(sql`
+      SELECT
+        count(*) FILTER (WHERE lower(${dealStages.name}) = 'won')  AS deals_won,
+        count(*) FILTER (WHERE lower(${dealStages.name}) = 'lost') AS deals_lost
+      FROM ${deals}
+      INNER JOIN ${dealStages} ON ${dealStages.id} = ${deals.stageId}
+      INNER JOIN ${pipelines}  ON ${pipelines.id} = ${deals.pipelineId}
+      WHERE ${deals.deletedAt} IS NULL
+    `)).rows[0] as Record<string, string>;
 
-    const [dealsLost] = await db
-      .select({ value: count() })
-      .from(deals)
-      .innerJoin(dealStages, eq(dealStages.id, deals.stageId))
-      .innerJoin(pipelines, eq(pipelines.id, deals.pipelineId))
-      .where(and(isNull(deals.deletedAt), ilike(dealStages.name, 'lost')));
-
-    push(metrics, 'nucrm_deals_won_total', 'Deals marked as won', 'gauge', Number(dealsWon?.value ?? 0));
-    push(metrics, 'nucrm_deals_lost_total', 'Deals marked as lost', 'gauge', Number(dealsLost?.value ?? 0));
+    push(metrics, 'nucrm_deals_won_total', 'Deals marked as won', 'gauge', Number(stages?.deals_won ?? 0));
+    push(metrics, 'nucrm_deals_lost_total', 'Deals marked as lost', 'gauge', Number(stages?.deals_lost ?? 0));
 
     // ── Deal Pipeline Value ────────────────────────────────────
     const [pipelineResult] = await db
