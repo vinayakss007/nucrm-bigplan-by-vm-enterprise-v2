@@ -99,4 +99,69 @@ describe('POST /api/tenant/export route - F6 ergonomics & streaming', () => {
     expect(res.headers.get('Content-Disposition')).toBe('attachment; filename="contacts-export.csv"');
     expect(await res.text()).toBe('');
   });
+
+  // #1987: the JSON path streams row-chunks but must emit bytes identical
+  // to the previous NextResponse.json({ data, meta }) shape.
+  describe('POST json export (streamed, #1987)', () => {
+    beforeEach(() => {
+      vi.doMock('@/lib/api/validate', () => ({
+        readJsonBody: vi.fn().mockResolvedValue({ entity: 'contacts', format: 'json' }),
+      }));
+    });
+
+    it('parses back to { data, meta } with the expected keys', async () => {
+      const rows = [
+        { id: '1', firstName: 'Ada' },
+        { id: '2', firstName: 'Grace' },
+      ];
+      mockDbRows(rows);
+
+      const { POST } = await import('@/app/api/tenant/export/route');
+      const req = new Request('http://localhost:3000/api/tenant/export', { method: 'POST' });
+      const res = await POST(req as unknown as Parameters<typeof POST>[0]);
+
+      expect(res.status).toBe(200);
+      expect(res.headers.get('Content-Type')).toBe('application/json');
+
+      const body = await res.json();
+      expect(body.data).toEqual(rows);
+      expect(body.meta.entity).toBe('contacts');
+      expect(body.meta.total).toBe(2);
+      expect(body.meta.format).toBe('json');
+      expect(typeof body.meta.exported_at).toBe('string');
+    });
+
+    it('streams chunk boundaries byte-identically to JSON.stringify', async () => {
+      // 600 rows spans multiple 250-row chunks (250+250+100) to prove the
+      // comma placement between chunks matches a single stringify call.
+      const rows = Array.from({ length: 600 }, (_, i) => ({ id: String(i), firstName: `F${i}` }));
+      mockDbRows(rows);
+
+      const { POST } = await import('@/app/api/tenant/export/route');
+      const req = new Request('http://localhost:3000/api/tenant/export', { method: 'POST' });
+      const res = await POST(req as unknown as Parameters<typeof POST>[0]);
+      const text = await res.text();
+
+      const parsed = JSON.parse(text);
+      expect(parsed.data.length).toBe(600);
+      expect(parsed.meta.total).toBe(600);
+      // Exact prefix/suffix: no stray commas around chunk joins.
+      expect(text.startsWith('{"data":[{"id":"0","firstName":"F0"},{"id":"1"')).toBe(true);
+      expect(text.endsWith('"format":"json"}}')).toBe(true);
+      expect(parsed.data[249]).toEqual({ id: '249', firstName: 'F249' });
+      expect(parsed.data[500]).toEqual({ id: '500', firstName: 'F500' });
+    });
+
+    it('emits an empty data array for zero rows', async () => {
+      mockDbRows([]);
+
+      const { POST } = await import('@/app/api/tenant/export/route');
+      const req = new Request('http://localhost:3000/api/tenant/export', { method: 'POST' });
+      const res = await POST(req as unknown as Parameters<typeof POST>[0]);
+      const text = await res.text();
+
+      expect(text.startsWith('{"data":[],"meta":')).toBe(true);
+      expect(JSON.parse(text).data).toEqual([]);
+    });
+  });
 });
