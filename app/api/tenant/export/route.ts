@@ -229,9 +229,36 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       return new NextResponse(stream, { status: 200, headers: csvHeaders });
     }
 
-    return NextResponse.json({
-      data,
-      meta: { entity, total: data.length, exported_at: new Date().toISOString(), format: 'json' },
+    // #1987: stream the JSON body in row-chunks instead of handing the whole
+    // payload to NextResponse.json, which builds one 5-15MB string in memory
+    // on top of the already-materialized rows. The emitted bytes are exactly
+    // what JSON.stringify({ data, meta }) produces (same key order, same
+    // commas, empty-array case included), so clients are unaffected.
+    const encoder = new TextEncoder();
+    const meta = { entity, total: data.length, exported_at: new Date().toISOString(), format: 'json' };
+    const metaTail = `],"meta":${JSON.stringify(meta)}}`;
+    const CHUNK_ROWS = 250;
+    let cursor = 0;
+    let started = false;
+
+    const jsonStream = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (cursor >= data.length) {
+          controller.enqueue(encoder.encode(started ? metaTail : `{"data":[${metaTail}`));
+          controller.close();
+          return;
+        }
+        const chunk = data.slice(cursor, cursor + CHUNK_ROWS);
+        cursor += CHUNK_ROWS;
+        const body = chunk.map((row: unknown) => JSON.stringify(row)).join(',');
+        controller.enqueue(encoder.encode(started ? `,${body}` : `{"data":[${body}`));
+        started = true;
+      },
+    });
+
+    return new NextResponse(jsonStream, {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
     });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
