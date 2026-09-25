@@ -18,6 +18,7 @@ import { fireWebhooks } from '@/lib/webhooks';
 import { logError } from '@/lib/errors-server';
 import { invalidateWidgetCache } from '@/lib/dashboard/widget-cache';
 import { withConcurrencyGuard } from '@/lib/concurrency';
+import { isEntityId } from '@/lib/id';
 import { updatedAtMs } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 
@@ -33,6 +34,7 @@ export const GET = withApiRoute(async (req: NextRequest, { params }: { params: P
     if (deny) return deny;
     
     const contactId = (await params).id;
+    if (!isEntityId(contactId)) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
     const [row] = await db
       .select({
@@ -109,6 +111,7 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params:
     if (deny) return deny;
 
     const contactId = (await params).id;
+    if (!isEntityId(contactId)) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     const body = await readJsonBody(req);
 
     const validated = validateBody(updateContactSchema, body);
@@ -290,6 +293,7 @@ export const DELETE = withApiRoute(async (req: NextRequest, { params }: { params
     if (deny) return deny;
 
     const contactId = (await params).id;
+    if (!isEntityId(contactId)) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
     // RBAC: if user lacks view_all, only allow deleting own records
     if (!can(ctx, 'contacts.view_all')) {
