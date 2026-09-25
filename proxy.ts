@@ -37,15 +37,24 @@ function generateRequestId(): string {
 
 /**
  * Per-request CSP nonce (#1070). The value must match Next 16's nonce regex
- * /^'nonce-([A-Za-z0-9+/_-]+={0,2})'$/ — base64 of a random UUID satisfies it.
- * Next's app-render (get-script-nonce-from-header) reads the INCOMING request
- * `content-security-policy` header, extracts the first script-src nonce, and
- * applies it to all framework/hydration/injected scripts and Next-injected
- * styles. So we must both (a) set the CSP on the FORWARDED request headers and
- * (b) set the same CSP + an x-nonce header on the RESPONSE for the browser.
+ * /^'nonce-([A-Za-z0-9+/_-]+={0,2})'$/ — 16 random bytes as base64 satisfies
+ * it. Next's app-render (get-script-nonce-from-header) reads the INCOMING
+ * request `content-security-policy` header, extracts the first script-src
+ * nonce, and applies it to all framework/hydration/injected scripts and
+ * Next-injected styles. So we must both (a) set the CSP on the FORWARDED
+ * request headers and (b) set the same CSP + an x-nonce header on the
+ * RESPONSE for the browser.
+ *
+ * #1992: generated with WebCrypto + btoa instead of Buffer.from(...). The
+ * proxy runs in the edge runtime; pulling Node's Buffer into that bundle
+ * cost cold-start weight and ran on every page/preflight request.
  */
 function generateCspNonce(): string {
-  return Buffer.from(globalThis.crypto.randomUUID()).toString('base64');
+  const bytes = new Uint8Array(16);
+  globalThis.crypto.getRandomValues(bytes);
+  let binary = '';
+  for (const b of bytes) binary += String.fromCharCode(b);
+  return btoa(binary);
 }
 
 /**
@@ -170,15 +179,19 @@ const PUBLIC_PATHS = [
 
 const PUBLIC_PREFIXES = ['/_next', '/favicon', '/images', '/static', '/icons', '/api/v2', '/fonts', '/sounds', '/videos', '/api/tenant/forms/public'];
 
+// #1992: exact matches hit a Set first so the common public routes
+// (/api/health, /auth/login, ...) skip the ~70-entry linear scan.
+const PUBLIC_PATH_SET = new Set(PUBLIC_PATHS);
+
 const ALLOWED_ORIGINS = (process.env['ALLOWED_ORIGINS'] || 'http://localhost:3000').split(',').map(s => s.trim());
 if (ALLOWED_ORIGINS.includes('*') && process.env['NODE_ENV'] === 'production') {
   throw new Error('FATAL: ALLOWED_ORIGINS=* in production. CORS is wide-open. Set specific origins.');
 }
 
 function isPublic(pathname: string): boolean {
-  if (PUBLIC_PATHS.some(p => pathname === p || pathname.startsWith(p + '/'))) return true;
-  if (PUBLIC_PREFIXES.some(p => pathname === p || pathname.startsWith(p + '/'))) return true;
-  return false;
+  if (PUBLIC_PATH_SET.has(pathname)) return true;
+  if (PUBLIC_PATHS.some(p => pathname.startsWith(p + '/'))) return true;
+  return PUBLIC_PREFIXES.some(p => pathname === p || pathname.startsWith(p + '/'));
 }
 
 /**
@@ -234,6 +247,18 @@ function buildRateLimitResponse(requestId: string, result: { allowed: boolean; r
 
 function isApiRequest(pathname: string): boolean {
   return pathname.startsWith('/api/');
+}
+
+/**
+ * Next's client-router prefetches (soft navigations, <Link> hover) ask for the
+ * RSC *flight payload*, not HTML — no <script>/<style> tags ship in that
+ * response, so building the per-request CSP + nonce for them is pure waste
+ * (#1992: the proxy ran the full CSP pipeline on every prefetch). Let those
+ * requests take the cheap pass-through; the real document navigation that
+ * follows still gets the full CSP treatment from nextWithCsp.
+ */
+function isRscPrefetch(request: NextRequest): boolean {
+  return request.headers.get('rsc') === 'true' || request.nextUrl.searchParams.has('_rsc');
 }
 
 export async function proxy(request: NextRequest) {
@@ -305,7 +330,7 @@ export async function proxy(request: NextRequest) {
   // Layer the per-request nonce CSP onto HTML page navigations (#1070); API
   // paths never reach here so the page CSP never lands on /api/ responses.
   if (!isApiRequest(pathname) && isPublic(pathname)) {
-    const response = nextWithCsp(request, requestId);
+    const response = isRscPrefetch(request) ? nextWithRequestId(request, requestId) : nextWithCsp(request, requestId);
     response.headers.set('x-request-id', requestId);
     setCORS(response, origin, pathname);
     return response;
@@ -391,9 +416,12 @@ export async function proxy(request: NextRequest) {
     }
 
     // Authenticated pass-through. For HTML page navigations, layer the
-    // per-request nonce CSP (#1070); API responses keep the plain pass-through
-    // so the page CSP never lands on /api/.
-    const response = isApiRequest(pathname) ? nextWithRequestId(request, requestId) : nextWithCsp(request, requestId);
+    // per-request nonce CSP (#1070); API responses and RSC flight-payload
+    // prefetches (#1992) keep the plain pass-through so the page CSP never
+    // lands on /api/ and nonce work is skipped for prefetch storms.
+    const response = isApiRequest(pathname) || isRscPrefetch(request)
+      ? nextWithRequestId(request, requestId)
+      : nextWithCsp(request, requestId);
     response.headers.set('x-request-id', requestId);
     setCORS(response, origin, pathname);
     return response;
