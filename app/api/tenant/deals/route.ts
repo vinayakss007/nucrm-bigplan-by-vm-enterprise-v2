@@ -252,7 +252,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     }
 
     cache.delByPattern(`tenant:${ctx.tenantId}:deals:*`);
-    return NextResponse.json({ data: { id: deal.id, title: deal.title, amount: (deal.amount ?? '0').toString(), stage_id: deal.stageId, pipeline_id: deal.pipelineId, close_date: deal.closeDate ? deal.closeDate.toISOString() : null, contact_id: deal.contactId, company_id: deal.companyId, assigned_to: deal.assignedTo, status: (deal.metadata as Record<string, unknown>)?.status as string | undefined, created_at: deal.createdAt.toISOString(), updated_at: deal.updatedAt?.toISOString(), tenant_id: deal.tenantId, user_id: deal.createdBy } }, { status: 201 });
+    return NextResponse.json({ data: { id: deal.id, title: deal.title, amount: (deal.amount ?? '0').toString(), stage_id: deal.stageId, pipeline_id: deal.pipelineId, close_date: deal.closeDate ? deal.closeDate.toISOString() : null, contact_id: deal.contactId, company_id: deal.companyId, assigned_to: deal.assignedTo, status: (deal.metadata as Record<string, unknown>)?.status as string | undefined, created_at: (deal.createdAt ?? new Date()).toISOString(), updated_at: deal.updatedAt?.toISOString(), tenant_id: deal.tenantId, user_id: deal.createdBy } }, { status: 201 });
   
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
