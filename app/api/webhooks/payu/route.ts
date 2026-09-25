@@ -183,6 +183,21 @@ export async function POST(request: NextRequest) {
               return { processed: false, alreadyProcessed: true };
             }
 
+            // #1917: the PayU hash proves the post body wasn't tampered with,
+            // NOT that `amount` matches what is owed. Guard against posting
+            // more than the outstanding balance — same default recordInvoicePayment
+            // applies. Partial payments remain allowed (ledger derives 'paid').
+            const totalsBefore = await recalculateInvoicePayments(tx, invoice.id, quote.tenantId);
+            if (paidAmount > totalsBefore.balanceDue + 0.01) {
+              void logError({
+                error: `PayU overpayment rejected: posted ${paidAmount}, outstanding ${totalsBefore.balanceDue}`,
+                context: 'webhooks/payu overpayment',
+                level: 'warning',
+                metadata: { txnid, invoiceId: invoice.id, paidAmount, balanceDue: totalsBefore.balanceDue },
+              });
+              return { processed: false, reason: 'overpayment_rejected' };
+            }
+
             // Append-only ledger entry; the invoice summary below is derived
             // from it (amount_paid / balance_due / status / paid_at).
             // #1916: the SELECT above races under concurrent callbacks, so the
