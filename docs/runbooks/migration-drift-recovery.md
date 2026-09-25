@@ -1,5 +1,30 @@
 # Migration Drift Recovery
 
+## How `db:migrate` behaves with an empty ledger (#1969)
+
+When the migration ledger (`drizzle.__drizzle_migrations`) is empty but the
+database has schema (provisioned with `db:push`/`db:sync` or restored from a
+dump), `npm run db:migrate` runs the **recovery path** in
+`scripts/migrate-recovery.ts`:
+
+1. It checks two markers — the early table `api_key_usage` and the column
+   `backup_records.last_verified_at` from the last-known backup-era
+   migration — and **logs exactly which matched plus live object counts**
+   before deciding anything.
+2. If both match, it stamps every journal entry as applied (no SQL runs).
+3. It then runs a **post-stamp verification**: every journal file is parsed
+   for its headline objects (tables, functions, and columns added/altered by
+   migrations) and diffed against the live catalog. If anything promised is
+   missing, the stamp is **rolled back**, the ledger stays empty, and the
+   run **fails loudly** listing the missing objects — instead of falsely
+   reporting "All migrations applied successfully".
+4. If the early marker matches but the last marker does not, it refuses
+   immediately (partial schema — stamping would cement the drift).
+
+If you see `Post-stamp verification FAILED`, follow the steps below to
+apply the missing DDL, then re-run `db:migrate` so it can stamp and verify
+cleanly.
+
 ## When you need this
 
 `npm run db:migrate` refuses with:
@@ -10,6 +35,7 @@
 ```
 
 This means:
+
 - The `drizzle.__drizzle_migrations` table is empty (no rows)
 - The database **does** have tables (it was provisioned with `db:push` / `db:sync`, or restored from a partial dump)
 - But the schema is **not** at the latest migration — some migrations were never applied
@@ -123,5 +149,5 @@ curl http://localhost:3000/api/health
 
 - Never use `db:sync` / `db:push` on a production database. It is for CI only.
 - Always use `npm run db:migrate` for production schema changes.
-- After any manual restore, verify `SELECT count(*) FROM drizzle.__drizzle_migrations` matches the journal entry count (currently 46).
-- The `db:migrate` script now checks for the latest migration's marker before stamping, so this scenario will be caught early rather than silently cementing drift.
+- After any manual restore, verify `SELECT count(*) FROM drizzle.__drizzle_migrations` matches the number of entries in `drizzle/migrations/meta/_journal.json`.
+- The `db:migrate` recovery path logs its marker evidence, then verifies every journal entry's headline objects after stamping and rolls the stamp back on drift (`scripts/migrate-recovery.ts`), so a false stamp can no longer silently cement schema drift.
