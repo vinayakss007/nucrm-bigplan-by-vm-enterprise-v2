@@ -8,7 +8,7 @@ import { logError } from '@/lib/errors-server';
 import { acquireLock } from '@/lib/cache';
 import { db } from '@/drizzle/db';
 import { sql } from 'drizzle-orm';
-import { setSuperAdminContext } from '@/lib/db/rls';
+import { setSuperAdminContext, setTenantContext } from '@/lib/db/rls';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { verifyCronSecret } from '@/lib/auth/cron';
 import { TenantDataExporter } from '@/lib/tenant-data-export';
@@ -81,6 +81,7 @@ async function runScheduledBackups() {
   const _now = new Date();
   let backupsRun = 0;
   let errors = 0;
+  let skipped = 0;
 
   // Get all enabled schedules that are due
   const schedules = await db.execute(sql`
@@ -120,7 +121,8 @@ async function runScheduledBackups() {
         // Global — backup ALL tenants
         const tenants = await db.execute(sql`SELECT id FROM tenants WHERE status != ${'suspended'}`);
         for (const tenant of tenants.rows as AnyRow[]) {
-          await backupSingleTenant(tenant.id, schedule);
+          const res = await backupSingleTenant(tenant.id, schedule) as AnyRow | undefined;
+          if (res?.skipped) skipped++;
         }
       }
 
@@ -140,7 +142,7 @@ async function runScheduledBackups() {
     }
   }
 
-  return { backupsRun, errors };
+  return { backupsRun, errors, skipped };
 }
 
 // ── Backup Single Tenant ─────────────────────────────────────────────────────
@@ -156,6 +158,40 @@ async function backupSingleTenant(
   const includeTables = backupType === 'critical_only' ? CRITICAL_TABLES : undefined;
   const retentionDays = schedule.retention_days || BACKUP_RETENTION_DAYS;
 
+  // Per-tenant work must run under THAT tenant's context, not the platform
+  // super-admin one (NUCRM-P): tenant_backup_records has no super-admin
+  // bypass, and — worse — the exporter's tenant-table reads would silently
+  // return zero rows under a tenant-less context, producing EMPTY backups.
+  // The tenants table itself carries a bypass, so the owner lookup below
+  // works from the platform context. try/finally restores the platform
+  // context so the schedule bookkeeping after this call is unaffected, and
+  // a throw here can never leak one tenant's GUCs into the next tenant.
+  const ownerRow = await db.execute(sql`
+    SELECT owner_id FROM tenants WHERE id = ${tenantId} LIMIT 1`
+  );
+  let contextUserId = (ownerRow.rows[0] as AnyRow | undefined)?.owner_id as string | undefined;
+  if (!contextUserId) {
+    // Older/provisioned tenants may have no owner_id. Any active member's
+    // identity suffices here: the backup only needs a same-tenant
+    // current_user so the fail-closed policies admit the reads/writes.
+    // Prefer an admin, fall back to the earliest active member.
+    const memberRow = await db.execute(sql`
+      SELECT user_id FROM tenant_members
+      WHERE tenant_id = ${tenantId} AND status = 'active'
+      ORDER BY (role_slug = 'admin') DESC, joined_at ASC NULLS LAST
+      LIMIT 1`
+    );
+    contextUserId = (memberRow.rows[0] as AnyRow | undefined)?.user_id as string | undefined;
+  }
+  if (!contextUserId) {
+    // Orphan tenant: no owner and no active members means no data can exist
+    // under it either (all writes require membership). Skip quietly instead
+    // of failing the whole run.
+    return { skipped: true, reason: 'no-members', tenantId } as AnyRow;
+  }
+  await setTenantContext(tenantId, contextUserId);
+
+  try {
   // Create backup record
   const record = await db.execute(sql`
     INSERT INTO tenant_backup_records (tenant_id, status, backup_type, initiated_auto, retention_days, include_tables, created_at)
@@ -201,6 +237,9 @@ async function backupSingleTenant(
     }
 
     throw err;
+  }
+  } finally {
+    await setSuperAdminContext();
   }
 }
 

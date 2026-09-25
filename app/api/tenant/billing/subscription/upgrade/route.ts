@@ -11,7 +11,7 @@ import { subscriptions, plans, billingEvents } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
-import { updateSubscription, getPriceId, isStripeConfigured } from '@/lib/stripe';
+import { updateSubscription, getPriceId, isStripeConfigured, getSubscriptionPeriodStart, getSubscriptionPeriodEnd } from '@/lib/stripe';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
@@ -94,13 +94,18 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       },
     });
 
+    // #1915: resolve period timestamps via the item-fallback helpers; Stripe
+    // API 2025+ omits the root fields, which previously persisted Invalid Date.
+    const periodStart = getSubscriptionPeriodStart(stripeSub);
+    const periodEnd = getSubscriptionPeriodEnd(stripeSub);
+
     // Update subscription in database
     await db.transaction(async (tx) => {
       await tx.update(subscriptions).set({
         planId: planId,
         status: 'active',
-        currentPeriodStart: new Date(stripeSub.current_period_start * 1000),
-        currentPeriodEnd: new Date(stripeSub.current_period_end * 1000),
+        currentPeriodStart: periodStart ? new Date(periodStart * 1000) : currentSub.currentPeriodStart,
+        currentPeriodEnd: periodEnd ? new Date(periodEnd * 1000) : currentSub.currentPeriodEnd,
         cancelAtPeriodEnd: false,
         metadata: {
           ...(currentSub.metadata as Record<string, unknown> || {}),
@@ -132,7 +137,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
         planId: planId,
         planName: newPlan.name,
         status: 'active',
-        currentPeriodEnd: stripeSub.current_period_end,
+        currentPeriodEnd: periodEnd || null,
         message: `Successfully upgraded to ${newPlan.name}`,
       },
     });
