@@ -159,7 +159,6 @@ describe('shouldBypassRateLimit', () => {
     expect(shouldBypassRateLimit('/api/health')).toBe(true);
     expect(shouldBypassRateLimit('/api/metrics')).toBe(true);
     expect(shouldBypassRateLimit('/api/keepalive')).toBe(true);
-    expect(shouldBypassRateLimit('/api/cron')).toBe(true);
   });
 
   it('does not bypass regular API routes', () => {
@@ -168,9 +167,11 @@ describe('shouldBypassRateLimit', () => {
     expect(shouldBypassRateLimit('/api/tenant/deals')).toBe(false);
   });
 
-  it('bypasses cron with sub-paths', () => {
-    expect(shouldBypassRateLimit('/api/cron/daily')).toBe(true);
-    expect(shouldBypassRateLimit('/api/cron/hourly/report')).toBe(true);
+  it('rate-limits cron, widgets and flags (#1995)', () => {
+    expect(shouldBypassRateLimit('/api/cron')).toBe(false);
+    expect(shouldBypassRateLimit('/api/cron/daily')).toBe(false);
+    expect(shouldBypassRateLimit('/api/tenant/dashboard/widgets/contacts/recent')).toBe(false);
+    expect(shouldBypassRateLimit('/api/flags')).toBe(false);
   });
 
   it('does not bypass root or other paths', () => {
@@ -186,7 +187,7 @@ describe('BYPASS_PREFIXES', () => {
     expect(BYPASS_PREFIXES).toContain('/api/health');
     expect(BYPASS_PREFIXES).toContain('/api/metrics');
     expect(BYPASS_PREFIXES).toContain('/api/keepalive');
-    expect(BYPASS_PREFIXES).toContain('/api/cron');
+    expect(BYPASS_PREFIXES).not.toContain('/api/cron');
   });
 });
 
