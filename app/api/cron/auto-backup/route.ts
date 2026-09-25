@@ -167,9 +167,22 @@ async function backupSingleTenant(
   const ownerRow = await db.execute(sql`
     SELECT owner_id FROM tenants WHERE id = ${tenantId} LIMIT 1`
   );
-  const ownerId = (ownerRow.rows[0] as AnyRow | undefined)?.owner_id as string | undefined;
-  if (!ownerId) throw new Error(`backup target tenant has no owner: ${tenantId}`);
-  await setTenantContext(tenantId, ownerId);
+  let contextUserId = (ownerRow.rows[0] as AnyRow | undefined)?.owner_id as string | undefined;
+  if (!contextUserId) {
+    // Older/provisioned tenants may have no owner_id. Any active member's
+    // identity suffices here: the backup only needs a same-tenant
+    // current_user so the fail-closed policies admit the reads/writes.
+    // Prefer an admin, fall back to the earliest active member.
+    const memberRow = await db.execute(sql`
+      SELECT user_id FROM tenant_members
+      WHERE tenant_id = ${tenantId} AND status = 'active'
+      ORDER BY (role_slug = 'admin') DESC, joined_at ASC NULLS LAST
+      LIMIT 1`
+    );
+    contextUserId = (memberRow.rows[0] as AnyRow | undefined)?.user_id as string | undefined;
+  }
+  if (!contextUserId) throw new Error(`backup target tenant has no usable identity: ${tenantId}`);
+  await setTenantContext(tenantId, contextUserId);
 
   try {
   // Create backup record
