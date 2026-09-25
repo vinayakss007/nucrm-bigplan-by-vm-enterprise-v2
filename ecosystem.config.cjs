@@ -54,6 +54,7 @@
 const FILE_ENV = (() => {
   try {
     const out = {};
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- .cjs has no import syntax; require is the only option
     for (const line of require('node:fs')
       .readFileSync(`${__dirname}/.env.local`, 'utf8')
       .split('\n')) {

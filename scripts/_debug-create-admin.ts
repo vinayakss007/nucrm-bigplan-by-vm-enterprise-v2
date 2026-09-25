@@ -1,5 +1,4 @@
 import { withSecurityContext, setTenantContext } from '@/lib/db/rls';
-import { db } from '@/drizzle/db';
 import { users, tenants, roles, tenantMembers } from '@/drizzle/schema';
 import { hashPassword } from '@/lib/auth/session';
 import { eq } from 'drizzle-orm';
