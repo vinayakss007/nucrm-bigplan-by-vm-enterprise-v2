@@ -652,6 +652,13 @@
       "when": 1788782400009,
       "tag": "0093_webhook_tables_superadmin_bypass",
       "breakpoints": true
+    },
+    {
+      "idx": 93,
+      "version": "7",
+      "when": 1788782400010,
+      "tag": "0094_sa_audit_tenant_id_uuid",
+      "breakpoints": true
     }
   ]
 }
