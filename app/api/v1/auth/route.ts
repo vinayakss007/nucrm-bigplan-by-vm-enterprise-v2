@@ -22,6 +22,9 @@ import { hashPassword, verifyPassword, createToken, setSessionCookie, clearSessi
 import { limiters } from '@/lib/rate-limit';
 import { handleError, ValidationError, AuthError, ConflictError, ErrorCode } from '@/lib/errors';
 import { devLogger } from '@/lib/dev-logger';
+// Deprecated v1 signup inserts into the platform-wide `users` table with no
+// authenticated context; without the security context it 500s on RLS.
+import { withSecurityContext } from '@/lib/db/rls';
 
 /**
  * POST /api/v1/auth/login
@@ -139,31 +142,40 @@ export async function POST_SIGNUP(request: NextRequest) {
       throw new ValidationError(passwordError);
     }
 
-    // Check if user exists
-    const [existing] = await db.select({ id: users.id })
-      .from(users)
-      .where(eq(sql`lower(${users.email})`, body.email.toLowerCase()))
-      .limit(1);
-
-    if (existing) {
-      throw new ConflictError('User with this email already exists');
-    }
+    // Check if user exists + create run under the security context below
+    // (bare connections cannot satisfy the fail-closed `users` policies).
 
     // Hash password
     const password_hash = await hashPassword(body.password);
 
-    // Create user
-    const [user] = await db.insert(users)
-      .values({
-        email: body.email.toLowerCase(),
-        passwordHash: password_hash,
-        emailVerified: true,
-      })
-      .returning({
-        id: users.id,
-        email: users.email,
-        isSuperAdmin: users.isSuperAdmin,
-      });
+    // Pre-auth provisioning: the existence check + insert run under the
+    // security context (same as /api/auth/signup) — a bare connection
+    // cannot satisfy the fail-closed `users` policies.
+    const [user] = await withSecurityContext(async (tx) => {
+      const [already] = await tx.select({ id: users.id })
+        .from(users)
+        .where(eq(sql`lower(${users.email})`, body.email.toLowerCase()))
+        .limit(1);
+
+      if (already) {
+        throw new ConflictError('User with this email already exists');
+      }
+
+      // Create user
+      const [created] = await tx.insert(users)
+        .values({
+          email: body.email.toLowerCase(),
+          passwordHash: password_hash,
+          emailVerified: true,
+        })
+        .returning({
+          id: users.id,
+          email: users.email,
+          isSuperAdmin: users.isSuperAdmin,
+        });
+
+      return [created];
+    });
 
     if (!user) {
       throw new Error('Failed to create user');

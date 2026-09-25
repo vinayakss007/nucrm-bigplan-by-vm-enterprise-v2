@@ -122,7 +122,7 @@ describe('withApiRoute pins the whole handler body (#1615)', () => {
     expect(fakeClient.release).toHaveBeenCalledTimes(1);
   });
 
-  it('is a no-op under PgBouncer (no client pinned, callback still runs)', async () => {
+  it('still pins under PgBouncer (session pooling needs one client per request)', async () => {
     process.env.PGBOUNCER_ENABLED = 'true';
     const { withApiRoute } = await import('../../lib/api/with-api-route');
     const { getPinnedClient } = await import('../../lib/db/request-connection');
@@ -135,8 +135,8 @@ describe('withApiRoute pins the whole handler body (#1615)', () => {
 
     const res = await GET({} as never, undefined as never);
 
-    expect(pinnedInside).toBeUndefined(); // no pin under PgBouncer
-    expect(fakeClient.release).not.toHaveBeenCalled();
+    expect(pinnedInside).toBeDefined(); // pinned even under PgBouncer
+    expect(fakeClient.release).toHaveBeenCalledTimes(1);
     expect(await res.text()).toBe('pgbouncer');
   });
 });

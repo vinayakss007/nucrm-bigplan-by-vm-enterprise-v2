@@ -107,6 +107,10 @@ vi.mock('drizzle-orm', () => {
 
 vi.mock('@/lib/db/rls', () => ({
   setTenantContext: vi.fn().mockResolvedValue(undefined),
+  // requireTenantCtx scopes its lookups via withUserContext(tx => tx.select()…);
+  // run the callback against the same mocked select chain as m.db.
+  withUserContext: vi.fn((_userId: unknown, fn: (tx: any) => unknown) =>
+    fn({ select: (...args: unknown[]) => mockDbSelect(...args) })),
 }));
 
 // #1615: requireTenantCtx now wraps its body in withPinnedConnection to pin one
@@ -307,9 +311,11 @@ describe('requireTenantCtx()', () => {
   it('redirects to /superadmin/dashboard when user has no membership but is super admin', async () => {
     mockCookiesGet.mockReturnValue({ value: 'valid-token' });
     mockVerifyToken.mockResolvedValue({ userId: 'admin-123' });
-    mockDbSelectChain.then.mockImplementation((cb: (rows: unknown[]) => unknown) => cb([]));
-
-    mockDbQueryUsers.findFirst.mockResolvedValue({ isSuperAdmin: true });
+    // First select (membership row) finds nothing; the super-admin probe
+    // select then finds a super-admin user row.
+    mockDbSelectChain.then
+      .mockImplementationOnce((cb: (rows: unknown[]) => unknown) => cb([]))
+      .mockImplementationOnce((cb: (rows: unknown[]) => unknown) => cb([{ isSuperAdmin: true }]));
 
     await expect(requireTenantCtx()).rejects.toThrow('NEXT_REDIRECT:/superadmin/dashboard');
     expect(mockRedirect).toHaveBeenCalledWith('/superadmin/dashboard');
