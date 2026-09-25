@@ -125,12 +125,14 @@ npx tsx scripts/rollback-migration.ts
 
 ## 5. Connection Pool Safety
 
-The app uses a connection pool (default: 5 connections, configurable via `DATABASE_POOL_SIZE`).
+The app uses a connection pool (default: **20** connections — `lib/db/pool.ts`, configurable via `DATABASE_POOL_SIZE`).
 
 ```env
-DATABASE_POOL_SIZE=10   # Increase for higher traffic
+DATABASE_POOL_SIZE=20    # Match the code default; see WAN guidance below
 DATABASE_SSL=false       # Set true for cloud PostgreSQL
 ```
+
+Every API request handled by `withApiRoute`/`withTenantScope` pins ONE pool client for its whole lifetime (`withPinnedConnection`, #1615), so the pool size must cover _concurrent in-flight requests_, not just DB queries. A dashboard mount alone fans out to 10–15 endpoints; a small pool (e.g. 5) against a WAN/cloud-hosted Postgres turns every mount into a connection queue behind ~1.7 s round-trips (#1972). Keep `DATABASE_POOL_SIZE` at 20+ for cloud DBs and raise `DATABASE_STATEMENT_TIMEOUT` (default 10 s) only per-query via `withTimeout` rather than globally.
 
 Pool exhaustion causes `Connection terminated due to connection timeout`. Increase pool size if you see this error.
 
