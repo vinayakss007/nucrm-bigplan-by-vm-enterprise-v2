@@ -10,14 +10,29 @@ TIMESTAMP=$(date +%Y-%m-%d_%H%M%S)
 BACKUP_FILE="${BACKUP_DIR}/nucrm-${TIMESTAMP}.dump"
 RETENTION_DAYS=30
 
+# PP-014 (#2050): pg_dump runs SET row_security=off, which PostgreSQL only
+# honours for superuser/BYPASSRLS roles, while every tenant table is FORCE
+# ROW LEVEL SECURITY. The app role therefore cannot produce a dump — pick a
+# bypass role (inside the container the local `postgres` superuser qualifies).
+# Never "fix" this by dropping FORCE RLS: that strips tenant isolation.
+BACKUP_DB_ROLE="${BACKUP_DB_ROLE:-postgres}"
+
 mkdir -p "$BACKUP_DIR"
+
+BYPASS=$(docker exec nucrm-db psql -h localhost -U "$BACKUP_DB_ROLE" -d nucrm -At -c \
+  "SELECT CASE WHEN COALESCE(rolsuper,false) OR COALESCE(rolbypassrls,false) THEN 'bypass' ELSE 'rls-bound' END FROM pg_roles WHERE rolname = current_user") \
+  || { echo "[$(date)] ERROR: cannot reach database as role '$BACKUP_DB_ROLE'" >&2; exit 1; }
+if [[ "$BYPASS" != "bypass" ]]; then
+  echo "[$(date)] ERROR: dump role '$BACKUP_DB_ROLE' is RLS-bound; pg_dump will abort on FORCE-RLS tables (PP-014). Set BACKUP_DB_ROLE to a superuser/BYPASSRLS role." >&2
+  exit 1
+fi
 
 # pg_dump with compression
 echo "[$(date)] Starting database backup..."
 docker exec nucrm-db pg_dump \
   -h localhost \
   -p 5432 \
-  -U nucrm \
+  -U "$BACKUP_DB_ROLE" \
   -d nucrm \
   --no-owner \
   --no-acl \

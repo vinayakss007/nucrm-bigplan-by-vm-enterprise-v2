@@ -39,7 +39,12 @@ async function createBackup(): Promise<void> {
   const filename = `nucrm-backup-${timestamp}.sql`;
   const localPath = join(LOCAL_DIR, filename);
 
-  const databaseUrl = process.env['DATABASE_URL'];
+  // PP-014/PP-015: pg_dump runs SET row_security=off, which PostgreSQL only
+  // honours for superuser/BYPASSRLS roles while every tenant table is FORCE
+  // ROW LEVEL SECURITY — so the app role can never produce a complete dump.
+  // BACKUP_DATABASE_URL aims the dump at a bypass role; it is consumed by
+  // backup scripts only, never by the application.
+  const databaseUrl = process.env['BACKUP_DATABASE_URL'] || process.env['DATABASE_URL'];
   if (!databaseUrl) {
     throw new Error('DATABASE_URL not set');
   }
