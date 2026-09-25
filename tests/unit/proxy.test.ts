@@ -73,7 +73,7 @@ vi.mock('@/lib/rate-limit-edge', () => ({
     'Retry-After': r.allowed ? '0' : '30',
   })),
   shouldBypassRateLimit: vi.fn((p: string) =>
-    ['/api/webhooks/', '/api/health', '/api/metrics', '/api/keepalive', '/api/cron'].some(x => p.startsWith(x))
+    ['/api/webhooks/', '/api/health', '/api/metrics', '/api/keepalive'].some(x => p.startsWith(x))
   ),
 }));
 
@@ -156,7 +156,7 @@ describe('proxy middleware', () => {
 
     it('bypasses health and metrics', async () => {
       const { proxy } = await import('@/proxy');
-      for (const p of ['/api/health', '/api/metrics', '/api/keepalive', '/api/cron']) {
+      for (const p of ['/api/health', '/api/metrics', '/api/keepalive']) {
         await proxy(makeReq(p));
       }
       expect(edgeCheckMock).not.toHaveBeenCalled();

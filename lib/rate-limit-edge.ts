@@ -105,7 +105,12 @@ export function getRateLimitHeaders(result: RateLimitCheckResult): Record<string
 
 export const edgeLimiter = new EdgeRateLimiter();
 
-export const BYPASS_PREFIXES = ['/api/webhooks/', '/api/health', '/api/metrics', '/api/keepalive', '/api/cron', '/api/tenant/dashboard/widgets/', '/api/flags', '/api/openapi', '/api/system/ready'];
+// #1995: bypass is limited to endpoints that MUST answer un-throttled
+// (provider webhooks, health/metrics probes, keepalive SSE, static openapi,
+// readiness). /api/cron*, dashboard widgets and /api/flags are no longer
+// exempt — cron keeps its CRON_SECRET gate but now also shares the edge
+// bucket, closing the unlimited-cron / widget-scraping flood.
+export const BYPASS_PREFIXES = ['/api/webhooks/', '/api/health', '/api/metrics', '/api/keepalive', '/api/openapi', '/api/system/ready'];
 
 export function shouldBypassRateLimit(pathname: string): boolean {
   return BYPASS_PREFIXES.some(p => pathname.startsWith(p));
