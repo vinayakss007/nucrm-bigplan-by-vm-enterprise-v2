@@ -277,6 +277,14 @@ async function handleSubscriptionDeleted(subscription: any) {
 
  
  
+// #1909: Stripe reports amounts in the smallest currency unit (integer
+// cents); the internal ledger and outbound webhook/automation payloads use
+// decimal. Normalize once here so integrations never see a 100× amount.
+function stripeCentsToDecimal(amount: unknown): number {
+  const cents = typeof amount === 'number' ? amount : parseFloat(String(amount ?? '0'));
+  return Number.isFinite(cents) ? Math.round(cents) / 100 : 0;
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function handlePaymentSucceeded(invoice: any) {
   const customerId = invoice.customer;
@@ -294,9 +302,15 @@ async function handlePaymentSucceeded(invoice: any) {
       .set({ status: 'active', updatedAt: new Date() })
       .where(eq(tenants.id, tenant.id));
 
+    // #1909: normalize Stripe's smallest-unit amount to decimal before
+    // emitting to webhooks/automations, and include the real currency.
+    const amountPaidDecimal = stripeCentsToDecimal(invoice.amount_paid);
+    const currency = typeof invoice.currency === 'string' ? invoice.currency : 'usd';
+
     fireWebhooks(tenant.id, 'invoice.paid', {
       stripe_invoice_id: invoice.id,
-      amount_paid: invoice.amount_paid,
+      amount_paid: amountPaidDecimal,
+      currency,
       customer: invoice.customer,
     }).catch((err) => logError({ error: err, context: 'webhooks/stripe async side-effect' }));
 
@@ -307,7 +321,8 @@ async function handlePaymentSucceeded(invoice: any) {
         event: 'invoice.paid',
         data: {
           stripe_invoice_id: invoice.id,
-          amount_paid: invoice.amount_paid,
+          amount_paid: amountPaidDecimal,
+          currency,
           customer: invoice.customer,
         },
       }).catch(err => void logError({ error: err, context: 'webhooks/stripe invoice.paid automation', level: 'warning' }));
