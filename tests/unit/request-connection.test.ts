@@ -8,10 +8,8 @@
  *   - the finally block issues the tenant-GUC reset and releases the client.
  *   - a nested withPinnedConnection reuses the already-pinned client (one
  *     connection per request).
- *   - under PGBOUNCER_ENABLED=true pinning STILL applies: session pooling
- *     binds one server connection per pool-client checkout, so holding one
- *     pool-client for the whole request is what keeps the SESSION tenant
- *     GUC visible to every query (see request-connection.ts header).
+ *   - under PGBOUNCER_ENABLED=true pinning APPLIES too (session pooling):
+ *     a client is still acquired and pinned for the request.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
@@ -170,7 +168,7 @@ describe('db/request-connection (#1615 pinning primitive)', () => {
     expect(order).toEqual(['detached-query-done', 'reset', 'release']);
   });
 
-  it('still pins under PgBouncer (session pooling needs one client per request)', async () => {
+  it('pins the client under PgBouncer too (session pooling, #1615)', async () => {
     process.env['PGBOUNCER_ENABLED'] = 'true';
     const { withPinnedConnection, getPinnedClient } = await import('@/lib/db/request-connection');
 
@@ -180,9 +178,10 @@ describe('db/request-connection (#1615 pinning primitive)', () => {
       return 42;
     });
 
+    // Pre-prod runs PgBouncer in SESSION pooling mode, so holding one
+    // pool-client for the whole request is exactly what makes the tenant GUC
+    // visible to every query — pinning must NOT be skipped here.
     expect(result).toBe(42);
-    // The pinned value is a serializing Proxy around the raw pool client,
-    // so assert presence (not identity) plus acquire/release accounting.
     expect(insideClient).toBeDefined();
     expect(mockPool.connect).toHaveBeenCalledTimes(1);
     expect(mockClient.release).toHaveBeenCalledTimes(1);

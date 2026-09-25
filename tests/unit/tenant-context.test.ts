@@ -105,12 +105,19 @@ vi.mock('drizzle-orm', () => {
   };
 });
 
+// context.ts reads users/memberships through withUserContext(tx); hand the
+// callback the same mock shape as the @/drizzle/db mock above.
 vi.mock('@/lib/db/rls', () => ({
   setTenantContext: vi.fn().mockResolvedValue(undefined),
-  // requireTenantCtx scopes its lookups via withUserContext(tx => tx.select()…);
-  // run the callback against the same mocked select chain as m.db.
-  withUserContext: vi.fn((_userId: unknown, fn: (tx: any) => unknown) =>
-    fn({ select: (...args: unknown[]) => mockDbSelect(...args) })),
+  withUserContext: async (_userId: string, fn: (tx: unknown) => unknown) =>
+    fn({
+      select: (...args: unknown[]) => mockDbSelect(...args),
+      query: {
+        tenants: mockDbQueryTenants,
+        users: mockDbQueryUsers,
+        plans: mockDbQueryPlans,
+      },
+    }),
 }));
 
 // #1615: requireTenantCtx now wraps its body in withPinnedConnection to pin one
@@ -311,11 +318,10 @@ describe('requireTenantCtx()', () => {
   it('redirects to /superadmin/dashboard when user has no membership but is super admin', async () => {
     mockCookiesGet.mockReturnValue({ value: 'valid-token' });
     mockVerifyToken.mockResolvedValue({ userId: 'admin-123' });
-    // First select (membership row) finds nothing; the super-admin probe
-    // select then finds a super-admin user row.
-    mockDbSelectChain.then
-      .mockImplementationOnce((cb: (rows: unknown[]) => unknown) => cb([]))
-      .mockImplementationOnce((cb: (rows: unknown[]) => unknown) => cb([{ isSuperAdmin: true }]));
+    // First select (membership join) finds nothing; the super-admin probe
+    // (second select inside withUserContext) must see the user's own row.
+    const results: unknown[][] = [[], [{ isSuperAdmin: true }]];
+    mockDbSelectChain.then.mockImplementation((cb: (rows: unknown[]) => unknown) => cb(results.shift() ?? []));
 
     await expect(requireTenantCtx()).rejects.toThrow('NEXT_REDIRECT:/superadmin/dashboard');
     expect(mockRedirect).toHaveBeenCalledWith('/superadmin/dashboard');

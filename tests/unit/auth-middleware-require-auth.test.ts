@@ -36,27 +36,13 @@ const m = vi.hoisted(() => {
     tenants: { findFirst: vi.fn() },
   };
 
-  // Transaction double for withUserContext/withSecurityContext: the
-  // middleware only uses tx.query.*.findFirst and the tx.select() chain.
-  // Both reuse the SAME mocks as m.db so existing per-test stubs
-  // (mockResolvedValue), FIFO queues, and call-count assertions keep
-  // working unchanged.
-  const mockTx: any = {
-    query: chain.query,
-    select: chain.select,
-    execute: vi.fn(() => Promise.resolve({ rows: [] })),
-  };
-
   return {
     db: chain,
-    mockTx,
     selectResults,
     cookieToken: { current: null as string | null },
     verifyToken: vi.fn(),
     hashToken: vi.fn(),
     setTenantContext: vi.fn(),
-    withUserContext: vi.fn(async (_userId: string, fn: (tx: any) => Promise<any>) => fn(m.mockTx)),
-    withSecurityContext: vi.fn(async (fn: (tx: any) => Promise<any>) => fn(m.mockTx)),
     tryApiKeyAuth: vi.fn(),
     rc: {
       generateId: vi.fn(),
@@ -119,10 +105,11 @@ vi.mock('@/lib/auth/session', () => ({
   hashToken: m.hashToken,
 }));
 
+// middleware.ts reads sessions/memberships through withUserContext(tx); the
+// pass-through hands the callback the same mocked db so existing queues apply.
 vi.mock('@/lib/db/rls', () => ({
   setTenantContext: m.setTenantContext,
-  withUserContext: m.withUserContext,
-  withSecurityContext: m.withSecurityContext,
+  withUserContext: async (_userId: string, fn: (tx: unknown) => unknown) => fn(m.db),
 }));
 
 vi.mock('@/lib/auth/api-key', () => ({ tryApiKeyAuth: m.tryApiKeyAuth }));
