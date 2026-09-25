@@ -105,7 +105,12 @@ vi.mock('@/lib/auth/session', () => ({
   hashToken: m.hashToken,
 }));
 
-vi.mock('@/lib/db/rls', () => ({ setTenantContext: m.setTenantContext }));
+// middleware.ts reads sessions/memberships through withUserContext(tx); the
+// pass-through hands the callback the same mocked db so existing queues apply.
+vi.mock('@/lib/db/rls', () => ({
+  setTenantContext: m.setTenantContext,
+  withUserContext: async (_userId: string, fn: (tx: unknown) => unknown) => fn(m.db),
+}));
 
 vi.mock('@/lib/auth/api-key', () => ({ tryApiKeyAuth: m.tryApiKeyAuth }));
 

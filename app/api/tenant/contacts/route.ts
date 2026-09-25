@@ -120,7 +120,31 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     .limit(limit)
     .offset(offset);
 
-    const response = { data, total, offset, limit };
+    // Map camelCase to snake_case for frontend compatibility
+    const response = {
+      data: data.map(c => ({
+        id: c.id,
+        tenant_id: c.tenantId,
+        company_id: c.companyId,
+        first_name: c.firstName,
+        last_name: c.lastName,
+        email: c.email,
+        phone: c.phone,
+        job_title: c.jobTitle,
+        lead_status: c.leadStatus,
+        lead_source: c.leadSource,
+        score: c.score,
+        city: c.city,
+        country: c.country,
+        tags: c.tags,
+        custom_fields: c.customFields,
+        created_at: c.createdAt,
+        updated_at: c.updatedAt,
+        company_name: c.companyName,
+        assigned_name: c.assignedName,
+      })),
+      total, offset, limit,
+    };
     return NextResponse.json(response);
   
 

@@ -31,7 +31,11 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3000
+      # Direct to postgres by default (prod path). For pgbouncer testing, use
+      # the 6432 line and PGBOUNCER_ENABLED (see pgbouncer service docs above).
       - DATABASE_URL=postgresql://nucrm:${POSTGRES_PASSWORD:?REQUIRED}@localhost:5432/nucrm?sslmode=require
+      # - DATABASE_URL=postgresql://nucrm:${POSTGRES_PASSWORD:?REQUIRED}@127.0.0.1:6432/nucrm?sslmode=require
+      # - PGBOUNCER_ENABLED=true
       - REDIS_URL=redis://:${REDIS_PASSWORD}@localhost:6379
       - JWT_SECRET=${JWT_SECRET}
       - SESSION_SECRET=${SESSION_SECRET}
@@ -80,7 +84,10 @@ services:
     command: ["node", "--import", "tsx", "worker.ts"]
     environment:
       - NODE_ENV=production
+      # See web service — same pgbouncer opt-in.
       - DATABASE_URL=postgresql://nucrm:${POSTGRES_PASSWORD:?REQUIRED}@localhost:5432/nucrm?sslmode=require
+      # - DATABASE_URL=postgresql://nucrm:${POSTGRES_PASSWORD:?REQUIRED}@127.0.0.1:6432/nucrm?sslmode=require
+      # - PGBOUNCER_ENABLED=true
       - REDIS_URL=redis://:${REDIS_PASSWORD}@localhost:6379
       - JWT_SECRET=${JWT_SECRET}
       - SESSION_SECRET=${SESSION_SECRET}
@@ -177,11 +184,23 @@ services:
       - nucrm-net
 
   # ── PgBouncer (Connection Pooler) ──────────────────────────────────────────
-  # Sits between app and postgres. Transaction mode with pool_size=20.
-  # App should connect to pgbouncer:6432 instead of postgres:5432.
+  # Optional: sits between app and postgres in transaction mode (pool_size=20).
+  # Production (pm2 deploy, deploy.yml) does NOT use pgbouncer — the app talks
+  # directly to postgres and lib/db/pool.ts does a release-time GUC reset
+  # (pool.ts:218). For local Docker, pgbouncer is *disabled by default* because
+  # web/worker use network_mode: host and connect directly to postgres:5432.
+  # To test the pgbouncer path locally:
+  #   1. `PGBOUNCER_ENABLED=true` in web/worker env (see below, commented)
+  #   2. change their DATABASE_URL to `...@127.0.0.1:6432/...` (also commented)
+  #   3. `docker compose --profile pgbouncer up -d`
+  # Then lib/db/pool.ts:40 + request-connection.ts:68 take the pgbouncer branch
+  # (adds ?pgbouncer=true, skips release-reset + pinning; relies on
+  # SERVER_RESET_QUERY=DISCARD ALL). Without the env flag the app would still
+  # go through pgbouncer's TCP hop but pool.ts would do the wrong reset logic.
   pgbouncer:
     image: edoburu/pgbouncer:latest
     container_name: nucrm-pgbouncer
+    profiles: ["pgbouncer"]
     network_mode: host
     environment:
       - DATABASE_URL=postgres://${POSTGRES_USER:-nucrm}:${POSTGRES_PASSWORD}@127.0.0.1:5432/${POSTGRES_DB:-nucrm}
@@ -261,7 +280,7 @@ services:
       redis-server
       --requirepass ${REDIS_PASSWORD}
       --maxmemory 256mb
-      --maxmemory-policy allkeys-lru
+      --maxmemory-policy noeviction
       --save 60 1000
       --appendonly yes
     volumes:

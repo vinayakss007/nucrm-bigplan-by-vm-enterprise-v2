@@ -23,9 +23,9 @@
  * even when a handler forgets its app-level tenant_id filter — the exact
  * defense-in-depth #1615 requires.
  *
- * NO-OP under PgBouncer: withPinnedConnection() short-circuits when
- * PGBOUNCER_ENABLED==='true', so this wrapper adds no acquire/pin there and the
- * existing transaction-mode semantics are preserved exactly.
+ * NO-OP nowhere: pinning applies behind PgBouncer too (pre-prod uses session
+ * pooling, where per-query checkouts would otherwise lose the SESSION-scoped
+ * tenant GUC — see lib/db/request-connection.ts).
  *
  * MIGRATION PATH (route handlers)
  * -------------------------------
@@ -75,7 +75,7 @@ export type RouteHandler<C = unknown> = (
  * connection, so the tenant GUC is visible to every query and RLS blocks
  * cross-tenant reads even if an app-level filter is missing.
  *
- * - No-op under PgBouncer (withPinnedConnection short-circuits).
+ * - Pins on every deploy path, including behind PgBouncer (session pooling).
  * - Preserves the handler's Response/NextResponse return value.
  * - Passes the request and the optional route-context (params) through
  *   unchanged, so dynamic routes work without modification. The generic `C`
@@ -119,8 +119,9 @@ export function withApiRoute<C = unknown>(
  *       });
  *     }
  *
- * No-op under PgBouncer. Preserves the callback's return value and propagates
- * errors (including Next.js redirect()/notFound() control-flow throws).
+ * Pins on every deploy path, including behind PgBouncer. Preserves the
+ * callback's return value and propagates errors (including Next.js
+ * redirect()/notFound() control-flow throws).
  */
 export function withTenantScope<T>(fn: () => Promise<T>): Promise<T> {
   return withPinnedConnection(fn);

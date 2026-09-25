@@ -8,6 +8,22 @@ beforeAll(() => {
   content = readFileSync(join(process.cwd(), 'docker-compose.scale.yml'), 'utf-8');
 });
 
+describe.each([
+  'docker-compose.yml',
+  'docker-compose.scale.yml',
+  'deploy/docker-compose.production.yml',
+  'deploy/docker-compose.preprod.yml',
+])('%s queue persistence', (file) => {
+  it('rejects writes at the memory limit instead of evicting queued jobs', () => {
+    const compose = readFileSync(join(process.cwd(), file), 'utf-8');
+    const redis = compose.match(/^  redis:\n([\s\S]*?)(?=^  [a-zA-Z][\w-]*:|^\S|(?![\s\S]))/m)?.[1];
+    expect(redis).toBeDefined();
+    expect(redis).toMatch(/^\s+--maxmemory-policy noeviction\s*$/m);
+    expect(redis).not.toMatch(/^\s+--maxmemory-policy (?!noeviction\b)\S+/m);
+    expect(redis).toMatch(/^\s+--appendonly yes\s*$/m);
+  });
+});
+
 describe('docker-compose.scale.yml', () => {
   it('defaults DATABASE_SSL to true for both the web and worker services', () => {
     const matches = content.match(/DATABASE_SSL=\$\{DATABASE_SSL:-true\}/g) ?? [];

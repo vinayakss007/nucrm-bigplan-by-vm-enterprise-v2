@@ -19,18 +19,18 @@ interface RecordOption {
 
 interface RecordRow {
   id: string;
-  firstName?: string | null;
-  lastName?: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
   title?: string | null;
   email?: string | null;
 }
 
 function toLabel(kind: RecordKind, row: RecordRow): RecordOption {
   if (kind === 'deal') {
-    const name = [row.firstName, row.lastName].filter(Boolean).join(' ').trim();
+    const name = [row.first_name, row.last_name].filter(Boolean).join(' ').trim();
     return { id: row.id, label: row.title || 'Untitled deal', sub: name || undefined };
   }
-  const label = [row.firstName, row.lastName].filter(Boolean).join(' ').trim();
+  const label = [row.first_name, row.last_name].filter(Boolean).join(' ').trim();
   return { id: row.id, label: label || row.email || 'Unnamed', sub: label ? (row.email ?? undefined) : undefined };
 }
 

@@ -1,0 +1,447 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+#  NuCRM — PRE-PROD OVERRIDES  (layered on top of docker-compose.production.yml)
+#
+#  Usage:
+#    docker compose -f deploy/docker-compose.production.yml \
+#                   -f deploy/docker-compose.preprod.yml up -d
+#
+#  Why an override instead of editing the production file: the tracked file stays
+#  pristine so `git pull` never conflicts. Every entry below is a deliberate,
+#  documented deviation for this VM.
+#
+#  Compose merge semantics relied on here, VERIFIED against the rendered config
+#  (an earlier version of this comment claimed `volumes` replace the base value —
+#  it does not):
+#    * `environment` entries are MERGED by key; the override value wins.
+#    * `image`, `command` and `entrypoint` are scalars, so they REPLACE.
+#    * `volumes` (like every other list) is APPENDED to the base list. An override
+#      can therefore ADD a mount but never REMOVE one. Where an inherited entry
+#      has to disappear — see the `promtail` block at the bottom — the list is
+#      marked `!override`, which discards the inherited value instead of merging.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+services:
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  #  PgBouncer — repointed at UpCloud Managed PostgreSQL (external, TLS-required)
+  # ─────────────────────────────────────────────────────────────────────────────
+  pgbouncer:
+    # Upstream pins `edoburu/pgbouncer:1.23`, which DOES NOT EXIST on Docker Hub
+    # (verified: "not found"). v1.23.1-p3 is the closest published tag on the
+    # same 1.23 line, and its /entrypoint.sh supports every var used below.
+    image: edoburu/pgbouncer:v1.23.1-p3
+    environment:
+      - DB_USER=${POSTGRES_USER:-nucrm}
+      - DB_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      # UpCloud Managed PostgreSQL, not host.docker.internal.
+      - DB_HOST=${POSTGRES_HOST:?POSTGRES_HOST is required}
+      - DB_PORT=${POSTGRES_PORT:-11569}
+      - DB_NAME=${POSTGRES_DB:-nucrm}
+
+      # ── ADR-0003 compliance (this is the load-bearing part) ──────────────────
+      # Transaction pooling would make SERVER_RESET_QUERY inert — the PgBouncer
+      # manual states: "When transaction pooling is used, the server_reset_query
+      # is not used." Without a reset, a pooled server connection keeps the
+      # session-scoped GUC `app.current_tenant` from the PREVIOUS client, which
+      # leaks one tenant's rows to the next. Session pooling + DISCARD ALL is the
+      # configuration ADR-0003 actually specifies.
+      - POOL_MODE=session
+      - SERVER_RESET_QUERY=DISCARD ALL
+      # SERVER_RESET_QUERY_ALWAYS is deliberately NOT set. It makes the reset
+      # query run after every *transaction* rather than at connection release,
+      # so DISCARD ALL would wipe the session-scoped `app.current_tenant` GUC
+      # mid-session — destroying the very state ADR-0003 relies on and yielding
+      # zero-row results. In session pooling, server_reset_query already runs on
+      # release, so the "always" variant is both redundant and harmful here.
+
+      # Sizing. UpCloud managed PG reports max_connections=100 (3 reserved for
+      # superusers). App holds 10 per replica x 2 replicas = 20, worker 10,
+      # so ~30 steady-state; 45 leaves headroom without starving the DB.
+      - DEFAULT_POOL_SIZE=40
+      - MAX_DB_CONNECTIONS=45
+      - MAX_CLIENT_CONN=120
+      - SERVER_IDLE_TIMEOUT=600
+
+      - AUTH_TYPE=scram-sha-256
+      # UpCloud managed PostgreSQL requires TLS on the server leg. The app->PgBouncer
+      # leg stays plaintext (client_tls_sslmode defaults to disable) which is why
+      # .env sets DATABASE_SSL=false — the two must agree or the handshake fails.
+      - SERVER_TLS_SSLMODE=require
+      # `statement_timeout` MUST be in this list. lib/db/pool.ts:185 passes
+      # `statement_timeout: DATABASE_STATEMENT_TIMEOUT ?? 10000` to the pg Pool,
+      # and libpq sends that as a STARTUP packet parameter. PgBouncer only accepts
+      # a fixed set of startup parameters and closes the connection for anything
+      # else, which is what the log showed (3 connections dropped in the first
+      # minutes of uptime):
+      #   WARNING ... unsupported startup parameter: statement_timeout=10000
+      #   LOG     ... closing because: unsupported startup parameter: statement_timeout
+      # Ignoring it here stops the drops. The app's real per-query limits are
+      # unaffected: they are applied as `SET LOCAL statement_timeout` inside
+      # transactions (lib/db/query-timeout.ts, lib/api/with-transaction.ts),
+      # which is a runtime statement, not a startup parameter.
+      - IGNORE_STARTUP_PARAMETERS=extra_float_digits,statement_timeout
+
+      # ── Listen port — REQUIRED, and the base file gets this wrong ─────────────
+      # /entrypoint.sh writes `listen_port = ${LISTEN_PORT:-5432}`, and the base
+      # file never sets LISTEN_PORT, so PgBouncer came up on :5432 while the three
+      # things that talk to it all assume :6432:
+      #   1. .env DATABASE_URL = ...@pgbouncer:6432/nucrm  -> "connection refused"
+      #   2. the base healthcheck  pg_isready -p 6432      -> unhealthy forever
+      #   3. the base port map     127.0.0.1:6432:6432     -> publishes a dead port
+      # Pinning the container-internal port to 6432 makes all four agree. The
+      # alternative (repointing DATABASE_URL at 5432) would leave the port map and
+      # healthcheck broken, so the port is moved to match the interface instead.
+      - LISTEN_PORT=6432
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  #  postgres-exporter — must scrape the MANAGED database, not host.docker.internal
+  # ─────────────────────────────────────────────────────────────────────────────
+  postgres-exporter:
+    environment:
+      - DATA_SOURCE_NAME=postgresql://${POSTGRES_USER:-nucrm}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@${POSTGRES_HOST:?POSTGRES_HOST is required}:${POSTGRES_PORT:-11569}/${POSTGRES_DB:-nucrm}?sslmode=${POSTGRES_EXPORTER_SSLMODE:-require}
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  #  App-tier: declare PGBOUNCER_ENABLED
+  #
+  #  The production compose never lists this variable, so setting it in .env alone
+  #  would have NO EFFECT (compose has no `env_file:`, it passes only the vars it
+  #  explicitly names). lib/db/request-connection.ts branches on it: with pooling
+  #  enabled the per-request connection pinning is a no-op, because session
+  #  pooling already guarantees connection affinity.
+  # ─────────────────────────────────────────────────────────────────────────────
+  app:
+    # The base file sets `container_name` on all fifteen other services but omits
+    # it here, so Compose fell back to the generated name `deploy-app-1`. Every
+    # operator-facing path assumes `nucrm-app` (scripts/start-docker.sh runs
+    # `docker exec nucrm-app ...`, deploy/monitoring/*.yml label the job
+    # `nucrm-app`), so the app was invisible to those scripts. This REQUIRES
+    # NUCRM_WEB_REPLICAS=1: a fixed container_name cannot be combined with scaled
+    # replicas. .env already pins replicas to 1 for this single-VM topology.
+    container_name: nucrm-app
+    # ── Single shared image for app + worker ─────────────────────────────────
+    # Upstream makes `worker` build its OWN image from the same Dockerfile but
+    # WITHOUT the args/secrets block `app` declares. The result is a second,
+    # silently-different image — the build log proves it: the app builder got
+    # SENTRY_DSN=https://dd4cd...@o...ingest.us.sentry.io/... while the worker
+    # builder got SENTRY_DSN= (empty), so the worker's bundle shipped with no
+    # Sentry DSN at all. Both stages are the identical `runner` target, so one
+    # tag is correct. This also halves peak build memory: two concurrent
+    # `next build` runs are what pushed the worker past Node's default heap.
+    image: nucrm-app:preprod
+    build:
+      args:
+        # Measured on this VM: 7887 MB RAM + 10 GB swap. Node's ~2 GB default
+        # old-space limit OOMs during the TypeScript check that runs after
+        # "Compiled successfully in 3.3min".
+        NODE_OPTIONS: "--max-old-space-size=4096"
+        SENTRY_ENVIRONMENT: preprod
+        SENTRY_RELEASE: "${SENTRY_RELEASE:-}"
+        # The Dockerfile used to hard-code http://localhost:3000 here. Server-
+        # side code reads the runtime value from .env, but `next build` inlines
+        # NEXT_PUBLIC_* into client bundles, so anything client-side would have
+        # pointed at localhost. getAppUrl() throws in production if unset.
+        NEXT_PUBLIC_APP_URL: "${NEXT_PUBLIC_APP_URL:-https://95.111.194.98}"
+    environment:
+      - PGBOUNCER_ENABLED=true
+      - SENTRY_ENVIRONMENT=preprod
+      - SENTRY_RELEASE=${SENTRY_RELEASE:-}
+      # The base compose passes S3_ENDPOINT/S3_REGION/AWS_* and both bucket vars
+      # but never S3_BUCKET — and lib/storage/s3-config.ts resolves the files
+      # bucket from S3_BUCKET alone. Without this the app logs "S3 storage not
+      # configured" and every upload / signed URL silently no-ops.
+      - S3_BUCKET=${S3_BUCKET:-nucrm-documents}
+      # The base compose passes RESEND_API_KEY but no SMTP_* at all, so the
+      # SMTP fallback lib/email/service.ts implements could never trigger in
+      # Docker. Pass the whole SMTP group through from .env.
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASS=${SMTP_PASS:-}
+      - SMTP_FROM_EMAIL=${SMTP_FROM_EMAIL:-}
+      - SMTP_FROM_NAME=${SMTP_FROM_NAME:-NuCRM}
+    # ── Bind all interfaces — REQUIRED for nginx and cron ────────────────────
+    # The image's CMD is `npm run prod:start:custom`, i.e.
+    #   node ... node_modules/next/dist/bin/next start -H 127.0.0.1
+    # The `-H` flag is a CLI argument, so it wins over any HOSTNAME env var and
+    # the server ends up loopback-only. Two failures follow, both reproduced:
+    #   * nginx proxies to `upstream nucrm_app { server app:3000; }` — the app
+    #     container's address on the bridge network, not loopback. From another
+    #     container on nucrm-net that is:
+    #       wget: can't connect to remote host (172.28.0.14): Connection refused
+    #     so every proxied request would have been a 502, and the cron container
+    #     (APP_URL=http://app:3000) could never trigger a scheduled job.
+    #   * the base healthcheck tests http://localhost:3000, which /etc/hosts maps
+    #     to ::1 ahead of 127.0.0.1 and busybox wget does not fall back to IPv4.
+    #     Measured in the container: `localhost` exit 1, `127.0.0.1` exit 0. The
+    #     container therefore never left "unhealthy", and nginx + cron stayed in
+    #     Created state waiting on `condition: service_healthy`.
+    # Binding 0.0.0.0 adds no exposure: the base service declares only
+    # `expose: ["3000"]` and no `ports:`, so the port is never published on the
+    # host — ingress stays nginx -> app over nucrm-net.
+    command:
+      - node
+      - --max-old-space-size=2048
+      - node_modules/next/dist/bin/next
+      - start
+      - -H
+      - 0.0.0.0
+      - -p
+      - "3000"
+
+    # Probe the IPv4 loopback explicitly, since `localhost` resolves to ::1 first
+    # (see above). Every other key is restated because Compose merges mappings key
+    # by key; the values match the base so only the URL actually changes.
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://127.0.0.1:3000/api/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 45s
+
+    # The base compose only waits on redis + minio. Without this the app can
+    # boot before PgBouncer is listening on :6432 and fail its first query.
+    depends_on:
+      pgbouncer:
+        condition: service_started
+
+  worker:
+    # Reuses the app's image tag (built once — see the note above). The build
+    # block is repeated with identical args/secrets so that even if Compose
+    # decides to build this service separately, the output is byte-for-byte the
+    # same image instead of the args-less variant upstream produced.
+    image: nucrm-app:preprod
+    build:
+      args:
+        NODE_OPTIONS: "--max-old-space-size=4096"
+        SENTRY_ENVIRONMENT: preprod
+        SENTRY_RELEASE: "${SENTRY_RELEASE:-}"
+        NEXT_PUBLIC_APP_URL: "${NEXT_PUBLIC_APP_URL:-https://95.111.194.98}"
+        DATABASE_URL: "postgresql://dummy:dummy@localhost:5432/dummy"
+        SENTRY_DSN: "${SENTRY_DSN:-}"
+        NEXT_PUBLIC_SENTRY_DSN: "${NEXT_PUBLIC_SENTRY_DSN:-}"
+        SENTRY_ORG: "${SENTRY_ORG:-}"
+        SENTRY_PROJECT: "${SENTRY_PROJECT:-}"
+      secrets:
+        - jwt_secret
+        - sentry_auth_token
+    environment:
+      - PGBOUNCER_ENABLED=true
+      - SENTRY_ENVIRONMENT=preprod
+      - SENTRY_RELEASE=${SENTRY_RELEASE:-}
+      # The base compose passes DATABASE_POOL_SIZE only to `app`. Without this
+      # the worker falls back to the library default and can exceed the 45
+      # server-connection budget the sizing comment above relies on.
+      - DATABASE_POOL_SIZE=${DATABASE_POOL_SIZE:-10}
+      # The worker uploads exports/backups through the same resolver as the app,
+      # so it needs S3_BUCKET too (see the note in the `app` service).
+      - S3_BUCKET=${S3_BUCKET:-nucrm-documents}
+      # The base compose passes BACKUP_BUCKET only to `app`. lib/backups/offsite.ts
+      # documents the failure that caused: listing from one bucket while deleting
+      # from another made retention pruning a silent no-op. Both processes must
+      # agree on which bucket holds backups.
+      - BACKUP_BUCKET=${BACKUP_BUCKET:-nucrm-backups}
+      # The base compose passes RESEND_API_KEY but no SMTP_* at all, so the
+      # SMTP fallback lib/email/service.ts implements could never trigger in
+      # Docker. The worker sends mail too (billing, notifications, backups).
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASS=${SMTP_PASS:-}
+      - SMTP_FROM_EMAIL=${SMTP_FROM_EMAIL:-}
+      - SMTP_FROM_NAME=${SMTP_FROM_NAME:-NuCRM}
+    # The Dockerfile bakes in HEALTHCHECK wget http://127.0.0.1:3000/api/health,
+    # and app + worker share one image — so the worker inherited a probe for an
+    # HTTP server it does not run. `command: node worker.ts` starts a BullMQ
+    # consumer and nothing else, so the probe failed on every interval and the
+    # container reported "unhealthy" forever while processing jobs correctly
+    # (observed: FailingStreak 13, "wget: can't connect to remote host").
+    # Worker liveness is genuinely observable through the app via
+    # GET /api/health/worker, which reads the `worker:heartbeat` key the worker
+    # writes to Redis, so the container-level probe is redundant as well as wrong.
+    healthcheck:
+      disable: true
+    depends_on:
+      pgbouncer:
+        condition: service_started
+
+  # NOTE: `cron` intentionally gets no PGBOUNCER_ENABLED. It is an alpine
+  # container running crond that only makes authenticated HTTP calls to the app
+  # (it is passed just CRON_SECRET and APP_URL) — it never opens a DB socket.
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  #  Redis — LOCAL, deliberately small (single-app / single-worker topology)
+  #
+  #  Redis runs as a container on this VM (never external). .env sets
+  #  REDIS_MAXMEMORY=128mb, which drives the base file's interpolated
+  #  `--maxmemory` flag; this block shrinks the surrounding container limit to
+  #  match. Upstream's 600M limit assumed a 2-replica app; with one app + one
+  #  worker on a 7.9GB VM the headroom is better spent on the app's 2048MB heap.
+  #  The limit stays above maxmemory so Redis can hold its keyspace plus
+  #  fragmentation overhead without being OOM-killed.
+  #
+  #  Persistence from the base file is untouched (AOF everysec + 2 RDB save
+  #  points), so the queue survives a restart.
+  # ─────────────────────────────────────────────────────────────────────────────
+  redis:
+    # ── Eviction policy: the base file's allkeys-lru is WRONG for a queue ─────
+    # The base command passes `--maxmemory-policy allkeys-lru`. Under memory
+    # pressure that evicts keys, and the worker says so on every boot:
+    #   "IMPORTANT! Eviction policy is allkeys-lru. It should be \"noeviction\""
+    # BullMQ requires noeviction because its jobs live in ordinary Redis keys —
+    # an LRU eviction silently discards a queued job (no error, no dead-letter),
+    # which is data loss in the pipeline that sends customer-visible mail and
+    # runs billing. `command` is a scalar, so Compose REPLACES it wholesale
+    # rather than merging; the base flags are restated here verbatim apart from
+    # the policy, and the override stays the single source of truth for it.
+    # With noeviction, Redis refuses writes once REDIS_MAXMEMORY is reached
+    # instead of dropping jobs — a loud OOM error is the correct failure mode.
+    command: >
+      redis-server
+      --maxmemory ${REDIS_MAXMEMORY:-128mb}
+      --maxmemory-policy noeviction
+      --save 60 1000
+      --save 300 100
+      --appendonly yes
+      --appendfsync everysec
+      --tcp-keepalive 60
+    deploy:
+      resources:
+        limits:
+          memory: 192M
+          cpus: "0.25"
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  #  realtime — the socket.io server the base file never defines
+  #
+  #  deploy/nginx/nginx-production.conf declares
+  #      upstream nucrm_realtime { ip_hash; server realtime:4001; }
+  #  and routes /socket.io/ to it (#644), but the production compose has no
+  #  `realtime` service. nginx resolves upstream names while LOADING its config,
+  #  so the missing host is fatal — nginx crash-looped with:
+  #      [emerg] host not found in upstream "realtime:4001" in nginx.conf:54
+  #  and never served a single request. realtime.ts exists and the dev compose
+  #  (docker-compose.yml) defines this service; this mirrors that definition with
+  #  the production DB path (PgBouncer) and this VM's resource budget.
+  #
+  #  It reuses the app's image tag deliberately: the Dockerfile now COPYs
+  #  realtime.ts into the runner stage, and no `build:` block here means this
+  #  service can never trigger a second, differently-argued build of it.
+  # ─────────────────────────────────────────────────────────────────────────────
+  realtime:
+    image: nucrm-app:preprod
+    container_name: nucrm-realtime
+    command: ["node", "--import", "tsx", "realtime.ts"]
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=${DATABASE_URL:?DATABASE_URL is required}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379}
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required}
+      - SESSION_SECRET=${SESSION_SECRET:?SESSION_SECRET is required}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:?ENCRYPTION_KEY is required}
+      - DATABASE_SSL=${DATABASE_SSL:-false}
+      - REALTIME_PORT=4001
+      # REQUIRED, same trap as the app's loopback bind: realtime.ts defaults
+      # REALTIME_HOST to 127.0.0.1 (see #1042 in the dev compose), but nginx is a
+      # DIFFERENT container reaching it over the bridge network, so a loopback
+      # bind means /socket.io/ would fail to connect.
+      - REALTIME_HOST=0.0.0.0
+      # Same DB path as app/worker, so its queries also get session pooling with
+      # the DISCARD ALL reset that ADR-0003 depends on.
+      - PGBOUNCER_ENABLED=true
+    expose:
+      - "4001"
+    depends_on:
+      redis:
+        condition: service_healthy
+      pgbouncer:
+        condition: service_started
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "require('http').get('http://127.0.0.1:4001/healthz',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          # Small: it holds sockets and a Redis pub/sub bridge, and the dev
+          # compose's 384M assumed a multi-replica setup.
+          memory: 256M
+          cpus: "0.25"
+    restart: unless-stopped
+    networks:
+      - nucrm-net
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  #  promtail — the host `/var/log` bind is REMOVED; it made promtail unstartable
+  #
+  #  The base file mounts, in this order:
+  #    - /var/log:/var/log:ro            (host bind, read-only)
+  #    - nginx-logs:/var/log/nginx:ro    (volume, nested INSIDE that bind)
+  #  Docker sets mounts up in order, so by the time it prepares the second one
+  #  `/var/log` is already the read-only bind and it cannot create the nested
+  #  mountpoint. Startup died with:
+  #    error mounting ".../deploy_nginx-logs/_data" to rootfs at "/var/log/nginx":
+  #    create mountpoint ...: mkdirat .../var/log/nginx: read-only file system
+  #  This is structural, not a race — a read-only bind can never host a nested
+  #  mountpoint. Because the failure aborts the whole `up`, it also left app,
+  #  worker and nginx created-but-never-started (nginx waits on app's health).
+  #
+  #  A plain `volumes:` would NOT work here. Compose APPENDS list fields, so the
+  #  inherited `- /var/log:/var/log:ro` survives the merge and keeps blocking the
+  #  nested mount — verified: the first attempt at this fix still failed with the
+  #  identical error. `!override` (Compose >= 2.24) discards the inherited list
+  #  instead of merging it, which is the only way an override can remove a mount.
+  #  Nothing is actually lost: of the four jobs in promtail-config.yml, only
+  #  `nginx-logs` has a writer on this VM.
+  #    * /var/log/app/*.log       — no writer anywhere in the repo. app + worker
+  #                                 log to Docker stdout, not to files. (Phase 7
+  #                                 fixes this properly with docker_sd_configs,
+  #                                 which is what the upstream config assumes.)
+  #    * /var/log/postgresql/*.log — Postgres is UpCloud-managed; there are no
+  #                                 host-side PG log files on this VM.
+  #    * /var/log/redis/*.log      — Redis is a container here; its log is stdout.
+  #  nginx still writes real files into the `nginx-logs` volume (the image's
+  #  access.log/error.log -> /dev/stdout symlinks are shadowed by the volume, so
+  #  nginx appends to plain files), which is exactly what the scrape job reads.
+  # ─────────────────────────────────────────────────────────────────────────────
+  promtail:
+    volumes: !override
+      - ./monitoring/promtail/promtail-config.yml:/etc/promtail/promtail-config.yml:ro
+      - nginx-logs:/var/log/nginx:ro
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  #  nginx — probe the IPv4 loopback, not `localhost`
+  #
+  #  Same root cause as the app's healthcheck above. The base probe is
+  #  `wget --quiet --tries=1 --spider http://localhost/health`, and the config
+  #  only binds IPv4 wildcard (`listen 80;` and `listen 443 ssl http2;` — there is
+  #  no `listen [::]:80`, which nginx would need to accept ::1). Inside the
+  #  container /etc/hosts lists `::1 localhost` ahead of the IPv4 entry and
+  #  busybox wget does not fall back, so the probe was refused. Measured in the
+  #  running container: `localhost` exit 1, `127.0.0.1` exit 0 — while the very
+  #  same URL served 200 to curl, i.e. the container was healthy and only the
+  #  probe was wrong. An "unhealthy" nginx is a false page for alerting and
+  #  poisons anything that gates on `depends_on: service_healthy` for it.
+  # ─────────────────────────────────────────────────────────────────────────────
+  nginx:
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://127.0.0.1/health || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  NOTE: `alertmanagerdata` used to be declared here as a workaround for the base
+#  file mounting a volume it never declared. That broke every script invoking the
+#  base file alone (e.g. deploy/scripts/setup-ssl.sh). The declaration now lives
+#  in docker-compose.production.yml where it belongs, so this override needs no
+#  `volumes:` block.
+# ═══════════════════════════════════════════════════════════════════════════════

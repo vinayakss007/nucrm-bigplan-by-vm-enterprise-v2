@@ -52,9 +52,11 @@ export async function POST(request: NextRequest) {
       .leftJoin(users, eq(users.id, tenants.ownerId))
       .where(inArray(tenants.id, tenantIds));
 
+      const ownersMap = new Map(owners.map(o => [o.id, o]));
+
       for (const t of justExpired) {
         expired++;
-        const owner = owners.find(o => o.id === t.id);
+        const owner = ownersMap.get(t.id);
         const to = t.billingEmail || owner?.ownerEmail;
         if (to) {
           await sendEmail({

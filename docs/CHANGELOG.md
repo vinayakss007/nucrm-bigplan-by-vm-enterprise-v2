@@ -6,6 +6,32 @@ All notable changes to NuCRM are documented here.
 
 ## [Unreleased]
 
+### Pre-Prod Bring-Up Fixes (2026-09-15)
+
+Fixes for the UpCloud pre-prod stack, plus the issue register that tracks the work
+(see [`docs/infra/PREPROD-ISSUE-REGISTER.md`](infra/PREPROD-ISSUE-REGISTER.md)).
+
+- **First-run setup**: the setup form now sends the key in the `x-setup-key` header — the
+  route only reads the header in production, so super-admin creation always returned 403
+  (`app/setup/SetupClient.tsx`, PP-003)
+- **Backups**: `backup.sh` deletes the partial dump when `pg_dump` fails, instead of leaving
+  a truncated file that passes the sanity check (PP-004)
+- **Healthchecks**: `nginx` and `app` probe `127.0.0.1` — inside a container `localhost`
+  resolves to `::1` while nginx binds IPv4 only, so healthy services read as unhealthy
+  (PP-001, PP-002)
+- **Image/build**: `NEXT_PUBLIC_APP_URL` and `NODE_OPTIONS` are now build args, and
+  `realtime.ts` is copied into the runner image (PP-005 … PP-007)
+- **Compose**: declared the `alertmanagerdata` volume (an undeclared volume aborted the whole
+  project) and pinned MinIO to `quay.io` releases plus `pgbouncer:v1.23.1-p3` (PP-008, PP-009)
+- **Docs**: new pre-prod issue register (22 tracked issues), fix log + lessons learned, and a
+  GitHub push-access note under `docs/infra/`
+- **GitHub filing**: the 13 open findings are pre-written as issue payloads in
+  [`docs/infra/issues/`](infra/issues/README.md) (in `bug_report.yml` shape) and filed with
+  `scripts/create-preprod-issues.sh` — idempotent, `--dry-run` needs no token
+- **Still open**: RLS policies reject the pre-auth bootstrap paths (signup, first super-admin,
+  login-attempt logging → brute-force lockout silently disabled), `pg_dump` needs a `BYPASSRLS`
+  role, and the tenant-isolation gate reports 21 table gaps (PP-010 … PP-015)
+
 ### Plugin System (New)
 
 A complete custom plugin system that lets users connect to ANY external API.

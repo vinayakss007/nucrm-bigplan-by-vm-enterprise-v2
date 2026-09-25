@@ -6,8 +6,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { logError } from '@/lib/errors-server';
 import { acquireLock } from '@/lib/cache';
-import { Pool } from 'pg';
-import { pgSslConfig } from '@/lib/db/ssl-config';
+import { db } from '@/drizzle/db';
+import { sql } from 'drizzle-orm';
+import { setSuperAdminContext } from '@/lib/db/rls';
+import { withApiRoute } from '@/lib/api/with-api-route';
 import { verifyCronSecret } from '@/lib/auth/cron';
 import { TenantDataExporter } from '@/lib/tenant-data-export';
 import { sendAlertEmail } from '@/lib/email/alerts';
@@ -29,7 +31,7 @@ const CRITICAL_TABLES = [
   'subscriptions', 'audit_logs', 'activities',
 ];
 
-export async function POST(req: NextRequest) {
+export const POST = withApiRoute(async (req: NextRequest) => {
   // Verify cron secret
   const verified = await verifyCronSecret(req);
   if (!verified) {
@@ -43,95 +45,94 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, skipped: true, reason: 'lock-held' });
   }
 
-  // FIX MEDIUM-07: Use try/finally to ensure pool is always closed
-  // SSL: use the shared pgSslConfig() so this backup pool matches the TLS
-  // policy of every other pool (TLS on by default, verified in production).
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: pgSslConfig() });
-  try {
-    // 1. Run scheduled backups
-    const scheduledResult = await runScheduledBackups(pool);
+  // Platform maintenance runs cross-tenant (all schedules, all tenants), so
+  // it cannot use a tenant context. The super-admin GUC is set on the pinned
+  // client that withApiRoute holds for this request, so EVERY query below —
+  // including TenantDataExporter's global-db reads — carries it. The
+  // fail-closed RLS policies admit the super-admin context, and the pin
+  // teardown resets the GUCs so nothing leaks to the next checkout.
+  await setSuperAdminContext();
 
-    // 2. Clean up expired backups
-    const cleanupResult = await cleanupExpiredBackups(pool);
+  // 1. Run scheduled backups
+  const scheduledResult = await runScheduledBackups();
 
-    // 3. Purge critical data older than 90 days
-    const purgeResult = await purgeExpiredCriticalBackups(pool);
+  // 2. Clean up expired backups
+  const cleanupResult = await cleanupExpiredBackups();
 
-    return NextResponse.json({
-      message: 'Auto-backup complete',
-      scheduled: scheduledResult,
-      cleaned: cleanupResult,
-      purged: purgeResult,
-    });
-  } finally {
-    await pool.end();
-  }
-}
+  // 3. Purge critical data older than 90 days
+  const purgeResult = await purgeExpiredCriticalBackups();
 
-export async function GET(req: NextRequest) {
-  // Allow GET for manual trigger/testing
-  return POST(req);
-}
+  return NextResponse.json({
+    message: 'Auto-backup complete',
+    scheduled: scheduledResult,
+    cleaned: cleanupResult,
+    purged: purgeResult,
+  });
+});
+
+export const GET = POST;
 
 // ── Run Due Backups ──────────────────────────────────────────────────────────
 
-async function runScheduledBackups(pool: Pool) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnyRow = Record<string, any>;
+
+async function runScheduledBackups() {
   const _now = new Date();
   let backupsRun = 0;
   let errors = 0;
 
   // Get all enabled schedules that are due
-  const schedules = await pool.query(
-    `SELECT * FROM backup_schedules 
-     WHERE enabled = true AND (next_run_at IS NULL OR next_run_at <= NOW())
-     ORDER BY next_run_at ASC NULLS FIRST`
+  const schedules = await db.execute(sql`
+    SELECT * FROM backup_schedules
+    WHERE enabled = true AND (next_run_at IS NULL OR next_run_at <= NOW())
+    ORDER BY next_run_at ASC NULLS FIRST`
   );
+  const rows = schedules.rows as AnyRow[];
 
-  if (schedules.rows.length === 0) {
+  if (rows.length === 0) {
     // No schedule is currently DUE. That does not mean no schedule exists —
     // an existing global schedule whose next_run_at is in the future also
     // yields zero rows here. backup_schedules has no unique constraint, so the
     // previous `ON CONFLICT DO NOTHING` never fired and a duplicate default
     // was inserted on every run. Guard on the actual existence of a global
     // schedule (tenant_id IS NULL) and only create the default when none exist.
-    const globalExists = await pool.query(
-      `SELECT 1 FROM backup_schedules WHERE tenant_id IS NULL LIMIT 1`
+    const globalExists = await db.execute(sql`
+      SELECT 1 FROM backup_schedules WHERE tenant_id IS NULL LIMIT 1`
     );
     if (globalExists.rows.length === 0) {
-      await pool.query(
-        `INSERT INTO backup_schedules (schedule_type, backup_type, retention_days, enabled, next_run_at)
-         VALUES ('monthly', 'full', $1, true, NOW() + INTERVAL '1 hour')
-         ON CONFLICT DO NOTHING`,
-        [BACKUP_RETENTION_DAYS]
+      await db.execute(sql`
+        INSERT INTO backup_schedules (schedule_type, backup_type, retention_days, enabled, next_run_at)
+        VALUES ('monthly', 'full', ${BACKUP_RETENTION_DAYS}, true, NOW() + INTERVAL '1 hour')
+        ON CONFLICT DO NOTHING`
       );
       return { message: 'Created default monthly backup schedule', backupsRun: 0 };
     }
     return { message: 'No backups due', backupsRun: 0 };
   }
 
-  for (const schedule of schedules.rows) {
+  for (const schedule of rows) {
     try {
       if (schedule.tenant_id) {
         // Per-tenant backup
-        await backupSingleTenant(pool, schedule.tenant_id, schedule);
+        await backupSingleTenant(schedule.tenant_id, schedule);
       } else {
         // Global — backup ALL tenants
-        const tenants = await pool.query('SELECT id FROM tenants WHERE status != $1', ['suspended']);
-        for (const tenant of tenants.rows) {
-          await backupSingleTenant(pool, tenant.id, schedule);
+        const tenants = await db.execute(sql`SELECT id FROM tenants WHERE status != ${'suspended'}`);
+        for (const tenant of tenants.rows as AnyRow[]) {
+          await backupSingleTenant(tenant.id, schedule);
         }
       }
 
       // Update schedule next run time
       const nextRun = calculateNextRun(schedule.schedule_type);
-      await pool.query(
-        `UPDATE backup_schedules SET last_run_at = NOW(), next_run_at = $1, updated_at = NOW() WHERE id = $2`,
-        [nextRun, schedule.id]
+      await db.execute(sql`
+        UPDATE backup_schedules SET last_run_at = NOW(), next_run_at = ${nextRun}, updated_at = NOW() WHERE id = ${schedule.id}`
       );
 
       backupsRun++;
- 
- 
+
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       void logError({ error: err, context: 'cron/auto-backup schedule', metadata: { scheduleId: schedule.id } });
@@ -145,55 +146,52 @@ async function runScheduledBackups(pool: Pool) {
 // ── Backup Single Tenant ─────────────────────────────────────────────────────
 
 async function backupSingleTenant(
-  pool: Pool,
   tenantId: string,
- 
- 
+
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   schedule: any
 ) {
   const backupType = schedule.backup_type || 'full';
   const includeTables = backupType === 'critical_only' ? CRITICAL_TABLES : undefined;
+  const retentionDays = schedule.retention_days || BACKUP_RETENTION_DAYS;
 
   // Create backup record
-  const record = await pool.query(
-    `INSERT INTO tenant_backup_records (tenant_id, status, backup_type, initiated_auto, retention_days, include_tables, created_at)
-     VALUES ($1, 'running', $2, true, $3, $4, NOW())
-     RETURNING *`,
-    [tenantId, backupType, schedule.retention_days || BACKUP_RETENTION_DAYS, includeTables ? JSON.stringify(includeTables) : null]
+  const record = await db.execute(sql`
+    INSERT INTO tenant_backup_records (tenant_id, status, backup_type, initiated_auto, retention_days, include_tables, created_at)
+    VALUES (${tenantId}, 'running', ${backupType}, true, ${retentionDays}, ${includeTables ? JSON.stringify(includeTables) : null}, NOW())
+    RETURNING *`
   );
 
-  const backupRecord = record.rows[0];
+  const backupRecord = record.rows[0] as AnyRow;
 
   try {
     const exporter = new TenantDataExporter(tenantId);
     const result = await exporter.exportAll(includeTables);
 
-    await pool.query(
-      `UPDATE tenant_backup_records 
-       SET status = 'completed',
-           data_size = $1,
-           table_count = $2,
-           record_count = $3,
-           backup_data = $4,
-           duration_ms = EXTRACT(EPOCH FROM (NOW() - created_at)) * 1000,
-           completed_at = NOW()
-       WHERE id = $5`,
-      [result.dataSize, result.tableCount, result.totalRecords, JSON.stringify(result.tables), backupRecord.id]
+    await db.execute(sql`
+      UPDATE tenant_backup_records
+      SET status = 'completed',
+          data_size = ${result.dataSize},
+          table_count = ${result.tableCount},
+          record_count = ${result.totalRecords},
+          backup_data = ${JSON.stringify(result.tables)},
+          duration_ms = EXTRACT(EPOCH FROM (NOW() - created_at)) * 1000,
+          completed_at = NOW()
+      WHERE id = ${backupRecord.id}`
     );
- 
- 
+
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    await pool.query(
-      `UPDATE tenant_backup_records SET status = 'failed', error_message = $1, completed_at = NOW() WHERE id = $2`,
-      [err.message, backupRecord.id]
+    await db.execute(sql`
+      UPDATE tenant_backup_records SET status = 'failed', error_message = ${err.message}, completed_at = NOW() WHERE id = ${backupRecord.id}`
     );
 
     // Alert super admin
     try {
-      const tenantInfo = await pool.query('SELECT name FROM tenants WHERE id = $1', [tenantId]);
-      const tenantName = tenantInfo.rows[0]?.name || tenantId;
+      const tenantInfo = await db.execute(sql`SELECT name FROM tenants WHERE id = ${tenantId}`);
+      const tenantName = (tenantInfo.rows[0] as AnyRow | undefined)?.name || tenantId;
       await sendAlertEmail(
         `Backup Failed: ${tenantName}`,
         `Backup failed for tenant ${tenantName}: ${err.message}`,
@@ -208,13 +206,13 @@ async function backupSingleTenant(
 
 // ── Clean Up Expired Backups ─────────────────────────────────────────────────
 
-async function cleanupExpiredBackups(pool: Pool) {
+async function cleanupExpiredBackups() {
   // Delete backups past their retention period
-  const result = await pool.query(
-    `DELETE FROM tenant_backup_records 
-     WHERE status = 'completed' 
-       AND expires_at < NOW()
-     RETURNING id, tenant_id`
+  const result = await db.execute(sql`
+    DELETE FROM tenant_backup_records
+    WHERE status = 'completed'
+      AND expires_at < NOW()
+    RETURNING id, tenant_id`
   );
 
   return { cleaned: result.rows.length };
@@ -222,11 +220,11 @@ async function cleanupExpiredBackups(pool: Pool) {
 
 // ── Purge Critical Data Backups Past 90 Days ─────────────────────────────────
 
-async function purgeExpiredCriticalBackups(pool: Pool) {
-  const result = await pool.query(
-    `DELETE FROM critical_data_backups 
-     WHERE retained_until < NOW()
-     RETURNING id, tenant_id, table_name, record_id`
+async function purgeExpiredCriticalBackups() {
+  const result = await db.execute(sql`
+    DELETE FROM critical_data_backups
+    WHERE retained_until < NOW()
+    RETURNING id, tenant_id, table_name, record_id`
   );
 
   return { purged: result.rows.length };

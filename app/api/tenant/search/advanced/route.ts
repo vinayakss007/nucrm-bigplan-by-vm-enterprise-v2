@@ -60,7 +60,6 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     const offset = (Math.max(1, page) - 1) * limit;
     const tid = ctx.tenantId;
     const pattern = q ? `%${q}%` : null;
-    const escapeClause = "ESCAPE '\\\\'";
 
  
  
@@ -80,11 +79,11 @@ export const POST = withApiRoute(async (request: NextRequest) => {
 
         if (pattern) {
           conditions.push(or(
-            sql`${contacts.firstName} ILIKE ${pattern} ${sql.raw(escapeClause)}`,
-            sql`${contacts.lastName} ILIKE ${pattern} ${sql.raw(escapeClause)}`,
-            sql`${contacts.email} ILIKE ${pattern} ${sql.raw(escapeClause)}`,
-            sql`${contacts.phone} ILIKE ${pattern} ${sql.raw(escapeClause)}`,
-            sql`(${contacts.firstName} || ' ' || ${contacts.lastName}) ILIKE ${pattern} ${sql.raw(escapeClause)}`
+            sql`${contacts.firstName} ILIKE ${pattern} ESCAPE '\\\\'`,
+            sql`${contacts.lastName} ILIKE ${pattern} ESCAPE '\\\\'`,
+            sql`${contacts.email} ILIKE ${pattern} ESCAPE '\\\\'`,
+            sql`${contacts.phone} ILIKE ${pattern} ESCAPE '\\\\'`,
+            sql`(${contacts.firstName} || ' ' || ${contacts.lastName}) ILIKE ${pattern} ESCAPE '\\\\'`
           )!);
         }
         if (filters.status?.length) {
@@ -149,7 +148,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
         ];
 
         if (pattern) {
-          conditions.push(sql`${deals.title} ILIKE ${pattern} ${sql.raw(escapeClause)}`);
+          conditions.push(sql`${deals.title} ILIKE ${pattern} ESCAPE '\\\\'`);
         }
         if (filters.stage?.length) {
           conditions.push(inArray(deals.stageId, filters.stage));
@@ -212,8 +211,8 @@ export const POST = withApiRoute(async (request: NextRequest) => {
 
         if (pattern) {
           conditions.push(or(
-            sql`${companies.name} ILIKE ${pattern} ${sql.raw(escapeClause)}`,
-            sql`${companies.domain} ILIKE ${pattern} ${sql.raw(escapeClause)}`
+            sql`${companies.name} ILIKE ${pattern} ESCAPE '\\\\'`,
+            sql`${companies.domain} ILIKE ${pattern} ESCAPE '\\\\'`
           )!);
         }
         if (filters.industry?.length) {
@@ -268,7 +267,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
         ];
 
         if (pattern) {
-          conditions.push(sql`${tasks.title} ILIKE ${pattern} ${sql.raw(escapeClause)}`);
+          conditions.push(sql`${tasks.title} ILIKE ${pattern} ESCAPE '\\\\'`);
         }
         if (filters.priority?.length) {
           conditions.push(inArray(tasks.priority, filters.priority));

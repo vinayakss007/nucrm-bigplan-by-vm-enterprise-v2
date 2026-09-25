@@ -27,10 +27,19 @@
  * request (no pool-wide serialization) and requires NO changes to the route
  * handlers that use `db` directly.
  *
- * PgBouncer path (PGBOUNCER_ENABLED==='true'): this is a NO-OP. In PgBouncer
- * transaction mode the existing tx/session semantics already work and pinning
- * is unnecessary, so withPinnedConnection() simply runs the callback without
- * acquiring or pinning a client, preserving that path exactly.
+ * PgBouncer path (PGBOUNCER_ENABLED==='true'): pinning APPLIES here too.
+ * Pre-prod runs PgBouncer in SESSION pooling (see
+ * deploy/docker-compose.preprod.yml: POOL_MODE=session, ADR-0003). Session
+ * pooling binds a server connection to the pool-client connection, but the
+ * app-level pool still checks out a DIFFERENT pool-client per query — so a
+ * SESSION-scoped tenant GUC set on one checkout is invisible to the next
+ * checkout, and the fail-closed RLS policy denies every row (reads return
+ * empty, writes fail with "new row violates row-level security policy").
+ * Holding ONE pool-client for the whole request is exactly what session
+ * pooling is designed for, and it makes the tenant GUC visible to every
+ * query in the request. (An earlier revision of this comment claimed pinning
+ * was unnecessary under PgBouncer because of "transaction-mode semantics" —
+ * wrong for session pooling, which is what this deployment actually uses.)
  *
  * SCOPE BOUNDARY (honest residual — #1615):
  * AsyncLocalStorage scopes are strictly lexical: the pin is active only for the
@@ -62,19 +71,10 @@ interface PinnedConnectionStore {
 const pinnedConnectionStorage = new AsyncLocalStorage<PinnedConnectionStore>();
 
 /**
- * True when running behind PgBouncer, where connection pinning is unnecessary
- * (transaction-mode pooling + DISCARD ALL already handle GUC lifecycle).
- */
-function isPgBouncerEnabled(): boolean {
-  return process.env['PGBOUNCER_ENABLED'] === 'true';
-}
-
-/**
  * Returns the PoolClient pinned to the current async request scope, or
- * undefined when no connection is pinned (e.g. background jobs, workers, the
- * PgBouncer path, or code that runs outside withPinnedConnection). Callers
- * that get undefined should fall back to the pool-bound db (drizzle/db.ts does
- * this automatically).
+ * undefined when no connection is pinned (e.g. background jobs or code that
+ * runs outside withPinnedConnection). Callers that get undefined should fall
+ * back to the pool-bound db (drizzle/db.ts does this automatically).
  */
 export function getPinnedClient(): PoolClient | undefined {
   return pinnedConnectionStorage.getStore()?.client;
@@ -84,8 +84,12 @@ export function getPinnedClient(): PoolClient | undefined {
  * SQL that resets the tenant GUCs to empty (fail-closed) on a client. Kept in
  * sync with the pool.on('release') reset in lib/db/pool.ts.
  */
+// app.is_super_admin and app.auth_lookup are reset here too: both are meant to
+// be transaction-local (SET LOCAL via withSecurityContext/withAuthLookupContext)
+// but the helpers accept a bare client, and a privilege GUC that survives a
+// checkout would be handed to an unrelated request under PgBouncer.
 const RESET_TENANT_GUCS_SQL =
-  "SELECT set_config('app.current_tenant', '', false), set_config('app.current_user', '', false)";
+  "SELECT set_config('app.current_tenant', '', false), set_config('app.current_user', '', false), set_config('app.is_super_admin', 'false', false), set_config('app.auth_lookup', '', false)";
 
 /**
  * Per-pinned-client query serialization (#pinned-client-query-serialization).
@@ -111,7 +115,7 @@ const RESET_TENANT_GUCS_SQL =
  * racing the single connection. Teardown waits for the queue to drain before
  * resetting GUCs and releasing the client, so no detached query can outlive the
  * connection. This covers ALL routes that use withApiRoute without touching any
- * handler. The PgBouncer path is unaffected (it never pins).
+ * handler, on every deploy path including behind PgBouncer (session pooling).
  *
  * Ordering note: chaining preserves submission order for queries issued from
  * the same synchronous tick (the normal request flow). It intentionally does
@@ -188,16 +192,13 @@ async function drainClientQueries(client: PoolClient): Promise<void> {
  *   entered (the request falls back to the pool-bound db, which is fail-closed
  *   under RLS).
  *
- * NO-OP under PgBouncer: when PGBOUNCER_ENABLED==='true' the callback runs
- * directly with no pinned client, preserving the existing behavior exactly.
+ * Applies on every deploy path, INCLUDING behind PgBouncer: pre-prod uses
+ * session pooling, where per-query checkouts land on different server
+ * connections and lose SESSION-scoped GUCs. Pinning one pool-client per
+ * request is what session pooling expects and is the only way the tenant
+ * context survives the whole request.
  */
 export async function withPinnedConnection<T>(fn: () => Promise<T>): Promise<T> {
-  // PgBouncer path: pinning is unnecessary and would fight transaction-mode
-  // pooling. Run the callback unchanged, with no pinned client.
-  if (isPgBouncerEnabled()) {
-    return fn();
-  }
-
   // If a client is already pinned for this scope (e.g. nested wrapping), reuse
   // it rather than acquiring a second connection — keeps the "one connection
   // per request" guarantee.

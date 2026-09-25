@@ -11,7 +11,7 @@ import { platformSettingsSchema } from '@/lib/api/schemas';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { platformSettings } from '@/drizzle/schema';
-import { isNull } from 'drizzle-orm';
+import { isNull, sql } from 'drizzle-orm';
 import { logSuperAdminAction } from '@/lib/audit/super-admin';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { logError } from '@/lib/errors-server';
@@ -140,21 +140,25 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     }
 
     await db.transaction(async (tx) => {
+      const valuesToInsert: { key: string; value: string; tenantId: null }[] = [];
       for (const k of updatedKeys) {
-        const val = v[k];
         if (ALLOWED.includes(k)) {
-          await tx
-            .insert(platformSettings)
-            .values({
-              key: k,
-              value: String(val),
-              tenantId: null,
-            })
-            .onConflictDoUpdate({
-              target: [platformSettings.key, platformSettings.tenantId],
-              set: { value: String(val), updatedAt: new Date() },
-            });
+          valuesToInsert.push({
+            key: k,
+            value: String(v[k]),
+            tenantId: null,
+          });
         }
+      }
+
+      if (valuesToInsert.length > 0) {
+        await tx
+          .insert(platformSettings)
+          .values(valuesToInsert)
+          .onConflictDoUpdate({
+            target: [platformSettings.key, platformSettings.tenantId],
+            set: { value: sql`EXCLUDED.value`, updatedAt: new Date() },
+          });
       }
     });
 

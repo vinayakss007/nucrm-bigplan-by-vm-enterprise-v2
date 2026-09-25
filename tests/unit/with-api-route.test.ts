@@ -122,7 +122,7 @@ describe('withApiRoute pins the whole handler body (#1615)', () => {
     expect(fakeClient.release).toHaveBeenCalledTimes(1);
   });
 
-  it('is a no-op under PgBouncer (no client pinned, callback still runs)', async () => {
+  it('pins the client under PgBouncer too (session pooling)', async () => {
     process.env.PGBOUNCER_ENABLED = 'true';
     const { withApiRoute } = await import('../../lib/api/with-api-route');
     const { getPinnedClient } = await import('../../lib/db/request-connection');
@@ -135,8 +135,10 @@ describe('withApiRoute pins the whole handler body (#1615)', () => {
 
     const res = await GET({} as never, undefined as never);
 
-    expect(pinnedInside).toBeUndefined(); // no pin under PgBouncer
-    expect(fakeClient.release).not.toHaveBeenCalled();
+    // Pre-prod PgBouncer runs in SESSION pooling mode, so the pin applies
+    // there too — otherwise the tenant GUC is lost between pool checkouts.
+    expect(pinnedInside).toBeDefined();
+    expect(fakeClient.release).toHaveBeenCalledTimes(1);
     expect(await res.text()).toBe('pgbouncer');
   });
 });

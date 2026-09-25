@@ -138,23 +138,28 @@ export async function syncCalendarEvents(
   // Sync events + integration config atomically
   try {
     await db.transaction(async (tx) => {
+      const inserts: any[] = [];
+      const updatePromises: Promise<any>[] = [];
+
       for (const event of externalEvents) {
         const existing = existingByExternal.get(event.externalId!);
         if (existing) {
-          await tx.update(meetings)
-            .set({
-              title: event.title,
-              description: event.description || null,
-              startTime: event.startTime,
-              endTime: event.endTime || null,
-              location: event.location || null,
-              meetingUrl: event.meetingUrl || null,
-              updatedAt: new Date(),
-            })
-            .where(eq(meetings.id, existing.id));
+          updatePromises.push(
+            tx.update(meetings)
+              .set({
+                title: event.title,
+                description: event.description || null,
+                startTime: event.startTime,
+                endTime: event.endTime || null,
+                location: event.location || null,
+                meetingUrl: event.meetingUrl || null,
+                updatedAt: new Date(),
+              })
+              .where(eq(meetings.id, existing.id))
+          );
           result.updated++;
         } else {
-          await tx.insert(meetings).values({
+          inserts.push({
             tenantId,
             userId,
             title: event.title,
@@ -171,6 +176,14 @@ export async function syncCalendarEvents(
           });
           result.created++;
         }
+      }
+
+      if (inserts.length > 0) {
+        await tx.insert(meetings).values(inserts);
+      }
+
+      if (updatePromises.length > 0) {
+        await Promise.all(updatePromises);
       }
 
       // Update integration config

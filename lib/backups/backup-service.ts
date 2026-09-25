@@ -8,6 +8,7 @@ import { backupRecords } from '@/drizzle/schema';
 import { eq, sql } from 'drizzle-orm';
 import { spawn, exec as execCb } from 'child_process';
 import { promisify } from 'util';
+import path from 'path';
 import { checksumFile, CHECKSUM_ALGORITHM } from './integrity';
 import { uploadBackupArtifact } from './offsite';
 import { encryptBackupFile, isEncryptionEnabled } from './encrypt';
@@ -56,6 +57,16 @@ export async function runPgDump(backupType: string, outputPath: string): Promise
   const dbUrl = process.env.DATABASE_URL;
   if (!dbUrl || (!dbUrl.startsWith('postgresql://') && !dbUrl.startsWith('postgres://'))) {
     throw new Error('Invalid DATABASE_URL format');
+  }
+
+  if (!['full', 'schema', 'selective'].includes(backupType)) {
+    throw new Error('Invalid backup type');
+  }
+
+  const resolvedOutputPath = path.resolve(outputPath);
+  const localDir = path.resolve(process.env.BACKUP_LOCAL_DIR || '/tmp/nucrm-backups');
+  if (!resolvedOutputPath.startsWith('/tmp/') && !resolvedOutputPath.startsWith(localDir)) {
+    throw new Error('Invalid output path');
   }
 
   // Parse the connection string and pass credentials to pg_dump via the

@@ -171,9 +171,11 @@ export function getPool(): Pool {
     }
 
     // Append pgbouncer=true to connection string when PgBouncer is active
+    const stripSslMode = process.env['DATABASE_SSL_REJECT_UNAUTHORIZED'] === 'false';
+    const csToUse = stripSslMode ? cs.replace(/[?&]sslmode=[^&]+/, '') : cs;
     const connectionString = pgBouncer
-      ? cs + (cs.includes('?') ? '&' : '?') + 'pgbouncer=true'
-      : cs;
+      ? csToUse + (csToUse.includes('?') ? '&' : '?') + 'pgbouncer=true'
+      : csToUse;
 
     const poolConfig: PoolConfig = {
       connectionString,
@@ -223,7 +225,7 @@ export function getPool(): Pool {
         // #1837: make a *persistent* failure observable instead of fully silent
         // — log at most once every 60s so a tearing-down client can't flood.
         void client
-          .query("SELECT set_config('app.current_tenant', '', false), set_config('app.current_user', '', false)")
+          .query("SELECT set_config('app.current_tenant', '', false), set_config('app.current_user', '', false), set_config('app.is_super_admin', 'false', false), set_config('app.auth_lookup', '', false)")
           .catch((err: unknown) => {
             const now = Date.now();
             if (now - lastRlsResetWarnAt >= 60_000) {
