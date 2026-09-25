@@ -38,10 +38,15 @@ vi.mock('../../lib/db/pool', () => ({
   })),
 }));
 
-// requireAuth is the first call in the route body. We capture the pinned client
-// at that moment (proves the route body runs inside the pin) and return a
-// minimal auth context so the route proceeds to its NextResponse.json.
-let pinnedWhenRouteRan: unknown = 'sentinel';
+// Mock rateLimitRead to return null so the route proceeds to requireAuth
+vi.mock('../../lib/api/read-rate-limit', () => ({
+  rateLimitRead: vi.fn(async () => null),
+}));
+
+// requireAuth is the first call in the route body (after rateLimitRead).
+// We capture the pinned client at that moment (proves the route body runs inside the pin)
+// and return a minimal auth context so the route proceeds to its NextResponse.json.
+let pinnedWhenRouteRan = 'sentinel';
 vi.mock('@/lib/auth/middleware', () => ({
   requireAuth: vi.fn(async () => {
     const { getPinnedClient } = await import('../../lib/db/request-connection');
