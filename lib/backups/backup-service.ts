@@ -54,7 +54,11 @@ async function getPgDumpVersion(): Promise<string> {
 }
 
 export async function runPgDump(backupType: string, outputPath: string): Promise<void> {
-  const dbUrl = process.env.DATABASE_URL;
+  // PP-014/PP-015 (#2050/#2051): pg_dump runs `SET row_security = off`, which
+  // PostgreSQL only honours for superuser/BYPASSRLS roles, while every tenant
+  // table is FORCE ROW LEVEL SECURITY — the app role can never produce a
+  // complete dump. Aim the dump at BACKUP_DATABASE_URL when configured.
+  const dbUrl = process.env.BACKUP_DATABASE_URL || process.env.DATABASE_URL;
   if (!dbUrl || (!dbUrl.startsWith('postgresql://') && !dbUrl.startsWith('postgres://'))) {
     throw new Error('Invalid DATABASE_URL format');
   }
