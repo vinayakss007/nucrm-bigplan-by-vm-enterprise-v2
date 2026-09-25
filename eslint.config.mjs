@@ -25,6 +25,8 @@ export default tseslint.config(
       "tests/load/",
       // k6 load script — runs under the k6 runtime (k6/* imports, __ENV), not Node.
       "scripts/load-test.js",
+      // PM2 config — CommonJS by design; `require()` is the only way to load fs there.
+      "ecosystem.config.cjs",
       // Retired / reference-only files; never built or linted.
       "archive/",
     ],
