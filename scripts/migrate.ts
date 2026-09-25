@@ -8,6 +8,7 @@ import { pgSslConfig } from '../lib/db/ssl-config';
 import * as fs from 'fs';
 import * as path from 'path';
 import { createInterface } from 'readline';
+import { collectExpectedSchema, verifyStampedSchema } from './migrate-recovery';
 
 /**
  * Execute SQL statements from a migration file with error tolerance.
@@ -164,6 +165,7 @@ function detectEnv(url: string): string {
   if (url.includes('prod') || url.includes('production')) return 'production';
   return 'unknown';
 }
+
 
 async function confirm(prompt: string): Promise<boolean> {
   const rl = createInterface({ input: process.stdin, output: process.stdout });
@@ -374,6 +376,15 @@ async function main() {
     );
 
     if (schemaExists.rows[0].exists && lastMigrationApplied.rows[0].exists) {
+      // #1969: tell the operator exactly what the recovery decision is based on.
+      const tableCount = await db.execute<{ cnt: string }>(
+        sql.raw(`SELECT COUNT(*)::text AS cnt FROM information_schema.tables WHERE table_schema = 'public'`),
+      );
+      console.log('[migrate] Recovery markers matched:');
+      console.log('[migrate]   table api_key_usage (early marker): present');
+      console.log('[migrate]   column backup_records.last_verified_at (late marker): present');
+      console.log(`[migrate]   public-schema tables present: ${tableCount.rows[0].cnt}`);
+      console.log(`[migrate]   journal entries to stamp: ${journal.entries.length}`);
       console.log('[migrate] Recovery: schema already exists but the migration ledger is empty.');
       console.log('[migrate] This database was provisioned with db:push/db:sync or restored');
       console.log('[migrate] from a dump. Stamping the journal as applied rather than replaying');
@@ -385,6 +396,26 @@ async function main() {
         );
       }
       console.log('[migrate] Recovery complete — no migration SQL was executed.');
+
+      // #1969: never trust a blind stamp. Replay the journal's DDL
+      // symbolically and require every net-created table/column to exist.
+      const expected = collectExpectedSchema(journal.entries, './drizzle/migrations');
+      const missing = await verifyStampedSchema(
+        (q) => db.execute(q) as unknown as Promise<{ rows: { table_name: string; column_name: string }[] }>,
+        expected,
+      );
+      if (missing.length > 0) {
+        console.error(`[migrate] FATAL: post-stamp verification FAILED — ${missing.length} object(s) the journal claims as applied are missing:`);
+        for (const obj of missing.slice(0, 50)) console.error(`[migrate]   missing ${obj}`);
+        if (missing.length > 50) console.error(`[migrate]   ...and ${missing.length - 50} more`);
+        await db.execute(sql.raw(`TRUNCATE "drizzle"."__drizzle_migrations" RESTART IDENTITY`));
+        console.error('[migrate] The seeded stamp was rolled back so a re-run does not look "already migrated".');
+        console.error('[migrate] Recovery procedure: docs/migration-recovery.md');
+        lockClient.release();
+        await pool.end();
+        process.exit(1);
+      }
+      console.log(`[migrate] Post-stamp verification passed — all headline objects for ${journal.entries.length} migrations exist.`);
     } else if (schemaExists.rows[0].exists && !lastMigrationApplied.rows[0].exists) {
       // Partial schema: the ledger is empty but the schema is NOT at the last
       // migration's state. Stamping everything would permanently hide the
@@ -396,6 +427,7 @@ async function main() {
       console.error('[migrate]   1. Run the remaining migrations manually and re-run db:migrate.');
       console.error('[migrate]   2. Restore from a full backup.');
       console.error('[migrate]   3. If the schema really is current, contact the maintainers.');
+      console.error('[migrate] Full recovery procedure: docs/migration-recovery.md');
       process.exit(1);
     } else {
       console.log('[migrate] Fresh database detected. Running all migrations...');
