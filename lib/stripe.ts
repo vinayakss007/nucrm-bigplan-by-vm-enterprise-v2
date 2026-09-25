@@ -211,8 +211,11 @@ export interface StripeSubscription {
   id: string;
   status?: string;
   cancel_at_period_end?: boolean;
-  current_period_start: number;
-  current_period_end: number;
+  // #1915: Stripe API 2025+ removed these from the subscription root; they now
+  // live on subscription items. Optional so callers must handle their absence
+  // (use getSubscriptionPeriodStart/End which resolve the item fallback).
+  current_period_start?: number;
+  current_period_end?: number;
   items?: { data?: StripeSubscriptionItem[] };
   metadata?: Record<string, string>;
   [key: string]: unknown;
@@ -392,6 +395,21 @@ export function getSubscriptionPeriodEnd(sub: StripeSubscription): number {
   const item = sub.items?.data?.[0] as { current_period_end?: unknown } | undefined;
   if (item && typeof item.current_period_end === 'number' && item.current_period_end > 0) {
     return item.current_period_end;
+  }
+  return 0;
+}
+
+/**
+ * Period start of a subscription, resilient to Stripe API version differences
+ * (#1915) — same root-then-item resolution as getSubscriptionPeriodEnd.
+ */
+export function getSubscriptionPeriodStart(sub: StripeSubscription): number {
+  if (typeof sub.current_period_start === 'number' && sub.current_period_start > 0) {
+    return sub.current_period_start;
+  }
+  const item = sub.items?.data?.[0] as { current_period_start?: unknown } | undefined;
+  if (item && typeof item.current_period_start === 'number' && item.current_period_start > 0) {
+    return item.current_period_start;
   }
   return 0;
 }
