@@ -21,7 +21,6 @@
 # ═══════════════════════════════════════════════════════════════════════════════
 
 services:
-
   # ─────────────────────────────────────────────────────────────────────────────
   #  PgBouncer — repointed at UpCloud Managed PostgreSQL (external, TLS-required)
   # ─────────────────────────────────────────────────────────────────────────────
@@ -192,7 +191,11 @@ services:
     # (see above). Every other key is restated because Compose merges mappings key
     # by key; the values match the base so only the URL actually changes.
     healthcheck:
-      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://127.0.0.1:3000/api/health || exit 1"]
+      test:
+        [
+          "CMD-SHELL",
+          "wget --quiet --tries=1 --spider http://127.0.0.1:3000/api/health || exit 1",
+        ]
       interval: 15s
       timeout: 5s
       retries: 3
@@ -411,11 +414,16 @@ services:
   #  nginx still writes real files into the `nginx-logs` volume (the image's
   #  access.log/error.log -> /dev/stdout symlinks are shadowed by the volume, so
   #  nginx appends to plain files), which is exactly what the scrape job reads.
+  #
+  #  #2053: the base config's `docker` job uses docker_sd_configs and reads
+  #  container stdout via the Docker API, so the socket must be mounted here too.
+  #  `volumes: !override` replaces the base list entirely, so re-declare it.
   # ─────────────────────────────────────────────────────────────────────────────
   promtail:
     volumes: !override
       - ./monitoring/promtail/promtail-config.yml:/etc/promtail/promtail-config.yml:ro
       - nginx-logs:/var/log/nginx:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
 
   # ─────────────────────────────────────────────────────────────────────────────
   #  nginx — probe the IPv4 loopback, not `localhost`
@@ -433,11 +441,14 @@ services:
   # ─────────────────────────────────────────────────────────────────────────────
   nginx:
     healthcheck:
-      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://127.0.0.1/health || exit 1"]
+      test:
+        [
+          "CMD-SHELL",
+          "wget --quiet --tries=1 --spider http://127.0.0.1/health || exit 1",
+        ]
       interval: 10s
       timeout: 3s
       retries: 3
-
 # ═══════════════════════════════════════════════════════════════════════════════
 #  NOTE: `alertmanagerdata` used to be declared here as a workaround for the base
 #  file mounting a volume it never declared. That broke every script invoking the

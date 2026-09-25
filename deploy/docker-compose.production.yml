@@ -537,6 +537,8 @@ services:
       - ./monitoring/promtail/promtail-config.yml:/etc/promtail/promtail-config.yml:ro
       - /var/log:/var/log:ro
       - nginx-logs:/var/log/nginx:ro
+      # #2053: docker_sd_configs target discovery (see promtail-config.yml)
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     command:
       - "--config.file=/etc/promtail/promtail-config.yml"
     deploy:

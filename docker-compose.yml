@@ -376,6 +376,10 @@ services:
     volumes:
       - ./deploy/monitoring/promtail/promtail-config.yml:/etc/promtail/promtail-config.yml:ro
       - /var/log:/var/log:ro
+      # #2053: docker_sd_configs target discovery. Read-only mount is still a
+      # powerful surface (container control via socket); promtail is the only
+      # consumer and the stack is single-host.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     command:
       - "--config.file=/etc/promtail/promtail-config.yml"
     depends_on:
