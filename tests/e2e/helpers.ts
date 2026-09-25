@@ -9,7 +9,7 @@ export async function loginAsTestUser(page: Page) {
   await page.goto('/auth/login');
   await page.fill('input[type="email"]', TEST_USER.email);
   await page.fill('input[type="password"]', TEST_USER.password);
-  await page.click('button[type="submit"]');
+  await page.getByRole('button', { name: 'Sign in' }).click();
 }
 
 export async function loginWithApi(page: Page, context: BrowserContext) {

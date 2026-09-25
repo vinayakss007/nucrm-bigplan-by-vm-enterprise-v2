@@ -6,7 +6,7 @@ test.describe('Notification System', () => {
       await page.goto('/auth/login');
       await page.fill('input[name="email"]', 'wrong@test.com');
       await page.fill('input[name="password"]', 'badpassword');
-      await page.click('button[type="submit"]');
+      await page.getByRole('button', { name: 'Sign in' }).click();
 
       // Error should appear (either as toast or inline error)
       await page.waitForTimeout(2000);
