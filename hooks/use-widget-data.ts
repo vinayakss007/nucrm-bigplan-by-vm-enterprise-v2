@@ -6,6 +6,7 @@
 'use client';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { DashboardDataState } from '@/types/dashboard';
+import { fetchWidgetData, onTabVisible } from './widget-fetch-coordinator';
 
 interface UseWidgetDataOptions {
   ttl?: number
@@ -22,12 +23,13 @@ export function useWidgetData<T = unknown>(
 
   const cacheKey = `dash_widget_${endpoint}`
   const ttl = options?.ttl ?? 300_000
-  const abortRef = useRef<AbortController | null>(null)
+  // Strictly-increasing request sequence: a response is only applied if no
+  // newer fetch started while it was in flight (replaces the old
+  // AbortController, which the shared coordinator makes impossible).
+  const seqRef = useRef(0)
 
   const doFetch = useCallback(async (isBackground = false) => {
-    abortRef.current?.abort()
-    const abort = new AbortController()
-    abortRef.current = abort
+    const seq = ++seqRef.current
 
     let showedCache = false
 
@@ -42,8 +44,6 @@ export function useWidgetData<T = unknown>(
       }
     } catch { /* Fallback to default on corrupted storage data */ }
 
-    if (abort.signal.aborted) return
-
     if (!isBackground && !showedCache) {
       setState(prev => ({ ...prev, loading: true }))
     } else if (showedCache) {
@@ -51,13 +51,8 @@ export function useWidgetData<T = unknown>(
     }
 
     try {
-      const res = await fetch(endpoint, { signal: abort.signal, credentials: 'include' })
-      if (!res.ok) {
-        const body = await res.text()
-        throw new Error(`HTTP ${res.status}: ${body}`)
-      }
-      const json = await res.json()
-      const payload = json.data ?? json
+      const { json } = await fetchWidgetData(endpoint)
+      const payload = (json as { data?: unknown })?.data ?? json
 
       try {
         sessionStorage.setItem(cacheKey, JSON.stringify({
@@ -65,11 +60,11 @@ export function useWidgetData<T = unknown>(
         }))
       } catch { /* Fallback to default on corrupted storage data */ }
 
-      if (!abort.signal.aborted) {
+      if (seq === seqRef.current) {
         setState({ data: payload, loading: false, error: null, stale: false })
       }
     } catch (err) {
-      if (abort.signal.aborted) return
+      if (seq !== seqRef.current) return
       if (!isBackground) {
         setState(prev => ({
           ...prev, error: (err as Error).message, loading: false,
@@ -82,18 +77,11 @@ export function useWidgetData<T = unknown>(
     if (options?.enabled === false) return
     doFetch(false)
     const interval = setInterval(() => doFetch(true), ttl)
-
-    const onVisibility = () => {
-      if (document.visibilityState === 'visible') {
-        doFetch(false)
-      }
-    }
-    document.addEventListener('visibilitychange', onVisibility)
+    const unsubVisible = onTabVisible(() => doFetch(false))
 
     return () => {
       clearInterval(interval)
-      document.removeEventListener('visibilitychange', onVisibility)
-      abortRef.current?.abort()
+      unsubVisible()
     }
   }, [doFetch, options?.enabled, ttl])
 
