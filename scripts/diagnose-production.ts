@@ -34,15 +34,27 @@ function line(label: string, value: unknown): void {
 }
 
 /**
- * Preflight TLS guard (#1474).
+ * Preflight TLS guard (#1474, #1971).
  *
  * `sslmode=disable` means the DB connection is plaintext — an in-network MITM
  * exposure and a SOC 2 / GDPR blocker for a CRM holding customer PII. In
  * production this is a hard failure; elsewhere it is a warning so local/dev
- * setups without TLS are not blocked. Returns true when the caller should abort.
+ * setups without TLS are not blocked. Any OTHER sslmode= value only warns:
+ * node-postgres v8 aliases prefer/require/verify-ca to verify-full and lets
+ * the URL param override the app's ssl policy (pgSslConfig), so the param
+ * should be dropped from DATABASE_URL entirely. Returns true on abort.
  */
 function sslModeGuardShouldAbort(url: string): boolean {
-  if (!/sslmode=disable/i.test(url)) {
+  const sslmode = url.match(/[?&]sslmode=([^&#]+)/i)?.[1]?.toLowerCase();
+  if (!sslmode) {
+    return false;
+  }
+  if (sslmode !== 'disable') {
+    console.warn('');
+    console.warn(`  !! WARNING: DATABASE_URL contains sslmode=${sslmode}. node-postgres v8`);
+    console.warn('     treats require/prefer/verify-ca as verify-full and lets it override the');
+    console.warn('     app TLS policy, so DATABASE_SSL / DATABASE_SSL_REJECT_UNAUTHORIZED then');
+    console.warn('     silently do nothing (#1971). Remove the param and control TLS via those knobs.');
     return false;
   }
   const isProduction = process.env.NODE_ENV === 'production';
@@ -50,14 +62,15 @@ function sslModeGuardShouldAbort(url: string): boolean {
     console.error('');
     console.error('  ❌ REFUSING: DATABASE_URL contains sslmode=disable while NODE_ENV=production.');
     console.error('     Plaintext DB traffic exposes credentials + PII to any in-network');
-    console.error('     attacker (SOC 2 / GDPR blocker). Use sslmode=require (or verify-full');
-    console.error('     with a CA) — see deploy/POSTGRES_PRODUCTION_GUIDE.md and DEPLOYMENT.md.');
+    console.error('     attacker (SOC 2 / GDPR blocker). TLS is on by default via the shared');
+    console.error('     pgSslConfig() policy (no sslmode= in the URL); see');
+    console.error('     deploy/POSTGRES_PRODUCTION_GUIDE.md and DEPLOYMENT.md.');
     return true;
   }
   console.warn('');
   console.warn('  !! WARNING: DATABASE_URL contains sslmode=disable. This is acceptable only');
   console.warn('     for local/dev on an isolated network. Never ship sslmode=disable to');
-  console.warn('     production — use sslmode=require (see DEPLOYMENT.md).');
+  console.warn('     production — drop the param (TLS is on by default, see DEPLOYMENT.md).');
   return false;
 }
 
