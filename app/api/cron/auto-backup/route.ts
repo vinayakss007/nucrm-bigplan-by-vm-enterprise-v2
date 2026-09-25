@@ -8,7 +8,7 @@ import { logError } from '@/lib/errors-server';
 import { acquireLock } from '@/lib/cache';
 import { db } from '@/drizzle/db';
 import { sql } from 'drizzle-orm';
-import { setSuperAdminContext } from '@/lib/db/rls';
+import { setSuperAdminContext, setTenantContext } from '@/lib/db/rls';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { verifyCronSecret } from '@/lib/auth/cron';
 import { TenantDataExporter } from '@/lib/tenant-data-export';
@@ -156,6 +156,22 @@ async function backupSingleTenant(
   const includeTables = backupType === 'critical_only' ? CRITICAL_TABLES : undefined;
   const retentionDays = schedule.retention_days || BACKUP_RETENTION_DAYS;
 
+  // Per-tenant work must run under THAT tenant's context, not the platform
+  // super-admin one (NUCRM-P): tenant_backup_records has no super-admin
+  // bypass, and — worse — the exporter's tenant-table reads would silently
+  // return zero rows under a tenant-less context, producing EMPTY backups.
+  // The tenants table itself carries a bypass, so the owner lookup below
+  // works from the platform context. try/finally restores the platform
+  // context so the schedule bookkeeping after this call is unaffected, and
+  // a throw here can never leak one tenant's GUCs into the next tenant.
+  const ownerRow = await db.execute(sql`
+    SELECT owner_id FROM tenants WHERE id = ${tenantId} LIMIT 1`
+  );
+  const ownerId = (ownerRow.rows[0] as AnyRow | undefined)?.owner_id as string | undefined;
+  if (!ownerId) throw new Error(`backup target tenant has no owner: ${tenantId}`);
+  await setTenantContext(tenantId, ownerId);
+
+  try {
   // Create backup record
   const record = await db.execute(sql`
     INSERT INTO tenant_backup_records (tenant_id, status, backup_type, initiated_auto, retention_days, include_tables, created_at)
@@ -201,6 +217,9 @@ async function backupSingleTenant(
     }
 
     throw err;
+  }
+  } finally {
+    await setSuperAdminContext();
   }
 }
 
