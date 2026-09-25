@@ -81,6 +81,7 @@ async function runScheduledBackups() {
   const _now = new Date();
   let backupsRun = 0;
   let errors = 0;
+  let skipped = 0;
 
   // Get all enabled schedules that are due
   const schedules = await db.execute(sql`
@@ -120,7 +121,8 @@ async function runScheduledBackups() {
         // Global — backup ALL tenants
         const tenants = await db.execute(sql`SELECT id FROM tenants WHERE status != ${'suspended'}`);
         for (const tenant of tenants.rows as AnyRow[]) {
-          await backupSingleTenant(tenant.id, schedule);
+          const res = await backupSingleTenant(tenant.id, schedule) as AnyRow | undefined;
+          if (res?.skipped) skipped++;
         }
       }
 
@@ -140,7 +142,7 @@ async function runScheduledBackups() {
     }
   }
 
-  return { backupsRun, errors };
+  return { backupsRun, errors, skipped };
 }
 
 // ── Backup Single Tenant ─────────────────────────────────────────────────────
@@ -181,7 +183,12 @@ async function backupSingleTenant(
     );
     contextUserId = (memberRow.rows[0] as AnyRow | undefined)?.user_id as string | undefined;
   }
-  if (!contextUserId) throw new Error(`backup target tenant has no usable identity: ${tenantId}`);
+  if (!contextUserId) {
+    // Orphan tenant: no owner and no active members means no data can exist
+    // under it either (all writes require membership). Skip quietly instead
+    // of failing the whole run.
+    return { skipped: true, reason: 'no-members', tenantId } as AnyRow;
+  }
   await setTenantContext(tenantId, contextUserId);
 
   try {
