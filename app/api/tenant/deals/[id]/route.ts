@@ -354,7 +354,11 @@ export const DELETE = withApiRoute(async (req: NextRequest, { params }: { params
 
     fireWebhooks(ctx.tenantId, 'deal.deleted', { id: dealId }).catch((err) => logError({ error: err, context: 'tenant/deals/:id fireWebhooks deal.deleted' }));
 
-    cache.delByPattern(`tenant:${ctx.tenantId}:deals:*`);
+    // Awaited: a dropped invalidation serves stale deal data until TTL.
+    // Failures are logged (not thrown) so a Redis blip never 500s the write.
+    await cache.delByPattern(`tenant:${ctx.tenantId}:deals:*`).catch((e: unknown) =>
+      logError({ error: e as Error, context: 'tenant/deals/:id DELETE cache invalidate' })
+    );
     return NextResponse.json({ ok: true, message: 'Moved to trash. Restore within 30 days.' });
  
  
