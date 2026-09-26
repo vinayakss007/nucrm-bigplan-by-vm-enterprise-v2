@@ -21,6 +21,23 @@ function push(metrics: string[], name: string, help: string, type: string, value
   metrics.push(labels ? `${name}${labels} ${value}` : `${name} ${value}`);
 }
 
+// #2118: when the app pool saturates, every query on this route queues behind
+// the same 30s pool timeout — one slow section used to 500 the whole scrape,
+// freezing every gauge at its last-good value exactly during the incident.
+// Sections are now isolated with their own deadline and emit *_up gauges so
+// Prometheus can distinguish "healthy and constant" from "section is dead".
+const SECTION_TIMEOUT_MS = 12_000;
+
+function withTimeout<T>(p: Promise<T>, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error(`[metrics] section ${label} timed out`)), SECTION_TIMEOUT_MS);
+    p.then(
+      (v) => { clearTimeout(t); resolve(v); },
+      (e) => { clearTimeout(t); reject(e); }
+    );
+  });
+}
+
 export async function GET(request: NextRequest) {
   // Fail closed: in production, metrics require an explicit METRICS_SECRET.
   if (!METRICS_SECRET && process.env['NODE_ENV'] === 'production') {
@@ -41,86 +58,102 @@ export async function GET(request: NextRequest) {
 
   const metrics: string[] = [];
   try {
+    // ── Database gauges FIRST (#2118) ──────────────────────────
+    // Under pool saturation the heavy CRM counts time out; these gauges are
+    // the signal operators need during exactly that incident, so they run
+    // before anything else and are isolated behind their own deadline.
+    try {
+      const t0 = Date.now();
+      await withTimeout(db.execute(sql`SELECT 1`), 'db_latency');
+      push(metrics, 'nucrm_db_up', 'DB gauge section emitted fresh values', 'gauge', 1);
+      push(metrics, 'nucrm_db_latency_ms', 'Database query latency in ms', 'gauge', Date.now() - t0);
+    } catch {
+      push(metrics, 'nucrm_db_up', 'DB gauge section emitted fresh values', 'gauge', 0);
+    }
+
+    try {
+      const poolRes = await withTimeout(db.execute(sql`
+        SELECT
+          (SELECT count(*)::int FROM pg_stat_activity WHERE datname = current_database()) AS active,
+          (SELECT count(*)::int FROM pg_stat_activity WHERE datname = current_database() AND state = 'active') AS active_queries,
+          (SELECT count(*)::int FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock') AS waiting,
+          (SELECT setting::int FROM pg_settings WHERE name = 'max_connections') AS max_conn
+      `), 'db_pool');
+      const poolRow = poolRes.rows[0] as Record<string, string> || {};
+      const maxConn = parseInt(poolRow?.max_conn || '100');
+      const activeConn = parseInt(poolRow?.active || '0');
+      push(metrics, 'nucrm_db_pool_up', 'DB pool stats section emitted fresh values', 'gauge', 1);
+      push(metrics, 'nucrm_db_active_connections', 'Active DB connections', 'gauge', activeConn);
+      push(metrics, 'nucrm_db_active_queries', 'DB connections running a query', 'gauge', parseInt(poolRow?.active_queries || '0'));
+      push(metrics, 'nucrm_db_waiting_queries', 'DB connections waiting on lock', 'gauge', parseInt(poolRow?.waiting || '0'));
+      push(metrics, 'nucrm_db_max_connections', 'Max DB connections configured', 'gauge', maxConn);
+      push(metrics, 'nucrm_db_pool_available', 'Available DB connections (max - active)', 'gauge', maxConn - activeConn);
+    } catch {
+      push(metrics, 'nucrm_db_pool_up', 'DB pool stats section emitted fresh values', 'gauge', 0);
+    }
+
     const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
     // ── CRM Counts ─────────────────────────────────────────────
-    const [
-      contactsCount, leadsCount, dealsCount, companiesCount,
-      pendingTasks, activitiesCount, activeTenants, usersCount,
-      tasksCompleted,
-      contactsCreated, leadsCreated, dealsCreated
-    ] = await Promise.all([
-      db.select({ value: count() }).from(contacts).where(isNull(contacts.deletedAt)).then(r => r[0]!.value),
-      db.select({ value: count() }).from(leads).where(isNull(leads.deletedAt)).then(r => r[0]!.value),
-      db.select({ value: count() }).from(deals).where(isNull(deals.deletedAt)).then(r => r[0]!.value),
-      db.select({ value: count() }).from(companies).where(isNull(companies.deletedAt)).then(r => r[0]!.value),
-      db.select({ value: count() }).from(tasks).where(and(eq(tasks.status, 'pending'), isNull(tasks.deletedAt))).then(r => r[0]!.value),
-      db.select({ value: count() }).from(activities).then(r => r[0]!.value),
-      db.select({ value: count() }).from(tenants).where(eq(tenants.status, 'active')).then(r => r[0]!.value),
-      db.select({ value: count() }).from(users).then(r => r[0]!.value),
-      db.select({ value: count() }).from(tasks).where(and(eq(tasks.status, 'completed'), isNull(tasks.deletedAt))).then(r => r[0]!.value),
-      db.select({ value: count() }).from(contacts).where(and(gte(contacts.createdAt, yesterday), isNull(contacts.deletedAt))).then(r => r[0]!.value),
-      db.select({ value: count() }).from(leads).where(and(gte(leads.createdAt, yesterday), isNull(leads.deletedAt))).then(r => r[0]!.value),
-      db.select({ value: count() }).from(deals).where(and(gte(deals.createdAt, yesterday), isNull(deals.deletedAt))).then(r => r[0]!.value),
-    ]);
+    // All queries fire concurrently behind one shared deadline (#2118, Sentry
+    // NUCRM-S): they used to run 15-in-a-row, stretching the scrape until it
+    // failed outright when the pool was slow.
+    try {
+      const [
+        contactsCount, leadsCount, dealsCount, companiesCount,
+        pendingTasks, activitiesCount, activeTenants, usersCount,
+        tasksCompleted,
+        contactsCreated, leadsCreated, dealsCreated,
+        dealsWon, dealsLost, pipelineValue,
+      ] = await withTimeout(Promise.all([
+        db.select({ value: count() }).from(contacts).where(isNull(contacts.deletedAt)).then(r => r[0]!.value),
+        db.select({ value: count() }).from(leads).where(isNull(leads.deletedAt)).then(r => r[0]!.value),
+        db.select({ value: count() }).from(deals).where(isNull(deals.deletedAt)).then(r => r[0]!.value),
+        db.select({ value: count() }).from(companies).where(isNull(companies.deletedAt)).then(r => r[0]!.value),
+        db.select({ value: count() }).from(tasks).where(and(eq(tasks.status, 'pending'), isNull(tasks.deletedAt))).then(r => r[0]!.value),
+        db.select({ value: count() }).from(activities).then(r => r[0]!.value),
+        db.select({ value: count() }).from(tenants).where(eq(tenants.status, 'active')).then(r => r[0]!.value),
+        db.select({ value: count() }).from(users).then(r => r[0]!.value),
+        db.select({ value: count() }).from(tasks).where(and(eq(tasks.status, 'completed'), isNull(tasks.deletedAt))).then(r => r[0]!.value),
+        db.select({ value: count() }).from(contacts).where(and(gte(contacts.createdAt, yesterday), isNull(contacts.deletedAt))).then(r => r[0]!.value),
+        db.select({ value: count() }).from(leads).where(and(gte(leads.createdAt, yesterday), isNull(leads.deletedAt))).then(r => r[0]!.value),
+        db.select({ value: count() }).from(deals).where(and(gte(deals.createdAt, yesterday), isNull(deals.deletedAt))).then(r => r[0]!.value),
+        db.select({ value: count() }).from(deals)
+          .innerJoin(dealStages, eq(dealStages.id, deals.stageId))
+          .innerJoin(pipelines, eq(pipelines.id, deals.pipelineId))
+          .where(and(isNull(deals.deletedAt), ilike(dealStages.name, 'won')))
+          .then(r => Number(r[0]?.value ?? 0)),
+        db.select({ value: count() }).from(deals)
+          .innerJoin(dealStages, eq(dealStages.id, deals.stageId))
+          .innerJoin(pipelines, eq(pipelines.id, deals.pipelineId))
+          .where(and(isNull(deals.deletedAt), ilike(dealStages.name, 'lost')))
+          .then(r => Number(r[0]?.value ?? 0)),
+        db.select({ total: sum(sql`${deals.amount}::numeric`) })
+          .from(deals)
+          .innerJoin(dealStages, eq(dealStages.id, deals.stageId))
+          .where(and(isNull(deals.deletedAt), sql`lower(${dealStages.name}) != 'lost'`))
+          .then(r => parseFloat(r[0]?.total ?? '0')),
+      ]), 'counts');
 
-    push(metrics, 'nucrm_contacts_total', 'Total contacts in CRM', 'gauge', Number(contactsCount));
-    push(metrics, 'nucrm_leads_total', 'Total leads (not deleted)', 'gauge', Number(leadsCount));
-    push(metrics, 'nucrm_deals_total', 'Total deals (not deleted)', 'gauge', Number(dealsCount));
-    push(metrics, 'nucrm_companies_total', 'Total companies (not deleted)', 'gauge', Number(companiesCount));
-    push(metrics, 'nucrm_tasks_pending_total', 'Pending incomplete tasks', 'gauge', Number(pendingTasks));
-    push(metrics, 'nucrm_activities_total', 'Total activities logged', 'gauge', Number(activitiesCount));
-    push(metrics, 'nucrm_tenants_total', 'Active tenants', 'gauge', Number(activeTenants));
-    push(metrics, 'nucrm_users_total', 'Total users', 'gauge', Number(usersCount));
-    push(metrics, 'nucrm_tasks_completed_total', 'Completed tasks', 'counter', Number(tasksCompleted));
-    push(metrics, 'nucrm_contacts_created_total', 'Contacts created in last 24h', 'counter', Number(contactsCreated));
-    push(metrics, 'nucrm_leads_created_total', 'Leads created in last 24h', 'counter', Number(leadsCreated));
-    push(metrics, 'nucrm_deals_created_total', 'Deals created in last 24h', 'counter', Number(dealsCreated));
-
-    // ── Deal Stage Counts ─────────────────────────────────────────
-    const [dealsWon] = await db
-      .select({ value: count() })
-      .from(deals)
-      .innerJoin(dealStages, eq(dealStages.id, deals.stageId))
-      .innerJoin(pipelines, eq(pipelines.id, deals.pipelineId))
-      .where(and(isNull(deals.deletedAt), ilike(dealStages.name, 'won')));
-
-    const [dealsLost] = await db
-      .select({ value: count() })
-      .from(deals)
-      .innerJoin(dealStages, eq(dealStages.id, deals.stageId))
-      .innerJoin(pipelines, eq(pipelines.id, deals.pipelineId))
-      .where(and(isNull(deals.deletedAt), ilike(dealStages.name, 'lost')));
-
-    push(metrics, 'nucrm_deals_won_total', 'Deals marked as won', 'gauge', Number(dealsWon?.value ?? 0));
-    push(metrics, 'nucrm_deals_lost_total', 'Deals marked as lost', 'gauge', Number(dealsLost?.value ?? 0));
-
-    // ── Deal Pipeline Value ────────────────────────────────────
-    const [pipelineResult] = await db
-      .select({ total: sum(sql`${deals.amount}::numeric`) })
-      .from(deals)
-      .innerJoin(dealStages, eq(dealStages.id, deals.stageId))
-      .where(and(isNull(deals.deletedAt), sql`lower(${dealStages.name}) != 'lost'`));
-    push(metrics, 'nucrm_deals_value_total', 'Total pipeline value (USD)', 'gauge', parseFloat(pipelineResult?.total ?? '0'));
-
-    // ── Database Metrics ───────────────────────────────────────
-    const t0 = Date.now();
-    await db.execute(sql`SELECT 1`);
-    push(metrics, 'nucrm_db_latency_ms', 'Database query latency in ms', 'gauge', Date.now() - t0);
-
-    const poolRes = await db.execute(sql`
-      SELECT
-        (SELECT count(*)::int FROM pg_stat_activity WHERE datname = current_database()) AS active,
-        (SELECT count(*)::int FROM pg_stat_activity WHERE datname = current_database() AND state = 'active') AS active_queries,
-        (SELECT count(*)::int FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock') AS waiting,
-        (SELECT setting::int FROM pg_settings WHERE name = 'max_connections') AS max_conn
-    `);
-    const poolRow = poolRes.rows[0] as Record<string, string> || {};
-    push(metrics, 'nucrm_db_active_connections', 'Active DB connections', 'gauge', parseInt(poolRow?.active || '0'));
-    push(metrics, 'nucrm_db_active_queries', 'DB connections running a query', 'gauge', parseInt(poolRow?.active_queries || '0'));
-    push(metrics, 'nucrm_db_waiting_queries', 'DB connections waiting on lock', 'gauge', parseInt(poolRow?.waiting || '0'));
-    push(metrics, 'nucrm_db_max_connections', 'Max DB connections configured', 'gauge', parseInt(poolRow?.max_conn || '100'));
-    push(metrics, 'nucrm_db_pool_available', 'Available DB connections (max - active)', 'gauge', parseInt(poolRow?.max_conn || '100') - parseInt(poolRow?.active || '0'));
+      push(metrics, 'nucrm_contacts_total', 'Total contacts in CRM', 'gauge', Number(contactsCount));
+      push(metrics, 'nucrm_leads_total', 'Total leads (not deleted)', 'gauge', Number(leadsCount));
+      push(metrics, 'nucrm_deals_total', 'Total deals (not deleted)', 'gauge', Number(dealsCount));
+      push(metrics, 'nucrm_companies_total', 'Total companies (not deleted)', 'gauge', Number(companiesCount));
+      push(metrics, 'nucrm_tasks_pending_total', 'Pending incomplete tasks', 'gauge', Number(pendingTasks));
+      push(metrics, 'nucrm_activities_total', 'Total activities logged', 'gauge', Number(activitiesCount));
+      push(metrics, 'nucrm_tenants_total', 'Active tenants', 'gauge', Number(activeTenants));
+      push(metrics, 'nucrm_users_total', 'Total users', 'gauge', Number(usersCount));
+      push(metrics, 'nucrm_tasks_completed_total', 'Completed tasks', 'counter', Number(tasksCompleted));
+      push(metrics, 'nucrm_contacts_created_total', 'Contacts created in last 24h', 'counter', Number(contactsCreated));
+      push(metrics, 'nucrm_leads_created_total', 'Leads created in last 24h', 'counter', Number(leadsCreated));
+      push(metrics, 'nucrm_deals_created_total', 'Deals created in last 24h', 'counter', Number(dealsCreated));
+      push(metrics, 'nucrm_deals_won_total', 'Deals marked as won', 'gauge', dealsWon);
+      push(metrics, 'nucrm_deals_lost_total', 'Deals marked as lost', 'gauge', dealsLost);
+      push(metrics, 'nucrm_deals_value_total', 'Total pipeline value (USD)', 'gauge', pipelineValue);
+      push(metrics, 'nucrm_metrics_counts_up', 'CRM counts section emitted fresh values', 'gauge', 1);
+    } catch {
+      push(metrics, 'nucrm_metrics_counts_up', 'CRM counts section emitted fresh values', 'gauge', 0);
+    }
 
     // ── Redis / Cache Metrics ──────────────────────────────────
     let redisConn: IORedis | null = null;
