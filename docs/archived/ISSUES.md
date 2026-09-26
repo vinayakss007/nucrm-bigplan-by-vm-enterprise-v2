@@ -1,3 +1,7 @@
+<!-- ARCHIVED 2026-09-26 (#1419 M1, #1843): the issues drafted here have been filed and the
+tracker has moved on. GitHub's issue tracker is the source of truth — run
+`gh issue list --state open` for current status. Kept for archaeology only. -->
+
 # Infrastructure Issues — Ready to Create
 
 ---
