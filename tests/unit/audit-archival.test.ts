@@ -5,10 +5,17 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { gunzipSync } from 'node:zlib';
 import { archiveAuditLogs, MemorySink } from '@/lib/db/audit-archival';
 import type { DbClient } from '@/drizzle/db';
+import { PgDialect } from 'drizzle-orm/pg-core';
 
-// Mock DB client
+// Mock DB client. Deletion runs inside dbClient.transaction() with the
+// migration-0042 purge opt-in GUC, so the mock tx executes on its own spy.
 const mockExecute = vi.fn();
-const mockDb = { execute: mockExecute } as unknown as DbClient;
+const mockTxExecute = vi.fn().mockResolvedValue({ rows: [] });
+const mockTransaction = vi.fn(
+  async (cb: (tx: { execute: typeof mockTxExecute }) => Promise<unknown>) =>
+    cb({ execute: mockTxExecute }),
+);
+const mockDb = { execute: mockExecute, transaction: mockTransaction } as unknown as DbClient;
 
 function makeRows(count: number, daysOld = 120) {
   return Array.from({ length: count }, (_, i) => ({
@@ -30,6 +37,9 @@ function makeRows(count: number, daysOld = 120) {
 describe('archiveAuditLogs', () => {
   beforeEach(() => {
     mockExecute.mockReset();
+    mockTxExecute.mockReset();
+    mockTxExecute.mockResolvedValue({ rows: [] });
+    mockTransaction.mockClear();
   });
 
   it('returns zero when no rows eligible', async () => {
@@ -65,8 +75,6 @@ describe('archiveAuditLogs', () => {
     mockExecute.mockResolvedValueOnce({ rows: [{ cnt: 50 }] });
     // 2. Fetch batch
     mockExecute.mockResolvedValueOnce({ rows });
-    // 3. Delete batch
-    mockExecute.mockResolvedValueOnce({ rows: [] });
 
     const sink = new MemorySink();
     const result = await archiveAuditLogs(mockDb, sink, { batchSize: 100 });
@@ -94,12 +102,8 @@ describe('archiveAuditLogs', () => {
     mockExecute.mockResolvedValueOnce({ rows: [{ cnt: 150 }] });
     // Fetch batch 1
     mockExecute.mockResolvedValueOnce({ rows: batch1 });
-    // Delete batch 1
-    mockExecute.mockResolvedValueOnce({ rows: [] });
     // Fetch batch 2
     mockExecute.mockResolvedValueOnce({ rows: batch2 });
-    // Delete batch 2
-    mockExecute.mockResolvedValueOnce({ rows: [] });
 
     const sink = new MemorySink();
     const result = await archiveAuditLogs(mockDb, sink, { batchSize: 100 });
@@ -109,6 +113,31 @@ describe('archiveAuditLogs', () => {
     expect(sink.archives.size).toBe(2);
   });
 
+  it('opts into the migration-0042 purge GUC in the same transaction as each delete (#676)', async () => {
+    const rows = makeRows(10);
+    // Count
+    mockExecute.mockResolvedValueOnce({ rows: [{ cnt: 10 }] });
+    // Fetch batch
+    mockExecute.mockResolvedValueOnce({ rows });
+
+    const sink = new MemorySink();
+    await archiveAuditLogs(mockDb, sink, { batchSize: 100 });
+
+    expect(mockTransaction).toHaveBeenCalledTimes(1);
+    const sqlText = (arg: unknown): string =>
+      new PgDialect().sqlToQuery(arg as Parameters<PgDialect['sqlToQuery']>[0]).sql;
+    const txSql = mockTxExecute.mock.calls.map((call) => sqlText(call[0]));
+    expect(txSql).toHaveLength(2);
+    expect(txSql[0]).toContain("SET LOCAL app.allow_audit_purge = 'on'");
+    expect(txSql[1]).toContain('DELETE FROM audit_logs');
+    // The GUC must be set before the delete — after it, the trigger would
+    // already have rejected the batch.
+    expect(txSql[0]).not.toContain('DELETE');
+    // The delete must NOT run on the un-pinned pool client, where a
+    // transaction-scoped GUC cannot reach it.
+    expect(mockExecute.mock.calls.map((call) => sqlText(call[0])).join('\n')).not.toContain('DELETE');
+  });
+
   it('respects maxRows limit', async () => {
     const batch1 = makeRows(100);
 
@@ -116,8 +145,6 @@ describe('archiveAuditLogs', () => {
     mockExecute.mockResolvedValueOnce({ rows: [{ cnt: 500 }] });
     // Fetch batch 1 (capped at maxRows=100)
     mockExecute.mockResolvedValueOnce({ rows: batch1 });
-    // Delete batch 1
-    mockExecute.mockResolvedValueOnce({ rows: [] });
 
     const sink = new MemorySink();
     const result = await archiveAuditLogs(mockDb, sink, {
