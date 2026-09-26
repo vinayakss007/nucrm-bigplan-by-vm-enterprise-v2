@@ -158,9 +158,27 @@ export async function logError(opts: {
   // Correlate the DB row, the Sentry event, and the request. The proxy/auth
   // middleware put the id in AsyncLocalStorage; callers may still override.
   const requestId = opts.requestId ?? getCurrentRequestId();
+
   try {
     const { db } = await import('@/drizzle/db');
-    await db.insert(errorLogs).values({
+    // #2128: vitest runs sometimes execute against the shared pre-prod DB — an
+    // unmocked write from a test pollutes production error_logs and Sentry.
+    // Skip the DB mirror in test mode unless the caller mocked `db.insert`
+    // (those unit tests legitimately assert the write happened).
+    const testMode = process.env.VITEST === 'true' || process.env.NODE_ENV === 'test';
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const mockedInsert = typeof (db as any).insert?._isMockFunction === 'boolean';
+    if (testMode && !mockedInsert) {
+      console.log(JSON.stringify({
+        source: 'logError.test-mode',
+        outcome: 'db_write_skipped',
+        level,
+        message: msg,
+        context: opts.context ?? null,
+        requestId: requestId ?? null,
+      }));
+    } else {
+      await db.insert(errorLogs).values({
       tenantId: opts.tenantId ?? null,
       userId: opts.userId ?? null,
       level,
@@ -175,11 +193,28 @@ export async function logError(opts: {
         ...opts.metadata,
       },
     });
+    }
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
-    console.error('[logError] DB write failed:', msg, '|', err.message);
+    // #2129: during pool saturation the DB write fails on exactly the worst
+    // errors. Never swallow the incident — emit a structured one-line JSON
+    // record to stdout so promtail/Loki keep a queryable copy.
+    console.error(JSON.stringify({
+      source: 'logError.fallback',
+      outcome: 'db_write_failed',
+      level,
+      message: msg,
+      context: opts.context ?? null,
+      requestId: requestId ?? null,
+      tenantId: opts.tenantId ?? null,
+      userId: opts.userId ?? null,
+      requestUrl: opts.requestUrl ?? null,
+      requestMethod: opts.requestMethod ?? null,
+      writeFailureCause: err?.message ?? String(err),
+      stack: stack ?? null,
+    }));
   }
 
   // External "assist" views — forward the same error out-of-band (best-effort).

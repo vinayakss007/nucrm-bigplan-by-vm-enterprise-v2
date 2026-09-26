@@ -1,0 +1,63 @@
+name: Nightly load soak (#2120)
+
+# Disabled by default: only runs when the repo variable LOAD_SOAK_ENABLED is
+# set to "true" and LOAD_SESSIONS_B64 (base64 of a sessions.json built by
+# tests/load/make-sessions.sh) plus LOAD_BASE_URL secrets exist.
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch: {}
+
+permissions: {}
+
+jobs:
+  soak:
+    if: vars.LOAD_SOAK_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install k6
+        run: |
+          set -euo pipefail
+          sudo mkdir -p /etc/apt/keyrings
+          curl -fsSL https://dl.k6.io/key.gpg | sudo gpg --dearmor -o /etc/apt/keyrings/k6-archive-key.gpg
+          echo "deb [signed-by=/etc/apt/keyrings/k6-archive-key.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+          sudo apt-get update && sudo apt-get install -y k6
+
+      - name: Write sessions file
+        run: |
+          umask 077
+          printf '%s' "${{ secrets.LOAD_SESSIONS_B64 }}" | base64 -d > /tmp/sessions.json
+
+      - name: Baseline smoke (QUICK)
+        env:
+          BASE_URL: ${{ secrets.LOAD_BASE_URL }}
+          SESSIONS_FILE: /tmp/sessions.json
+          QUICK: "1"
+          VUS: "10"
+          QUICK_DURATION: "60s"
+        run: |
+          k6 run tests/load/baseline.js \
+            --env BASE_URL --env SESSIONS_FILE --env QUICK --env VUS --env QUICK_DURATION \
+            --summary-export=/tmp/baseline.json
+
+      - name: Write-heavy smoke (QUICK)
+        env:
+          BASE_URL: ${{ secrets.LOAD_BASE_URL }}
+          SESSIONS_FILE: /tmp/sessions.json
+          QUICK: "1"
+          VUS: "5"
+          QUICK_DURATION: "60s"
+        run: |
+          k6 run tests/load/write-heavy.js \
+            --env BASE_URL --env SESSIONS_FILE --env QUICK --env VUS --env QUICK_DURATION \
+            --summary-export=/tmp/write-heavy.json
+
+      - name: Upload summaries
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: load-soak-${{ github.run_number }}
+          path: /tmp/*.json
+          if-no-files-found: ignore

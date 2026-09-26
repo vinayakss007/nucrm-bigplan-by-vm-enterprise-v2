@@ -28,11 +28,48 @@ const API_VERSION = '2.0';
 
 const RATE_LIMIT_UNAUTH = 30;
 const RATE_LIMIT_AUTH = 120;
+// #2117: dashboard polling and UI mutations shared the single 120/min/user
+// budget, so an authenticated user's own polling could 429 their writes
+// (self-DoS under load). Splits cookie-session traffic into route-class
+// buckets: reads get a larger budget, writes keep the original ceiling.
+const RATE_LIMIT_READS = 300;
 const RATE_LIMIT_API_KEY = 300;
 const RATE_LIMIT_WINDOW_MS = 60_000;
 
 function generateRequestId(): string {
   return globalThis.crypto.randomUUID();
+}
+
+/**
+ * #1992: short-lived verified-JWT cache. HS256 jwtVerify costs ~5-15ms CPU and
+ * the proxy runs it on every request (incl. RSC prefetches and every asset-ish
+ * path the matcher lets through). Entries live 10s, so a revoked session is
+ * rejected at the route layer (requireAuth verifies independently) and at worst
+ * passes the proxy gate for 10 extra seconds. Bounded LRU-ish by insertion
+ * order so a spoofed-token flood can't grow it unboundedly.
+ */
+const JWT_CACHE_TTL_MS = 10_000;
+const JWT_CACHE_MAX = 1_000;
+interface JwtCacheEntry { sub: string; exp: number; cachedAt: number }
+const jwtCache = new Map<string, JwtCacheEntry>();
+
+function jwtCacheGet(token: string): JwtCacheEntry | null {
+  const hit = jwtCache.get(token);
+  if (!hit) return null;
+  const now = Date.now();
+  if (now - hit.cachedAt > JWT_CACHE_TTL_MS || hit.exp * 1000 <= now) {
+    jwtCache.delete(token);
+    return null;
+  }
+  return hit;
+}
+
+function jwtCacheSet(token: string, entry: JwtCacheEntry): void {
+  if (jwtCache.size >= JWT_CACHE_MAX) {
+    const oldest = jwtCache.keys().next().value;
+    if (oldest !== undefined) jwtCache.delete(oldest);
+  }
+  jwtCache.set(token, entry);
 }
 
 /**
@@ -188,6 +225,7 @@ if (ALLOWED_ORIGINS.includes('*') && process.env['NODE_ENV'] === 'production') {
   throw new Error('FATAL: ALLOWED_ORIGINS=* in production. CORS is wide-open. Set specific origins.');
 }
 
+// #1992: O(1) exact-match fast path; prefix fallback keeps original semantics.
 function isPublic(pathname: string): boolean {
   if (PUBLIC_PATH_SET.has(pathname)) return true;
   if (PUBLIC_PATHS.some(p => pathname.startsWith(p + '/'))) return true;
@@ -383,8 +421,20 @@ export async function proxy(request: NextRequest) {
   }
 
   try {
-    const { payload } = await jwtVerify(token, JWT_SECRET);
-    if (!payload.sub) throw new Error('Invalid token');
+    let sub: string;
+    const cachedJwt = jwtCacheGet(token);
+    if (cachedJwt) {
+      sub = cachedJwt.sub;
+    } else {
+      const { payload } = await jwtVerify(token, JWT_SECRET);
+      if (!payload.sub) throw new Error('Invalid token');
+      sub = payload.sub;
+      jwtCacheSet(token, {
+        sub,
+        exp: typeof payload.exp === 'number' ? payload.exp : Math.floor(Date.now() / 1000) + 60,
+        cachedAt: Date.now(),
+      });
+    }
 
     // CSRF protection for state-changing API requests
     if (isApiRequest(pathname)) {
@@ -399,10 +449,13 @@ export async function proxy(request: NextRequest) {
 
       // Authenticated API rate limiting (by user)
       if (!shouldBypassRateLimit(pathname)) {
-        const userId = payload.sub;
+        const userId = sub;
         const isApiKey = authHeader?.startsWith('Bearer ') && token !== cookieToken && !cookieToken;
-        const max = isApiKey ? RATE_LIMIT_API_KEY : RATE_LIMIT_AUTH;
-        const key = isApiKey ? `rl:apikey:${userId}` : `rl:user:${userId}`;
+        const isRead = request.method === 'GET' || request.method === 'HEAD';
+        const max = isApiKey ? RATE_LIMIT_API_KEY : isRead ? RATE_LIMIT_READS : RATE_LIMIT_AUTH;
+        const key = isApiKey
+          ? `rl:apikey:${userId}`
+          : `rl:user:${userId}:${isRead ? 'read' : 'write'}`;
         const result = edgeLimiter.check(key, max, RATE_LIMIT_WINDOW_MS);
         if (!result.allowed) {
           return buildRateLimitResponse(requestId, result, origin);

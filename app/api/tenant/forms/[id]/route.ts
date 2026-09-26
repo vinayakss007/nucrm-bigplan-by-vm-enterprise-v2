@@ -14,6 +14,7 @@ import { eq, and, desc } from 'drizzle-orm';
 import { concurrencyGuard } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { isEntityId } from '@/lib/id';
 
  
  
@@ -23,6 +24,7 @@ export const GET = withApiRoute(async (req: NextRequest, { params }: any) => {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
     const { id } = await params;
+    if (!isEntityId(id)) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
     const form = await db.query.forms.findFirst({
       where: and(eq(forms.id, id), eq(forms.tenantId, ctx.tenantId))
@@ -65,6 +67,7 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: any) => {
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
     const { id } = await params;
+    if (!isEntityId(id)) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     const raw = await readJsonBody(req);
     const validated = validateBody(updateFormSchema, raw);
     if (validated instanceof NextResponse) return validated;
@@ -110,6 +113,7 @@ export const DELETE = withApiRoute(async (req: NextRequest, { params }: any) => 
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
     const { id } = await params;
+    if (!isEntityId(id)) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
     await db.update(forms).set({ deletedAt: new Date() }).where(and(eq(forms.id, id), eq(forms.tenantId, ctx.tenantId)));
     return NextResponse.json({ ok: true });

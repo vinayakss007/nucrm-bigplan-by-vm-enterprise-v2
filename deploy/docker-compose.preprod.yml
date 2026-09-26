@@ -21,7 +21,6 @@
 # ═══════════════════════════════════════════════════════════════════════════════
 
 services:
-
   # ─────────────────────────────────────────────────────────────────────────────
   #  PgBouncer — repointed at UpCloud Managed PostgreSQL (external, TLS-required)
   # ─────────────────────────────────────────────────────────────────────────────
@@ -143,6 +142,14 @@ services:
         NEXT_PUBLIC_APP_URL: "${NEXT_PUBLIC_APP_URL:-https://95.111.194.98}"
     environment:
       - PGBOUNCER_ENABLED=true
+      # #2116: nginx-production.conf now sends a single-hop authoritative
+      # X-Forwarded-For ($remote_addr), so getClientIp()/rate-limiting can
+      # trust the header.
+      - TRUST_PROXY=true
+      # #2122: pin explicitly instead of relying on the code default so the
+      # server-connection budget (app 20 + worker 10 ≈ 30 of the 40 pgbouncer
+      # default pool) is auditable from this file alone.
+      - DATABASE_POOL_SIZE=${DATABASE_POOL_SIZE:-20}
       - SENTRY_ENVIRONMENT=preprod
       - SENTRY_RELEASE=${SENTRY_RELEASE:-}
       # The base compose passes S3_ENDPOINT/S3_REGION/AWS_* and both bucket vars
@@ -192,7 +199,11 @@ services:
     # (see above). Every other key is restated because Compose merges mappings key
     # by key; the values match the base so only the URL actually changes.
     healthcheck:
-      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://127.0.0.1:3000/api/health || exit 1"]
+      test:
+        [
+          "CMD-SHELL",
+          "wget --quiet --tries=1 --spider http://127.0.0.1:3000/api/health || exit 1",
+        ]
       interval: 15s
       timeout: 5s
       retries: 3
@@ -433,7 +444,11 @@ services:
   # ─────────────────────────────────────────────────────────────────────────────
   nginx:
     healthcheck:
-      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://127.0.0.1/health || exit 1"]
+      test:
+        [
+          "CMD-SHELL",
+          "wget --quiet --tries=1 --spider http://127.0.0.1/health || exit 1",
+        ]
       interval: 10s
       timeout: 3s
       retries: 3

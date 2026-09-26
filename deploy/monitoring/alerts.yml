@@ -29,13 +29,47 @@ groups:
           description: "Node.js heap usage has exceeded 90% for 5 minutes."
 
       - alert: AppHighErrorRate
-        expr: rate(nucrm_http_requests_total{status=~"5.."}[5m]) / rate(nucrm_http_requests_total[5m]) > 0.05
+        # The app collector exports http_requests_total WITHOUT a nucrm_
+        # prefix (lib/metrics.ts trackRequest) — the old expr matched a
+        # series that never exists, so this alert could not fire.
+        expr: rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m]) > 0.05
         for: 5m
         labels:
           severity: warning
         annotations:
           summary: "HTTP 5xx error rate > 5%"
           description: "More than 5% of requests are returning 5xx errors."
+
+      - alert: AppCacheDown
+        # nucrm_cache_up is emitted by /api/metrics every scrape (1 healthy,
+        # 0 unreachable), so the 0 reflects the CURRENT scrape, not a stale
+        # last-bad sample.
+        expr: nucrm_cache_up == 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "App cannot reach Redis"
+          description: "/api/metrics reports nucrm_cache_up == 0 — queue and cache telemetry is dark."
+
+      - alert: AppDbSectionDown
+        expr: nucrm_db_up == 0 or nucrm_db_pool_up == 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Metrics DB section failing"
+          description: "/api/metrics DB gauge or pool section returned down (#2118) — check the app DB pool."
+
+      - alert: QueueBacklogHigh
+        # nucrm_queue_jobs_total covers all ten worker queues (6f9f6999).
+        expr: max by (queue) (nucrm_queue_jobs_total{status="waiting"}) > 100
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "BullMQ queue backlog > 100"
+          description: "Queue {{ $labels.queue }} has >100 waiting jobs for 10 minutes — worker stalled or under-provisioned."
 
       - alert: NoTasksPending
         expr: nucrm_tasks_pending_total == 0

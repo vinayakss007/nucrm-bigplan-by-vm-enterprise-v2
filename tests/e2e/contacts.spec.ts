@@ -5,18 +5,30 @@ const TEST_USER = {
   password: 'admin123',
 };
 
-test.describe('Contacts', () => {
-  test.beforeEach(async ({ page, context }) => {
+
+let _cachedAuth: { csrf: string; session: string } | null = null;
+async function cachedLogin(page: import('@playwright/test').Page, context: import('@playwright/test').BrowserContext) {
+  await context.route('**/api/track/**', route => route.abort());
+  if (!_cachedAuth) {
     const api = await page.request.post('/api/auth/login', {
       data: { email: TEST_USER.email, password: TEST_USER.password },
     });
-    const setCookie = api.headers()['set-cookie'] || '';
-    const csrf = setCookie.match(/nucrm_csrf_token=([^;]+)/)?.[1] || '';
-    const session = setCookie.match(/nucrm_session=([^;]+)/)?.[1] || '';
-    await context.addCookies([
-      { name: 'nucrm_csrf_token', value: csrf, domain: 'localhost', path: '/' },
-      { name: 'nucrm_session', value: session, domain: 'localhost', path: '/' },
-    ]);
+    if (api.status() !== 200) throw new Error(`e2e login failed: ${api.status()} ${await api.text()}`);
+    const sc = api.headers()['set-cookie'] || '';
+    _cachedAuth = {
+      csrf: sc.match(/nucrm_csrf_token=([^;]+)/)?.[1] || '',
+      session: sc.match(/nucrm_session=([^;]+)/)?.[1] || '',
+    };
+  }
+  await context.addCookies([
+    { name: 'nucrm_csrf_token', value: _cachedAuth.csrf, domain: 'localhost', path: '/', secure: true, sameSite: 'Strict' as const },
+    { name: 'nucrm_session', value: _cachedAuth.session, domain: 'localhost', path: '/', secure: true, sameSite: 'Strict' as const },
+  ]);
+}
+
+test.describe('Contacts', () => {
+  test.beforeEach(async ({ page, context }) => {
+    await cachedLogin(page, context);
   });
 
   test('view contacts list', async ({ page }) => {

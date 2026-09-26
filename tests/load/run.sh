@@ -8,18 +8,30 @@
 #   ./tests/load/run.sh multi-tenant # Run only multi-tenant
 #
 # Environment:
-#   BASE_URL     - Target URL (default: http://localhost:3000)
-#   EMAIL        - Login email
-#   PASSWORD     - Login password
-#   CI           - Set to "true" for CI mode (fails on threshold breach)
+#   BASE_URL       - Target URL (default: http://localhost:3000; use
+#                    https://localhost for the nginx-fronted deployed app)
+#   SESSIONS_FILE  - JSON array of {session, csrf} pairs (preferred; build
+#                    with ./tests/load/make-sessions.sh). Login itself is
+#                    rate-limited, so load runs must not authenticate per-VU
+#                    against a deployed instance.
+#   EMAIL/PASSWORD - Fallback single-account login (relaxed-limiter dev only)
+#   TENANTn_EMAIL/TENANTn_PASSWORD - multi-tenant fallback login (n=1..3)
+#   CI             - Set to "true" for CI mode (fails on threshold breach)
 
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BASE_URL="${BASE_URL:-http://localhost:3000}"
-EMAIL="${EMAIL:-superadmin@nucrm.com}"
-PASSWORD="${PASSWORD:-admin123}"
 CI="${CI:-false}"
+
+if [ -z "${SESSIONS_FILE:-}" ] && { [ -z "${EMAIL:-}" ] || [ -z "${PASSWORD:-}" ]; }; then
+  echo -e "${RED}No auth source: set SESSIONS_FILE, or EMAIL+PASSWORD (dev instances only - login is rate-limited). See #2120.${NC}"
+  exit 1
+fi
+if [ -n "${SESSIONS_FILE:-}" ] && [ ! -f "${SESSIONS_FILE}" ]; then
+  echo -e "${RED}SESSIONS_FILE not found: ${SESSIONS_FILE}${NC}"
+  exit 1
+fi
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -49,11 +61,16 @@ run_test() {
   echo -e "${GREEN}Running: ${test_name}${NC}"
   echo "File: ${test_file}"
 
+  local k6_extra=()
+  case "${BASE_URL}" in https://localhost*) k6_extra+=(--insecure-skip-tls-verify) ;; esac
+
   local exit_code=0
   k6 run "${test_file}" \
     --env BASE_URL="${BASE_URL}" \
-    --env EMAIL="${EMAIL}" \
-    --env PASSWORD="${PASSWORD}" \
+    ${SESSIONS_FILE:+--env SESSIONS_FILE="${SESSIONS_FILE}"} \
+    ${EMAIL:+--env EMAIL="${EMAIL}"} \
+    ${PASSWORD:+--env PASSWORD="${PASSWORD}"} \
+    "${k6_extra[@]}" \
     || exit_code=$?
 
   if [ ${exit_code} -eq 0 ]; then

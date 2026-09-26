@@ -53,8 +53,50 @@
  */
 
 import type { NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 import { withPinnedConnection } from '@/lib/db/request-connection';
 import { trackRequestStart, trackRequestEnd } from '@/lib/db/graceful-shutdown';
+import { metrics } from '@/lib/metrics';
+
+/**
+ * Collapse variable path segments (numeric ids, UUIDs) to `[id]` so the
+ * Prometheus series count stays bounded by route shape, not by entity count.
+ */
+function normalizeMetricPath(pathname: string): string {
+  return pathname
+    .replace(/\/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}(?=\/|$)/g, '/[id]')
+    .replace(/\/\d+(?=\/|$)/g, '/[id]');
+}
+
+/**
+ * Map the Postgres constraint/cast errors that prove out as client problems
+ * when a handler let them escape, at the single route chokepoint, instead of
+ * a generic 500 (+ Sentry noise for user-input mistakes):
+ *
+ * - 22P02 uuid cast — ~30 [id] routes have no isEntityId() guard, so probing
+ *   /api/tenant/<thing>/foobar used to 500 (Sentry NUCRM-Y/W/X class, #2131).
+ *   A bad PATH id -> 404 (not a uuid cannot name an entity); on POST the bad
+ *   uuid is almost always a body reference -> 400.
+ * - 23505 unique_violation — the roles route already answers 409 for a
+ *   duplicate name; unhandled escapes elsewhere get the same status.
+ * - 23503 foreign_key_violation — create/update referencing a nonexistent
+ *   id is bad client input -> 400.
+ *
+ * Everything else (including 22P02 on non-uuid types) still propagates so
+ * real server bugs keep surfacing as 500s.
+ */
+function clientErrorFromDbCode(err: unknown, method: string): { status: number; message: string } | null {
+  const e = err as { code?: string; message?: string } | null;
+  const code = e?.code;
+  if (code === '22P02' && /uuid/i.test(String(e?.message))) {
+    return method === 'POST'
+      ? { status: 400, message: 'Invalid identifier in request body' }
+      : { status: 404, message: 'Not found' };
+  }
+  if (code === '23505') return { status: 409, message: 'Conflict: value already exists' };
+  if (code === '23503') return { status: 400, message: 'Invalid reference' };
+  return null;
+}
 
 /**
  * A Next.js App Router route handler: receives the request and an optional
@@ -93,9 +135,41 @@ export function withApiRoute<C = unknown>(
     // making the drain loop a no-op (inFlightCount stayed 0). The counter is
     // decremented in finally so it can never leak on error/early-return.
     trackRequestStart();
+    // Record into the in-memory collector so /api/metrics exposes
+    // http_requests_total/http_request_duration_ms in production. Before
+    // this only the dev middleware called trackRequest(), which made the
+    // Grafana 5xx-rate alert permanently dead: nothing in prod emitted the
+    // series. Errors count as 500 (the thrown handler becomes a 500 too).
+    // Observability must never break the request path, so path/method
+    // extraction is fail-safe (route fakes in tests, malformed urls).
+    const startedAt = Date.now();
+    let metricPath = 'unknown';
     try {
-      return await withPinnedConnection(async () => handler(request, context));
+      metricPath = normalizeMetricPath(new URL(String(request.url)).pathname);
+    } catch { /* non-URL request (test double) */ }
+    const metricMethod = request?.method ?? 'unknown';
+    let metricStatus = 500;
+    try {
+      const response = await withPinnedConnection(async () => handler(request, context));
+      metricStatus = response instanceof Response ? response.status : 500;
+      return response;
+    } catch (err) {
+      const mapped = clientErrorFromDbCode(err, metricMethod);
+      if (mapped) {
+        metricStatus = mapped.status;
+        return NextResponse.json({ error: mapped.message }, { status: mapped.status });
+      }
+      throw err;
     } finally {
+      metrics.increment('http_requests_total', 1, {
+        method: metricMethod,
+        path: metricPath,
+        status: String(metricStatus),
+      });
+      metrics.timing('http_request_duration', Date.now() - startedAt, {
+        method: metricMethod,
+        path: metricPath,
+      });
       trackRequestEnd();
     }
   };

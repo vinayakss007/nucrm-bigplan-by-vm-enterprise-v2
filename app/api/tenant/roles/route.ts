@@ -59,6 +59,13 @@ export const POST = withApiRoute(async (request: NextRequest) => {
 
     const slug = v.name.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
 
+    const slugTaken = await db.select({ id: roles.id }).from(roles)
+      .where(and(eq(roles.tenantId, ctx.tenantId), eq(roles.slug, slug), isNull(roles.deletedAt)))
+      .limit(1);
+    if (slugTaken.length > 0) {
+      return NextResponse.json({ error: 'A role with this name already exists' }, { status: 409 });
+    }
+
     const [newRole] = await db.insert(roles)
       .values({
         tenantId: ctx.tenantId,
@@ -74,6 +81,11 @@ export const POST = withApiRoute(async (request: NextRequest) => {
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {
+    // Race against the pre-check above: two parallel creates with the same
+    // slug — the unique index wins; surface it as 409, not a 500.
+    if ((err?.cause?.code ?? err?.code) === '23505') {
+      return NextResponse.json({ error: 'A role with this name already exists' }, { status: 409 });
+    }
     await logError({ error: err, context: 'roles POST', requestMethod: 'POST' });
     return apiError(err);
   }

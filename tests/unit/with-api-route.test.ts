@@ -141,4 +141,66 @@ describe('withApiRoute pins the whole handler body (#1615)', () => {
     expect(fakeClient.release).toHaveBeenCalledTimes(1);
     expect(await res.text()).toBe('pgbouncer');
   });
+
+  it('records http_requests_total with normalized path and final status', async () => {
+    const { withApiRoute } = await import('../../lib/api/with-api-route');
+    const { metrics, exportPrometheusMetrics } = await import('../../lib/metrics');
+    metrics.reset();
+
+    const ok = withApiRoute(async () => new Response(null, { status: 201 }));
+    await ok(new Request('http://x/api/tenant/contacts/42/notes', { method: 'GET' }) as never, undefined as never);
+    const boom = withApiRoute(async () => { throw new Error('x'); });
+    await expect(boom(new Request('http://x/api/tenant/deals/0f51db8c-1d42-4f4c-9be6-a5fbc5f7d31a', { method: 'DELETE' }) as never, undefined as never)).rejects.toThrow('x');
+
+    const out = exportPrometheusMetrics();
+    // Numeric and UUID segments collapse to [id] so series cardinality is
+    // bounded by route shape; thrown handlers count as 500.
+    expect(out).toContain('http_requests_total{method="GET",path="/api/tenant/contacts/[id]/notes",status="201"} 1');
+    expect(out).toContain('http_requests_total{method="DELETE",path="/api/tenant/deals/[id]",status="500"} 1');
+    metrics.reset();
+  });
+
+  it('maps Postgres uuid-cast failures on non-uuid ids to 404 (GET) / 400 (POST)', async () => {
+    // Sentry NUCRM-Y/W/X class: ~30 [id] routes without isEntityId guards
+    // used to answer 500 for /api/tenant/<thing>/foobar.
+    const { withApiRoute } = await import('../../lib/api/with-api-route');
+    const castErr = () => {
+      const e = new Error('invalid input syntax for type uuid: "foobar"') as Error & { code: string };
+      e.code = '22P02';
+      return e;
+    };
+    const GET = withApiRoute(async () => { throw castErr(); });
+    const POST = withApiRoute(async () => { throw castErr(); });
+
+    const resGet = await GET(new Request('http://x/api/tenant/tasks/foobar', { method: 'GET' }) as never, undefined as never);
+    expect(resGet!.status).toBe(404);
+    expect(await resGet!.json()).toEqual({ error: 'Not found' });
+
+    const resPost = await POST(new Request('http://x/api/tenant/tasks', { method: 'POST' }) as never, undefined as never);
+    expect(resPost!.status).toBe(400);
+
+    // Non-22P02 and non-uuid 22P02 errors must still propagate as 500s.
+    const Other = withApiRoute(async () => {
+      const e = new Error('invalid input syntax for type integer: "x"') as Error & { code: string };
+      e.code = '22P02';
+      throw e;
+    });
+    await expect(Other(new Request('http://x/api/tenant/tasks/1', { method: 'GET' }) as never, undefined as never)).rejects.toThrow();
+
+    // Constraint escapes become proper client-error statuses too.
+    const mk = (code: string, msg: string) => withApiRoute(async () => {
+      const e = new Error(msg) as Error & { code: string };
+      e.code = code;
+      throw e;
+    });
+    const dup = await mk('23505', 'duplicate key value violates unique constraint "roles_name_tenant_key"')(
+      new Request('http://x/api/tenant/roles', { method: 'POST' }) as never, undefined as never);
+    expect(dup!.status).toBe(409);
+    expect(await dup!.json()).toEqual({ error: 'Conflict: value already exists' });
+
+    const fk = await mk('23503', 'violates foreign key constraint "tasks_contact_id_fkey"')(
+      new Request('http://x/api/tenant/tasks', { method: 'PUT' }) as never, undefined as never);
+    expect(fk!.status).toBe(400);
+    expect(await fk!.json()).toEqual({ error: 'Invalid reference' });
+  });
 });
