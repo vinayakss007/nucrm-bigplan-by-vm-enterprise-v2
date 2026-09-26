@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // Mock drizzle DB with controllable return values
 let dbReturnValue: unknown[] = [];
 
+vi.mock('@/lib/errors-server', () => ({ logError: vi.fn().mockResolvedValue(undefined) }));
 vi.mock('@/drizzle/db', () => ({
   db: {
     select: vi.fn(() => ({

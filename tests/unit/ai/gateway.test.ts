@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Gateway unit tests stub global fetch with fake providers — bypass the SSRF
 // guard so localhost test endpoints resolve to the stub (guard has own suite).
+vi.mock('@/lib/errors-server', () => ({ logError: vi.fn().mockResolvedValue(undefined) }));
 vi.mock('@/lib/security/ssrf', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/security/ssrf')>();
   return {
