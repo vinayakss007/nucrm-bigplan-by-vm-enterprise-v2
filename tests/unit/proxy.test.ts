@@ -183,6 +183,22 @@ describe('proxy middleware', () => {
       expect(res.status).toBe(429);
     });
 
+    it('#2117: reads use a dedicated rl:user:<id>:read bucket at 300/min', async () => {
+      const { proxy } = await import('@/proxy');
+      await proxy(makeReq('/api/tenant/contacts', { cookies: { nucrm_session: 'valid-token' } }));
+      const [key, max] = edgeCheckMock.mock.calls[0] as [string, number];
+      expect(key).toBe('rl:user:user-123:read');
+      expect(max).toBe(300);
+    });
+
+    it('#2117: writes keep the 120/min budget on rl:user:<id>:write', async () => {
+      const { proxy } = await import('@/proxy');
+      await proxy(makeReq('/api/tenant/contacts', { method: 'POST', cookies: { nucrm_session: 'valid-token' } }));
+      const [key, max] = edgeCheckMock.mock.calls[0] as [string, number];
+      expect(key).toBe('rl:user:user-123:write');
+      expect(max).toBe(120);
+    });
+
     it('rejects unauthenticated requests', async () => {
       mockJwtVerify.mockRejectedValue(new Error('no token'));
       const { proxy } = await import('@/proxy');

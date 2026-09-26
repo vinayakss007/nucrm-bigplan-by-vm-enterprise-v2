@@ -44,9 +44,10 @@ curl -s -b "$jar" \
 ```
 
 Rate limits that bite scripted traffic first: login 10/15min,
-`csrf-token` 10/min, mutating routes 30/min, authenticated edge limiter
-120/min per user. For load runs, pre-create sessions (see
-`tests/load/make-sessions.sh`).
+`csrf-token` 10/min, mutating routes 30/min, and the authenticated edge
+limiter, which is per user per minute split into route-class buckets
+(#2117): 300/min for GET/HEAD reads, 120/min for writes. For load runs,
+pre-create sessions (see `tests/load/make-sessions.sh`).
 
 ## 2. Request bodies are snake_case; response bodies are camelCase
 

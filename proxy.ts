@@ -28,6 +28,11 @@ const API_VERSION = '2.0';
 
 const RATE_LIMIT_UNAUTH = 30;
 const RATE_LIMIT_AUTH = 120;
+// #2117: dashboard polling and UI mutations shared the single 120/min/user
+// budget, so an authenticated user's own polling could 429 their writes
+// (self-DoS under load). Splits cookie-session traffic into route-class
+// buckets: reads get a larger budget, writes keep the original ceiling.
+const RATE_LIMIT_READS = 300;
 const RATE_LIMIT_API_KEY = 300;
 const RATE_LIMIT_WINDOW_MS = 60_000;
 
@@ -434,8 +439,11 @@ export async function proxy(request: NextRequest) {
       if (!shouldBypassRateLimit(pathname)) {
         const userId = sub;
         const isApiKey = authHeader?.startsWith('Bearer ') && token !== cookieToken && !cookieToken;
-        const max = isApiKey ? RATE_LIMIT_API_KEY : RATE_LIMIT_AUTH;
-        const key = isApiKey ? `rl:apikey:${userId}` : `rl:user:${userId}`;
+        const isRead = request.method === 'GET' || request.method === 'HEAD';
+        const max = isApiKey ? RATE_LIMIT_API_KEY : isRead ? RATE_LIMIT_READS : RATE_LIMIT_AUTH;
+        const key = isApiKey
+          ? `rl:apikey:${userId}`
+          : `rl:user:${userId}:${isRead ? 'read' : 'write'}`;
         const result = edgeLimiter.check(key, max, RATE_LIMIT_WINDOW_MS);
         if (!result.allowed) {
           return buildRateLimitResponse(requestId, result, origin);
