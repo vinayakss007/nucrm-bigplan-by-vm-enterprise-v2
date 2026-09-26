@@ -1,0 +1,73 @@
+name: Backup Restore Drill (RLS)
+
+# Proves scripts/backup-rls-live.sh + scripts/restore-drill.sh round-trip the
+# REAL schema (#2124): migrate a throwaway PostgreSQL 16, dump it with the
+# RLS-safe backup tooling, restore into a scratch DB, and assert every
+# manifest row count. Runs weekly; any red X means backups cannot be trusted.
+
+on:
+  schedule:
+    - cron: "37 4 * * 1" # Mondays ~04:37 UTC
+  workflow_dispatch:
+
+jobs:
+  drill:
+    name: Backup -> restore -> verify
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: nucrm
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    env:
+      PGURL: postgresql://postgres:postgres@localhost:5432/nucrm
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - run: npm ci
+
+      - name: Build the real schema
+        run: |
+          npm run db:sync
+          node scripts/apply-rls-ci.mjs
+        env:
+          DATABASE_URL: ${{ env.PGURL }}
+
+      - name: Seed a known-nonempty table
+        run: >
+          psql "$PGURL" -v ON_ERROR_STOP=1 -c
+          "CREATE TABLE drill_seed(t text); INSERT INTO drill_seed SELECT 'r'||g FROM generate_series(1,3) g"
+
+      - name: RLS-safe backup
+        run: |
+          BACKUP_DATABASE_URL="$PGURL" BACKUP_DIR="$RUNNER_TEMP/backups" bash scripts/backup-rls-live.sh
+          ls -la "$RUNNER_TEMP/backups"
+        shell: bash
+
+      - name: Restore drill (row counts must match manifest)
+        run: |
+          D=$(ls -d "$RUNNER_TEMP"/backups/*/ | head -1)
+          DRILL_DATABASE_URL="$PGURL" bash scripts/restore-drill.sh "$D"
+        shell: bash
+
+      - name: Upload dump set on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: failed-backup-set
+          path: ${{ runner.temp }}/backups
+          retention-days: 7

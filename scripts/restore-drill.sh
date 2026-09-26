@@ -61,7 +61,18 @@ psql "$DRILL_DATABASE_URL" -v ON_ERROR_STOP=1 -q -c "DROP DATABASE IF EXISTS $SC
 psql "$DRILL_DATABASE_URL" -v ON_ERROR_STOP=1 -q -c "CREATE DATABASE $SCRATCH_DB TEMPLATE template0"
 
 log "applying schema.sql"
-psql "$SCRATCH_URL" -v ON_ERROR_STOP=1 -q -f "$DUMP_DIR/schema.sql"
+if ! psql "$SCRATCH_URL" -v ON_ERROR_STOP=1 -q -f "$DUMP_DIR/schema.sql" 2>/tmp/restore-drill-schema.err; then
+  # Newer pg_dump clients emit SET statements (e.g. transaction_timeout on
+  # PG18) that an older scratch server rejects. Strip only top-level SET
+  # lines and retry before declaring the schema unrestorable.
+  if grep -q 'unrecognized configuration parameter' /tmp/restore-drill-schema.err; then
+    log "WARN: pg_dump client is newer than the server; stripping unknown SET lines and retrying"
+    sed -E '/^SET /d' "$DUMP_DIR/schema.sql" | psql "$SCRATCH_URL" -v ON_ERROR_STOP=1 -q -f /dev/stdin
+  else
+    cat /tmp/restore-drill-schema.err >&2
+    fail "schema.sql did not apply cleanly"
+  fi
+fi
 
 psql_q() { psql "$SCRATCH_URL" -v ON_ERROR_STOP=1 -Atq -c "$1"; }
 
