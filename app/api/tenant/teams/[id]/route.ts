@@ -45,8 +45,7 @@ export const GET = withApiRoute(async (req: NextRequest, { params }: { params: P
       ));
 
     return NextResponse.json({ data: { ...team, members } });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) { return apiError(err); }
+  } catch (err) { return apiError(err); }
 });
 
 // PATCH /api/tenant/teams/:id — update team fields (admin only).
@@ -80,8 +79,7 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params:
     if (!updated) return NextResponse.json({ error: 'Team not found' }, { status: 404 });
 
     return NextResponse.json({ data: updated });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) { return apiError(err); }
+  } catch (err) { return apiError(err); }
 });
 
 // DELETE /api/tenant/teams/:id — soft-delete the team (admin only). Members are
@@ -103,6 +101,5 @@ export const DELETE = withApiRoute(async (req: NextRequest, { params }: { params
     if (!deleted) return NextResponse.json({ error: 'Team not found' }, { status: 404 });
 
     return NextResponse.json({ data: { id, deleted: true } });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) { return apiError(err); }
+  } catch (err) { return apiError(err); }
 });

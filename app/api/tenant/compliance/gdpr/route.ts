@@ -57,8 +57,7 @@ export const GET = withApiRoute(async (req: NextRequest) => {
     });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) { return apiError(err); }
+  } catch (err) { return apiError(err); }
 });
 
 export const POST = withApiRoute(async (req: NextRequest) => {
@@ -137,6 +136,5 @@ export const POST = withApiRoute(async (req: NextRequest) => {
     }, { status: 201 });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) { return apiError(err); }
+  } catch (err) { return apiError(err); }
 });

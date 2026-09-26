@@ -54,8 +54,7 @@ export const GET = withApiRoute(async (req: NextRequest, { params }: { params: P
       .limit(1);
 
     return NextResponse.json({ data: forecast ?? null });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) { return apiError(err); }
+  } catch (err) { return apiError(err); }
 });
 
 // POST /api/tenant/deals/:id/forecast - create or update forecast
@@ -117,6 +116,5 @@ export const POST = withApiRoute(async (req: NextRequest, { params }: { params: 
     }
 
     return NextResponse.json({ data: result }, { status: existing ? 200 : 201 });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) { return apiError(err); }
+  } catch (err) { return apiError(err); }
 });

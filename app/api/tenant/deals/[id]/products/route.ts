@@ -58,8 +58,7 @@ export const GET = withApiRoute(async (req: NextRequest, { params }: { params: P
     );
 
     return NextResponse.json({ data: items, total });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) { return apiError(err); }
+  } catch (err) { return apiError(err); }
 });
 
 // POST /api/tenant/deals/:id/products — add a line item.
@@ -91,8 +90,7 @@ export const POST = withApiRoute(async (req: NextRequest, { params }: { params: 
     }).returning();
 
     return NextResponse.json({ data: item }, { status: 201 });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) { return apiError(err); }
+  } catch (err) { return apiError(err); }
 });
 
 // PATCH /api/tenant/deals/:id/products — update a line item (pass item_id in body).
@@ -135,8 +133,7 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params:
 
     if (!updated) return NextResponse.json({ error: 'Item not found' }, { status: 404 });
     return NextResponse.json({ data: updated });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) { return apiError(err); }
+  } catch (err) { return apiError(err); }
 });
 
 // DELETE /api/tenant/deals/:id/products?item_id=... — remove a line item.
@@ -164,6 +161,5 @@ export const DELETE = withApiRoute(async (req: NextRequest, { params }: { params
 
     if (!deleted) return NextResponse.json({ error: 'Item not found' }, { status: 404 });
     return NextResponse.json({ data: { id: itemId, deleted: true } });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) { return apiError(err); }
+  } catch (err) { return apiError(err); }
 });

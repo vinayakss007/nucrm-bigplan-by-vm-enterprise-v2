@@ -41,6 +41,5 @@ export const GET = withApiRoute(async (req: NextRequest, { params }: any) => {
     return NextResponse.json({ data });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) { return apiError(err); }
+  } catch (err) { return apiError(err); }
 });

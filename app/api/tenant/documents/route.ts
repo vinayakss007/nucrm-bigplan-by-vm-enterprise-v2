@@ -107,8 +107,7 @@ export const GET = withApiRoute(async (req: NextRequest) => {
     return NextResponse.json({ data: { documents: docs, folders }, page, limit, total: Number(countRow?.total ?? 0) });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) { return apiError(err); }
+  } catch (err) { return apiError(err); }
 });
 
 export const POST = withApiRoute(async (req: NextRequest) => {
@@ -218,8 +217,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
     }, { status: 201 });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) { return apiError(err); }
+  } catch (err) { return apiError(err); }
 });
 
 export const DELETE = withApiRoute(async (req: NextRequest) => {
@@ -252,6 +250,5 @@ export const DELETE = withApiRoute(async (req: NextRequest) => {
     return NextResponse.json({ data: { id, deleted: true } });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) { return apiError(err); }
+  } catch (err) { return apiError(err); }
 });

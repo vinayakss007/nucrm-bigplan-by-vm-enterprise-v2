@@ -65,8 +65,7 @@ export const POST = withApiRoute(async (req: NextRequest, { params }: { params: 
     }
 
     return NextResponse.json({ data: member }, { status: 201 });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) { return apiError(err); }
+  } catch (err) { return apiError(err); }
 });
 
 // DELETE /api/tenant/teams/:id/members?userId=... — remove a member (admin only).
@@ -95,6 +94,5 @@ export const DELETE = withApiRoute(async (req: NextRequest, { params }: { params
     if (!removed) return NextResponse.json({ error: 'Member not found' }, { status: 404 });
 
     return NextResponse.json({ data: { teamId, userId, removed: true } });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) { return apiError(err); }
+  } catch (err) { return apiError(err); }
 });

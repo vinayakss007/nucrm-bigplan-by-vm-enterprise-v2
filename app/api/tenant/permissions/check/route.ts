@@ -18,6 +18,5 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     return NextResponse.json({ allowed: can(ctx, permission), roleSlug: ctx.roleSlug });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) { return apiError(err); }
+  } catch (err) { return apiError(err); }
 });

@@ -95,6 +95,5 @@ export const DELETE = withApiRoute(async (req: NextRequest, { params }: { params
     return NextResponse.json({ ok: true });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) { return apiError(err); }
+  } catch (err) { return apiError(err); }
 });
