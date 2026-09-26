@@ -123,8 +123,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true, tenant_name: inv.tenantName });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     void logError({ error: err, context: 'auth/accept-invite POST', requestUrl: request.url, requestMethod: request.method });
     return apiError(err);
   }

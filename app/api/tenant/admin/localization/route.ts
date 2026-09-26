@@ -71,8 +71,7 @@ export const GET = withApiRoute(async (req: NextRequest) => {
     return NextResponse.json({ localization: { ...DEFAULTS, ...stored } });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     return apiError(err);
   }
 });
@@ -192,8 +191,7 @@ export const PATCH = withApiRoute(async (req: NextRequest) => {
     return NextResponse.json({ ok: true, localization: { ...DEFAULTS, ...safe } });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     void logError({ error: err, context: 'localization PATCH', ...tenantMeta(ctx) });
     return apiError(err);
   }

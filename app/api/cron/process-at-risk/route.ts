@@ -115,8 +115,7 @@ export async function POST(request: NextRequest) {
     });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (error: any) {
+  } catch (error) {
     void logError({ error, context: 'cron/process-at-risk' });
     return apiError(error, "Internal server error", 500);
   }

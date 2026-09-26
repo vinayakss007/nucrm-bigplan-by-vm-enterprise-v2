@@ -48,8 +48,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     return NextResponse.json({ users: tenantUsers });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     await logError({ error: err, context: 'selective-restore/users GET', requestMethod: 'GET' });
     return apiError(err);
   }

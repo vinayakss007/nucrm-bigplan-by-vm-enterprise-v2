@@ -76,8 +76,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
     return NextResponse.json({ data: call }, { status: 201 });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     return apiError(err);
   }
 });
@@ -149,8 +148,7 @@ export const GET = withApiRoute(async (req: NextRequest) => {
     return NextResponse.json({ data: calls });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     return apiError(err);
   }
 });

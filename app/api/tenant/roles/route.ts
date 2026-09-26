@@ -35,8 +35,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     return NextResponse.json({ data });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     await logError({ error: err, context: 'roles GET', requestMethod: 'GET' });
     return apiError(err);
   }
@@ -79,11 +78,11 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     return NextResponse.json({ data: newRole }, { status: 201 });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     // Race against the pre-check above: two parallel creates with the same
     // slug — the unique index wins; surface it as 409, not a 500.
-    if ((err?.cause?.code ?? err?.code) === '23505') {
+    const pg = err as { code?: string; cause?: { code?: string } };
+    if ((pg.cause?.code ?? pg.code) === '23505') {
       return NextResponse.json({ error: 'A role with this name already exists' }, { status: 409 });
     }
     await logError({ error: err, context: 'roles POST', requestMethod: 'POST' });

@@ -85,8 +85,7 @@ export async function POST(req: NextRequest) {
     });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     void logError({ error: err, context: 'tenant/esignature/webhook' });
     return NextResponse.json(
       { error: 'Webhook processing failed' },

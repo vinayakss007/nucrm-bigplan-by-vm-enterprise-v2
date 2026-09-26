@@ -115,8 +115,7 @@ export const GET = withApiRoute(async (req: NextRequest) => {
     return NextResponse.json({ picklists: result, categories: CATEGORIES });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     return apiError(err);
   }
 });
@@ -209,8 +208,7 @@ export const PATCH = withApiRoute(async (req: NextRequest) => {
     return NextResponse.json({ ok: true, picklists: safe });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     void logError({ error: err, context: 'picklists PATCH', ...tenantMeta(ctx) });
     return apiError(err);
   }

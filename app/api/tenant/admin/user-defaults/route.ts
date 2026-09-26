@@ -74,8 +74,7 @@ export const GET = withApiRoute(async (req: NextRequest) => {
     return NextResponse.json({ user_defaults: stored });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     return apiError(err);
   }
 });
@@ -159,8 +158,7 @@ export const PATCH = withApiRoute(async (req: NextRequest) => {
     return NextResponse.json({ ok: true, user_defaults: safe });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     void logError({ error: err, context: 'user-defaults PATCH', ...tenantMeta(ctx) });
     return apiError(err);
   }
@@ -201,8 +199,7 @@ export const DELETE = withApiRoute(async (req: NextRequest) => {
     return NextResponse.json({ ok: true });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     return apiError(err);
   }
 });

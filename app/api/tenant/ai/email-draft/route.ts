@@ -180,8 +180,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (error: any) {
+  } catch (error) {
     void logError({ error, context: 'tenant/ai/email-draft POST' });
     return apiError(error);
   }
@@ -241,8 +240,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (error: any) {
+  } catch (error) {
     void logError({ error, context: 'tenant/ai/email-draft GET' });
     return apiError(error);
   }

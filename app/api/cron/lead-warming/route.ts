@@ -63,8 +63,7 @@ export async function POST(req: NextRequest) {
     });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     void logError({ error: err, context: 'cron/lead-warming' });
     return apiError(err, "Internal server error", 500);
   }

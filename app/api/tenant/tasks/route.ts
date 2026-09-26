@@ -101,8 +101,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     return NextResponse.json(response);
   
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     void logError({ error: err, context: 'tenant/tasks GET' });
     return apiError(err);
   }
@@ -206,8 +205,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     return NextResponse.json({ data: { id: newTask.id, title: newTask.title, description: newTask.description, priority: newTask.priority, status: newTask.status, completed: newTask.completed, due_date: newTask.dueDate ? newTask.dueDate.toISOString() : null, completed_at: newTask.completedAt ? newTask.completedAt.toISOString() : null, contact_id: newTask.contactId, deal_id: newTask.dealId, assigned_to: newTask.assignedTo, created_at: (newTask.createdAt ?? new Date()).toISOString(), updated_at: newTask.updatedAt?.toISOString(), tenant_id: newTask.tenantId, user_id: newTask.createdBy } }, { status: 201 });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     void logError({ error: err, context: 'tenant/tasks POST' });
     return apiError(err);
   }

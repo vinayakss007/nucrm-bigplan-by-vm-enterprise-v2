@@ -11,8 +11,7 @@ export async function processTenantCleanup(tenantId: string) {
     // and third party integrations (remove OAuth tokens).
 
     console.log(`[Tenant Cleanup] Finished cleanup for tenant: ${tenantId}`);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (error: any) {
+  } catch (error) {
     await logError({ error, context: 'worker:tenant-cleanup', tenantId, level: 'error' });
     throw error;
   }

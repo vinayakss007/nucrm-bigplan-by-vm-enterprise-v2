@@ -243,8 +243,7 @@ export async function POST(request: NextRequest) {
 
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     logError({ error: err, context: 'leads/public' }).catch((err) => logError({ error: err, context: 'leads/public async side-effect' }));
     // Internal errors must NOT fake success (#1109): the caller's data was not
     // saved, so report failure. Anti-enumeration masking only applies to

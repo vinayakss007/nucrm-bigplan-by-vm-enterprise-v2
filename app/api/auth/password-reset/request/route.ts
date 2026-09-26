@@ -42,8 +42,7 @@ export async function POST(request: NextRequest) {
 
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     void logError({ error: err, context: 'auth/password-reset/request POST', requestUrl: request.url, requestMethod: request.method });
     return NextResponse.json({ error: 'Failed to process request' }, { status: 500 });
   }

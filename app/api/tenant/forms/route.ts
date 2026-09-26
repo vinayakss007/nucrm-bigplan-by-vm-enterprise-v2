@@ -54,8 +54,7 @@ export const GET = withApiRoute(async (req: NextRequest) => {
     return NextResponse.json({ data: formsWithEmbed, total, limit, offset, hasMore: offset + allForms.length < total });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     return apiError(err);
   }
 });
@@ -108,8 +107,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
     }, { status: 201 });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     return apiError(err);
   }
 });

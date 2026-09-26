@@ -26,8 +26,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true, snapshots: count });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) { 
+  } catch (err) { 
     void logError({ error: err, context: 'cron/usage-snapshot' });
     return apiError(err); 
   }

@@ -61,8 +61,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (error: any) {
+  } catch (error) {
     void logError({ error, context: 'tenant/ai/score POST' });
     return apiError(error);
   }
@@ -136,8 +135,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     return NextResponse.json({ data: topScoredResults });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (error: any) {
+  } catch (error) {
     void logError({ error, context: 'tenant/ai/score GET' });
     return apiError(error);
   }

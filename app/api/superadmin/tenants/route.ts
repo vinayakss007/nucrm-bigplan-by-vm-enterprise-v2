@@ -92,8 +92,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     return NextResponse.json({ data });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     await logError({ error: err, context: 'superadmin/tenants GET', requestMethod: 'GET' });
     return apiError(err);
   }
@@ -201,8 +200,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     return NextResponse.json({ data: result }, { status: 201 });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     await logError({ error: err, context: 'superadmin/tenants POST', requestMethod: 'POST' });
     return apiError(err);
   }
@@ -278,8 +276,7 @@ export const PATCH = withApiRoute(async (request: NextRequest) => {
     return NextResponse.json({ data: row });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     await logError({ error: err, context: 'superadmin/tenants PATCH', requestMethod: 'PATCH' });
     return apiError(err);
   }
@@ -389,8 +386,7 @@ export const DELETE = withApiRoute(async (request: NextRequest) => {
     return NextResponse.json({ ok: true });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     await logError({ error: err, context: 'superadmin/tenants DELETE', requestMethod: 'DELETE' });
     return apiError(err);
   }

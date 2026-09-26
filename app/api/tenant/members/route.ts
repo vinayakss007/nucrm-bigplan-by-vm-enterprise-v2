@@ -127,8 +127,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     return NextResponse.json({ ok: true, data: { user: publicUser, member: result.member } }, { status: 201 });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     await logError({ error: err, context: 'members POST', requestMethod: 'POST' });
     return apiError(err);
   }
@@ -175,8 +174,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     return NextResponse.json({ data: members, invitations: invites, tenantId: ctx.tenantId });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     await logError({ error: err, context: 'members GET', requestMethod: 'GET' });
     return apiError(err);
   }
@@ -356,8 +354,7 @@ export const PATCH = withApiRoute(async (request: NextRequest) => {
     return NextResponse.json({ ok: true });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     await logError({ error: err, context: 'members PATCH', requestMethod: 'PATCH' });
     return apiError(err);
   }

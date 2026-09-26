@@ -157,8 +157,7 @@ export const GET = withApiRoute(async (req: NextRequest) => {
 
     return NextResponse.json({ data: files });
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     await logError({ error: err, context: 'files GET', requestMethod: 'GET' });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
@@ -256,8 +255,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
 
     return NextResponse.json({ data: attachment }, { status: 201 });
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     await logError({ error: err, context: 'files POST', requestMethod: 'POST' });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
@@ -297,8 +295,7 @@ export const DELETE = withApiRoute(async (req: NextRequest) => {
     await logAudit({ tenantId: ctx.tenantId, userId: ctx.userId, action:'delete', entityType:'file', entityId: id });
     return NextResponse.json({ ok: true });
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     await logError({ error: err, context: 'files DELETE', requestMethod: 'DELETE' });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }

@@ -149,12 +149,11 @@ export async function safeQuery<T extends QueryResult = QueryResult>(
         return pool.query(queryText, params) as Promise<T>;
       });
       return result;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (error: any) {
+    } catch (error) {
       lastError = error;
 
       // If circuit breaker itself is open, do not retry
-      if (error?.message === 'Circuit breaker is open') {
+      if (error instanceof Error && error.message === 'Circuit breaker is open') {
         await logQueryFailure(error, queryText, attempt, { tenantId, label });
         throw error;
       }
@@ -227,11 +226,10 @@ export async function safeTransaction<T>(
         }
       });
       return result;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (error: any) {
+    } catch (error) {
       lastError = error;
 
-      if (error?.message === 'Circuit breaker is open') {
+      if (error instanceof Error && error.message === 'Circuit breaker is open') {
         await logQueryFailure(error, `[transaction: ${label}]`, attempt, { tenantId, label });
         throw error;
       }
@@ -279,14 +277,13 @@ export async function checkDatabaseHealth(): Promise<DatabaseHealthResult> {
         waitingCount: pool.waitingCount,
       },
     };
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (error: any) {
+  } catch (error) {
     return {
       healthy: false,
       reachable: false,
       latencyMs: Date.now() - start,
       poolStats: { totalCount: 0, idleCount: 0, waitingCount: 0 },
-      error: error?.message || 'Unknown error',
+      error: error instanceof Error ? error.message : 'Unknown error',
     };
   }
 }

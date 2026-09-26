@@ -83,8 +83,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     return NextResponse.json({ url: session.url, sessionId: session.id });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     return apiError(err);
   }
 });
@@ -116,8 +115,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     return NextResponse.json({ url: session.url });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     return apiError(err);
   }
 });

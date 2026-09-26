@@ -70,8 +70,7 @@ export const GET = withApiRoute(async (req: NextRequest) => {
     return NextResponse.json({ data, meta: { page, limit, total: data[0]?.totalCount ?? 0 } });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     await logError({ error: err, context: 'automations GET', requestMethod: 'GET' });
     return apiError(err);
   }
@@ -118,8 +117,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
     return NextResponse.json({ data: newAutomation }, { status: 201 });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     await logError({ error: err, context: 'automations POST', requestMethod: 'POST' });
     return apiError(err);
   }

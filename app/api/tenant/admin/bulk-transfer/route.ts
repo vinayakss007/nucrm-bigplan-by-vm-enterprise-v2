@@ -105,8 +105,7 @@ export const GET = withApiRoute(async (req: NextRequest) => {
     return NextResponse.json({ from_user_id: fromUserId, only_open: onlyOpen, counts, total });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     return apiError(err);
   }
 });
@@ -214,8 +213,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
     return NextResponse.json({ ok: true, transferred, total });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     void logError({ error: err, context: 'bulk-transfer POST', ...tenantMeta(ctx) });
     return apiError(err);
   }

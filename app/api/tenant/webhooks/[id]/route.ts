@@ -73,8 +73,7 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params:
     });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) { 
+  } catch (err) { 
     return apiError(err); 
   }
 });

@@ -57,8 +57,7 @@ export const GET = withApiRoute(async (request: NextRequest,
     return NextResponse.json({ data: history });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     await logError({ error: err, context: 'history GET', requestMethod: 'GET' });
     return apiError(err);
   }

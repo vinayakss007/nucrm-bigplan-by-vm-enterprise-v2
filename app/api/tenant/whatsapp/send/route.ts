@@ -192,8 +192,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
     }, { status: 201 });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     await logError({ error: err, context: 'WhatsApp Send', requestMethod: 'POST' });
     return apiError(err);
   }

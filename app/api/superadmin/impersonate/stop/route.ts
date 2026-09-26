@@ -111,8 +111,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     return NextResponse.json({ ok: true, message: 'Impersonation ended' });
  
  
- // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     await logError({ error: err, context: 'superadmin/impersonate/stop POST', requestMethod: 'POST' });
     return apiError(err);
   }
@@ -138,8 +137,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     return NextResponse.json({ data: res.rows });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     await logError({ error: err, context: 'superadmin/impersonate/stop GET', requestMethod: 'GET' });
     return apiError(err);
   }

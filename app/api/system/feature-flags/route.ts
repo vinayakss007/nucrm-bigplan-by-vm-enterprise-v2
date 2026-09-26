@@ -24,8 +24,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
 
     const flags = await getAllFlags();
     return NextResponse.json({ data: flags });
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     return apiError(err);
   }
 });
@@ -65,8 +64,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     await setFeatureFlag(flag);
 
     return NextResponse.json({ data: flag, message: `Flag "${key}" updated` });
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     return apiError(err);
   }
 });

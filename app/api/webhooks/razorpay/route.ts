@@ -125,8 +125,7 @@ export async function POST(request: NextRequest) {
 
     if (claimedDb && razorpayEventId) await completeWebhookEvent('razorpay', razorpayEventId);
     return NextResponse.json({ received: true });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     void logError({ error: err, context: 'webhooks/razorpay event processing', metadata: { eventType } });
     // Release both the Redis lock and the DB claim so Razorpay's retry of
     // THIS failed event is processed instead of being dropped as a duplicate,

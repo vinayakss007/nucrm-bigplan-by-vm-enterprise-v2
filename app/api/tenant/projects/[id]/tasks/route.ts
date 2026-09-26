@@ -64,8 +64,7 @@ export const GET = withApiRoute(async (request: NextRequest,
     return NextResponse.json({ data });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     await logError({ error: err, context: 'project-tasks GET', requestMethod: 'GET' });
     return apiError(err);
   }
@@ -134,8 +133,7 @@ export const POST = withApiRoute(async (request: NextRequest,
     return NextResponse.json({ data: link }, { status: 201 });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     await logError({ error: err, context: 'project-tasks POST', requestMethod: 'POST' });
     return apiError(err);
   }
@@ -190,8 +188,7 @@ export const DELETE = withApiRoute(async (request: NextRequest,
     return NextResponse.json({ data: { id: deleted.id, deleted: true } });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     await logError({ error: err, context: 'project-tasks DELETE', requestMethod: 'DELETE' });
     return apiError(err);
   }

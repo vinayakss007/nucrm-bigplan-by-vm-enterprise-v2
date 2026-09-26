@@ -59,8 +59,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     return NextResponse.json({ data: tenant });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     return apiError(err);
   }
 });
@@ -126,8 +125,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     return NextResponse.json({ data: tenant }, { status: 201 });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     return apiError(err);
   }
 });
@@ -189,8 +187,7 @@ export const PATCH = withApiRoute(async (request: NextRequest) => {
     return NextResponse.json({ data: tenant });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     return apiError(err);
   }
 });

@@ -88,8 +88,7 @@ export const GET = withApiRoute(async (req: NextRequest) => {
     return NextResponse.json({ login_policy: merged });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     return apiError(err);
   }
 });
@@ -232,8 +231,7 @@ export const PATCH = withApiRoute(async (req: NextRequest) => {
     return NextResponse.json({ ok: true, login_policy: safe });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     void logError({ error: err, context: 'login-policy PATCH', ...tenantMeta(ctx) });
     return apiError(err);
   }

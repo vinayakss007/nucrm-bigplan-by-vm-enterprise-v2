@@ -75,8 +75,7 @@ export const GET = withApiRoute(async (request: NextRequest,
     });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (error: any) {
+  } catch (error) {
     await logError({ error: error, context: 'Report GET error', requestMethod: 'GET' });
     return apiError(error);
   }
@@ -140,8 +139,7 @@ export const PATCH = withApiRoute(async (request: NextRequest,
     });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (error: any) {
+  } catch (error) {
     await logError({ error: error, context: 'Report PATCH error', requestMethod: 'PATCH' });
     return apiError(error);
   }
@@ -179,8 +177,7 @@ export const DELETE = withApiRoute(async (request: NextRequest,
     });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (error: any) {
+  } catch (error) {
     await logError({ error: error, context: 'Report DELETE error', requestMethod: 'DELETE' });
     return apiError(error);
   }
@@ -213,8 +210,7 @@ export const POST = withApiRoute(async (request: NextRequest,
     });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (error: any) {
+  } catch (error) {
     await logError({ error: error, context: 'Report Run POST error', requestMethod: 'POST' });
     return apiError(error);
   }

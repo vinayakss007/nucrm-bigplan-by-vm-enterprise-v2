@@ -392,8 +392,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
     });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     await logError({ error: err, context: 'leads/bulk', tenantId: undefined });
     return apiError(err);
   }

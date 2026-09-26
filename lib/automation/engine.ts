@@ -118,8 +118,7 @@ export async function evaluateAutomations(payload: TriggerPayload): Promise<void
     }
   
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     captureError(err, 'automation:evaluate');
   }
 }
@@ -241,8 +240,7 @@ async function executeAction(dbOrTx: NodePgDatabase | typeof db, action: Automat
         `);
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } catch (err: any) {
+      } catch (err) {
         captureError(err, 'automation:sequence-enrollment');
       }
       break;
@@ -304,8 +302,7 @@ async function executeAction(dbOrTx: NodePgDatabase | typeof db, action: Automat
         });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } catch (err: any) {
+      } catch (err) {
         captureError(err, 'automation:whatsapp-send');
       }
       break;

@@ -138,8 +138,7 @@ export const GET = withApiRoute(async (request: NextRequest, { params }: any) =>
     return NextResponse.json({ data });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (error: any) {
+  } catch (error) {
     await logError({ error, context: 'tenant/contacts/[id]/leads GET', requestMethod: 'GET' });
     return apiError(error, "Internal server error", 500);
   }

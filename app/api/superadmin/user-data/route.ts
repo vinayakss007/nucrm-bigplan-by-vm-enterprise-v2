@@ -286,8 +286,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     return NextResponse.json({ error: 'Invalid action. Use: summary, full, export' }, { status: 400 });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     return apiError(err);
   }
 });
@@ -438,8 +437,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     return apiError(err);
   }
 });
@@ -502,8 +500,7 @@ export const DELETE = withApiRoute(async (request: NextRequest) => {
     });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     return apiError(err);
   }
 });

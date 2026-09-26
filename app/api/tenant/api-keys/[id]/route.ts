@@ -66,8 +66,7 @@ export const GET = withApiRoute(async (request: NextRequest,
     });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (error: any) {
+  } catch (error) {
     await logError({ error: error, context: 'API Keys GET', requestMethod: 'GET' });
     return apiError(error);
   }
@@ -100,8 +99,7 @@ export const DELETE = withApiRoute(async (request: NextRequest,
     return NextResponse.json({ ok: true, message: 'API key revoked' });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (error: any) {
+  } catch (error) {
     await logError({ error: error, context: 'API Keys DELETE', requestMethod: 'DELETE' });
     return apiError(error);
   }
@@ -155,8 +153,7 @@ export const POST = withApiRoute(async (request: NextRequest,
     });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (error: any) {
+  } catch (error) {
     await logError({ error: error, context: 'API Keys ROTATE', requestMethod: 'POST' });
     return apiError(error);
   }

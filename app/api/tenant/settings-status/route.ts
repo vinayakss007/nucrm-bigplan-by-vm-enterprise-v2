@@ -130,8 +130,7 @@ export const GET = withApiRoute(async (req: NextRequest) => {
     return NextResponse.json({ statuses, summary });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     return apiError(err);
   }
 });

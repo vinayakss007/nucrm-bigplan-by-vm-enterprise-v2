@@ -51,8 +51,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     return NextResponse.json({ data, meta: { page, limit, total: data[0]?.totalCount ?? 0 } });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     return apiError(err);
   }
 });
@@ -89,8 +88,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     return NextResponse.json({ data: row }, { status: 201 });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     return apiError(err);
   }
 });

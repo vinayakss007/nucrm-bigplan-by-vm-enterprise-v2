@@ -80,8 +80,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     await logError({ error: err, context: 'selective-restore/backups GET', requestMethod: 'GET' });
     return apiError(err);
   }
@@ -156,8 +155,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     await logError({ error: err, context: 'selective-restore/backups POST', requestMethod: 'POST' });
     return apiError(err);
   }
@@ -201,8 +199,7 @@ export const DELETE = withApiRoute(async (request: NextRequest) => {
     return NextResponse.json({ success: true });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     await logError({ error: err, context: 'selective-restore/backups DELETE', requestMethod: 'DELETE' });
     return apiError(err);
   }
@@ -224,8 +221,7 @@ async function parseBackupAsync(backupId: string, filePath: string) {
       .where(eq(superAdminBackups.id, backupId));
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     await logError({ error: err, context: 'selective-restore/backups parseBackupAsync', metadata: { backupId } });
     await db
       .update(superAdminBackups)

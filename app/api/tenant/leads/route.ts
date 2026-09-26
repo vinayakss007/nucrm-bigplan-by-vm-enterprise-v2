@@ -208,8 +208,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (error: any) {
+  } catch (error) {
     await logError({ error, context: 'tenant/leads GET', requestMethod: 'GET' });
     return NextResponse.json({ error: 'Failed to fetch leads' }, { status: 500 });
   }
@@ -404,8 +403,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     return NextResponse.json({ data: newLead }, { status: 201 });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (error: any) {
+  } catch (error) {
     await logError({ error, context: 'tenant/leads POST', requestMethod: 'POST' });
     return NextResponse.json({ error: 'Failed to create lead' }, { status: 500 });
   }

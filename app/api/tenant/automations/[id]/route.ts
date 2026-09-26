@@ -78,8 +78,7 @@ export const GET = withApiRoute(async (req: NextRequest,
     });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) { 
+  } catch (err) { 
     await logError({ error: err, context: 'automation GET', requestMethod: 'GET' });
     return apiError(err); 
   }
@@ -140,8 +139,7 @@ export const PATCH = withApiRoute(async (req: NextRequest,
     return NextResponse.json({ data: row });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) { 
+  } catch (err) { 
     await logError({ error: err, context: 'automation PATCH', requestMethod: 'PATCH' });
     return apiError(err); 
   }
@@ -185,8 +183,7 @@ export const DELETE = withApiRoute(async (req: NextRequest,
     return NextResponse.json({ ok: true });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) { 
+  } catch (err) { 
     await logError({ error: err, context: 'automation DELETE', requestMethod: 'DELETE' });
     return apiError(err); 
   }

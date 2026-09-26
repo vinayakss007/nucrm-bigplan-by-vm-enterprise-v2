@@ -420,8 +420,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
     return NextResponse.json({ ok: true, affected, action, ...extraResult });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     await logError({ error: err, context: 'tenant/contacts bulk POST', requestMethod: 'POST' });
     await logError({ error: err, context: 'contacts/bulk', tenantId: ctx?.tenantId });
     return apiError(err);
