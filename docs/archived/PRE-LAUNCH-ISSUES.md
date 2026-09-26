@@ -1,3 +1,7 @@
+<!-- ARCHIVED 2026-09-26 (#1419 M1, #1843): point-in-time snapshot (generated 2026-07-31,
+last verified 2026-08-31). GitHub's issue tracker is the source of truth — run
+`gh issue list --state open` for current status. Kept for archaeology only. -->
+
 # Pre-Launch Issues
 
 Generated: 2026-07-31
