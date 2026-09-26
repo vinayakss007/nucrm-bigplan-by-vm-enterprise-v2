@@ -14,6 +14,11 @@ import { registerProcessErrorHandlers } from '@/lib/process-errors';
 import { redactEmail, redactPhone, redactUrl } from '@/lib/logger/pii';
 import { escapeHtml } from '@/lib/email/escape-html';
 import { logError } from '@/lib/errors-server';
+import { materializeFileSecrets } from '@/lib/secrets-file';
+
+// #2123: read bind-mounted secret files into process.env before any config is
+// captured below, so the worker can run without secrets in container metadata.
+materializeFileSecrets();
 
 registerProcessErrorHandlers('worker');
 

@@ -48,6 +48,11 @@ import {
   userRoom,
   tenantRoom,
 } from '@/lib/realtime/events';
+import { materializeFileSecrets } from '@/lib/secrets-file';
+
+// #2123: read bind-mounted secret files into process.env before any config is
+// captured below, so realtime can run without secrets in container metadata.
+materializeFileSecrets();
 
 const PORT = Number(process.env['REALTIME_PORT'] ?? 4001);
 // Bind to loopback by default so the realtime port is never exposed on the
