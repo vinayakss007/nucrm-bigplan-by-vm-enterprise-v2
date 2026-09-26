@@ -308,7 +308,7 @@ export const auditLogs = pgTable('audit_logs', {
   // Actor id, deliberately NOT a foreign key (migration 0050). Retaining the
   // actor is the purpose of an audit log, and ON DELETE SET NULL would both erase
   // attribution when a user is deleted and trip the append-only UPDATE trigger
-  // from 0048, making user deletion impossible.
+  // from 0042, making user deletion impossible.
   userId: uuid('user_id'),
   impersonatedBy: uuid('impersonated_by'),
   action: text('action').notNull(),

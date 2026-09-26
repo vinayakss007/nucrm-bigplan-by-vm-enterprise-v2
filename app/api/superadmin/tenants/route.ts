@@ -342,7 +342,7 @@ export const DELETE = withApiRoute(async (request: NextRequest) => {
         metadata: { hard_delete: true, confirmed_name: confirm_name },
       });
 
-      // The cascade reaches audit_logs, which migration 0048 protects with an
+      // The cascade reaches audit_logs, which migration 0042 protects with an
       // append-only trigger. A lawful tenant erasure is exactly what that
       // escape hatch is for, so opt in explicitly and transaction-scoped —
       // without this the delete fails with a confusing trigger error.
