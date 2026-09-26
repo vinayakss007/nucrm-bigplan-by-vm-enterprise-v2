@@ -47,6 +47,16 @@ vi.mock('@/drizzle/db', () => ({
 import { NextRequest } from 'next/server';
 import { GET } from '@/app/api/metrics/route';
 
+function metricsReq() {
+  // CI jobs export METRICS_SECRET for the whole run (ci.yml), and the route
+  // captures it at module load — so the scrape must present the token there.
+  const secret = process.env.METRICS_SECRET;
+  return new NextRequest('http://localhost/api/metrics', {
+    headers: secret ? { authorization: `Bearer ${secret}` } : {},
+  });
+}
+
+
 function poolRows(active: string) {
   return { rows: [{ active, active_queries: '10', waiting: '3', max_conn: '100' }] };
 }
@@ -60,7 +70,7 @@ describe('GET /api/metrics section isolation (#2118)', () => {
 
   it('emits live DB gauges and fresh counts when everything answers', async () => {
     mockExecute.mockResolvedValue(poolRows('42'));
-    const res = await GET(new NextRequest('http://localhost/api/metrics'));
+    const res = await GET(metricsReq());
     expect(res.status).toBe(200);
     const body = await res.text();
     expect(body).toContain('nucrm_db_active_connections 42');
@@ -77,9 +87,9 @@ describe('GET /api/metrics section isolation (#2118)', () => {
 
   it('gauge values move when pool state changes', async () => {
     mockExecute.mockResolvedValue(poolRows('42'));
-    const first = await (await GET(new NextRequest('http://localhost/api/metrics'))).text();
+    const first = await (await GET(metricsReq())).text();
     mockExecute.mockResolvedValue(poolRows('97'));
-    const second = await (await GET(new NextRequest('http://localhost/api/metrics'))).text();
+    const second = await (await GET(metricsReq())).text();
     expect(first).toContain('nucrm_db_active_connections 42');
     expect(second).toContain('nucrm_db_active_connections 97');
     expect(second).toContain('nucrm_db_pool_available 3');
@@ -88,7 +98,7 @@ describe('GET /api/metrics section isolation (#2118)', () => {
   it('still returns 200 with down-section markers when the pool is saturated', async () => {
     failSelect = true;
     mockExecute.mockRejectedValue(new Error('timeout exceeded when trying to connect'));
-    const res = await GET(new NextRequest('http://localhost/api/metrics'));
+    const res = await GET(metricsReq());
     expect(res.status).toBe(200);
     const body = await res.text();
     // Sections report dead instead of the whole scrape 500-ing and freezing.
@@ -103,7 +113,7 @@ describe('GET /api/metrics section isolation (#2118)', () => {
   it('emits worker gauges from a valid heartbeat', async () => {
     redisMock.heartbeat = '{"uptime":95,"memory":{"heapUsed":123},"workers":{"email":true,"automation":false}}';
     mockExecute.mockResolvedValue(poolRows('42'));
-    const body = await (await GET(new NextRequest('http://localhost/api/metrics'))).text();
+    const body = await (await GET(metricsReq())).text();
     expect(body).toContain('nucrm_worker_uptime_seconds 95');
     expect(body).toContain('nucrm_worker_running{worker="email"} 1');
     expect(body).toContain('nucrm_worker_running{worker="automation"} 0');
@@ -116,7 +126,7 @@ describe('GET /api/metrics section isolation (#2118)', () => {
     // duplicate HELP/TYPE makes Prometheus reject the entire scrape.
     redisMock.heartbeat = 'not-json';
     mockExecute.mockResolvedValue(poolRows('42'));
-    const body = await (await GET(new NextRequest('http://localhost/api/metrics'))).text();
+    const body = await (await GET(metricsReq())).text();
     expect(body).toContain('nucrm_cache_up 1');
     expect(body).not.toContain('nucrm_cache_up 0');
     expect(body.match(/^nucrm_cache_up /m)).toHaveLength(1);

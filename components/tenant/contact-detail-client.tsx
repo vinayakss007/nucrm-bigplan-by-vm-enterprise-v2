@@ -4,7 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   ArrowLeft, Mail, Phone, Globe, Contact, Building2, Edit, Save, Target,
@@ -95,7 +95,7 @@ const ACTIVITY_ICONS: Record<string,any> = {
 };
 
 // ── QuickAdd: Task inline ──────────────────────────────────────
-const QuickAddTask = memo(function QuickAddTask({ contactId, _contactName, teamMembers, onAdded }: {
+function QuickAddTask({ contactId, _contactName, teamMembers, onAdded }: {
   contactId: string;
   _contactName: string;
   teamMembers: TeamMemberOption[];
@@ -143,10 +143,10 @@ const QuickAddTask = memo(function QuickAddTask({ contactId, _contactName, teamM
       )}
     </div>
   );
-});
+}
 
 // ── QuickAdd: Deal inline ──────────────────────────────────────
-const QuickAddDeal = memo(function QuickAddDeal({ contactId, _companies, onAdded }: {
+function QuickAddDeal({ contactId, _companies, onAdded }: {
   contactId: string;
   _companies: Company[];
   onAdded: (deal: Deal) => void;
@@ -189,10 +189,10 @@ const QuickAddDeal = memo(function QuickAddDeal({ contactId, _companies, onAdded
       )}
     </div>
   );
-});
+}
 
 // ── QuickAdd: Meeting inline ───────────────────────────────────
-const QuickAddMeeting = memo(function QuickAddMeeting({ contactId, onAdded }: {
+function QuickAddMeeting({ contactId, onAdded }: {
   contactId: string;
   onAdded: (meeting: { id: string; title: string }) => void;
 }) {
@@ -233,630 +233,15 @@ const QuickAddMeeting = memo(function QuickAddMeeting({ contactId, onAdded }: {
       )}
     </div>
   );
-});
-
-// ── Stable empty-array defaults (keeps memoized children from
-//    re-rendering when optional list props are omitted) ─────────
-const EMPTY_ARRAY: never[] = [];
-
-// ── Activity: manual log list (memoized section) ───────────────
-const ActivityLogSection = memo(function ActivityLogSection({ activities, userId, onDeleteNote }: {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  activities: any[];
-  userId: string;
-  onDeleteNote: (noteId: string) => void;
-}) {
-  return (
-    <div className="admin-card overflow-hidden">
-      <div className="px-5 py-3 border-b border-border flex items-center justify-between">
-        <p className="text-sm font-semibold">Manual log</p>
-        <p className="text-xs text-muted-foreground">{activities.length} entries · notes, calls, emails, meetings you log</p>
-      </div>
-      {!activities.length ? (
-        <div className="px-5 py-10 text-center text-sm text-muted-foreground">
-          No activity yet — log a note, call, email or meeting above
-        </div>
-      ) : (
-        <div className="divide-y divide-border">
-          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-          {activities.map((a: any, i: number) => {
-            const Icon = ACTIVITY_ICONS[a.type] ?? MessageSquare;
-            const colorCls = ACTIVITY_COLORS[a.type] ?? 'text-gray-600 bg-gray-100';
-            const isStatusChange = a.metadata?.status_change;
-            const isOwn = a.user_id === userId || a.full_name === 'You';
-            return (
-              <div key={a.id ?? i} className="flex gap-3.5 px-5 py-4 group hover:bg-accent/20 transition-colors">
-                <div className={cn('w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-0.5', colorCls)}>
-                  <Icon className="w-3.5 h-3.5" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm leading-relaxed">{a.description}</p>
-                  {/* Timestamp with full date/time */}
-                  <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                    {a.full_name && (
-                      <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                        <User className="w-3 h-3" />{a.full_name}
-                      </span>
-                    )}
-                    <span className="flex items-center gap-1 text-xs text-muted-foreground" title={new Date(a.created_at).toLocaleString()}>
-                      <Clock className="w-3 h-3" />
-                      <span className="font-medium text-foreground/70">{formatDateTimeShort(a.created_at)}</span>
-                      <span className="text-muted-foreground/50">·</span>
-                      <span>{formatRelativeTime(a.created_at)}</span>
-                    </span>
-                    {isStatusChange && (
-                      <span className="text-[10px] bg-blue-100 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 px-1.5 py-0.5 rounded-full font-semibold">
-                        Status Change
-                      </span>
-                    )}
-                    <span className={cn('text-[10px] px-1.5 py-0.5 rounded-full font-semibold capitalize', colorCls)}>
-                      {a.type?.replace('_',' ')}
-                    </span>
-                  </div>
-                </div>
-                {/* Delete button — only own notes */}
-                {isOwn && !['contact_created'].includes(a.type) && !a.id?.startsWith('tmp_') && (
-                  <button onClick={() => onDeleteNote(a.id)}
-                    className="max-md:opacity-100 md:opacity-0 md:group-hover:opacity-100 w-6 h-6 flex items-center justify-center rounded text-muted-foreground hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 transition-all shrink-0 mt-1">
-                    <Trash2 className="w-3 h-3" />
-                  </button>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-});
-
-// ── Activity: system events timeline (memoized section) ────────
-const SystemEventsSection = memo(function SystemEventsSection({ contactId }: { contactId: string }) {
-  return (
-    <div className="admin-card overflow-hidden">
-      <div className="px-5 py-3 border-b border-border flex items-center justify-between">
-        <p className="text-sm font-semibold">System events</p>
-        <p className="text-xs text-muted-foreground">Auto-tracked: email opens/clicks, calls, meetings, deals, lifecycle changes, forms, automations</p>
-      </div>
-      <div className="p-5">
-        <ContactTimeline key={contactId} contactId={contactId} />
-      </div>
-    </div>
-  );
-});
-
-// ── Tasks tab (memoized section) ───────────────────────────────
-const TasksTabSection = memo(function TasksTabSection({ contactId, contactName, teamMembers, tasks, onTaskAdded, onToggleTask }: {
-  contactId: string;
-  contactName: string;
-  teamMembers: TeamMemberOption[];
-  tasks: Task[];
-  onTaskAdded: (task: Task) => void;
-  onToggleTask: (taskId: string, completed: boolean) => void;
-}) {
-  return (
-    <div className="admin-card overflow-hidden">
-      <div className="px-5 py-3 border-b border-border flex items-center justify-between">
-        <p className="text-sm font-semibold">Tasks</p>
-        <QuickAddTask contactId={contactId} _contactName={contactName} teamMembers={teamMembers} onAdded={onTaskAdded} />
-      </div>
-      {!tasks.length ? (
-        <div className="px-5 py-10 text-center text-sm text-muted-foreground">No tasks yet — create one above</div>
-      ) : (
-        <div className="divide-y divide-border">
-          {[...tasks].sort((a: Task, b: Task) => {
-            if (a.completed && !b.completed) return 1;
-            if (!a.completed && b.completed) return -1;
-            if (!a.due_date && !b.due_date) return 0;
-            if (!a.due_date) return 1;
-            if (!b.due_date) return -1;
-            return new Date(a.due_date).getTime() - new Date(b.due_date).getTime();
-          }).map((t: Task) => {
-            const today = new Date().toISOString().split('T')[0] || '';
-            const overdue = !t.completed && t.due_date && t.due_date < today;
-            return (
-              <div key={t.id} className={cn('flex items-start gap-3 px-5 py-3.5 hover:bg-accent/20 transition-colors', t.completed && 'opacity-50')}>
-                <button onClick={() => onToggleTask(t.id, !t.completed)} className="mt-0.5 shrink-0">
-                  <div className={cn('w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors',
-                    t.completed ? 'bg-emerald-500 border-emerald-500' : 'border-border hover:border-violet-500')}>
-                    {t.completed && <CheckCircle className="w-3.5 h-3.5 text-white" />}
-                  </div>
-                </button>
-                <div className="flex-1 min-w-0">
-                  <p className={cn('text-sm font-medium', t.completed && 'line-through text-muted-foreground')}>{t.title}</p>
-                  <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                    <span className={cn('text-[10px] font-semibold px-1.5 py-0.5 rounded-full capitalize',
-                      t.priority==='high' ? 'text-red-600 bg-red-100 dark:bg-red-900/20' :
-                      t.priority==='medium' ? 'text-amber-600 bg-amber-100 dark:bg-amber-900/20' :
-                      'text-slate-500 bg-slate-100 dark:bg-slate-800')}>
-                      {t.priority}
-                    </span>
-                    {t.assignee_name && <span className="text-xs text-muted-foreground flex items-center gap-1"><User className="w-3 h-3" />{t.assignee_name}</span>}
-                    {t.due_date && (
-                      <span className={cn('text-xs flex items-center gap-1', overdue ? 'text-red-500 font-semibold' : 'text-muted-foreground')}>
-                        <Clock className="w-3 h-3" />{formatDate(t.due_date)}{overdue && ' — Overdue'}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-});
-
-// ── Deals tab (memoized section) ───────────────────────────────
-const DealsTabSection = memo(function DealsTabSection({ contactId, companies, deals, onDealAdded }: {
-  contactId: string;
-  companies: Company[];
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  deals: any[];
-  onDealAdded: (deal: Deal) => void;
-}) {
-  return (
-    <div className="admin-card overflow-hidden">
-      <div className="px-5 py-3 border-b border-border flex items-center justify-between">
-        <p className="text-sm font-semibold">Deals</p>
-        <QuickAddDeal contactId={contactId} _companies={companies} onAdded={onDealAdded} />
-      </div>
-      {!deals.length ? (
-        <div className="px-5 py-10 text-center text-sm text-muted-foreground">No deals yet — create one above</div>
-      ) : (
-        <div className="divide-y divide-border">
-          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-          {deals.map((d: any) => (
-            <div key={d.id} className="flex items-center gap-4 px-5 py-4 hover:bg-accent/20 transition-colors">
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold">{d.title}</p>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <span className={cn('text-[10px] font-semibold px-1.5 py-0.5 rounded-full capitalize', STAGE_COLORS[d.stage]??STAGE_COLORS["lead"])}>{d.stage}</span>
-                  {d.close_date && <span className="text-xs text-muted-foreground flex items-center gap-1"><Calendar className="w-3 h-3" />Close: {formatDate(d.close_date)}</span>}
-                </div>
-              </div>
-              <div className="text-right shrink-0">
-                <p className="text-base font-bold text-violet-600">{formatCurrency(Number(d.value))}</p>
-                <p className="text-xs text-muted-foreground">{formatRelativeTime(d.created_at)}</p>
-              </div>
-            </div>
-          ))}
-          <div className="px-5 py-3 bg-muted/20 flex items-center justify-between">
-            <span className="text-xs font-semibold text-muted-foreground">Total pipeline</span>
-            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-            <span className="text-sm font-bold">{formatCurrency(deals.filter((d: any)=>!['lost'].includes(d.stage)).reduce((s: any, d: any)=>s+Number(d.value),0))}</span>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-});
-
-// ── Follow-ups tab (memoized section) ──────────────────────────
-const FollowUpsTabSection = memo(function FollowUpsTabSection({ followUps }: {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  followUps: any[];
-}) {
-  return (
-    <div className="admin-card overflow-hidden">
-      <div className="px-5 py-3 border-b border-border flex items-center justify-between">
-        <p className="text-sm font-semibold">Follow-ups</p>
-        <span className="text-xs text-muted-foreground">Scheduled next steps for this contact</span>
-      </div>
-      {!followUps.length ? (
-        <div className="px-5 py-10 text-center text-sm text-muted-foreground">No follow-ups scheduled</div>
-      ) : (
-        <div className="divide-y divide-border">
-          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-          {followUps.map((f: any) => {
-            const done = f.status === 'completed' || f.status === 'done' || !!f.completedAt;
-            const overdue = !done && f.dueDate && new Date(f.dueDate) < new Date();
-            return (
-              <div key={f.id} className="flex items-center gap-4 px-5 py-4 hover:bg-accent/20 transition-colors">
-                <div className={cn('shrink-0', done ? 'text-emerald-600' : overdue ? 'text-red-600' : 'text-muted-foreground')}>
-                  {done ? <CheckCircle className="w-4 h-4" /> : <ListChecks className="w-4 h-4" />}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className={cn('text-sm font-semibold', done && 'line-through text-muted-foreground')}>{f.title}</p>
-                  {f.description && <p className="text-xs text-muted-foreground truncate">{f.description}</p>}
-                  <div className="flex items-center gap-2 mt-0.5">
-                    <span className={cn('text-[10px] font-semibold px-1.5 py-0.5 rounded-full capitalize',
-                      done ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
-                           : overdue ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
-                                     : 'bg-muted text-muted-foreground')}>
-                      {done ? 'done' : overdue ? 'overdue' : f.status}
-                    </span>
-                    {f.assignee_name && <span className="text-xs text-muted-foreground">· {f.assignee_name}</span>}
-                  </div>
-                </div>
-                {f.dueDate && (
-                  <div className="text-right shrink-0">
-                    <p className={cn('text-xs flex items-center gap-1', overdue ? 'text-red-600 font-medium' : 'text-muted-foreground')}>
-                      <Calendar className="w-3 h-3" />{formatDate(f.dueDate)}
-                    </p>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-});
-
-// ── Tickets tab (memoized section) ─────────────────────────────
-const TicketsTabSection = memo(function TicketsTabSection({ tickets }: {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  tickets: any[];
-}) {
-  const router = useRouter();
-  return (
-    <div className="admin-card overflow-hidden">
-      <div className="px-5 py-3 border-b border-border flex items-center justify-between">
-        <p className="text-sm font-semibold">Support Tickets</p>
-        <span className="text-xs text-muted-foreground">This customer&apos;s support history</span>
-      </div>
-      {!tickets.length ? (
-        <div className="px-5 py-10 text-center text-sm text-muted-foreground">No support tickets for this contact</div>
-      ) : (
-        <div className="divide-y divide-border">
-          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-          {tickets.map((t: any) => {
-            const statusColor: Record<string,string> = {
-              open: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
-              in_progress: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
-              resolved: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
-              closed: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-400',
-            };
-            return (
-              <button key={t.id} onClick={() => router.push(`/tenant/tickets/${t.id}`)}
-                className="w-full text-left flex items-center gap-4 px-5 py-4 hover:bg-accent/20 transition-colors">
-                <Ticket className="w-4 h-4 text-muted-foreground shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold truncate">{t.subject}</p>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    <span className={cn('text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full', statusColor[t.status] ?? statusColor['open'])}>
-                      {String(t.status).replace('_',' ')}
-                    </span>
-                    {t.priority && <span className={cn('text-[10px] font-semibold uppercase', t.priority==='urgent'?'text-red-600':t.priority==='high'?'text-orange-600':'text-muted-foreground')}>{t.priority}</span>}
-                    {t.category && <span className="text-xs text-muted-foreground">· {t.category}</span>}
-                  </div>
-                </div>
-                <p className="text-xs text-muted-foreground shrink-0">{formatRelativeTime(t.createdAt)}</p>
-              </button>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-});
-
-// ── Calls tab (memoized section) ───────────────────────────────
-const CallsTabSection = memo(function CallsTabSection({ contactId, companyId, teamMembers, callLogs, onLogged }: {
-  contactId: string;
-  companyId?: string;
-  teamMembers: TeamMemberOption[];
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  callLogs: any[];
-  onLogged: () => void;
-}) {
-  return (
-    <div className="admin-card overflow-hidden">
-      <div className="px-5 py-3 border-b border-border flex items-center justify-between">
-        <p className="text-sm font-semibold">Call Logs</p>
-        <CallLogger
-          contactId={contactId}
-          companyId={companyId}
-          teamMembers={teamMembers}
-          onLogged={onLogged}
-        />
-      </div>
-      {!callLogs.length ? (
-        <div className="px-5 py-10 text-center text-sm text-muted-foreground">No calls logged yet</div>
-      ) : (
-        <div className="p-2">
-          <CallLogList calls={callLogs} />
-        </div>
-      )}
-    </div>
-  );
-});
-
-// ── Leads tab (memoized section) ───────────────────────────────
-const LeadsTabSection = memo(function LeadsTabSection({ leads, loading }: {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  leads: any[];
-  loading: boolean;
-}) {
-  const router = useRouter();
-  return (
-    <div className="admin-card overflow-hidden">
-      <div className="px-5 py-3 border-b border-border flex items-center justify-between">
-        <p className="text-sm font-semibold">Leads</p>
-        <span className="text-xs text-muted-foreground">
-          Every sales conversation with this person
-        </span>
-      </div>
-      {loading ? (
-        <div className="px-5 py-10 text-center text-sm text-muted-foreground">Loading…</div>
-      ) : !leads.length ? (
-        <div className="px-5 py-10 text-center text-sm text-muted-foreground">
-          No leads linked to this contact yet
-        </div>
-      ) : (
-        <div className="divide-y divide-border">
-          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-          {leads.map((l: any) => {
-            const status = LEAD_STATUSES.find(s => s.id === l.lead_status) ?? LEAD_STATUSES[0]!;
-            const offerLabel = l.offer_total > 0
-              ? `${l.offer_currency} ${Number(l.offer_total).toLocaleString()}`
-              : null;
-            return (
-              <div
-                key={l.id}
-                onClick={() => router.push(`/tenant/leads/${l.id}`)}
-                className="px-5 py-4 hover:bg-accent/20 cursor-pointer transition-colors group"
-              >
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-xs font-mono text-muted-foreground">
-                        {l.lead_oid ?? l.id.slice(0, 8)}
-                      </span>
-                      <span className={cn('inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold', status.color)}>
-                        {status.label}
-                      </span>
-                      {l.product_id && (
-                        <span className="text-[10px] font-semibold uppercase tracking-wide text-violet-600 bg-violet-50 dark:bg-violet-900/20 px-2 py-0.5 rounded-full">
-                          {l.product_id}
-                        </span>
-                      )}
-                      {l.lifecycle_stage && (
-                        <span className="text-[10px] capitalize text-muted-foreground">
-                          · {l.lifecycle_stage.replace(/_/g, ' ')}
-                        </span>
-                      )}
-                    </div>
-                    {(l.need_description || l.timeline || l.budget) && (
-                      <p className="text-xs text-muted-foreground mt-1.5 line-clamp-2">
-                        {[
-                          l.budget && `${l.budget_currency || 'USD'} ${Number(l.budget).toLocaleString()} budget`,
-                          l.timeline && `${l.timeline}`,
-                          l.need_description,
-                        ].filter(Boolean).join(' · ')}
-                      </p>
-                    )}
-                    <div className="flex items-center gap-3 mt-2 text-[11px] text-muted-foreground">
-                      {l.assigned_name && (
-                        <span className="flex items-center gap-1">
-                          <User className="w-3 h-3" />
-                          {l.assigned_name}
-                        </span>
-                      )}
-                      <span className="flex items-center gap-1">
-                        <Clock className="w-3 h-3" />
-                        {formatRelativeTime(l.last_activity_at || l.updated_at || l.created_at)}
-                      </span>
-                      {l.score > 0 && (
-                        <span className="flex items-center gap-1">
-                          <Star className="w-3 h-3" />
-                          {l.score}/100
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="text-right shrink-0">
-                    {offerLabel && (
-                      <div>
-                        <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Open offers</p>
-                        <p className="text-sm font-bold text-violet-600">{offerLabel}</p>
-                        <p className="text-[10px] text-muted-foreground">{l.offer_count} item{l.offer_count === 1 ? '' : 's'}</p>
-                      </div>
-                    )}
-                    {!offerLabel && l.value && (
-                      <div>
-                        <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Estimated value</p>
-                        <p className="text-sm font-bold text-violet-600">
-                          {l.budget_currency || 'USD'} {Number(l.value).toLocaleString()}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-});
-
-// ── History tab (memoized section) ─────────────────────────────
-const HistoryTabSection = memo(function HistoryTabSection({ history, loading }: {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  history: any[];
-  loading: boolean;
-}) {
-  return (
-    <div className="admin-card overflow-hidden">
-      <div className="px-5 py-3 border-b border-border flex items-center justify-between">
-        <p className="text-sm font-semibold">Edit History</p>
-        <span className="text-xs text-muted-foreground">{history.length} changes</span>
-      </div>
-      {loading ? (
-        <div className="px-5 py-10 text-center text-sm text-muted-foreground">Loading...</div>
-      ) : !history.length ? (
-        <div className="px-5 py-10 text-center text-sm text-muted-foreground">No edit history yet</div>
-      ) : (
-        <div className="divide-y divide-border max-h-[500px] overflow-y-auto">
-          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-          {history.map((h: any) => (
-            <div key={h.id} className="px-5 py-4 hover:bg-accent/10 transition-colors">
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-semibold bg-violet-100 text-violet-700 px-2 py-0.5 rounded">
-                      {h.fieldLabel || h.fieldName}
-                    </span>
-                  </div>
-                  <div className="mt-2 text-sm">
-                    <span className="text-muted-foreground line-through">{h.oldValue || '(empty)'}</span>
-                    <span className="mx-2">→</span>
-                    <span className="font-medium">{h.newValue || '(empty)'}</span>
-                  </div>
-                </div>
-                <div className="text-right shrink-0">
-                  <p className="text-xs text-muted-foreground">{h.userName || h.userEmail || 'Unknown'}</p>
-                  <p className="text-xs text-muted-foreground">{formatRelativeTime(h.createdAt)}</p>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-});
-
-// ── Billing tab (memoized section) ─────────────────────────────
-const BillingTabSection = memo(function BillingTabSection({ invoices, orders, contracts, subscriptions, quotes, contactId }: {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  invoices: any[]; orders: any[]; contracts: any[]; subscriptions: any[]; quotes: any[];
-  contactId: string;
-}) {
-  const router = useRouter();
-  return (
-    <div className="space-y-4">
-      {/* Summary cards */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        <div className="admin-card p-3 text-center">
-          <p className="text-xs text-muted-foreground mb-1">Invoices</p>
-          <p className="text-xl font-bold text-violet-600">{invoices.length}</p>
-        </div>
-        <div className="admin-card p-3 text-center">
-          <p className="text-xs text-muted-foreground mb-1">Orders</p>
-          <p className="text-xl font-bold text-blue-600">{orders.length}</p>
-        </div>
-        <div className="admin-card p-3 text-center">
-          <p className="text-xs text-muted-foreground mb-1">Contracts</p>
-          <p className="text-xl font-bold text-green-600">{contracts.length}</p>
-        </div>
-        <div className="admin-card p-3 text-center">
-          <p className="text-xs text-muted-foreground mb-1">Subs</p>
-          <p className="text-xl font-bold text-amber-600">{subscriptions.length}</p>
-        </div>
-        <div className="admin-card p-3 text-center">
-          <p className="text-xs text-muted-foreground mb-1">Quotes</p>
-          <p className="text-xl font-bold text-emerald-600">{quotes.length}</p>
-        </div>
-      </div>
-
-      {/* Unified billing timeline */}
-      <div className="admin-card overflow-hidden">
-        <div className="px-5 py-3 border-b border-border flex items-center justify-between">
-          <p className="text-sm font-semibold">Billing History</p>
-          <div className="flex gap-2">
-            <button onClick={() => router.push(`/tenant/invoices?contactId=${contactId}`)} className="text-xs text-violet-600 hover:underline flex items-center gap-1"><FileText className="w-3 h-3" />Invoices</button>
-            <button onClick={() => router.push(`/tenant/orders?contactId=${contactId}`)} className="text-xs text-blue-600 hover:underline flex items-center gap-1"><ShoppingCart className="w-3 h-3" />Orders</button>
-            <button onClick={() => router.push(`/tenant/contracts?contactId=${contactId}`)} className="text-xs text-green-600 hover:underline flex items-center gap-1"><FileSignature className="w-3 h-3" />Contracts</button>
-            <button onClick={() => router.push(`/tenant/quotes?contactId=${contactId}`)} className="text-xs text-emerald-600 hover:underline flex items-center gap-1"><FileText className="w-3 h-3" />Quotes</button>
-          </div>
-        </div>
-
-        {/* Build unified timeline */}
-        {(() => {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-          type BillingItem = { type: string; item: any; date: Date; label: string; amount: number; status: string; number: string; };
-          const items: BillingItem[] = [];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-          invoices.forEach((i: any) => items.push({ type: 'invoice', item: i, date: new Date(i.createdAt), label: i.title || i.invoiceNumber, amount: parseFloat(i.totalAmount || 0), status: i.status, number: i.invoiceNumber || '' }));
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-          orders.forEach((o: any) => items.push({ type: 'order', item: o, date: new Date(o.createdAt), label: o.title || o.orderNumber, amount: parseFloat(o.totalAmount || 0), status: o.status, number: o.orderNumber || '' }));
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-          contracts.forEach((c: any) => items.push({ type: 'contract', item: c, date: new Date(c.createdAt), label: c.title, amount: parseFloat(c.totalValue || 0), status: c.status, number: c.contractNumber || '' }));
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-          subscriptions.forEach((s: any) => items.push({ type: 'subscription', item: s, date: new Date(s.createdAt), label: s.name, amount: parseFloat(s.amount || 0), status: s.status, number: '' }));
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-          quotes.forEach((q: any) => items.push({ type: 'quote', item: q, date: new Date(q.createdAt), label: q.title, amount: parseFloat(q.totalAmount || 0), status: q.status, number: q.quoteNumber || '' }));
-
-          items.sort((a, b) => b.date.getTime() - a.date.getTime());
-
-          if (!items.length) {
-            return <div className="px-5 py-10 text-center text-sm text-muted-foreground">No billing records — create an invoice, order, contract, subscription or quote</div>;
-          }
-
-          return (
-            <div className="divide-y divide-border">
-              {items.map((entry, idx) => {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const typeIcons: Record<string, any> = {
-                  invoice: FileText, order: ShoppingCart, contract: FileSignature,
-                  subscription: RefreshCw, quote: FileText,
-                };
-                const typeColors: Record<string, string> = {
-                  invoice: 'bg-violet-100 text-violet-600',
-                  order: 'bg-blue-100 text-blue-600',
-                  contract: 'bg-green-100 text-green-600',
-                  subscription: 'bg-amber-100 text-amber-600',
-                  quote: 'bg-emerald-100 text-emerald-600',
-                };
-                const Icon = typeIcons[entry.type] || FileText;
-                const _statusBadgeColors: Record<string, string> = {
-                  draft: 'bg-slate-100 text-slate-600', sent: 'bg-blue-100 text-blue-700',
-                  paid: 'bg-green-100 text-green-700', overdue: 'bg-red-100 text-red-700',
-                  active: 'bg-green-100 text-green-700', accepted: 'bg-green-100 text-green-700',
-                  cancelled: 'bg-gray-100 text-gray-600', confirmed: 'bg-blue-100 text-blue-700',
-                  processing: 'bg-indigo-100 text-indigo-700', shipped: 'bg-violet-100 text-violet-700',
-                  delivered: 'bg-green-100 text-green-700', expired: 'bg-amber-100 text-amber-700',
-                  declined: 'bg-red-100 text-red-700',
-                };
-
-                return (
-                  <div key={idx} className="flex items-start gap-3 px-5 py-4 hover:bg-accent/20 transition-colors group">
-                    <div className={cn('w-9 h-9 rounded-full flex items-center justify-center shrink-0', typeColors[entry.type])}>
-                      <Icon className="w-4 h-4" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">{entry.type}</span>
-                        {entry.number && <span className="text-xs font-mono text-muted-foreground">{entry.number}</span>}
-                        <span className="px-2 py-0.5 text-[10px] rounded-full font-semibold capitalize" style={{ backgroundColor: 'var(--muted)', color: 'var(--foreground)' }}>{entry.status}</span>
-                      </div>
-                      <p className="text-sm font-medium mt-0.5">{entry.label}</p>
-                      <div className="flex items-center gap-3 mt-1">
-                        <span className="text-xs text-muted-foreground flex items-center gap-1"><Calendar className="w-3 h-3" />{formatDate(entry.date)}</span>
-                        <span className="text-sm font-bold text-violet-600">{formatCurrency(entry.amount)}</span>
-                      </div>
-                    </div>
-                    <div className="flex gap-1 max-md:opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity shrink-0">
-                      <button
-                        onClick={() => router.push(`/tenant/${entry.type}s/${entry.item.id}`)}
-                        className="p-1.5 hover:bg-accent rounded" title="View"
-                      ><FileText className="w-3.5 h-3.5" /></button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          );
-        })()}
-      </div>
-    </div>
-  );
-});
+}
 
 // ── Main Component ─────────────────────────────────────────────
 export default function ContactDetailClient({
   contact: initialContact, initialActivities, deals: initialDeals,
   tasks: initialTasks, companies, teamMembers, permissions, userId,
-  invoices=EMPTY_ARRAY, orders=EMPTY_ARRAY, contracts=EMPTY_ARRAY, subscriptions=EMPTY_ARRAY, quotes=EMPTY_ARRAY,
-  callLogs: initialCallLogs=EMPTY_ARRAY,
-  tickets=EMPTY_ARRAY, followUps=EMPTY_ARRAY, sourceLead=null,
+  invoices=[], orders=[], contracts=[], subscriptions=[], quotes=[],
+  callLogs: initialCallLogs=[],
+  tickets=[], followUps=[], sourceLead=null,
 }: {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   contact: any; initialActivities: any[]; deals: any[]; tasks: any[];
@@ -892,14 +277,8 @@ export default function ContactDetailClient({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const router = useRouter();
 
-  const curStatus = useMemo(() => LEAD_STATUSES.find(s => s.id === contact.lead_status) ?? LEAD_STATUSES[0]!, [contact.lead_status]);
+  const curStatus = LEAD_STATUSES.find(s => s.id === contact.lead_status) ?? LEAD_STATUSES[0]!;
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
-
-  // ── Derived list counts (memoized so edit-form keystrokes don't recompute/re-render lists) ──
-  const openTasksCount = useMemo(() => tasks.filter(t => !t.completed).length, [tasks]);
-  const openFollowUpsCount = useMemo(() => followUps.filter(f => f.status !== 'completed' && f.status !== 'done').length, [followUps]);
-  const openTicketsCount = useMemo(() => tickets.filter(t => t.status !== 'closed' && t.status !== 'resolved').length, [tickets]);
-  const billingCount = useMemo(() => invoices.length + orders.length + contracts.length + subscriptions.length + quotes.length, [invoices, orders, contracts, subscriptions, quotes]);
 
   // Fetch history when tab changes
   useEffect(() => {
@@ -952,7 +331,7 @@ export default function ContactDetailClient({
   };
 
   // ── Delete note ──────────────────────────────────────────────
-  const deleteNote = useCallback(async (noteId: string) => {
+  const deleteNote = async (noteId: string) => {
     await confirmThen('Delete this note?', async () => {
       await fetch(`/api/tenant/contacts/${contact.id}/notes`, {
         method:'DELETE', headers:{'Content-Type':'application/json'},
@@ -962,7 +341,7 @@ export default function ContactDetailClient({
       setActivities((prev: any[]) => prev.filter((a: any) => a.id !== noteId));
       toast.success('Note deleted');
     });
-  }, [contact.id]);
+  };
 
   // ── Change lead status ───────────────────────────────────────
   const changeStatus = async (newStatus: string) => {
@@ -1004,7 +383,7 @@ export default function ContactDetailClient({
   };
 
   // ── Toggle task complete ─────────────────────────────────────
-  const toggleTask = useCallback(async (taskId: string, completed: boolean) => {
+  const toggleTask = async (taskId: string, completed: boolean) => {
     const res = await fetch(`/api/tenant/tasks/${taskId}`, {
       method:'PATCH', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ completed }),
@@ -1013,20 +392,7 @@ export default function ContactDetailClient({
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       setTasks((prev: any[]) => prev.map((t: any) => t.id === taskId ? { ...t, completed } : t));
     }
-  }, []);
-
-  // ── Stable callbacks for memoized children (keeps memo() effective) ──
-  const handleTaskAdded = useCallback((task: Task) => { setTasks(prev => [task, ...prev]); }, []);
-  const handleDealAdded = useCallback((deal: Deal) => { setDeals(prev => [deal, ...prev]); }, []);
-  const handleMeetingAdded = useCallback((m: { id: string; title: string }) => {
-    setActivities(prev => [{ id:`tmp_${Date.now()}`, type:'meeting', description:`Meeting scheduled: ${m.title}`, created_at:new Date().toISOString(), full_name:'You' }, ...prev]);
-  }, []);
-  const reloadCallLogs = useCallback(() => {
-    fetch(`/api/tenant/calls?contact_id=${contact.id}`)
-      .then(r => r.json())
-      .then(d => setCallLogs(d.data || []))
-      .catch(() => {});
-  }, [contact.id]);
+  };
 
   return (
     <div className="max-w-7xl space-y-0 animate-fade-in">
@@ -1212,9 +578,11 @@ export default function ContactDetailClient({
           {/* Quick actions */}
           <div className="admin-card p-4 space-y-1">
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Quick Add</p>
-            <QuickAddTask contactId={contact.id} _contactName={`${contact.first_name} ${contact.last_name}`} teamMembers={teamMembers} onAdded={handleTaskAdded} />
-            <QuickAddDeal contactId={contact.id} _companies={companies} onAdded={handleDealAdded} />
-            <QuickAddMeeting contactId={contact.id} onAdded={handleMeetingAdded} />
+            <QuickAddTask contactId={contact.id} _contactName={`${contact.first_name} ${contact.last_name}`} teamMembers={teamMembers} onAdded={(t) => setTasks((prev) => [t, ...prev])} />
+            <QuickAddDeal contactId={contact.id} _companies={companies} onAdded={(d) => setDeals((prev) => [d, ...prev])} />
+            <QuickAddMeeting contactId={contact.id} onAdded={(m) => {
+              setActivities((prev) => [{ id:`tmp_${Date.now()}`, type:'meeting', description:`Meeting scheduled: ${m.title}`, created_at:new Date().toISOString(), full_name:'You' }, ...prev]);
+            }} />
           </div>
         </div>
 
@@ -1225,12 +593,12 @@ export default function ContactDetailClient({
             {[
               { id:'activity', label:`Activity (${activities.length})` },
               { id:'leads',    label:`Leads${contactLeads.length ? ` (${contactLeads.length})` : ''}` },
-              { id:'tasks',    label:`Tasks (${openTasksCount} open)` },
-              { id:'followups',label:`Follow-ups (${openFollowUpsCount} open)`, icon: ListChecks },
+              { id:'tasks',    label:`Tasks (${tasks.filter(t=>!t.completed).length} open)` },
+              { id:'followups',label:`Follow-ups (${followUps.filter(f=>f.status!=='completed'&&f.status!=='done').length} open)`, icon: ListChecks },
               { id:'deals',    label:`Deals (${deals.length})` },
-              { id:'tickets',  label:`Tickets (${openTicketsCount} open)`, icon: Ticket },
+              { id:'tickets',  label:`Tickets (${tickets.filter(t=>t.status!=='closed'&&t.status!=='resolved').length} open)`, icon: Ticket },
               { id:'calls',    label:`Calls (${callLogs.length})`, icon: PhoneCall },
-              { id:'billing',  label:`Billing (${billingCount})`, icon: DollarSign },
+              { id:'billing',  label:`Billing (${invoices.length + orders.length + contracts.length + subscriptions.length + quotes.length})`, icon: DollarSign },
               { id:'history', label:'History', icon: History },
             ].map(tab => (
               <button key={tab.id} onClick={() => setActiveTab(tab.id)}
@@ -1278,71 +646,551 @@ export default function ContactDetailClient({
               </div>
 
               {/* Timeline */}
-              <ActivityLogSection activities={activities} userId={userId} onDeleteNote={deleteNote} />
+              <div className="admin-card overflow-hidden">
+                <div className="px-5 py-3 border-b border-border flex items-center justify-between">
+                  <p className="text-sm font-semibold">Manual log</p>
+                  <p className="text-xs text-muted-foreground">{activities.length} entries · notes, calls, emails, meetings you log</p>
+                </div>
+                {!activities.length ? (
+                  <div className="px-5 py-10 text-center text-sm text-muted-foreground">
+                    No activity yet — log a note, call, email or meeting above
+                  </div>
+                ) : (
+                  <div className="divide-y divide-border">
+                    {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                    {activities.map((a: any, i: number) => {
+                      const Icon = ACTIVITY_ICONS[a.type] ?? MessageSquare;
+                      const colorCls = ACTIVITY_COLORS[a.type] ?? 'text-gray-600 bg-gray-100';
+                      const isStatusChange = a.metadata?.status_change;
+                      const isOwn = a.user_id === userId || a.full_name === 'You';
+                      return (
+                        <div key={a.id ?? i} className="flex gap-3.5 px-5 py-4 group hover:bg-accent/20 transition-colors">
+                          <div className={cn('w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-0.5', colorCls)}>
+                            <Icon className="w-3.5 h-3.5" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm leading-relaxed">{a.description}</p>
+                            {/* Timestamp with full date/time */}
+                            <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                              {a.full_name && (
+                                <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                                  <User className="w-3 h-3" />{a.full_name}
+                                </span>
+                              )}
+                              <span className="flex items-center gap-1 text-xs text-muted-foreground" title={new Date(a.created_at).toLocaleString()}>
+                                <Clock className="w-3 h-3" />
+                                <span className="font-medium text-foreground/70">{formatDateTimeShort(a.created_at)}</span>
+                                <span className="text-muted-foreground/50">·</span>
+                                <span>{formatRelativeTime(a.created_at)}</span>
+                              </span>
+                              {isStatusChange && (
+                                <span className="text-[10px] bg-blue-100 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 px-1.5 py-0.5 rounded-full font-semibold">
+                                  Status Change
+                                </span>
+                              )}
+                              <span className={cn('text-[10px] px-1.5 py-0.5 rounded-full font-semibold capitalize', colorCls)}>
+                                {a.type?.replace('_',' ')}
+                              </span>
+                            </div>
+                          </div>
+                          {/* Delete button — only own notes */}
+                          {isOwn && !['contact_created'].includes(a.type) && !a.id?.startsWith('tmp_') && (
+                            <button onClick={() => deleteNote(a.id)}
+                              className="max-md:opacity-100 md:opacity-0 md:group-hover:opacity-100 w-6 h-6 flex items-center justify-center rounded text-muted-foreground hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 transition-all shrink-0 mt-1">
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
 
               {/* System events timeline — emails opened/clicked, calls, meetings, deals, lifecycle changes, automations, forms, webhooks */}
-              <SystemEventsSection contactId={contact.id} />
+              <div className="admin-card overflow-hidden">
+                <div className="px-5 py-3 border-b border-border flex items-center justify-between">
+                  <p className="text-sm font-semibold">System events</p>
+                  <p className="text-xs text-muted-foreground">Auto-tracked: email opens/clicks, calls, meetings, deals, lifecycle changes, forms, automations</p>
+                </div>
+                <div className="p-5">
+                  <ContactTimeline contactId={contact.id} />
+                </div>
+              </div>
             </div>
           )}
 
           {/* ── TASKS TAB ── */}
           {activeTab === 'tasks' && (
-            <TasksTabSection
-              contactId={contact.id}
-              contactName={`${contact.first_name} ${contact.last_name}`}
-              teamMembers={teamMembers}
-              tasks={tasks}
-              onTaskAdded={handleTaskAdded}
-              onToggleTask={toggleTask}
-            />
+            <div className="admin-card overflow-hidden">
+              <div className="px-5 py-3 border-b border-border flex items-center justify-between">
+                <p className="text-sm font-semibold">Tasks</p>
+                <QuickAddTask contactId={contact.id} _contactName={`${contact.first_name} ${contact.last_name}`} teamMembers={teamMembers} onAdded={(t) => {  setTasks((prev) => [t, ...prev])}} />
+              </div>
+              {!tasks.length ? (
+                <div className="px-5 py-10 text-center text-sm text-muted-foreground">No tasks yet — create one above</div>
+              ) : (
+                <div className="divide-y divide-border">
+                  {[...tasks].sort((a: Task, b: Task) => {
+                    if (a.completed && !b.completed) return 1;
+                    if (!a.completed && b.completed) return -1;
+                    if (!a.due_date && !b.due_date) return 0;
+                    if (!a.due_date) return 1;
+                    if (!b.due_date) return -1;
+                    return new Date(a.due_date).getTime() - new Date(b.due_date).getTime();
+                  }).map((t: Task) => {
+                    const today = new Date().toISOString().split('T')[0] || '';
+                    const overdue = !t.completed && t.due_date && t.due_date < today;
+                    return (
+                      <div key={t.id} className={cn('flex items-start gap-3 px-5 py-3.5 hover:bg-accent/20 transition-colors', t.completed && 'opacity-50')}>
+                        <button onClick={() => toggleTask(t.id, !t.completed)} className="mt-0.5 shrink-0">
+                          <div className={cn('w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors',
+                            t.completed ? 'bg-emerald-500 border-emerald-500' : 'border-border hover:border-violet-500')}>
+                            {t.completed && <CheckCircle className="w-3.5 h-3.5 text-white" />}
+                          </div>
+                        </button>
+                        <div className="flex-1 min-w-0">
+                          <p className={cn('text-sm font-medium', t.completed && 'line-through text-muted-foreground')}>{t.title}</p>
+                          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                            <span className={cn('text-[10px] font-semibold px-1.5 py-0.5 rounded-full capitalize',
+                              t.priority==='high' ? 'text-red-600 bg-red-100 dark:bg-red-900/20' :
+                              t.priority==='medium' ? 'text-amber-600 bg-amber-100 dark:bg-amber-900/20' :
+                              'text-slate-500 bg-slate-100 dark:bg-slate-800')}>
+                              {t.priority}
+                            </span>
+                            {t.assignee_name && <span className="text-xs text-muted-foreground flex items-center gap-1"><User className="w-3 h-3" />{t.assignee_name}</span>}
+                            {t.due_date && (
+                              <span className={cn('text-xs flex items-center gap-1', overdue ? 'text-red-500 font-semibold' : 'text-muted-foreground')}>
+                                <Clock className="w-3 h-3" />{formatDate(t.due_date)}{overdue && ' — Overdue'}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           )}
 
           {/* ── DEALS TAB ── */}
           {activeTab === 'deals' && (
-            <DealsTabSection contactId={contact.id} companies={companies} deals={deals} onDealAdded={handleDealAdded} />
+            <div className="admin-card overflow-hidden">
+              <div className="px-5 py-3 border-b border-border flex items-center justify-between">
+                <p className="text-sm font-semibold">Deals</p>
+                <QuickAddDeal contactId={contact.id} _companies={companies} onAdded={(d) => {  setDeals((prev) => [d, ...prev])}} />
+              </div>
+              {!deals.length ? (
+                <div className="px-5 py-10 text-center text-sm text-muted-foreground">No deals yet — create one above</div>
+              ) : (
+                <div className="divide-y divide-border">
+                  {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                  {deals.map((d: any) => (
+                    <div key={d.id} className="flex items-center gap-4 px-5 py-4 hover:bg-accent/20 transition-colors">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold">{d.title}</p>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className={cn('text-[10px] font-semibold px-1.5 py-0.5 rounded-full capitalize', STAGE_COLORS[d.stage]??STAGE_COLORS["lead"])}>{d.stage}</span>
+                          {d.close_date && <span className="text-xs text-muted-foreground flex items-center gap-1"><Calendar className="w-3 h-3" />Close: {formatDate(d.close_date)}</span>}
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="text-base font-bold text-violet-600">{formatCurrency(Number(d.value))}</p>
+                        <p className="text-xs text-muted-foreground">{formatRelativeTime(d.created_at)}</p>
+                      </div>
+                    </div>
+                  ))}
+                  <div className="px-5 py-3 bg-muted/20 flex items-center justify-between">
+                    <span className="text-xs font-semibold text-muted-foreground">Total pipeline</span>
+                    {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                    <span className="text-sm font-bold">{formatCurrency(deals.filter((d: any)=>!['lost'].includes(d.stage)).reduce((s: any, d: any)=>s+Number(d.value),0))}</span>
+                  </div>
+                </div>
+              )}
+            </div>
           )}
 
           {/* ── FOLLOW-UPS TAB (#1814) ── */}
           {activeTab === 'followups' && (
-            <FollowUpsTabSection followUps={followUps} />
+            <div className="admin-card overflow-hidden">
+              <div className="px-5 py-3 border-b border-border flex items-center justify-between">
+                <p className="text-sm font-semibold">Follow-ups</p>
+                <span className="text-xs text-muted-foreground">Scheduled next steps for this contact</span>
+              </div>
+              {!followUps.length ? (
+                <div className="px-5 py-10 text-center text-sm text-muted-foreground">No follow-ups scheduled</div>
+              ) : (
+                <div className="divide-y divide-border">
+                  {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                  {followUps.map((f: any) => {
+                    const done = f.status === 'completed' || f.status === 'done' || !!f.completedAt;
+                    const overdue = !done && f.dueDate && new Date(f.dueDate) < new Date();
+                    return (
+                      <div key={f.id} className="flex items-center gap-4 px-5 py-4 hover:bg-accent/20 transition-colors">
+                        <div className={cn('shrink-0', done ? 'text-emerald-600' : overdue ? 'text-red-600' : 'text-muted-foreground')}>
+                          {done ? <CheckCircle className="w-4 h-4" /> : <ListChecks className="w-4 h-4" />}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className={cn('text-sm font-semibold', done && 'line-through text-muted-foreground')}>{f.title}</p>
+                          {f.description && <p className="text-xs text-muted-foreground truncate">{f.description}</p>}
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className={cn('text-[10px] font-semibold px-1.5 py-0.5 rounded-full capitalize',
+                              done ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
+                                   : overdue ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                                             : 'bg-muted text-muted-foreground')}>
+                              {done ? 'done' : overdue ? 'overdue' : f.status}
+                            </span>
+                            {f.assignee_name && <span className="text-xs text-muted-foreground">· {f.assignee_name}</span>}
+                          </div>
+                        </div>
+                        {f.dueDate && (
+                          <div className="text-right shrink-0">
+                            <p className={cn('text-xs flex items-center gap-1', overdue ? 'text-red-600 font-medium' : 'text-muted-foreground')}>
+                              <Calendar className="w-3 h-3" />{formatDate(f.dueDate)}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           )}
 
           {/* ── TICKETS TAB (#1814) ── */}
           {activeTab === 'tickets' && (
-            <TicketsTabSection tickets={tickets} />
+            <div className="admin-card overflow-hidden">
+              <div className="px-5 py-3 border-b border-border flex items-center justify-between">
+                <p className="text-sm font-semibold">Support Tickets</p>
+                <span className="text-xs text-muted-foreground">This customer&apos;s support history</span>
+              </div>
+              {!tickets.length ? (
+                <div className="px-5 py-10 text-center text-sm text-muted-foreground">No support tickets for this contact</div>
+              ) : (
+                <div className="divide-y divide-border">
+                  {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                  {tickets.map((t: any) => {
+                    const statusColor: Record<string,string> = {
+                      open: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+                      in_progress: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+                      resolved: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
+                      closed: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-400',
+                    };
+                    return (
+                      <button key={t.id} onClick={() => router.push(`/tenant/tickets/${t.id}`)}
+                        className="w-full text-left flex items-center gap-4 px-5 py-4 hover:bg-accent/20 transition-colors">
+                        <Ticket className="w-4 h-4 text-muted-foreground shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold truncate">{t.subject}</p>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className={cn('text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full', statusColor[t.status] ?? statusColor['open'])}>
+                              {String(t.status).replace('_',' ')}
+                            </span>
+                            {t.priority && <span className={cn('text-[10px] font-semibold uppercase', t.priority==='urgent'?'text-red-600':t.priority==='high'?'text-orange-600':'text-muted-foreground')}>{t.priority}</span>}
+                            {t.category && <span className="text-xs text-muted-foreground">· {t.category}</span>}
+                          </div>
+                        </div>
+                        <p className="text-xs text-muted-foreground shrink-0">{formatRelativeTime(t.createdAt)}</p>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           )}
 
           {/* ── CALLS TAB ── */}
           {activeTab === 'calls' && (
-            <CallsTabSection
-              contactId={contact.id}
-              companyId={contact.company_id}
-              teamMembers={teamMembers}
-              callLogs={callLogs}
-              onLogged={reloadCallLogs}
-            />
+            <div className="admin-card overflow-hidden">
+              <div className="px-5 py-3 border-b border-border flex items-center justify-between">
+                <p className="text-sm font-semibold">Call Logs</p>
+                <CallLogger
+                  contactId={contact.id}
+                  companyId={contact.company_id}
+                  teamMembers={teamMembers}
+                  onLogged={() => {
+                    fetch(`/api/tenant/calls?contact_id=${contact.id}`)
+                      .then(r => r.json())
+                      .then(d => setCallLogs(d.data || []))
+                      .catch(() => {});
+                  }}
+                />
+              </div>
+              {!callLogs.length ? (
+                <div className="px-5 py-10 text-center text-sm text-muted-foreground">No calls logged yet</div>
+              ) : (
+                <div className="p-2">
+                  <CallLogList calls={callLogs} />
+                </div>
+              )}
+            </div>
           )}
 
           {/* ── LEADS TAB (every lead this contact has been on — past + present) ── */}
           {activeTab === 'leads' && (
-            <LeadsTabSection leads={contactLeads} loading={loadingContactLeads} />
+            <div className="admin-card overflow-hidden">
+              <div className="px-5 py-3 border-b border-border flex items-center justify-between">
+                <p className="text-sm font-semibold">Leads</p>
+                <span className="text-xs text-muted-foreground">
+                  Every sales conversation with this person
+                </span>
+              </div>
+              {loadingContactLeads ? (
+                <div className="px-5 py-10 text-center text-sm text-muted-foreground">Loading…</div>
+              ) : !contactLeads.length ? (
+                <div className="px-5 py-10 text-center text-sm text-muted-foreground">
+                  No leads linked to this contact yet
+                </div>
+              ) : (
+                <div className="divide-y divide-border">
+                  {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                  {contactLeads.map((l: any) => {
+                    const status = LEAD_STATUSES.find(s => s.id === l.lead_status) ?? LEAD_STATUSES[0]!;
+                    const offerLabel = l.offer_total > 0
+                      ? `${l.offer_currency} ${Number(l.offer_total).toLocaleString()}`
+                      : null;
+                    return (
+                      <div
+                        key={l.id}
+                        onClick={() => router.push(`/tenant/leads/${l.id}`)}
+                        className="px-5 py-4 hover:bg-accent/20 cursor-pointer transition-colors group"
+                      >
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-xs font-mono text-muted-foreground">
+                                {l.lead_oid ?? l.id.slice(0, 8)}
+                              </span>
+                              <span className={cn('inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold', status.color)}>
+                                {status.label}
+                              </span>
+                              {l.product_id && (
+                                <span className="text-[10px] font-semibold uppercase tracking-wide text-violet-600 bg-violet-50 dark:bg-violet-900/20 px-2 py-0.5 rounded-full">
+                                  {l.product_id}
+                                </span>
+                              )}
+                              {l.lifecycle_stage && (
+                                <span className="text-[10px] capitalize text-muted-foreground">
+                                  · {l.lifecycle_stage.replace(/_/g, ' ')}
+                                </span>
+                              )}
+                            </div>
+                            {(l.need_description || l.timeline || l.budget) && (
+                              <p className="text-xs text-muted-foreground mt-1.5 line-clamp-2">
+                                {[
+                                  l.budget && `${l.budget_currency || 'USD'} ${Number(l.budget).toLocaleString()} budget`,
+                                  l.timeline && `${l.timeline}`,
+                                  l.need_description,
+                                ].filter(Boolean).join(' · ')}
+                              </p>
+                            )}
+                            <div className="flex items-center gap-3 mt-2 text-[11px] text-muted-foreground">
+                              {l.assigned_name && (
+                                <span className="flex items-center gap-1">
+                                  <User className="w-3 h-3" />
+                                  {l.assigned_name}
+                                </span>
+                              )}
+                              <span className="flex items-center gap-1">
+                                <Clock className="w-3 h-3" />
+                                {formatRelativeTime(l.last_activity_at || l.updated_at || l.created_at)}
+                              </span>
+                              {l.score > 0 && (
+                                <span className="flex items-center gap-1">
+                                  <Star className="w-3 h-3" />
+                                  {l.score}/100
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="text-right shrink-0">
+                            {offerLabel && (
+                              <div>
+                                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Open offers</p>
+                                <p className="text-sm font-bold text-violet-600">{offerLabel}</p>
+                                <p className="text-[10px] text-muted-foreground">{l.offer_count} item{l.offer_count === 1 ? '' : 's'}</p>
+                              </div>
+                            )}
+                            {!offerLabel && l.value && (
+                              <div>
+                                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Estimated value</p>
+                                <p className="text-sm font-bold text-violet-600">
+                                  {l.budget_currency || 'USD'} {Number(l.value).toLocaleString()}
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           )}
 
           {/* ── HISTORY TAB ── */}
           {activeTab === 'history' && (
-            <HistoryTabSection history={history} loading={loadingHistory} />
+            <div className="admin-card overflow-hidden">
+              <div className="px-5 py-3 border-b border-border flex items-center justify-between">
+                <p className="text-sm font-semibold">Edit History</p>
+                <span className="text-xs text-muted-foreground">{history.length} changes</span>
+              </div>
+              {loadingHistory ? (
+                <div className="px-5 py-10 text-center text-sm text-muted-foreground">Loading...</div>
+              ) : !history.length ? (
+                <div className="px-5 py-10 text-center text-sm text-muted-foreground">No edit history yet</div>
+              ) : (
+                <div className="divide-y divide-border max-h-[500px] overflow-y-auto">
+                  {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                  {history.map((h: any) => (
+                    <div key={h.id} className="px-5 py-4 hover:bg-accent/10 transition-colors">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-semibold bg-violet-100 text-violet-700 px-2 py-0.5 rounded">
+                              {h.fieldLabel || h.fieldName}
+                            </span>
+                          </div>
+                          <div className="mt-2 text-sm">
+                            <span className="text-muted-foreground line-through">{h.oldValue || '(empty)'}</span>
+                            <span className="mx-2">→</span>
+                            <span className="font-medium">{h.newValue || '(empty)'}</span>
+                          </div>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="text-xs text-muted-foreground">{h.userName || h.userEmail || 'Unknown'}</p>
+                          <p className="text-xs text-muted-foreground">{formatRelativeTime(h.createdAt)}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
 
           {/* ── BILLING TAB ── */}
           {activeTab === 'billing' && (
-            <BillingTabSection
-              invoices={invoices}
-              orders={orders}
-              contracts={contracts}
-              subscriptions={subscriptions}
-              quotes={quotes}
-              contactId={contact.id}
-            />
+            <div className="space-y-4">
+              {/* Summary cards */}
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                <div className="admin-card p-3 text-center">
+                  <p className="text-xs text-muted-foreground mb-1">Invoices</p>
+                  <p className="text-xl font-bold text-violet-600">{invoices.length}</p>
+                </div>
+                <div className="admin-card p-3 text-center">
+                  <p className="text-xs text-muted-foreground mb-1">Orders</p>
+                  <p className="text-xl font-bold text-blue-600">{orders.length}</p>
+                </div>
+                <div className="admin-card p-3 text-center">
+                  <p className="text-xs text-muted-foreground mb-1">Contracts</p>
+                  <p className="text-xl font-bold text-green-600">{contracts.length}</p>
+                </div>
+                <div className="admin-card p-3 text-center">
+                  <p className="text-xs text-muted-foreground mb-1">Subs</p>
+                  <p className="text-xl font-bold text-amber-600">{subscriptions.length}</p>
+                </div>
+                <div className="admin-card p-3 text-center">
+                  <p className="text-xs text-muted-foreground mb-1">Quotes</p>
+                  <p className="text-xl font-bold text-emerald-600">{quotes.length}</p>
+                </div>
+              </div>
+
+              {/* Unified billing timeline */}
+              <div className="admin-card overflow-hidden">
+                <div className="px-5 py-3 border-b border-border flex items-center justify-between">
+                  <p className="text-sm font-semibold">Billing History</p>
+                  <div className="flex gap-2">
+                    <button onClick={() => router.push(`/tenant/invoices?contactId=${contact.id}`)} className="text-xs text-violet-600 hover:underline flex items-center gap-1"><FileText className="w-3 h-3" />Invoices</button>
+                    <button onClick={() => router.push(`/tenant/orders?contactId=${contact.id}`)} className="text-xs text-blue-600 hover:underline flex items-center gap-1"><ShoppingCart className="w-3 h-3" />Orders</button>
+                    <button onClick={() => router.push(`/tenant/contracts?contactId=${contact.id}`)} className="text-xs text-green-600 hover:underline flex items-center gap-1"><FileSignature className="w-3 h-3" />Contracts</button>
+                    <button onClick={() => router.push(`/tenant/quotes?contactId=${contact.id}`)} className="text-xs text-emerald-600 hover:underline flex items-center gap-1"><FileText className="w-3 h-3" />Quotes</button>
+                  </div>
+                </div>
+
+                {/* Build unified timeline */}
+                {(() => {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  type BillingItem = { type: string; item: any; date: Date; label: string; amount: number; status: string; number: string; };
+                  const items: BillingItem[] = [];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  invoices.forEach((i: any) => items.push({ type: 'invoice', item: i, date: new Date(i.createdAt), label: i.title || i.invoiceNumber, amount: parseFloat(i.totalAmount || 0), status: i.status, number: i.invoiceNumber || '' }));
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  orders.forEach((o: any) => items.push({ type: 'order', item: o, date: new Date(o.createdAt), label: o.title || o.orderNumber, amount: parseFloat(o.totalAmount || 0), status: o.status, number: o.orderNumber || '' }));
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  contracts.forEach((c: any) => items.push({ type: 'contract', item: c, date: new Date(c.createdAt), label: c.title, amount: parseFloat(c.totalValue || 0), status: c.status, number: c.contractNumber || '' }));
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  subscriptions.forEach((s: any) => items.push({ type: 'subscription', item: s, date: new Date(s.createdAt), label: s.name, amount: parseFloat(s.amount || 0), status: s.status, number: '' }));
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  quotes.forEach((q: any) => items.push({ type: 'quote', item: q, date: new Date(q.createdAt), label: q.title, amount: parseFloat(q.totalAmount || 0), status: q.status, number: q.quoteNumber || '' }));
+
+                  items.sort((a, b) => b.date.getTime() - a.date.getTime());
+
+                  if (!items.length) {
+                    return <div className="px-5 py-10 text-center text-sm text-muted-foreground">No billing records — create an invoice, order, contract, subscription or quote</div>;
+                  }
+
+                  return (
+                    <div className="divide-y divide-border">
+                      {items.map((entry, idx) => {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        const typeIcons: Record<string, any> = {
+                          invoice: FileText, order: ShoppingCart, contract: FileSignature,
+                          subscription: RefreshCw, quote: FileText,
+                        };
+                        const typeColors: Record<string, string> = {
+                          invoice: 'bg-violet-100 text-violet-600',
+                          order: 'bg-blue-100 text-blue-600',
+                          contract: 'bg-green-100 text-green-600',
+                          subscription: 'bg-amber-100 text-amber-600',
+                          quote: 'bg-emerald-100 text-emerald-600',
+                        };
+                        const Icon = typeIcons[entry.type] || FileText;
+                        const _statusBadgeColors: Record<string, string> = {
+                          draft: 'bg-slate-100 text-slate-600', sent: 'bg-blue-100 text-blue-700',
+                          paid: 'bg-green-100 text-green-700', overdue: 'bg-red-100 text-red-700',
+                          active: 'bg-green-100 text-green-700', accepted: 'bg-green-100 text-green-700',
+                          cancelled: 'bg-gray-100 text-gray-600', confirmed: 'bg-blue-100 text-blue-700',
+                          processing: 'bg-indigo-100 text-indigo-700', shipped: 'bg-violet-100 text-violet-700',
+                          delivered: 'bg-green-100 text-green-700', expired: 'bg-amber-100 text-amber-700',
+                          declined: 'bg-red-100 text-red-700',
+                        };
+
+                        return (
+                          <div key={idx} className="flex items-start gap-3 px-5 py-4 hover:bg-accent/20 transition-colors group">
+                            <div className={cn('w-9 h-9 rounded-full flex items-center justify-center shrink-0', typeColors[entry.type])}>
+                              <Icon className="w-4 h-4" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">{entry.type}</span>
+                                {entry.number && <span className="text-xs font-mono text-muted-foreground">{entry.number}</span>}
+                                <span className="px-2 py-0.5 text-[10px] rounded-full font-semibold capitalize" style={{ backgroundColor: 'var(--muted)', color: 'var(--foreground)' }}>{entry.status}</span>
+                              </div>
+                              <p className="text-sm font-medium mt-0.5">{entry.label}</p>
+                              <div className="flex items-center gap-3 mt-1">
+                                <span className="text-xs text-muted-foreground flex items-center gap-1"><Calendar className="w-3 h-3" />{formatDate(entry.date)}</span>
+                                <span className="text-sm font-bold text-violet-600">{formatCurrency(entry.amount)}</span>
+                              </div>
+                            </div>
+                            <div className="flex gap-1 max-md:opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity shrink-0">
+                              <button
+                                onClick={() => router.push(`/tenant/${entry.type}s/${entry.item.id}`)}
+                                className="p-1.5 hover:bg-accent rounded" title="View"
+                              ><FileText className="w-3.5 h-3.5" /></button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
           )}
         </div>
       </div>
