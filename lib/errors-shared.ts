@@ -80,3 +80,22 @@ export interface ApiError {
   field?: string;
   requestId?: string;
 }
+
+/**
+ * Thrown when the request body is not parseable JSON.
+ *
+ * This exists as a distinct type so error renderers can answer 400 instead of
+ * 500 without having to guess. A bare `SyntaxError` is not a safe signal: a
+ * server-side `JSON.parse` of corrupt stored data throws exactly the same
+ * messages, and reporting that as a client error would hide real corruption.
+ *
+ * Lives in the dependency-free `errors-shared` module so every error path
+ * (`apiError()`, v1 `handleError()`, `logError()`) can recognise it without
+ * importing the server-only validate/route plumbing.
+ */
+export class InvalidJsonBodyError extends Error {
+  constructor(cause?: unknown) {
+    super('Invalid JSON body', { cause });
+    this.name = 'InvalidJsonBodyError';
+  }
+}

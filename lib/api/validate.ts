@@ -5,6 +5,7 @@
  */
 import { NextResponse } from 'next/server';
 import { logError } from '@/lib/errors-server';
+import { InvalidJsonBodyError } from '@/lib/errors-shared';
 import { ZodError, ZodSchema, z } from 'zod';
 import { logger } from '@/lib/logger';
 
@@ -97,8 +98,10 @@ export function withValidation<T>(
   return async (request: Request): Promise<NextResponse> => {
     let body: unknown;
     try {
-      body = await request.json();
+      body = await readJsonBody(request);
     } catch (e) {
+      // InvalidJsonBodyError short-circuits inside logError, so a client's
+      // malformed body no longer mirrors to error_logs/Sentry.
       await logError({ error: e, context: 'validate: withValidation bad JSON body' });
       return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
     }
@@ -114,19 +117,11 @@ export function withValidation<T>(
 }
 
 /**
- * Thrown when the request body is not parseable JSON.
- *
- * This exists as a distinct type so `apiError()` can answer 400 instead of 500
- * without having to guess. A bare `SyntaxError` is not a safe signal: a
- * server-side `JSON.parse` of corrupt stored data throws exactly the same
- * messages, and reporting that as a client error would hide real corruption.
+ * Thrown when the request body is not parseable JSON. Canonical definition
+ * lives in the dependency-free `errors-shared` module so every error path
+ * recognises the same class; re-exported here for existing importers.
  */
-export class InvalidJsonBodyError extends Error {
-  constructor(cause?: unknown) {
-    super('Invalid JSON body', { cause });
-    this.name = 'InvalidJsonBodyError';
-  }
-}
+export { InvalidJsonBodyError } from '@/lib/errors-shared';
 
 /**
  * Read and parse a JSON request body.

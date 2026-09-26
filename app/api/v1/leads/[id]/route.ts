@@ -10,6 +10,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { readJsonBody } from '@/lib/api/validate';
 import { db } from '@/drizzle/db';
 import { leads } from '@/drizzle/schema';
 import { eq, and, sql } from 'drizzle-orm';
@@ -75,7 +76,7 @@ export const PUT = withApiRoute(async (request: NextRequest, { params }: { param
     if (ctx instanceof NextResponse) return ctx;
 
     const { id } = await params;
-    const body = await request.json();
+    const body = await readJsonBody(request);
     const updateFields: Record<string, unknown> = {};
 
     if (body.first_name !== undefined) updateFields.firstName = body.first_name;

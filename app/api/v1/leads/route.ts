@@ -9,6 +9,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { readJsonBody } from '@/lib/api/validate';
 import { db } from '@/drizzle/db';
 import { leads, contacts, companies } from '@/drizzle/schema';
 import { eq, and, sql, desc, count } from 'drizzle-orm';
@@ -110,7 +111,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       );
     }
 
-    const body = await request.json();
+    const body = await readJsonBody(request);
 
     if (!body.first_name || !body.last_name) {
       throw new ValidationError('first_name and last_name are required');

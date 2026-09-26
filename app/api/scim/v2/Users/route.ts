@@ -13,6 +13,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { readJsonBody, InvalidJsonBodyError } from '@/lib/api/validate';
 import { logError } from '@/lib/errors-server';
 import { RateLimiter } from '@/lib/rate-limit';
 import { escapeLike } from '@/lib/api/sanitize-like';
@@ -184,7 +185,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const parsedBody = scimUserSchema.safeParse(await request.json());
+    const parsedBody = scimUserSchema.safeParse(await readJsonBody(request));
     if (!parsedBody.success) {
       return NextResponse.json(
         generateSCIMError('Invalid SCIM User payload', 400),
@@ -354,6 +355,12 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
+    if (error instanceof InvalidJsonBodyError) {
+      return NextResponse.json(
+        generateSCIMError('Invalid JSON body', 400),
+        { status: 400, headers: { 'Content-Type': 'application/scim+json' } }
+      );
+    }
     void logError({ error, context: 'scim/Users POST' });
     return NextResponse.json(
       generateSCIMError('Internal server error', 500),

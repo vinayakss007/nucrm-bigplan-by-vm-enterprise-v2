@@ -19,7 +19,7 @@
  */
 import 'server-only';
 import { NextResponse } from 'next/server';
-import { ErrorCode, type ApiError } from '@/lib/errors-shared';
+import { ErrorCode, InvalidJsonBodyError, type ApiError } from '@/lib/errors-shared';
 
 export { ErrorCode, type ApiError } from '@/lib/errors-shared';
 export type { ErrorLevel } from '@/lib/errors-shared';
@@ -141,6 +141,12 @@ export async function withErrorLogging<T>(fn: () => Promise<T>, context: string,
 }
 
 export function handleError(error: unknown): NextResponse<ApiError> {
+  // Malformed client JSON must leave as 400 (v1 contract) without the
+  // console/DB noise of a server-side failure.
+  if (error instanceof InvalidJsonBodyError) {
+    return new ValidationError('Invalid JSON body').toResponse();
+  }
+
   logError({ error, context: 'handleError' });
 
   if (error instanceof AppError) {

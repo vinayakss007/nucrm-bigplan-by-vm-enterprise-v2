@@ -10,6 +10,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { readJsonBody } from '@/lib/api/validate';
 import { db } from '@/drizzle/db';
 import { contacts, contactEmails, companies } from '@/drizzle/schema';
 import { eq, and, sql } from 'drizzle-orm';
@@ -84,7 +85,7 @@ export const PUT = withApiRoute(async (request: NextRequest, { params }: { param
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
     const { id } = await params;
-    const body = await request.json();
+    const body = await readJsonBody(request);
 
     // Map allowed fields from snake_case to camelCase
     const updateData: Record<string, unknown> = {};

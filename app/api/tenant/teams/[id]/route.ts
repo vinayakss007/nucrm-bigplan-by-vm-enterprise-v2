@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { readJsonBody } from '@/lib/api/validate';
 import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
@@ -59,7 +60,7 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params:
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
     const id = (await params).id;
 
-    const body = await req.json();
+    const body = await readJsonBody(req);
 
     // Optimistic concurrency: reject if another update happened since client read
     const expectedUpdatedAt = body?.expectedUpdatedAt ? new Date(body.expectedUpdatedAt) : null;
