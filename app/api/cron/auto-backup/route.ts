@@ -82,6 +82,9 @@ async function runScheduledBackups() {
   let backupsRun = 0;
   let errors = 0;
   let skipped = 0;
+  // #2127: a run that reports success while silently excluding tenants is
+  // worse than a failure — track who was skipped so we can alert loudly.
+  const skippedTenants: string[] = [];
 
   // Get all enabled schedules that are due
   const schedules = await db.execute(sql`
@@ -116,13 +119,20 @@ async function runScheduledBackups() {
     try {
       if (schedule.tenant_id) {
         // Per-tenant backup
-        await backupSingleTenant(schedule.tenant_id, schedule);
+        const res = await backupSingleTenant(schedule.tenant_id, schedule) as AnyRow | undefined;
+        if (res?.skipped) {
+          skipped++;
+          if (res.tenantId) skippedTenants.push(String(res.tenantId));
+        }
       } else {
         // Global — backup ALL tenants
         const tenants = await db.execute(sql`SELECT id FROM tenants WHERE status != ${'suspended'}`);
         for (const tenant of tenants.rows as AnyRow[]) {
           const res = await backupSingleTenant(tenant.id, schedule) as AnyRow | undefined;
-          if (res?.skipped) skipped++;
+          if (res?.skipped) {
+            skipped++;
+            if (res.tenantId) skippedTenants.push(String(res.tenantId));
+          }
         }
       }
 
@@ -142,7 +152,20 @@ async function runScheduledBackups() {
     }
   }
 
-  return { backupsRun, errors, skipped };
+  // #2127: skipped tenants mean the "green" nightly run did NOT back up their
+  // data. Surface the list in the response and page the super admin by email
+  // (backup failures already alert per-tenant; skips were silent).
+  if (skippedTenants.length > 0) {
+    const detail = `Tenants skipped by auto-backup (no owner and no active members — their data is NOT in this run's backups):\n${skippedTenants.map(t => `- ${t}`).join('\n')}`;
+    void logError({ error: new Error('auto-backup skipped tenants'), context: 'cron/auto-backup', level: 'warning', metadata: { skippedTenants } });
+    try {
+      await sendAlertEmail(`Auto-backup incomplete: ${skippedTenants.length} tenant(s) skipped`, detail);
+    } catch (err) {
+      void logError({ error: err, context: 'cron/auto-backup skip-alert email', level: 'warning' });
+    }
+  }
+
+  return { backupsRun, errors, skipped, skippedTenants };
 }
 
 // ── Backup Single Tenant ─────────────────────────────────────────────────────
