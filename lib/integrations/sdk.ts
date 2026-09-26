@@ -16,6 +16,9 @@
 
 import { createHmac } from 'crypto';
 
+/** Response payloads are untyped JSON envelopes; inputs keep their declared shapes. */
+export type Entity = Record<string, unknown>;
+
 export interface NuCRMConfig {
   apiKey: string;
   baseUrl: string;
@@ -34,8 +37,7 @@ export interface ContactInput {
   notes?: string;
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  custom_fields?: Record<string, any>;
+  custom_fields?: Record<string, unknown>;
 }
 
 export interface DealInput {
@@ -86,25 +88,20 @@ class NuCRMClient {
       const q = new URLSearchParams(params as Record<string, string>).toString();
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return this.req<{ data: any[]; total: number }>(`/api/tenant/contacts?${q}`);
+      return this.req<{ data: Entity[]; total: number }>(`/api/tenant/contacts?${q}`);
     },
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    get: (id: string) => this.req<{ data: any }>(`/api/tenant/contacts/${id}`),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    create: (body: ContactInput) => this.req<{ data: any }>('/api/tenant/contacts', { method:'POST', body:JSON.stringify(body) }),
+    get: (id: string) => this.req<{ data: Entity }>(`/api/tenant/contacts/${id}`),
+    create: (body: ContactInput) => this.req<{ data: Entity }>('/api/tenant/contacts', { method:'POST', body:JSON.stringify(body) }),
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    update: (id: string, body: Partial<ContactInput>) => this.req<{ data: any }>(`/api/tenant/contacts/${id}`, { method:'PATCH', body:JSON.stringify(body) }),
+    update: (id: string, body: Partial<ContactInput>) => this.req<{ data: Entity }>(`/api/tenant/contacts/${id}`, { method:'PATCH', body:JSON.stringify(body) }),
     delete: (id: string) => this.req<{ ok: boolean }>(`/api/tenant/contacts/${id}`, { method:'DELETE' }),
     addNote: (id: string, description: string, type = 'note') =>
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      this.req<{ data: any }>(`/api/tenant/contacts/${id}/notes`, { method:'POST', body:JSON.stringify({ description, type }) }),
+      this.req<{ data: Entity }>(`/api/tenant/contacts/${id}/notes`, { method:'POST', body:JSON.stringify({ description, type }) }),
   };
 
   // ── Deals ───────────────────────────────────────────────────
@@ -113,19 +110,15 @@ class NuCRMClient {
       const q = new URLSearchParams(params as Record<string, string>).toString();
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return this.req<{ data: any[]; total: number }>(`/api/tenant/deals?${q}`);
+      return this.req<{ data: Entity[]; total: number }>(`/api/tenant/deals?${q}`);
     },
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    get: (id: string) => this.req<{ data: any }>(`/api/tenant/deals/${id}`),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    create: (body: DealInput) => this.req<{ data: any }>('/api/tenant/deals', { method:'POST', body:JSON.stringify(body) }),
+    get: (id: string) => this.req<{ data: Entity }>(`/api/tenant/deals/${id}`),
+    create: (body: DealInput) => this.req<{ data: Entity }>('/api/tenant/deals', { method:'POST', body:JSON.stringify(body) }),
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    update: (id: string, body: Partial<DealInput> & { stage?: string }) => this.req<{ data: any }>(`/api/tenant/deals/${id}`, { method:'PATCH', body:JSON.stringify(body) }),
+    update: (id: string, body: Partial<DealInput> & { stage?: string }) => this.req<{ data: Entity }>(`/api/tenant/deals/${id}`, { method:'PATCH', body:JSON.stringify(body) }),
     delete: (id: string) => this.req<{ ok: boolean }>(`/api/tenant/deals/${id}`, { method:'DELETE' }),
   };
 
@@ -135,15 +128,12 @@ class NuCRMClient {
       const q = new URLSearchParams(params as Record<string, string>).toString();
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return this.req<{ data: any[] }>(`/api/tenant/tasks?${q}`);
+      return this.req<{ data: Entity[] }>(`/api/tenant/tasks?${q}`);
     },
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    create: (body: TaskInput) => this.req<{ data: any }>('/api/tenant/tasks', { method:'POST', body:JSON.stringify(body) }),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    complete: (id: string) => this.req<{ data: any }>(`/api/tenant/tasks/${id}`, { method:'PATCH', body:JSON.stringify({ completed:true }) }),
+    create: (body: TaskInput) => this.req<{ data: Entity }>('/api/tenant/tasks', { method:'POST', body:JSON.stringify(body) }),
+    complete: (id: string) => this.req<{ data: Entity }>(`/api/tenant/tasks/${id}`, { method:'PATCH', body:JSON.stringify({ completed:true }) }),
     delete: (id: string) => this.req<{ ok: boolean }>(`/api/tenant/tasks/${id}`, { method:'DELETE' }),
   };
 
@@ -153,16 +143,13 @@ class NuCRMClient {
       const q = new URLSearchParams(params as Record<string, string>).toString();
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return this.req<{ data: any[] }>(`/api/tenant/companies?${q}`);
+      return this.req<{ data: Entity[] }>(`/api/tenant/companies?${q}`);
     },
     create: (body: { name: string; industry?: string; website?: string; phone?: string }) =>
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      this.req<{ data: any }>('/api/tenant/companies', { method:'POST', body:JSON.stringify(body) }),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    update: (id: string, body: any) => this.req<{ data: any }>(`/api/tenant/companies/${id}`, { method:'PATCH', body:JSON.stringify(body) }),
+      this.req<{ data: Entity }>('/api/tenant/companies', { method:'POST', body:JSON.stringify(body) }),
+    update: (id: string, body: Entity) => this.req<{ data: Entity }>(`/api/tenant/companies/${id}`, { method:'PATCH', body:JSON.stringify(body) }),
   };
 
   // ── Search ──────────────────────────────────────────────────
@@ -170,21 +157,18 @@ class NuCRMClient {
     global: (query: string, type = 'all') =>
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      this.req<{ contacts:any[]; deals:any[]; companies:any[]; tasks:any[]; total:number }>(`/api/tenant/search?q=${encodeURIComponent(query)}&type=${type}`),
+      this.req<{ contacts: Entity[]; deals: Entity[]; companies: Entity[]; tasks: Entity[]; total: number }>(`/api/tenant/search?q=${encodeURIComponent(query)}&type=${type}`),
   };
 
   // ── Webhooks ────────────────────────────────────────────────
   readonly webhooks = {
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    list: () => this.req<{ data: any[] }>('/api/tenant/webhooks'),
+    list: () => this.req<{ data: Entity[] }>('/api/tenant/webhooks'),
     create: (name: string, url: string, events: string[]) =>
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      this.req<{ data: any }>('/api/tenant/webhooks', { method:'POST', body:JSON.stringify({ name, url, events }) }),
+      this.req<{ data: Entity }>('/api/tenant/webhooks', { method:'POST', body:JSON.stringify({ name, url, events }) }),
     delete: (id: string) => this.req<{ ok: boolean }>(`/api/tenant/webhooks/${id}`, { method:'DELETE' }),
   };
 
@@ -192,10 +176,8 @@ class NuCRMClient {
   readonly forms = {
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    list: () => this.req<{ data: any[] }>('/api/tenant/forms'),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    submit: (formId: string, data: Record<string,any>) =>
+    list: () => this.req<{ data: Entity[] }>('/api/tenant/forms'),
+    submit: (formId: string, data: Record<string, unknown>) =>
       fetch(`${this.cfg.baseUrl}/api/forms/submit`, {
         method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ form_id: formId, data }),
@@ -206,19 +188,15 @@ class NuCRMClient {
   readonly automation = {
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    list: () => this.req<{ data: any[] }>('/api/tenant/automations'),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    create: (body: { name:string; trigger_type:string; actions:any[]; is_active?:boolean }) =>
+    list: () => this.req<{ data: Entity[] }>('/api/tenant/automations'),
+    create: (body: { name: string; trigger_type: string; actions: unknown[]; is_active?: boolean }) =>
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      this.req<{ data: any }>('/api/tenant/automations', { method:'POST', body:JSON.stringify(body) }),
+      this.req<{ data: Entity }>('/api/tenant/automations', { method:'POST', body:JSON.stringify(body) }),
     toggle: (id: string, is_active: boolean) =>
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      this.req<{ data: any }>(`/api/tenant/automations/${id}`, { method:'PATCH', body:JSON.stringify({ is_active }) }),
+      this.req<{ data: Entity }>(`/api/tenant/automations/${id}`, { method:'PATCH', body:JSON.stringify({ is_active }) }),
   };
 
   // ── Test connection ─────────────────────────────────────────
@@ -226,14 +204,12 @@ class NuCRMClient {
     try {
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const data = await this.req<any>('/api/tenant/me');
+      const data = await this.req<{ tenant_id?: string }>('/api/tenant/me');
       return { ok: true, tenant: data.tenant_id };
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (err: any) {
-      return { ok: false, error: err.message };
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) };
     }
   }
 }
