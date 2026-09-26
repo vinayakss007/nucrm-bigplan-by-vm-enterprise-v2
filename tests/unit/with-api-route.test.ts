@@ -203,4 +203,17 @@ describe('withApiRoute pins the whole handler body (#1615)', () => {
     expect(fk!.status).toBe(400);
     expect(await fk!.json()).toEqual({ error: 'Invalid reference' });
   });
+
+  it('pool checkout timeout fast-fails as 503 with Retry-After (#2122)', async () => {
+    const { withApiRoute } = await import('../../lib/api/with-api-route');
+    const GET = withApiRoute(async () => {
+      // Exact error text pg-pool throws when connectionTimeoutMillis elapses.
+      throw new Error('timeout exceeded when trying to connect');
+    });
+    const res = await GET(
+      new Request('http://x/api/tenant/contacts', { method: 'GET' }) as never, undefined as never);
+    expect(res!.status).toBe(503);
+    expect(res!.headers.get('retry-after')).toBe('2');
+    expect(await res!.json()).toEqual({ error: 'Service temporarily overloaded, please retry' });
+  });
 });

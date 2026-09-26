@@ -61,6 +61,19 @@ groups:
           summary: "Metrics DB section failing"
           description: "/api/metrics DB gauge or pool section returned down (#2118) — check the app DB pool."
 
+      - alert: AppRateLimitSurge
+        # #2117 ask 3: sustained 429s mean legitimate clients are being
+        # throttled (per-user/per-route budgets), which reads to users as
+        # the app being broken. Covers in-app limiter rejects; nginx/edge
+        # rejects never reach the app's collector (noted in #2117).
+        expr: sum by (path) (rate(http_requests_total{status="429"}[2m])) * 60 > 30
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "429 surge on {{ $labels.path }} (>30/min sustained)"
+          description: "Route {{ $labels.path }} is rate-limiting steadily for 1+ minute — check limiter budgets before users self-DoS."
+
       - alert: QueueBacklogHigh
         # nucrm_queue_jobs_total covers all ten worker queues (6f9f6999).
         expr: max by (queue) (nucrm_queue_jobs_total{status="waiting"}) > 100

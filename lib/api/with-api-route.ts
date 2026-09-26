@@ -160,6 +160,17 @@ export function withApiRoute<C = unknown>(
       metricStatus = response instanceof Response ? response.status : 500;
       return response;
     } catch (err) {
+      // #2122: pg-pool checkout timeout means the DB pool is saturated —
+      // the request was going to die anyway after burning its queue wait.
+      // Answer 503 + Retry-After immediately so clients back off while the
+      // pool drains instead of piling on doomed requests.
+      if (err instanceof Error && /timeout exceeded when trying to connect/i.test(err.message)) {
+        metricStatus = 503;
+        return NextResponse.json(
+          { error: 'Service temporarily overloaded, please retry' },
+          { status: 503, headers: { 'Retry-After': '2' } }
+        );
+      }
       const mapped = clientErrorFromDbCode(err, metricMethod);
       if (mapped) {
         metricStatus = mapped.status;
