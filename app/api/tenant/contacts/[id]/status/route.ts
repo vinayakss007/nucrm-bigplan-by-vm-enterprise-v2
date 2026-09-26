@@ -90,8 +90,7 @@ export const PATCH = withApiRoute(async (request: NextRequest,
     return NextResponse.json({ data: contact });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) { 
+  } catch (err) { 
     return apiError(err); 
   }
 });

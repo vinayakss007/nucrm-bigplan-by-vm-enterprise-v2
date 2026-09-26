@@ -105,8 +105,7 @@ async function handleSummary(searchParams: URLSearchParams) {
     return NextResponse.json({ summary: summaryRes.rows[0] });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     return apiError(err);
   }
 }
@@ -162,8 +161,7 @@ async function handleSchemaInfo() {
     return NextResponse.json({ tables: tableDetails });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     return apiError(err);
   }
 }
@@ -369,8 +367,7 @@ async function handleSearch(searchParams: URLSearchParams) {
     });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     await logError({ error: err, context: 'superadmin/data-explorer search' });
     return apiError(err);
   }
@@ -476,8 +473,7 @@ export const PUT = withApiRoute(async (req: NextRequest) => {
     });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     return apiError(err);
   }
 });
@@ -545,8 +541,7 @@ export const DELETE = withApiRoute(async (req: NextRequest) => {
     return NextResponse.json({ message: 'Record deleted', id });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     return apiError(err);
   }
 });

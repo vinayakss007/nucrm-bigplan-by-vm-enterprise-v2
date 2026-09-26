@@ -133,8 +133,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     await logError({ error: err, context: 'superadmin/join-tenant POST', requestMethod: 'POST' });
     return apiError(err);
   }
@@ -174,8 +173,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     await logError({ error: err, context: 'superadmin/join-tenant GET', requestMethod: 'GET' });
     return apiError(err);
   }

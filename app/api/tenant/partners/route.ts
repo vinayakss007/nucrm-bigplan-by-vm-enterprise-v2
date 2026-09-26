@@ -41,8 +41,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     const partners = getPartnersByTenant(ctx.tenantId);
     return NextResponse.json({ data: partners, total: partners.length });
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     void logError({ error: err, context: 'tenant/partners GET' });
     return apiError(err);
   }
@@ -78,8 +77,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
 
     return NextResponse.json({ data: partner }, { status: 201 });
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     void logError({ error: err, context: 'tenant/partners POST' });
     return apiError(err);
   }

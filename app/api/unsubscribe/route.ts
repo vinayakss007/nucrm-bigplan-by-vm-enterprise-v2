@@ -114,8 +114,7 @@ async function handleUnsubscribe(req: NextRequest, htmlResponse: boolean) {
     return new NextResponse(UNSUBSCRIBED_HTML, {
       headers: { 'Content-Type': 'text/html' },
     });
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     void logError({ error: err, context: 'unsubscribe' });
     return new NextResponse('Something went wrong. Please contact support.', { status: 500 });
   }

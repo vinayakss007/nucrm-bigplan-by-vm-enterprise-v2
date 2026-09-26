@@ -94,8 +94,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     await logError({ error: err, context: 'activities GET', requestMethod: 'GET' });
     return apiError(err, "Internal server error", 200);
   }
@@ -132,8 +131,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     return NextResponse.json({ data: newActivity }, { status: 201 });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     await logError({ error: err, context: 'activities POST', requestMethod: 'POST' });
     return apiError(err);
   }

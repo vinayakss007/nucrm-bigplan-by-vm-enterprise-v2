@@ -81,8 +81,7 @@ export const POST = withApiRoute(async (request: NextRequest, { params }: { para
     return NextResponse.json({ success: true }, { status: 201 });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     void logError({ error: err, context: 'tenant/tickets/[id]/replies POST' });
     return apiError(err);
   }

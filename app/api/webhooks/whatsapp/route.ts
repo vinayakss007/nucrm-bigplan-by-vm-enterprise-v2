@@ -61,8 +61,7 @@ export async function POST(req: NextRequest) {
     try {
       await addJob('whatsapp-webhook', body, { attempts: 5 });
       enqueued = true;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (enqueueErr: any) {
+    } catch (enqueueErr) {
       void logError({ error: enqueueErr, context: 'webhooks/whatsapp queue unavailable, inline fallback', level: 'warning' });
     }
 
@@ -78,8 +77,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     void logError({ error: err, context: 'webhooks/whatsapp' });
     return apiError(err);
   }

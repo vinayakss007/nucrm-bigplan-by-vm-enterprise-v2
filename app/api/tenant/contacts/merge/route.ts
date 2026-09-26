@@ -206,8 +206,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
         message: `Successfully merged "${duplicate.firstName} ${duplicate.lastName}" into "${primary.firstName} ${primary.lastName}"`,
       },
     });
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     return apiError(err);
   }
 });

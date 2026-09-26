@@ -58,8 +58,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     const checkOut = createCheckOut(checkInId, ctx.userId, { lat, lng, notes });
 
     return NextResponse.json({ data: checkOut }, { status: 200 });
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     await logError({ error: err, context: 'field-sales/checkout POST', requestMethod: 'POST' });
     return apiError(err);
   }

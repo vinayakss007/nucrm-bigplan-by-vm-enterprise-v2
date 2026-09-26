@@ -82,8 +82,7 @@ export const GET = withApiRoute(async (req: NextRequest) => {
     return NextResponse.json({ data: payload, ...payload });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     await logError({ error: err, context: 'superadmin/recent-activity GET', requestMethod: 'GET' });
     return apiError(err);
   }

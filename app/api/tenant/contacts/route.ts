@@ -148,8 +148,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     return NextResponse.json(response);
   
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     await logError({ error: err, context: 'tenant/contacts GET', requestMethod: 'GET' });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
@@ -291,8 +290,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     return NextResponse.json({ data: { id: contact.id, first_name: contact.firstName, last_name: contact.lastName, email: contact.email, phone: contact.phone, job_title: contact.jobTitle, company_id: contact.companyId, lead_status: contact.leadStatus, lead_source: contact.leadSource, notes: contact.notes, tags: contact.tags, score: contact.score, city: contact.city, country: contact.country, website: contact.website, linkedin_url: contact.linkedinUrl, twitter_url: contact.twitterUrl, custom_fields: contact.customFields, created_at: (contact.createdAt ?? new Date()).toISOString(), updated_at: contact.updatedAt?.toISOString(), tenant_id: contact.tenantId, user_id: contact.createdBy } }, { status: 201 });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     await logError({ error: err, context: 'tenant/contacts POST', requestMethod: 'POST' });
     return apiError(err, "Internal server error", 500);
   }

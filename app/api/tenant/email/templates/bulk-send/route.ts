@@ -132,8 +132,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
         skipped_unsubscribed: skippedUnsubscribed,
       },
     });
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     return apiError(err);
   }
 });

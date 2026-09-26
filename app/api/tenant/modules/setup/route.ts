@@ -82,8 +82,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
 
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     await logError({ error: err, context: 'IndustrySetup POST', requestMethod: 'POST' });
     return apiError(err);
   }

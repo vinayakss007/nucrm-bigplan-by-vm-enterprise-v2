@@ -35,8 +35,7 @@ export const GET = withApiRoute(async (request: NextRequest,
     const registrations = getPartnerDealRegistrations(partnerId, ctx.tenantId);
     return NextResponse.json({ data: registrations, total: registrations.length });
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     await logError({ error: err, context: 'tenant partner deals GET', requestMethod: 'GET' });
     return apiError(err);
   }

@@ -51,8 +51,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (error: any) {
+  } catch (error) {
     await logError({ error, context: 'API Keys GET', requestMethod: 'GET' });
     return apiError(error);
   }
@@ -103,8 +102,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     }, { status: 201 });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (error: any) {
+  } catch (error) {
     await logError({ error, context: 'API Keys POST', requestMethod: 'POST' });
     return apiError(error);
   }

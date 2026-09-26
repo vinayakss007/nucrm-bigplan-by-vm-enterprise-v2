@@ -48,12 +48,11 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     return NextResponse.json({ data: results, services: results });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (error: any) {
+  } catch (error) {
     void logError({ error, context: 'tenant/services GET' });
     return NextResponse.json({ 
       error: 'Failed to fetch services', 
-      detail: error?.message || 'Unknown error'
+      detail: error instanceof Error ? error.message : 'Unknown error'
     }, { status: 500 });
   }
 });

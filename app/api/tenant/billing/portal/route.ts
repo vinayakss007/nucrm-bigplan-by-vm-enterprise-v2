@@ -65,8 +65,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
 
     return NextResponse.json({ url: session.url });
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     await logError({ error: err, context: 'Billing Portal POST', requestMethod: 'POST' });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }

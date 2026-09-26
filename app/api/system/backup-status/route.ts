@@ -64,8 +64,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
         next_scheduled: schedules[0]?.nextRunAt ?? null,
       },
     });
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     return apiError(err);
   }
 });

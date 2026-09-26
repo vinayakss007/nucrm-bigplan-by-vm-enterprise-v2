@@ -128,8 +128,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
         total_duplicate_contacts: [...new Set(groups.flatMap(g => g.contact_ids))].length,
       },
     });
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     return apiError(err);
   }
 });

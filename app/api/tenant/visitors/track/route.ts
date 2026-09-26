@@ -111,8 +111,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true }, { status: 200 });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     // Still return 200 to not block client-side tracking
     await logError({ error: err, context: 'visitor-track POST', requestMethod: 'POST' });
     return NextResponse.json({ ok: true }, { status: 200 });

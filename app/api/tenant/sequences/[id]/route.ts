@@ -56,8 +56,7 @@ export const GET = withApiRoute(async (request: NextRequest,
     });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (error: any) {
+  } catch (error) {
     await logError({ error: error, context: 'Sequence GET error', requestMethod: 'GET' });
     return apiError(error);
   }
@@ -151,8 +150,7 @@ export const PATCH = withApiRoute(async (request: NextRequest,
     });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (error: any) {
+  } catch (error) {
     await logError({ error: error, context: 'Sequence PATCH error', requestMethod: 'PATCH' });
     return apiError(error);
   }
@@ -195,8 +193,7 @@ export const DELETE = withApiRoute(async (request: NextRequest,
     });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (error: any) {
+  } catch (error) {
     await logError({ error: error, context: 'Sequence DELETE error', requestMethod: 'DELETE' });
     return apiError(error);
   }
@@ -277,8 +274,7 @@ export const POST = withApiRoute(async (request: NextRequest,
           return { contact_id: contactId, enrollment_id: enrollmentId };
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-        } catch (error: any) {
+        } catch (error) {
           // Skip if already enrolled or other error
           await logError({ error: error, context: `Failed to enroll contact ${contactId}`, tenantId: ctx.tenantId, userId: ctx.userId, requestMethod: 'POST' });
           return { contact_id: contactId, error: "Internal server error" };
@@ -295,8 +291,7 @@ export const POST = withApiRoute(async (request: NextRequest,
     });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (error: any) {
+  } catch (error) {
     await logError({ error: error, context: 'Enroll POST error', requestMethod: 'POST' });
     return apiError(error);
   }

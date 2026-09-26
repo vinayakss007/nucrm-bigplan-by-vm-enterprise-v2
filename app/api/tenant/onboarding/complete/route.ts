@@ -86,8 +86,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     await logError({ error: err, context: 'Onboarding Complete', requestMethod: 'POST' });
     return apiError(err);
   }
@@ -108,8 +107,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     return NextResponse.json({ completed });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (_err: any) {
+  } catch (_err) {
     return NextResponse.json({ completed: false }); // Don't block on error
   }
 });

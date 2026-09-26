@@ -77,8 +77,7 @@ export const GET = withApiRoute(async (req: NextRequest) => {
     return NextResponse.json({ tags, total: tags.length });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     return apiError(err);
   }
 });
@@ -178,8 +177,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
     return NextResponse.json({ error: `unknown action: ${action}` }, { status: 400 });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     void logError({ error: err, context: 'tags POST', ...tenantMeta(ctx) });
     return apiError(err);
   }

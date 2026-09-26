@@ -107,8 +107,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
         },
       });
     }
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     return apiError(err);
   }
 });

@@ -58,8 +58,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     return NextResponse.json({ data: enriched });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     return apiError(err);
   }
 });
@@ -107,8 +106,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     }, { status: 201 });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     return apiError(err);
   }
 });
@@ -143,8 +141,7 @@ export const PATCH = withApiRoute(async (request: NextRequest) => {
     return NextResponse.json({ success: true, data: { id: updated?.id, updatedAt: updated?.updatedAt } });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     return apiError(err);
   }
 });
@@ -167,8 +164,7 @@ export const DELETE = withApiRoute(async (request: NextRequest) => {
     return NextResponse.json({ success: true });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     return apiError(err);
   }
 });

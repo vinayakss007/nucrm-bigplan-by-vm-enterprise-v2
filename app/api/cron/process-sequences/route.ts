@@ -294,8 +294,7 @@ export async function POST(req: NextRequest) {
           processed++;
         });
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } catch (err: any) {
+      } catch (err) {
         void logError({ error: err, context: 'cron/process-sequences enrollment', metadata: { enrollmentId: enrollment.id } });
         // Reschedule for 1 hour later in a separate statement (outside the failed tx)
         await db.update(sequenceEnrollments)
@@ -307,8 +306,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ ok: true, processed });
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     void logError({ error: err, context: 'cron/process-sequences fatal' });
     return apiError(err);
   } finally {

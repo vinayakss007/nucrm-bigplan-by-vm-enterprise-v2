@@ -250,8 +250,7 @@ export const DELETE = withApiRoute(async (req: NextRequest, { params }: any) => 
     return NextResponse.json({ ok: true });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) { 
+  } catch (err) { 
     return apiError(err); 
   }
 });

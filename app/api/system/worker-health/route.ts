@@ -69,8 +69,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     // Workers down (Redis unreachable) → 503 so monitoring/alerting can react;
     // a 200 would mask outages for anything polling this endpoint.
     return NextResponse.json(payload, { status: healthy ? 200 : 503 });
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     return apiError(err);
   }
 });

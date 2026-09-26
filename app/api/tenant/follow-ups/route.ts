@@ -89,8 +89,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     return NextResponse.json({ data, total: countRes?.count ?? 0 });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     void logError({ error: err, context: 'tenant/follow-ups GET' });
     return apiError(err);
   }
@@ -127,8 +126,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     return NextResponse.json({ data: newFollowUp }, { status: 201 });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     void logError({ error: err, context: 'tenant/follow-ups POST' });
     return apiError(err);
   }

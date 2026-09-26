@@ -92,8 +92,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
 
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     void logError({ error: err, context: 'super-admin/tenants GET' });
     return apiError(err);
   }

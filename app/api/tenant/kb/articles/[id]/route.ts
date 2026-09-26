@@ -42,8 +42,7 @@ export const GET = withApiRoute(async (request: NextRequest, { params }: { param
     return NextResponse.json({ data: article });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     return apiError(err);
   }
 });
@@ -78,8 +77,7 @@ export const PATCH = withApiRoute(async (request: NextRequest, { params }: { par
     return NextResponse.json({ success: true });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     return apiError(err);
   }
 });
@@ -96,8 +94,7 @@ export const DELETE = withApiRoute(async (request: NextRequest, { params }: { pa
     return NextResponse.json({ success: true });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     return apiError(err);
   }
 });
@@ -129,8 +126,7 @@ export const POST = withApiRoute(async (request: NextRequest, { params }: { para
     return NextResponse.json({ success: true, data: updated });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     return apiError(err);
   }
 });

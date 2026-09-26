@@ -351,8 +351,7 @@ export async function executeSelectiveRestore(
  
 
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-          } catch (err: any) {
+          } catch (err) {
             await logError({ error: err, context: 'restore failed to restore row', metadata: { table } });
           }
           

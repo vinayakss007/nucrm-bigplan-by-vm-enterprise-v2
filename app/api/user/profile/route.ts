@@ -89,8 +89,7 @@ export const PATCH = withApiRoute(async (request: NextRequest) => {
     return NextResponse.json({ user });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) { 
+  } catch (err) { 
     return apiError(err); 
   }
 });

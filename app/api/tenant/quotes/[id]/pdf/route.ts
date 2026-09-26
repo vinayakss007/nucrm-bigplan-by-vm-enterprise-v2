@@ -110,8 +110,7 @@ export const GET = withApiRoute(async (request: NextRequest, { params }: { param
         'Content-Disposition': `inline; filename="quote-${id.slice(0, 8)}.pdf"`,
       },
     });
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     return apiError(err);
   }
 });

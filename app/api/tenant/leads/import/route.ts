@@ -362,8 +362,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     return NextResponse.json({ ok: true, results });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     await logError({ error: err, context: 'tenant/leads/import POST', requestMethod: 'POST' });
     return apiError(err);
   }

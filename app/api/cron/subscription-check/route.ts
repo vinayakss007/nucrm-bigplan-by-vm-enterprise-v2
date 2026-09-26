@@ -116,8 +116,7 @@ export async function POST(request: Request) {
         downgraded++;
  
  
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
         void logError({ error: err, context: 'cron/subscription-check tenant', tenantId: sub.tenantId });
       }
     }
@@ -130,8 +129,7 @@ export async function POST(request: Request) {
       downgraded,
       timestamp: new Date().toISOString(),
     });
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     void logError({ error: err, context: 'cron/subscription-check' });
     return NextResponse.json(
       { error: 'Internal error' },

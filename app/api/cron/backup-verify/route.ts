@@ -272,8 +272,7 @@ export async function POST(request: NextRequest) {
       checksum_match: !backup.checksum || backup.checksum.toLowerCase() === actual.toLowerCase(),
       ...(failures.length > 0 ? { failures } : {}),
     });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     if (failures.length > 0) {
       // We have specific diagnostics — return them even on a throw.
       await db.insert(backupAlerts).values({

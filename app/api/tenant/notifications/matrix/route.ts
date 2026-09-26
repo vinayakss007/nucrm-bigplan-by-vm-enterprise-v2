@@ -98,8 +98,7 @@ export const GET = withApiRoute(async (req: NextRequest) => {
     return NextResponse.json({ matrix, channels: CHANNELS });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     return apiError(err);
   }
 });
@@ -155,8 +154,7 @@ export const PATCH = withApiRoute(async (req: NextRequest) => {
     return NextResponse.json({ ok: true, count: Object.keys(safe).length });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     return apiError(err);
   }
 });

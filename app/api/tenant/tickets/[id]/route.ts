@@ -149,8 +149,7 @@ export const GET = withApiRoute(async (request: NextRequest, { params }: { param
     return NextResponse.json({ data: { ...ticket, replies, customer } });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     await logError({ error: err, context: 'ticket GET', requestMethod: 'GET' });
     return apiError(err);
   }
@@ -288,8 +287,7 @@ export const PATCH = withApiRoute(async (request: NextRequest, { params }: { par
     return NextResponse.json({ data: updatedTicket ?? { id } });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     await logError({ error: err, context: 'ticket PATCH', requestMethod: 'PATCH' });
     return apiError(err);
   }
@@ -312,8 +310,7 @@ export const DELETE = withApiRoute(async (request: NextRequest, { params }: { pa
     return NextResponse.json({ data: { id, deleted: true } });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     await logError({ error: err, context: 'ticket DELETE', requestMethod: 'DELETE' });
     return apiError(err);
   }

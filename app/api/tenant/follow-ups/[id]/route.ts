@@ -73,8 +73,7 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: any) => {
     return NextResponse.json({ data: row });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     void logError({ error: err, context: 'tenant/follow-ups/[id] PATCH' });
     return apiError(err);
   }
@@ -110,8 +109,7 @@ export const DELETE = withApiRoute(async (req: NextRequest, { params }: any) => 
     return NextResponse.json({ ok: true, message: 'Follow-up deleted.' });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     void logError({ error: err, context: 'tenant/follow-ups/[id] DELETE' });
     return apiError(err);
   }

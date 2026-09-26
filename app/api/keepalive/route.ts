@@ -29,8 +29,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     void logError({ error: err, context: 'keepalive' });
     return apiError(err, "Internal server error", 500);
   }

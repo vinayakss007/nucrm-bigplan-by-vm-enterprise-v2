@@ -145,8 +145,7 @@ async function runScheduledBackups() {
       backupsRun++;
 
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (err: any) {
+    } catch (err) {
       void logError({ error: err, context: 'cron/auto-backup schedule', metadata: { scheduleId: schedule.id } });
       errors++;
     }

@@ -99,8 +99,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
 
     return NextResponse.json({ ok: true, affected: validIds.length });
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     await logError({ error: err, context: 'notes/bulk', tenantId: ctx?.tenantId, requestMethod: 'POST' });
     return apiError(err);
   }

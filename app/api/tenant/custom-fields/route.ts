@@ -155,8 +155,7 @@ export const GET = withApiRoute(async (req: NextRequest) => {
     return NextResponse.json({ entityType, fields });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     return apiError(err);
   }
 });

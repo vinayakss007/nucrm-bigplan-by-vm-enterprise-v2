@@ -42,8 +42,7 @@ export const PATCH = withApiRoute(async (request: NextRequest, { params }: { par
     return NextResponse.json({ success: true });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     return apiError(err);
   }
 });
@@ -60,8 +59,7 @@ export const DELETE = withApiRoute(async (request: NextRequest, { params }: { pa
     return NextResponse.json({ success: true });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     return apiError(err);
   }
 });

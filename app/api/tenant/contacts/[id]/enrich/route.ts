@@ -98,8 +98,7 @@ export const POST = withApiRoute(async (request: NextRequest, { params }: { para
     return NextResponse.json({
       data: { enriched, contact_id: id },
     });
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     return apiError(err);
   }
 });

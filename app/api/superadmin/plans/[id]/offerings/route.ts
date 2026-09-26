@@ -48,8 +48,7 @@ export const GET = withApiRoute(async (_req: NextRequest,
     });
 
     return NextResponse.json({ plan_id: planId, offerings });
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     await logError({ error: err, context: 'superadmin/plans/[id]/offerings GET', requestMethod: 'GET' });
     return apiError(err);
   }
@@ -118,8 +117,7 @@ export const PUT = withApiRoute(async (req: NextRequest,
     });
 
     return NextResponse.json({ ok: true });
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     await logError({ error: err, context: 'superadmin/plans/[id]/offerings PUT', requestMethod: 'PUT' });
     return apiError(err);
   }

@@ -283,8 +283,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       status: 200,
       headers: { 'content-type': 'application/json' },
     });
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     return apiError(err);
   }
 });

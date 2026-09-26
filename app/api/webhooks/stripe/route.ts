@@ -121,8 +121,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ received: true });
 
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     void logError({ error: err, context: 'webhooks/stripe event processing', metadata: { eventType } });
     // Release both the Redis lock and the DB claim so Stripe's retry of THIS
     // failed event is processed instead of being dropped as a duplicate.

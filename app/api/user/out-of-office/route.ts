@@ -64,8 +64,7 @@ export const GET = withApiRoute(async (req: NextRequest) => {
     return NextResponse.json({ out_of_office: { ...DEFAULT_OOO, ...stored } });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     return apiError(err);
   }
 });
@@ -184,8 +183,7 @@ export const PATCH = withApiRoute(async (req: NextRequest) => {
     return NextResponse.json({ ok: true, out_of_office: safe, reassigned });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     void logError({ error: err, context: 'user/out-of-office PATCH' });
     return apiError(err);
   }

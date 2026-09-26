@@ -50,8 +50,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     return NextResponse.json({ data });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (error: any) {
+  } catch (error) {
     void logError({ error, context: 'tenant/sequences GET' });
     return apiError(error);
   }
@@ -123,8 +122,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     }, { status: 201 });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (error: any) {
+  } catch (error) {
     void logError({ error, context: 'tenant/sequences POST' });
     return apiError(error);
   }

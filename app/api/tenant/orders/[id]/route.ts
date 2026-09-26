@@ -52,8 +52,7 @@ export const GET = withApiRoute(async (req: NextRequest, { params }: { params: P
     return NextResponse.json({ data: row });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     await logError({ error: err, context: 'orders [id] GET', requestMethod: 'GET' });
     return apiError(err);
   }
@@ -180,8 +179,7 @@ export const PUT = withApiRoute(async (req: NextRequest, { params }: { params: P
     return NextResponse.json({ data: updated });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     await logError({ error: err, context: 'orders [id] PUT', requestMethod: 'PUT' });
     return apiError(err);
   }
@@ -227,8 +225,7 @@ export const DELETE = withApiRoute(async (req: NextRequest, { params }: { params
     return NextResponse.json({ data: { id: row.id, deleted: true } });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     await logError({ error: err, context: 'orders [id] DELETE', requestMethod: 'DELETE' });
     return apiError(err);
   }

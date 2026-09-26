@@ -98,8 +98,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) { 
+  } catch (err) { 
     return apiError(err); 
   }
 });
@@ -138,8 +137,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     return NextResponse.json({ data: { id: row!.id, tenantId: row!.tenantId, userId: row!.userId, contact_id: row!.contactId ?? null, deal_id: row!.dealId ?? null, title: row!.title, description: row!.description, start_time: (row!.startTime ?? new Date()).toISOString(), end_time: (row!.endTime ?? new Date()).toISOString(), location: row!.location ?? null, meeting_url: row!.meetingUrl ?? null, status: row!.status, created_at: (row!.createdAt ?? new Date()).toISOString(), updated_at: row!.updatedAt?.toISOString() } }, { status: 201 });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) { 
+  } catch (err) { 
     return apiError(err); 
   }
 });

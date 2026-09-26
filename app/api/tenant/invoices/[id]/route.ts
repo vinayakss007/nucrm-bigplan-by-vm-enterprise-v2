@@ -44,8 +44,7 @@ export const GET = withApiRoute(async (req: NextRequest, { params }: { params: P
     return NextResponse.json({ data: row });
 
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     await logError({ error: err, context: 'tenant/invoices/[id] GET', requestMethod: 'GET' });
     return apiError(err);
   }
@@ -177,8 +176,7 @@ export const PUT = withApiRoute(async (req: NextRequest, { params }: { params: P
     return NextResponse.json({ data: updated });
 
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     await logError({ error: err, context: 'tenant/invoices/[id] PUT', requestMethod: 'PUT' });
     return apiError(err);
   }
@@ -227,8 +225,7 @@ export const DELETE = withApiRoute(async (req: NextRequest, { params }: { params
     return NextResponse.json({ ok: true, message: 'Moved to trash. Restore within 30 days.' });
 
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     await logError({ error: err, context: 'tenant/invoices/[id] DELETE', requestMethod: 'DELETE' });
     return apiError(err);
   }

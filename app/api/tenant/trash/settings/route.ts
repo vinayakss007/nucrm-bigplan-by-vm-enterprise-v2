@@ -48,8 +48,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     void logError({ error: err, context: 'tenant/trash/settings GET' });
     return apiError(err);
   }
@@ -86,8 +85,7 @@ export const PUT = withApiRoute(async (request: NextRequest) => {
     return NextResponse.json({ ok: true });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     void logError({ error: err, context: 'tenant/trash/settings PUT' });
     return apiError(err);
   }

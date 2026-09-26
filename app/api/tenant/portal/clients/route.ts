@@ -34,8 +34,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     return NextResponse.json({ data: clients });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     await logError({ error: err, context: 'portal clients GET', requestMethod: 'GET' });
     return apiError(err);
   }
@@ -94,8 +93,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     await logError({ error: err, context: 'portal clients POST', requestMethod: 'POST' });
     return apiError(err);
   }
@@ -120,8 +118,7 @@ export const DELETE = withApiRoute(async (request: NextRequest) => {
     return NextResponse.json({ ok: true });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     await logError({ error: err, context: 'portal clients DELETE', requestMethod: 'DELETE' });
     return apiError(err);
   }

@@ -58,8 +58,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     if ((memberCount?.count ?? 0) > 1) completed.push('team');
 
     return NextResponse.json({ completed, total: 5 });
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     return apiError(err);
   }
 });

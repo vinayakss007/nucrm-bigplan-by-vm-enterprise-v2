@@ -42,8 +42,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     const checkIn = createCheckIn(ctx.userId, ctx.tenantId, parsed.data);
 
     return NextResponse.json({ data: checkIn }, { status: 201 });
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     await logError({ error: err, context: 'field-sales/checkin POST', requestMethod: 'POST' });
     return apiError(err);
   }
@@ -85,8 +84,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       data: checkIns,
       total: checkIns.length,
     });
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     await logError({ error: err, context: 'field-sales/checkin GET', requestMethod: 'GET' });
     return apiError(err);
   }

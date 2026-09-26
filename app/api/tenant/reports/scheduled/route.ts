@@ -58,8 +58,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     return NextResponse.json({ data: reports });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     void logError({ error: err, context: 'tenant/reports/scheduled GET' });
     return apiError(err);
   }
@@ -94,8 +93,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     return NextResponse.json({ data: report }, { status: 201 });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     void logError({ error: err, context: 'tenant/reports/scheduled POST' });
     return apiError(err);
   }
@@ -136,8 +134,7 @@ export const PATCH = withApiRoute(async (request: NextRequest) => {
     return NextResponse.json({ success: true });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     return apiError(err);
   }
 });
@@ -163,8 +160,7 @@ export const DELETE = withApiRoute(async (request: NextRequest) => {
     return NextResponse.json({ success: true });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     return apiError(err);
   }
 });

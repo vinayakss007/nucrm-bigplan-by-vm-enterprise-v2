@@ -105,8 +105,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     void logError({ error: err, context: 'auth/forgot-password POST', requestUrl: request.url, requestMethod: request.method });
     await normalizeTiming(startedAt);
     return NextResponse.json({ ok: true }); // Don't reveal errors

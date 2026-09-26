@@ -35,8 +35,7 @@ export const GET = withApiRoute(async (request: NextRequest,
     return NextResponse.json({ service });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (error: any) {
+  } catch (error) {
     await logError({ error: error, context: 'services/[id]/GET', requestMethod: 'GET' });
     return apiError(error);
   }
@@ -98,8 +97,7 @@ export const PATCH = withApiRoute(async (request: NextRequest,
     return NextResponse.json({ service });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (error: any) {
+  } catch (error) {
     await logError({ error: error, context: 'services/[id]/PATCH', requestMethod: 'PATCH' });
     return apiError(error);
   }
@@ -127,8 +125,7 @@ export const DELETE = withApiRoute(async (request: NextRequest,
     return NextResponse.json({ success: true });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (error: any) {
+  } catch (error) {
     await logError({ error: error, context: 'services/[id]/DELETE', requestMethod: 'DELETE' });
     return apiError(error);
   }

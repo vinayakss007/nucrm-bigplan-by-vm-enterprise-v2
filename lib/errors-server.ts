@@ -196,8 +196,7 @@ export async function logError(opts: {
     }
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     // #2129: during pool saturation the DB write fails on exactly the worst
     // errors. Never swallow the incident — emit a structured one-line JSON
     // record to stdout so promtail/Loki keep a queryable copy.
@@ -212,7 +211,7 @@ export async function logError(opts: {
       userId: opts.userId ?? null,
       requestUrl: opts.requestUrl ?? null,
       requestMethod: opts.requestMethod ?? null,
-      writeFailureCause: err?.message ?? String(err),
+      writeFailureCause: err instanceof Error ? err.message : String(err),
       stack: stack ?? null,
     }));
   }
