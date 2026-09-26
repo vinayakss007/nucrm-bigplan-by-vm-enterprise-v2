@@ -130,7 +130,6 @@
   "lib/cache/queries.ts": 8,
   "lib/cache/redis.ts": 1,
   "lib/capture-error.ts": 1,
-  "lib/critical-data-capture.ts": 11,
   "lib/data-integrity.ts": 5,
   "lib/db/cache.ts": 1,
   "lib/db/ensure-schema.ts": 1,

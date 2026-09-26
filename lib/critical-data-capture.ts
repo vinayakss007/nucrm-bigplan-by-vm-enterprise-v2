@@ -17,6 +17,45 @@ const CRITICAL_TABLES = [
 
 const RETENTION_DAYS = 90;
 
+/**
+ * A JSON-object row as it arrives from raw SQL / jsonb columns.
+ *
+ * `db.execute()` rows and jsonb `backup_data` are genuinely untyped at the
+ * drizzle boundary (plain jsonb infers to `unknown`), so instead of asserting
+ * `Record<string, any>` we validate once with a guard and carry `unknown`
+ * values from there — per-value narrowing happens where the value is used.
+ */
+type JsonRecord = Record<string, unknown>;
+
+function isJsonRecord(value: unknown): value is JsonRecord {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/** JSON-safe mirror of a DB row: bigints become numbers, dates ISO strings. */
+function toJsonSafeRow(row: JsonRecord): JsonRecord {
+  const cleanData: JsonRecord = {};
+  for (const [key, value] of Object.entries(row)) {
+    if (typeof value === 'bigint') {
+      cleanData[key] = Number(value);
+    } else if (value instanceof Date) {
+      cleanData[key] = value.toISOString();
+    } else {
+      cleanData[key] = value;
+    }
+  }
+  return cleanData;
+}
+
+type CriticalBackupRow = typeof criticalDataBackups.$inferSelect;
+
+interface CriticalBackupStats {
+  total_backups: number;
+  restorable: number;
+  deleted_records: number;
+  updated_records: number;
+  by_table: { table_name: string; count: number }[];
+}
+
 export class CriticalDataCapture {
   async captureBeforeDelete(
     tenantId: string,
@@ -37,21 +76,9 @@ export class CriticalDataCapture {
 
         if (result.rows.length === 0) continue;
 
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const rowData = result.rows[0] as Record<string, any>;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const cleanData: Record<string, any> = {};
-        for (const [key, value] of Object.entries(rowData)) {
-          if (typeof value === 'bigint') {
-            cleanData[key] = Number(value);
-          } else if (value instanceof Date) {
-            cleanData[key] = value.toISOString();
-          } else {
-            cleanData[key] = value;
-          }
-        }
+        const rowData = result.rows[0];
+        if (!isJsonRecord(rowData)) continue;
+        const cleanData = toJsonSafeRow(rowData);
 
         await db.insert(criticalDataBackups).values({
           tenantId, tableName, recordId,
@@ -62,10 +89,7 @@ export class CriticalDataCapture {
         });
 
         captured++;
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } catch (err: any) {
+      } catch (err) {
         logger.error('[CriticalDataCapture] Failed to capture record', { tableName, recordId, error: err instanceof Error ? err.message : String(err) });
       }
     }
@@ -84,21 +108,9 @@ export class CriticalDataCapture {
 
       if (result.rows.length === 0) return;
 
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const rowData = result.rows[0] as Record<string, any>;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const cleanData: Record<string, any> = {};
-      for (const [key, value] of Object.entries(rowData)) {
-        if (typeof value === 'bigint') {
-          cleanData[key] = Number(value);
-        } else if (value instanceof Date) {
-          cleanData[key] = value.toISOString();
-        } else {
-          cleanData[key] = value;
-        }
-      }
+      const rowData = result.rows[0];
+      if (!isJsonRecord(rowData)) return;
+      const cleanData = toJsonSafeRow(rowData);
 
       await db.insert(criticalDataBackups).values({
         tenantId, tableName, recordId,
@@ -106,10 +118,7 @@ export class CriticalDataCapture {
         operation: 'update',
         retainedUntil: new Date(Date.now() + RETENTION_DAYS * 24 * 60 * 60 * 1000),
       });
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (err: any) {
+    } catch (err) {
       logger.error('[CriticalDataCapture] Failed to capture update', { tableName, recordId, error: err instanceof Error ? err.message : String(err) });
     }
   }
@@ -123,10 +132,7 @@ export class CriticalDataCapture {
     canRestore?: boolean;
     page?: number;
     limit?: number;
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  }): Promise<{ backups: any[]; total: number }> {
+  }): Promise<{ backups: CriticalBackupRow[]; total: number }> {
     const whereFilters = [];
 
     if (filters.tenantId) whereFilters.push(eq(criticalDataBackups.tenantId, filters.tenantId));
@@ -157,10 +163,7 @@ export class CriticalDataCapture {
     };
   }
 
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  async restoreFromBackup(backupId: string): Promise<{ success: boolean; message: string; data?: any }> {
+  async restoreFromBackup(backupId: string): Promise<{ success: boolean; message: string; data?: JsonRecord }> {
     try {
       return await db.transaction(async (tx) => {
         const backup = await tx.query.criticalDataBackups.findFirst({
@@ -171,10 +174,10 @@ export class CriticalDataCapture {
           return { success: false, message: 'Backup not found or already restored' };
         }
 
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const data = backup.backupData as Record<string, any>;
+        const data = backup.backupData;
+        if (!isJsonRecord(data)) {
+          return { success: false, message: 'Backup payload is not a JSON object' };
+        }
         const tableName = validateTableName(backup.tableName);
         const columns = Object.keys(data);
         const values = Object.values(data);
@@ -196,18 +199,12 @@ export class CriticalDataCapture {
           data,
         };
       });
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (err: any) {
-      return { success: false, message: `Restore failed: ${err.message}` };
+    } catch (err) {
+      return { success: false, message: `Restore failed: ${err instanceof Error ? err.message : String(err)}` };
     }
   }
 
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  async getStats(tenantId?: string): Promise<any> {
+  async getStats(tenantId?: string): Promise<CriticalBackupStats> {
     const whereFilters = [];
     if (tenantId) whereFilters.push(eq(criticalDataBackups.tenantId, tenantId));
 
@@ -229,6 +226,14 @@ export class CriticalDataCapture {
     .groupBy(criticalDataBackups.tableName)
     .orderBy(desc(count()));
 
-    return { ...stats, by_table: byTable };
+    // The COUNT aggregate always returns exactly one row; the `?? 0` fallbacks
+    // satisfy the index-access type and are semantically true (no rows = 0).
+    return {
+      total_backups: stats?.total_backups ?? 0,
+      restorable: stats?.restorable ?? 0,
+      deleted_records: stats?.deleted_records ?? 0,
+      updated_records: stats?.updated_records ?? 0,
+      by_table: byTable,
+    };
   }
 }
