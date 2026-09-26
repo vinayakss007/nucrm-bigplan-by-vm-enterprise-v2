@@ -147,7 +147,6 @@
   "lib/import/contacts.ts": 3,
   "lib/integrations/ai-connector.ts": 5,
   "lib/integrations/registry.ts": 8,
-  "lib/lead-warming/engine.ts": 17,
   "lib/lead-warming/reply-analyzer.ts": 7,
   "lib/logger.ts": 1,
   "lib/modules/auto-install.ts": 1,
