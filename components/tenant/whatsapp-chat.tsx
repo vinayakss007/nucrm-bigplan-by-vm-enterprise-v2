@@ -8,6 +8,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { Send, Phone, Loader2, Check, CheckCheck, Clock, AlertCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { clientLogError } from '@/lib/client-logger'
 import toast from 'react-hot-toast'
 
 interface WhatsAppMessage {
@@ -49,7 +50,7 @@ export default function WhatsAppChat({ contactId, contactName, contactPhone }: P
 
     } catch (err: unknown) {
       if (err instanceof DOMException && err.name === 'AbortError') return
-      if (!signal?.aborted) console.error('[whatsapp] loadMessages failed', err);
+      if (!signal?.aborted) clientLogError('whatsapp:load-messages', err);
     } finally {
       if (!signal?.aborted) setLoading(false)
     }
@@ -63,7 +64,7 @@ export default function WhatsAppChat({ contactId, contactName, contactPhone }: P
       if (!signal?.aborted) setTemplates(data.data || [])
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return
-      if (!signal?.aborted) console.error('[whatsapp] loadTemplates failed', err);
+      if (!signal?.aborted) clientLogError('whatsapp:load-templates', err);
     }
   }, [])
 

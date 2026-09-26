@@ -10,10 +10,10 @@ import {
   ArrowLeft, Mail, Phone, Globe, Contact, Building2, Edit, Save, Target,
   MessageSquare, PhoneCall, AtSign, Calendar, Briefcase, X, Trash2,
   CheckCircle, Plus, ChevronDown, Star,
-  Clock, User, History,
+  Clock, User, History, Ticket, ListChecks,
   FileText, ShoppingCart, FileSignature, RefreshCw, DollarSign,
-  Ticket, ListChecks,
 } from 'lucide-react';
+import { clientLogError } from '@/lib/client-logger';
 import { cn, formatCurrency, formatDateTimeShort, formatDate, formatRelativeTime } from '@/lib/utils';
 import { getScoreTier, getScoreTierConfig } from '@/lib/scoring';
 import ContactTimeline from '@/components/tenant/contact-timeline';
@@ -288,7 +288,7 @@ export default function ContactDetailClient({
       fetch(`/api/tenant/history/contact?entity_id=${contact.id}&limit=50`, { signal: abort.signal })
         .then(res => res.json())
         .then(data => { if (!abort.signal.aborted) setHistory(data.data || []); })
-        .catch(err => { if (!abort.signal.aborted) console.error('Failed to load history', err); })
+        .catch(err => { if (!abort.signal.aborted) clientLogError('contact-detail:load-history', err); })
         .finally(() => { if (!abort.signal.aborted) setLoadingHistory(false); });
       return () => abort.abort();
     }
@@ -302,7 +302,7 @@ export default function ContactDetailClient({
       fetch(`/api/tenant/contacts/${contact.id}/leads`, { signal: abort.signal })
         .then(res => res.json())
         .then(data => { if (!abort.signal.aborted) setContactLeads(data.data || []); })
-        .catch(err => { if (!abort.signal.aborted) console.error('Failed to load contact leads', err); })
+        .catch(err => { if (!abort.signal.aborted) clientLogError('contact-detail:load-leads', err); })
         .finally(() => { if (!abort.signal.aborted) setLoadingContactLeads(false); });
       return () => abort.abort();
     }

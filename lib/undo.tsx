@@ -7,6 +7,7 @@
  * Undo System — track last N actions per session, offer 10s undo via toast
  */
 import toast from 'react-hot-toast';
+import { clientLogError } from '@/lib/client-logger';
 
 interface UndoAction {
   id: string;
@@ -62,7 +63,7 @@ export function showUndoToast(
               await undoFn();
               toast.success('Undone');
             } catch (e) {
-              console.error('[Undo] Undo action failed:', e);
+              clientLogError('undo:action-failed', e);
               toast.error('Undo failed');
             }
           }}

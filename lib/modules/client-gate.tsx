@@ -21,6 +21,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import { clientLogError } from '@/lib/client-logger';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -84,7 +85,7 @@ export function ModuleProvider({ children, initialModules }: ModuleProviderProps
       setModules(data);
       setLoaded(true);
     } catch (err) {
-      console.error('[ModuleProvider] Failed to load modules:', err);
+      clientLogError('module-provider:load', err);
     }
   }, []);
 

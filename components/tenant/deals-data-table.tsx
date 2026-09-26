@@ -10,7 +10,7 @@ import { useRouter } from 'next/navigation'
 import { useOpenCreateParam } from '@/hooks/use-open-create-param'
 import { Plus, MoreHorizontal, Edit, Trash2, DollarSign, Tag, UserPlus, ArrowRightLeft, Trophy, Layers, Archive, RotateCcw } from 'lucide-react'
 import { cn, formatCurrency, formatDate, toSnakeCase } from '@/lib/utils'
-import { clientLogWarn } from '@/lib/client-logger'
+import { clientLogWarn, clientLogError } from '@/lib/client-logger'
 import { DataTable, ColumnDef, createSortableHeader } from '@/components/ui/data-table'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -107,7 +107,7 @@ export default function DealsDataTable({ initialDeals, contacts: initialContacts
       setDeals((data.data ?? []).map((d: Record<string, unknown>) => toSnakeCase(d)))
       setTotal(data.total ?? 0)
     } catch (error) {
-      console.error('Failed to load deals:', error)
+      clientLogError('deals:load', error)
     }
     setSelectAllMatching(false)
     setLoading(false)
@@ -145,7 +145,7 @@ export default function DealsDataTable({ initialDeals, contacts: initialContacts
         }
         setStages(flat)
       })
-      .catch((e) => console.error('[deals-data-table] stages fetch failed:', e))
+      .catch((e) => clientLogError('deals:stages-fetch', e))
     return () => { cancelled = true }
   }, [])
 
