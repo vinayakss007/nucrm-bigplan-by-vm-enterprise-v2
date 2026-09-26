@@ -16,6 +16,7 @@
  * (default "postgres"). Unknown/`none` values fall back to a no-op store so
  * tracking can be disabled in an environment without breaking callers.
  */
+import { logError } from '@/lib/errors-server';
 import { db } from '@/drizzle/db';
 import { analyticsEvents } from '@/drizzle/schema';
 
@@ -95,6 +96,6 @@ export async function recordEvent(event: AnalyticsEvent): Promise<void> {
   try {
     await getAnalyticsStore().recordEvent(event);
   } catch (err) {
-    console.error('[analytics] recordEvent failed:', err);
+    await logError({ error: err, context: 'analytics: recordEvent' });
   }
 }

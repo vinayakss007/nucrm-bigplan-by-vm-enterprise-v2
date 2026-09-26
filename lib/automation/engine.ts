@@ -18,6 +18,7 @@
  *   invoice.created | invoice.paid
  */
 
+import { logError } from '@/lib/errors-server';
 import { safeFetch } from '@/lib/security/ssrf';
 import { db } from '@/drizzle/db';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
@@ -329,7 +330,7 @@ async function executeAction(dbOrTx: NodePgDatabase | typeof db, action: Automat
   
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } catch (err: any) {
-        console.error(`[automation] Webhook failed for ${config.url}:`, err.message);
+        await logError({ error: err, context: `automation: webhook ${config.url}` });
       }
       break;
     }

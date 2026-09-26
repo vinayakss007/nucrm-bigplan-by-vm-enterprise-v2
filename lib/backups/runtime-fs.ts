@@ -3,12 +3,14 @@
  * Copyright (c) 2026 abetworks.in. All Rights Reserved.
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
+import { logError } from '@/lib/errors-server';
+
 export async function checkDirExists(path: string): Promise<boolean> {
   try {
     const fs = await import('fs');
     return fs.existsSync(path);
-  } catch {
-    console.error('[backups] Failed to check dir existence', path);
+  } catch (err) {
+    await logError({ error: err, context: `backups: checkDirExists ${path}` });
     return false;
   }
 }

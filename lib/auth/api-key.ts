@@ -9,6 +9,7 @@
  */
 
 import { NextRequest } from 'next/server';
+import { logError } from '@/lib/errors-server';
 import { db } from '@/drizzle/db';
 import { apiKeys, apiKeyUsage, users } from '@/drizzle/schema';
 import { eq, and, sql, gt, desc, asc } from 'drizzle-orm';
@@ -68,7 +69,7 @@ export async function tryApiKeyAuth(request: NextRequest): Promise<AuthContext |
         });
     });
   } catch (err) {
-    console.error('[API Key] Failed to log usage:', err);
+    await logError({ error: err, context: 'api-key: logUsage' });
   }
 
   // Map scopes to permissions

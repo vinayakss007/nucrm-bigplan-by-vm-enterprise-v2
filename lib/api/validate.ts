@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextResponse } from 'next/server';
+import { logError } from '@/lib/errors-server';
 import { ZodError, ZodSchema, z } from 'zod';
 import { logger } from '@/lib/logger';
 
@@ -98,7 +99,7 @@ export function withValidation<T>(
     try {
       body = await request.json();
     } catch (e) {
-      console.error('[Validate] Invalid JSON body', e);
+      await logError({ error: e, context: 'validate: withValidation bad JSON body' });
       return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
     }
 

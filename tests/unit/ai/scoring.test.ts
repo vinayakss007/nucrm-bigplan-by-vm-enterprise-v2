@@ -48,6 +48,8 @@ vi.mock('@/drizzle/schema/ai', () => ({
   aiActivity: {},
 }));
 
+vi.mock('@/lib/errors-server', () => ({ logError: vi.fn().mockResolvedValue(undefined) }));
+
 vi.mock('@/drizzle/schema/crm', () => ({
   contacts: {},
   contactScores: {},
@@ -139,6 +141,10 @@ describe('AI Scoring', () => {
 
       const results = await mod.bulkScoreLeads('t-1', 'u-1', 20);
       expect(results).toHaveLength(1);
+      const { logError } = await import('@/lib/errors-server');
+      expect(logError).toHaveBeenCalledWith(
+        expect.objectContaining({ context: 'ai-scoring: bulkScoreLeads lead=c-ok' })
+      );
     });
   });
 });
