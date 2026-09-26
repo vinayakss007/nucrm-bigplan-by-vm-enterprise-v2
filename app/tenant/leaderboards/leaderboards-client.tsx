@@ -8,6 +8,7 @@
 import { useState } from 'react';
 import useSWR from 'swr';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import type { FetchError } from '@/lib/swr-config';
 
 type Metric = 'deals_won' | 'revenue' | 'activities' | 'conversion';
 type Period = 'week' | 'month' | 'quarter' | 'custom';
@@ -44,9 +45,19 @@ export default function LeaderboardsPage() {
   if (period === 'custom' && customEnd) params.set('end', customEnd);
   const queryString = params.toString();
 
-  const { data: res, error, isLoading } = useSWR(`/api/tenant/leaderboards?${queryString}`);
+  const { data: res, error, isLoading } = useSWR<{ data?: LeaderboardEntry[] }, FetchError>(
+    `/api/tenant/leaderboards?${queryString}`,
+  );
   const data = (res?.data || []) as LeaderboardEntry[];
   const loading = isLoading;
+  // SWR's error is an Error OBJECT — rendering it directly crashes the page
+  // ("Objects are not valid as a React child" → error boundary). Show a
+  // derived, safe string instead; 403 means the analytics-pro module gate.
+  const errorText = error
+    ? error.status === 403
+      ? 'Leaderboards require the Analytics Pro module for this workspace.'
+      : 'Failed to load leaderboard data. Please try again.'
+    : null;
 
   return (
     <div className="space-y-6">
@@ -110,9 +121,9 @@ export default function LeaderboardsPage() {
       </div>
 
       {/* Error State */}
-      {error && (
+      {errorText && (
         <div className="rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-900/20">
-          <p className="text-sm text-red-600 dark:text-red-300">{error}</p>
+          <p className="text-sm text-red-600 dark:text-red-300">{errorText}</p>
         </div>
       )}
 
@@ -126,7 +137,7 @@ export default function LeaderboardsPage() {
       )}
 
       {/* Chart */}
-      {!loading && !error && data.length > 0 && (
+      {!loading && !errorText && data.length > 0 && (
         <div className="rounded-lg border p-4">
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={data.slice(0, 10)} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
@@ -141,7 +152,7 @@ export default function LeaderboardsPage() {
       )}
 
       {/* Ranked List */}
-      {!loading && !error && (
+      {!loading && !errorText && (
         <div className="space-y-2">
           {data.length === 0 && (
             <p className="text-center text-muted-foreground py-8">No data for the selected period</p>

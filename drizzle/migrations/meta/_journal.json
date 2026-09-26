@@ -638,6 +638,13 @@
       "when": 1788782400007,
       "tag": "0095_jsonb_helpers_qualified_calls",
       "breakpoints": true
+    },
+    {
+      "idx": 91,
+      "version": "7",
+      "when": 1788782400008,
+      "tag": "0096_analytics_events_ingest_insert",
+      "breakpoints": true
     }
   ]
 }
