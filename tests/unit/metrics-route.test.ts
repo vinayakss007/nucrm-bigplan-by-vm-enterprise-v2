@@ -11,6 +11,8 @@ let failSelect = false;
 // Mock Redis so the scrape has a deterministic reachable backend — before
 // this the suite relied on localhost:6379 being DOWN, which hid that
 // nucrm_cache_up was only ever emitted on failure (stale-gauge bug).
+const redisMock = vi.hoisted(() => ({ heartbeat: null as string | null }));
+
 vi.mock('ioredis', () => ({
   default: class MockIORedis {
     async connect() { return this; }
@@ -18,7 +20,7 @@ vi.mock('ioredis', () => ({
     async dbsize() { return 42; }
     async llen() { return 0; }
     async zcount() { return 0; }
-    async get() { return null; }
+    async get() { return redisMock.heartbeat; }
     disconnect() {}
   },
 }));
@@ -52,6 +54,7 @@ function poolRows(active: string) {
 describe('GET /api/metrics section isolation (#2118)', () => {
   beforeEach(() => {
     failSelect = false;
+    redisMock.heartbeat = null;
     mockExecute.mockReset();
   });
 
@@ -92,5 +95,28 @@ describe('GET /api/metrics section isolation (#2118)', () => {
     // Process-level sections never touch the DB, so they must survive.
     expect(body).toContain('nucrm_uptime_seconds');
     expect(body).toContain('nucrm_memory_rss_bytes');
+  });
+
+  it('emits worker gauges from a valid heartbeat', async () => {
+    redisMock.heartbeat = '{"uptime":95,"memory":{"heapUsed":123},"workers":{"email":true,"automation":false}}';
+    mockExecute.mockResolvedValue(poolRows('42'));
+    const body = await (await GET(new NextRequest('http://localhost/api/metrics'))).text();
+    expect(body).toContain('nucrm_worker_uptime_seconds 95');
+    expect(body).toContain('nucrm_worker_running{worker="email"} 1');
+    expect(body).toContain('nucrm_worker_running{worker="automation"} 0');
+    expect(body).toContain('nucrm_cache_up 1');
+  });
+
+  it('a malformed heartbeat must not emit a second contradicting nucrm_cache_up sample', async () => {
+    // Regression: JSON.parse used to fall through to the Redis catch, which
+    // pushed cache_up 0 after cache_up 1 — two samples for one series with
+    // duplicate HELP/TYPE makes Prometheus reject the entire scrape.
+    redisMock.heartbeat = 'not-json';
+    mockExecute.mockResolvedValue(poolRows('42'));
+    const body = await (await GET(new NextRequest('http://localhost/api/metrics'))).text();
+    expect(body).toContain('nucrm_cache_up 1');
+    expect(body).not.toContain('nucrm_cache_up 0');
+    expect(body.match(/^nucrm_cache_up /m)).toHaveLength(1);
+    expect(body).not.toContain('nucrm_worker_uptime_seconds');
   });
 });

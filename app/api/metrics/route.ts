@@ -201,17 +201,22 @@ export async function GET(request: NextRequest) {
         } catch { /* Silently skip during migration/setup when tables may not exist yet */ }
       }
 
-      // Worker health heartbeat
-      const workerRaw = await redisConn.get('worker:heartbeat');
-      if (workerRaw) {
-        const workerInfo = JSON.parse(workerRaw);
-        push(metrics, 'nucrm_worker_uptime_seconds', 'Worker process uptime', 'counter', workerInfo.uptime);
-        push(metrics, 'nucrm_worker_memory_heap_bytes', 'Worker heap memory', 'gauge', workerInfo.memory?.heapUsed || 0);
-        const workerNames = Object.keys(workerInfo.workers || {});
-        for (const w of workerNames) {
-          push(metrics, 'nucrm_worker_running', 'Worker running status', 'gauge', workerInfo.workers[w] ? 1 : 0, `{worker="${w}"}`);
+      // Worker health heartbeat — its own guard: a bad heartbeat payload
+      // must not fall through to the outer catch, which would push a second
+      // nucrm_cache_up (0) after the 1 already emitted and make the whole
+      // scrape invalid for Prometheus (duplicate samples for one series).
+      try {
+        const workerRaw = await redisConn.get('worker:heartbeat');
+        if (workerRaw) {
+          const workerInfo = JSON.parse(workerRaw);
+          push(metrics, 'nucrm_worker_uptime_seconds', 'Worker process uptime', 'counter', workerInfo.uptime);
+          push(metrics, 'nucrm_worker_memory_heap_bytes', 'Worker heap memory', 'gauge', workerInfo.memory?.heapUsed || 0);
+          const workerNames = Object.keys(workerInfo.workers || {});
+          for (const w of workerNames) {
+            push(metrics, 'nucrm_worker_running', 'Worker running status', 'gauge', workerInfo.workers[w] ? 1 : 0, `{worker="${w}"}`);
+          }
         }
-      }
+      } catch { /* malformed or missing heartbeat — cache section already reported */ }
     } catch {
       push(metrics, 'nucrm_cache_up', 'Whether Redis is reachable', 'gauge', 0);
     } finally {
