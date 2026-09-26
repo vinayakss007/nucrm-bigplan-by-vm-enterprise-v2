@@ -14,9 +14,9 @@ import { getAppUrl } from '../app-url';
  * - Rate limiting to prevent abuse
  */
 
-import { db } from '@/drizzle/db';
 import { users, passwordResets, sessions } from '@/drizzle/schema';
 import { eq, isNull, and, gt } from 'drizzle-orm';
+import { withAuthLookupContext, withSecurityContext } from '@/lib/db/rls';
 import { createHash, randomBytes } from 'crypto';
 import { sendEmail } from '@/lib/email/service';
 import { hashPassword, validatePassword } from '@/lib/auth/session';
@@ -31,13 +31,19 @@ const RESET_TOKEN_LENGTH = 32;
  */
 export async function clearResetToken(userId: string): Promise<void> {
   try {
-    await db
+    // PP-026: password_resets only carried `password_resets_user_own`, which
+  // keys off app.current_user — but a reset is authorised by the token, not by
+  // a session, so no user context exists here. Runs in the platform-security
+  // context that 0088 admits for this table.
+  await withSecurityContext(async (tx) =>
+      await tx
       .update(passwordResets)
       .set({ deletedAt: new Date() })
       .where(and(
         eq(passwordResets.userId, userId),
         isNull(passwordResets.deletedAt)
-      ));
+      ))
+    );
   } catch (err) {
     devLogger.error(err as Error, '[password-reset] clearResetToken failed');
   }
@@ -54,7 +60,11 @@ export async function requestPasswordReset(
     const normalizedEmail = email.toLowerCase().trim();
     
     // Find user by email
-    const [user] = await db
+    // PP-026: pre-auth lookup by email, so it needs the auth_lookup privilege
+  // (users_auth_lookup). Without it RLS returned zero rows and this function
+  // silently reported success having created no token at all.
+  const [user] = await withAuthLookupContext(async (tx) =>
+      await tx
       .select({
         id: users.id,
         email: users.email,
@@ -62,7 +72,8 @@ export async function requestPasswordReset(
       })
       .from(users)
       .where(eq(users.email, normalizedEmail))
-      .limit(1);
+      .limit(1)
+    );
 
     // Always return success to prevent email enumeration
     // This is a security best practice - don't reveal if email exists
@@ -79,11 +90,13 @@ export async function requestPasswordReset(
     const tokenHash = createHash('sha256').update(token).digest('hex');
     const expiresAt = new Date(Date.now() + RESET_TOKEN_EXPIRY_HOURS * 60 * 60 * 1000);
 
-    await db.insert(passwordResets).values({
-      userId: user.id,
-      token: tokenHash,
-      expiresAt,
-    });
+    await withAuthLookupContext(async (tx) =>
+      await tx.insert(passwordResets).values({
+        userId: user.id,
+        token: tokenHash,
+        expiresAt,
+      })
+    );
 
     // Build reset URL
     const resetUrl = `${appUrl}/auth/reset-password?token=${token}`;
@@ -161,7 +174,8 @@ export async function verifyResetToken(token: string): Promise<{
     const now = new Date();
 
     // Find valid reset token in password_resets table
-    const [resetRecord] = await db
+    const [resetRecord] = await withAuthLookupContext(async (tx) =>
+      await tx
       .select({
         id: passwordResets.id,
         userId: passwordResets.userId,
@@ -174,18 +188,21 @@ export async function verifyResetToken(token: string): Promise<{
         isNull(passwordResets.deletedAt),
         gt(passwordResets.expiresAt, now)
       ))
-      .limit(1);
+      .limit(1)
+    );
 
     if (!resetRecord) {
       return { valid: false };
     }
 
     // Get user email
-    const [user] = await db
+    const [user] = await withAuthLookupContext(async (tx) =>
+      await tx
       .select({ email: users.email })
       .from(users)
       .where(eq(users.id, resetRecord.userId))
-      .limit(1);
+      .limit(1)
+    );
 
     return {
       valid: true,
@@ -209,7 +226,8 @@ export async function resetPassword(
   try {
     // Validate token
     const tokenCheck = await verifyResetToken(token);
-    if (!tokenCheck.valid || !tokenCheck.userId) {
+    const resetUserId = tokenCheck.userId;
+    if (!tokenCheck.valid || !resetUserId) {
       return {
         success: false,
         message: 'Invalid or expired reset token. Please request a new one.'
@@ -229,24 +247,27 @@ export async function resetPassword(
     const passwordHash = await hashPassword(newPassword);
 
     // Update user password
-    await db
+    await withSecurityContext(async (tx) =>
+      await tx
       .update(users)
       .set({
         passwordHash,
         updatedAt: new Date(),
       })
-      .where(eq(users.id, tokenCheck.userId));
+      .where(eq(users.id, resetUserId))
+    );
 
     // Invalidate all existing sessions for this user
-    await db
+    await withSecurityContext(async (tx) =>
+      await tx
       .delete(sessions)
-      .where(eq(sessions.userId, tokenCheck.userId))
-      .catch((e) => { console.error('[password-reset] Failed to invalidate sessions', e); });
+      .where(eq(sessions.userId, resetUserId))
+    ).catch((e) => { console.error('[password-reset] Failed to invalidate sessions', e); });
 
     // Consume the reset token to prevent reuse within the expiry window
-    await clearResetToken(tokenCheck.userId);
+    await clearResetToken(resetUserId);
 
-    logger.info('Password reset successful', { userId: tokenCheck.userId });
+    logger.info('Password reset successful', { userId: resetUserId });
 
     return {
       success: true,

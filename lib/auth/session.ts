@@ -6,9 +6,9 @@
 import { SignJWT, jwtVerify } from 'jose';
 import { cookies } from 'next/headers';
 import bcrypt from 'bcryptjs';
-import { db } from '@/drizzle/db';
 import { users, sessions } from '@/drizzle/schema';
 import { eq, and, gt } from 'drizzle-orm';
+import { withAuthResolutionContext } from '@/lib/db/rls';
 
 // Lazy-initialise so that importing this module at build time (Next.js static
 // analysis) does not throw. The check is deferred to the first call that
@@ -139,22 +139,30 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
 
   const tokenHash = await hashToken(token);
 
-  // Verify session still exists in DB
-  const results = await db.select({
-    id: users.id,
-    email: users.email,
-    fullName: users.fullName,
-    isSuperAdmin: users.isSuperAdmin,
-    avatarUrl: users.avatarUrl,
-    lastTenantId: users.lastTenantId,
-  })
-  .from(sessions)
-  .innerJoin(users, eq(users.id, sessions.userId))
-  .where(and(
-    eq(sessions.tokenHash, tokenHash),
-    gt(sessions.expiresAt, new Date())
-  ))
-  .limit(1);
+  // Verify session still exists in DB.
+  //
+  // PP-026: this is a *pre-auth* read — performing it is what proves who the
+  // caller is — so it cannot run on the plain pool, where every policy on
+  // `sessions`/`users` keys off an identity that does not exist yet. The userId
+  // comes from the verified token above (never from client input), so
+  // withAuthResolutionContext scopes the read to this principal's own rows.
+  const results = await withAuthResolutionContext(payload.userId, async (tx) =>
+    await tx.select({
+      id: users.id,
+      email: users.email,
+      fullName: users.fullName,
+      isSuperAdmin: users.isSuperAdmin,
+      avatarUrl: users.avatarUrl,
+      lastTenantId: users.lastTenantId,
+    })
+    .from(sessions)
+    .innerJoin(users, eq(users.id, sessions.userId))
+    .where(and(
+      eq(sessions.tokenHash, tokenHash),
+      gt(sessions.expiresAt, new Date())
+    ))
+    .limit(1)
+  );
 
   return results[0] ?? null;
 }

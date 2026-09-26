@@ -55,6 +55,7 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { withPinnedConnection } from '@/lib/db/request-connection';
+import { runWithTenantCarrier } from '@/lib/db/tenant-carrier';
 import { trackRequestStart, trackRequestEnd } from '@/lib/db/graceful-shutdown';
 import { metrics } from '@/lib/metrics';
 
@@ -150,7 +151,12 @@ export function withApiRoute<C = unknown>(
     const metricMethod = request?.method ?? 'unknown';
     let metricStatus = 500;
     try {
-      const response = await withPinnedConnection(async () => handler(request, context));
+      // PP-027: tenant-carrier scope wraps the pinned connection so the identity
+      // requireAuth() proves stays visible to bare db.transaction() calls under
+      // PgBouncer transaction pooling (no-op cost without PgBouncer).
+      const response = await runWithTenantCarrier(() =>
+        withPinnedConnection(async () => handler(request, context))
+      );
       metricStatus = response instanceof Response ? response.status : 500;
       return response;
     } catch (err) {
@@ -198,5 +204,7 @@ export function withApiRoute<C = unknown>(
  * redirect()/notFound() control-flow throws).
  */
 export function withTenantScope<T>(fn: () => Promise<T>): Promise<T> {
-  return withPinnedConnection(fn);
+  // PP-027: same carrier scope as withApiRoute, for Server Components that
+  // run `db.transaction()` after requireTenantCtx() returns.
+  return runWithTenantCarrier(() => withPinnedConnection(fn));
 }
