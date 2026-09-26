@@ -63,7 +63,8 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
       stage: dealStages.name,
       value: dealsTable.amount,
       close_date: dealsTable.closeDate,
-      assigned_to: dealsTable.assignedTo
+      assigned_to: dealsTable.assignedTo,
+      created_at: dealsTable.createdAt
     })
     .from(dealsTable)
     .leftJoin(dealStages, eq(dealStages.id, dealsTable.stageId))
@@ -80,9 +81,9 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
       description: tasksTable.description,
       priority: tasksTable.priority,
       status: tasksTable.status,
-      dueDate: tasksTable.dueDate,
+      due_date: tasksTable.dueDate,
       completed: tasksTable.completed,
-      completedAt: tasksTable.completedAt,
+      completed_at: tasksTable.completedAt,
       assignee_name: usersTable.fullName
     })
     .from(tasksTable)
@@ -190,11 +191,39 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
   if (!contactResult.length) notFound();
   
   const contactRow = contactResult[0]!;
+  // #1268 wave 6: the client contract is snake_case (it PATCHes the same keys
+  // back to /api/tenant/contacts/[id], which reads v.first_name etc.). Map the
+  // camelCase Drizzle row explicitly — spreading the row silently fed the
+  // client undefined fields for every multi-word column.
+  const c = contactRow.contact;
   const contact = {
-    ...contactRow.contact,
+    id: c.id,
+    tenant_id: c.tenantId,
+    created_by: c.createdBy,
+    assigned_to: c.assignedTo,
+    company_id: c.companyId,
+    first_name: c.firstName,
+    last_name: c.lastName,
+    email: c.email,
+    phone: c.phone,
+    city: c.city,
+    country: c.country,
+    website: c.website,
+    linkedin_url: c.linkedinUrl,
+    tags: c.tags,
+    notes: c.notes,
+    lead_source: c.leadSource,
+    lead_status: c.leadStatus,
+    score: c.score,
+    lifecycle_stage: c.lifecycleStage,
+    custom_fields: c.customFields,
+    is_archived: c.isArchived,
+    do_not_contact: c.doNotContact,
+    created_at: c.createdAt.toISOString(),
+    updated_at: c.updatedAt?.toISOString() ?? '',
     company_name: contactRow.company_name,
     assigned_name: contactRow.assigned_name,
-    created_by_name: contactRow.created_by_name
+    created_by_name: contactRow.created_by_name,
   };
 
   // #1816: if this contact was created by converting a lead, resolve that lead
