@@ -202,7 +202,9 @@ export function exportPrometheusMetrics(): string {
 
   for (const [name, points] of grouped.entries()) {
     const latest = points[points.length - 1];
-    if (latest) {
+    // Same rule as the route's push(): a NaN/Infinity line invalidates the
+    // whole Prometheus exposition, not just that metric.
+    if (latest && Number.isFinite(latest.value)) {
       const labels = latest.labels
         ? `{${Object.entries(latest.labels).map(([k, v]) => `${k}="${v}"`).join(',')}}`
         : '';

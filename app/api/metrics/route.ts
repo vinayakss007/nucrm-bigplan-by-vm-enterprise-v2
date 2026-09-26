@@ -16,6 +16,11 @@ const METRICS_SECRET = process.env['METRICS_SECRET'] || '';
 const REDIS_URL = process.env['REDIS_URL'] || 'redis://localhost:6379';
 
 function push(metrics: string[], name: string, help: string, type: string, value: number, labels = '') {
+  // One non-finite sample line (NaN/Infinity) makes Prometheus reject the
+  // ENTIRE scrape — every other metric goes dark because one parse of a
+  // dirty column was off. Drop the bad sample; section *_up gauges still
+  // report which part produced it.
+  if (!Number.isFinite(value)) return;
   if (help) metrics.push(`# HELP ${name} ${help}`);
   if (type) metrics.push(`# TYPE ${name} ${type}`);
   metrics.push(labels ? `${name}${labels} ${value}` : `${name} ${value}`);

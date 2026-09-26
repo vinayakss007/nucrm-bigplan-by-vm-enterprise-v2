@@ -269,5 +269,21 @@ describe('metrics', () => {
       const output = exportPrometheusMetrics();
       expect(output).toBe('');
     });
+
+    it('omits non-finite values so one NaN cannot invalidate the whole scrape', async () => {
+      // Prometheus rejects the ENTIRE exposition on a single NaN/Inf line —
+      // every other metric would go dark because one collector recorded a
+      // bad duration.
+      const { metrics, exportPrometheusMetrics } = await import('@/lib/metrics');
+      metrics.reset();
+      metrics.gauge('good_gauge', 5);
+      metrics.gauge('nan_gauge', NaN);
+      metrics.gauge('inf_gauge', Infinity);
+      const output = exportPrometheusMetrics();
+      expect(output).toContain('good_gauge 5');
+      expect(output).not.toContain('nan_gauge');
+      expect(output).not.toContain('inf_gauge');
+      expect(output).not.toContain('NaN');
+    });
   });
 });
