@@ -32,6 +32,12 @@ if (SENTRY_DSN) {
       'Failed to fetch',
       'Load failed',
       'ResizeObserver loop limit exceeded',
+      // NUCRM fatal seen in Sentry (abortIncoming/_http_server "Error: aborted"):
+      // the client hung up mid-response. Node raises it from the server core, so
+      // it is disconnect noise, never an application fault — drop it by exact
+      // shape only, so real messages that merely contain "aborted" still page.
+      /^aborted$/i,
+      /^AbortError(?::|\s|$)/,
     ],
     beforeSend(event) {
       return scrubPii(event);
