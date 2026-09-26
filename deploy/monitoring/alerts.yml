@@ -61,6 +61,16 @@ groups:
           summary: "Metrics DB section failing"
           description: "/api/metrics DB gauge or pool section returned down (#2118) — check the app DB pool."
 
+      - alert: QueueBacklogHigh
+        # nucrm_queue_jobs_total covers all ten worker queues (6f9f6999).
+        expr: max by (queue) (nucrm_queue_jobs_total{status="waiting"}) > 100
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "BullMQ queue backlog > 100"
+          description: "Queue {{ $labels.queue }} has >100 waiting jobs for 10 minutes — worker stalled or under-provisioned."
+
       - alert: NoTasksPending
         expr: nucrm_tasks_pending_total == 0
         for: 0m
