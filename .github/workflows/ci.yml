@@ -56,6 +56,9 @@ jobs:
       - name: File-size ratchet (#1843)
         run: npm run guard:filesize
 
+      - name: no-explicit-any suppression ratchet (#1268)
+        run: npm run guard:any-suppressions
+
   test-unit:
     name: Unit Tests
     runs-on: ubuntu-latest
