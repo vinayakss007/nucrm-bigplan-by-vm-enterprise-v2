@@ -20,18 +20,23 @@ import ContactTimeline from '@/components/tenant/contact-timeline';
 import { CallLogger, CallLogList } from '@/components/tenant/call-logger';
 import toast from 'react-hot-toast';
 import { confirmThen } from '@/components/ui/confirm-dialog';
-import type { Task, Deal, Company } from '@/types';
+import type { Company } from '@/types';
+import type { LucideIcon } from 'lucide-react';
+import type {
+  ActivityRow, BillingDoc, CallLogRow, ContactDeal, ContactDetailData,
+  ContactLeadRow, ContactTask, FollowUpRow, HistoryEntry, TicketRow,
+} from './contact-detail-types';
 
 // ── Types ─────────────────────────────────────────────────────
 interface ContactFormState {
-  [key: string]: string | number | boolean | string[] | Record<string, unknown> | null | undefined;
+  [key: string]: unknown;
   id: string;
   tenant_id: string;
   created_by: string | null;
   assigned_to: string | null;
   company_id: string | null;
   first_name: string;
-  last_name: string;
+  last_name: string | null;
   email: string | null;
   phone: string | null;
   city: string | null;
@@ -39,23 +44,24 @@ interface ContactFormState {
   tags: string;
   notes: string | null;
   lead_source: string | null;
-  lead_status: string;
-  score: number;
+  lead_status: string | null;
+  score: number | null;
   lifecycle_stage: string | null;
-  custom_fields: Record<string, unknown>;
-  is_archived: boolean;
-  do_not_contact: boolean;
+  custom_fields: unknown;
+  is_archived: boolean | null;
+  do_not_contact: boolean | null;
   website: string | null;
   linkedin_url: string | null;
   created_at: string;
   updated_at: string;
-  company_name?: string;
-  assigned_name?: string;
+  company_name?: string | null;
+  assigned_name?: string | null;
+  created_by_name?: string | null;
 }
 
 interface TeamMemberOption {
   user_id: string;
-  full_name: string;
+  full_name: string | null;
 }
 
 // ── Constants ─────────────────────────────────────────────────
@@ -88,8 +94,7 @@ const ACTIVITY_COLORS: Record<string,string> = {
   deal_update:'text-purple-600 bg-purple-100 dark:bg-purple-900/30',
   contact_created:'text-emerald-600 bg-emerald-100 dark:bg-emerald-900/30',
 };
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const ACTIVITY_ICONS: Record<string,any> = {
+const ACTIVITY_ICONS: Record<string, LucideIcon> = {
   note:MessageSquare, call:PhoneCall, email:AtSign, meeting:Calendar,
   task:CheckCircle, deal_update:Briefcase, contact_created:Star,
 };
@@ -99,7 +104,7 @@ function QuickAddTask({ contactId, _contactName, teamMembers, onAdded }: {
   contactId: string;
   _contactName: string;
   teamMembers: TeamMemberOption[];
-  onAdded: (task: Task) => void;
+  onAdded: (task: ContactTask) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ title:'', priority:'medium', due_date:'', assigned_to:'' });
@@ -132,8 +137,7 @@ function QuickAddTask({ contactId, _contactName, teamMembers, onAdded }: {
           </div>
           <select value={form.assigned_to} onChange={e=>setForm(f=>({...f,assigned_to:e.target.value}))} className={inp}>
             <option value="">Assign to...</option>
-                  {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                  {teamMembers.map((m: any) => <option key={m.user_id} value={m.user_id}>{m.full_name}</option>)}
+                  {teamMembers.map((m) => <option key={m.user_id} value={m.user_id}>{m.full_name}</option>)}
           </select>
           <div className="flex gap-2">
             <button type="submit" disabled={saving} className="flex-1 py-1.5 rounded-lg bg-violet-600 hover:bg-violet-700 text-white text-xs font-semibold disabled:opacity-50 transition-colors">{saving?'Saving...':'Create Task'}</button>
@@ -148,8 +152,8 @@ function QuickAddTask({ contactId, _contactName, teamMembers, onAdded }: {
 // ── QuickAdd: Deal inline ──────────────────────────────────────
 function QuickAddDeal({ contactId, _companies, onAdded }: {
   contactId: string;
-  _companies: Company[];
-  onAdded: (deal: Deal) => void;
+  _companies: Pick<Company, 'id' | 'name'>[];
+  onAdded: (deal: ContactDeal) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ title:'', value:'', stage:'lead', close_date:'' });
@@ -243,14 +247,11 @@ export default function ContactDetailClient({
   callLogs: initialCallLogs=[],
   tickets=[], followUps=[], sourceLead=null,
 }: {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  contact: any; initialActivities: any[]; deals: any[]; tasks: any[];
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  companies: any[]; teamMembers: any[]; permissions: any; userId: string;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  invoices?: any[]; orders?: any[]; contracts?: any[]; subscriptions?: any[]; quotes?: any[]; callLogs?: any[];
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  tickets?: any[]; followUps?: any[];
+  contact: ContactDetailData; initialActivities: ActivityRow[]; deals: ContactDeal[]; tasks: ContactTask[];
+  companies: Pick<Company, 'id' | 'name'>[]; teamMembers: TeamMemberOption[];
+  permissions: { canEdit: boolean; canDelete: boolean; canAssign: boolean }; userId: string;
+  invoices?: BillingDoc[]; orders?: BillingDoc[]; contracts?: BillingDoc[]; subscriptions?: BillingDoc[]; quotes?: BillingDoc[]; callLogs?: CallLogRow[];
+  tickets?: TicketRow[]; followUps?: FollowUpRow[];
   sourceLead?: { id: string; name: string } | null;
 }) {
   const [contact, setContact]       = useState(initialContact);
@@ -259,14 +260,12 @@ export default function ContactDetailClient({
   const [tasks, setTasks]           = useState(initialTasks);
   const [callLogs, setCallLogs]     = useState(initialCallLogs);
   const [activeTab, setActiveTab]   = useState('activity'); // 'activity' | 'tasks' | 'deals' | 'calls' | 'history' | 'billing'
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [history, setHistory]           = useState<any[]>([]);
+  const [history, setHistory]           = useState<HistoryEntry[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [contactLeads, setContactLeads]            = useState<any[]>([]);
+  const [contactLeads, setContactLeads]            = useState<ContactLeadRow[]>([]);
   const [loadingContactLeads, setLoadingContactLeads] = useState(false);
   const [editing, setEditing]       = useState(false);
-  const [editForm, setEditForm]     = useState<ContactFormState>({ ...initialContact });
+  const [editForm, setEditForm]     = useState<ContactFormState>({ ...initialContact, tags: Array.isArray(initialContact.tags) ? initialContact.tags.join(', ') : '' });
   const [noteText, setNoteText]     = useState('');
   const [noteType, setNoteType]     = useState('note');
   const [addingNote, setAddingNote] = useState(false);
@@ -278,6 +277,7 @@ export default function ContactDetailClient({
   const router = useRouter();
 
   const curStatus = LEAD_STATUSES.find(s => s.id === contact.lead_status) ?? LEAD_STATUSES[0]!;
+  const score = contact.score ?? 0;
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
 
   // Fetch history when tab changes
@@ -309,7 +309,7 @@ export default function ContactDetailClient({
   }, [activeTab, contact.id, contactLeads.length, loadingContactLeads]);
 
   // ── Add activity / note ──────────────────────────────────────
-  const addNote = async (e: React.FormEvent) => {
+  const addNote = async (e: React.SyntheticEvent) => {
     e.preventDefault();
     if (!noteText.trim()) return;
     setAddingNote(true);
@@ -319,8 +319,7 @@ export default function ContactDetailClient({
     });
     const data = await res.json();
     if (!res.ok) { toast.error(data.error); setAddingNote(false); return; }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    setActivities((prev: any) => [{
+    setActivities((prev) => [{
       ...data.data,
       full_name: 'You',
       created_at: new Date().toISOString(),
@@ -337,8 +336,7 @@ export default function ContactDetailClient({
         method:'DELETE', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ noteId }),
       });
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      setActivities((prev: any[]) => prev.filter((a: any) => a.id !== noteId));
+      setActivities((prev) => prev.filter((a) => a.id !== noteId));
       toast.success('Note deleted');
     });
   };
@@ -351,11 +349,9 @@ export default function ContactDetailClient({
     });
     const data = await res.json();
     if (!res.ok) { toast.error(data.error); return; }
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    setContact((c: any) => ({ ...c, lead_status: newStatus }));
+    setContact((c) => ({ ...c, lead_status: newStatus }));
     const desc = `Status changed: ${contact.lead_status} → ${newStatus}${statusReason ? ` — ${statusReason}` : ''}`;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    setActivities((prev: any) => [{
+    setActivities((prev) => [{
       id: `tmp_${Date.now()}`, type:'note', description: desc,
       created_at: new Date().toISOString(), full_name: 'You',
       metadata: { status_change: true },
@@ -389,8 +385,7 @@ export default function ContactDetailClient({
       body: JSON.stringify({ completed }),
     });
     if (res.ok) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      setTasks((prev: any[]) => prev.map((t: any) => t.id === taskId ? { ...t, completed } : t));
+      setTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, completed } : t));
     }
   };
 
@@ -512,16 +507,14 @@ export default function ContactDetailClient({
                 <label className="block text-[10px] font-medium text-muted-foreground mb-0.5">Company</label>
                 <select value={editForm.company_id||''} onChange={e => {  setEditForm((p) => ({...p, company_id: e.target.value||null}))}} className={inp}>
                   <option value="">No company</option>
-                  {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                  {companies.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
               </div>
               <div>
                 <label className="block text-[10px] font-medium text-muted-foreground mb-0.5">Assigned To</label>
                 <select value={editForm.assigned_to||''} onChange={e => {  setEditForm((p) => ({...p, assigned_to: e.target.value||null}))}} className={inp}>
                   <option value="">Unassigned</option>
-            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-            {teamMembers.map((m: any) => <option key={m.user_id} value={m.user_id}>{m.full_name}</option>)}
+            {teamMembers.map((m) => <option key={m.user_id} value={m.user_id}>{m.full_name}</option>)}
                 </select>
               </div>
               <div>
@@ -546,18 +539,18 @@ export default function ContactDetailClient({
                 {contact.lead_source && <div className="flex justify-between text-xs"><span className="text-muted-foreground">Source</span><span className="font-medium capitalize">{contact.lead_source.replace(/_/g,' ')}</span></div>}
                 {contact.assigned_name && <div className="flex justify-between text-xs"><span className="text-muted-foreground">Owner</span><span className="font-medium">{contact.assigned_name}</span></div>}
                 {(contact.city || contact.country) && <div className="flex justify-between text-xs"><span className="text-muted-foreground">Location</span><span className="font-medium">{[contact.city,contact.country].filter(Boolean).join(', ')}</span></div>}
-                {contact.score > 0 && <div className="flex justify-between text-xs"><span className="text-muted-foreground">Score</span><span className="font-bold text-violet-600">{contact.score}</span></div>}
-                {contact.score > 0 && (() => {
-                  const tier = getScoreTier(contact.score);
+                {score > 0 && <div className="flex justify-between text-xs"><span className="text-muted-foreground">Score</span><span className="font-bold text-violet-600">{score}</span></div>}
+                {score > 0 && (() => {
+                  const tier = getScoreTier(score);
                   const cfg = getScoreTierConfig(tier);
                   return (
                     <div className={cn('mt-2 p-2 rounded-lg', cfg.bg)}>
                       <div className="flex items-center justify-between mb-1">
                         <span className={cn('text-[10px] font-bold uppercase', cfg.color)}>{cfg.label}</span>
-                        <span className={cn('text-xs font-bold', cfg.color)}>{contact.score}/100</span>
+                        <span className={cn('text-xs font-bold', cfg.color)}>{score}/100</span>
                       </div>
                       <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
-                        <div className={cn('h-full rounded-full transition-all', cfg.bar)} style={{ width: `${Math.min(100, contact.score)}%` }} />
+                        <div className={cn('h-full rounded-full transition-all', cfg.bar)} style={{ width: `${Math.min(100, score)}%` }} />
                       </div>
                     </div>
                   );
@@ -566,7 +559,7 @@ export default function ContactDetailClient({
               </div>
               {(contact.tags ?? []).length > 0 && (
                 <div className="flex flex-wrap gap-1 pt-2 border-t border-border">
-                  {(contact.tags).map((t:string) => (
+                  {(contact.tags ?? []).map((t) => (
                     <span key={t} className="text-[10px] bg-violet-100 dark:bg-violet-900/20 text-violet-700 dark:text-violet-400 px-2 py-0.5 rounded-full">{t}</span>
                   ))}
                 </div>
@@ -632,8 +625,7 @@ export default function ContactDetailClient({
                     placeholder={ACTIVITY_TABS.find(t=>t.id===noteType)?.placeholder}
                     rows={3}
                     className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-muted/20 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 resize-none"
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    onKeyDown={e => { if (e.key==='Enter' && (e.metaKey||e.ctrlKey) && noteText.trim()) { e.preventDefault(); addNote(e as any); }}}
+                    onKeyDown={e => { if (e.key==='Enter' && (e.metaKey||e.ctrlKey) && noteText.trim()) { e.preventDefault(); addNote(e); }}}
                   />
                   <div className="flex items-center justify-between mt-2">
                     <p className="text-xs text-muted-foreground">⌘+Enter to save · Will be timestamped automatically</p>
@@ -657,11 +649,10 @@ export default function ContactDetailClient({
                   </div>
                 ) : (
                   <div className="divide-y divide-border">
-                    {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                    {activities.map((a: any, i: number) => {
+                    {activities.map((a, i) => {
                       const Icon = ACTIVITY_ICONS[a.type] ?? MessageSquare;
                       const colorCls = ACTIVITY_COLORS[a.type] ?? 'text-gray-600 bg-gray-100';
-                      const isStatusChange = a.metadata?.status_change;
+                      const isStatusChange = a.metadata?.status_change === true;
                       const isOwn = a.user_id === userId || a.full_name === 'You';
                       return (
                         <div key={a.id ?? i} className="flex gap-3.5 px-5 py-4 group hover:bg-accent/20 transition-colors">
@@ -731,16 +722,16 @@ export default function ContactDetailClient({
                 <div className="px-5 py-10 text-center text-sm text-muted-foreground">No tasks yet — create one above</div>
               ) : (
                 <div className="divide-y divide-border">
-                  {[...tasks].sort((a: Task, b: Task) => {
+                {[...tasks].sort((a, b) => {
                     if (a.completed && !b.completed) return 1;
                     if (!a.completed && b.completed) return -1;
                     if (!a.due_date && !b.due_date) return 0;
                     if (!a.due_date) return 1;
                     if (!b.due_date) return -1;
                     return new Date(a.due_date).getTime() - new Date(b.due_date).getTime();
-                  }).map((t: Task) => {
+                  }).map((t) => {
                     const today = new Date().toISOString().split('T')[0] || '';
-                    const overdue = !t.completed && t.due_date && t.due_date < today;
+                    const overdue = !t.completed && !!t.due_date && new Date(t.due_date) < new Date(today);
                     return (
                       <div key={t.id} className={cn('flex items-start gap-3 px-5 py-3.5 hover:bg-accent/20 transition-colors', t.completed && 'opacity-50')}>
                         <button onClick={() => toggleTask(t.id, !t.completed)} className="mt-0.5 shrink-0">
@@ -785,13 +776,12 @@ export default function ContactDetailClient({
                 <div className="px-5 py-10 text-center text-sm text-muted-foreground">No deals yet — create one above</div>
               ) : (
                 <div className="divide-y divide-border">
-                  {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                  {deals.map((d: any) => (
+                  {deals.map((d) => (
                     <div key={d.id} className="flex items-center gap-4 px-5 py-4 hover:bg-accent/20 transition-colors">
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-semibold">{d.title}</p>
                         <div className="flex items-center gap-2 mt-0.5">
-                          <span className={cn('text-[10px] font-semibold px-1.5 py-0.5 rounded-full capitalize', STAGE_COLORS[d.stage]??STAGE_COLORS["lead"])}>{d.stage}</span>
+                          <span className={cn('text-[10px] font-semibold px-1.5 py-0.5 rounded-full capitalize', STAGE_COLORS[d.stage ?? 'lead'] ?? STAGE_COLORS["lead"])}>{d.stage ?? ''}</span>
                           {d.close_date && <span className="text-xs text-muted-foreground flex items-center gap-1"><Calendar className="w-3 h-3" />Close: {formatDate(d.close_date)}</span>}
                         </div>
                       </div>
@@ -803,8 +793,7 @@ export default function ContactDetailClient({
                   ))}
                   <div className="px-5 py-3 bg-muted/20 flex items-center justify-between">
                     <span className="text-xs font-semibold text-muted-foreground">Total pipeline</span>
-                    {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                    <span className="text-sm font-bold">{formatCurrency(deals.filter((d: any)=>!['lost'].includes(d.stage)).reduce((s: any, d: any)=>s+Number(d.value),0))}</span>
+                    <span className="text-sm font-bold">{formatCurrency(deals.filter((d)=>!['lost'].includes(d.stage ?? '')).reduce((s, d)=>s+Number(d.value),0))}</span>
                   </div>
                 </div>
               )}
@@ -822,8 +811,7 @@ export default function ContactDetailClient({
                 <div className="px-5 py-10 text-center text-sm text-muted-foreground">No follow-ups scheduled</div>
               ) : (
                 <div className="divide-y divide-border">
-                  {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                  {followUps.map((f: any) => {
+                  {followUps.map((f) => {
                     const done = f.status === 'completed' || f.status === 'done' || !!f.completedAt;
                     const overdue = !done && f.dueDate && new Date(f.dueDate) < new Date();
                     return (
@@ -870,8 +858,7 @@ export default function ContactDetailClient({
                 <div className="px-5 py-10 text-center text-sm text-muted-foreground">No support tickets for this contact</div>
               ) : (
                 <div className="divide-y divide-border">
-                  {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                  {tickets.map((t: any) => {
+                  {tickets.map((t) => {
                     const statusColor: Record<string,string> = {
                       open: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
                       in_progress: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
@@ -908,7 +895,7 @@ export default function ContactDetailClient({
                 <p className="text-sm font-semibold">Call Logs</p>
                 <CallLogger
                   contactId={contact.id}
-                  companyId={contact.company_id}
+                  companyId={contact.company_id ?? undefined}
                   teamMembers={teamMembers}
                   onLogged={() => {
                     fetch(`/api/tenant/calls?contact_id=${contact.id}`)
@@ -945,10 +932,9 @@ export default function ContactDetailClient({
                 </div>
               ) : (
                 <div className="divide-y divide-border">
-                  {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                  {contactLeads.map((l: any) => {
+                  {contactLeads.map((l) => {
                     const status = LEAD_STATUSES.find(s => s.id === l.lead_status) ?? LEAD_STATUSES[0]!;
-                    const offerLabel = l.offer_total > 0
+                    const offerLabel = Number(l.offer_total) > 0
                       ? `${l.offer_currency} ${Number(l.offer_total).toLocaleString()}`
                       : null;
                     return (
@@ -1044,8 +1030,7 @@ export default function ContactDetailClient({
                 <div className="px-5 py-10 text-center text-sm text-muted-foreground">No edit history yet</div>
               ) : (
                 <div className="divide-y divide-border max-h-[500px] overflow-y-auto">
-                  {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                  {history.map((h: any) => (
+                  {history.map((h) => (
                     <div key={h.id} className="px-5 py-4 hover:bg-accent/10 transition-colors">
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex-1 min-w-0">
@@ -1113,20 +1098,14 @@ export default function ContactDetailClient({
 
                 {/* Build unified timeline */}
                 {(() => {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-                  type BillingItem = { type: string; item: any; date: Date; label: string; amount: number; status: string; number: string; };
+                  type BillingItem = { type: string; item: BillingDoc; date: Date; label: string | null; amount: number; status: string | null; number: string; };
                   const items: BillingItem[] = [];
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-                  invoices.forEach((i: any) => items.push({ type: 'invoice', item: i, date: new Date(i.createdAt), label: i.title || i.invoiceNumber, amount: parseFloat(i.totalAmount || 0), status: i.status, number: i.invoiceNumber || '' }));
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-                  orders.forEach((o: any) => items.push({ type: 'order', item: o, date: new Date(o.createdAt), label: o.title || o.orderNumber, amount: parseFloat(o.totalAmount || 0), status: o.status, number: o.orderNumber || '' }));
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-                  contracts.forEach((c: any) => items.push({ type: 'contract', item: c, date: new Date(c.createdAt), label: c.title, amount: parseFloat(c.totalValue || 0), status: c.status, number: c.contractNumber || '' }));
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-                  subscriptions.forEach((s: any) => items.push({ type: 'subscription', item: s, date: new Date(s.createdAt), label: s.name, amount: parseFloat(s.amount || 0), status: s.status, number: '' }));
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-                  quotes.forEach((q: any) => items.push({ type: 'quote', item: q, date: new Date(q.createdAt), label: q.title, amount: parseFloat(q.totalAmount || 0), status: q.status, number: q.quoteNumber || '' }));
+                  invoices.forEach((i) => items.push({ type: 'invoice', item: i, date: new Date(i.createdAt), label: i.title || i.invoiceNumber || null, amount: Number(i.totalAmount || 0), status: i.status, number: i.invoiceNumber || '' }));
+                  orders.forEach((o) => items.push({ type: 'order', item: o, date: new Date(o.createdAt), label: o.title || o.orderNumber || null, amount: Number(o.totalAmount || 0), status: o.status, number: o.orderNumber || '' }));
+                  contracts.forEach((c) => items.push({ type: 'contract', item: c, date: new Date(c.createdAt), label: c.title || null, amount: Number(c.totalValue || 0), status: c.status, number: c.contractNumber || '' }));
+                  subscriptions.forEach((s) => items.push({ type: 'subscription', item: s, date: new Date(s.createdAt), label: s.name || null, amount: Number(s.amount || 0), status: s.status, number: '' }));
+                  quotes.forEach((q) => items.push({ type: 'quote', item: q, date: new Date(q.createdAt), label: q.title || null, amount: Number(q.totalAmount || 0), status: q.status, number: q.quoteNumber || '' }));
 
                   items.sort((a, b) => b.date.getTime() - a.date.getTime());
 
@@ -1137,8 +1116,7 @@ export default function ContactDetailClient({
                   return (
                     <div className="divide-y divide-border">
                       {items.map((entry, idx) => {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-                        const typeIcons: Record<string, any> = {
+                        const typeIcons: Record<string, LucideIcon> = {
                           invoice: FileText, order: ShoppingCart, contract: FileSignature,
                           subscription: RefreshCw, quote: FileText,
                         };

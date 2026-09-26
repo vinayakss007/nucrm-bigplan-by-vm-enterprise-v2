@@ -17,19 +17,19 @@ import toast from 'react-hot-toast';
 
 interface CallLog {
   id: string;
-  contactId: string;
+  contactId: string | null;
   direction: string;
-  duration: number;
+  duration: number | null;
   notes: string | null;
   phoneNumber: string | null;
-  createdAt: string;
+  createdAt: string | Date;
   userName: string | null;
 }
 
 export function CallLogger({ contactId, companyId, teamMembers, onLogged }: {
   contactId: string;
   companyId?: string;
-  teamMembers?: { user_id: string; full_name: string }[];
+  teamMembers?: { user_id: string; full_name: string | null }[];
   onLogged?: () => void;
 }) {
   const [showForm, setShowForm] = useState(false);
@@ -159,7 +159,7 @@ export function CallLogList({ calls }: { calls: CallLog[] }) {
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
               <span className="text-xs font-medium capitalize">{call.direction}</span>
-              {call.duration > 0 && <span className="text-[10px] text-muted-foreground">{formatDuration(call.duration)}</span>}
+              {(call.duration ?? 0) > 0 && <span className="text-[10px] text-muted-foreground">{formatDuration(call.duration ?? 0)}</span>}
               {call.userName && (
                 <span className="text-[10px] text-muted-foreground flex items-center gap-1">
                   <User className="w-2.5 h-2.5" />{call.userName}

@@ -162,6 +162,5 @@
   "lib/utils.ts": 3,
   "lib/visitor-tracking.ts": 2,
   "lib/webhooks/dlq.ts": 2,
-  "components/tenant/contact-detail-client.tsx": 30,
   "components/tenant/dashboard/widget-wrapper.tsx": 3
 }
