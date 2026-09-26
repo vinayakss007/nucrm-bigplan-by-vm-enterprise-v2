@@ -141,4 +141,22 @@ describe('withApiRoute pins the whole handler body (#1615)', () => {
     expect(fakeClient.release).toHaveBeenCalledTimes(1);
     expect(await res.text()).toBe('pgbouncer');
   });
+
+  it('records http_requests_total with normalized path and final status', async () => {
+    const { withApiRoute } = await import('../../lib/api/with-api-route');
+    const { metrics, exportPrometheusMetrics } = await import('../../lib/metrics');
+    metrics.reset();
+
+    const ok = withApiRoute(async () => new Response(null, { status: 201 }));
+    await ok(new Request('http://x/api/tenant/contacts/42/notes', { method: 'GET' }) as never, undefined as never);
+    const boom = withApiRoute(async () => { throw new Error('x'); });
+    await expect(boom(new Request('http://x/api/tenant/deals/0f51db8c-1d42-4f4c-9be6-a5fbc5f7d31a', { method: 'DELETE' }) as never, undefined as never)).rejects.toThrow('x');
+
+    const out = exportPrometheusMetrics();
+    // Numeric and UUID segments collapse to [id] so series cardinality is
+    // bounded by route shape; thrown handlers count as 500.
+    expect(out).toContain('http_requests_total{method="GET",path="/api/tenant/contacts/[id]/notes",status="201"} 1');
+    expect(out).toContain('http_requests_total{method="DELETE",path="/api/tenant/deals/[id]",status="500"} 1');
+    metrics.reset();
+  });
 });

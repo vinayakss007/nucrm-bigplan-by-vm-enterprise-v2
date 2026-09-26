@@ -285,5 +285,30 @@ describe('metrics', () => {
       expect(output).not.toContain('inf_gauge');
       expect(output).not.toContain('NaN');
     });
+
+    it('keeps one line per label series and sums counters (rate()-usable)', async () => {
+      // Regression: grouping by name alone collapsed all label series into
+      // the single last-written point, so rate()-based alerts saw noise.
+      const { metrics, exportPrometheusMetrics } = await import('@/lib/metrics');
+      metrics.reset();
+      metrics.increment('http_requests_total', 1, { method: 'GET', status: '200' });
+      metrics.increment('http_requests_total', 1, { method: 'GET', status: '200' });
+      metrics.increment('http_requests_total', 1, { method: 'POST', status: '500' });
+      metrics.gauge('queue_depth', 5);
+      metrics.gauge('queue_depth', 2);
+      const output = exportPrometheusMetrics();
+      expect(output).toContain('http_requests_total{method="GET",status="200"} 2');
+      expect(output).toContain('http_requests_total{method="POST",status="500"} 1');
+      expect(output).toContain('queue_depth 2');
+      expect(output.match(/^http_requests_total/gm)).toHaveLength(2);
+    });
+
+    it('escapes quotes and backslashes in label values', async () => {
+      const { metrics, exportPrometheusMetrics } = await import('@/lib/metrics');
+      metrics.reset();
+      metrics.increment('weird_total', 1, { path: '/a"b\\c' });
+      const output = exportPrometheusMetrics();
+      expect(output).toContain('weird_total{path="/a\\"b\\\\c"} 1');
+    });
   });
 });

@@ -27,6 +27,7 @@ export interface MetricPoint {
   value: number;
   timestamp: number;
   labels?: Record<string, string>;
+  kind?: 'counter' | 'gauge';
 }
 
 export interface MetricsCollector {
@@ -65,7 +66,7 @@ class ConsoleMetricsCollector implements MetricsCollector {
       return;
     }
 
-    this.push({ name, value, timestamp: Date.now(), labels });
+    this.push({ name, value, timestamp: Date.now(), labels, kind: 'counter' });
   }
 
   timing(name: string, duration: number, labels?: Record<string, string>): void {
@@ -73,7 +74,7 @@ class ConsoleMetricsCollector implements MetricsCollector {
       return;
     }
 
-    this.push({ name: `${name}_ms`, value: duration, timestamp: Date.now(), labels });
+    this.push({ name: `${name}_ms`, value: duration, timestamp: Date.now(), labels, kind: 'gauge' });
   }
 
   gauge(name: string, value: number, labels?: Record<string, string>): void {
@@ -81,7 +82,7 @@ class ConsoleMetricsCollector implements MetricsCollector {
       return;
     }
 
-    this.push({ name, value, timestamp: Date.now(), labels });
+    this.push({ name, value, timestamp: Date.now(), labels, kind: 'gauge' });
   }
 
   getMetrics(): MetricPoint[] {
@@ -190,26 +191,48 @@ export function trackBusinessMetric(
  */
 export function exportPrometheusMetrics(): string {
   const metricsData = metrics.getMetrics();
-  const lines: string[] = [];
 
-  // Group by metric name
-  const grouped = new Map<string, MetricPoint[]>();
-  for (const metric of metricsData) {
-    const existing = grouped.get(metric.name) || [];
-    existing.push(metric);
-    grouped.set(metric.name, existing);
+  // One line per (name, labels) SERIES — grouping by name alone collapsed
+  // e.g. http_requests_total{method,path,status} down to a single
+  // last-written series, which made every rate()-based alert meaningless.
+  // Counters export their cumulative sum since start (monotonic, so
+  // rate()/increase() work); gauges and timings export their latest value.
+  interface Series {
+    name: string;
+    labels: Record<string, string> | undefined;
+    kind: 'counter' | 'gauge';
+    sum: number;
+    latest: number;
+  }
+  const series = new Map<string, Series>();
+  for (const point of metricsData) {
+    const key = `${point.name}\u0000${JSON.stringify(point.labels ?? {})}`;
+    const existing = series.get(key);
+    if (existing) {
+      existing.sum += point.value;
+      existing.latest = point.value;
+    } else {
+      series.set(key, {
+        name: point.name,
+        labels: point.labels,
+        kind: point.kind ?? 'gauge',
+        sum: point.value,
+        latest: point.value,
+      });
+    }
   }
 
-  for (const [name, points] of grouped.entries()) {
-    const latest = points[points.length - 1];
-    // Same rule as the route's push(): a NaN/Infinity line invalidates the
+  const escapeLabelValue = (v: string) => v.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n');
+  const lines: string[] = [];
+  for (const s of series.values()) {
+    const value = s.kind === 'counter' ? s.sum : s.latest;
+    // Same rule as the route's push(): a NaN/Inf line invalidates the
     // whole Prometheus exposition, not just that metric.
-    if (latest && Number.isFinite(latest.value)) {
-      const labels = latest.labels
-        ? `{${Object.entries(latest.labels).map(([k, v]) => `${k}="${v}"`).join(',')}}`
-        : '';
-      lines.push(`${name}${labels} ${latest.value}`);
-    }
+    if (!Number.isFinite(value)) continue;
+    const labels = s.labels
+      ? `{${Object.entries(s.labels).map(([k, v]) => `${k}="${escapeLabelValue(v)}"`).join(',')}}`
+      : '';
+    lines.push(`${s.name}${labels} ${value}`);
   }
 
   return lines.join('\n');
