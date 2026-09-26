@@ -8,18 +8,14 @@
  *
  * Implements Double Submit Cookie pattern for CSRF protection
  *
- * #1992: this module is imported by proxy.ts (edge runtime), so it must not
- * pull in Node's 'crypto'. The WebCrypto global is available in both the
- * edge runtime and Node 18+, and the double-submit comparison is done
- * directly on the tokens in constant time — the previous SHA-256 pre-hash
- * added no security for attacker-controlled values, it only forced the
- * Node crypto dependency into the edge bundle.
+ * #1992: this module runs inside the edge proxy bundle as well as Node
+ * route handlers, so it must not import Node's `crypto` — that dragged the
+ * entire Node module into the edge bundle for every request. All entropy
+ * now comes from the WebCrypto global, which exists in both runtimes.
  */
 
 function getRandomValues(length: number): Uint8Array {
-  const bytes = new Uint8Array(length);
-  globalThis.crypto.getRandomValues(bytes);
-  return bytes;
+  return globalThis.crypto.getRandomValues(new Uint8Array(length));
 }
 
 const CSRF_COOKIE_NAME = 'nucrm_csrf_token';
@@ -111,18 +107,21 @@ export function validateCsrfToken(
   if (!cookieToken || !headerToken) {
     return false;
   }
-  
-  // Constant-time comparison to prevent timing attacks (#1992: direct
-  // compare — no Node-crypto hashing needed for the double-submit check).
+
+  // Constant-time comparison to prevent timing attacks. #1992: the pre-
+  // comparison SHA-256 (via Node crypto) only existed to normalize length for
+  // timingSafeEqual; both values here are same-origin double-submit copies of
+  // a 64-hex-char token, so a direct length-checked XOR walk is equivalent
+  // and stays edge-compatible (no Node crypto in the proxy bundle).
   if (cookieToken.length !== headerToken.length) {
     return false;
   }
-  
+
   let result = 0;
   for (let i = 0; i < cookieToken.length; i++) {
     result |= cookieToken.charCodeAt(i) ^ headerToken.charCodeAt(i);
   }
-  
+
   return result === 0;
 }
 
