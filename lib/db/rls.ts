@@ -17,9 +17,12 @@
  * while never leaking to another request's connection checkout.
  */
 
-import { db } from '@/drizzle/db';
+import { db, type DbClient } from '@/drizzle/db';
 import { sql } from 'drizzle-orm';
 import { setTenantCarrier, clearTenantCarrier } from '@/lib/db/tenant-carrier';
+
+/** Drizzle transaction handle as passed to `with*Context` callbacks and `set*(…, tx)`. */
+type RlsTransaction = Parameters<Parameters<DbClient['transaction']>[0]>[0];
 
 /**
  * Test seam: unit tests mock `@/drizzle/db` with plain `{ select, update,
@@ -28,13 +31,11 @@ import { setTenantCarrier, clearTenantCarrier } from '@/lib/db/tenant-carrier';
  * `with*` helpers run `fn` directly against the mock. Production always has a
  * real pool, so this branch never triggers outside tests.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function isMockClient(client: any): boolean {
+function isMockClient(client: { execute?: unknown } | undefined): boolean {
   return !client || typeof client.execute !== 'function';
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function hasTransaction(client: any): boolean {
+function hasTransaction(client: { transaction?: unknown }): boolean {
   return !!client && typeof client.transaction === 'function';
 }
 
@@ -46,8 +47,7 @@ function hasTransaction(client: any): boolean {
  * - lib/tenant/context.ts (2 sites) — no tx, session-scoped
  * - lib/notifications.ts (via withTenantContext) — tx-scoped
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function setTenantContext(tenantId: string, userId: string, tx?: any): Promise<void> {
+export async function setTenantContext(tenantId: string, userId: string, tx?: RlsTransaction): Promise<void> {
   if (!tenantId || !userId) {
     throw new Error('[RLS] setTenantContext called with empty tenantId or userId — refusing to set empty context');
   }
@@ -75,8 +75,7 @@ export async function setTenantContext(tenantId: string, userId: string, tx?: an
  * Clear tenant context — call at end of request if needed for defence-in-depth.
  * Not strictly required when PgBouncer runs DISCARD ALL on connection return.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function clearTenantContext(tx?: any): Promise<void> {
+export async function clearTenantContext(tx?: RlsTransaction): Promise<void> {
   try {
     const client = tx || db;
     clearTenantCarrier();
@@ -97,8 +96,7 @@ export async function clearTenantContext(tx?: any): Promise<void> {
 export async function withTenantContext<T>(
   tenantId: string,
   userId: string,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  fn: (tx: any) => Promise<T>
+  fn: (tx: RlsTransaction) => Promise<T>
 ): Promise<T> {
   if (!tenantId || !userId) {
     throw new Error('[RLS] withTenantContext called with empty tenantId or userId');
@@ -142,8 +140,7 @@ export const SUPER_ADMIN_GUC = 'app.is_super_admin';
  * `lib/db/request-connection.ts`) clears this GUC too, so a leaked context
  * cannot survive a checkout under PgBouncer.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function setSuperAdminContext(tx?: any): Promise<void> {
+export async function setSuperAdminContext(tx?: RlsTransaction): Promise<void> {
   const client = tx || db;
   if (isMockClient(client)) return;
   const isLocal = tx ? sql`true` : sql`false`;
@@ -160,8 +157,7 @@ export async function setSuperAdminContext(tx?: any): Promise<void> {
  * cannot leak to unrelated queries and is dropped at COMMIT/ROLLBACK.
  */
 export async function withSecurityContext<T>(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  fn: (tx: any) => Promise<T>
+  fn: (tx: RlsTransaction) => Promise<T>
 ): Promise<T> {
   if (!hasTransaction(db)) return fn(db as unknown as Parameters<typeof fn>[0]);
   return await db.transaction(async (tx) => {
@@ -179,8 +175,7 @@ export async function withSecurityContext<T>(
  * identity; tenant-scoped tables stay closed because app.current_tenant is
  * still empty. That is exactly the reach a fresh login should have.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function setUserContext(userId: string, tx?: any): Promise<void> {
+export async function setUserContext(userId: string, tx?: RlsTransaction): Promise<void> {
   if (!userId) {
     throw new Error('[RLS] setUserContext called with empty userId — refusing to set empty context');
   }
@@ -203,8 +198,7 @@ export async function setUserContext(userId: string, tx?: any): Promise<void> {
  * read, never UPDATE or DELETE, so a login request cannot mutate anyone's
  * account beyond what the *_own policies already allow.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function setAuthLookupContext(tx?: any): Promise<void> {
+export async function setAuthLookupContext(tx?: RlsTransaction): Promise<void> {
   const client = tx || db;
   if (isMockClient(client)) return;
   const isLocal = tx ? sql`true` : sql`false`;
@@ -216,8 +210,7 @@ export async function setAuthLookupContext(tx?: any): Promise<void> {
  * read privilege it needs. Keep the callback to the lookup itself.
  */
 export async function withAuthLookupContext<T>(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  fn: (tx: any) => Promise<T>
+  fn: (tx: RlsTransaction) => Promise<T>
 ): Promise<T> {
   if (!hasTransaction(db)) return fn(db as unknown as Parameters<typeof fn>[0]);
   return await db.transaction(async (tx) => {
@@ -233,8 +226,7 @@ export async function withAuthLookupContext<T>(
  */
 export async function withUserContext<T>(
   userId: string,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  fn: (tx: any) => Promise<T>
+  fn: (tx: RlsTransaction) => Promise<T>
 ): Promise<T> {
   if (!userId) {
     throw new Error('[RLS] withUserContext called with empty userId');
@@ -269,8 +261,7 @@ export async function withUserContext<T>(
  */
 export async function withAuthResolutionContext<T>(
   userId: string,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  fn: (tx: any) => Promise<T>
+  fn: (tx: RlsTransaction) => Promise<T>
 ): Promise<T> {
   if (!userId) {
     throw new Error('[RLS] withAuthResolutionContext called with empty userId');
