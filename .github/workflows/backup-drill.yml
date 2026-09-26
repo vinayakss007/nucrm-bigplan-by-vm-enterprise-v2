@@ -55,12 +55,12 @@ jobs:
       - name: RLS-safe backup
         run: |
           BACKUP_DATABASE_URL="$PGURL" BACKUP_DIR="$RUNNER_TEMP/backups" bash scripts/backup-rls-live.sh
-          ls -la "$RUNNER_TEMP/backups"
+          find "$RUNNER_TEMP/backups" -mindepth 1 -maxdepth 2 -printf "%M %p\n" | sort -k2
         shell: bash
 
       - name: Restore drill (row counts must match manifest)
         run: |
-          D=$(ls -d "$RUNNER_TEMP"/backups/*/ | head -1)
+          D=$(find "$RUNNER_TEMP/backups" -mindepth 1 -maxdepth 1 -type d | sort | head -1); D="$D/"
           DRILL_DATABASE_URL="$PGURL" bash scripts/restore-drill.sh "$D"
         shell: bash
 
