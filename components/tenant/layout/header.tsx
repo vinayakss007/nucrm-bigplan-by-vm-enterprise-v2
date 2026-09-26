@@ -14,6 +14,7 @@ import { clientLogError } from '@/lib/client-logger';
 import Link from 'next/link';
 import { cn, formatCurrency, getInitials, formatRelativeTime, toSnakeCase } from '@/lib/utils';
 import { confirmThen } from '@/components/ui/confirm-dialog';
+import BugReportButton from '@/components/shared/bug-report-button';
 import type {
   TenantInfo, ProfileInfo, HeaderNotification, HeaderSearchResults,
 } from './types';
@@ -226,6 +227,9 @@ export default function TenantHeader({ tenant, profile, roleSlug, onToggleSideba
 
       {/* Right side */}
       <div className="flex items-center gap-1 ml-auto shrink-0">
+        {/* Beta bug-report button — files straight to the operator's inbox (#beta) */}
+        <BugReportButton />
+
         {/* Refresh button */}
         <button onClick={()=>router.refresh()} title="Refresh page"
           type="button"
