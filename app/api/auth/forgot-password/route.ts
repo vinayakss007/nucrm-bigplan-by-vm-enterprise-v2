@@ -5,7 +5,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { validateBody, readJsonBody } from '@/lib/api/validate';
+import { validateBody, readJsonBody, InvalidJsonBodyError } from '@/lib/api/validate';
 import { db } from '@/drizzle/db';
 import { users, passwordResets } from '@/drizzle/schema';
 import { eq, sql } from 'drizzle-orm';
@@ -106,6 +106,12 @@ export async function POST(request: NextRequest) {
  
  
   } catch (err) {
+    // A malformed JSON body is a client error, not a server fault: answer 400
+    // without logging it to Sentry. This never reveals whether the email
+    // exists (the body wasn't even parsed to an email), so it's enumeration-safe.
+    if (err instanceof InvalidJsonBodyError) {
+      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+    }
     void logError({ error: err, context: 'auth/forgot-password POST', requestUrl: request.url, requestMethod: request.method });
     await normalizeTiming(startedAt);
     return NextResponse.json({ ok: true }); // Don't reveal errors

@@ -121,7 +121,6 @@
   "lib/api/concurrency.ts": 1,
   "lib/api/validate.ts": 3,
   "lib/api-error.ts": 3,
-  "lib/auth/api-handlers.ts": 2,
   "lib/automation/engine.ts": 8,
   "lib/automation/types.ts": 4,
   "lib/automation/workflows.ts": 5,
