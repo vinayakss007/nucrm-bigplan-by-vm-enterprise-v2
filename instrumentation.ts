@@ -8,6 +8,11 @@ import * as Sentry from "@sentry/nextjs";
 export async function register() {
   if (process.env['NEXT_RUNTIME'] === "nodejs") {
     await import("./sentry.server.config");
+    // #2123: pull secret files (bind-mounted /run/secrets) into process.env
+    // before anything reads configuration, so compose can run the app without
+    // secret values in container metadata (visible via `docker inspect`).
+    const { materializeFileSecrets } = await import("./lib/secrets-file");
+    materializeFileSecrets();
     const { initEnv } = await import("./lib/env");
     initEnv();
 
