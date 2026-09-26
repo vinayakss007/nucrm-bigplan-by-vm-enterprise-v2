@@ -41,6 +41,18 @@ vi.mock('pg-boss', () => ({
       stop: mockClose,
     };
   }),
+  // pg-boss v12 ships BOTH a default export and the named `PgBoss` class
+  // (dist/index.js: `export class PgBoss` + `export default Boss`). lib/queue
+  // now uses the typed named export, so the mock must mirror the real shape.
+  PgBoss: vi.fn(function MockPgBoss() {
+    return {
+      start: mockStart,
+      send: mockSend,
+      work: mockWork,
+      createQueue: mockCreateQueue,
+      stop: mockClose,
+    };
+  }),
 }));
 
 process.env.REDIS_URL = 'redis://localhost:6379';
