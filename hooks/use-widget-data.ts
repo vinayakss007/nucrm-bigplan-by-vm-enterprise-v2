@@ -27,6 +27,14 @@ export function useWidgetData<T = unknown>(
   // newer fetch started while it was in flight (replaces the old
   // AbortController, which the shared coordinator makes impossible).
   const seqRef = useRef(0)
+  // A late fetch resolving after unmount (or after jsdom teardown in tests)
+  // must not call setState — React logs it as an unhandled rejection.
+  const mountedRef = useRef(true)
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => { mountedRef.current = false }
+  }, [])
 
   const doFetch = useCallback(async (isBackground = false) => {
     const seq = ++seqRef.current
@@ -60,11 +68,11 @@ export function useWidgetData<T = unknown>(
         }))
       } catch { /* Fallback to default on corrupted storage data */ }
 
-      if (seq === seqRef.current) {
-        setState({ data: payload, loading: false, error: null, stale: false })
+      if (seq === seqRef.current && mountedRef.current) {
+        setState({ data: payload as T, loading: false, error: null, stale: false })
       }
     } catch (err) {
-      if (seq !== seqRef.current) return
+      if (seq !== seqRef.current || !mountedRef.current) return
       if (!isBackground) {
         setState(prev => ({
           ...prev, error: (err as Error).message, loading: false,
