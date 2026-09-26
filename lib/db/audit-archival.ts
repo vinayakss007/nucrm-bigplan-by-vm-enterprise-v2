@@ -170,11 +170,15 @@ export async function archiveAuditLogs(
     await sink.write(key, compressed);
     totalBytes += compressed.byteLength;
 
-    // Delete archived rows by ID in a transaction
+    // Delete archived rows by ID in a transaction. Migration 0042 protects
+    // audit_logs with an append-only DELETE trigger, so the purge must opt in
+    // with SET LOCAL in the SAME transaction as the delete — without it the
+    // archival job fails with a check_violation on the first batch.
     const ids = batchRows.map((r) => r.id);
-    await dbClient.execute(
-      sql`DELETE FROM audit_logs WHERE id = ANY(${ids})`,
-    );
+    await dbClient.transaction(async (tx) => {
+      await tx.execute(sql`SET LOCAL app.allow_audit_purge = 'on'`);
+      await tx.execute(sql`DELETE FROM audit_logs WHERE id = ANY(${ids})`);
+    });
 
     archived += batchRows.length;
   }
