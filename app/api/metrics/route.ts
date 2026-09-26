@@ -5,8 +5,7 @@
  */
 import { NextRequest } from 'next/server';
 import { db } from '@/drizzle/db';
-import { contacts, leads, deals, companies, tasks, activities, tenants, users, dealStages, pipelines } from '@/drizzle/schema';
-import { eq, and, isNull, gte, sql, count, sum, ilike } from 'drizzle-orm';
+import { sql } from 'drizzle-orm';
 import { exportPrometheusMetrics as exportAppMetrics } from '@/lib/metrics';
 import IORedis from 'ioredis';
 
@@ -100,61 +99,55 @@ export async function GET(request: NextRequest) {
     const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
     // ── CRM Counts ─────────────────────────────────────────────
-    // All queries fire concurrently behind one shared deadline (#2118, Sentry
-    // NUCRM-S): they used to run 15-in-a-row, stretching the scrape until it
-    // failed outright when the pool was slow.
+    // #2146: ONE aggregate statement instead of 15 queries per scrape. The
+    // Promise.all fan-out (#2118) fixed scrape timeouts but Sentry still
+    // flagged every scrape as N+1 (1636 events) and each subquery took its
+    // own pool checkout, feeding pool pressure (#2145). Same values, same
+    // per-section deadline so a slow count still cannot 500 the scrape.
     try {
-      const [
-        contactsCount, leadsCount, dealsCount, companiesCount,
-        pendingTasks, activitiesCount, activeTenants, usersCount,
-        tasksCompleted,
-        contactsCreated, leadsCreated, dealsCreated,
-        dealsWon, dealsLost, pipelineValue,
-      ] = await withTimeout(Promise.all([
-        db.select({ value: count() }).from(contacts).where(isNull(contacts.deletedAt)).then(r => r[0]!.value),
-        db.select({ value: count() }).from(leads).where(isNull(leads.deletedAt)).then(r => r[0]!.value),
-        db.select({ value: count() }).from(deals).where(isNull(deals.deletedAt)).then(r => r[0]!.value),
-        db.select({ value: count() }).from(companies).where(isNull(companies.deletedAt)).then(r => r[0]!.value),
-        db.select({ value: count() }).from(tasks).where(and(eq(tasks.status, 'pending'), isNull(tasks.deletedAt))).then(r => r[0]!.value),
-        db.select({ value: count() }).from(activities).then(r => r[0]!.value),
-        db.select({ value: count() }).from(tenants).where(eq(tenants.status, 'active')).then(r => r[0]!.value),
-        db.select({ value: count() }).from(users).then(r => r[0]!.value),
-        db.select({ value: count() }).from(tasks).where(and(eq(tasks.status, 'completed'), isNull(tasks.deletedAt))).then(r => r[0]!.value),
-        db.select({ value: count() }).from(contacts).where(and(gte(contacts.createdAt, yesterday), isNull(contacts.deletedAt))).then(r => r[0]!.value),
-        db.select({ value: count() }).from(leads).where(and(gte(leads.createdAt, yesterday), isNull(leads.deletedAt))).then(r => r[0]!.value),
-        db.select({ value: count() }).from(deals).where(and(gte(deals.createdAt, yesterday), isNull(deals.deletedAt))).then(r => r[0]!.value),
-        db.select({ value: count() }).from(deals)
-          .innerJoin(dealStages, eq(dealStages.id, deals.stageId))
-          .innerJoin(pipelines, eq(pipelines.id, deals.pipelineId))
-          .where(and(isNull(deals.deletedAt), ilike(dealStages.name, 'won')))
-          .then(r => Number(r[0]?.value ?? 0)),
-        db.select({ value: count() }).from(deals)
-          .innerJoin(dealStages, eq(dealStages.id, deals.stageId))
-          .innerJoin(pipelines, eq(pipelines.id, deals.pipelineId))
-          .where(and(isNull(deals.deletedAt), ilike(dealStages.name, 'lost')))
-          .then(r => Number(r[0]?.value ?? 0)),
-        db.select({ total: sum(sql`${deals.amount}::numeric`) })
-          .from(deals)
-          .innerJoin(dealStages, eq(dealStages.id, deals.stageId))
-          .where(and(isNull(deals.deletedAt), sql`lower(${dealStages.name}) != 'lost'`))
-          .then(r => parseFloat(r[0]?.total ?? '0')),
-      ]), 'counts');
-
-      push(metrics, 'nucrm_contacts_total', 'Total contacts in CRM', 'gauge', Number(contactsCount));
-      push(metrics, 'nucrm_leads_total', 'Total leads (not deleted)', 'gauge', Number(leadsCount));
-      push(metrics, 'nucrm_deals_total', 'Total deals (not deleted)', 'gauge', Number(dealsCount));
-      push(metrics, 'nucrm_companies_total', 'Total companies (not deleted)', 'gauge', Number(companiesCount));
-      push(metrics, 'nucrm_tasks_pending_total', 'Pending incomplete tasks', 'gauge', Number(pendingTasks));
-      push(metrics, 'nucrm_activities_total', 'Total activities logged', 'gauge', Number(activitiesCount));
-      push(metrics, 'nucrm_tenants_total', 'Active tenants', 'gauge', Number(activeTenants));
-      push(metrics, 'nucrm_users_total', 'Total users', 'gauge', Number(usersCount));
-      push(metrics, 'nucrm_tasks_completed_total', 'Completed tasks', 'counter', Number(tasksCompleted));
-      push(metrics, 'nucrm_contacts_created_total', 'Contacts created in last 24h', 'counter', Number(contactsCreated));
-      push(metrics, 'nucrm_leads_created_total', 'Leads created in last 24h', 'counter', Number(leadsCreated));
-      push(metrics, 'nucrm_deals_created_total', 'Deals created in last 24h', 'counter', Number(dealsCreated));
-      push(metrics, 'nucrm_deals_won_total', 'Deals marked as won', 'gauge', dealsWon);
-      push(metrics, 'nucrm_deals_lost_total', 'Deals marked as lost', 'gauge', dealsLost);
-      push(metrics, 'nucrm_deals_value_total', 'Total pipeline value (USD)', 'gauge', pipelineValue);
+      const countsRes = await withTimeout(db.execute(sql`
+        SELECT
+          (SELECT count(*)::int FROM contacts  WHERE deleted_at IS NULL)                          AS contacts_total,
+          (SELECT count(*)::int FROM leads     WHERE deleted_at IS NULL)                          AS leads_total,
+          (SELECT count(*)::int FROM deals     WHERE deleted_at IS NULL)                          AS deals_total,
+          (SELECT count(*)::int FROM companies WHERE deleted_at IS NULL)                          AS companies_total,
+          (SELECT count(*)::int FROM tasks     WHERE status = 'pending'   AND deleted_at IS NULL) AS tasks_pending,
+          (SELECT count(*)::int FROM tasks     WHERE status = 'completed' AND deleted_at IS NULL) AS tasks_completed,
+          (SELECT count(*)::int FROM activities)                                                  AS activities_total,
+          (SELECT count(*)::int FROM tenants WHERE status = 'active')                             AS tenants_active,
+          (SELECT count(*)::int FROM users)                                                       AS users_total,
+          (SELECT count(*)::int FROM contacts WHERE created_at >= ${yesterday} AND deleted_at IS NULL) AS contacts_created_24h,
+          (SELECT count(*)::int FROM leads    WHERE created_at >= ${yesterday} AND deleted_at IS NULL) AS leads_created_24h,
+          (SELECT count(*)::int FROM deals    WHERE created_at >= ${yesterday} AND deleted_at IS NULL) AS deals_created_24h,
+          (SELECT count(*)::int FROM deals d
+             JOIN deal_stages s ON s.id = d.stage_id
+             JOIN pipelines  p ON p.id = d.pipeline_id
+            WHERE d.deleted_at IS NULL AND s.name ILIKE 'won')                                   AS deals_won,
+          (SELECT count(*)::int FROM deals d
+             JOIN deal_stages s ON s.id = d.stage_id
+             JOIN pipelines  p ON p.id = d.pipeline_id
+            WHERE d.deleted_at IS NULL AND s.name ILIKE 'lost')                                  AS deals_lost,
+          (SELECT COALESCE(sum(d.amount::numeric), 0)::text FROM deals d
+             JOIN deal_stages s ON s.id = d.stage_id
+            WHERE d.deleted_at IS NULL AND lower(s.name) != 'lost')                              AS pipeline_value
+      `), 'counts');
+      const c = (countsRes.rows[0] ?? {}) as Record<string, unknown>;
+      const num = (key: string): number => Number(c[key] ?? 0);
+      push(metrics, 'nucrm_contacts_total', 'Total contacts in CRM', 'gauge', num('contacts_total'));
+      push(metrics, 'nucrm_leads_total', 'Total leads (not deleted)', 'gauge', num('leads_total'));
+      push(metrics, 'nucrm_deals_total', 'Total deals (not deleted)', 'gauge', num('deals_total'));
+      push(metrics, 'nucrm_companies_total', 'Total companies in CRM', 'gauge', num('companies_total'));
+      push(metrics, 'nucrm_tasks_pending_total', 'Pending incomplete tasks', 'gauge', num('tasks_pending'));
+      push(metrics, 'nucrm_activities_total', 'Total activities logged', 'gauge', num('activities_total'));
+      push(metrics, 'nucrm_tenants_total', 'Active tenants', 'gauge', num('tenants_active'));
+      push(metrics, 'nucrm_users_total', 'Total users', 'gauge', num('users_total'));
+      push(metrics, 'nucrm_tasks_completed_total', 'Completed tasks', 'counter', num('tasks_completed'));
+      push(metrics, 'nucrm_contacts_created_total', 'Contacts created in last 24h', 'counter', num('contacts_created_24h'));
+      push(metrics, 'nucrm_leads_created_total', 'Leads created in last 24h', 'counter', num('leads_created_24h'));
+      push(metrics, 'nucrm_deals_created_total', 'Deals created in last 24h', 'counter', num('deals_created_24h'));
+      push(metrics, 'nucrm_deals_won_total', 'Deals marked as won', 'gauge', num('deals_won'));
+      push(metrics, 'nucrm_deals_lost_total', 'Deals marked as lost', 'gauge', num('deals_lost'));
+      push(metrics, 'nucrm_deals_value_total', 'Total pipeline value (USD)', 'gauge', num('pipeline_value'));
       push(metrics, 'nucrm_metrics_counts_up', 'CRM counts section emitted fresh values', 'gauge', 1);
     } catch {
       push(metrics, 'nucrm_metrics_counts_up', 'CRM counts section emitted fresh values', 'gauge', 0);
