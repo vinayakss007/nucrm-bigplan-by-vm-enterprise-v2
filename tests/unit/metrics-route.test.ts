@@ -8,6 +8,21 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const mockExecute = vi.fn();
 let failSelect = false;
 
+// Mock Redis so the scrape has a deterministic reachable backend — before
+// this the suite relied on localhost:6379 being DOWN, which hid that
+// nucrm_cache_up was only ever emitted on failure (stale-gauge bug).
+vi.mock('ioredis', () => ({
+  default: class MockIORedis {
+    async connect() { return this; }
+    async info() { return '# Server\r\nuptime_in_seconds:3600\r\n# Clients\r\nconnected_clients:2\r\n# Memory\r\nused_memory:123456\r\nStats\r\nkeyspace_hits:100\r\nkeyspace_misses:20'; }
+    async dbsize() { return 42; }
+    async llen() { return 0; }
+    async zcount() { return 0; }
+    async get() { return null; }
+    disconnect() {}
+  },
+}));
+
 function makeQueryBuilder(): { then: (f: (v: unknown[]) => unknown, r?: (e: unknown) => unknown) => Promise<unknown> } {
   const builder: Record<string, unknown> = {};
   for (const m of ['from', 'where', 'innerJoin', 'leftJoin', 'orderBy', 'groupBy', 'limit', 'offset', 'values', 'returning', 'set']) {
@@ -24,13 +39,6 @@ vi.mock('@/drizzle/db', () => ({
   db: {
     select: () => makeQueryBuilder(),
     execute: (...args: unknown[]) => mockExecute(...args),
-  },
-}));
-
-vi.mock('ioredis', () => ({
-  default: class MockRedis {
-    async connect() { throw new Error('redis down'); }
-    disconnect() {}
   },
 }));
 
@@ -56,7 +64,9 @@ describe('GET /api/metrics section isolation (#2118)', () => {
     expect(body).toContain('nucrm_db_pool_up 1');
     expect(body).toContain('nucrm_metrics_counts_up 1');
     expect(body).toContain('nucrm_contacts_total 7');
-    expect(body).toContain('nucrm_cache_up 0');
+    expect(body).toContain('nucrm_cache_up 1');
+    expect(body).toContain('nucrm_cache_size 42');
+    expect(body).toContain('nucrm_cache_hit_rate 83');
   });
 
   it('gauge values move when pool state changes', async () => {

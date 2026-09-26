@@ -167,6 +167,10 @@ export async function GET(request: NextRequest) {
         return line ? parseInt(line.split(':')[1] || '0', 10) : 0;
       };
       const dbsize = await redisConn.dbsize();
+      // Emit 1 on success too: a gauge that only exists when Redis is down
+      // goes stale in Prometheus between scrapes, so `nucrm_cache_up == 0`
+      // alerts depend on the last bad sample instead of the current state.
+      push(metrics, 'nucrm_cache_up', 'Whether Redis is reachable', 'gauge', 1);
       push(metrics, 'nucrm_cache_size', 'Total Redis keys (cache entries)', 'gauge', dbsize);
       push(metrics, 'nucrm_cache_hits_total', 'Redis keyspace hits', 'counter', getVal('keyspace_hits'));
       push(metrics, 'nucrm_cache_misses_total', 'Redis keyspace misses', 'counter', getVal('keyspace_misses'));
