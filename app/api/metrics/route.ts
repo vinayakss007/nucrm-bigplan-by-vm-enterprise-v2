@@ -189,8 +189,11 @@ export async function GET(request: NextRequest) {
       push(metrics, 'nucrm_redis_connected_clients', 'Redis connected clients', 'gauge', getVal('connected_clients'));
       push(metrics, 'nucrm_redis_uptime_seconds', 'Redis uptime', 'counter', getVal('uptime_in_seconds'));
 
-      // Queue job counts from Redis (known BullMQ queues)
-      const knownQueues = ['send-email', 'send-notification', 'send-bulk-emails', 'run-automation', 'send-lead-warming', 'webhooks'];
+      // Queue job counts from Redis (BullMQ queues). Kept in sync with
+      // worker.ts QUEUE_NAMES — the previous 6-entry list silently missed
+      // whatsapp-webhook, export-csv, contact-import and tenant-cleanup,
+      // so pileups there were invisible in Prometheus.
+      const knownQueues = ['send-email', 'send-notification', 'send-bulk-emails', 'run-automation', 'send-lead-warming', 'webhooks', 'whatsapp-webhook', 'export-csv', 'contact-import', 'tenant-cleanup'];
       for (const queue of knownQueues) {
         try {
           const waiting = await redisConn.llen(`bull:${queue}:wait`);

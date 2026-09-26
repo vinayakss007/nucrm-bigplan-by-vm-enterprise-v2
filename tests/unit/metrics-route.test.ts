@@ -18,7 +18,7 @@ vi.mock('ioredis', () => ({
     async connect() { return this; }
     async info() { return '# Server\r\nuptime_in_seconds:3600\r\n# Clients\r\nconnected_clients:2\r\n# Memory\r\nused_memory:123456\r\nStats\r\nkeyspace_hits:100\r\nkeyspace_misses:20'; }
     async dbsize() { return 42; }
-    async llen() { return 0; }
+    async llen(key: string) { return key === 'bull:tenant-cleanup:wait' ? 5 : 0; }
     async zcount() { return 0; }
     async get() { return redisMock.heartbeat; }
     disconnect() {}
@@ -70,6 +70,9 @@ describe('GET /api/metrics section isolation (#2118)', () => {
     expect(body).toContain('nucrm_cache_up 1');
     expect(body).toContain('nucrm_cache_size 42');
     expect(body).toContain('nucrm_cache_hit_rate 83');
+    // tenant-cleanup is one of the four queues worker.ts declares but the
+    // old knownQueues list omitted — their pileups were invisible.
+    expect(body).toContain('nucrm_queue_jobs_total{queue="tenant-cleanup",status="waiting"} 5');
   });
 
   it('gauge values move when pool state changes', async () => {
