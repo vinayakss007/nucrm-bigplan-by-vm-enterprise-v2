@@ -22,7 +22,7 @@ import { installDefaultModules } from '@/lib/modules/auto-install';
 import { withSecurityContext, withTenantContext, withUserContext, withAuthLookupContext, setTenantContext } from '@/lib/db/rls';
 import { isBlocked, recordFailedAttempt, recordSuccessfulLogin } from '@/lib/security/brute-force';
 import { getClientIp } from '@/lib/client-ip';
-import { validateBody } from '@/lib/api/validate';
+import { validateBody, readJsonBody, InvalidJsonBodyError } from '@/lib/api/validate';
 import { loginSchema, signupSchema } from '@/lib/api/schemas';
 import { redactEmail } from '@/lib/logger/pii';
 
@@ -74,7 +74,7 @@ export async function POST_login(request: NextRequest) {
         return NextResponse.redirect(new URL('/auth/login?error=missing_fields', request.url));
       }
     } else {
-      const body = await request.json();
+      const body = await readJsonBody(request);
       const parsed = validateBody(loginSchema, body);
       if (parsed instanceof NextResponse) return parsed;
       email = parsed.data.email;
@@ -211,8 +211,10 @@ export async function POST_login(request: NextRequest) {
     return response;
   
   
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err:any) {
+  } catch (err) {
+    if (err instanceof InvalidJsonBodyError) {
+      return loginRespond(request, isForm, { error: 'Invalid JSON body' }, 400);
+    }
     devLogger.error(err as Error, '[auth/login]');
     return loginRespond(request, isForm, { error:'Login failed. Please try again.' }, 500);
   }
@@ -249,7 +251,7 @@ export async function POST_signup(request: NextRequest) {
       return NextResponse.json({ error: 'Signups are currently disabled. Please contact support.' }, { status: 403 });
     }
 
-    const body = await request.json();
+    const body = await readJsonBody(request);
     const parsed = validateBody(signupSchema, body);
     if (parsed instanceof NextResponse) return parsed;
     const { email, password, full_name: fullName, workspace_name: workspaceName } = parsed.data;
@@ -464,8 +466,10 @@ export async function POST_signup(request: NextRequest) {
     return signupResponse;
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err:any) {
+  } catch (err) {
+    if (err instanceof InvalidJsonBodyError) {
+      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+    }
     devLogger.error(err as Error, '[auth/signup]');
     return NextResponse.json({ error: 'Signup failed. Please try again.' }, { status:500 });
   }
