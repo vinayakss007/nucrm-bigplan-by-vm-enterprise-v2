@@ -24,6 +24,7 @@
  */
 
 import { getPool } from './pool';
+import { isTransientError } from './retry';
 
 /**
  * Pre-establish connections by acquiring and releasing clients.
@@ -33,37 +34,62 @@ import { getPool } from './pool';
  * @returns Number of connections successfully warmed
  */
 export async function warmPool(count?: number, timeoutMs = 10_000): Promise<number> {
-  const pool = getPool();
+  let pool: ReturnType<typeof getPool>;
+  try {
+    pool = getPool();
+  } catch (err) {
+    // Pool cannot even be constructed (e.g. DATABASE_URL missing/invalid at
+    // boot). This is a configuration error — retrying cannot help.
+    console.warn('[pool-warmup] Skipped — pool unavailable:', err instanceof Error ? err.message : err);
+    return 0;
+  }
   const poolMax = (pool as unknown as { options?: { max?: number } }).options?.max ?? 20;
   const target = count ?? Math.min(Math.ceil(poolMax / 2), 5);
 
   const deadline = Date.now() + timeoutMs;
-  let warmed = 0;
+  let delay = 250;
 
-  // Acquire connections in parallel (up to target), then release them.
-  const promises = Array.from({ length: target }, async () => {
-    if (Date.now() > deadline) return false;
-    try {
-      const client = await pool.connect();
-      // Run a trivial query to ensure the connection is fully established
-      // (not just TCP-connected but also authenticated and ready).
-      await client.query('SELECT 1');
-      client.release();
-      warmed++;
-      return true;
-    } catch (err) {
-      console.warn('[pool-warmup] Failed to warm a connection:', err instanceof Error ? err.message : err);
-      return false;
+  // #674 §1: when Postgres starts *after* the app (VM reboot / deploy race),
+  // the first round fails with ECONNREFUSED / 57P03 on every connection.
+  // Retry the whole round with exponential backoff until the deadline so the
+  // pool is warm by the time the readiness probe passes, instead of leaving
+  // the first N user requests to absorb connect latency and errors.
+  for (;;) {
+    let warmed = 0;
+    let sawTransient = false;
+
+    // Acquire connections in parallel (up to target), then release them.
+    const promises = Array.from({ length: target }, async () => {
+      if (Date.now() > deadline) return false;
+      try {
+        const client = await pool.connect();
+        // Run a trivial query to ensure the connection is fully established
+        // (not just TCP-connected but also authenticated and ready).
+        await client.query('SELECT 1');
+        client.release();
+        warmed++;
+        return true;
+      } catch (err) {
+        if (isTransientError(err)) sawTransient = true;
+        console.warn('[pool-warmup] Failed to warm a connection:', err instanceof Error ? err.message : err);
+        return false;
+      }
+    });
+
+    await Promise.allSettled(promises);
+
+    if (warmed > 0) {
+      console.log(`[pool-warmup] Warmed ${warmed}/${target} connections (pool max: ${poolMax})`);
+      return warmed;
     }
-  });
 
-  await Promise.allSettled(promises);
+    if (!sawTransient || Date.now() + delay > deadline) {
+      console.warn('[pool-warmup] Could not warm any connections — DB may be unreachable');
+      return 0;
+    }
 
-  if (warmed > 0) {
-    console.log(`[pool-warmup] Warmed ${warmed}/${target} connections (pool max: ${poolMax})`);
-  } else {
-    console.warn('[pool-warmup] Could not warm any connections — DB may be unreachable');
+    console.log(`[pool-warmup] Transient failures on all ${target} attempts — retrying in ${delay}ms`);
+    await new Promise(resolve => setTimeout(resolve, Math.min(delay, deadline - Date.now())));
+    delay = Math.min(delay * 2, 2_000);
   }
-
-  return warmed;
 }
