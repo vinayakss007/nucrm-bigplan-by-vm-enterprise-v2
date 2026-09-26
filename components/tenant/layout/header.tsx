@@ -10,6 +10,7 @@ import { Bell, Sun, Moon, Search, LogOut, X, Users, TrendingUp,
   Building2, Menu, ChevronDown, User, Settings, Crown, KeyRound, RefreshCw, UserCheck, CheckSquare,
   Mail, AlertCircle, Info } from 'lucide-react';
 import { useTheme } from 'next-themes';
+import { clientLogError } from '@/lib/client-logger';
 import Link from 'next/link';
 import { cn, formatCurrency, getInitials, formatRelativeTime, toSnakeCase } from '@/lib/utils';
 import { confirmThen } from '@/components/ui/confirm-dialog';
@@ -69,7 +70,7 @@ export default function TenantHeader({ tenant, profile, roleSlug, onToggleSideba
       setNotifications((notifData.data ?? []).slice(0, 8).map((n: Record<string, unknown>) => toSnakeCase(n as Record<string, unknown>)) as HeaderNotification[]);
     } catch (error) {
       if ((error as Error)?.name === 'AbortError') return;
-      console.error('[header] Failed to load notifications:', error);
+      clientLogError('header:notifications', error);
     }
   }, []);
 
@@ -86,7 +87,7 @@ export default function TenantHeader({ tenant, profile, roleSlug, onToggleSideba
       bc.addEventListener('message', e => { if (e.data==='logout') { router.push('/auth/login'); router.refresh(); } });
       return () => bc.close();
     } catch (error) {
-      console.error('[header] BroadcastChannel error:', error);
+      clientLogError('header:broadcast', error);
     }
   }, [router]);
 
@@ -116,7 +117,7 @@ export default function TenantHeader({ tenant, profile, roleSlug, onToggleSideba
   const logout = async () => {
     await confirmThen('Are you sure you want to log out?', async () => {
       await fetch('/api/auth/logout', { method: 'POST' });
-      try { new BroadcastChannel('nucrm_auth').postMessage('logout'); } catch (e) { console.error('[header] BroadcastChannel error:', e); }
+      try { new BroadcastChannel('nucrm_auth').postMessage('logout'); } catch (e) { clientLogError('header:broadcast', e); }
       router.push('/auth/login');
       router.refresh();
     }, 'danger_only', 'Log out');

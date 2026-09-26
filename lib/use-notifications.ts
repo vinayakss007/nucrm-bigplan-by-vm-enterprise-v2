@@ -7,6 +7,7 @@
 import { useState, useEffect, useRef } from 'react';
 import type { Socket } from 'socket.io-client';
 import { RealtimeEvent, REALTIME_PATH } from '@/lib/realtime/events';
+import { clientLogError } from '@/lib/client-logger';
 
 interface NotificationState {
   unreadCount: number;
@@ -92,10 +93,8 @@ export function useNotifications(enabled = true) {
             sseReconnectTimer = setTimeout(open, delay);
             sseAttempts++;
           };
-        } catch {
-          if (process.env.NODE_ENV === 'development') {
-            console.error('[useNotifications] Failed to create EventSource');
-          }
+        } catch (err) {
+          clientLogError('use-notifications:eventsource', err);
         }
       };
       open();

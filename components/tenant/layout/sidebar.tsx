@@ -12,11 +12,11 @@ import {
   Crown, ChevronDown, UserCheck, Trash2, Search, X, Menu, Zap, Book,
   LifeBuoy, FileText, ShoppingCart, FileSignature, RefreshCw, Library,
   Command, Star, Database, Upload, Workflow, Mail, MessageSquare,
-  Trophy, Wrench, Boxes, Sparkles, ListChecks, ArrowRightLeft, Tag, Filter, Send, ShieldCheck, FolderKanban,
-  Video, Activity, PieChart,
+  Trophy, Wrench, Boxes, Sparkles, ListChecks, ArrowRightLeft, Tag, Filter, Send, ShieldCheck, FolderKanban, Video, Activity, PieChart,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { clientLogError } from '@/lib/client-logger';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useModules } from '@/lib/modules/client-gate';
 import type { TenantInfo, ProfileInfo } from './types';
@@ -163,7 +163,7 @@ const SECTION_KEY = 'nucrm.sidebar.sections';
 
 export default function TenantSidebar({ tenant, _profile, _roleSlug, permissions, isAdmin, isSuperAdmin, collapsed=false, onToggle, onMobileClose }: Props) {
   const pathname = usePathname();
-  const { hasModule, loaded: modulesLoaded } = useModules();
+  const { hasModule } = useModules();
   const [query, setQuery] = useState('');
   const [pinned, setPinned] = useState<string[]>([]);
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
@@ -172,7 +172,7 @@ export default function TenantSidebar({ tenant, _profile, _roleSlug, permissions
     try {
       const prefs = _profile?.metadata?.prefs;
       if (Array.isArray(prefs?.hidden_nav_items)) return prefs.hidden_nav_items;
-    } catch (e) { console.error('[sidebar] Error:', e); }
+    } catch (e) { clientLogError('sidebar', e); }
     return [];
   })();
   const [hiddenItems, setHiddenItems] = useState<string[]>(initialHidden);
@@ -189,7 +189,7 @@ export default function TenantSidebar({ tenant, _profile, _roleSlug, permissions
           if (data?.sections) setOpenSections(data.sections);
           else setOpenSections(Object.fromEntries(NAV_SECTIONS.map(s => [s.id, !!s.defaultOpen])));
         }
-      } catch (e) { if (e instanceof DOMException && e.name === 'AbortError') return; console.error('[sidebar] Error:', e); }
+      } catch (e) { if (e instanceof DOMException && e.name === 'AbortError') return; clientLogError('sidebar', e); }
 
       // localStorage fallback for pinned
       try {
@@ -212,7 +212,7 @@ export default function TenantSidebar({ tenant, _profile, _roleSlug, permissions
             setHiddenItems(prefs.hidden_nav_items);
           }
         }
-      } catch (e) { if (e instanceof DOMException && e.name === 'AbortError') return; console.error('[sidebar] Error:', e); }
+      } catch (e) { if (e instanceof DOMException && e.name === 'AbortError') return; clientLogError('sidebar', e); }
     })();
     return () => abort.abort();
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -227,7 +227,7 @@ export default function TenantSidebar({ tenant, _profile, _roleSlug, permissions
           const prefs = JSON.parse(cached);
           setHiddenItems(Array.isArray(prefs?.hidden_nav_items) ? prefs.hidden_nav_items : []);
         }
-      } catch (e) { console.error('[sidebar] Error:', e); }
+      } catch (e) { clientLogError('sidebar', e); }
     };
     window.addEventListener('nucrm:prefs-changed', handler);
     return () => window.removeEventListener('nucrm:prefs-changed', handler);
@@ -267,13 +267,13 @@ export default function TenantSidebar({ tenant, _profile, _roleSlug, permissions
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(prefs),
       });
-    } catch (e) { console.error('[sidebar] Error:', e); }
+    } catch (e) { clientLogError('sidebar', e); }
   }, []);
 
   const toggleSection = (id: string) => {
     setOpenSections(prev => {
       const next = { ...prev, [id]: !prev[id] };
-      try { localStorage.setItem(SECTION_KEY, JSON.stringify(next)); } catch (e) { console.error('[sidebar] Error:', e); }
+      try { localStorage.setItem(SECTION_KEY, JSON.stringify(next)); } catch (e) { clientLogError('sidebar', e); }
       persistSidebarPrefs({ sections: next });
       return next;
     });
@@ -282,7 +282,7 @@ export default function TenantSidebar({ tenant, _profile, _roleSlug, permissions
   const togglePin = useCallback((href: string) => {
     setPinned(prev => {
       const next = prev.includes(href) ? prev.filter(h => h !== href) : [...prev, href];
-      try { localStorage.setItem(PIN_KEY, JSON.stringify(next)); } catch (e) { console.error('[sidebar] Error:', e); }
+      try { localStorage.setItem(PIN_KEY, JSON.stringify(next)); } catch (e) { clientLogError('sidebar', e); }
       persistSidebarPrefs({ pinned: next });
       return next;
     });

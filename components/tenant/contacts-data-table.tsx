@@ -13,7 +13,7 @@ import { cn, formatDate } from '@/lib/utils'
 import { confirmThen } from '@/components/ui/confirm-dialog'
 import { InlineEdit } from '@/components/ui/inline-edit'
 import { DataTable, ColumnDef, createSortableHeader } from '@/components/ui/data-table'
-import { clientLogWarn } from '@/lib/client-logger'
+import { clientLogWarn, clientLogError } from '@/lib/client-logger'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -122,7 +122,7 @@ export default function ContactsDataTable({
       setContacts(data.data ?? [])
       setTotal(data.total ?? 0)
     } catch (error) {
-      console.error('Failed to load contacts:', error)
+      clientLogError('contacts:load', error)
     }
     setSelectAllMatching(false)
     setLoading(false)
@@ -164,7 +164,7 @@ export default function ContactsDataTable({
         setTotal(data.total ?? 0)
       } catch (error) {
         if (error instanceof Error && error.name !== 'AbortError') {
-          console.error('Failed to load contacts:', error)
+          clientLogError('contacts:load', error)
         }
       }
       setLoading(false)
