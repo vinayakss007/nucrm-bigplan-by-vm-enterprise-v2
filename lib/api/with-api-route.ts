@@ -69,17 +69,33 @@ function normalizeMetricPath(pathname: string): string {
 }
 
 /**
- * A non-uuid path param that reaches `eq(table.id, params.id)` surfaces as
- * Postgres 22P02 "invalid input syntax for type uuid". Roughly thirty [id]
- * routes have no isEntityId() guard, so every probe of
- * /api/tenant/<thing>/foobar used to answer 500 and pollute Sentry with
- * client-input noise (Sentry NUCRM-Y/W/X class). Mapping it at the single
- * chokepoint to 404 matches the guarded routes' semantics: an id that is
- * not a uuid cannot name an existing entity.
+ * Map the Postgres constraint/cast errors that prove out as client problems
+ * when a handler let them escape, at the single route chokepoint, instead of
+ * a generic 500 (+ Sentry noise for user-input mistakes):
+ *
+ * - 22P02 uuid cast — ~30 [id] routes have no isEntityId() guard, so probing
+ *   /api/tenant/<thing>/foobar used to 500 (Sentry NUCRM-Y/W/X class, #2131).
+ *   A bad PATH id -> 404 (not a uuid cannot name an entity); on POST the bad
+ *   uuid is almost always a body reference -> 400.
+ * - 23505 unique_violation — the roles route already answers 409 for a
+ *   duplicate name; unhandled escapes elsewhere get the same status.
+ * - 23503 foreign_key_violation — create/update referencing a nonexistent
+ *   id is bad client input -> 400.
+ *
+ * Everything else (including 22P02 on non-uuid types) still propagates so
+ * real server bugs keep surfacing as 500s.
  */
-function isUuidCastError(err: unknown): boolean {
+function clientErrorFromDbCode(err: unknown, method: string): { status: number; message: string } | null {
   const e = err as { code?: string; message?: string } | null;
-  return e?.code === '22P02' && /uuid/i.test(String(e?.message));
+  const code = e?.code;
+  if (code === '22P02' && /uuid/i.test(String(e?.message))) {
+    return method === 'POST'
+      ? { status: 400, message: 'Invalid identifier in request body' }
+      : { status: 404, message: 'Not found' };
+  }
+  if (code === '23505') return { status: 409, message: 'Conflict: value already exists' };
+  if (code === '23503') return { status: 400, message: 'Invalid reference' };
+  return null;
 }
 
 /**
@@ -138,16 +154,10 @@ export function withApiRoute<C = unknown>(
       metricStatus = response instanceof Response ? response.status : 500;
       return response;
     } catch (err) {
-      if (isUuidCastError(err)) {
-        // POST failures are usually a bad uuid in the BODY (e.g. a bogus
-        // contactId on create) -> 400; other methods are path-param probes
-        // for an id that cannot name an entity -> 404.
-        const isPost = metricMethod === 'POST';
-        metricStatus = isPost ? 400 : 404;
-        return NextResponse.json(
-          { error: isPost ? 'Invalid identifier in request body' : 'Not found' },
-          { status: metricStatus },
-        );
+      const mapped = clientErrorFromDbCode(err, metricMethod);
+      if (mapped) {
+        metricStatus = mapped.status;
+        return NextResponse.json({ error: mapped.message }, { status: mapped.status });
       }
       throw err;
     } finally {

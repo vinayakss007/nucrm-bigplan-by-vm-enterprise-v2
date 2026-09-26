@@ -186,5 +186,21 @@ describe('withApiRoute pins the whole handler body (#1615)', () => {
       throw e;
     });
     await expect(Other(new Request('http://x/api/tenant/tasks/1', { method: 'GET' }) as never, undefined as never)).rejects.toThrow();
+
+    // Constraint escapes become proper client-error statuses too.
+    const mk = (code: string, msg: string) => withApiRoute(async () => {
+      const e = new Error(msg) as Error & { code: string };
+      e.code = code;
+      throw e;
+    });
+    const dup = await mk('23505', 'duplicate key value violates unique constraint "roles_name_tenant_key"')(
+      new Request('http://x/api/tenant/roles', { method: 'POST' }) as never, undefined as never);
+    expect(dup!.status).toBe(409);
+    expect(await dup!.json()).toEqual({ error: 'Conflict: value already exists' });
+
+    const fk = await mk('23503', 'violates foreign key constraint "tasks_contact_id_fkey"')(
+      new Request('http://x/api/tenant/tasks', { method: 'PUT' }) as never, undefined as never);
+    expect(fk!.status).toBe(400);
+    expect(await fk!.json()).toEqual({ error: 'Invalid reference' });
   });
 });
