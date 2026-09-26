@@ -1,12 +1,30 @@
 /* eslint-disable */
+// Baseline read-path load test (#2120: cookie+CSRF auth, live route paths).
+//
+// Run against the local dev app:   EMAIL=... PASSWORD=... k6 run tests/load/baseline.js
+// Run against the deployed app:    SESSIONS_FILE=./sessions.json BASE_URL=https://localhost \
+//                                    k6 run --insecure-skip-tls-verify tests/load/baseline.js
 import http from 'k6/http';
 import { check, sleep } from 'k6';
 import { Rate, Trend } from 'k6/metrics';
+import { BASE_URL, getSession, authHeaders } from './auth.js';
 
 const errorRate = new Rate('errors');
 const responseTime = new Trend('response_time');
 
-export const options = {
+export const options = __ENV.QUICK
+  ? {
+      // QUICK=1 [VUS=10 QUICK_DURATION=30s] — short smoke profile (#2120 verify)
+      vus: parseInt(__ENV.VUS || '1', 10),
+      duration: __ENV.QUICK_DURATION || '30s',
+      // Deployed-app dashboard widget p95 is ~2-3s (tracked as perf issues
+      // from the 2026-09 QA); smoke mode guards auth+availability, not speed.
+      thresholds: {
+        http_req_duration: ['p(95)<3500'],
+        errors: ['rate<0.1'],
+      },
+    }
+  : {
   scenarios: {
     smoke: {
       executor: 'constant-vus',
@@ -38,60 +56,31 @@ export const options = {
   },
 };
 
-const BASE_URL = __ENV.BASE_URL || 'http://localhost:3000';
-const EMAIL = __ENV.EMAIL || 'superadmin@nucrm.com';
-const PASSWORD = __ENV.PASSWORD || 'admin123';
-
-let authToken = '';
-
-export function setup() {
-  const loginRes = http.post(`${BASE_URL}/api/auth/login`, 
-    JSON.stringify({ email: EMAIL, password: PASSWORD }),
-    { headers: { 'Content-Type': 'application/json' } }
-  );
-  
-  const token = loginRes.json('token');
-  if (token) {
-    authToken = token;
-  }
-  return { token };
+function get(headers, path) {
+  const res = http.get(`${BASE_URL}${path}`, { headers });
+  check(res, { [`${path} 200`]: (r) => r.status === 200 }) || errorRate.add(1);
+  responseTime.add(res.timings.duration);
+  return res;
 }
 
-export default function(data) {
-  const headers = {
-    'Content-Type': 'application/json',
-    'Authorization': `Bearer ${data.token || authToken}`,
-  };
+export default function () {
+  const headers = authHeaders(getSession(() => ({
+    email: __ENV.EMAIL,
+    password: __ENV.PASSWORD,
+  })));
 
-  // Test 1: Dashboard
-  const dashboard = http.get(`${BASE_URL}/api/tenant/dashboard/stats`, { headers });
-  check(dashboard, { 'dashboard status 200': (r) => r.status === 200 }) || errorRate.add(1);
-  responseTime.add(dashboard.timings.duration);
+  // Dashboard widgets (moved out of the old /dashboard/stats, #2120)
+  get(headers, '/api/tenant/dashboard/widgets/stats/contacts');
+  get(headers, '/api/tenant/dashboard/widgets/stats/pipeline');
+  get(headers, '/api/tenant/dashboard/widgets/stats/revenue');
+  get(headers, '/api/tenant/dashboard/widgets/stats/tasks');
 
-  // Test 2: Contacts List
-  const contacts = http.get(`${BASE_URL}/api/tenant/contacts?limit=20`, { headers });
-  check(contacts, { 'contacts status 200': (r) => r.status === 200 }) || errorRate.add(1);
-  responseTime.add(contacts.timings.duration);
-
-  // Test 3: Companies List
-  const companies = http.get(`${BASE_URL}/api/tenant/companies?limit=20`, { headers });
-  check(companies, { 'companies status 200': (r) => r.status === 200 }) || errorRate.add(1);
-  responseTime.add(companies.timings.duration);
-
-  // Test 4: Deals List
-  const deals = http.get(`${BASE_URL}/api/tenant/deals?limit=20`, { headers });
-  check(deals, { 'deals status 200': (r) => r.status === 200 }) || errorRate.add(1);
-  responseTime.add(deals.timings.duration);
-
-  // Test 5: Tasks List
-  const tasks = http.get(`${BASE_URL}/api/tenant/tasks?limit=20`, { headers });
-  check(tasks, { 'tasks status 200': (r) => r.status === 200 }) || errorRate.add(1);
-  responseTime.add(tasks.timings.duration);
-
-  // Test 6: Search
-  const search = http.get(`${BASE_URL}/api/tenant/search?q=test`, { headers });
-  check(search, { 'search status 200': (r) => r.status === 200 }) || errorRate.add(1);
-  responseTime.add(search.timings.duration);
+  // Lists
+  get(headers, '/api/tenant/contacts?limit=20');
+  get(headers, '/api/tenant/companies?limit=20');
+  get(headers, '/api/tenant/deals?limit=20');
+  get(headers, '/api/tenant/tasks?limit=20');
+  get(headers, '/api/tenant/search?q=test');
 
   sleep(1);
 }
@@ -104,12 +93,12 @@ export function handleSummary(data) {
 }
 
 function textSummary(data) {
+  const m = data.metrics;
   return `
 === Load Test Results ===
 
-Duration: ${data.metrics.http_req_duration.values.p(95).toFixed(2)}ms (p95)
-Errors: ${(data.metrics.errors.values.rate * 100).toFixed(2)}%
-Total Requests: ${data.metrics.http_reqs.values.count}
-
-=== By Scenario ===`;
+p95: ${m.http_req_duration.values['p(95)'].toFixed(2)}ms
+Errors: ${(m.errors.values.rate * 100).toFixed(2)}%
+Total Requests: ${m.http_reqs.values.count}
+`;
 }

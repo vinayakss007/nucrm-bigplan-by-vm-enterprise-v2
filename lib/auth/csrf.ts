@@ -3,20 +3,19 @@
  * Copyright (c) 2026 abetworks.in. All Rights Reserved.
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
-import crypto from 'crypto';
-
 /**
  * CSRF Protection Module
- * 
+ *
  * Implements Double Submit Cookie pattern for CSRF protection
+ *
+ * #1992: this module runs inside the edge proxy bundle as well as Node
+ * route handlers, so it must not import Node's `crypto` — that dragged the
+ * entire Node module into the edge bundle for every request. All entropy
+ * now comes from the WebCrypto global, which exists in both runtimes.
  */
 
 function getRandomValues(length: number): Uint8Array {
-  return crypto.randomBytes(length);
-}
-
-function createHashSha256(data: string): string {
-  return crypto.createHash('sha256').update(data).digest('hex');
+  return globalThis.crypto.getRandomValues(new Uint8Array(length));
 }
 
 const CSRF_COOKIE_NAME = 'nucrm_csrf_token';
@@ -28,13 +27,6 @@ const CSRF_HEADER_NAME = 'x-csrf-token';
 export function generateCsrfToken(): string {
   const bytes = getRandomValues(32);
   return Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
-}
-
-/**
- * Hash a CSRF token for secure storage
- */
-function hashToken(token: string): string {
-  return createHashSha256(token);
 }
 
 /**
@@ -115,20 +107,21 @@ export function validateCsrfToken(
   if (!cookieToken || !headerToken) {
     return false;
   }
-  
-  // Constant-time comparison to prevent timing attacks
-  const cookieHash = hashToken(cookieToken);
-  const headerHash = hashToken(headerToken);
-  
-  if (cookieHash.length !== headerHash.length) {
+
+  // Constant-time comparison to prevent timing attacks. #1992: the pre-
+  // comparison SHA-256 (via Node crypto) only existed to normalize length for
+  // timingSafeEqual; both values here are same-origin double-submit copies of
+  // a 64-hex-char token, so a direct length-checked XOR walk is equivalent
+  // and stays edge-compatible (no Node crypto in the proxy bundle).
+  if (cookieToken.length !== headerToken.length) {
     return false;
   }
-  
+
   let result = 0;
-  for (let i = 0; i < cookieHash.length; i++) {
-    result |= cookieHash.charCodeAt(i) ^ headerHash.charCodeAt(i);
+  for (let i = 0; i < cookieToken.length; i++) {
+    result |= cookieToken.charCodeAt(i) ^ headerToken.charCodeAt(i);
   }
-  
+
   return result === 0;
 }
 

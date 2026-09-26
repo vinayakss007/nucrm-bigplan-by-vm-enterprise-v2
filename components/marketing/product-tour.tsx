@@ -6,9 +6,23 @@
 'use client';
 
 import Link from 'next/link';
-import { useState, type ReactNode } from 'react';
+import dynamic from 'next/dynamic';
+import { useState } from 'react';
 import { Icon } from './icon';
 import { softLower } from '@/lib/marketing/text';
+
+/** Which product mock to show — resolved client-side by TourVisual (#1972). */
+export type MockKey = 'ai' | 'automation' | 'conversations' | 'revenue' | 'analytics';
+
+const TourVisual = dynamic(() => import('./tour-visual'), {
+  ssr: false,
+  loading: () => (
+    <div
+      className="min-h-[380px] w-full rounded-2xl border border-white/[0.09] bg-[#0a1330]/60 animate-pulse"
+      aria-hidden
+    />
+  ),
+});
 
 export type TourTab = {
   id: string;
@@ -19,14 +33,16 @@ export type TourTab = {
   body: string;
   points: string[];
   href: string;
-  /** Rendered by the server and handed over as a prop. */
-  visual: ReactNode;
+  visual: MockKey;
 };
 
 /**
- * Tabbed walkthrough of the product. The visuals are built on the server and
- * passed in as props, so this island only owns the selected index — every panel
- * stays mounted so switching tabs never re-triggers the entry animations.
+ * Tabbed walkthrough of the product. The tab copy is server-rendered, but the
+ * mock visuals are resolved from a string key inside a `ssr: false` island
+ * (#1972): previously the landing page built the mock JSX server-side and
+ * handed it over as props, so the full DOM of five dashboard mocks was
+ * serialized into the RSC flight *and* SSR'd into the HTML — a large slice of
+ * the 570 KB payload for content below the fold.
  */
 export function ProductTour({ tabs }: { tabs: TourTab[] }) {
   const [active, setActive] = useState(0);
@@ -101,7 +117,7 @@ export function ProductTour({ tabs }: { tabs: TourTab[] }) {
               className={`pointer-events-none absolute -inset-6 -z-10 rounded-[32px] bg-gradient-to-br ${current.accent} opacity-[0.18] blur-3xl`}
               aria-hidden
             />
-            {current.visual}
+            <TourVisual name={current.visual} />
           </div>
         </div>
       )}

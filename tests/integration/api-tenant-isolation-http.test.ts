@@ -170,7 +170,7 @@ describe('Tenant Isolation HTTP (#666)', () => {
       }));
       expect(res.status).toBe(201);
       const body = await res.json();
-      expect(body.data.tenantId).toBe('tenant-a-001');
+      expect(body.data.tenant_id).toBe('tenant-a-001');
     });
   });
 

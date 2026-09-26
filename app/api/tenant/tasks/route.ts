@@ -74,7 +74,28 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     .limit(limit)
     .offset(offset);
 
-    const response = { data, total: countRes?.count ?? 0 };
+    // Map camelCase to snake_case for frontend compatibility
+    const response = {
+      data: data.map(t => ({
+        id: t.id,
+        title: t.title,
+        description: t.description,
+        priority: t.priority,
+        status: t.status,
+        completed: t.completed,
+        due_date: t.dueDate,
+        completed_at: t.completedAt,
+        contact_id: t.contactId,
+        deal_id: t.dealId,
+        assigned_to: t.assignedTo,
+        created_at: t.createdAt,
+        first_name: t.firstName,
+        last_name: t.lastName,
+        deal_title: t.dealTitle,
+        assignee_name: t.assigneeName,
+      })),
+      total: countRes?.count ?? 0,
+    };
     const cacheKey = `tenant:${ctx.tenantId}:tasks:${searchParams.toString()}`;
     cache.set(cacheKey, response, 30);
     return NextResponse.json(response);
@@ -182,7 +203,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
 
     fireWebhooks(ctx.tenantId, 'task.created', { id: newTask.id, title: v.title }).catch((err) => logError({ error: err, context: 'tenant/tasks fireWebhooks task.created' }));
 
-    return NextResponse.json({ data: newTask }, { status: 201 });
+    return NextResponse.json({ data: { id: newTask.id, title: newTask.title, description: newTask.description, priority: newTask.priority, status: newTask.status, completed: newTask.completed, due_date: newTask.dueDate ? newTask.dueDate.toISOString() : null, completed_at: newTask.completedAt ? newTask.completedAt.toISOString() : null, contact_id: newTask.contactId, deal_id: newTask.dealId, assigned_to: newTask.assignedTo, created_at: (newTask.createdAt ?? new Date()).toISOString(), updated_at: newTask.updatedAt?.toISOString(), tenant_id: newTask.tenantId, user_id: newTask.createdBy } }, { status: 201 });
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -10,23 +10,65 @@
  * live in this file — every app loads its environment from .env.local
  * (generated via deploy/generate-secrets.sh). Never commit secrets here.
  *
+ * Loading .env.local: PM2 7.x does NOT implement the `env_file` key — it is
+ * accepted and silently ignored — so every app below loads its environment
+ * itself. `web` gets it from Next.js (which reads .env.local before running any
+ * code); the two `tsx` processes (worker, cron) get it from the
+ * `--import ./scripts/load-env.mjs` preload, because tsx does not read .env* at
+ * all. Without the preload those processes start with an empty environment:
+ * cron died with "FATAL: CRON_SECRET is required" (5 restarts → "errored") and
+ * the worker silently fell back to redis://localhost:6379.
+ *
+ * Host vs Docker networking: this VM serves public traffic from the Docker
+ * stack, whose .env.local carries Docker-network names
+ * (REDIS_URL=redis://redis, S3_ENDPOINT=http://minio). Those names do NOT
+ * resolve on the host, so every app below overrides them to the loopback
+ * ports the infra compose publishes (Redis 127.0.0.1:6379, MinIO
+ * 127.0.0.1:9000). dotenv/Next.js never overwrite variables already present in
+ * the process environment, which is why these `env:` overrides win over the
+ * file for all three apps. Override with NUCRM_REDIS_URL / NUCRM_S3_ENDPOINT.
+ *
  * Usage:
  *   pm2 start ecosystem.config.cjs                 # start all apps
  *   pm2 start ecosystem.config.cjs --only web      # frontend only
  *   pm2 scale web 4                                # set 4 frontend instances
  *   pm2 reload ecosystem.config.cjs                # zero-downtime reload
+ *   pm2 save && pm2 startup                        # REQUIRED: survive reboot
  *   pm2 logs / pm2 monit
  *
- * Tunables (env):
+ * Tunables (shell env when invoking pm2, else read from .env.local):
  *   NUCRM_INSTANCES         frontend instances        (default: "max")
  *   NUCRM_HOST              frontend bind address      (default: 127.0.0.1)
  *   NUCRM_PORT              frontend base port         (default: 3000)
  *   NUCRM_MAX_MEMORY        MB before frontend restart (default: 512)
  *   NUCRM_WORKER_INSTANCES  worker processes           (default: 2)
  *   NUCRM_LOG_DIR           log directory              (default: ./logs)
+ *   NUCRM_REDIS_URL         Redis URL as seen FROM THE HOST
+ *   NUCRM_S3_ENDPOINT       S3 URL as seen FROM THE HOST
  */
 
-const LOG_DIR = process.env.NUCRM_LOG_DIR || `${__dirname}/logs`;
+// PM2 evaluates this file with an empty environment (no dotenv), but the
+// repo's .env.local pins replica counts / memory caps for this single-VM
+// topology (same values the compose stacks read). Parse just enough of the
+// file to honour them; runtime env still comes from Next.js + load-env.mjs.
+const FILE_ENV = (() => {
+  try {
+    const out = {};
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- .cjs has no import syntax; require is the only option
+    for (const line of require('node:fs')
+      .readFileSync(`${__dirname}/.env.local`, 'utf8')
+      .split('\n')) {
+      const m = line.match(/^([A-Z0-9_]+)=(.*)$/);
+      if (m) out[m[1]] = m[2];
+    }
+    return out;
+  } catch {
+    return {};
+  }
+})();
+const setting = (name) => process.env[name] ?? FILE_ENV[name];
+
+const LOG_DIR = setting('NUCRM_LOG_DIR') || `${__dirname}/logs`;
 
 module.exports = {
   apps: [
@@ -38,19 +80,21 @@ module.exports = {
       // given -H, which would expose port 3000 on the VM's public interface.
       // nginx (the only public service) proxies to 127.0.0.1:3000. Override
       // NUCRM_HOST=0.0.0.0 only when nginx runs in a separate network namespace.
-      args: `start -H ${process.env.NUCRM_HOST || '127.0.0.1'}`,
+      args: `start -H ${setting('NUCRM_HOST') || '127.0.0.1'}`,
       cwd: __dirname,
 
-      instances: process.env.NUCRM_INSTANCES || 'max',
+      instances: setting('NUCRM_INSTANCES') || 'max',
       exec_mode: 'cluster',
 
       // Environment comes from .env.local — no secrets in this file.
-      env_file: '.env.local',
+      // Next.js loads .env.local itself; PM2's env_file is a no-op (#1424).
       env: {
         NODE_ENV: 'production',
-        PORT: process.env.NUCRM_PORT || 3000,
+        PORT: setting('NUCRM_PORT') || 3000,
         DATABASE_SSL: 'true',
         DATABASE_SSL_REJECT_UNAUTHORIZED: 'false',
+        REDIS_URL: setting('NUCRM_REDIS_URL') || 'redis://127.0.0.1:6379',
+        S3_ENDPOINT: setting('NUCRM_S3_ENDPOINT') || 'http://127.0.0.1:9000',
       },
 
       max_memory_restart: `${process.env.NUCRM_MAX_MEMORY || 512}M`,

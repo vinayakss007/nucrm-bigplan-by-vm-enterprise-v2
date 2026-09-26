@@ -105,12 +105,11 @@ vi.mock('@/lib/auth/session', () => ({
   hashToken: m.hashToken,
 }));
 
+// middleware.ts reads sessions/memberships through withUserContext(tx); the
+// pass-through hands the callback the same mocked db so existing queues apply.
 vi.mock('@/lib/db/rls', () => ({
   setTenantContext: m.setTenantContext,
-  // PP-026: requireAuth redeems the presented session via
-  // withAuthResolutionContext; in unit tests there is no RLS, so run the
-  // callback directly against the mocked db.
-  withAuthResolutionContext: async (_userId: string, fn: (tx: unknown) => Promise<unknown>) => fn(m.db),
+  withUserContext: async (_userId: string, fn: (tx: unknown) => unknown) => fn(m.db),
 }));
 
 vi.mock('@/lib/auth/api-key', () => ({ tryApiKeyAuth: m.tryApiKeyAuth }));

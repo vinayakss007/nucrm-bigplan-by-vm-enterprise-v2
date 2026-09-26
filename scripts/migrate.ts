@@ -4,6 +4,8 @@ import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import { sql } from 'drizzle-orm';
 import { Pool } from 'pg';
 import * as schema from '../drizzle/schema';
+import { pgSslConfig } from '../lib/db/ssl-config';
+import { runRecoveryStamp } from './migrate-recovery';
 import * as fs from 'fs';
 import * as path from 'path';
 import { createInterface } from 'readline';
@@ -191,6 +193,7 @@ async function main() {
   console.log(`[migrate] Target database environment: ${env}`);
 
   const journalPath = path.resolve('./drizzle/migrations/meta/_journal.json');
+  const MIGRATIONS_DIR = path.resolve('./drizzle/migrations');
   if (!fs.existsSync(journalPath)) {
     console.error('ERROR: Migration journal not found at', journalPath);
     process.exit(1);
@@ -251,7 +254,7 @@ async function main() {
   const cleanUrl = databaseUrl.replace(/[?&]sslmode=[^&]+/, '');
   const pool = new Pool({
     connectionString: cleanUrl,
-    ssl: { rejectUnauthorized: false },
+    ssl: pgSslConfig(),
     connectionTimeoutMillis: 10_000,
   });
 
@@ -352,53 +355,14 @@ async function main() {
   const rowCount = parseInt(count.rows[0].cnt, 10);
 
   if (rowCount === 0 && journal.entries.length > 0) {
-    const schemaExists = await db.execute<{ exists: boolean }>(
-      sql.raw(`SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'api_key_usage')`),
-    );
-
-    // Marker for the LAST migration in the journal (0044_backup_verification
-    // adds last_verified_at to backup_records). Checking only an early marker
-    // (api_key_usage is created by 0016/0017) let a DB that was pushed at
-    // ~0038 get stamped as fully migrated, permanently cementing schema drift
-    // (verified on the prod VM: contacts.team_id from 0041 was missing and
-    // contact creation failed with "column team_id does not exist").
-    const lastEntry = journal.entries[journal.entries.length - 1]!;
-    const lastMigrationApplied = await db.execute<{ exists: boolean }>(
-      sql.raw(`
-        SELECT EXISTS (
-          SELECT FROM information_schema.columns
-          WHERE table_name = 'backup_records' AND column_name = 'last_verified_at'
-        )
-      `),
-    );
-
-    if (schemaExists.rows[0].exists && lastMigrationApplied.rows[0].exists) {
-      console.log('[migrate] Recovery: schema already exists but the migration ledger is empty.');
-      console.log('[migrate] This database was provisioned with db:push/db:sync or restored');
-      console.log('[migrate] from a dump. Stamping the journal as applied rather than replaying');
-      console.log(`[migrate] it over live tables. Seeding ${journal.entries.length} entries...`);
-      for (const entry of journal.entries) {
-        await db.execute(
-          sql`INSERT INTO "drizzle"."__drizzle_migrations" (hash, created_at)
-              VALUES (${entry.tag}, ${entry.when})`,
-        );
-      }
-      console.log('[migrate] Recovery complete — no migration SQL was executed.');
-    } else if (schemaExists.rows[0].exists && !lastMigrationApplied.rows[0].exists) {
-      // Partial schema: the ledger is empty but the schema is NOT at the last
-      // migration's state. Stamping everything would permanently hide the
-      // drift; replaying from 0000_init would replay the entire history over
-      // live tables. Either way risks data loss — refuse and ask for action.
-      console.error('[migrate] ERROR: Database has schema but it is NOT at the latest migration state.');
-      console.error(`[migrate] Ledger is empty but marker for the last migration (${lastEntry.tag}) is missing.`);
-      console.error('[migrate] This is usually a partial push/restore. Options:');
-      console.error('[migrate]   1. Run the remaining migrations manually and re-run db:migrate.');
-      console.error('[migrate]   2. Restore from a full backup.');
-      console.error('[migrate]   3. If the schema really is current, contact the maintainers.');
-      process.exit(1);
-    } else {
-      console.log('[migrate] Fresh database detected. Running all migrations...');
-    }
+    await runRecoveryStamp({
+      pool,
+      journalEntries: journal.entries,
+      readMigrationFile: (tag) => {
+        const p = path.join(MIGRATIONS_DIR, `${tag}.sql`);
+        return fs.existsSync(p) ? fs.readFileSync(p, 'utf-8') : null;
+      },
+    });
   }
 
   // Re-check ledger after potential recovery stamping: if recovery seeded
@@ -428,7 +392,7 @@ async function main() {
   const freshPath = freshRowCount === 0 && journal.entries.length > 0;
 
   if (freshPath) {
-    const migrationsDir = path.resolve('./drizzle/migrations');
+    const migrationsDir = MIGRATIONS_DIR;
     const journalFiles = journal.entries.map((e: { tag: string }) => `${e.tag}.sql`);
     const client = await pool.connect();
     try {

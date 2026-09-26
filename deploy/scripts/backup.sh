@@ -81,7 +81,40 @@ pg_restore_run() {
   fi
 }
 
+psql_val() {
+  if command -v psql >/dev/null 2>&1; then
+    psql "$DATABASE_URL" -At -c "$1"
+  else
+    docker run --rm --network "$COMPOSE_NETWORK" \
+      --add-host host.docker.internal:host-gateway \
+      -e PGCONNECT_TIMEOUT=15 \
+      "$PG_IMAGE" psql "$DATABASE_URL" -At -c "$1"
+  fi
+}
+
+# PP-014 (#2050) — the dump role must bypass RLS. pg_dump issues
+# `SET row_security = off` in its session, which PostgreSQL only honours for
+# superuser / BYPASSRLS roles; every tenant-scoped table is FORCE ROW LEVEL
+# SECURITY, so an RLS-bound role (the app role `nucrm`) aborts on the first
+# data table with "query would be affected by row-level security policy" —
+# after writing a partial file. Postgres' own HINT (ALTER TABLE ... NO FORCE
+# ROW LEVEL SECURITY) must NEVER be followed: it would silently strip tenant
+# isolation from the application to make a backup convenient. The fix is the
+# BACKUP_DATABASE_URL role, not the policy (see PP-015 / .env.example).
+require_dump_role() {
+  local out role rights
+  out=$(psql_val "SELECT current_user || E'\n' || CASE WHEN COALESCE(rolsuper, false) OR COALESCE(rolbypassrls, false) THEN 'bypass' ELSE 'rls-bound' END FROM pg_roles WHERE rolname = current_user" 2>/dev/null) \
+    || err "Cannot reach the database — check DATABASE_URL / BACKUP_DATABASE_URL and connectivity."
+  role=$(head -n1 <<<"$out")
+  rights=$(tail -n1 <<<"$out")
+  if [[ "$rights" != "bypass" ]]; then
+    err "Dump role '$role' is RLS-bound, so pg_dump (SET row_security=off) will abort on FORCE-RLS tables. Point BACKUP_DATABASE_URL at a BYPASSRLS role (e.g. the managed 'upadmin' or a dedicated backup role) — see .env.example. Do NOT disable FORCE ROW LEVEL SECURITY to work around this: that removes tenant isolation from the app."
+  fi
+  log "Dump role '$role' may bypass RLS (PP-014 guard passed)."
+}
+
 backup_local() {
+  require_dump_role
   log "Creating PostgreSQL dump (custom format, compressed)..."
   # --format=custom lets pg_restore do selective, parallel restores later.
   #
@@ -92,8 +125,12 @@ backup_local() {
   # Such a file is worse than no backup at all — it is non-empty, so the sanity
   # check below passes, and a restore would silently rebuild a TRUNCATED
   # database. Remove it before reporting the failure.
+  # --file=/dev/stdout is deliberately NOT used: inside the one-shot container
+  # stdout is a pipe, and pg_dump fails the dump with
+  #   could not fsync file "/dev/stdout": Invalid argument
+  # A plain shell redirect leaves pg_dump writing to stdout with no fsync.
   pg_dump_run --format=custom --compress=6 --no-owner --no-privileges \
-    --file=/dev/stdout > "${BACKUP_DIR}/${BACKUP_FILE}" \
+    > "${BACKUP_DIR}/${BACKUP_FILE}" \
     || {
       rm -f "${BACKUP_DIR}/${BACKUP_FILE}"
       err "pg_dump failed — check DATABASE_URL, connectivity, and the role's RLS rights."

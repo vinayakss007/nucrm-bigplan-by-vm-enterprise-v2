@@ -61,7 +61,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     if (q) filters.push(ilike(deals.title, `%${escapeLike(q)}%`));
 
     // Perf: count + page fetch in parallel (was 2 serial WAN round-trips).
-    const [countResult, data] = await Promise.all([
+    const [countResult, rawData] = await Promise.all([
       db.select({ count: sql<number>`count(*)::int` })
         .from(deals)
         .where(and(...filters)).then((r) => r[0]),
@@ -93,6 +93,28 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       .limit(limit)
       .offset(offset),
     ]);
+
+    // Map camelCase to snake_case for frontend compatibility
+    const data = rawData.map(d => ({
+      id: d.id,
+      title: d.title,
+      value: d.amount,
+      amount: d.amount,
+      stage_id: d.stageId,
+      stage: d.stageName,
+      stage_name: d.stageName,
+      stage_order: d.stageOrder,
+      close_date: d.closeDate,
+      contact_id: d.contactId,
+      assigned_to: d.assignedTo,
+      created_by: d.createdBy,
+      created_at: d.createdAt,
+      updated_at: d.updatedAt,
+      first_name: d.firstName,
+      last_name: d.lastName,
+      company_name: d.companyName,
+      assigned_name: d.assignedName,
+    }));
 
     const response = { data, total: countResult?.count ?? 0 };
     return NextResponse.json(response);
@@ -230,7 +252,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     }
 
     cache.delByPattern(`tenant:${ctx.tenantId}:deals:*`);
-    return NextResponse.json({ data: deal }, { status: 201 });
+    return NextResponse.json({ data: { id: deal.id, title: deal.title, amount: (deal.amount ?? '0').toString(), stage_id: deal.stageId, pipeline_id: deal.pipelineId, close_date: deal.closeDate ? deal.closeDate.toISOString() : null, contact_id: deal.contactId, company_id: deal.companyId, assigned_to: deal.assignedTo, status: (deal.metadata as Record<string, unknown>)?.status as string | undefined, created_at: (deal.createdAt ?? new Date()).toISOString(), updated_at: deal.updatedAt?.toISOString(), tenant_id: deal.tenantId, user_id: deal.createdBy } }, { status: 201 });
   
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {

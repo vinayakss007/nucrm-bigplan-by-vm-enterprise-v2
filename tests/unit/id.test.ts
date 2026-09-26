@@ -6,6 +6,8 @@ import {
   generateStructuredId,
   parseStructuredId,
   isStructuredId,
+  isUuid,
+  isEntityId,
   ENTITY_CODES,
 } from '../../lib/id';
 
@@ -171,6 +173,37 @@ describe('isStructuredId', () => {
     expect(isStructuredId('')).toBe(false);
     expect(isStructuredId('ACME')).toBe(false);
     expect(isStructuredId('not-an-id')).toBe(false);
+  });
+});
+
+// ─── isUuid / isEntityId ────────────────────────────────────
+
+describe('isUuid', () => {
+  it('returns true for plain UUIDs (case-insensitive)', () => {
+    expect(isUuid('550e8400-e29b-41d4-a716-446655440000')).toBe(true);
+    expect(isUuid('C823AA31-E8E2-4286-8425-F6C4972822AB')).toBe(true);
+  });
+
+  it('returns false for structured IDs and non-UUIDs', () => {
+    expect(isUuid('ACME-DL-2aUyqjCzEIiEcYMKj7TZtw')).toBe(false);
+    expect(isUuid('public')).toBe(false);
+    expect(isUuid('notes')).toBe(false);
+    expect(isUuid('')).toBe(false);
+  });
+});
+
+describe('isEntityId', () => {
+  it('accepts both plain UUIDs and structured IDs', () => {
+    expect(isEntityId('550e8400-e29b-41d4-a716-446655440000')).toBe(true);
+    expect(isEntityId('ACME-DL-2aUyqjCzEIiEcYMKj7TZtw')).toBe(true);
+  });
+
+  it('rejects path segments that are not entity ids (guards the [id] uuid-cast 500)', () => {
+    expect(isEntityId('public')).toBe(false);
+    expect(isEntityId('notes')).toBe(false);
+    expect(isEntityId('undefined')).toBe(false);
+    expect(isEntityId('1')).toBe(false);
+    expect(isEntityId('')).toBe(false);
   });
 });
 

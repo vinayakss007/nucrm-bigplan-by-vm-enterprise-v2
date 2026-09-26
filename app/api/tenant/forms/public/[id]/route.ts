@@ -7,10 +7,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { forms, tenants } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
+import { isEntityId } from '@/lib/id';
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
+    if (!isEntityId(id)) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
     const [form] = await db
       .select({
@@ -27,8 +29,17 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       .where(eq(forms.id, id))
       .limit(1);
 
-    if (!form || !form.isActive || form.tenantStatus !== 'active') {
+    // #2119: distinguish "form gone/unpublished" (404) from "tenant not
+    // active" (403 + machine-readable code) so visitors get a truthful
+    // message and support has a signal instead of a silent 404.
+    if (!form || !form.isActive) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
+    if (form.tenantStatus !== 'active') {
+      return NextResponse.json(
+        { error: 'This form is temporarily unavailable', code: 'TENANT_NOT_ACTIVE' },
+        { status: 403 }
+      );
     }
 
     return NextResponse.json({

@@ -25,6 +25,10 @@ import { getAppUrl } from './app-url';
 
 import { webcrypto } from 'crypto';
 import { logger } from '@/lib/logger';
+// Period resolvers live in ./stripe-period (#1915); re-exported so callers
+// keep importing them from '@/lib/stripe'.
+import { getSubscriptionPeriodEnd } from './stripe-period';
+export { getSubscriptionPeriodStart, getSubscriptionPeriodEnd } from './stripe-period';
 
 const STRIPE_API = 'https://api.stripe.com/v1';
 
@@ -211,8 +215,11 @@ export interface StripeSubscription {
   id: string;
   status?: string;
   cancel_at_period_end?: boolean;
-  current_period_start: number;
-  current_period_end: number;
+  // #1915: Stripe API 2025+ removed these from the subscription root; they now
+  // live on subscription items. Optional so callers must handle their absence
+  // (use getSubscriptionPeriodStart/End which resolve the item fallback).
+  current_period_start?: number;
+  current_period_end?: number;
   items?: { data?: StripeSubscriptionItem[] };
   metadata?: Record<string, string>;
   [key: string]: unknown;
@@ -377,23 +384,6 @@ export interface StripeSchedulePhase {
   end_date?: number;
   proration_behavior?: 'none' | 'create_prorations' | 'always_invoice';
   metadata?: Record<string, string>;
-}
-
-/**
- * Period end of a subscription, resilient to Stripe API version differences
- * (#1915): on newer API versions the period fields moved from the
- * subscription root onto the subscription items. Prefer the root, fall back
- * to the first item, else 0 (caller decides how to handle unknown).
- */
-export function getSubscriptionPeriodEnd(sub: StripeSubscription): number {
-  if (typeof sub.current_period_end === 'number' && sub.current_period_end > 0) {
-    return sub.current_period_end;
-  }
-  const item = sub.items?.data?.[0] as { current_period_end?: unknown } | undefined;
-  if (item && typeof item.current_period_end === 'number' && item.current_period_end > 0) {
-    return item.current_period_end;
-  }
-  return 0;
 }
 
 export async function createScheduleFromSubscription(subscriptionId: string): Promise<StripeSchedule> {

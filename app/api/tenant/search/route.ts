@@ -9,7 +9,7 @@ import { apiError } from '@/lib/api-error';
 import { logError } from '@/lib/errors-server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { contacts, leads, deals, companies } from '@/drizzle/schema';
+import { contacts, leads, deals, dealStages, companies } from '@/drizzle/schema';
 import { tasks } from '@/drizzle/schema';
 import { eq, and, or, ilike, desc, sql, asc } from 'drizzle-orm';
 import { checkRateLimit } from '@/lib/rate-limit';
@@ -40,13 +40,12 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       (type === 'all' || type === 'contacts')
         ? db.select({
             id: contacts.id,
-            firstName: contacts.firstName,
-            lastName: contacts.lastName,
+            first_name: contacts.firstName,
+            last_name: contacts.lastName,
             email: contacts.email,
             phone: contacts.phone,
-            leadStatus: contacts.leadStatus,
-            companyName: companies.name,
-            tags: contacts.metadata
+            lead_status: contacts.leadStatus,
+            company_name: companies.name,
           })
           .from(contacts)
           .leftJoin(companies, eq(companies.id, contacts.companyId))
@@ -69,13 +68,12 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       (type === 'all' || type === 'leads')
         ? db.select({
             id: leads.id,
-            firstName: leads.firstName,
-            lastName: leads.lastName,
+            first_name: leads.firstName,
+            last_name: leads.lastName,
             email: leads.email,
             phone: leads.phone,
-            leadStatus: leads.leadStatus,
-            companyName: leads.companyName,
-            tags: leads.metadata
+            lead_status: leads.leadStatus,
+            company_name: leads.companyName,
           })
           .from(leads)
           .where(and(
@@ -98,15 +96,16 @@ export const GET = withApiRoute(async (request: NextRequest) => {
         ? db.select({
             id: deals.id,
             title: deals.title,
-            amount: deals.amount,
-            closeDate: deals.closeDate,
-            firstName: contacts.firstName,
-            lastName: contacts.lastName,
-            companyName: companies.name
+            value: deals.amount,
+            stage: dealStages.name,
+            first_name: contacts.firstName,
+            last_name: contacts.lastName,
+            company_name: companies.name
           })
           .from(deals)
           .leftJoin(contacts, eq(contacts.id, deals.contactId))
           .leftJoin(companies, eq(companies.id, deals.companyId))
+          .leftJoin(dealStages, eq(dealStages.id, deals.stageId))
           .where(and(
             eq(deals.tenantId, tid),
             sql`${deals.deletedAt} IS NULL`,
@@ -129,7 +128,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
             industry: companies.industry,
             phone: companies.phone,
             website: companies.website,
-            contactCount: sql<number>`(SELECT count(*)::int FROM ${contacts} WHERE ${contacts.companyId} = ${companies.id} AND ${contacts.deletedAt} IS NULL)`
+            contact_count: sql<number>`(SELECT count(*)::int FROM ${contacts} WHERE ${contacts.companyId} = ${companies.id} AND ${contacts.deletedAt} IS NULL)`
           })
           .from(companies)
           .where(and(
@@ -152,10 +151,11 @@ export const GET = withApiRoute(async (request: NextRequest) => {
             title: tasks.title,
             description: tasks.description,
             priority: tasks.priority,
-            dueDate: tasks.dueDate,
+            due_date: tasks.dueDate,
             status: tasks.status,
-            firstName: contacts.firstName,
-            lastName: contacts.lastName
+            completed: sql<boolean>`${tasks.status} = 'completed'`,
+            first_name: contacts.firstName,
+            last_name: contacts.lastName
           })
           .from(tasks)
           .leftJoin(contacts, eq(contacts.id, tasks.contactId))

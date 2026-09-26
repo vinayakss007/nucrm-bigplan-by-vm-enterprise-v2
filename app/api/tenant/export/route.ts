@@ -8,7 +8,7 @@ import { apiError } from '@/lib/api-error';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { contacts, companies, deals, leads, tasks, activities } from '@/drizzle/schema';
-import { eq, and, isNull } from 'drizzle-orm';
+import { eq, and, isNull, sql } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
 import { escapeCSV } from '@/lib/export';
@@ -58,8 +58,11 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       return NextResponse.json({ error: `Invalid entity. Must be one of: ${validEntities.join(', ')}` }, { status: 400 });
     }
 
+    // #1987: build the query instead of eagerly loading up to 10k rows into
+    // memory for the JSON path; the CSV path still materializes (it streams
+    // row-by-row into the response but reads in one round-trip).
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let data: any[] = [];
+    let query: any = null;
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const tenantFilter = (table: { tenantId: any; deletedAt?: any }) =>
@@ -73,7 +76,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     // omitted.
     switch (entity) {
       case 'contacts':
-        data = await db.select({
+        query = db.select({
           id: contacts.id,
           firstName: contacts.firstName,
           lastName: contacts.lastName,
@@ -94,10 +97,10 @@ export const POST = withApiRoute(async (request: NextRequest) => {
           isCustomer: contacts.isCustomer,
           createdAt: contacts.createdAt,
           updatedAt: contacts.updatedAt,
-        }).from(contacts).where(tenantFilter(contacts)).limit(10000);
+        }).from(contacts).where(tenantFilter(contacts));
         break;
       case 'companies':
-        data = await db.select({
+        query = db.select({
           id: companies.id,
           name: companies.name,
           domain: companies.domain,
@@ -112,10 +115,10 @@ export const POST = withApiRoute(async (request: NextRequest) => {
           isCustomer: companies.isCustomer,
           createdAt: companies.createdAt,
           updatedAt: companies.updatedAt,
-        }).from(companies).where(tenantFilter(companies)).limit(10000);
+        }).from(companies).where(tenantFilter(companies));
         break;
       case 'deals':
-        data = await db.select({
+        query = db.select({
           id: deals.id,
           title: deals.title,
           amount: deals.amount,
@@ -127,10 +130,10 @@ export const POST = withApiRoute(async (request: NextRequest) => {
           closeDate: deals.closeDate,
           createdAt: deals.createdAt,
           updatedAt: deals.updatedAt,
-        }).from(deals).where(tenantFilter(deals)).limit(10000);
+        }).from(deals).where(tenantFilter(deals));
         break;
       case 'leads':
-        data = await db.select({
+        query = db.select({
           id: leads.id,
           firstName: leads.firstName,
           lastName: leads.lastName,
@@ -150,10 +153,10 @@ export const POST = withApiRoute(async (request: NextRequest) => {
           isConverted: leads.isConverted,
           createdAt: leads.createdAt,
           updatedAt: leads.updatedAt,
-        }).from(leads).where(tenantFilter(leads)).limit(10000);
+        }).from(leads).where(tenantFilter(leads));
         break;
       case 'tasks':
-        data = await db.select({
+        query = db.select({
           id: tasks.id,
           title: tasks.title,
           description: tasks.description,
@@ -169,10 +172,10 @@ export const POST = withApiRoute(async (request: NextRequest) => {
           leadId: tasks.leadId,
           createdAt: tasks.createdAt,
           updatedAt: tasks.updatedAt,
-        }).from(tasks).where(tenantFilter(tasks)).limit(10000);
+        }).from(tasks).where(tenantFilter(tasks));
         break;
       case 'activities':
-        data = await db.select({
+        query = db.select({
           id: activities.id,
           entityType: activities.entityType,
           entityId: activities.entityId,
@@ -185,7 +188,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
           companyId: activities.companyId,
           leadId: activities.leadId,
           createdAt: activities.createdAt,
-        }).from(activities).where(eq(activities.tenantId, ctx.tenantId)).limit(10000);
+        }).from(activities).where(eq(activities.tenantId, ctx.tenantId));
         break;
     }
 
@@ -194,6 +197,9 @@ export const POST = withApiRoute(async (request: NextRequest) => {
         'Content-Type': 'text/csv',
         'Content-Disposition': `attachment; filename="${entity}-export.csv"`,
       };
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const data: any[] = await query.orderBy(sql`id`).limit(10000);
 
       if (data.length === 0) {
         return new NextResponse('', { status: 200, headers: csvHeaders });
@@ -229,9 +235,53 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       return new NextResponse(stream, { status: 200, headers: csvHeaders });
     }
 
-    return NextResponse.json({
-      data,
-      meta: { entity, total: data.length, exported_at: new Date().toISOString(), format: 'json' },
+    // #1987: the JSON path used to materialize up to 10k rows (5-15MB) in one
+    // query, pinning a pooled connection for the whole round trip and holding
+    // the result plus the serialized body in memory at once. Stream the exact
+    // same body shape ({ data, meta }) in 1k-row chunks, deterministic order.
+    const CHUNK_SIZE = 1000;
+    const MAX_ROWS = 10000;
+    const exportedAt = new Date().toISOString();
+    const encoder = new TextEncoder();
+    let offset = 0;
+    let total = 0;
+    let headerSent = false;
+    let closed = false;
+
+    const stream = new ReadableStream<Uint8Array>({
+      async pull(controller) {
+        try {
+          if (closed) return;
+          if (!headerSent) {
+            controller.enqueue(encoder.encode('{"data":['));
+            headerSent = true;
+          }
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const rows: any[] = await query
+            .orderBy(sql`id`)
+            .limit(CHUNK_SIZE)
+            .offset(offset);
+          for (const row of rows) {
+            controller.enqueue(encoder.encode(`${total > 0 ? ',' : ''}${JSON.stringify(row)}`));
+            total++;
+          }
+          offset += CHUNK_SIZE;
+          if (rows.length < CHUNK_SIZE || offset >= MAX_ROWS) {
+            controller.enqueue(encoder.encode(
+              `],"meta":{"entity":${JSON.stringify(entity)},"total":${total},"exported_at":${JSON.stringify(exportedAt)},"format":"json"}}`,
+            ));
+            controller.close();
+            closed = true;
+          }
+        } catch (err) {
+          controller.error(err);
+        }
+      },
+    });
+
+    return new NextResponse(stream, {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
     });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (err: any) {

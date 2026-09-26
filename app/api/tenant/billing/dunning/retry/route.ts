@@ -64,6 +64,29 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       return NextResponse.json({ error: 'No Stripe subscription found' }, { status: 400 });
     }
 
+    // #1909: record the event with the subscription's REAL currency and amount
+    // instead of hardcoded usd/'0' — the latter corrupts revenue reporting and
+    // reconciliation for every non-USD tenant. On lookup failure fall back to
+    // the previous constants (an attempt is still worth recording).
+    let billingAmount = '0';
+    let billingCurrency = 'usd';
+    try {
+      const { getSubscription } = await import('@/lib/stripe');
+      const stripeSub = await getSubscription(subscription.stripeSubscriptionId);
+      if (typeof stripeSub.currency === 'string' && stripeSub.currency) {
+        billingCurrency = stripeSub.currency.toLowerCase();
+      }
+      const cents = (stripeSub.items?.data ?? []).reduce((sum, item) => {
+        const unit = (item.price as { unit_amount?: unknown } | undefined)?.unit_amount;
+        return sum + (typeof unit === 'number' ? unit : 0);
+      }, 0);
+      if (cents > 0) {
+        billingAmount = (cents / 100).toFixed(2);
+      }
+    } catch {
+      // keep fallback values; dunning must not fail because Stripe is slow
+    }
+
     // Get dunning settings
     const settings = await db.query.dunningSettings.findFirst({
       where: eq(dunningSettings.tenantId, ctx.tenantId),
@@ -116,7 +139,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
         attemptNumber: nextNumber,
         status: 'pending',
         scheduledAt: new Date(),
-        paymentAmount: '0', // Will be populated from Stripe invoice
+        paymentAmount: billingAmount, // #1909: real amount from Stripe subscription
         metadata: {
           created_by: ctx.userId,
           manual_retry: true,
@@ -135,8 +158,8 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       await tx.insert(billingEvents).values({
         tenantId: ctx.tenantId,
         eventType: 'dunning.retry_initiated',
-        amount: '0',
-        currency: 'usd',
+        amount: billingAmount, // #1909: no more hardcoded usd/'0'
+        currency: billingCurrency,
         metadata: {
           subscription_id: subscriptionId,
           attempt_id: a.id,

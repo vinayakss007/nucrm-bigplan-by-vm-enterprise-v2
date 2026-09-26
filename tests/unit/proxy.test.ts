@@ -73,17 +73,20 @@ vi.mock('@/lib/rate-limit-edge', () => ({
     'Retry-After': r.allowed ? '0' : '30',
   })),
   shouldBypassRateLimit: vi.fn((p: string) =>
-    ['/api/webhooks/', '/api/health', '/api/metrics', '/api/keepalive', '/api/cron'].some(x => p.startsWith(x))
+    ['/api/webhooks/', '/api/health', '/api/metrics', '/api/keepalive', '/api/cron', '/api/track/event'].some(x => p.startsWith(x))
   ),
 }));
 
-function makeReq(pathname: string, opts: {
+function makeReq(pathnameWithQuery: string, opts: {
   method?: string;
   headers?: Record<string, string>;
   cookies?: Record<string, string>;
 } = {}) {
+  const qIdx = pathnameWithQuery.indexOf('?');
+  const pathname = qIdx === -1 ? pathnameWithQuery : pathnameWithQuery.slice(0, qIdx);
+  const search = qIdx === -1 ? '' : pathnameWithQuery.slice(qIdx + 1);
   return {
-    nextUrl: { pathname, searchParams: new URLSearchParams() },
+    nextUrl: { pathname, searchParams: new URLSearchParams(search) },
     method: opts.method || 'GET',
     headers: new Map(Object.entries(opts.headers || {})),
     cookies: {
@@ -131,6 +134,54 @@ describe('proxy middleware', () => {
       const { proxy } = await import('@/proxy');
       const res = await proxy(makeReq('/auth/login'));
       expect(res._isNext || res._isResponse).toBeTruthy();
+    });
+
+    // #1972: /api/track/event is an intentionally anonymous ingest endpoint
+    // (always 204, self rate-limited at 120/min/IP). The proxy must let it
+    // through without JWT auth and without the 30/min public edge limiter.
+    it('passes anonymous POST /api/track/event without auth or edge rate limit', async () => {
+      const { proxy } = await import('@/proxy');
+      const res = await proxy(makeReq('/api/track/event', { method: 'POST' }));
+      expect(res._isNext).toBe(true);
+      expect(edgeCheckMock).not.toHaveBeenCalled();
+    });
+  });
+
+  // #1992: CSP/nonce work belongs on HTML document responses only — RSC
+  // flight-payload prefetches must skip it, and the nonce must be edge-safe
+  // (WebCrypto base64, still matching Next's nonce regex).
+  describe('CSP + RSC prefetches (#1992)', () => {
+    it('layers a valid nonce CSP on a public HTML page navigation', async () => {
+      const { proxy } = await import('@/proxy');
+      const res = await proxy(makeReq('/auth/login'));
+      const csp = res.headers.get('content-security-policy');
+      expect(csp).toContain("script-src 'self' 'nonce-");
+      const nonce = res.headers.get('x-nonce') as string;
+      expect(nonce).toMatch(/^[A-Za-z0-9+/_-]+={0,2}$/);
+      expect(nonce.length).toBe(24); // 16 random bytes -> 24 base64 chars
+    });
+
+    it('skips the CSP build for public RSC prefetches (?_rsc=…)', async () => {
+      const { proxy } = await import('@/proxy');
+      const res = await proxy(makeReq('/auth/login?_rsc=abc123'));
+      expect(res._isNext).toBe(true);
+      expect(res.headers.get('content-security-policy')).toBeNull();
+      expect(res.headers.get('x-nonce')).toBeNull();
+    });
+
+    it('skips the CSP build for authenticated RSC prefetches (RSC: true) but keeps it for navigations', async () => {
+      mockJwtVerify.mockResolvedValue({ payload: { sub: 'user-1' } });
+      const { proxy } = await import('@/proxy');
+      const prefetch = await proxy(makeReq('/tenant/contacts', {
+        headers: { rsc: 'true' },
+        cookies: { nucrm_session: 'jwt-token' },
+      }));
+      expect(prefetch.headers.get('content-security-policy')).toBeNull();
+
+      const navigation = await proxy(makeReq('/tenant/contacts', {
+        cookies: { nucrm_session: 'jwt-token' },
+      }));
+      expect(navigation.headers.get('content-security-policy')).toContain('nonce-');
     });
   });
 
@@ -181,6 +232,22 @@ describe('proxy middleware', () => {
       const { proxy } = await import('@/proxy');
       const res = await proxy(makeReq('/api/tenant/contacts', { cookies: { nucrm_session: 'valid-token' } }));
       expect(res.status).toBe(429);
+    });
+
+    it('#2117: reads use a dedicated rl:user:<id>:read bucket at 300/min', async () => {
+      const { proxy } = await import('@/proxy');
+      await proxy(makeReq('/api/tenant/contacts', { cookies: { nucrm_session: 'valid-token' } }));
+      const [key, max] = edgeCheckMock.mock.calls[0] as [string, number];
+      expect(key).toBe('rl:user:user-123:read');
+      expect(max).toBe(300);
+    });
+
+    it('#2117: writes keep the 120/min budget on rl:user:<id>:write', async () => {
+      const { proxy } = await import('@/proxy');
+      await proxy(makeReq('/api/tenant/contacts', { method: 'POST', cookies: { nucrm_session: 'valid-token' } }));
+      const [key, max] = edgeCheckMock.mock.calls[0] as [string, number];
+      expect(key).toBe('rl:user:user-123:write');
+      expect(max).toBe(120);
     });
 
     it('rejects unauthenticated requests', async () => {

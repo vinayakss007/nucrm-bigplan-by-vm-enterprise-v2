@@ -72,8 +72,25 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     .limit(limit)
     .offset(offset);
 
+    // Map camelCase to snake_case for frontend compatibility
     return NextResponse.json({
-      data,
+      data: data.map(m => ({
+        id: m.id,
+        tenant_id: m.tenantId,
+        user_id: m.userId,
+        contact_id: m.contactId,
+        deal_id: m.dealId,
+        title: m.title,
+        description: m.description,
+        start_time: m.startTime,
+        end_time: m.endTime,
+        location: m.location,
+        meeting_url: m.meetingUrl,
+        status: m.status,
+        created_at: m.createdAt,
+        updated_at: m.updatedAt,
+        contact_name: m.contact_name,
+      })),
       total: countResult?.count ?? 0,
       limit,
       offset,
@@ -118,7 +135,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       status: v.status || 'scheduled',
     }).returning();
 
-    return NextResponse.json({ data: row }, { status: 201 });
+    return NextResponse.json({ data: { id: row!.id, tenantId: row!.tenantId, userId: row!.userId, contact_id: row!.contactId ?? null, deal_id: row!.dealId ?? null, title: row!.title, description: row!.description, start_time: (row!.startTime ?? new Date()).toISOString(), end_time: (row!.endTime ?? new Date()).toISOString(), location: row!.location ?? null, meeting_url: row!.meetingUrl ?? null, status: row!.status, created_at: (row!.createdAt ?? new Date()).toISOString(), updated_at: row!.updatedAt?.toISOString() } }, { status: 201 });
  
  
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -57,7 +57,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     .groupBy(contacts.companyId)
     .as('cnt');
     
-    const [data, totalResult] = await Promise.all([
+    const [rawData, totalResult] = await Promise.all([
       db.select({
         id: companies.id,
         name: companies.name,
@@ -83,6 +83,22 @@ export const GET = withApiRoute(async (request: NextRequest) => {
         .from(companies)
         .where(and(...filters)),
     ]);
+
+    // Map camelCase to snake_case for frontend compatibility
+    const data = rawData.map(c => ({
+      id: c.id,
+      name: c.name,
+      industry: c.industry,
+      company_size: c.companySize,
+      website: c.website,
+      phone: c.phone,
+      address: c.address,
+      notes: c.notes,
+      custom_fields: c.customFields,
+      created_at: c.createdAt,
+      updated_at: c.updatedAt,
+      contact_count: c.contactCount,
+    }));
 
     return NextResponse.json({ data, total: totalResult[0]?.count ?? 0, limit, offset });
  

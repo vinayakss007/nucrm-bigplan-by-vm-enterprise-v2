@@ -1,5 +1,5 @@
 /**
- * Multi-Tenant Concurrent User Simulation
+ * Multi-Tenant Concurrent User Simulation (#2120: cookie+CSRF auth, live paths)
  *
  * Simulates multiple tenants accessing the system concurrently to test:
  * - Tenant isolation under load
@@ -7,18 +7,25 @@
  * - RLS policy performance
  * - Cache effectiveness
  *
- * Run: k6 run tests/load/multi-tenant.js
+ * Provide one session per tenant: either a SESSIONS_FILE JSON array whose
+ * entries are picked round-robin, or TENANTn_EMAIL/TENANTn_PASSWORD env for
+ * a per-VU dev-instance login (login is rate-limited, sessions preferred).
+ *
+ * Run: SESSIONS_FILE=./sessions.json k6 run tests/load/multi-tenant.js
  */
 
 import http from 'k6/http';
 import { check, sleep } from 'k6';
 import { Rate, Trend } from 'k6/metrics';
+import { BASE_URL, getSession, authHeaders } from './auth.js';
 
 const errorRate = new Rate('errors');
 const tenantLatency = new Trend('tenant_latency');
 const crossTenantLeak = new Rate('cross_tenant_leak');
 
-export const options = {
+export const options = __ENV.QUICK
+  ? { vus: parseInt(__ENV.VUS || '3', 10), duration: __ENV.QUICK_DURATION || '20s' }
+  : {
   scenarios: {
     multi_tenant: {
       executor: 'ramping-vus',
@@ -38,89 +45,51 @@ export const options = {
   },
 };
 
-const BASE_URL = __ENV.BASE_URL || 'http://localhost:3000';
-
-// Simulated tenant credentials (create these in your test database)
+// Tenant identities for the no-SESSIONS_FILE fallback. No fake defaults:
+// set TENANTn_EMAIL/TENANTn_PASSWORD or run make-sessions.sh (#2120).
 const TENANTS = [
-  { email: __ENV.TENANT1_EMAIL || 'tenant1@test.com', password: __ENV.TENANT1_PASSWORD || 'test1234' },
-  { email: __ENV.TENANT2_EMAIL || 'tenant2@test.com', password: __ENV.TENANT2_PASSWORD || 'test1234' },
-  { email: __ENV.TENANT3_EMAIL || 'tenant3@test.com', password: __ENV.TENANT3_PASSWORD || 'test1234' },
-];
+  { email: __ENV.TENANT1_EMAIL, password: __ENV.TENANT1_PASSWORD },
+  { email: __ENV.TENANT2_EMAIL, password: __ENV.TENANT2_PASSWORD },
+  { email: __ENV.TENANT3_EMAIL, password: __ENV.TENANT3_PASSWORD },
+].filter((t) => t.email && t.password);
 
-export function setup() {
-  const tokens = [];
-
-  for (const tenant of TENANTS) {
-    const res = http.post(`${BASE_URL}/api/auth/login`,
-      JSON.stringify({ email: tenant.email, password: tenant.password }),
-      { headers: { 'Content-Type': 'application/json' } }
-    );
-
-    if (res.status === 200) {
-      const token = res.json('token');
-      if (token) {
-        tokens.push({ token, email: tenant.email });
-      }
-    }
-  }
-
-  if (tokens.length === 0) {
-    throw new Error('No tenants could authenticate. Check BASE_URL and credentials.');
-  }
-
-  return { tokens };
-}
-
-export default function(data) {
-  // Each VU picks a random tenant
-  const tenantIdx = Math.floor(Math.random() * data.tokens.length);
-  const tenant = data.tokens[tenantIdx];
-
-  const headers = {
-    'Content-Type': 'application/json',
-    'Authorization': `Bearer ${tenant.token}`,
-  };
+export default function () {
+  // With SESSIONS_FILE: auth.getSession round-robins VUs over the session list
+  // (one session = one tenant). Without it: per-VU login as TENANTn creds.
+  const tenant = TENANTS.length > 0 ? TENANTS[(parseInt(__VU, 10) - 1) % TENANTS.length] : {};
+  const s = getSession(() => tenant);
+  const headers = authHeaders(s);
+  const label = `vu-${__VU}`;
 
   const start = Date.now();
 
-  // Dashboard stats
-  const dashboard = http.get(`${BASE_URL}/api/tenant/dashboard/stats`, { headers });
-  check(dashboard, {
-    [`${tenant.email}: dashboard 200`]: (r) => r.status === 200,
-  }) || errorRate.add(1);
+  // Dashboard widget stats (the old /dashboard/stats endpoint no longer exists)
+  const stats = http.get(`${BASE_URL}/api/tenant/dashboard/widgets/stats/contacts`, { headers });
+  check(stats, { [`${label}: dashboard stats 200`]: (r) => r.status === 200 }) || errorRate.add(1);
 
   // Contacts list — verify tenant isolation
   const contacts = http.get(`${BASE_URL}/api/tenant/contacts?limit=10`, { headers });
   const contactsData = contacts.json('data');
   check(contacts, {
-    [`${tenant.email}: contacts 200`]: (r) => r.status === 200,
-    [`${tenant.email}: contacts is array`]: (r) => Array.isArray(contactsData),
+    [`${label}: contacts 200`]: (r) => r.status === 200,
+    [`${label}: contacts is array`]: () => Array.isArray(contactsData),
   }) || errorRate.add(1);
 
-  // Verify no cross-tenant data leak (contacts should belong to this tenant)
-  if (Array.isArray(contactsData) && contactsData.length > 0) {
-    // In a real test, you'd verify tenantId matches
-    // For now, just check the response is valid
-    crossTenantLeak.add(0);
+  // RLS + the API only ever return the session tenant's rows; a tenantId
+  // field leaking through would be the alarm bell.
+  if (Array.isArray(contactsData)) {
+    const leaks = contactsData.filter((c) => c && c.tenantId && s.tenantId && c.tenantId !== s.tenantId);
+    crossTenantLeak.add(leaks.length > 0 ? 1 : 0);
   }
 
-  // Deals list
   const deals = http.get(`${BASE_URL}/api/tenant/deals?limit=10`, { headers });
-  check(deals, {
-    [`${tenant.email}: deals 200`]: (r) => r.status === 200,
-  }) || errorRate.add(1);
+  check(deals, { [`${label}: deals 200`]: (r) => r.status === 200 }) || errorRate.add(1);
 
-  // Tasks list
   const tasks = http.get(`${BASE_URL}/api/tenant/tasks?limit=10`, { headers });
-  check(tasks, {
-    [`${tenant.email}: tasks 200`]: (r) => r.status === 200,
-  }) || errorRate.add(1);
+  check(tasks, { [`${label}: tasks 200`]: (r) => r.status === 200 }) || errorRate.add(1);
 
-  // Notifications
   const notifications = http.get(`${BASE_URL}/api/tenant/notifications?limit=10`, { headers });
-  check(notifications, {
-    [`${tenant.email}: notifications 200`]: (r) => r.status === 200,
-  }) || errorRate.add(1);
+  check(notifications, { [`${label}: notifications 200`]: (r) => r.status === 200 }) || errorRate.add(1);
 
   tenantLatency.add(Date.now() - start);
 
@@ -139,7 +108,6 @@ function textSummary(data, title) {
   return `
 === ${title} ===
 
-Duration: ${new Date(data.state.testRunDurationMs).toISOString().substr(11, 8)}
 Total Requests: ${metrics.http_reqs.values.count}
 Error Rate: ${(metrics.errors.values.rate * 100).toFixed(2)}%
 

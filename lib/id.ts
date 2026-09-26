@@ -245,3 +245,18 @@ export function parseStructuredId(id: string): {
 export function isStructuredId(id: string): boolean {
   return parseStructuredId(id) !== null;
 }
+
+/** Plain UUID (the format all current route params use). */
+export function isUuid(id: string): boolean {
+  return UUID_REGEX.test(id);
+}
+
+/**
+ * True if a path/id parameter can name an entity row at all. Non-ID segments
+ * (e.g. GET /forms/public when no static route claims "public") reach the
+ * [id] handler as a literal string; without this guard they hit a Postgres
+ * uuid cast and surface as a 500 instead of a 404.
+ */
+export function isEntityId(id: string): boolean {
+  return isUuid(id) || isStructuredId(id);
+}

@@ -18,7 +18,8 @@ sudo systemctl start postgresql
 sudo systemctl enable postgresql
 
 # Setup DB
-sudo -u postgres psql -c "ALTER USER postgres WITH PASSWORD 'nucrm_pass';" 
+DB_PASS=$(openssl rand -hex 16)
+sudo -u postgres psql -c "ALTER USER postgres WITH PASSWORD '${DB_PASS}';"
 sudo -u postgres createdb nucrm_db
 
 # Clone
@@ -28,7 +29,7 @@ cd nu2-byopen-510
 
 # Create .env.local
 cat > .env.local << EOF
-DATABASE_URL=postgresql://postgres:nucrm_pass@localhost:5432/nucrm_db
+DATABASE_URL=postgresql://postgres:${DB_PASS}@localhost:5432/nucrm_db
 DATABASE_SSL=false
 JWT_SECRET=$(openssl rand -hex 32)
 SETUP_KEY=admin-setup-key-2026

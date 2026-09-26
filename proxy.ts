@@ -28,6 +28,11 @@ const API_VERSION = '2.0';
 
 const RATE_LIMIT_UNAUTH = 30;
 const RATE_LIMIT_AUTH = 120;
+// #2117: dashboard polling and UI mutations shared the single 120/min/user
+// budget, so an authenticated user's own polling could 429 their writes
+// (self-DoS under load). Splits cookie-session traffic into route-class
+// buckets: reads get a larger budget, writes keep the original ceiling.
+const RATE_LIMIT_READS = 300;
 const RATE_LIMIT_API_KEY = 300;
 const RATE_LIMIT_WINDOW_MS = 60_000;
 
@@ -36,16 +41,57 @@ function generateRequestId(): string {
 }
 
 /**
+ * #1992: short-lived verified-JWT cache. HS256 jwtVerify costs ~5-15ms CPU and
+ * the proxy runs it on every request (incl. RSC prefetches and every asset-ish
+ * path the matcher lets through). Entries live 10s, so a revoked session is
+ * rejected at the route layer (requireAuth verifies independently) and at worst
+ * passes the proxy gate for 10 extra seconds. Bounded LRU-ish by insertion
+ * order so a spoofed-token flood can't grow it unboundedly.
+ */
+const JWT_CACHE_TTL_MS = 10_000;
+const JWT_CACHE_MAX = 1_000;
+interface JwtCacheEntry { sub: string; exp: number; cachedAt: number }
+const jwtCache = new Map<string, JwtCacheEntry>();
+
+function jwtCacheGet(token: string): JwtCacheEntry | null {
+  const hit = jwtCache.get(token);
+  if (!hit) return null;
+  const now = Date.now();
+  if (now - hit.cachedAt > JWT_CACHE_TTL_MS || hit.exp * 1000 <= now) {
+    jwtCache.delete(token);
+    return null;
+  }
+  return hit;
+}
+
+function jwtCacheSet(token: string, entry: JwtCacheEntry): void {
+  if (jwtCache.size >= JWT_CACHE_MAX) {
+    const oldest = jwtCache.keys().next().value;
+    if (oldest !== undefined) jwtCache.delete(oldest);
+  }
+  jwtCache.set(token, entry);
+}
+
+/**
  * Per-request CSP nonce (#1070). The value must match Next 16's nonce regex
- * /^'nonce-([A-Za-z0-9+/_-]+={0,2})'$/ — base64 of a random UUID satisfies it.
- * Next's app-render (get-script-nonce-from-header) reads the INCOMING request
- * `content-security-policy` header, extracts the first script-src nonce, and
- * applies it to all framework/hydration/injected scripts and Next-injected
- * styles. So we must both (a) set the CSP on the FORWARDED request headers and
- * (b) set the same CSP + an x-nonce header on the RESPONSE for the browser.
+ * /^'nonce-([A-Za-z0-9+/_-]+={0,2})'$/ — 16 random bytes as base64 satisfies
+ * it. Next's app-render (get-script-nonce-from-header) reads the INCOMING
+ * request `content-security-policy` header, extracts the first script-src
+ * nonce, and applies it to all framework/hydration/injected scripts and
+ * Next-injected styles. So we must both (a) set the CSP on the FORWARDED
+ * request headers and (b) set the same CSP + an x-nonce header on the
+ * RESPONSE for the browser.
+ *
+ * #1992: generated with WebCrypto + btoa instead of Buffer.from(...). The
+ * proxy runs in the edge runtime; pulling Node's Buffer into that bundle
+ * cost cold-start weight and ran on every page/preflight request.
  */
 function generateCspNonce(): string {
-  return Buffer.from(globalThis.crypto.randomUUID()).toString('base64');
+  const bytes = new Uint8Array(16);
+  globalThis.crypto.getRandomValues(bytes);
+  let binary = '';
+  for (const b of bytes) binary += String.fromCharCode(b);
+  return btoa(binary);
 }
 
 /**
@@ -156,7 +202,7 @@ const PUBLIC_PATHS = [
   '/api/auth/csrf-token', '/api/auth/sso',
   '/api/forms/submit', '/api/leads/public',
   '/api/webhooks/stripe', '/api/webhooks/resend', '/api/webhooks/whatsapp', '/api/webhooks/inbound',
-  '/api/health', '/api/track/click', '/api/track/open', '/api/unsubscribe',
+  '/api/health', '/api/track/click', '/api/track/open', '/api/track/event', '/api/unsubscribe',
   '/api/keepalive', '/api/test-email', '/api/cron', '/api/metrics', '/api/embed', '/api/emergency',
   '/api/flags', '/api/openapi',
   '/api/setup/check', '/api/setup/create-admin', '/api/lead-capture', '/api/lead-capture/submit',
@@ -170,15 +216,20 @@ const PUBLIC_PATHS = [
 
 const PUBLIC_PREFIXES = ['/_next', '/favicon', '/images', '/static', '/icons', '/api/v2', '/fonts', '/sounds', '/videos', '/api/tenant/forms/public'];
 
+// #1992: exact matches hit a Set first so the common public routes
+// (/api/health, /auth/login, ...) skip the ~70-entry linear scan.
+const PUBLIC_PATH_SET = new Set(PUBLIC_PATHS);
+
 const ALLOWED_ORIGINS = (process.env['ALLOWED_ORIGINS'] || 'http://localhost:3000').split(',').map(s => s.trim());
 if (ALLOWED_ORIGINS.includes('*') && process.env['NODE_ENV'] === 'production') {
   throw new Error('FATAL: ALLOWED_ORIGINS=* in production. CORS is wide-open. Set specific origins.');
 }
 
+// #1992: O(1) exact-match fast path; prefix fallback keeps original semantics.
 function isPublic(pathname: string): boolean {
-  if (PUBLIC_PATHS.some(p => pathname === p || pathname.startsWith(p + '/'))) return true;
-  if (PUBLIC_PREFIXES.some(p => pathname === p || pathname.startsWith(p + '/'))) return true;
-  return false;
+  if (PUBLIC_PATH_SET.has(pathname)) return true;
+  if (PUBLIC_PATHS.some(p => pathname.startsWith(p + '/'))) return true;
+  return PUBLIC_PREFIXES.some(p => pathname === p || pathname.startsWith(p + '/'));
 }
 
 /**
@@ -236,6 +287,18 @@ function isApiRequest(pathname: string): boolean {
   return pathname.startsWith('/api/');
 }
 
+/**
+ * Next's client-router prefetches (soft navigations, <Link> hover) ask for the
+ * RSC *flight payload*, not HTML — no <script>/<style> tags ship in that
+ * response, so building the per-request CSP + nonce for them is pure waste
+ * (#1992: the proxy ran the full CSP pipeline on every prefetch). Let those
+ * requests take the cheap pass-through; the real document navigation that
+ * follows still gets the full CSP treatment from nextWithCsp.
+ */
+function isRscPrefetch(request: NextRequest): boolean {
+  return request.headers.get('rsc') === 'true' || request.nextUrl.searchParams.has('_rsc');
+}
+
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const origin = request.headers.get('origin');
@@ -252,6 +315,18 @@ export async function proxy(request: NextRequest) {
       response.headers.set('Access-Control-Max-Age', '86400');
     }
     return response;
+  }
+
+  // Post-signup onboarding wizard removed: signup already provisions the
+  // workspace, pipeline and default modules, so any visit to
+  // /tenant/onboarding goes straight to the dashboard. Enforced here (not
+  // just in the page component) so it holds even while streaming.
+  if (pathname === '/tenant/onboarding' || pathname.startsWith('/tenant/onboarding/')) {
+    const url = request.nextUrl.clone();
+    url.pathname = '/tenant/dashboard';
+    const redirect = NextResponse.redirect(url);
+    redirect.headers.set('x-request-id', requestId);
+    return redirect;
   }
 
   // Public API routes: apply rate limiting or pass through
@@ -293,7 +368,7 @@ export async function proxy(request: NextRequest) {
   // Layer the per-request nonce CSP onto HTML page navigations (#1070); API
   // paths never reach here so the page CSP never lands on /api/ responses.
   if (!isApiRequest(pathname) && isPublic(pathname)) {
-    const response = nextWithCsp(request, requestId);
+    const response = isRscPrefetch(request) ? nextWithRequestId(request, requestId) : nextWithCsp(request, requestId);
     response.headers.set('x-request-id', requestId);
     setCORS(response, origin, pathname);
     return response;
@@ -346,8 +421,20 @@ export async function proxy(request: NextRequest) {
   }
 
   try {
-    const { payload } = await jwtVerify(token, JWT_SECRET);
-    if (!payload.sub) throw new Error('Invalid token');
+    let sub: string;
+    const cachedJwt = jwtCacheGet(token);
+    if (cachedJwt) {
+      sub = cachedJwt.sub;
+    } else {
+      const { payload } = await jwtVerify(token, JWT_SECRET);
+      if (!payload.sub) throw new Error('Invalid token');
+      sub = payload.sub;
+      jwtCacheSet(token, {
+        sub,
+        exp: typeof payload.exp === 'number' ? payload.exp : Math.floor(Date.now() / 1000) + 60,
+        cachedAt: Date.now(),
+      });
+    }
 
     // CSRF protection for state-changing API requests
     if (isApiRequest(pathname)) {
@@ -362,10 +449,13 @@ export async function proxy(request: NextRequest) {
 
       // Authenticated API rate limiting (by user)
       if (!shouldBypassRateLimit(pathname)) {
-        const userId = payload.sub;
+        const userId = sub;
         const isApiKey = authHeader?.startsWith('Bearer ') && token !== cookieToken && !cookieToken;
-        const max = isApiKey ? RATE_LIMIT_API_KEY : RATE_LIMIT_AUTH;
-        const key = isApiKey ? `rl:apikey:${userId}` : `rl:user:${userId}`;
+        const isRead = request.method === 'GET' || request.method === 'HEAD';
+        const max = isApiKey ? RATE_LIMIT_API_KEY : isRead ? RATE_LIMIT_READS : RATE_LIMIT_AUTH;
+        const key = isApiKey
+          ? `rl:apikey:${userId}`
+          : `rl:user:${userId}:${isRead ? 'read' : 'write'}`;
         const result = edgeLimiter.check(key, max, RATE_LIMIT_WINDOW_MS);
         if (!result.allowed) {
           return buildRateLimitResponse(requestId, result, origin);
@@ -379,9 +469,12 @@ export async function proxy(request: NextRequest) {
     }
 
     // Authenticated pass-through. For HTML page navigations, layer the
-    // per-request nonce CSP (#1070); API responses keep the plain pass-through
-    // so the page CSP never lands on /api/.
-    const response = isApiRequest(pathname) ? nextWithRequestId(request, requestId) : nextWithCsp(request, requestId);
+    // per-request nonce CSP (#1070); API responses and RSC flight-payload
+    // prefetches (#1992) keep the plain pass-through so the page CSP never
+    // lands on /api/ and nonce work is skipped for prefetch storms.
+    const response = isApiRequest(pathname) || isRscPrefetch(request)
+      ? nextWithRequestId(request, requestId)
+      : nextWithCsp(request, requestId);
     response.headers.set('x-request-id', requestId);
     setCORS(response, origin, pathname);
     return response;
