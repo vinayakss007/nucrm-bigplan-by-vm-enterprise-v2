@@ -11,26 +11,27 @@
  */
 
 import type { Queue as QueueType } from 'bullmq';
+import type { PgBoss as PgBossClass } from 'pg-boss';
 
 export type QueueProvider = 'redis' | 'pgboss' | 'memory';
 export type JobType = 'send-email' | 'send-notification' | 'send-bulk-emails' | 'export-csv' | 'contact-import' | 'run-automation' | 'send-lead-warming' | 'whatsapp-webhook' | 'webhooks' | 'tenant-cleanup';
 
+/**
+ * Job payloads are passed through verbatim to the queue backend (BullMQ's
+ * `data` / pg-boss's `send(data)`), which serializes them to JSON. Nothing
+ * here interprets them, so the honest type is `unknown` — consumers narrow
+ * the payload on the worker side where the job type is known.
+ */
 export interface JobData {
   type: JobType;
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  payload: any;
+  payload: unknown;
   tenantId?: string;
   userId?: string;
 }
 
 export interface QueueAdapter {
   provider: QueueProvider;
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  addJob(jobType: JobType, data: any, options?: JobOptions): Promise<void>;
+  addJob(jobType: JobType, data: unknown, options?: JobOptions): Promise<void>;
   close(): Promise<void>;
 }
 
@@ -40,11 +41,10 @@ export interface JobOptions {
   attempts?: number;
 }
 
+type BossInstance = InstanceType<typeof PgBossClass>;
+
 let adapter: QueueAdapter | null = null;
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let pgbossInstance: any = null;
+let pgbossInstance: BossInstance | null = null;
 
 /**
  * Initialize the queue adapter (auto-detect best available)
@@ -120,10 +120,7 @@ async function createRedisAdapter(redisUrl: string): Promise<QueueAdapter> {
 
   return {
     provider: 'redis',
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    async addJob(jobType: JobType, data: any, options?: JobOptions) {
+    async addJob(jobType: JobType, data: unknown, options?: JobOptions) {
       const queue = queues.get(jobType);
       if (!queue) throw new Error(`Unknown job type: ${jobType}`);
 
@@ -148,15 +145,12 @@ async function createRedisAdapter(redisUrl: string): Promise<QueueAdapter> {
  * Uses dynamic import to avoid loading pg-boss when not needed
  */
 async function createPgBossAdapter(databaseUrl: string): Promise<QueueAdapter> {
-  // Dynamic import - only loads if pg-boss is needed
-  const PgBossModule = await import('pg-boss');
-  const PgBoss = (PgBossModule as unknown as { default?: new (...args: unknown[]) => unknown }).default || PgBossModule;
-
-  const BossConstructor = PgBoss as new (...args: unknown[]) => unknown;
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const boss = new BossConstructor({ connectionString: databaseUrl }) as any;
+  // Dynamic import - only loads if pg-boss is needed. pg-boss v12 is pure ESM
+  // and exposes the class as the NAMED export `PgBoss`; using it directly
+  // replaces the old `.default || namespace` interop dance that typed the
+  // instance as `any` (the namespace object itself is not constructible).
+  const { PgBoss } = await import('pg-boss');
+  const boss = new PgBoss({ connectionString: databaseUrl });
   await boss.start();
   pgbossInstance = boss;
 
@@ -169,10 +163,13 @@ async function createPgBossAdapter(databaseUrl: string): Promise<QueueAdapter> {
 
   return {
     provider: 'pgboss',
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    async addJob(jobType: JobType, data: any, options?: JobOptions) {
+    async addJob(jobType: JobType, data: unknown, options?: JobOptions) {
+      // pg-boss serializes data to JSON (send accepts object | null); narrowing
+      // here turns the queue's `unknown` contract into that boundary honestly
+      // instead of casting — non-object payloads would die at stringify anyway.
+      if (typeof data !== 'object') {
+        throw new Error(`[Queue] pg-boss job data must be a JSON-serializable object, got ${typeof data}`);
+      }
       await boss.send(jobType, data, {
         startAfter: options?.delay ? new Date(Date.now() + options.delay) : undefined,
         priority: options?.priority,
@@ -195,10 +192,7 @@ async function createPgBossAdapter(databaseUrl: string): Promise<QueueAdapter> {
  * FIXED: Stores interval reference and clears it properly
  */
 function createMemoryAdapter(): QueueAdapter {
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const pendingJobs: Array<{ type: JobType; data: any; runAt: number }> = [];
+  const pendingJobs: Array<{ type: JobType; data: unknown; runAt: number }> = [];
 
   // Process jobs every 5 seconds — but we have no registered handlers, so
   // every due job is silently dropped.  Log a loud warning so operators know
@@ -218,10 +212,7 @@ function createMemoryAdapter(): QueueAdapter {
 
   return {
     provider: 'memory',
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    async addJob(jobType: JobType, data: any, options?: JobOptions) {
+    async addJob(jobType: JobType, data: unknown, options?: JobOptions) {
       console.warn(`[MemoryQueue] Job ${jobType} queued but will be DISCARDED — no worker registered. This adapter is dev-only and does not execute jobs.`);
       pendingJobs.push({
         type: jobType,
@@ -239,10 +230,7 @@ function createMemoryAdapter(): QueueAdapter {
 /**
  * Convenience function to add a job
  */
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function addJob(jobType: JobType, data: any, options?: JobOptions): Promise<void> {
+export async function addJob(jobType: JobType, data: unknown, options?: JobOptions): Promise<void> {
   const queue = await getQueueAdapter();
   await queue.addJob(jobType, data, options);
 }
@@ -264,15 +252,15 @@ export type { Job } from 'bullmq';
  * Get the underlying pg-boss instance for advanced usage
  * Returns null if not using pg-boss provider
  */
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function getBoss(): Promise<any> {
+export async function getBoss(): Promise<BossInstance> {
   if (!pgbossInstance) {
     const queueAdapter = await getQueueAdapter();
     if (queueAdapter.provider !== 'pgboss') {
       throw new Error('getBoss() is only available with pg-boss provider. Current: ' + queueAdapter.provider);
     }
+  }
+  if (!pgbossInstance) {
+    throw new Error('getBoss() called with pg-boss provider selected but instance is not initialized');
   }
   return pgbossInstance;
 }

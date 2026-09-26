@@ -149,7 +149,6 @@
   "lib/logger.ts": 1,
   "lib/modules/auto-install.ts": 1,
   "lib/modules/lazy-loader.tsx": 2,
-  "lib/queue/index.ts": 10,
   "lib/react/optimizations.tsx": 3,
   "lib/restore/restore-executor.ts": 4,
   "lib/storage/s3.ts": 2,
