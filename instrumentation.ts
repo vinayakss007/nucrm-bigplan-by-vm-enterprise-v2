@@ -37,6 +37,19 @@ export async function register() {
     const { metrics } = await import("./lib/metrics");
     metrics.gauge('app_startup', 1);
 
+    // #674 §1: pre-warm the pool so the first requests after boot don't each
+    // pay TCP+TLS+auth; warmPool retries transiently with backoff when
+    // Postgres starts after the app (VM reboot / deploy race). Fire-and-forget
+    // — readiness still gates on /api/system/ready's own SELECT 1. Skipped in
+    // the build worker (register() runs there too) and when no DB is
+    // configured, so `next build` never touches Postgres.
+    if (process.env.DATABASE_URL && !process.env.NEXT_PHASE?.includes('build')) {
+      const { warmPool } = await import("./lib/db/warmup");
+      void warmPool().catch((err) => {
+        console.warn('[instrumentation] pool warm-up failed:', err instanceof Error ? err.message : err);
+      });
+    }
+
     // Auto-register Telegram bot webhook
     const botToken = process.env['TELEGRAM_BOT_TOKEN'];
     const appUrl = process.env['NEXT_PUBLIC_APP_URL'];
