@@ -69,6 +69,7 @@ services:
       # #2122: 10 per replica caused a 30s queue-timeout cliff under load
       # before the DB itself was saturated; code default is 20 (lib/db/pool.ts).
       - DATABASE_POOL_SIZE=${DATABASE_POOL_SIZE:-20}
+      - DATABASE_CONNECTION_TIMEOUT_MS=${DATABASE_CONNECTION_TIMEOUT_MS:-5000}
       # #2116: nginx sends a single-hop authoritative X-Forwarded-For.
       - TRUST_PROXY=true
       - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL:-http://localhost}

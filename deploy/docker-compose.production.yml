@@ -182,6 +182,7 @@ services:
       - PAGERDUTY_ROUTING_KEY=${PAGERDUTY_ROUTING_KEY:-}
       - PAGERDUTY_ENABLED=${PAGERDUTY_ENABLED:-}
       - DATABASE_POOL_SIZE=${DATABASE_POOL_SIZE:-20}
+      - DATABASE_CONNECTION_TIMEOUT_MS=${DATABASE_CONNECTION_TIMEOUT_MS:-5000}
       - DATABASE_SSL=${DATABASE_SSL:-true}
       - METRICS_SECRET=${METRICS_SECRET:?METRICS_SECRET is required - Prometheus authenticates to /api/metrics with it - run deploy/generate-secrets.sh}
     expose:

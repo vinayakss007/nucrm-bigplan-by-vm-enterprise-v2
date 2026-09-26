@@ -51,6 +51,7 @@ services:
       # timeout cliff under load while pgbouncer (DEFAULT_POOL_SIZE=20 below)
       # was never saturated.
       - DATABASE_POOL_SIZE=${DATABASE_POOL_SIZE:-20}
+      - DATABASE_CONNECTION_TIMEOUT_MS=${DATABASE_CONNECTION_TIMEOUT_MS:-5000}
       - NEXT_PUBLIC_APP_URL=http://34.70.191.180
       - BREVO_SMTP_HOST=${BREVO_SMTP_HOST}
       - BREVO_SMTP_PORT=${BREVO_SMTP_PORT}
