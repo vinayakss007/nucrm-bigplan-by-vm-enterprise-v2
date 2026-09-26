@@ -53,6 +53,7 @@
  */
 
 import type { NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 import { withPinnedConnection } from '@/lib/db/request-connection';
 import { trackRequestStart, trackRequestEnd } from '@/lib/db/graceful-shutdown';
 import { metrics } from '@/lib/metrics';
@@ -65,6 +66,20 @@ function normalizeMetricPath(pathname: string): string {
   return pathname
     .replace(/\/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}(?=\/|$)/g, '/[id]')
     .replace(/\/\d+(?=\/|$)/g, '/[id]');
+}
+
+/**
+ * A non-uuid path param that reaches `eq(table.id, params.id)` surfaces as
+ * Postgres 22P02 "invalid input syntax for type uuid". Roughly thirty [id]
+ * routes have no isEntityId() guard, so every probe of
+ * /api/tenant/<thing>/foobar used to answer 500 and pollute Sentry with
+ * client-input noise (Sentry NUCRM-Y/W/X class). Mapping it at the single
+ * chokepoint to 404 matches the guarded routes' semantics: an id that is
+ * not a uuid cannot name an existing entity.
+ */
+function isUuidCastError(err: unknown): boolean {
+  const e = err as { code?: string; message?: string } | null;
+  return e?.code === '22P02' && /uuid/i.test(String(e?.message));
 }
 
 /**
@@ -122,6 +137,19 @@ export function withApiRoute<C = unknown>(
       const response = await withPinnedConnection(async () => handler(request, context));
       metricStatus = response instanceof Response ? response.status : 500;
       return response;
+    } catch (err) {
+      if (isUuidCastError(err)) {
+        // POST failures are usually a bad uuid in the BODY (e.g. a bogus
+        // contactId on create) -> 400; other methods are path-param probes
+        // for an id that cannot name an entity -> 404.
+        const isPost = metricMethod === 'POST';
+        metricStatus = isPost ? 400 : 404;
+        return NextResponse.json(
+          { error: isPost ? 'Invalid identifier in request body' : 'Not found' },
+          { status: metricStatus },
+        );
+      }
+      throw err;
     } finally {
       metrics.increment('http_requests_total', 1, {
         method: metricMethod,

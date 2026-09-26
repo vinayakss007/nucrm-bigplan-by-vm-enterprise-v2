@@ -159,4 +159,32 @@ describe('withApiRoute pins the whole handler body (#1615)', () => {
     expect(out).toContain('http_requests_total{method="DELETE",path="/api/tenant/deals/[id]",status="500"} 1');
     metrics.reset();
   });
+
+  it('maps Postgres uuid-cast failures on non-uuid ids to 404 (GET) / 400 (POST)', async () => {
+    // Sentry NUCRM-Y/W/X class: ~30 [id] routes without isEntityId guards
+    // used to answer 500 for /api/tenant/<thing>/foobar.
+    const { withApiRoute } = await import('../../lib/api/with-api-route');
+    const castErr = () => {
+      const e = new Error('invalid input syntax for type uuid: "foobar"') as Error & { code: string };
+      e.code = '22P02';
+      return e;
+    };
+    const GET = withApiRoute(async () => { throw castErr(); });
+    const POST = withApiRoute(async () => { throw castErr(); });
+
+    const resGet = await GET(new Request('http://x/api/tenant/tasks/foobar', { method: 'GET' }) as never, undefined as never);
+    expect(resGet!.status).toBe(404);
+    expect(await resGet!.json()).toEqual({ error: 'Not found' });
+
+    const resPost = await POST(new Request('http://x/api/tenant/tasks', { method: 'POST' }) as never, undefined as never);
+    expect(resPost!.status).toBe(400);
+
+    // Non-22P02 and non-uuid 22P02 errors must still propagate as 500s.
+    const Other = withApiRoute(async () => {
+      const e = new Error('invalid input syntax for type integer: "x"') as Error & { code: string };
+      e.code = '22P02';
+      throw e;
+    });
+    await expect(Other(new Request('http://x/api/tenant/tasks/1', { method: 'GET' }) as never, undefined as never)).rejects.toThrow();
+  });
 });
