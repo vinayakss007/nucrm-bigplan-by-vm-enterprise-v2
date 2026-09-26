@@ -186,4 +186,25 @@ describe('db/request-connection (#1615 pinning primitive)', () => {
     expect(mockPool.connect).toHaveBeenCalledTimes(1);
     expect(mockClient.release).toHaveBeenCalledTimes(1);
   });
+  it('#674: registers the pinned client with the leak detector and clears it on release', async () => {
+    const { withPinnedConnection } = await import('@/lib/db/request-connection');
+    const { getTrackedCount, resetLeakDetector } = await import('@/lib/db/leak-detector');
+    resetLeakDetector();
+
+    let heldDuring = -1;
+    await withPinnedConnection(async () => {
+      heldDuring = getTrackedCount();
+    });
+    expect(heldDuring).toBe(1);
+    expect(getTrackedCount()).toBe(0);
+
+    // A throwing handler must also leave no tracked client behind — this is
+    // exactly the leak path the detector exists to catch if it ever regresses.
+    await expect(
+      withPinnedConnection(async () => {
+        throw new Error('boom');
+      })
+    ).rejects.toThrow('boom');
+    expect(getTrackedCount()).toBe(0);
+  });
 });
