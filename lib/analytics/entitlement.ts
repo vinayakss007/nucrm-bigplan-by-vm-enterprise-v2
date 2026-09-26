@@ -17,6 +17,7 @@
  *   - there is an active Stripe subscription id, OR
  *   - a manual paid-until date is set and still in the future.
  */
+import { logError } from '@/lib/errors-server';
 import { db } from '@/drizzle/db';
 import { tenants } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
@@ -73,7 +74,7 @@ export async function resolveEntitlement(tenantId: string): Promise<Entitlement>
 
     return { tenantId, planId, isPaid };
   } catch (err) {
-    console.error('[analytics] resolveEntitlement failed:', err);
+    await logError({ error: err, context: 'analytics: resolveEntitlement' });
     return fallback;
   }
 }

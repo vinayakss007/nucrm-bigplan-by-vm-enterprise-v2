@@ -9,6 +9,7 @@
  * Orchestrates the scoring of leads by fetching active rules,
  * hydrating lead data, and calling the AI gateway.
  */
+import { logError } from '@/lib/errors-server';
 import { db } from '@/drizzle/db';
 import { leadScoringRules } from '@/drizzle/schema/ai';
 import { contacts, contactScores } from '@/drizzle/schema/crm';
@@ -177,7 +178,7 @@ export async function bulkScoreLeads(tenantId: string, userId: string, limit: nu
       const res = await scoreLead(tenantId, userId, lead.id);
       results.push(res);
     } catch (err) {
-      console.error(`Failed to score lead ${lead.id}:`, err);
+      await logError({ error: err, context: `ai-scoring: bulkScoreLeads lead=${lead.id}` });
     }
   }
 

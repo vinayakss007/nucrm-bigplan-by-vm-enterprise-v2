@@ -3,6 +3,7 @@
  * Copyright (c) 2026 abetworks.in. All Rights Reserved.
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
+import { logError } from '@/lib/errors-server';
 import type { RealtimeEvent, RealtimeEventHandler } from './types';
 
 export interface RealtimeConfig {
@@ -45,9 +46,9 @@ export class RealtimeSDK {
         const data = await res.json() as { ticket: string };
         return data.ticket;
       }
-    } catch {
+    } catch (err) {
       // Fall back to API key if ticket endpoint is unavailable
-      console.error('[RealtimeSDK] Failed to get ticket, falling back to API key');
+      await logError({ error: err, context: 'realtime-sdk: getTicket' });
     }
     return this.apiKey;
   }

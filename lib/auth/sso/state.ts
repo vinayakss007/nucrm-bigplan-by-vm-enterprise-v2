@@ -12,6 +12,7 @@
  * match the `state` query param, and discard the cookie.
  */
 import { SignJWT, jwtVerify } from 'jose';
+import { logError } from '@/lib/errors-server';
 import { cookies } from 'next/headers';
 
 export interface SsoStatePayload {
@@ -66,7 +67,7 @@ export async function readSsoState(): Promise<SsoStatePayload | null> {
       redirectTo: payload['redirectTo'] ? String(payload['redirectTo']) : undefined,
     };
   } catch (e) {
-    console.error('[SsoState] Failed to read SSO state', e);
+    await logError({ error: e, context: 'sso-state: readSsoState' });
     return null;
   }
 }

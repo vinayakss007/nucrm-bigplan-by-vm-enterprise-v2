@@ -42,6 +42,7 @@ vi.mock('@/drizzle/db', () => ({
 
 vi.mock('@/drizzle/schema/ai', () => ({ tenantAiCredits: {}, aiCreditsLedger: {}, aiProviderSecrets: {}, aiActivity: {} }));
 vi.mock('@/drizzle/schema/core', () => ({ tenants: {} }));
+vi.mock('@/lib/errors-server', () => ({ logError: vi.fn().mockResolvedValue(undefined) }));
 vi.mock('drizzle-orm', () => ({
   and: vi.fn((...a: unknown[]) => ({ type: 'and', args: a })),
   eq: vi.fn((...a: unknown[]) => ({ type: 'eq', args: a })),
@@ -148,6 +149,10 @@ describe('ai/credits', () => {
     const result = await deductCredits({ tenantId: 'tenant-1', userId: 'user-1', action: 'chat', provider: 'openai', model: 'gpt-4', tokensIn: 50, tokensOut: 150, costCents: 2, activityId: 'act-1' });
     expect(result.success).toBe(false);
     expect(result.error).toBe('DB error');
+    const { logError } = await import('@/lib/errors-server');
+    expect(logError).toHaveBeenCalledWith(
+      expect.objectContaining({ context: 'ai-credits: deductCredits' })
+    );
   });
 
   it('allocateCredits inserts or updates credit allocation', async () => {

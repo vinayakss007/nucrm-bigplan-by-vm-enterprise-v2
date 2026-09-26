@@ -13,6 +13,7 @@
  *
  * This module handles centralized credit checking, deduction, and ledger logging.
  */
+import { logError } from '@/lib/errors-server';
 import { db } from '@/drizzle/db';
 import { tenantAiCredits, aiCreditsLedger, aiProviderSecrets, aiActivity } from '@/drizzle/schema/ai';
 import { tenants } from '@/drizzle/schema/core';
@@ -221,7 +222,7 @@ export async function deductCredits(params: {
 
     return { success: true, balanceAfter: balance };
   } catch (err) {
-    console.error('[ai credits] deduction failed:', (err as Error).message);
+    await logError({ error: err, context: 'ai-credits: deductCredits' });
     try {
       const balance = await getCreditBalance(params.tenantId);
       return { success: false, balanceAfter: balance, error: (err as Error).message };

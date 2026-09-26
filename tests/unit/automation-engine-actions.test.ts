@@ -24,6 +24,7 @@ const sendEmail = vi.fn().mockResolvedValue(undefined);
 const createNotification = vi.fn().mockResolvedValue(undefined);
 const safeFetch = vi.fn().mockResolvedValue({ ok: true });
 const captureError = vi.fn();
+const logError = vi.fn();
 const integrationsFindFirst = vi.fn().mockResolvedValue(undefined);
 const automationsFindMany = vi.fn().mockResolvedValue([]);
 
@@ -31,6 +32,7 @@ vi.mock('@/lib/email/service', () => ({ sendEmail: (...a: unknown[]) => sendEmai
 vi.mock('@/lib/notifications', () => ({ createNotification: (...a: unknown[]) => createNotification(...a) }));
 vi.mock('@/lib/security/ssrf', () => ({ safeFetch: (...a: unknown[]) => safeFetch(...a) }));
 vi.mock('@/lib/capture-error', () => ({ captureError: (...a: unknown[]) => captureError(...a) }));
+vi.mock('@/lib/errors-server', () => ({ logError: (...a: unknown[]) => logError(...a) }));
 vi.mock('@/drizzle/schema', () => ({
   automations: { tenantId: 'a.tenantId', isActive: 'a.isActive', triggerType: 'a.trigger', createdAt: 'a.createdAt' },
   automationRuns: {},
