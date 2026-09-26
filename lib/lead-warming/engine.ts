@@ -26,7 +26,20 @@ import {
   leadWarmingMessages,
   leadWarmingSchedule,
 } from '@/drizzle/schema/lead-warming';
+
+type WarmingCampaign = typeof leadWarmingCampaigns.$inferSelect;
+type WarmingEventRow = typeof leadWarmingEvents.$inferSelect;
+// Events may also be synthesized (birthdays carry no row id); only these fields are read.
+type WarmingEventInput = {
+  id: string | null;
+  name: string;
+  eventType: string;
+  aiPromptHint: string | null;
+  defaultEmailSubject: string | null;
+  defaultWhatsappTemplate: string | null;
+};
 import { eq, and, sql, gte, isNull, or, inArray } from 'drizzle-orm';
+import type { SQL } from 'drizzle-orm';
 import { chat } from '@/lib/ai/gateway';
 import { addJob } from '@/lib/queue';
 import { logger } from '@/lib/logger';
@@ -126,8 +139,7 @@ export interface ContactToWarm {
   leadStatus: string | null;
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  tags: any;
+  tags: string[] | null;
   birthday: Date | null;
   assignedTo: string | null;
   doNotContact: boolean | null;
@@ -192,9 +204,8 @@ export async function processLeadWarming(): Promise<WarmingResult> {
         result.campaignsProcessed++;
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } catch (err: any) {
-        result.errors.push(`Campaign ${campaign.id}: ${err.message}`);
+      } catch (err) {
+        result.errors.push(`Campaign ${campaign.id}: ${err instanceof Error ? err.message : String(err)}`);
       }
     }
 
@@ -203,9 +214,8 @@ export async function processLeadWarming(): Promise<WarmingResult> {
 
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
-    result.errors.push(`Global error: ${err.message}`);
+  } catch (err) {
+    result.errors.push(`Global error: ${err instanceof Error ? err.message : String(err)}`);
   }
 
   return result;
@@ -217,10 +227,8 @@ export async function processLeadWarming(): Promise<WarmingResult> {
 async function processCampaign(
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  campaign: any,
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  todayEvents: any[],
+  campaign: WarmingCampaign,
+  todayEvents: WarmingEventRow[],
   result: WarmingResult,
 ): Promise<void> {
   // Filter events that this campaign cares about
@@ -241,9 +249,8 @@ async function processCampaign(
         await sendWarmingMessage(campaign, contact, event, result);
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } catch (err: any) {
-        result.errors.push(`Contact ${contact.id} / Event ${event.name}: ${err.message}`);
+      } catch (err) {
+        result.errors.push(`Contact ${contact.id} / Event ${event.name}: ${err instanceof Error ? err.message : String(err)}`);
       }
     }
   }
@@ -254,15 +261,13 @@ async function processCampaign(
  */
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function getEligibleContacts(campaign: any): Promise<ContactToWarm[]> {
+async function getEligibleContacts(campaign: WarmingCampaign): Promise<ContactToWarm[]> {
   const filter = (campaign.targetFilter as Record<string, unknown>) || {};
 
   // Build WHERE conditions
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const conditions: any[] = [
+  const conditions: (SQL<unknown> | undefined)[] = [
     eq(contacts.tenantId, campaign.tenantId),
     or(eq(contacts.doNotContact, false), isNull(contacts.doNotContact)),
   ];
@@ -327,13 +332,11 @@ async function getEligibleContacts(campaign: any): Promise<ContactToWarm[]> {
 async function sendWarmingMessage(
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  campaign: any,
+  campaign: WarmingCampaign,
   contact: ContactToWarm,
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  event: any,
+  event: WarmingEventInput,
   result: WarmingResult,
 ): Promise<void> {
   const channels: string[] = [];
@@ -429,7 +432,7 @@ async function sendWarmingMessage(
 
 async function upsertWarmingSchedule(
   tx: typeof db,
-  campaign: { id: string; cooldownDays?: number; tenantId: string },
+  campaign: { id: string; cooldownDays?: number | null; tenantId: string },
   contact: { id: string },
 ): Promise<void> {
   const cooldownDays = campaign.cooldownDays || 7;
@@ -509,16 +512,14 @@ async function processBirthdayCampaigns(
           await sendWarmingMessage(campaign, contact as ContactToWarm, birthdayEvent, result);
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-        } catch (err: any) {
-          result.errors.push(`Birthday for ${contact.id}: ${err.message}`);
+        } catch (err) {
+          result.errors.push(`Birthday for ${contact.id}: ${err instanceof Error ? err.message : String(err)}`);
         }
       }
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (err: any) {
-      result.errors.push(`Birthday campaign ${campaign.id}: ${err.message}`);
+    } catch (err) {
+      result.errors.push(`Birthday campaign ${campaign.id}: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 }
@@ -534,13 +535,11 @@ interface GeneratedMessage {
 async function generateAIMessage(
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  campaign: any,
+  campaign: WarmingCampaign,
   contact: ContactToWarm,
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  event: any,
+  event: WarmingEventInput,
 ): Promise<GeneratedMessage> {
   const contactName = [contact.firstName, contact.lastName].filter(Boolean).join(' ') || 'there';
   const companyInfo = contact.companyName ? ` from ${contact.companyName}` : '';
@@ -596,9 +595,8 @@ Rules:
     };
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
-    console.warn('[lead-warming] AI message generation failed, using default:', err.message);
+  } catch (err) {
+    console.warn('[lead-warming] AI message generation failed, using default:', err instanceof Error ? err.message : String(err));
     return getDefaultMessage(contact, event);
   }
 }
@@ -619,8 +617,7 @@ function parseMessageResponse(raw: string): { subject: string; body: string } {
 
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function getDefaultMessage(contact: ContactToWarm, event: any): GeneratedMessage {
+function getDefaultMessage(contact: ContactToWarm, event: WarmingEventInput): GeneratedMessage {
   const name = contact.firstName || 'there';
   const templates: Record<string, string> = {
     'Diwali': `Hi ${name},\n\nWishing you a very Happy Diwali! May this festival of lights bring prosperity and joy to you and your family.\n\nWarm regards`,
@@ -689,8 +686,7 @@ export async function seedSystemEvents(): Promise<number> {
       inserted++;
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (err: any) {
+    } catch (err) {
       // Skip duplicates
       logger.error('[lead-warming] Seed skipped', { festival: festival.name, error: err instanceof Error ? err.message : String(err) });
     }
