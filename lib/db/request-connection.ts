@@ -63,6 +63,7 @@
 import { AsyncLocalStorage } from 'async_hooks';
 import type { PoolClient } from 'pg';
 import { getPool } from './pool';
+import { trackClient, releaseClient } from './leak-detector';
 
 interface PinnedConnectionStore {
   client: PoolClient;
@@ -208,6 +209,12 @@ export async function withPinnedConnection<T>(fn: () => Promise<T>): Promise<T> 
   }
 
   const rawClient = await getPool().connect();
+  // #674: the pinned client is THE long-held per-request connection — if a
+  // handler path ever escapes the finally below, it is lost from the pool
+  // silently. Register it with the leak detector (30s default threshold,
+  // DB_LEAK_THRESHOLD_MS) so held-too-long checkouts get logged with the
+  // acquisition stack.
+  const leakId = trackClient(new Error('pinned-connection acquired'));
   // Store the serialized wrapper as the pinned client so every db.* call in the
   // request (including detached fire-and-forget queries) queues on one chain.
   const client = serializeClientQueries(rawClient);
@@ -237,5 +244,6 @@ export async function withPinnedConnection<T>(fn: () => Promise<T>): Promise<T> 
       // avoid masking the original error / unhandled rejections.
     }
     rawClient.release();
+    releaseClient(leakId);
   }
 }

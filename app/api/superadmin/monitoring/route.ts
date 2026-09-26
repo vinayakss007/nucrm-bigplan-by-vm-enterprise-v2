@@ -11,6 +11,7 @@ import { tenants, plans, errorLogs, backupRecords, selectiveRestoreLogs, superAd
 import { eq, and, sql, desc, gt, inArray } from 'drizzle-orm';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { logError } from '@/lib/errors-server';
+import { getTrackedCount, getLeakedConnections } from '@/lib/db/leak-detector';
 
 export const GET = withApiRoute(async (request: NextRequest) => {
   try {
@@ -183,6 +184,11 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       apiStats,
       activeTenants: activeTenants[0]?.count || 0,
       dbSize: dbSize[0]?.size || '0 B',
+      // #674: in-memory pinned-connection leak detector stats (no DB access)
+      connectionStats: {
+        tracked: getTrackedCount(),
+        suspectedLeaks: getLeakedConnections().length,
+      },
     };
     return NextResponse.json({ data: payload, ...payload });
  
