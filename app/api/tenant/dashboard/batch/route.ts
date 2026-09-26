@@ -29,7 +29,11 @@ import { GET as widgetTickets } from '../widgets/tickets/route';
  * time so a batch can never exhaust the pool. Responses are passed through
  * verbatim, so each widget's own caching/ETag behavior is unchanged.
  */
-const WIDGET_ROUTES: Record<string, (request: NextRequest) => Promise<Response>> = {
+// withApiRoute-wrapped handlers are typed `(request, context) => Promise<Response |
+// undefined | void>`; the batch runner always calls them without a context and
+// guards against a missing Response below.
+type WidgetHandler = (request: NextRequest, context?: unknown) => Promise<Response | undefined | void>;
+const WIDGET_ROUTES: Record<string, WidgetHandler> = {
   '/api/tenant/dashboard/widgets/activity': widgetActivity,
   '/api/tenant/dashboard/widgets/contacts/recent': widgetContactsRecent,
   '/api/tenant/dashboard/widgets/deals/closing': widgetDealsClosing,
@@ -73,7 +77,9 @@ export const GET = withApiRoute(async (request: NextRequest) => {
           method: 'GET',
           headers: request.headers,
         });
-        const res = await WIDGET_ROUTES[path]!(subRequest);
+        const raw = await WIDGET_ROUTES[path]!(subRequest);
+        if (!raw) throw new Error('widget handler returned no response');
+        const res: Response = raw;
         let body: unknown = null;
         try {
           body = await res.json();
