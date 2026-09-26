@@ -9,6 +9,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { readJsonBody } from '@/lib/api/validate';
 import { escapeLike } from '@/lib/api/sanitize-like';
 import { db } from '@/drizzle/db';
 import { contacts, companies } from '@/drizzle/schema';
@@ -143,7 +144,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       );
     }
 
-    const body = await request.json();
+    const body = await readJsonBody(request);
 
     // Validate required fields
     if (!body.first_name || !body.last_name) {

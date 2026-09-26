@@ -14,6 +14,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { readJsonBody, InvalidJsonBodyError } from '@/lib/api/validate';
 import { logError } from '@/lib/errors-server';
 import { z } from 'zod';
 import { db } from '@/drizzle/db';
@@ -211,7 +212,7 @@ export async function PATCH(
       );
     }
 
-    const parsedBody = scimPatchRequestSchema.safeParse(await request.json());
+    const parsedBody = scimPatchRequestSchema.safeParse(await readJsonBody(request));
     if (!parsedBody.success) {
       return NextResponse.json(
         generateSCIMError('Invalid SCIM PatchOp payload', 400),
@@ -423,6 +424,12 @@ export async function PATCH(
       headers: { 'Content-Type': 'application/scim+json' },
     });
   } catch (error) {
+    if (error instanceof InvalidJsonBodyError) {
+      return NextResponse.json(
+        generateSCIMError('Invalid JSON body', 400),
+        { status: 400, headers: { 'Content-Type': 'application/scim+json' } }
+      );
+    }
     void logError({ error, context: 'scim/Users/:id PATCH' });
     return NextResponse.json(
       generateSCIMError('Internal server error', 500),

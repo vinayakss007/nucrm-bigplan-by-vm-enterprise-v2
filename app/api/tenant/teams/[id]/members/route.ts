@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { readJsonBody } from '@/lib/api/validate';
 import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
@@ -35,7 +36,7 @@ export const POST = withApiRoute(async (req: NextRequest, { params }: { params: 
     const team = await loadTeam(ctx.tenantId, teamId);
     if (!team) return NextResponse.json({ error: 'Team not found' }, { status: 404 });
 
-    const body = await req.json();
+    const body = await readJsonBody(req);
     const userId = body?.userId;
     const role = body?.role === 'manager' ? 'manager' : 'member';
     if (!userId) return NextResponse.json({ error: 'userId is required' }, { status: 400 });

@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { readJsonBody } from '@/lib/api/validate';
 import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
 import {
@@ -52,7 +53,7 @@ export const POST = withApiRoute(async (request: NextRequest,
     if (ctx instanceof NextResponse) return ctx;
 
     const partnerId = (await params).id;
-    const body = await request.json();
+    const body = await readJsonBody(request);
     const { dealTitle, contactName, contactEmail, expectedValue, expiresAt } = body;
 
     if (!dealTitle || !contactName || !contactEmail) {

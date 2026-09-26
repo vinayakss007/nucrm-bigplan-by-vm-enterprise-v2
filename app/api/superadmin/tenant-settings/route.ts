@@ -12,6 +12,7 @@
  * PATCH merges provided keys into the existing settings JSON column.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { readJsonBody } from '@/lib/api/validate';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { tenants, tenantMembers } from '@/drizzle/schema';
@@ -92,7 +93,7 @@ export const PATCH = withApiRoute(async (req: NextRequest) => {
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Super admin required' }, { status: 403 });
 
-    const body = await req.json();
+    const body = await readJsonBody(req);
     const { tenant_id, settings: incoming } = body;
     if (!tenant_id) return NextResponse.json({ error: 'tenant_id required' }, { status: 400 });
     if (!incoming || typeof incoming !== 'object') return NextResponse.json({ error: 'settings object required' }, { status: 400 });

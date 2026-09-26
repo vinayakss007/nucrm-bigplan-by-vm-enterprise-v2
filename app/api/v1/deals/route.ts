@@ -9,6 +9,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { readJsonBody } from '@/lib/api/validate';
 import { db } from '@/drizzle/db';
 import { deals, dealStages, contacts, companies } from '@/drizzle/schema';
 import { eq, and, sql, desc, count } from 'drizzle-orm';
@@ -113,7 +114,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       );
     }
 
-    const body = await request.json();
+    const body = await readJsonBody(request);
 
     if (!body.title) {
       throw new ValidationError('title is required');

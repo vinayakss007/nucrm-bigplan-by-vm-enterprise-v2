@@ -11,7 +11,7 @@ import { db } from '@/drizzle/db';
 import { deals, dealProducts } from '@/drizzle/schema';
 import { eq, and, sql, isNull } from 'drizzle-orm';
 import { z } from 'zod';
-import { validateBody } from '@/lib/api/validate';
+import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { concurrencyGuard } from '@/lib/api/concurrency';
 import { withApiRoute } from '@/lib/api/with-api-route';
@@ -75,7 +75,7 @@ export const POST = withApiRoute(async (req: NextRequest, { params }: { params: 
       return NextResponse.json({ error: 'Deal not found' }, { status: 404 });
     }
 
-    const body = await req.json();
+    const body = await readJsonBody(req);
     const validated = validateBody(createDealProductSchema, body);
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;
@@ -103,7 +103,7 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params:
     if (ctx instanceof NextResponse) return ctx;
     const dealId = (await params).id;
 
-    const body = await req.json();
+    const body = await readJsonBody(req);
     const itemId = body?.item_id;
     if (!itemId) return NextResponse.json({ error: 'item_id is required' }, { status: 400 });
 

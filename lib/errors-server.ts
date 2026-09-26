@@ -6,6 +6,7 @@
 import { errorLogs } from '@/drizzle/schema/support';
 import { sendCriticalErrorAlert } from '@/lib/critical-error-alert';
 import { getCurrentRequestId } from '@/lib/tenant/request-context';
+import { InvalidJsonBodyError } from '@/lib/errors-shared';
 
 type ErrorLevel = 'warning' | 'error' | 'fatal';
 
@@ -151,6 +152,10 @@ export async function logError(opts: {
   /** Set false to skip the external forwards (Sentry + Loki) for a noisy expected error. Default true. The DB row is still written. */
   captureToSentry?: boolean;
 }): Promise<void> {
+  // A malformed JSON body is the caller's error and every renderer already
+  // answers it with a 400. Skipping the error_logs row, the Sentry capture and
+  // the critical-alert keeps clients from paging anyone.
+  if (opts.error instanceof InvalidJsonBodyError) return;
   const level: ErrorLevel = opts.level ?? 'error';
   const msg = opts.error instanceof Error ? opts.error.message : String(opts.error ?? 'Unknown error');
   const stack = opts.error instanceof Error ? opts.error.stack : undefined;

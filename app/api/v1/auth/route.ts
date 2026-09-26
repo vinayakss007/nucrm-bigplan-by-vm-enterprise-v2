@@ -15,6 +15,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { readJsonBody } from '@/lib/api/validate';
 import { db } from '@/drizzle/db';
 import { users } from '@/drizzle/schema';
 import { eq, and, sql } from 'drizzle-orm';
@@ -46,7 +47,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const body = await request.json();
+    const body = await readJsonBody(request);
 
     if (!body.email || !body.password) {
       throw new ValidationError('email and password are required');
@@ -130,7 +131,7 @@ export async function POST_LOGOUT(_request: NextRequest) {
 export async function POST_SIGNUP(request: NextRequest) {
   console.warn('DEPRECATED: /api/v1/auth/signup called - use /api/auth/signup instead');
   try {
-    const body = await request.json();
+    const body = await readJsonBody(request);
 
     // Validate
     if (!body.email || !body.password) {

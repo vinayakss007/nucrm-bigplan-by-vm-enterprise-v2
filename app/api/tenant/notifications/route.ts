@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { readJsonBody } from '@/lib/api/validate';
 import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
@@ -77,7 +78,7 @@ export const PATCH = withApiRoute(async (request: NextRequest) => {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
 
-    const body = await request.json();
+    const body = await readJsonBody(request);
 
     if (body.action === 'mark_all_read' || body.markAllRead === true) {
       await db.update(notifications)
@@ -128,7 +129,7 @@ export const DELETE = withApiRoute(async (request: NextRequest) => {
     if (ctx instanceof NextResponse) return ctx;
 
     let body;
-    try { body = await request.json(); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
+    try { body = await readJsonBody(request); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
 
     if (body.id) {
       const concurrencyWhere = concurrencyGuard(notifications, body.expectedUpdatedAt);
