@@ -136,7 +136,6 @@
   "lib/db/ensure-schema.ts": 1,
   "lib/db/migration-safety.ts": 1,
   "lib/db/request-connection.ts": 2,
-  "lib/db/rls.ts": 12,
   "lib/db/safe-connection.ts": 3,
   "lib/dev-logger.ts": 3,
   "lib/email/mock-service.ts": 1,
