@@ -37,8 +37,7 @@ export const GET = withApiRoute(async (req: NextRequest) => {
       .orderBy(teams.name);
 
     return NextResponse.json({ data: rows });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) { return apiError(err); }
+  } catch (err) { return apiError(err); }
 });
 
 // POST /api/tenant/teams — create a team (admin only).
@@ -93,6 +92,5 @@ export const POST = withApiRoute(async (req: NextRequest) => {
     });
 
     return NextResponse.json({ data: team }, { status: 201 });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) { return apiError(err); }
+  } catch (err) { return apiError(err); }
 });

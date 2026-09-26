@@ -142,8 +142,7 @@ export const GET = withApiRoute(async (req: NextRequest) => {
     return NextResponse.json({ data: withExpiry, total: withExpiry.length });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) { return apiError(err); }
+  } catch (err) { return apiError(err); }
 });
 
 export const PATCH = withApiRoute(async (req: NextRequest) => {
@@ -222,8 +221,7 @@ export const PATCH = withApiRoute(async (req: NextRequest) => {
     return NextResponse.json({ ok: true, message: `${resource_type} restored successfully` });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) { return apiError(err); }
+  } catch (err) { return apiError(err); }
 });
 
 export const DELETE = withApiRoute(async (req: NextRequest) => {
@@ -262,6 +260,5 @@ export const DELETE = withApiRoute(async (req: NextRequest) => {
     return NextResponse.json({ ok: true });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) { return apiError(err); }
+  } catch (err) { return apiError(err); }
 });

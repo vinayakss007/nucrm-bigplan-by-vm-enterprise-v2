@@ -28,8 +28,7 @@ export const GET = withApiRoute(async (req: NextRequest) => {
     return NextResponse.json({ data: merged });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) { return apiError(err); }
+  } catch (err) { return apiError(err); }
 });
 
 export const POST = withApiRoute(async (req: NextRequest) => {
@@ -44,8 +43,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
     return NextResponse.json({ ok: true });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) { return apiError(err); }
+  } catch (err) { return apiError(err); }
 });
 
 export const PATCH = withApiRoute(async (req: NextRequest) => {
@@ -64,6 +62,5 @@ export const PATCH = withApiRoute(async (req: NextRequest) => {
     return NextResponse.json({ ok: true });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) { return apiError(err); }
+  } catch (err) { return apiError(err); }
 });
