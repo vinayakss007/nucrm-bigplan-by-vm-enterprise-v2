@@ -182,7 +182,12 @@ export function getPool(): Pool {
       ssl: pgSslConfig(),
       max: poolSize,
       idleTimeoutMillis: pgBouncer ? 10_000 : 60_000,
-      connectionTimeoutMillis: 30_000,
+      // #2122: was 30_000. Under saturation requests queued a full 30s and
+      // then died anyway (28% 5xx at ~100 concurrent DB requests in the
+      // 2026-09-25 stress pass). Fail the checkout in 5s instead: withApiRoute
+      // turns it into an immediate 503 + Retry-After, so clients back off
+      // while the pool drains instead of piling on doomed requests.
+      connectionTimeoutMillis: parseIntEnv(process.env['DATABASE_CONNECTION_TIMEOUT_MS'], 5_000),
       allowExitOnIdle: true,
       statement_timeout: parseIntEnv(process.env['DATABASE_STATEMENT_TIMEOUT'], 10000),
     };

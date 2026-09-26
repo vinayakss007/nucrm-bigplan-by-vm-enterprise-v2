@@ -150,6 +150,7 @@ services:
       # server-connection budget (app 20 + worker 10 ≈ 30 of the 40 pgbouncer
       # default pool) is auditable from this file alone.
       - DATABASE_POOL_SIZE=${DATABASE_POOL_SIZE:-20}
+      - DATABASE_CONNECTION_TIMEOUT_MS=${DATABASE_CONNECTION_TIMEOUT_MS:-5000}
       - SENTRY_ENVIRONMENT=preprod
       - SENTRY_RELEASE=${SENTRY_RELEASE:-}
       # The base compose passes S3_ENDPOINT/S3_REGION/AWS_* and both bucket vars
