@@ -5,6 +5,7 @@
  */
 'use client';
 import { useState, useRef, useCallback } from 'react';
+import { useMutation } from '@tanstack/react-query';
 import { Upload, Download, Loader2, AlertTriangle, CheckCircle, X, Database, FileSpreadsheet, ArrowRight, Eye } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
@@ -66,10 +67,8 @@ export default function ImportExportPage() {
 function ImportExportInner() {
   const [tab, setTab] = useState<'import' | 'export'>('import');
   const [entityType, setEntityType] = useState('contacts');
-  const [importing, setImporting] = useState(false);
   const [result, setResult] = useState<ImportResult | null>(null);
   const [dragOver, setDragOver] = useState(false);
-  const [exporting, setExporting] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   // Import workflow state
@@ -202,7 +201,46 @@ function ImportExportInner() {
     setColumnMapping(prev => ({ ...prev, [csvCol]: dbCol }));
   };
 
-  const handleImport = async () => {
+  // #1328: import/export POSTs via useMutation (were raw fetch + useState flags).
+  const importMutation = useMutation({
+    mutationFn: async (csv: string) => {
+      const res = await fetch(`/api/tenant/${entityType}/import`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ csv }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      return data as ImportResultData;
+    },
+    onSuccess: (data) => { setResult({ type: 'success', data }); setStep('preview'); toast.success('Import completed'); },
+    onError: (err: Error) => {
+      setResult({ type: 'error', message: err.message });
+      toast.error(err.message);
+    },
+  });
+  const importing = importMutation.isPending;
+
+  const exportMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/tenant/export?entity=${entityType}`);
+      if (!res.ok) throw new Error('Export failed');
+      return res.blob();
+    },
+    onSuccess: (blob) => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${entityType}-export.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success('Export downloaded');
+    },
+    onError: (err: Error) => toast.error(err.message || 'Export failed'),
+  });
+  const exporting = exportMutation.isPending;
+
+  const handleImport = () => {
     // Build CSV from mapped data
     const mappedColumns = Object.entries(columnMapping).filter(([, v]) => v);
     if (mappedColumns.length === 0) { toast.error('Please map at least one column'); return; }
@@ -216,47 +254,11 @@ function ImportExportInner() {
     });
     const csv = [csvHeader, ...csvRows].join('\n');
 
-    setImporting(true);
     setResult(null);
-    try {
-      const res = await fetch(`/api/tenant/${entityType}/import`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ csv }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
-      setResult({ type: 'success', data });
-      setStep('preview');
-      toast.success('Import completed');
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Import failed';
-      setResult({ type: 'error', message });
-      toast.error(message);
-    } finally {
-      setImporting(false);
-    }
+    importMutation.mutate(csv);
   };
 
-  const handleExport = async () => {
-    setExporting(true);
-    try {
-      const res = await fetch(`/api/tenant/export?entity=${entityType}`);
-      if (!res.ok) throw new Error('Export failed');
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${entityType}-export.csv`;
-      a.click();
-      URL.revokeObjectURL(url);
-      toast.success('Export downloaded');
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Export failed');
-    } finally {
-      setExporting(false);
-    }
-  };
+  const handleExport = () => exportMutation.mutate();
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();

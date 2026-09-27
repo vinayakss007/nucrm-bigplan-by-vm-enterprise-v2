@@ -4,8 +4,9 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { Suspense, useState, useEffect, useCallback } from 'react';
+import { Suspense, useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { useMutation } from '@tanstack/react-query';
 import { LogIn, Loader2, ShieldAlert } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -35,8 +36,9 @@ export function usePortalSession() {
 function LoginInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  // Client-side validation messages (pre-submit); API/network errors come
+  // from the mutation state below.
+  const [localError, setLocalError] = useState('');
 
   const [form, setForm] = useState({
     email: searchParams.get('email') || '',
@@ -44,23 +46,24 @@ function LoginInner() {
     tenant_id: searchParams.get('tenant_id') || '',
   });
 
-  const doLogin = useCallback(async (email: string, token: string, tenantId: string) => {
-    setLoading(true);
-    setError('');
-    try {
-      const res = await fetch('/api/tenant/portal/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, token, tenant_id: tenantId }),
-      });
-      const data = await res.json();
-
-      if (!res.ok) {
-        setError(data.error || 'Login failed');
-        setLoading(false);
-        return;
+  // #1328: login via useMutation (was raw fetch + useState loading/error).
+  const loginMutation = useMutation({
+    mutationFn: async (creds: { email: string; token: string; tenantId: string }) => {
+      let res: Response;
+      try {
+        res = await fetch('/api/tenant/portal/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: creds.email, token: creds.token, tenant_id: creds.tenantId }),
+        });
+      } catch {
+        throw new Error('Connection failed. Please try again.');
       }
-
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Login failed');
+      return data;
+    },
+    onSuccess: (data) => {
       const session: PortalSession = {
         email: data.client.email,
         name: data.client.name,
@@ -69,40 +72,41 @@ function LoginInner() {
       localStorage.setItem('portal_session', JSON.stringify(session));
       toast.success(`Welcome, ${data.client.name}`);
       router.replace('/portal');
-    } catch {
-      setError('Connection failed. Please try again.');
-      setLoading(false);
-    }
-  }, [router]);
+    },
+  });
+  const loading = loginMutation.isPending;
+  const error = localError || (loginMutation.isError ? loginMutation.error.message : '');
 
+  // Deep-link auto-login: when email/token/tenant_id are all in the URL,
+  // fire the login once (was an effect calling doLogin directly).
+  const autoLoggedInRef = useRef(false);
   useEffect(() => {
     const urlEmail = searchParams.get('email');
     const urlToken = searchParams.get('token');
     const urlTenant = searchParams.get('tenant_id');
-    if (urlEmail && urlToken && urlTenant) {
-      doLogin(urlEmail, urlToken, urlTenant);
+    if (urlEmail && urlToken && urlTenant && !autoLoggedInRef.current) {
+      autoLoggedInRef.current = true;
+      loginMutation.mutate({ email: urlEmail, token: urlToken, tenantId: urlTenant });
     }
-  }, [searchParams, doLogin]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
+  const fail = (msg: string) => { loginMutation.reset(); setLocalError(msg); };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.email || !form.token || !form.tenant_id) {
-      setError('All fields are required');
-      return;
-    }
+    if (!form.email || !form.token || !form.tenant_id) { fail('All fields are required'); return; }
     // #1342: validate the shape of the inputs before hitting the API.
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(form.email.trim())) {
-      setError('Enter a valid email address');
-      return;
-    }
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(form.email.trim())) { fail('Enter a valid email address'); return; }
     // Access tokens are long opaque strings — reject obviously malformed input
     // (too short, or containing whitespace) before submitting.
     const token = form.token.trim();
     if (token.length < 16 || /\s/.test(token)) {
-      setError('That access token looks invalid. Paste the full token from your invitation email.');
+      fail('That access token looks invalid. Paste the full token from your invitation email.');
       return;
     }
-    doLogin(form.email.trim(), token, form.tenant_id.trim());
+    setLocalError('');
+    loginMutation.mutate({ email: form.email.trim(), token, tenantId: form.tenant_id.trim() });
   };
 
   const inp = "w-full px-3 py-2.5 rounded-xl border border-border bg-card text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500 transition-all";
