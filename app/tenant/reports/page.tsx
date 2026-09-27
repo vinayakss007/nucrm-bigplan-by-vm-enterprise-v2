@@ -4,13 +4,14 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import {
   BarChart3, Download, RefreshCw, FileText, TrendingUp, Users, CheckSquare,
   Mail, Building2, Target, Zap, FilePlus, Clock
 } from 'lucide-react';
 import { formatCurrency, formatDate, cn } from '@/lib/utils';
+import { useApiQuery } from '@/lib/query/client';
 import toast from 'react-hot-toast';
 
 const REPORT_TYPES = [
@@ -61,29 +62,44 @@ function downloadCSV(data: Record<string, unknown>[], filename: string) {
 export default function ReportsPage() {
   const [selectedType, setSelectedType] = useState('contacts');
   const [dateRange, setDateRange] = useState(30);
-  const [loading, setLoading] = useState(false);
-  const [results, setResults] = useState<Record<string, unknown>[]>([]);
-  const [ran, setRan] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState('All');
+  // #1328: the report is now a cached TanStack query keyed on the last-run
+  // params (null = not yet run). Re-clicking Run with unchanged params
+  // refetches explicitly; switching back to a previously-run report is free.
+  const [ranWith, setRanWith] = useState<{ type: string; days: number } | null>(null);
 
   const filteredTypes = categoryFilter === 'All'
     ? REPORT_TYPES
     : REPORT_TYPES.filter(r => r.category === categoryFilter);
 
-  const runReport = async () => {
-    setLoading(true);
-    setRan(true);
-    try {
-      const params = new URLSearchParams({ type: selectedType, days: String(dateRange) });
-      const res = await fetch(`/api/tenant/reports?${params}`);
-      const data = await res.json();
-      if (!res.ok) { toast.error(data.error || 'Failed'); setLoading(false); return; }
-      setResults(data.data || []);
-      if (!data.data?.length) toast.success('No data found for this period');
-    } catch (err: unknown) {
-      toast.error('Report failed: ' + (err instanceof Error ? err.message : String(err)));
+  const reportUrl = ranWith
+    ? `/api/tenant/reports?${new URLSearchParams({ type: ranWith.type, days: String(ranWith.days) })}`
+    : '';
+  const reportQuery = useApiQuery<{ data?: Record<string, unknown>[] }>(
+    ['tenant', 'reports', ranWith?.type ?? '', ranWith?.days ?? 0],
+    reportUrl,
+    { enabled: !!ranWith, staleTime: 60_000 },
+  );
+  const results: Record<string, unknown>[] = reportQuery.data?.data ?? [];
+  const loading = reportQuery.isFetching;
+  const ran = !!ranWith;
+
+  // useQuery has no onError callback (TanStack v5) — toast each distinct
+  // failure once; the results panel already renders the empty-data state.
+  const lastToastedError = useRef<unknown>(null);
+  useEffect(() => {
+    if (reportQuery.isError && reportQuery.error !== lastToastedError.current) {
+      lastToastedError.current = reportQuery.error;
+      toast.error('Report failed: ' + reportQuery.error.message);
     }
-    setLoading(false);
+  }, [reportQuery.isError, reportQuery.error]);
+
+  const runReport = () => {
+    if (ranWith && ranWith.type === selectedType && ranWith.days === dateRange) {
+      void reportQuery.refetch();
+    } else {
+      setRanWith({ type: selectedType, days: dateRange });
+    }
   };
 
   const meta = REPORT_TYPES.find(r => r.id === selectedType)!;

@@ -5,6 +5,7 @@
  */
 'use client';
 import { useState } from 'react';
+import { useMutation } from '@tanstack/react-query';
 import { BrainCircuit, Loader2, ThumbsUp, ThumbsDown, Minus, Send } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -17,30 +18,24 @@ type SentimentResult = {
 
 export default function SentimentPage() {
   const [text, setText] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<SentimentResult | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
-  const analyze = async () => {
-    if (!text.trim()) return;
-    setLoading(true);
-    setError(null);
-    setResult(null);
-    try {
+  // #1328: analysis via useMutation — loading/error/result derive from its
+  // state (were three useState flags + raw fetch).
+  const analyzeMutation = useMutation({
+    mutationFn: async () => {
       const r = await fetch('/api/tenant/ai/sentiment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text }),
       });
-      const data = await r.json();
+      const data = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(data.error || 'Analysis failed');
-      setResult(data.data);
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setLoading(false);
-    }
-  };
+      return data.data as SentimentResult;
+    },
+  });
+  const loading = analyzeMutation.isPending;
+  const error = analyzeMutation.isError ? analyzeMutation.error.message : null;
+  const result = analyzeMutation.data ?? null;
 
   const labelConfig = {
     positive: { icon: ThumbsUp, color: 'text-emerald-600', bg: 'bg-emerald-50 dark:bg-emerald-950/30', border: 'border-emerald-300' },
@@ -72,7 +67,7 @@ export default function SentimentPage() {
           className="w-full h-32 rounded-lg border border-border bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-violet-500"
         />
         <button
-          onClick={analyze}
+          onClick={() => { if (text.trim()) analyzeMutation.mutate(); }}
           disabled={loading || !text.trim()}
           className={cn(
             'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors',
