@@ -158,10 +158,7 @@ const TENANT_TABLES = [
 ];
 
 export interface TenantExportResult {
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  tables: Record<string, { columns: string[]; rows: Record<string, any>[] }>;
+  tables: Record<string, { columns: string[]; rows: Record<string, unknown>[] }>;
   dataSize: number;
   tableCount: number;
   totalRecords: number;
@@ -212,14 +209,11 @@ export class TenantDataExporter {
             result.totalRecords += tableData.rows.length;
           }
           result.tableCount++;
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-        } catch (err: any) {
+        } catch (err) {
           // Table might not exist yet (migrations not run) — skip gracefully
           // Only warn for non-optional tables; optional tables are expected to be missing sometimes
           if (!tableDef.optional) {
-            console.warn(`[Export] Table ${tableDef.table} not found or error, skipping:`, err.message);
+            console.warn(`[Export] Table ${tableDef.table} not found or error, skipping:`, err instanceof Error ? err.message : String(err));
           }
           result.tableCount++; // Count it anyway so progress is accurate
         }
@@ -228,10 +222,7 @@ export class TenantDataExporter {
       // Calculate data size
       result.dataSize = Buffer.byteLength(JSON.stringify(result.tables), 'utf8');
 
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (err: any) {
+    } catch (err) {
       logger.error('[Export] Critical error during export', { error: err instanceof Error ? err.message : String(err) });
       throw err;
     }
@@ -244,37 +235,27 @@ export class TenantDataExporter {
    */
   private async exportTable(
     tableDef: { table: string; filterColumn: string }
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  ): Promise<{ columns: string[]; rows: Record<string, any>[] }> {
+  ): Promise<{ columns: string[]; rows: Record<string, unknown>[] }> {
     // Get Drizzle table object if it exists in registry
     const table = TABLE_REGISTRY[tableDef.table as TableName];
-    
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let result: any;
+
+    let result: Record<string, unknown>[];
     if (table) {
       // Use Drizzle select if table is registered
       result = await db.select()
         .from(table.table)
-        .where(sql`${sql.identifier(tableDef.filterColumn)} = ${this.tenantId}`);
+        .where(sql`${sql.identifier(tableDef.filterColumn)} = ${this.tenantId}`) as unknown as Record<string, unknown>[];
     } else {
       // Fallback to raw SQL for unregistered tables
-      result = await db.execute(
+      const execResult = await db.execute(
         sql`SELECT * FROM ${sql.identifier(tableDef.table)} WHERE ${sql.identifier(tableDef.filterColumn)} = ${this.tenantId}`
       );
-      result = result.rows;
+      result = execResult.rows as unknown as Record<string, unknown>[];
     }
 
     // Convert BigInt and Date to serializable formats
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const rows = result.map((row: any) => {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const cleanRow: Record<string, any> = {};
+    const rows = result.map((row) => {
+      const cleanRow: Record<string, unknown> = {};
       for (const [key, value] of Object.entries(row)) {
         if (typeof value === 'bigint') {
           cleanRow[key] = Number(value);
@@ -290,7 +271,7 @@ export class TenantDataExporter {
     });
 
     // Get column names
-    const columns = rows.length > 0 ? Object.keys(rows[0]) : [];
+    const columns = rows[0] ? Object.keys(rows[0]) : [];
 
     return {
       columns,

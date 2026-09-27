@@ -43,6 +43,8 @@ export interface TenantImportResult {
   errors: { table: string; error: string }[];
 }
 
+type TenantImportTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
 export class TenantDataImporter {
   private tenantId: string;
 
@@ -54,10 +56,7 @@ export class TenantDataImporter {
    * Import all tables from a backup export
    */
   async importAll(
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    tables: Record<string, { columns: string[]; rows: Record<string, any>[] }>
+    tables: Record<string, { columns: string[]; rows: Record<string, unknown>[] }>
   ): Promise<TenantImportResult> {
     const result: TenantImportResult = {
       tablesRestored: 0,
@@ -72,21 +71,15 @@ export class TenantDataImporter {
             const inserted = await this.importTable(tx, tableName, tableData);
             result.tablesRestored++;
             result.recordsRestored += inserted;
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-          } catch (err: any) {
-            result.errors.push({ table: tableName, error: err.message });
+          } catch (err) {
+            result.errors.push({ table: tableName, error: err instanceof Error ? err.message : String(err) });
             logger.error('[Import] Error importing table', { tableName, error: err instanceof Error ? err.message : String(err) });
             // Continue with other tables — don't fail entirely
           }
         }
       });
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (err: any) {
-      throw new Error(`Import transaction failed: ${err.message}`);
+    } catch (err) {
+      throw new Error(`Import transaction failed: ${err instanceof Error ? err.message : String(err)}`);
     }
 
     return result;
@@ -204,11 +197,8 @@ export class TenantDataImporter {
           }
         }
       });
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (err: any) {
-      throw new Error(`Delete failed: ${err.message}`);
+    } catch (err) {
+      throw new Error(`Delete failed: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
@@ -216,15 +206,9 @@ export class TenantDataImporter {
    * Import a single table
    */
   private async importTable(
-
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    tx: any,
+    tx: TenantImportTx,
     tableName: string,
-
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    tableData: { columns: string[]; rows: Record<string, any>[] }
+    tableData: { columns: string[]; rows: Record<string, unknown>[] }
   ): Promise<number> {
     if (tableData.rows.length === 0) return 0;
 
@@ -250,15 +234,12 @@ export class TenantDataImporter {
       const query = sql`INSERT INTO ${sql.identifier(tableName)} (${colList}) VALUES (${placeholders}) ON CONFLICT (${sql.identifier(conflictColumn)}) DO NOTHING`;
 
       try {
-        const result = await tx.execute(query);
+        const result = await tx.execute(query) as unknown as { rowCount?: number | null };
         if (result.rowCount && result.rowCount > 0) {
           inserted++;
         }
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } catch (err: any) {
-        console.warn(`[Import] Row insert failed in ${tableName}:`, err.message);
+      } catch (err) {
+        console.warn(`[Import] Row insert failed in ${tableName}:`, err instanceof Error ? err.message : String(err));
       }
     }
 
@@ -305,32 +286,22 @@ export class TenantDataImporter {
             if (res.rowCount) {
               result.recordsRestored += res.rowCount;
             }
- 
-
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-          } catch (err: any) {
-            result.errors.push({ table: 'sql', error: err.message });
-            console.warn('[Import SQL] Statement failed:', err.message);
+          } catch (err) {
+            result.errors.push({ table: 'sql', error: err instanceof Error ? err.message : String(err) });
+            console.warn('[Import SQL] Statement failed:', err instanceof Error ? err.message : String(err));
           }
         }
       });
       result.tablesRestored = 1;
- 
-
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (err: any) {
-      throw new Error(`SQL import failed: ${err.message}`);
+    } catch (err) {
+      throw new Error(`SQL import failed: ${err instanceof Error ? err.message : String(err)}`);
     }
 
     return result;
   }
 }
 
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function _parseAndBuildInsert(sqlString: string): any {
+function _parseAndBuildInsert(sqlString: string): SQL | null {
   // Accept an optional schema qualifier and optional double-quoted identifiers,
   // e.g. all of:
   //     INSERT INTO contacts (...)

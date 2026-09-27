@@ -149,8 +149,6 @@
   "lib/react/optimizations.tsx": 3,
   "lib/restore/restore-executor.ts": 4,
   "lib/storage/s3.ts": 2,
-  "lib/tenant-data-export.ts": 7,
-  "lib/tenant-data-import.ts": 10,
   "lib/usage/tracker.ts": 1,
   "lib/utils.ts": 3,
   "lib/visitor-tracking.ts": 2,
