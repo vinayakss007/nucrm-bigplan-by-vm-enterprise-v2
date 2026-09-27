@@ -9,7 +9,7 @@
  * Ready-to-use automations that can be enabled with one click
  */
 
-import { Workflow } from './types';
+import { Workflow, WorkflowEventData } from './types';
 import { sendEmail } from '@/lib/email/service';
 import { escapeHtml } from '@/lib/email/escape-html';
 import { createNotification } from '@/lib/notifications';
@@ -26,15 +26,14 @@ export const PREBUILT_WORKFLOWS: Workflow[] = [
     actions: [
       {
         type: 'send-email',
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-        execute: async (data: any) => {
+        execute: async (data: WorkflowEventData) => {
+          const to = data.contact?.email;
+          if (!to) return;
           const tenantName = escapeHtml(String(data.tenant?.name ?? ''));
           const firstName = escapeHtml(String(data.contact?.first_name || 'there'));
           await sendEmail({
-            to: data.contact.email,
-            subject: `Welcome to ${data.tenant.name}!`,
+            to,
+            subject: `Welcome to ${data.tenant?.name ?? ''}!`,
             html: `
               <p>Hi ${firstName},</p>
               <p>Welcome to ${tenantName}! We're excited to work with you.</p>
@@ -62,17 +61,16 @@ export const PREBUILT_WORKFLOWS: Workflow[] = [
     actions: [
       {
         type: 'send-notification',
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-        execute: async (data: any) => {
+        execute: async (data: WorkflowEventData) => {
+          const task = data.task;
+          if (!task?.assigned_to || !data.tenant_id) return;
           await createNotification({
-            userId: data.task.assigned_to,
+            userId: task.assigned_to,
             tenantId: data.tenant_id,
             type: 'task_due',
             title: 'Task Due Today',
-            body: `${data.task.title} is due today`,
-            link: `/tenant/tasks/${data.task.id}`
+            body: `${task.title} is due today`,
+            link: `/tenant/tasks/${task.id}`
           });
         }
       }
@@ -93,17 +91,16 @@ export const PREBUILT_WORKFLOWS: Workflow[] = [
     actions: [
       {
         type: 'send-notification',
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-        execute: async (data: any) => {
+        execute: async (data: WorkflowEventData) => {
+          const deal = data.deal;
+          if (!deal?.assigned_to || !data.tenant_id) return;
           await createNotification({
-            userId: data.deal.assigned_to,
+            userId: deal.assigned_to,
             tenantId: data.tenant_id,
             type: 'deal_stage',
             title: 'Deal Stage Updated',
-            body: `${data.deal.title} moved from ${data.old_stage} to ${data.new_stage}`,
-            link: `/tenant/deals/${data.deal.id}`
+            body: `${deal.title} moved from ${data.old_stage} to ${data.new_stage}`,
+            link: `/tenant/deals/${deal.id}`
           });
         }
       }
@@ -123,10 +120,11 @@ export const PREBUILT_WORKFLOWS: Workflow[] = [
     actions: [
       {
         type: 'assign-round-robin',
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-        execute: async (data: any) => {
+        execute: async (data: WorkflowEventData) => {
+          const tenantId = data.tenant_id;
+          const targetId = data.contact?.id ?? data.lead?.id;
+          if (!tenantId || !targetId) return;
+
           const { db } = await import('@/drizzle/db');
           const { tenantMembers, contacts } = await import('@/drizzle/schema');
           const { eq, and, inArray, sql } = await import('drizzle-orm');
@@ -135,7 +133,7 @@ export const PREBUILT_WORKFLOWS: Workflow[] = [
           const reps = await db.select({ userId: tenantMembers.userId })
             .from(tenantMembers)
             .where(and(
-              eq(tenantMembers.tenantId, data.tenant_id),
+              eq(tenantMembers.tenantId, tenantId),
               eq(tenantMembers.status, 'active'),
               inArray(tenantMembers.roleSlug, ['admin', 'sales_rep'])
             ))
@@ -145,7 +143,7 @@ export const PREBUILT_WORKFLOWS: Workflow[] = [
           if (reps[0]) {
             await db.update(contacts)
               .set({ assignedTo: reps[0].userId })
-              .where(eq(contacts.id, data.contact?.id ?? data.lead?.id));
+              .where(eq(contacts.id, targetId));
           }
         }
       }
@@ -167,20 +165,21 @@ export const PREBUILT_WORKFLOWS: Workflow[] = [
     actions: [
       {
         type: 'create-task',
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-        execute: async (data: any) => {
+        execute: async (data: WorkflowEventData) => {
+          const tenantId = data.tenant_id;
+          const contact = data.contact;
+          if (!tenantId || !contact?.assigned_to) return;
+
           const { db } = await import('@/drizzle/db');
           const { tasks } = await import('@/drizzle/schema');
 
           await db.insert(tasks).values({
-            tenantId: data.tenant_id,
-            title: `Follow up with ${data.contact.first_name}`,
-            assignedTo: data.contact.assigned_to,
+            tenantId,
+            title: `Follow up with ${contact.first_name}`,
+            assignedTo: contact.assigned_to,
             dueDate: new Date(Date.now() + 24 * 60 * 60 * 1000), // tomorrow
             priority: 'medium',
-            createdBy: data.tenant_id, // Fallback if no user
+            createdBy: tenantId, // Fallback if no user
           });
         }
       }
