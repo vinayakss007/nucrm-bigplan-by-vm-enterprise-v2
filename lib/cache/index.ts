@@ -170,10 +170,7 @@ function startReconnectTimer(): void {
 // In-memory fallback cache (for development)
 // FIX HIGH-04: Add size limit to prevent unbounded memory growth
 const MAX_CACHE_ENTRIES = 1000;
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const memoryCache = new Map<string, { value: any; expires: number; lastAccessed: number }>();
+const memoryCache = new Map<string, { value: unknown; expires: number; lastAccessed: number }>();
 
 function evictIfNecessary() {
   if (memoryCache.size < MAX_CACHE_ENTRIES) return;
@@ -210,10 +207,7 @@ function evictIfNecessary() {
  */
 export async function set(
   key: string,
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  value: any,
+  value: unknown,
   ttlSeconds: number = 300
 ): Promise<void> {
   const redis = getRedisClient();
@@ -247,10 +241,7 @@ export async function set(
 /**
  * Get a cache value
  */
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function get<T = any>(key: string): Promise<T | null> {
+export async function get<T = unknown>(key: string): Promise<T | null> {
   const redis = getRedisClient();
 
   if (redis && redis.status === 'ready') {
@@ -363,10 +354,7 @@ function ttlWithJitter(ttlSeconds: number): number {
  * Get a value or set it with a fallback function
  * Includes distributed mutex to prevent cache stampede.
  */
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function getOrSet<T = any>(
+export async function getOrSet<T = unknown>(
   key: string,
   fallback: () => Promise<T>,
   ttlSeconds: number = 300
@@ -413,10 +401,7 @@ export async function getOrSet<T = any>(
  * Get or set with stale-while-revalidate:
  * Returns stale data immediately while refreshing in background.
  */
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function getOrSetStale<T = any>(
+export async function getOrSetStale<T = unknown>(
   key: string,
   fallback: () => Promise<T>,
   ttlSeconds: number = 300
@@ -463,10 +448,7 @@ export async function getOrSetStale<T = any>(
 /**
  * Warm cache by pre-loading a key
  */
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function warm<T = any>(
+export async function warm<T = unknown>(
   key: string,
   fallback: () => Promise<T>,
   ttlSeconds: number = 300
@@ -586,10 +568,7 @@ export async function incr(key: string, ttlSeconds?: number): Promise<number> {
 /**
  * Cache wrapper for database queries
  */
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function cachedQuery<T = any>(
+export async function cachedQuery<T = unknown>(
   key: string,
   queryFn: () => Promise<T>,
   ttlSeconds: number = 60

@@ -125,8 +125,6 @@
   "lib/automation/types.ts": 4,
   "lib/automation/workflows.ts": 5,
   "lib/billing/payments.ts": 1,
-  "lib/cache/index.ts": 7,
-  "lib/cache/queries.ts": 8,
   "lib/cache/redis.ts": 1,
   "lib/capture-error.ts": 1,
   "lib/data-integrity.ts": 5,

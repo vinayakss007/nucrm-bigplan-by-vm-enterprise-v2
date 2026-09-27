@@ -169,7 +169,7 @@ export async function batchGetContexts(
 
   // Get all from cache at once
   const cachePromises = tokenHashes.map(hash =>
-    redisCache.get(`${CACHE_PREFIX}${hash}`).then(ctx => ({ hash, ctx }))
+    redisCache.get<RequestContext>(`${CACHE_PREFIX}${hash}`).then(ctx => ({ hash, ctx }))
   );
 
   const cached = await Promise.all(cachePromises);
