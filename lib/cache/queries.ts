@@ -17,10 +17,7 @@ const QUERY_PREFIX = 'query:';
 /**
  * Cache a query result
  */
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function cacheQuery<T = any>(
+export async function cacheQuery<T = unknown>(
   key: string,
   data: T,
   ttlSeconds: number = 300
@@ -31,10 +28,7 @@ export async function cacheQuery<T = any>(
 /**
  * Get cached query result
  */
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function getCachedQuery<T = any>(
+export async function getCachedQuery<T = unknown>(
   key: string
 ): Promise<T | null> {
   return cache.get(`${QUERY_PREFIX}${key}`);
@@ -43,10 +37,7 @@ export async function getCachedQuery<T = any>(
 /**
  * Get query result or execute fallback
  */
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function getQueryOrFetch<T = any>(
+export async function getQueryOrFetch<T = unknown>(
   key: string,
   fetchFn: () => Promise<T>,
   ttlSeconds: number = 300
@@ -129,18 +120,12 @@ export const CacheTTL = {
  *   // ... query logic
  * }
  */
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function cachedQuery<T extends any[], _R = any>(options: {
+export function cachedQuery<T extends unknown[], _R = unknown>(options: {
   key: (...args: T) => string;
   ttl?: number;
 }) {
   return function (
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    target: any,
+    target: object,
     propertyKey: string,
     descriptor: PropertyDescriptor
   ) {
@@ -170,24 +155,15 @@ export function cachedQuery<T extends any[], _R = any>(options: {
  *   // ... mutation logic
  * }
  */
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function invalidateCache(keys: string[] | ((...args: any[]) => string[])) {
+export function invalidateCache(keys: string[] | ((...args: unknown[]) => string[])) {
   return function (
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    target: any,
+    target: object,
     propertyKey: string,
     descriptor: PropertyDescriptor
   ) {
     const originalMethod = descriptor.value;
 
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    descriptor.value = async function (...args: any[]) {
+    descriptor.value = async function (...args: unknown[]) {
       const result = await originalMethod.apply(this, args);
 
       const keysToInvalidate = typeof keys === 'function'
