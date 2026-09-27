@@ -22,13 +22,18 @@
 import { safeFetch, SsrfBlockedError } from '@/lib/security/ssrf';
 import type { IntegrationInstance, ActionResult } from './types';
 
+interface ApiPattern {
+  url: string;
+  method: string;
+  headers: Record<string, string>;
+  body: unknown;
+  authType: string;
+}
+
 export async function aiConnector(
   instance: IntegrationInstance,
   action: string,
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  params: Record<string, any>
+  params: Record<string, unknown>
 ): Promise<ActionResult> {
   const _baseUrl = instance.config['base_url'] || instance.config['baseUrl'] || guessBaseUrl(instance.providerId);
   const apiKey = instance.config['api_key'] || instance.config['token'] || instance.config['apiKey'] || '';
@@ -88,10 +93,7 @@ export async function aiConnector(
       if (!lastHttpError || res.status >= 500) {
         lastHttpError = { status: res.status, error: httpMessage };
       }
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (err: any) {
+    } catch (err) {
       // A blocked target is a hard failure — do not walk the remaining patterns
       // against the same (internal) host, which would leak timing information.
       if (err instanceof SsrfBlockedError) {
@@ -148,16 +150,9 @@ function guessBaseUrl(providerId: string): string {
 function guessApiPatterns(
   providerId: string,
   action: string,
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  params: Record<string, any>
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-): { url: string; method: string; headers: Record<string, string>; body: any; authType: string }[] {
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const patterns: { url: string; method: string; headers: Record<string, string>; body: any; authType: string }[] = [];
+  params: Record<string, unknown>
+): ApiPattern[] {
+  const patterns: ApiPattern[] = [];
 
   const id = providerId.toLowerCase();
 

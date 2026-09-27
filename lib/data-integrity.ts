@@ -148,8 +148,7 @@ export async function verifyReferentialIntegrity(
           sourceColumn: rel.sourceColumn,
           targetTable: rel.targetTable,
           targetColumn: rel.targetColumn,
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          orphanedIds: result.rows.map((r: any) => String(r.orphaned_id)),
+          orphanedIds: result.rows.map((r: { orphaned_id: string }) => String(r.orphaned_id)),
           count: result.rows.length,
         });
       }
@@ -242,8 +241,7 @@ export async function verifyTenantBoundaries(
           sampleSize,
           foreignTable: check.foreignTable,
           foreignColumn: check.foreignColumn,
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          crossTenantIds: result.rows.map((r: any) => String(r.record_id)),
+          crossTenantIds: result.rows.map((r: { record_id: string }) => String(r.record_id)),
           violated: true,
         });
       }
@@ -303,8 +301,7 @@ export async function verifyAuditChainIntegrity(
     let previousHash: string | null = null;
     let isFirstRecord = true;
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    for (const row of rows.rows as any[]) {
+    for (const row of rows.rows as Array<{ id: string; previous_hash: string | null; hash: string | null }>) {
       checkedRecords++;
       const backPointer: string | null = row.previous_hash ?? null;
       const entry: AuditChainEntry = {
@@ -384,8 +381,7 @@ async function discoverForeignKeys(pool: Pool): Promise<ForeignKeyRelationship[]
       LIMIT 200
     `);
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return result.rows.map((r: any) => ({
+    return result.rows.map((r: { source_table: string; source_column: string; target_table: string; target_column: string }) => ({
       sourceTable: r.source_table,
       sourceColumn: r.source_column,
       targetTable: r.target_table,
@@ -428,8 +424,7 @@ async function discoverTenantBoundaryChecks(pool: Pool): Promise<TenantBoundaryC
       LIMIT 100
     `);
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return result.rows.map((r: any) => ({
+    return result.rows.map((r: { source_table: string; fk_column: string; target_table: string; target_column: string }) => ({
       table: r.source_table,
       foreignColumn: r.fk_column,
       foreignTable: r.target_table,

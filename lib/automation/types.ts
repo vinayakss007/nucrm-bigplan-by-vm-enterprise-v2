@@ -15,12 +15,26 @@ export interface WorkflowTrigger {
   condition?: string;    // human-readable condition description
 }
 
+/**
+ * Payload shape passed to prebuilt workflow `execute` handlers by the
+ * automation engine / test harness. All fields are optional because each
+ * trigger supplies only the subset relevant to its workflow; handlers guard
+ * before dereferencing.
+ */
+export interface WorkflowEventData {
+  tenant_id?: string;
+  tenant?: { name?: string };
+  contact?: { id?: string; email?: string; first_name?: string; assigned_to?: string | null };
+  lead?: { id?: string };
+  task?: { id?: string; title?: string; assigned_to?: string | null };
+  deal?: { id?: string; title?: string; assigned_to?: string | null };
+  old_stage?: string;
+  new_stage?: string;
+}
+
 export interface WorkflowAction {
   type: string;
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  execute: (data: any) => Promise<void>;
+  execute: (data: WorkflowEventData) => Promise<void>;
 }
 
 export interface Workflow {
