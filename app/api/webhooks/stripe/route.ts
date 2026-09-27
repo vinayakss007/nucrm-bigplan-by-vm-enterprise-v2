@@ -17,6 +17,37 @@ import { logError } from '@/lib/errors-server';
 
 const IDEMPOTENCY_TTL = 3600 * 24; // 24 hours
 
+// Structural shapes for Stripe objects read out of the verified webhook JSON.
+// Only the fields these handlers actually consume are declared (Issue #1341).
+interface StripeMetadata {
+  tenant_id?: string;
+}
+
+interface StripeSubscriptionLike {
+  id?: string;
+  status?: string;
+  customer?: string | { id?: string } | null;
+  metadata?: StripeMetadata;
+  items?: { data?: Array<{ price?: { id?: string } } | null> } | null;
+  cancel_at_period_end?: boolean;
+}
+
+interface StripeSessionLike {
+  id?: string;
+  customer?: string | null;
+  subscription?: string | StripeSubscriptionLike | null;
+  metadata?: StripeMetadata;
+  amount_total?: number | null;
+  line_items?: { data?: Array<{ price?: { id?: string } } | null> } | null;
+}
+
+interface StripeInvoiceLike {
+  id?: string;
+  customer?: string | null;
+  amount_paid?: number | null;
+  currency?: string | null;
+}
+
 /**
  * Stripe Webhook Handler
  *
@@ -89,27 +120,27 @@ export async function POST(request: NextRequest) {
   try {
     switch (eventType) {
       case 'checkout.session.completed': {
-        await handleCheckoutCompleted(data);
+        await handleCheckoutCompleted(data as unknown as StripeSessionLike);
         break;
       }
 
       case 'customer.subscription.updated': {
-        await handleSubscriptionUpdated(data);
+        await handleSubscriptionUpdated(data as unknown as StripeSubscriptionLike);
         break;
       }
 
       case 'customer.subscription.deleted': {
-        await handleSubscriptionDeleted(data);
+        await handleSubscriptionDeleted(data as unknown as StripeSubscriptionLike);
         break;
       }
 
       case 'invoice.payment_succeeded': {
-        await handlePaymentSucceeded(data);
+        await handlePaymentSucceeded(data as unknown as StripeInvoiceLike);
         break;
       }
 
       case 'invoice.payment_failed': {
-        await handlePaymentFailed(data);
+        await handlePaymentFailed(data as unknown as StripeInvoiceLike);
         break;
       }
 
@@ -134,10 +165,7 @@ export async function POST(request: NextRequest) {
 
 // ── Event Handlers ───────────────────────────────────────────────────────────
 
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function handleCheckoutCompleted(session: any) {
+async function handleCheckoutCompleted(session: StripeSessionLike) {
   const tenantId = session.metadata?.tenant_id;
   if (!tenantId) {
     console.warn('[Stripe] Checkout completed but no tenant_id in metadata');
@@ -145,7 +173,9 @@ async function handleCheckoutCompleted(session: any) {
   }
 
   const customerId = session.customer;
-  const subscriptionId = session.subscription;
+  const subscriptionId = typeof session.subscription === 'string'
+    ? session.subscription
+    : session.subscription?.id;
 
   // Determine plan using the most reliable method available:
   // 1. Try subscription object (price ID mapping)
@@ -167,10 +197,7 @@ async function handleCheckoutCompleted(session: any) {
   console.log(`[Stripe] Tenant ${tenantId} activated with plan ${planId}`);
 }
 
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function handleSubscriptionUpdated(subscription: any) {
+async function handleSubscriptionUpdated(subscription: StripeSubscriptionLike) {
   // #1640: Stripe does not guarantee metadata.tenant_id on every
   // customer.subscription.* event. Prefer the fast metadata path, but fall
   // back to resolving the tenant by Stripe customer id (as the invoice
@@ -247,10 +274,7 @@ async function handleSubscriptionUpdated(subscription: any) {
   console.log(`[Stripe] Tenant ${tenantId} subscription updated: stripeStatus=${status} -> status=${nuCrmStatus}, plan=${planId}`);
 }
 
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function handleSubscriptionDeleted(subscription: any) {
+async function handleSubscriptionDeleted(subscription: StripeSubscriptionLike) {
   // #1640: mirror handleSubscriptionUpdated — resolve the tenant by metadata
   // first, then fall back to the Stripe customer id so genuine cancellations
   // without metadata are not silently dropped.
@@ -284,8 +308,7 @@ function stripeCentsToDecimal(amount: unknown): number {
   return Number.isFinite(cents) ? Math.round(cents) / 100 : 0;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function handlePaymentSucceeded(invoice: any) {
+async function handlePaymentSucceeded(invoice: StripeInvoiceLike) {
   const customerId = invoice.customer;
   if (!customerId) return;
 
@@ -333,10 +356,7 @@ async function handlePaymentSucceeded(invoice: any) {
   }
 }
 
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function handlePaymentFailed(invoice: any) {
+async function handlePaymentFailed(invoice: StripeInvoiceLike) {
   const customerId = invoice.customer;
   if (!customerId) return;
 
@@ -371,10 +391,7 @@ async function handlePaymentFailed(invoice: any) {
  * handlers) so that genuine updates/cancellations are not silently dropped.
  * Returns null only when NEITHER metadata NOR the customer lookup resolves.
  */
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function resolveTenantId(subscription: any): Promise<string | null> {
+async function resolveTenantId(subscription: StripeSubscriptionLike): Promise<string | null> {
   const metadataTenantId = subscription.metadata?.tenant_id;
   if (metadataTenantId) return metadataTenantId;
 
@@ -390,10 +407,7 @@ async function resolveTenantId(subscription: any): Promise<string | null> {
   return tenant?.id ?? null;
 }
 
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function determinePlanFromCheckoutSession(session: any): string | null {
+function determinePlanFromCheckoutSession(session: StripeSessionLike): string | null {
   // Strategy 1: If the subscription is expanded (object with items), use price ID mapping
   const subscription = session.subscription;
   if (subscription && typeof subscription === 'object') {
@@ -440,10 +454,7 @@ function determinePlanFromPriceId(priceId: string): string | null {
   return null;
 }
 
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function determinePlanFromSubscription(subscription: any): string | null {
+function determinePlanFromSubscription(subscription: StripeSubscriptionLike): string | null {
   const priceId = subscription.items?.data?.[0]?.price?.id;
   if (!priceId) return null;
 
