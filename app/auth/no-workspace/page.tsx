@@ -5,6 +5,7 @@
  */
 'use client';
 import { useState } from 'react';
+import { useMutation } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { Zap, Building2, Loader2, LogOut } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
@@ -12,22 +13,32 @@ import toast from 'react-hot-toast';
 
 export default function NoWorkspacePage() {
   const [name, setName] = useState('');
-  const [creating, setCreating] = useState(false);
   const router = useRouter();
 
-  const create = async (e: React.FormEvent) => {
+  // #1328: workspace create via useMutation (was raw fetch + useState flag).
+  const createMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch('/api/tenant/workspace', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Failed');
+      return data;
+    },
+    onSuccess: () => {
+      toast.success('Workspace created!');
+      router.push('/tenant/dashboard');
+      router.refresh();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const creating = createMutation.isPending;
+
+  const create = (e: React.FormEvent) => {
     e.preventDefault();
-    setCreating(true);
-    const res = await fetch('/api/tenant/workspace', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name }),
-    });
-    const data = await res.json();
-    if (!res.ok) { toast.error(data.error || 'Failed'); setCreating(false); return; }
-    toast.success('Workspace created!');
-    router.push('/tenant/dashboard');
-    router.refresh();
+    createMutation.mutate();
   };
 
   const logout = async () => {
