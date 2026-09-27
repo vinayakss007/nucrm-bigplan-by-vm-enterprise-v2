@@ -6,6 +6,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useMutation } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Loader2, Eye, EyeOff, Mail, Lock, User, Building2,
@@ -67,50 +68,36 @@ export default function SignupPage() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
-  const [loading, setLoading] = useState(false);
+  // Client-side validation messages; API/connection errors come from the mutation.
   const [error, setError] = useState('');
   const { errors, touched, validate, touch, validateAll } = useFormValidation(validationRules);
 
   const passwordStrength = getPasswordStrength(password);
 
-  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    if (!agreedToTerms) {
-      setError('Please agree to the Terms of Service');
-      return;
-    }
-    const values = {
-      workspace_name: workspaceName,
-      full_name: name,
-      email,
-      password,
-    };
-    if (!validateAll(values)) {
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    setError('');
-
-    try {
-      const res = await fetch('/api/auth/signup', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          email,
-          password,
-          full_name: name,
-          workspace_name: workspaceName,
-        }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error || 'Signup failed');
-        setLoading(false);
-        return;
+  // #1328: signup POST via useMutation (was raw fetch + useState loading).
+  const signupMutation = useMutation({
+    mutationFn: async () => {
+      let res: Response;
+      try {
+        res = await fetch('/api/auth/signup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({
+            email,
+            password,
+            full_name: name,
+            workspace_name: workspaceName,
+          }),
+        });
+      } catch {
+        throw new Error('Connection error. Please try again.');
       }
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Signup failed');
+      return data;
+    },
+    onSuccess: () => {
       track('signup', { method: 'password' });
       toast.success('Workspace created! Welcome to NuCRM.');
       // Navigate immediately — the old 1500ms timer plus the heavy first
@@ -118,10 +105,26 @@ export default function SignupPage() {
       // (looked broken; retries minted duplicate workspaces). The toast
       // survives navigation; onboarding has its own skeleton.
       router.push('/tenant/dashboard');
-    } catch {
-      setError('Connection error. Please try again.');
-      setLoading(false);
+    },
+  });
+  const loading = signupMutation.isPending;
+  const apiError = signupMutation.isError ? signupMutation.error.message : '';
+
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!agreedToTerms) {
+      setError('Please agree to the Terms of Service');
+      return;
     }
+    setError('');
+    const values = {
+      workspace_name: workspaceName,
+      full_name: name,
+      email,
+      password,
+    };
+    if (!validateAll(values)) return;
+    signupMutation.mutate();
   }
 
 
@@ -196,12 +199,12 @@ export default function SignupPage() {
             </div>
 
             {/* Error banner */}
-            {error && (
+            {(error || apiError) && (
               <div className="mb-6 p-4 rounded-xl bg-red-50 border border-red-200 flex items-start gap-3">
                 <div className="w-5 h-5 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0 mt-0.5">
                   <span className="text-red-600 text-xs font-bold">!</span>
                 </div>
-                <p className="text-sm font-medium text-red-700">{error}</p>
+                <p className="text-sm font-medium text-red-700">{error || apiError}</p>
               </div>
             )}
 

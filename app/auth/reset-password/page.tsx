@@ -4,7 +4,8 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect, Suspense } from 'react';
+import { useState, Suspense } from 'react';
+import { useMutation } from '@tanstack/react-query';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Zap, Eye, EyeOff, Loader2, AlertTriangle } from 'lucide-react';
@@ -14,33 +15,39 @@ function ResetPasswordContent() {
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [show, setShow] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [invalid, setInvalid] = useState(false);
   const searchParams = useSearchParams();
   const router = useRouter();
   const token = searchParams.get('token');
+  const invalid = !token;
 
-  useEffect(() => {
-    if (!token) setInvalid(true);
-  }, [token, router]);
+  // #1328: reset via useMutation (was raw fetch + useState loading flag).
+  const resetMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch('/api/auth/reset-password', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, password }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Failed');
+      return data;
+    },
+    onSuccess: () => {
+      toast.success('Password reset! Logging you in...');
+      router.push('/tenant/dashboard');
+      router.refresh();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const loading = resetMutation.isPending;
 
-  const submit = async (e: React.FormEvent) => {
+  const submit = (e: React.FormEvent) => {
     e.preventDefault();
     if (password !== confirm) { toast.error('Passwords do not match'); return; }
     if (password.length < 12) { toast.error('Password must be at least 12 characters with uppercase, number, and special character'); return; }
     if (!/[A-Z]/.test(password)) { toast.error('Password must contain an uppercase letter'); return; }
     if (!/[0-9]/.test(password)) { toast.error('Password must contain a number'); return; }
     if (!/[!@#$%^&*(),.?":{}|<>]/.test(password)) { toast.error('Password must contain a special character'); return; }
-    setLoading(true);
-    const res = await fetch('/api/auth/reset-password', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token, password }),
-    });
-    const data = await res.json();
-    if (!res.ok) { toast.error(data.error || 'Failed'); setLoading(false); return; }
-    toast.success('Password reset! Logging you in...');
-    router.push('/tenant/dashboard');
-    router.refresh();
+    resetMutation.mutate();
   };
 
   const inp = "w-full px-3.5 py-2.5 rounded-xl border border-border bg-background text-sm font-medium focus:outline-none focus:ring-2 focus:ring-violet-500 placeholder:text-muted-foreground";

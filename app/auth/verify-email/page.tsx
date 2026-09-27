@@ -4,36 +4,47 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useEffect, useState, Suspense } from 'react';
+import { Suspense, useEffect, useRef } from 'react';
+import { useMutation } from '@tanstack/react-query';
 import { useSearchParams } from 'next/navigation';
 import { Zap, CheckCircle, XCircle, Loader2 } from 'lucide-react';
 
 function VerifyEmailContent() {
-  const [status, setStatus] = useState<'loading'|'success'|'error'>('loading');
-  const [msg, setMsg] = useState('');
   const searchParams = useSearchParams();
   const token = searchParams.get('token');
 
+  // #1328: verification via useMutation fired once on mount (was raw fetch +
+  // AbortController + three useState flags). A missing token short-circuits
+  // to the error panel without running the mutation.
+  const verifyMutation = useMutation({
+    mutationFn: async (t: string) => {
+      const r = await fetch('/api/auth/verify-email', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({token:t}) });
+      return r.json() as Promise<{ ok?: boolean; email?: string; error?: string }>;
+    },
+    onSuccess: (d) => {
+      // #1267: intentional full reload — email verification changes auth
+      // state; reload so middleware/server components re-run authenticated.
+      if (d.ok) setTimeout(() => { window.location.href = '/tenant/dashboard'; }, 2500);
+    },
+  });
+  const firedRef = useRef(false);
   useEffect(() => {
-    if (!token) { setStatus('error'); setMsg('No verification token provided.'); return; }
-    const controller = new AbortController();
-    const { signal } = controller;
-    let redirectTimer: ReturnType<typeof setTimeout> | undefined;
-    fetch('/api/auth/verify-email', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({token}), signal })
-      .then(r => r.json())
-      .then(d => {
-        if (signal.aborted) return;
-        // #1267: intentional full reload — email verification changes auth
-        // state; reload so middleware/server components re-run authenticated.
-        if (d.ok) { setStatus('success'); setMsg(d.email); redirectTimer = setTimeout(() => { window.location.href = '/tenant/dashboard'; }, 2500); }
-        else { setStatus('error'); setMsg(d.error); }
-      })
-      .catch((e) => {
-        if ((e as Error)?.name === 'AbortError') return;
-        setStatus('error'); setMsg('Verification failed. Please try again.');
-      });
-    return () => { controller.abort(); if (redirectTimer) clearTimeout(redirectTimer); };
+    if (token && !firedRef.current) {
+      firedRef.current = true;
+      verifyMutation.mutate(token);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
+
+  const noToken = !token;
+  const ok = verifyMutation.isSuccess && !!verifyMutation.data?.ok;
+  const failed = noToken || verifyMutation.isError || (verifyMutation.isSuccess && !verifyMutation.data?.ok);
+  const status: 'loading'|'success'|'error' = ok ? 'success' : failed ? 'error' : 'loading';
+  const msg = noToken
+    ? 'No verification token provided.'
+    : verifyMutation.isError
+      ? 'Verification failed. Please try again.'
+      : verifyMutation.data?.email ?? verifyMutation.data?.error ?? 'Verification failed. Please try again.';
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-violet-50 via-white to-indigo-50 dark:from-slate-950 dark:via-slate-900 dark:to-violet-950 flex items-center justify-center p-4">
