@@ -29,15 +29,13 @@ const SENTRY_LEVEL: Record<ErrorLevel, 'warning' | 'error' | 'fatal'> = {
  * not initialized (no DSN), this is a no-op and the DB write is unaffected.
  */
 async function forwardToSentry(opts: {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  error: any;
+  error: unknown;
   level: ErrorLevel;
   context?: string;
   tenantId?: string;
   userId?: string;
   requestId?: string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   requestUrl?: string;
   requestMethod?: string;
 }): Promise<void> {
@@ -52,8 +50,7 @@ async function forwardToSentry(opts: {
         requestId: opts.requestId,
         tenantId: opts.tenantId,
       },
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      user: opts.userId ? ({ id: opts.userId } as any) : undefined,
+      user: opts.userId ? { id: opts.userId } : undefined,
       extra: {
         requestUrl: opts.requestUrl,
         requestMethod: opts.requestMethod,
@@ -84,16 +81,14 @@ const LOKI_LEVEL: Record<ErrorLevel, 'warn' | 'error'> = {
  * guarded so a push failure can never affect the DB write or the caller.
  */
 async function forwardToLoki(opts: {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  error: any;
+  error: unknown;
   level: ErrorLevel;
   message: string;
   context?: string;
   tenantId?: string;
   userId?: string;
   requestId?: string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   requestUrl?: string;
   requestMethod?: string;
   stack?: string;
@@ -132,18 +127,12 @@ function getSourceLocation(): { file: string; line: number; function: string } |
 }
 
 export async function logError(opts: {
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  error: any;
+  error: unknown;
   context?: string;
   tenantId?: string;
   userId?: string;
   level?: ErrorLevel;
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   requestUrl?: string;
   requestMethod?: string;
   sourceFile?: string;
@@ -171,8 +160,7 @@ export async function logError(opts: {
     // Skip the DB mirror in test mode unless the caller mocked `db.insert`
     // (those unit tests legitimately assert the write happened).
     const testMode = process.env.VITEST === 'true' || process.env.NODE_ENV === 'test';
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const mockedInsert = typeof (db as any).insert?._isMockFunction === 'boolean';
+    const mockedInsert = typeof (db as unknown as { insert?: { _isMockFunction?: unknown } }).insert?.['_isMockFunction'] === 'boolean';
     if (testMode && !mockedInsert) {
       console.log(JSON.stringify({
         source: 'logError.test-mode',
