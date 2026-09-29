@@ -3,10 +3,19 @@
  * Copyright (c) 2026 abetworks.in. All Rights Reserved.
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextResponse } from 'next/server';
-import { eq, and, isNull, sql, SQL } from 'drizzle-orm';
-import { PgTableWithColumns } from 'drizzle-orm/pg-core';
+import { eq, and, isNull, sql, type SQL } from 'drizzle-orm';
+import type { AnyPgTable, PgColumn } from 'drizzle-orm/pg-core';
+
+type AppDb = (typeof import('@/drizzle/db'))['db'];
+
+type GuardableColumns = {
+  id?: PgColumn;
+  tenantId?: PgColumn;
+  parentTenantId?: PgColumn;
+  deletedAt?: PgColumn;
+  updatedAt?: PgColumn;
+};
 
 /**
  * Optimistic concurrency guard — two overloads:
@@ -28,30 +37,30 @@ import { PgTableWithColumns } from 'drizzle-orm/pg-core';
 
 // Overload 1: SQL fragment (no db)
 export function concurrencyGuard(
-  table: PgTableWithColumns<any>,
+  table: AnyPgTable,
   expectedUpdatedAt: string | Date | null | undefined,
 ): SQL<unknown> | null;
 
 // Overload 2: NextResponse guard (with db)
 export function concurrencyGuard(
-  db: any,
-  table: PgTableWithColumns<any>,
+  db: AppDb,
+  table: AnyPgTable,
   id: string | undefined | null,
   tenantId: string | undefined | null,
   expectedUpdatedAt: Date | string | null | undefined,
 ): Promise<NextResponse | null>;
 
 export function concurrencyGuard(
-  dbOrTable: any,
-  tableOrExpected: any,
-  idOrUndefined?: any,
-  tenantIdOrUndefined?: any,
-  expectedUpdatedAtOrUndefined?: any,
+  dbOrTable: AppDb | AnyPgTable,
+  tableOrExpected: AnyPgTable | Date | string | null | undefined,
+  idOrUndefined?: string | null,
+  tenantIdOrUndefined?: string | null,
+  expectedUpdatedAtOrUndefined?: Date | string | null,
 ): SQL<unknown> | null | Promise<NextResponse | null> {
   // Detect overload 1 (2 args, no db): table + expectedUpdatedAt
   if (idOrUndefined === undefined && tenantIdOrUndefined === undefined && expectedUpdatedAtOrUndefined === undefined) {
-    const table = dbOrTable;
-    const expectedUpdatedAt = tableOrExpected;
+    const table = dbOrTable as AnyPgTable & GuardableColumns;
+    const expectedUpdatedAt = tableOrExpected as Date | string | null | undefined;
 
     if (!expectedUpdatedAt) return null;
 
@@ -66,8 +75,8 @@ export function concurrencyGuard(
 
   // Overload 2 (5 args): db + table + id + tenantId + expectedUpdatedAt
   return concurrencyGuardAsync(
-    dbOrTable,
-    tableOrExpected,
+    dbOrTable as AppDb,
+    tableOrExpected as AnyPgTable,
     idOrUndefined,
     tenantIdOrUndefined,
     expectedUpdatedAtOrUndefined,
@@ -75,8 +84,8 @@ export function concurrencyGuard(
 }
 
 async function concurrencyGuardAsync(
-  db: any,
-  table: PgTableWithColumns<any>,
+  db: AppDb,
+  table: AnyPgTable,
   id: string | undefined | null,
   tenantId: string | undefined | null,
   expectedUpdatedAt: Date | string | null | undefined,
@@ -95,10 +104,11 @@ async function concurrencyGuardAsync(
     );
   }
 
-  const idCol = table.id;
-  const tenantCol = table.tenantId ?? table.parentTenantId;
-  const deletedCol = table.deletedAt;
-  const updatedAtCol = table.updatedAt;
+  const cols = table as AnyPgTable & GuardableColumns;
+  const idCol = cols.id;
+  const tenantCol = cols.tenantId ?? cols.parentTenantId;
+  const deletedCol = cols.deletedAt;
+  const updatedAtCol = cols.updatedAt;
 
   if (!idCol || !updatedAtCol) return null;
 
@@ -126,7 +136,7 @@ async function concurrencyGuardAsync(
     );
   }
 
-  const dbTime = new Date(row.updatedAt);
+  const dbTime = new Date(row.updatedAt as Date | string);
   const clientTime = new Date(timestamp);
 
   if (dbTime.getTime() !== clientTime.getTime()) {
@@ -143,8 +153,8 @@ async function concurrencyGuardAsync(
  * Same as concurrencyGuard but without tenant scoping.
  */
 export async function concurrencyGuardById(
-  db: any,
-  table: PgTableWithColumns<any>,
+  db: AppDb,
+  table: AnyPgTable,
   id: string | undefined | null,
   expectedUpdatedAt: Date | string | null | undefined,
 ): Promise<NextResponse | null> {
@@ -163,17 +173,18 @@ export async function concurrencyGuardById(
  *   .where(and(eq(deals.id, id), updatedAtMs(deals, prev.updatedAt!)))
  */
 export function updatedAtMs(
-  table: PgTableWithColumns<any>,
+  table: AnyPgTable,
   expected: Date | string,
 ): SQL<unknown> {
   const ts = expected instanceof Date ? expected : new Date(expected);
-  return sql`date_trunc('millisecond', ${table.updatedAt}::timestamptz) = date_trunc('millisecond', ${ts}::timestamptz)`;
+  const updatedAtCol = (table as AnyPgTable & GuardableColumns).updatedAt;
+  return sql`date_trunc('millisecond', ${updatedAtCol}::timestamptz) = date_trunc('millisecond', ${ts}::timestamptz)`;
 }
 
 /**
  * Check if an update affected 0 rows and return a 409 Conflict response if so.
  */
-export function checkStaleUpdate(updated: any): NextResponse | null {
+export function checkStaleUpdate(updated: unknown): NextResponse | null {
   if (!updated) {
     return NextResponse.json(
       { error: 'Stale data — this record was modified by another user. Please refresh and retry.' },

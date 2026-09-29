@@ -45,8 +45,7 @@ async function rotateLogs(): Promise<void> {
 }
 
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function writeToFile(logEntry: any) {
+function writeToFile(logEntry: Record<string, unknown>) {
   if (logFileBusy) return;
   logFileBusy = true;
   rotateLogs()
