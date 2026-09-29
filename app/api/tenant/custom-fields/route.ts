@@ -13,17 +13,14 @@ import { customFieldDefs, contacts, companies, deals, leads } from '@/drizzle/sc
 import { users, tenants, featureRegistry } from '@/drizzle/schema';
 import { tasks } from '@/drizzle/schema';
 import { eq, and, asc, desc, sql, isNull } from 'drizzle-orm';
+import type { AnyPgTable } from 'drizzle-orm/pg-core';
 import { concurrencyGuard } from '@/lib/api/concurrency';
+
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 const VALID_ENTITY_TYPES = ['contact', 'company', 'deal', 'lead', 'task', 'user', 'tenant'] as const;
-type EntityType = typeof VALID_ENTITY_TYPES[number];
-
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const tableMap: Record<EntityType, any> = {
+type EntityType = typeof VALID_ENTITY_TYPES[number];const tableMap: Record<EntityType, AnyPgTable> = {
   contact: contacts,
   company: companies,
   deal: deals,
@@ -86,11 +83,7 @@ export const GET = withApiRoute(async (req: NextRequest) => {
       // We need to use raw SQL here because table is dynamic
       const results = await db.execute(
         sql`SELECT id, metadata FROM ${table} WHERE id = ${entityId} AND tenant_id = ${ctx.tenantId}`
-      );
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const result: any = results.rows[0];
+      );      const result = results.rows[0] as { id: string; metadata: Record<string, unknown> | null } | undefined;
 
       if (!result) {
         return NextResponse.json({ error: 'Entity not found' }, { status: 404 });
@@ -104,12 +97,7 @@ export const GET = withApiRoute(async (req: NextRequest) => {
           eq(customFieldDefs.entityType, entityType)
         ),
         orderBy: [asc(customFieldDefs.displayOrder)]
-      });
-
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const fieldMap: Record<string, any> = {};
+      });      const fieldMap: Record<string, { label: string; type: string; options?: unknown; value: unknown }> = {};
       for (const def of fieldDefinitions) {
         fieldMap[def.fieldKey] = {
           label: def.fieldLabel,
@@ -261,11 +249,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
 
     const entityResult = await db.execute(
       sql`SELECT metadata FROM ${table} WHERE id = ${entityId} AND tenant_id = ${ctx.tenantId}`
-    );
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const entity: any = entityResult.rows[0];
+    );    const entity = entityResult.rows[0] as { id: string; metadata: Record<string, unknown> | null } | undefined;
     if (!entity) {
       return NextResponse.json({ error: 'Entity not found or not owned' }, { status: 404 });
     }

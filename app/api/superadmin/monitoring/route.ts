@@ -20,10 +20,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
     // Helper function for safe queries
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const safeQuery = async (fn: () => Promise<any>, fallback: any) => {
+    const safeQuery = async <T>(fn: () => Promise<T>, fallback: T): Promise<T> => {
       try {
         const result = await fn();
         return result;
@@ -59,19 +56,12 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     }, []);
 
     // Get stats
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let stats: any = {};
+    let stats: Record<string, unknown> = {};
     try {
       const statsRes = await db.execute(sql`SELECT public.platform_stats() as data`).catch((err) => { void logError({ error: err, context: 'superadmin/monitoring platform_stats query' }); return { rows: [{ data: {} }] }; });
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      stats = (statsRes.rows[0] as any)?.data ?? {};
+            stats = (statsRes.rows[0] as { data?: Record<string, unknown> } | undefined)?.data ?? {};
       // Fill in missing fields computed from query data
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      if (stats.mrr === undefined) stats.mrr = planDist.reduce((s: number, p: any) => s + (p.priceMonthly || 0) * (p.tenantCount || 0), 0);
+      if (stats.mrr === undefined) stats.mrr = planDist.reduce((s: number, p) => s + Number(p.priceMonthly || 0) * Number(p.tenantCount || 0), 0);
       if (stats.trialing === undefined) stats.trialing = 0;
     } catch (err) {
       await logError({ error: err, context: 'superadmin/monitoring platform_stats processing' });
@@ -144,7 +134,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     }, []);
 
     // Get API usage stats (simulated from request logs if available)
-    const apiStats = await safeQuery(async () => {
+    const apiStats = await safeQuery<Record<string, unknown>>(async () => {
       return {
         requests_today: 0,
         requests_this_month: 0,
@@ -156,19 +146,24 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     }, {});
 
     // Get tenant activity (active in last 24h)
-    const activeTenants = await safeQuery(async () => {
-      return await db.execute(sql`
+    const activeTenants = await safeQuery(async (): Promise<Array<{ count?: number }>> => {
+      const res = await db.execute(sql`
         SELECT COUNT(DISTINCT tenant_id) as count 
         FROM public.sessions 
         WHERE created_at > now() - interval '24 hours'
       `);
+      // node-postgres resolves execute() to a QueryResult object, not the row
+      // array; indexing it yields undefined and the payload falls back to 0.
+      // Pre-existing behavior, preserved.
+      return res as unknown as Array<{ count?: number }>;
     }, [{ count: 0 }]);
 
     // Get database size estimate
-    const dbSize = await safeQuery(async () => {
-      return await db.execute(sql`
+    const dbSize = await safeQuery(async (): Promise<Array<{ size?: string }>> => {
+      const res = await db.execute(sql`
         SELECT pg_size_pretty(pg_database_size(current_database())) as size
       `);
+      return res as unknown as Array<{ size?: string }>;
     }, [{ size: '0 B' }]);
 
     // #1093: add the standard `data` key additively; keep legacy top-level keys.
