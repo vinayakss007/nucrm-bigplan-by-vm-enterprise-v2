@@ -21,8 +21,7 @@ import { logError } from '@/lib/errors-server';
 export const GET = withApiRoute(async (request: NextRequest,
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  { params }: any) => {
+  { params }: { params: Promise<{ id: string }> }) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -79,8 +78,7 @@ export const GET = withApiRoute(async (request: NextRequest,
 export const DELETE = withApiRoute(async (request: NextRequest,
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  { params }: any) => {
+  { params }: { params: Promise<{ id: string }> }) => {
   try {
   const limited = await rateLimitMutating(request, 'integrations', 'delete');
   if (limited) return limited;
@@ -112,8 +110,7 @@ export const DELETE = withApiRoute(async (request: NextRequest,
 export const POST = withApiRoute(async (request: NextRequest,
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  { params }: any) => {
+  { params }: { params: Promise<{ id: string }> }) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;

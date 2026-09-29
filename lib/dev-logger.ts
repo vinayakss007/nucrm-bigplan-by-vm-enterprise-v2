@@ -47,8 +47,7 @@ interface QueryLog {
   timestamp: number;
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  params?: any[];
+  params?: unknown[];
 }
 
 interface ErrorLog {
@@ -216,8 +215,7 @@ class DevelopmentLogger {
    */
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  query(sql: string, duration: number, params?: any[]) {
+  query(sql: string, duration: number, params?: unknown[]) {
     const log: QueryLog = {
       sql: sql.slice(0, 500), // Limit SQL length
       duration,
@@ -548,8 +546,11 @@ export const devLogger = new DevelopmentLogger();
 export function createDevelopmentMiddleware() {
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return function developmentLoggerMiddleware(req: any, res: any, next: () => void) {
+  return function developmentLoggerMiddleware(
+    req: { method: string; url: string; ip?: string; user?: { id?: string } },
+    res: { on(event: 'finish', listener: () => void): void; statusCode: number },
+    next: () => void
+  ) {
     const start = Date.now();
     
     // Track response
