@@ -227,8 +227,7 @@ export const PATCH = withApiRoute(async (request: NextRequest) => {
     // Map validated snake_case fields to their camelCase Drizzle columns.
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const mappedUpdates: any = {};
+    const mappedUpdates: Partial<typeof tenants.$inferInsert> = {};
     if (v.name !== undefined) mappedUpdates.name = v.name;
     if (v.status !== undefined) mappedUpdates.status = v.status;
     if (v.billing_email !== undefined) mappedUpdates.billingEmail = v.billing_email;
