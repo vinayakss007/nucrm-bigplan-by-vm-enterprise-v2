@@ -116,9 +116,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ ok:true, due_today: dueToday.length, overdue: overdue.length, notified });
  
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err:any) {
+  } catch (err) {
     void logError({ error: err, context: 'cron/task-reminders' });
     return apiError(err);
   }

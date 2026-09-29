@@ -17,7 +17,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { readJsonBody, InvalidJsonBodyError } from '@/lib/api/validate';
 import { logError } from '@/lib/errors-server';
 import { z } from 'zod';
-import { db } from '@/drizzle/db';
+import { db, type DbClient } from '@/drizzle/db';
 import { users, tenantMembers, sessions } from '@/drizzle/schema';
 import { eq, and, ne } from 'drizzle-orm';
 import {
@@ -48,8 +48,7 @@ import { concurrencyGuard } from '@/lib/api/concurrency';
  * @param tenantId  the tenant that just deactivated them (excluded from the check)
  */
 async function revokeSessionsIfLastActiveTenant(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  tx: any,
+  tx: DbClient,
   userId: string,
   tenantId: string,
 ): Promise<void> {

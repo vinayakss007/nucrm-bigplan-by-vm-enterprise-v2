@@ -17,10 +17,8 @@ async function runCheck(service: string, fn: () => Promise<{ latency_ms: number;
     const result = await fn();
     return { service, status: 'up', ...result };
  
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (e: any) {
-    return { service, status: 'down', latency_ms: 0, message: e.message };
+  } catch (e) {
+    return { service, status: 'down', latency_ms: 0, message: e instanceof Error ? e.message : String(e) };
   }
 }
 

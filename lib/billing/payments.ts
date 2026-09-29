@@ -24,6 +24,8 @@ import { db } from '@/drizzle/db';
 import { invoices, invoicePayments } from '@/drizzle/schema';
 import { eq, and, sql } from 'drizzle-orm';
 
+type DbTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
 /** Statuses that describe payment progress and may therefore be recomputed. */
 const PAYMENT_DRIVEN_STATUSES = new Set(['draft', 'sent', 'partially_paid', 'paid', 'overdue']);
 
@@ -58,8 +60,7 @@ function toCents(value: number): number {
  * invoice should not quietly resurrect it as `sent`.
  */
 export async function recalculateInvoicePayments(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  tx: any,
+  tx: DbTransaction,
   invoiceId: string,
   tenantId: string
 ): Promise<InvoiceTotals> {

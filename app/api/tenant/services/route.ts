@@ -9,7 +9,7 @@ import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { createServiceSchema } from '@/lib/api/schemas';
 import { db } from '@/drizzle/db';
 import { services } from '@/drizzle/schema';
-import { eq, and, desc, like } from 'drizzle-orm';
+import { eq, and, desc, like , type SQL} from 'drizzle-orm';
 import { requireAuth } from '@/lib/auth/middleware';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
@@ -35,8 +35,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
 
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const conditions: any[] = [eq(services.tenantId, tenantId)];
+    const conditions: SQL[] = [eq(services.tenantId, tenantId)];
     if (activeOnly) conditions.push(eq(services.isActive, true));
     if (category) conditions.push(eq(services.category, category));
     if (search) conditions.push(like(services.name, `%${search}%`));

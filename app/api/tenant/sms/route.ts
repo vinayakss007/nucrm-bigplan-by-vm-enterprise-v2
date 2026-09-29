@@ -9,7 +9,7 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { requireModule } from '@/lib/modules/gate';
 import { db } from '@/drizzle/db';
 import { smsMessages } from '@/drizzle/schema/sms';
-import { eq, and, desc, sql } from 'drizzle-orm';
+import { eq, and, desc, sql , type SQL} from 'drizzle-orm';
 import { sendSMS, sendTemplateSMS } from '@/lib/sms';
 import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
@@ -38,8 +38,7 @@ export const GET = withApiRoute(async (req: NextRequest) => {
 
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const filters: any[] = [eq(smsMessages.tenantId, ctx.tenantId)];
+    const filters: SQL[] = [eq(smsMessages.tenantId, ctx.tenantId)];
     if (status) {
       filters.push(eq(smsMessages.status, status));
     }
