@@ -74,8 +74,14 @@ export const GET = POST;
 
 // ── Run Due Backups ──────────────────────────────────────────────────────────
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type AnyRow = Record<string, any>;
+type BackupScheduleRow = {
+  id: string;
+  tenant_id: string | null;
+  schedule_type: string;
+  backup_type: string;
+  retention_days: number;
+};
+type BackupResult = { skipped?: boolean; tenantId?: string; reason?: string };
 
 async function runScheduledBackups() {
   const _now = new Date();
@@ -92,7 +98,7 @@ async function runScheduledBackups() {
     WHERE enabled = true AND (next_run_at IS NULL OR next_run_at <= NOW())
     ORDER BY next_run_at ASC NULLS FIRST`
   );
-  const rows = schedules.rows as AnyRow[];
+  const rows = schedules.rows as BackupScheduleRow[];
 
   if (rows.length === 0) {
     // No schedule is currently DUE. That does not mean no schedule exists —
@@ -119,7 +125,7 @@ async function runScheduledBackups() {
     try {
       if (schedule.tenant_id) {
         // Per-tenant backup
-        const res = await backupSingleTenant(schedule.tenant_id, schedule) as AnyRow | undefined;
+        const res = await backupSingleTenant(schedule.tenant_id, schedule) as BackupResult | undefined;
         if (res?.skipped) {
           skipped++;
           if (res.tenantId) skippedTenants.push(String(res.tenantId));
@@ -127,8 +133,8 @@ async function runScheduledBackups() {
       } else {
         // Global — backup ALL tenants
         const tenants = await db.execute(sql`SELECT id FROM tenants WHERE status != ${'suspended'}`);
-        for (const tenant of tenants.rows as AnyRow[]) {
-          const res = await backupSingleTenant(tenant.id, schedule) as AnyRow | undefined;
+        for (const tenant of tenants.rows as { id: string }[]) {
+          const res = await backupSingleTenant(tenant.id, schedule) as BackupResult | undefined;
           if (res?.skipped) {
             skipped++;
             if (res.tenantId) skippedTenants.push(String(res.tenantId));
@@ -171,10 +177,7 @@ async function runScheduledBackups() {
 
 async function backupSingleTenant(
   tenantId: string,
-
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  schedule: any
+  schedule: BackupScheduleRow
 ) {
   const backupType = schedule.backup_type || 'full';
   const includeTables = backupType === 'critical_only' ? CRITICAL_TABLES : undefined;
@@ -191,7 +194,7 @@ async function backupSingleTenant(
   const ownerRow = await db.execute(sql`
     SELECT owner_id FROM tenants WHERE id = ${tenantId} LIMIT 1`
   );
-  let contextUserId = (ownerRow.rows[0] as AnyRow | undefined)?.owner_id as string | undefined;
+  let contextUserId = (ownerRow.rows[0] as { owner_id: string | null } | undefined)?.owner_id ?? undefined;
   if (!contextUserId) {
     // Older/provisioned tenants may have no owner_id. Any active member's
     // identity suffices here: the backup only needs a same-tenant
@@ -203,13 +206,13 @@ async function backupSingleTenant(
       ORDER BY (role_slug = 'admin') DESC, joined_at ASC NULLS LAST
       LIMIT 1`
     );
-    contextUserId = (memberRow.rows[0] as AnyRow | undefined)?.user_id as string | undefined;
+    contextUserId = (memberRow.rows[0] as { user_id: string | null } | undefined)?.user_id ?? undefined;
   }
   if (!contextUserId) {
     // Orphan tenant: no owner and no active members means no data can exist
     // under it either (all writes require membership). Skip quietly instead
     // of failing the whole run.
-    return { skipped: true, reason: 'no-members', tenantId } as AnyRow;
+    return { skipped: true, reason: 'no-members', tenantId };
   }
   await setTenantContext(tenantId, contextUserId);
 
@@ -221,7 +224,7 @@ async function backupSingleTenant(
     RETURNING *`
   );
 
-  const backupRecord = record.rows[0] as AnyRow;
+  const backupRecord = record.rows[0] as { id: string };
 
   try {
     const exporter = new TenantDataExporter(tenantId);
@@ -240,19 +243,19 @@ async function backupSingleTenant(
     );
 
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : String(err);
     await db.execute(sql`
-      UPDATE tenant_backup_records SET status = 'failed', error_message = ${err.message}, completed_at = NOW() WHERE id = ${backupRecord.id}`
+      UPDATE tenant_backup_records SET status = 'failed', error_message = ${errorMessage}, completed_at = NOW() WHERE id = ${backupRecord.id}`
     );
 
     // Alert super admin
     try {
       const tenantInfo = await db.execute(sql`SELECT name FROM tenants WHERE id = ${tenantId}`);
-      const tenantName = (tenantInfo.rows[0] as AnyRow | undefined)?.name || tenantId;
+      const tenantName = (tenantInfo.rows[0] as { name: string | null } | undefined)?.name || tenantId;
       await sendAlertEmail(
         `Backup Failed: ${tenantName}`,
-        `Backup failed for tenant ${tenantName}: ${err.message}`,
+        `Backup failed for tenant ${tenantName}: ${errorMessage}`,
       );
     } catch (err) {
       void logError({ error: err, context: 'cron/auto-backup email alert', level: 'warning' });

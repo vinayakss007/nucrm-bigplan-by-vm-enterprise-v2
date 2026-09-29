@@ -170,17 +170,19 @@ export async function processContactImport(
       return newCo.id;
     };
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const insertBuffer: any[] = [];
+    type ContactInsertRow = Pick<typeof contacts.$inferInsert, 'firstName' | 'tenantId'>
+      & Partial<typeof contacts.$inferInsert>;
+    const insertBuffer: ContactInsertRow[] = [];
 
     for (const [index, row] of rows.entries()) {
       try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const mapped: any = {};
+        const mapped: Record<string, unknown> = {};
         for (const [key, val] of Object.entries(row)) {
           const dbCol = CONTACT_COLUMN_MAP[key.toLowerCase().trim()];
           if (dbCol && val) mapped[dbCol] = val;
         }
+        // CSV cells are strings; mapped values arrive as unknown.
+        const s = (v: unknown): string => (typeof v === 'string' ? v : String(v ?? ''));
 
         if (!mapped.firstName) {
           results.errors.push(`Row ${index + 2}: first_name is required`);
@@ -188,22 +190,23 @@ export async function processContactImport(
           continue;
         }
 
-        if (mapped.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mapped.email)) {
-          results.errors.push(`Row ${index + 2}: invalid email "${mapped.email}"`);
+        const email = s(mapped.email);
+        if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+          results.errors.push(`Row ${index + 2}: invalid email "${email}"`);
           results.skipped++;
           continue;
         }
 
-        const companyId = await getOrCreateCompany(mapped.company_name || '');
-        const leadStatus = VALID_STATUSES.includes(mapped.leadStatus) ? mapped.leadStatus : 'new';
-        const tags = mapped.tags ? mapped.tags.split(/[;|]/).map((t: string) => t.trim()).filter(Boolean) : [];
-        const score = mapped.score ? parseInt(mapped.score) : 0;
+        const companyId = await getOrCreateCompany(s(mapped.company_name) || '');
+        const leadStatus = VALID_STATUSES.includes(s(mapped.leadStatus)) ? s(mapped.leadStatus) : 'new';
+        const tags = mapped.tags ? s(mapped.tags).split(/[;|]/).map((t: string) => t.trim()).filter(Boolean) : [];
+        const score = mapped.score ? parseInt(s(mapped.score)) : 0;
 
-        if (mapped.email) {
+        if (email) {
           const [existing] = await tx
             .select({ id: contacts.id })
             .from(contacts)
-            .where(and(eq(contacts.tenantId, tenantId), eq(contacts.email, mapped.email.toLowerCase().trim()), sql`${contacts.deletedAt} IS NULL`))
+            .where(and(eq(contacts.tenantId, tenantId), eq(contacts.email, email.toLowerCase().trim()), sql`${contacts.deletedAt} IS NULL`))
             .limit(1);
 
           if (existing) {
@@ -215,25 +218,25 @@ export async function processContactImport(
               await tx
                 .update(contacts)
                 .set({
-                  firstName: mapped.firstName,
-                  lastName: mapped.lastName || '',
-                  phone: mapped.phone || null,
+                  firstName: s(mapped.firstName),
+                  lastName: s(mapped.lastName) || '',
+                  phone: s(mapped.phone) || null,
                   companyId,
                   leadStatus,
-                  leadSource: mapped.leadSource || null,
-                  notes: mapped.notes || null,
-                  city: mapped.city || null,
-                  country: mapped.country || null,
-                  state: mapped.state || null,
-                  address: mapped.address || null,
-                  postalCode: mapped.postalCode || null,
-                  website: mapped.website || null,
-                  linkedinUrl: mapped.linkedinUrl || null,
-                  twitterUrl: mapped.twitterUrl || null,
+                  leadSource: s(mapped.leadSource) || null,
+                  notes: s(mapped.notes) || null,
+                  city: s(mapped.city) || null,
+                  country: s(mapped.country) || null,
+                  state: s(mapped.state) || null,
+                  address: s(mapped.address) || null,
+                  postalCode: s(mapped.postalCode) || null,
+                  website: s(mapped.website) || null,
+                  linkedinUrl: s(mapped.linkedinUrl) || null,
+                  twitterUrl: s(mapped.twitterUrl) || null,
                   tags,
-                  jobTitle: mapped.jobTitle || null,
+                  jobTitle: s(mapped.jobTitle) || null,
                   score,
-                  lifecycleStage: mapped.lifecycleStage || null,
+                  lifecycleStage: s(mapped.lifecycleStage) || null,
                   updatedAt: new Date(),
                 })
                 .where(eq(contacts.id, existing.id));
@@ -246,27 +249,27 @@ export async function processContactImport(
         insertBuffer.push({
           tenantId,
           createdBy: userId,
-          assignedTo: mapped.assignedTo || userId,
-          firstName: mapped.firstName,
-          lastName: mapped.lastName || '',
-          email: mapped.email?.toLowerCase().trim() || null,
-          phone: mapped.phone || null,
+          assignedTo: mapped.assignedTo ? s(mapped.assignedTo) : userId,
+          firstName: s(mapped.firstName),
+          lastName: s(mapped.lastName) || '',
+          email: email ? email.toLowerCase().trim() : null,
+          phone: s(mapped.phone) || null,
           companyId,
           leadStatus,
-          leadSource: mapped.leadSource || null,
-          notes: mapped.notes?.slice(0, 5000) || null,
-          city: mapped.city || null,
-          country: mapped.country || null,
-          state: mapped.state || null,
-          address: mapped.address || null,
-          postalCode: mapped.postalCode || null,
-          website: mapped.website || null,
-          linkedinUrl: mapped.linkedinUrl || null,
-          twitterUrl: mapped.twitterUrl || null,
+          leadSource: s(mapped.leadSource) || null,
+          notes: s(mapped.notes).slice(0, 5000) || null,
+          city: s(mapped.city) || null,
+          country: s(mapped.country) || null,
+          state: s(mapped.state) || null,
+          address: s(mapped.address) || null,
+          postalCode: s(mapped.postalCode) || null,
+          website: s(mapped.website) || null,
+          linkedinUrl: s(mapped.linkedinUrl) || null,
+          twitterUrl: s(mapped.twitterUrl) || null,
           tags,
-          jobTitle: mapped.jobTitle || null,
+          jobTitle: s(mapped.jobTitle) || null,
           score,
-          lifecycleStage: mapped.lifecycleStage || null,
+          lifecycleStage: s(mapped.lifecycleStage) || null,
         });
 
         if (insertBuffer.length >= BATCH_SIZE) {
@@ -274,9 +277,8 @@ export async function processContactImport(
           results.imported += insertBuffer.length;
           insertBuffer.length = 0;
         }
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } catch (rowErr: any) {
-        results.errors.push(`Row ${index + 2}: ${rowErr.message}`);
+      } catch (rowErr) {
+        results.errors.push(`Row ${index + 2}: ${rowErr instanceof Error ? rowErr.message : String(rowErr)}`);
         results.skipped++;
       }
     }
