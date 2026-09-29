@@ -143,8 +143,7 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params:
     // Map snake_case to camelCase for Drizzle
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const updateData: any = {};
+    const updateData: Partial<typeof contacts.$inferInsert> = {};
     if (v.first_name !== undefined) updateData.firstName = v.first_name;
     if (v.last_name !== undefined) updateData.lastName = v.last_name;
     if (v.email !== undefined) updateData.email = v.email;
@@ -241,7 +240,7 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params:
     };
 
     for (const [field, label] of Object.entries(fieldsToTrack)) {
-      if (updateData[field] !== undefined) {
+      if (updateData[field as keyof typeof updateData] !== undefined) {
         await trackFieldChange(
           ctx.tenantId,
           ctx.userId,
@@ -252,7 +251,7 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params:
           field,
           label,
           existing[field as keyof typeof existing],
-          updateData[field],
+          updateData[field as keyof typeof updateData],
           ipAddress,
           userAgent
         );
