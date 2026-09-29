@@ -181,10 +181,9 @@ export async function POST(req: NextRequest) {
                 text: emailBody + `\n\nUnsubscribe: ${unsubLink}`
               });
 
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            } catch (err: any) {
+            } catch (err) {
               success = false;
-              errorMessage = err.message;
+              errorMessage = err instanceof Error ? err.message : String(err);
             }
           } else if (step.stepType === 'email' && enrollment.contact?.doNotContact) {
             // Contact has doNotContact flag - skip this email step and log it
@@ -213,10 +212,9 @@ export async function POST(req: NextRequest) {
                 completed: false,
               });
 
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            } catch (err: any) {
+            } catch (err) {
               success = false;
-              errorMessage = err.message;
+              errorMessage = err instanceof Error ? err.message : String(err);
             }
           }
 

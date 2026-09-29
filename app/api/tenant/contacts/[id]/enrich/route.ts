@@ -54,8 +54,7 @@ export const POST = withApiRoute(async (request: NextRequest, { params }: { para
     if (!contact) return NextResponse.json({ error: 'Contact not found' }, { status: 404 });
 
     // Enrich with heuristic data
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const enriched: Record<string, any> = {};
+    const enriched: Record<string, unknown> = {};
 
     // Extract company domain from email
     if (contact.email && contact.email.includes('@')) {
@@ -86,8 +85,7 @@ export const POST = withApiRoute(async (request: NextRequest, { params }: { para
     enriched.enrichment_source = 'heuristic';
 
     // Merge into metadata
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const existingMeta = (contact.metadata as Record<string, any>) || {};
+    const existingMeta = (contact.metadata as Record<string, unknown>) || {};
     const newMeta = { ...existingMeta, enrichment: enriched };
 
     await db

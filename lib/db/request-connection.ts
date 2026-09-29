@@ -136,15 +136,14 @@ function serializeClientQueries(client: PoolClient): PoolClient {
   return new Proxy(client, {
     get(target, prop, receiver) {
       if (prop === 'query') {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        return (...args: any[]) => {
+        type QueryArgs = Parameters<PoolClient['query']>;
+        return (...args: QueryArgs) => {
           const prior = clientQueryTail.get(target) ?? Promise.resolve();
           // Chain on the SETTLED prior query (success OR failure) so one
           // rejected query never poisons the queue for later ones.
           const run = prior
             .catch(() => undefined)
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            .then(() => (target.query as (...a: any[]) => Promise<unknown>)(...args));
+            .then(() => (target.query as (...a: QueryArgs) => Promise<unknown>)(...args));
           // The tail tracks completion (settled) so the next query waits for
           // this one; swallow here to avoid an unhandled rejection on the tail
           // itself — the real result/rejection is returned to the caller via

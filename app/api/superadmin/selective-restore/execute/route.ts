@@ -112,8 +112,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       async start(controller) {
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const sendEvent = (event: string, data: any) => {
+        const sendEvent = (event: string, data: unknown) => {
           controller.enqueue(
             encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
           );
@@ -214,8 +213,8 @@ export const POST = withApiRoute(async (request: NextRequest) => {
 
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-        } catch (err: any) {
+        } catch (err) {
+          const errorMessage = err instanceof Error ? err.message : String(err);
           await logError({
             error: err,
             context: 'selective-restore/execute stream',
@@ -227,7 +226,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
             .update(selectiveRestoreLogs)
             .set({ 
               status: 'failed', 
-              errorMessage: err.message, 
+              errorMessage, 
               completedAt: new Date() 
             })
             .where(eq(selectiveRestoreLogs.id, restoreLog.id));
@@ -266,8 +265,7 @@ interface AuditLogParams {
   performed_by_email?: string;
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  details?: any;
+  details?: unknown;
   ip_address?: string | null;
   user_agent?: string | null;
 }

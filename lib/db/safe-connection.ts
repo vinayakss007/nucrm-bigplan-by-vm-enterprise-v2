@@ -75,12 +75,12 @@ const NON_RETRYABLE_CLASSES = new Set([
   '22', // data_exception
 ]);
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function isTransientError(error: any): boolean {
+function isTransientError(error: unknown): boolean {
   if (!error) return false;
 
   // Check PostgreSQL error code
-  const code: string | undefined = error.code;
+  const rawCode = (error as { code?: unknown }).code;
+  const code: string | undefined = typeof rawCode === 'string' ? rawCode : undefined;
   if (code && TRANSIENT_ERROR_CODES.has(code)) return true;
 
   // Check Node.js network error codes
@@ -90,7 +90,7 @@ function isTransientError(error: any): boolean {
   if (code && NON_RETRYABLE_CLASSES.has(code.slice(0, 2))) return false;
 
   // Connection-level errors from the driver
-  const msg = String(error.message || '').toLowerCase();
+  const msg = String((error as { message?: unknown }).message ?? '').toLowerCase();
   if (
     msg.includes('connection terminated') ||
     msg.includes('connection reset') ||
@@ -127,8 +127,7 @@ function sleep(ms: number): Promise<void> {
  */
 export async function safeQuery<T extends QueryResult = QueryResult>(
   queryText: string,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  params?: any[],
+  params?: unknown[],
   options: SafeQueryOptions = {}
 ): Promise<T> {
   const {
@@ -305,8 +304,7 @@ export { isTransientError };
 // -------------------------------------------------------------------
 
 async function logQueryFailure(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  error: any,
+  error: unknown,
   queryText: string,
   attempt: number,
   context: { tenantId?: string; label?: string }
@@ -318,7 +316,7 @@ async function logQueryFailure(
       tenantId: context.tenantId,
       metadata: {
         querySnippet: truncateQuery(queryText),
-        errorCode: error?.code || 'N/A',
+        errorCode: (error as { code?: string })?.code || 'N/A',
         attempt: attempt + 1,
       },
     });
@@ -326,7 +324,7 @@ async function logQueryFailure(
     // Best-effort logging; never let logging itself fail the caller
     console.error(
       `[SafeConnection] Failed to log error for query: ${truncateQuery(queryText, 80)}`,
-      error?.message
+      (error as { message?: unknown })?.message
     );
   }
 }
