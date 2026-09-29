@@ -79,8 +79,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
         AND created_at >= DATE_TRUNC('month', CURRENT_DATE)
     `);
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const countsRow = counts.rows[0] as any;
+    const countsRow = counts.rows[0] as Record<string, unknown> | undefined;
     const wonCount = Number(countsRow?.won ?? 0);
     const totalCount = Number(countsRow?.total ?? 1);
 
