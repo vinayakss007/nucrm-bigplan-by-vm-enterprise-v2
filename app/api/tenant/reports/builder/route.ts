@@ -119,8 +119,7 @@ interface ReportParams {
   dateRange?: { from: string; to: string };
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  filters: Record<string, any>;
+  filters: Record<string, string | string[]>;
   tenantId: string;
   limit: number;
 }
