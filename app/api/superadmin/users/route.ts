@@ -116,9 +116,8 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     return NextResponse.json({ data: newUser }, { status: 201 });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
-    if (err.code === '23505' || err.message?.includes('unique constraint')) {
+  } catch (err) {
+    if ((err as { code?: string }).code === '23505' || (err instanceof Error && err.message.includes('unique constraint'))) {
       return NextResponse.json({ error: 'Email already exists' }, { status: 409 });
     }
     await logError({ error: err, context: 'superadmin/users POST', requestMethod: 'POST' });

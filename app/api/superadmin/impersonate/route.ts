@@ -31,8 +31,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     let targetUserId = userId;
  
  
- // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let targetUser: any;
+    let targetUser: { id: string; email: string; fullName: string | null };
 
     if (targetUserId) {
       const [u] = await db

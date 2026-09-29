@@ -33,7 +33,7 @@ interface GeneratedInsight {
  */
 function fallbackInsights(
   entityType: string,
-  entityData: { recentActivityCount?: number; lifecycleStage?: string | null },
+  entityData: { recentActivityCount?: number; lifecycleStage?: string | null; [key: string]: unknown },
   daysSinceLastActivity: number | null,
 ): GeneratedInsight[] {
   const out: GeneratedInsight[] = [];
@@ -84,8 +84,10 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     // Get entity data (context for the model)
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let entityData: any;
+    let entityData:
+      | { id: string; firstName: string; lastName: string | null; lifecycleStage: string | null; activityCount: number; recentActivityCount: number }
+      | { id: string; title: string; amount: string | null; activityCount: number }
+      | undefined;
     if (entity_type === 'contact') {
       const contactResults = await db.select({
         id: contacts.id,

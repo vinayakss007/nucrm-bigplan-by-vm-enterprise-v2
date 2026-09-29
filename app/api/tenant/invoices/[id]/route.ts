@@ -91,8 +91,7 @@ export const PUT = withApiRoute(async (req: NextRequest, { params }: { params: P
 
 
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const allowedFields: Record<string, any> = {};
+    const allowedFields: Partial<typeof invoices.$inferInsert> = {};
     // amountPaid / balanceDue are deliberately NOT mutable here. They are
     // derived from the invoice_payments ledger (lib/billing/payments.ts) and
     // recomputed on every payment mutation. Allowing them to be set by hand is

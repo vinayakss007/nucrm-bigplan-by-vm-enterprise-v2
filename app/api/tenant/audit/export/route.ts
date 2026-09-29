@@ -8,7 +8,7 @@ import { apiError } from '@/lib/api-error';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { auditLogs, users } from '@/drizzle/schema';
-import { eq, and, gte, lte, desc, isNull } from 'drizzle-orm';
+import { eq, and, gte, lte, desc, isNull, type SQL } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { escapeCSV } from '@/lib/export';
 import { withApiRoute } from '@/lib/api/with-api-route';
@@ -43,8 +43,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     const limit = Math.min(50000, Number(searchParams.get('limit') || '5000'));
 
     // Build query filters
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const filters: any[] = [eq(auditLogs.tenantId, ctx.tenantId), isNull(auditLogs.deletedAt)];
+    const filters: SQL[] = [eq(auditLogs.tenantId, ctx.tenantId), isNull(auditLogs.deletedAt)];
     if (from) {
       const fromDate = new Date(from);
       if (Number.isNaN(fromDate.getTime())) {

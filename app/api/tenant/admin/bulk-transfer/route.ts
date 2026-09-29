@@ -115,12 +115,12 @@ export const POST = withApiRoute(async (req: NextRequest) => {
   if (limited) return limited;
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let ctx: any;
+  let ctx: { tenantId: string; userId: string } | undefined;
   try {
     const auth = await assertAdmin(req);
     if (auth.error) return auth.error;
     ctx = auth.ctx!;
+    const authCtx = ctx;
 
     let body;
     try { body = await readJsonBody(req); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
@@ -141,9 +141,9 @@ export const POST = withApiRoute(async (req: NextRequest) => {
         return NextResponse.json({ error: `unknown resource: ${r}` }, { status: 400 });
     }
 
-    if (!(await memberOfTenant(ctx.tenantId, fromUserId)))
+    if (!(await memberOfTenant(authCtx.tenantId, fromUserId)))
       return NextResponse.json({ error: 'from_user is not a member of this workspace' }, { status: 404 });
-    if (!(await memberOfTenant(ctx.tenantId, toUserId)))
+    if (!(await memberOfTenant(authCtx.tenantId, toUserId)))
       return NextResponse.json({ error: 'to_user is not a member of this workspace' }, { status: 404 });
 
     // Optionally also tag the moved leads/contacts with a team (WF-04/WF-07).
@@ -151,7 +151,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
       const [team] = await db
         .select({ id: teams.id })
         .from(teams)
-        .where(and(eq(teams.id, toTeamId), eq(teams.tenantId, ctx.tenantId), isNull(teams.deletedAt)))
+        .where(and(eq(teams.id, toTeamId), eq(teams.tenantId, authCtx.tenantId), isNull(teams.deletedAt)))
         .limit(1);
       if (!team) return NextResponse.json({ error: 'to_team is not a team in this workspace' }, { status: 404 });
     }
@@ -163,37 +163,37 @@ export const POST = withApiRoute(async (req: NextRequest) => {
       if (resources.includes('leads')) {
         const r = await tx.update(leads)
           .set({ assignedTo: toUserId, updatedAt: now, ...(toTeamId ? { teamId: toTeamId } : {}) })
-          .where(and(eq(leads.tenantId, ctx.tenantId), eq(leads.assignedTo, fromUserId), sql`${leads.deletedAt} IS NULL`));
+          .where(and(eq(leads.tenantId, authCtx.tenantId), eq(leads.assignedTo, fromUserId), sql`${leads.deletedAt} IS NULL`));
         transferred.leads = r.rowCount ?? 0;
       }
 
       if (resources.includes('contacts')) {
         const r = await tx.update(contacts)
           .set({ assignedTo: toUserId, updatedAt: now, ...(toTeamId ? { teamId: toTeamId } : {}) })
-          .where(and(eq(contacts.tenantId, ctx.tenantId), eq(contacts.assignedTo, fromUserId), sql`${contacts.deletedAt} IS NULL`));
+          .where(and(eq(contacts.tenantId, authCtx.tenantId), eq(contacts.assignedTo, fromUserId), sql`${contacts.deletedAt} IS NULL`));
         transferred.contacts = r.rowCount ?? 0;
       }
 
       if (resources.includes('deals')) {
-        const conds = [eq(deals.tenantId, ctx.tenantId), eq(deals.assignedTo, fromUserId), sql`${deals.deletedAt} IS NULL`];
+        const conds = [eq(deals.tenantId, authCtx.tenantId), eq(deals.assignedTo, fromUserId), sql`${deals.deletedAt} IS NULL`];
         if (onlyOpen) conds.push(sql`COALESCE(${deals.metadata}->>'outcome', '') NOT IN ('won','lost')`);
         const r = await tx.update(deals)
-          .set({ assignedTo: toUserId, updatedAt: now, updatedBy: ctx.userId })
+          .set({ assignedTo: toUserId, updatedAt: now, updatedBy: authCtx.userId })
           .where(and(...conds));
         transferred.deals = r.rowCount ?? 0;
       }
 
       if (resources.includes('tasks')) {
-        const conds = [eq(tasks.tenantId, ctx.tenantId), eq(tasks.assignedTo, fromUserId), sql`${tasks.deletedAt} IS NULL`];
+        const conds = [eq(tasks.tenantId, authCtx.tenantId), eq(tasks.assignedTo, fromUserId), sql`${tasks.deletedAt} IS NULL`];
         if (onlyOpen) conds.push(sql`${tasks.completed} = false`);
         const r = await tx.update(tasks)
-          .set({ assignedTo: toUserId, updatedAt: now, updatedBy: ctx.userId })
+          .set({ assignedTo: toUserId, updatedAt: now, updatedBy: authCtx.userId })
           .where(and(...conds));
         transferred.tasks = r.rowCount ?? 0;
       }
 
       if (resources.includes('tickets')) {
-        const conds = [eq(tickets.tenantId, ctx.tenantId), eq(tickets.assignedTo, fromUserId), sql`${tickets.deletedAt} IS NULL`];
+        const conds = [eq(tickets.tenantId, authCtx.tenantId), eq(tickets.assignedTo, fromUserId), sql`${tickets.deletedAt} IS NULL`];
         if (onlyOpen) conds.push(sql`COALESCE(${tickets.status}, 'open') NOT IN ('closed','resolved')`);
         const r = await tx.update(tickets)
           .set({ assignedTo: toUserId, updatedAt: now })
@@ -205,7 +205,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
     const total = Object.values(transferred).reduce((a, b) => a + b, 0);
 
     await logAudit({
-      tenantId: ctx.tenantId, userId: ctx.userId,
+      tenantId: authCtx.tenantId, userId: authCtx.userId,
       action: 'bulk_transfer', entityType: 'user',
       newData: { from_user_id: fromUserId, to_user_id: toUserId, to_team_id: toTeamId ?? null, resources, only_open: onlyOpen, transferred, total },
     });

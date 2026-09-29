@@ -116,8 +116,7 @@ export const PUT = withApiRoute(async (req: NextRequest) => {
 
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const updateData: Record<string, any> = { updatedAt: new Date() };
+    const updateData: Partial<typeof dataRetentionPolicies.$inferInsert> = { updatedAt: new Date() };
     if (v.retentionDays !== undefined) updateData['retentionDays'] = v.retentionDays;
     if (v.action !== undefined) updateData['action'] = v.action;
     if (v.isActive !== undefined) updateData['isActive'] = v.isActive;
