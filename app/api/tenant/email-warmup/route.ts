@@ -103,8 +103,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
 
       if (Array.isArray(participants) && participants.length > 0) {
   
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const poolValues = participants.map((p: any) => ({
+        const poolValues = participants.map((p) => ({
           configId: configId!,
           participantEmail: p.email,
           participantName: p.name || '',

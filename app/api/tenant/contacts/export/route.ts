@@ -36,8 +36,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     // #H2: an over-limit export is a client-actionable condition, not a server
     // fault — return 413 and tell the user to narrow the filter, and don't page
     // on-call for it.

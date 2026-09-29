@@ -187,8 +187,7 @@ async function handleSearch(searchParams: URLSearchParams) {
 
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const results: any = {};
+    const results: Record<string, unknown> = {};
     let totalAcrossAll = 0;
 
     const buildConditions = (tableAlias: string, searchFields: string[]) => {

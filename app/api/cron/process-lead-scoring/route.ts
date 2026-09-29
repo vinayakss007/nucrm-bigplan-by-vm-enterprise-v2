@@ -38,8 +38,7 @@ export async function POST(req: NextRequest) {
 
    
    
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const results: any[] = [];
+    const results: { tenantId: string; scoredCount: number }[] = [];
     for (const tenant of activeTenants) {
       if (!tenant.ownerId) continue;
       try {

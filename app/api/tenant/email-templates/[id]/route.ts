@@ -21,10 +21,7 @@ import { updatedAtMs } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const GET = withApiRoute(async (request: NextRequest, { params }: any) => {
+export const GET = withApiRoute(async (request: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -56,10 +53,7 @@ export const GET = withApiRoute(async (request: NextRequest, { params }: any) =>
   }
 });
 
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const PATCH = withApiRoute(async (request: NextRequest, { params }: any) => {
+export const PATCH = withApiRoute(async (request: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
   const limited = await rateLimitMutating(request, 'emailTemplates', 'patch');
   if (limited) return limited;
@@ -73,8 +67,7 @@ export const PATCH = withApiRoute(async (request: NextRequest, { params }: any) 
 
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const updateData: any = { updatedAt: new Date() };
+    const updateData: Partial<typeof emailTemplates.$inferInsert> = { updatedAt: new Date() };
     if (v.name     !== undefined) updateData.name = v.name.trim();
     if (v.subject  !== undefined) updateData.subject = v.subject.trim();
     if (v.body     !== undefined) updateData.bodyHtml = v.body.trim();
@@ -124,10 +117,7 @@ export const PATCH = withApiRoute(async (request: NextRequest, { params }: any) 
   }
 });
 
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const DELETE = withApiRoute(async (request: NextRequest, { params }: any) => {
+export const DELETE = withApiRoute(async (request: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
   const limited = await rateLimitMutating(request, 'emailTemplates', 'delete');
   if (limited) return limited;

@@ -41,8 +41,7 @@ export const GET = withApiRoute(async (req: NextRequest) => {
   
     const total = countResult?.count ?? 0;
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const formsWithEmbed = allForms.map((f: any) => ({
+    const formsWithEmbed = allForms.map((f) => ({
       ...f,
       embed_code: `<iframe src="${appUrl}/lead-capture?form=${f.slug}" 
   style="width:100%;min-height:500px;border:none;border-radius:8px;" 

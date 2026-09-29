@@ -47,8 +47,7 @@ export const GET = withApiRoute(async (req: NextRequest) => {
         created_at: integrations.createdAt,
         url: sql<string>`${integrations.config}->>'url'`,
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-        events: sql<any[]>`${integrations.config}->'events'`,
+        events: sql<string[]>`${integrations.config}->'events'`,
         delivered_count: sql<number>`(SELECT count(*)::int FROM ${webhookQueue} WHERE webhook_id = ${integrations.id} AND status = 'delivered')`,
         failed_count: sql<number>`(SELECT count(*)::int FROM ${webhookQueue} WHERE webhook_id = ${integrations.id} AND status = 'failed')`
       })
