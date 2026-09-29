@@ -45,8 +45,6 @@ interface QueryLog {
   sql: string;
   duration: number;
   timestamp: number;
- 
- 
   params?: unknown[];
 }
 
@@ -213,8 +211,6 @@ class DevelopmentLogger {
   /**
    * Log database query
    */
- 
- 
   query(sql: string, duration: number, params?: unknown[]) {
     const log: QueryLog = {
       sql: sql.slice(0, 500), // Limit SQL length
@@ -544,8 +540,6 @@ export const devLogger = new DevelopmentLogger();
 
 // Middleware helper
 export function createDevelopmentMiddleware() {
- 
- 
   return function developmentLoggerMiddleware(
     req: { method: string; url: string; ip?: string; user?: { id?: string } },
     res: { on(event: 'finish', listener: () => void): void; statusCode: number },
