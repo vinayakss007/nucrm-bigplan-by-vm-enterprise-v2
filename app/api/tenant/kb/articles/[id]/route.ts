@@ -61,8 +61,7 @@ export const PATCH = withApiRoute(async (request: NextRequest, { params }: { par
     if (guard) return guard;
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const updates: Record<string, any> = {};
+    const updates: Partial<typeof kbArticles.$inferInsert> = {};
     if (body['title']) updates['title'] = body['title'];
     if (body['content']) updates['content'] = body['content'];
     if (body['excerpt'] !== undefined) updates['excerpt'] = body['excerpt'];

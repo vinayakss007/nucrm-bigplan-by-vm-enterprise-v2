@@ -142,8 +142,7 @@ export const PATCH = withApiRoute(async (request: NextRequest) => {
     if (validated instanceof NextResponse) return validated;
     const { id, status, resolution, assigned_to, updated_at } = validated.data;
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const updateData: any = { updatedAt: new Date() };
+    const updateData: Partial<typeof supportTickets.$inferInsert> = { updatedAt: new Date() };
     if (status) {
       updateData.status = status;
       if (status === 'resolved') {

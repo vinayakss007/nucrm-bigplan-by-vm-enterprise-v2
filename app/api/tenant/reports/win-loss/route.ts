@@ -62,8 +62,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       ORDER BY month DESC
     `);
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const s = stats.rows[0] as any;
+    const s = stats.rows[0] as Record<string, unknown> | undefined;
     const won = Number(s?.won ?? 0);
     const lost = Number(s?.lost ?? 0);
     const totalClosed = won + lost;

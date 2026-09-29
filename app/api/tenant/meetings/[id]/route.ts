@@ -72,8 +72,7 @@ export const PATCH = withApiRoute(async (request: NextRequest, { params }: { par
 
     if (!existing) return NextResponse.json({ error: 'Meeting not found' }, { status: 404 });
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const updates: any = { updatedAt: new Date() };
+    const updates: Partial<typeof meetings.$inferInsert> = { updatedAt: new Date() };
     if (v.title !== undefined) updates.title = v.title;
     if (v.description !== undefined) updates.description = v.description ?? null;
     if (v.start_time !== undefined) updates.startTime = new Date(v.start_time);
