@@ -150,8 +150,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       try {
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const mapped: any = {};
+        const mapped: Record<string, string> = {};
         for (const [key, val] of Object.entries(row)) {
           const dbCol = LEAD_COLUMN_MAP[key.toLowerCase().trim()];
           if (dbCol && val) mapped[dbCol] = val;
@@ -171,9 +170,9 @@ export const POST = withApiRoute(async (request: NextRequest) => {
           continue;
         }
 
-        const leadStatus = VALID_STATUSES.includes(mapped.leadStatus) ? mapped.leadStatus : 'new';
-        const lifecycle = VALID_LIFECYCLES.includes(mapped.lifecycleStage) ? mapped.lifecycleStage : 'lead';
-        const authority = VALID_AUTHORITY.includes(mapped.authorityLevel) ? mapped.authorityLevel : 'unknown';
+        const leadStatus = VALID_STATUSES.includes(mapped.leadStatus ?? "") ? mapped.leadStatus : 'new';
+        const lifecycle = VALID_LIFECYCLES.includes(mapped.lifecycleStage ?? "") ? mapped.lifecycleStage : 'lead';
+        const authority = VALID_AUTHORITY.includes(mapped.authorityLevel ?? "") ? mapped.authorityLevel : 'unknown';
         const tags = mapped.tags ? mapped.tags.split(/[;|]/).map((t: string) => t.trim()).filter(Boolean) : [];
         const scoreVal = mapped.score ? Math.min(100, Math.max(0, parseInt(mapped.score) || 0)) : 0;
         const budgetVal = mapped.budget ? mapped.budget.toString() : null;
@@ -332,9 +331,8 @@ export const POST = withApiRoute(async (request: NextRequest) => {
         results.imported++;
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } catch (rowErr: any) {
-        results.errors.push(`Row ${index + 2}: ${rowErr.message}`);
+      } catch (rowErr) {
+        results.errors.push(`Row ${index + 2}: ${rowErr instanceof Error ? rowErr.message : String(rowErr)}`);
         results.skipped++;
       }
     }
