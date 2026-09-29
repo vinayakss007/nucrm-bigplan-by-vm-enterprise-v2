@@ -177,8 +177,8 @@ export const GET = withApiRoute(async (request: NextRequest) => {
 
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const total = (contactResults as any[]).length + (leadResults as any[]).length + (dealResults as any[]).length + (companyResults as any[]).length + (taskResults as any[]).length;
+    const total = [contactResults, leadResults, dealResults, companyResults, taskResults]
+      .reduce((acc, r) => acc + (Array.isArray(r) ? r.length : 0), 0);
     return NextResponse.json({ 
       contacts: contactResults, 
       leads: leadResults, 
