@@ -15,8 +15,7 @@ import { withApiRoute } from '@/lib/api/with-api-route';
 
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const DELETE = withApiRoute(async (request: NextRequest, { params }: any) => {
+export const DELETE = withApiRoute(async (request: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
   const limited = await rateLimitMutating(request, 'settings', 'delete');
   if (limited) return limited;

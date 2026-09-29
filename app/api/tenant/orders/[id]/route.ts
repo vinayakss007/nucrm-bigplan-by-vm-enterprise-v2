@@ -85,8 +85,7 @@ export const PUT = withApiRoute(async (req: NextRequest, { params }: { params: P
 
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const allowedFields: Record<string, any> = {};
+    const allowedFields: Partial<typeof orders.$inferInsert> = {};
     const mutable = ['title', 'status', 'expectedDeliveryDate', 'shippingAddress', 'shippingCity', 'shippingState', 'shippingCountry', 'shippingPostalCode', 'trackingNumber', 'shippingCarrier', 'notes', 'customerNotes'] as const;
     for (const key of mutable) {
       if (body[key] !== undefined) allowedFields[key] = body[key];
