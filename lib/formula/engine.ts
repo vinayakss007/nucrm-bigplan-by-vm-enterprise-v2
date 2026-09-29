@@ -15,12 +15,12 @@
  * (GHSA-8gw3-rxh4-v6jx, GHSA-jc85-fpwf-qm7x) with NO fix available.
  */
 
-import { create, all } from 'mathjs';
+import { create, all, type FactoryFunctionMap } from 'mathjs';
 import { logger } from '@/lib/logger';
 
 // Create a restricted mathjs instance — no dangerous functions
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const math = create(all as any);
+// mathjs types `all` as possibly undefined although the named export always exists.
+const math = create(all as FactoryFunctionMap);
 
 // Remove dangerous functions that could be abused
 const BLOCKED_FUNCTIONS = [
@@ -47,16 +47,14 @@ export class FormulaEngine {
    */
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  evaluate(formula: string, data: Record<string, any>): any {
+  evaluate(formula: string, data: Record<string, unknown>): unknown {
     if (!formula) return null;
 
     try {
       // 1. Pre-process: replace {{field}} with clean variable names
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const variables: Record<string, any> = {};
+      const variables: Record<string, unknown> = {};
       let cleanFormula = formula;
 
       const matches = formula.match(/\{\{([\w\.]+)\}\}/g);
@@ -67,7 +65,7 @@ export class FormulaEngine {
 
           cleanFormula = cleanFormula.replace(match, safeKey);
           const value = this.getNestedValue(data, rawKey);
-          variables[safeKey] = typeof value === 'number' ? value : (parseFloat(value) || 0);
+          variables[safeKey] = typeof value === 'number' ? value : (parseFloat(String(value)) || 0);
         }
       }
 
@@ -114,9 +112,11 @@ export class FormulaEngine {
 
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private getNestedValue(obj: Record<string, any>, path: string): any {
-    return path.split('.').reduce((acc, key) => acc?.[key], obj);
+  private getNestedValue(obj: Record<string, unknown>, path: string): unknown {
+    return path.split('.').reduce<unknown>((acc, key) => {
+      if (acc && typeof acc === 'object') return (acc as Record<string, unknown>)[key];
+      return undefined;
+    }, obj);
   }
 }
 
