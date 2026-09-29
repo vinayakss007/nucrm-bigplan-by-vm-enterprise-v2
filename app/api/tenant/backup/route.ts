@@ -109,11 +109,10 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     }
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
-    const errorMsg = err.name === 'AbortError' 
-      ? 'Backup timed out after 5 minutes' 
-      : err.message.slice(0, 500);
+  } catch (err) {
+    const errorMsg = err instanceof Error && err.name === 'AbortError'
+      ? 'Backup timed out after 5 minutes'
+      : (err instanceof Error ? err.message : String(err)).slice(0, 500);
     return NextResponse.json({ error: 'Failed to run backup: ' + errorMsg }, { status: 500 });
   }
 });
