@@ -22,8 +22,7 @@ import { withApiRoute } from '@/lib/api/with-api-route';
 
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const PATCH = withApiRoute(async (req: NextRequest, { params }: any) => {
+export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
   const limited = await rateLimitMutating(req, 'tasks', 'patch');
   if (limited) return limited;
@@ -58,8 +57,7 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: any) => {
 
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const updateData: any = {
+    const updateData: Partial<typeof tasks.$inferInsert> = {
       updatedAt: new Date(),
     };
 
@@ -131,8 +129,7 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: any) => {
 
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const DELETE = withApiRoute(async (req: NextRequest, { params }: any) => {
+export const DELETE = withApiRoute(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
   const limited = await rateLimitMutating(req, 'tasks', 'delete');
   if (limited) return limited;
