@@ -1,15 +1,11 @@
 {
   "app/api/tenant/api-keys/[id]/route.ts": 3,
-  "app/api/tenant/subscriptions/route.ts": 2,
-  "app/api/tenant/workflows/[id]/route.ts": 2,
   "lib/api/validate.ts": 3,
   "lib/api-error.ts": 3,
   "lib/automation/types.ts": 3,
   "lib/dev-logger.ts": 3,
-  "lib/email/service.ts": 2,
   "lib/env.ts": 4,
   "lib/formula/engine.ts": 4,
-  "lib/modules/lazy-loader.tsx": 2,
   "lib/restore/restore-executor.ts": 4,
   "lib/utils.ts": 3
 }

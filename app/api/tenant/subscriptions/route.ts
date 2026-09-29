@@ -8,7 +8,7 @@ import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { createSubscriptionSchema } from '@/lib/api/schemas';
 import { db } from '@/drizzle/db';
 import { serviceSubscriptions } from '@/drizzle/schema';
-import { eq, and, desc, sql } from 'drizzle-orm';
+import { eq, and, desc, sql, type SQL } from 'drizzle-orm';
 import { requireAuth } from '@/lib/auth/middleware';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
@@ -28,8 +28,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
 
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const conditions: any[] = [eq(serviceSubscriptions.tenantId, tenantId)];
+    const conditions: SQL[] = [eq(serviceSubscriptions.tenantId, tenantId)];
     if (status) conditions.push(eq(serviceSubscriptions.status, status));
 
     const offset = (page - 1) * limit;
@@ -62,6 +61,9 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       return NextResponse.json({ error: 'Start date and billing frequency are required' }, { status: 400 });
     }
 
+    // start_date/end_date/trial_end_date are zod `z.string().date()` values and the
+    // columns are drizzle `date()` (string mode) — pass the ISO strings through
+    // untouched instead of wrapping in Date (which `as any` was hiding).
     const [subscription] = await db.insert(serviceSubscriptions).values({
       tenantId,
       contactId: contactId || null,
@@ -69,19 +71,18 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       name: 'Subscription',
       planName: null,
       status: status ?? 'active',
-      startDate: new Date(startDate),
-      currentPeriodStart: new Date(startDate),
-      currentPeriodEnd: endDate ? new Date(endDate) : null,
+      startDate,
+      currentPeriodStart: startDate,
+      currentPeriodEnd: endDate ?? null,
       amount: '0',
       currency: 'USD',
       billingFrequency,
       autoRenew: autoRenew ?? true,
       paymentMethod: null,
       last4: null,
-      trialEndDate: trialEndDate ? new Date(trialEndDate) : null,
+      trialEndDate: trialEndDate ?? null,
       createdBy: userId,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any).returning();
+    }).returning();
 
     return NextResponse.json({ data: subscription }, { status: 201 });
   } catch (error) {
