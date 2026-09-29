@@ -34,10 +34,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, skipped: true, reason: 'lock-held' });
   }
 
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const results: Record<string, any> = {};
+  const results: Record<string, unknown> = {};
 
   try {
     // 1. Process lead warming (send messages for today's events)

@@ -215,16 +215,13 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       message: `Database restored from backup: ${backup.storagePath}`,
       duration_ms: durationMs,
     });
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     await logError({ error: err, context: 'superadmin/restore POST', requestMethod: 'POST' });
     await db.insert(errorLogs).values({
       level: 'fatal',
       code: 'RESTORE_FAILED',
       message: "Internal server error",
-      stack: err.stack?.slice(0, 2000),
+      stack: (err instanceof Error ? err.stack : undefined)?.slice(0, 2000),
     }).catch((err) => logError({ error: err, context: 'superadmin/restore async side-effect' }));
     return apiError(err);
   }
