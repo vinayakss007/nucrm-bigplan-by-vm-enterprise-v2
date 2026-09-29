@@ -14,7 +14,7 @@ import { apiError } from '@/lib/api-error';
 import { escapeLike } from '@/lib/api/sanitize-like';
 import { NextRequest, NextResponse } from 'next/server';
 import { logError } from '@/lib/errors-server';
-import { requireAuth, requirePerm } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm, type AuthContext } from '@/lib/auth/middleware';
 import { db, type DbClient } from '@/drizzle/db';
 import { supportTickets } from '@/drizzle/schema';
 import { eq, and, inArray, or, ilike, isNull } from 'drizzle-orm';
@@ -33,11 +33,11 @@ export const POST = withApiRoute(async (req: NextRequest) => {
   if (limited) return limited;
 
   
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let ctx: any;
+  let ctx!: AuthContext;
   try {
-    ctx = await requireAuth(req);
-    if (ctx instanceof NextResponse) return ctx;
+    const auth = await requireAuth(req);
+    if (auth instanceof NextResponse) return auth;
+    ctx = auth;
 
     const modErr = await requirePerm(ctx, 'tickets.manage');
     if (modErr) return modErr;
