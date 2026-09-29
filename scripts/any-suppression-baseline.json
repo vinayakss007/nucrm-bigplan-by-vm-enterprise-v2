@@ -2,11 +2,9 @@
   "app/api/tenant/api-keys/[id]/route.ts": 3,
   "app/api/tenant/partners/[id]/deals/route.ts": 1,
   "app/api/tenant/reports/[id]/route.ts": 1,
-  "app/api/tenant/subscriptions/route.ts": 2,
   "app/api/tenant/tickets/[id]/route.ts": 1,
   "app/api/tenant/webhooks/[id]/deliveries/route.ts": 1,
   "app/api/tenant/whatsapp/templates/route.ts": 1,
-  "app/api/tenant/workflows/[id]/route.ts": 2,
   "app/api/tenant/workspace/route.ts": 1,
   "app/api/user/profile/route.ts": 1,
   "app/api/webhooks/resend/route.ts": 1,
@@ -18,10 +16,8 @@
   "lib/db/ensure-schema.ts": 1,
   "lib/db/migration-safety.ts": 1,
   "lib/dev-logger.ts": 3,
-  "lib/email/service.ts": 2,
   "lib/env.ts": 4,
   "lib/formula/engine.ts": 4,
-  "lib/modules/lazy-loader.tsx": 2,
   "lib/restore/restore-executor.ts": 4,
   "lib/utils.ts": 3
 }
