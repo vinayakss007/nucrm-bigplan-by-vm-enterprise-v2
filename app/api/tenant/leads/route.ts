@@ -10,7 +10,8 @@ import { requireAuth, requirePerm, can } from '@/lib/auth/middleware';
 import { checkLimit } from '@/lib/usage/middleware';
 import { db } from '@/drizzle/db';
 import { leads, users, companies, leadActivities, activities, contacts } from '@/drizzle/schema';
-import { eq, and, or, desc, sql, ilike, isNull, gte, lte, arrayContains } from 'drizzle-orm';
+import { eq, and, or, desc, sql, ilike, isNull, gte, lte, arrayContains, type SQL } from 'drizzle-orm';
+import type { PgColumn } from 'drizzle-orm/pg-core';
 import { logAudit } from '@/lib/audit';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { resolveOrCreateContactForLead } from '@/lib/contacts/resolve';
@@ -25,8 +26,7 @@ import { withApiRoute } from '@/lib/api/with-api-route';
 // Whitelist for sort columns to prevent SQL injection
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const ALLOWED_SORT_COLUMNS: Record<string, any> = {
+const ALLOWED_SORT_COLUMNS: Record<string, PgColumn> = {
   'created_at': leads.createdAt,
   'updated_at': leads.updatedAt,
   'last_activity_at': leads.lastActivityAt,
@@ -80,14 +80,13 @@ export const GET = withApiRoute(async (request: NextRequest) => {
 
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const filters: any[] = [
+    const filters: SQL[] = [
       eq(leads.tenantId, ctx.tenantId),
       isNull(leads.deletedAt)
     ];
 
     if (!can(ctx, 'leads.view_all')) {
-      filters.push(or(eq(leads.assignedTo, ctx.userId), eq(leads.createdBy, ctx.userId)));
+      filters.push(or(eq(leads.assignedTo, ctx.userId), eq(leads.createdBy, ctx.userId))!);
     }
 
     if (leadStatus) {
@@ -124,7 +123,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
         ilike(leads.email, searchWildcard),
         ilike(leads.phone, searchWildcard),
         ilike(leads.companyName, searchWildcard)
-      ));
+      )!);
     }
 
     const [countResult] = await db.select({ 

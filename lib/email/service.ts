@@ -123,9 +123,8 @@ async function sendViaResend(payload: EmailPayload): Promise<SendResult> {
     return { success: false, error: data.message ?? `HTTP ${res.status}` };
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
-    return { success: false, error: err.message };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : String(err) };
   }
 }
 
@@ -205,9 +204,8 @@ async function sendViaSMTP(payload: EmailPayload): Promise<SendResult> {
     return { success: true, provider: 'smtp', messageId: info.messageId };
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
-    return { success: false, error: err.message };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : String(err) };
   }
 }
 

@@ -59,10 +59,8 @@ export const GET = withApiRoute(async (request: NextRequest) => {
         AND completed_at IS NOT NULL
     `);
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const fu = fuStats.rows[0] as any;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const ts = taskStats.rows[0] as any;
+    const fu = fuStats.rows[0] as { on_time: string | number | null; total_completed: string | number | null; overdue: string | number | null } | undefined;
+    const ts = taskStats.rows[0] as { on_time: string | number | null; total_completed: string | number | null; overdue: string | number | null } | undefined;
 
     const fuOnTime = Number(fu?.on_time ?? 0);
     const fuTotal = Number(fu?.total_completed ?? 1);
