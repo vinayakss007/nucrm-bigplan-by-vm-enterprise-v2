@@ -26,7 +26,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         .limit(1);
 
       if (!ticket) return NextResponse.json({ error: 'Ticket not found' }, { status: 404 });
-      return ticketWithReplies(id, ticket);
+      return ticketWithReplies(id, ticket!);
     }
 
     // Cookie-session path (portal UI): the ticket must belong to the caller's
@@ -55,8 +55,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function ticketWithReplies(id: string, ticket: any) {
+async function ticketWithReplies(id: string, ticket: typeof supportTickets.$inferSelect) {
   const replies = await db
     .select({
       id: ticketReplies.id,
