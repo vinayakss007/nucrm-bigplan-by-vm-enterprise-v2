@@ -390,19 +390,16 @@ async function handleContact(
   if (!firstName) throw new Error('first_name is required');
 
   // Check duplicate email
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let existing: any = null;
+  let existing: typeof contacts.$inferSelect | null = null;
   if (email) {
-    existing = await tx.query.contacts.findFirst({
+    existing = (await tx.query.contacts.findFirst({
       where: and(
         eq(contacts.tenantId, tenantId),
         eq(contacts.email, email),
         eq(contacts.isArchived, false),
         isNull(contacts.deletedAt)
       )
-    });
+    })) ?? null;
   }
 
   // On plain "create" with a duplicate, reject
@@ -479,18 +476,15 @@ async function handleLead(
   const firstName = sanitizeString(d['firstName'] as string, 100);
   if (!firstName) throw new Error('first_name is required for lead');
 
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let existing: any = null;
+  let existing: typeof leads.$inferSelect | null = null;
   if (email) {
-    existing = await tx.query.leads.findFirst({
+    existing = (await tx.query.leads.findFirst({
       where: and(
         eq(leads.tenantId, tenantId),
         eq(leads.email, email),
         isNull(leads.deletedAt)
       )
-    });
+    })) ?? null;
   }
 
   if (action === 'create' && existing) {
@@ -876,6 +870,14 @@ async function processItem(
 
 // ── Route handler ──────────────────────────────────────────────────────
 
+/** Accepted payload shapes: a single { action, entity, data } or { batch: [...] }. */
+type InboundRequestBody = {
+  batch?: Array<{ action: string; entity: string; data: Record<string, unknown> }>;
+  action?: string;
+  entity?: string;
+  data?: Record<string, unknown>;
+};
+
 export async function POST(request: NextRequest) {
   const startTime = Date.now();
   let apiKeyRow: Awaited<ReturnType<typeof resolveApiKey>> = null;
@@ -883,8 +885,7 @@ export async function POST(request: NextRequest) {
   // Hoisted so the outer catch can still persist whatever body it received.
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let body: any;
+  let body: InboundRequestBody | undefined;
 
   try {
     // 1. Extract API key — header ONLY. ?api_key= query params leak into
@@ -937,7 +938,7 @@ export async function POST(request: NextRequest) {
           { status: 413 }
         );
       }
-      body = JSON.parse(text);
+      body = JSON.parse(text) as InboundRequestBody;
     } catch {
       logRequest(keyPrefix, 400, request.nextUrl.pathname);
       return NextResponse.json({ error: 'Invalid JSON payload.' }, { status: 400 });
@@ -1050,8 +1051,7 @@ export async function POST(request: NextRequest) {
 
  
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } catch (err: any) {
+      } catch (err) {
         hasError = true;
         results.push({
           entity: item.entity,
@@ -1071,7 +1071,7 @@ export async function POST(request: NextRequest) {
           entity: item.entity,
           status: 'error',
           statusCode: 400,
-          errorMessage: err.message,
+          errorMessage: err instanceof Error ? err.message : String(err),
           recordId: null,
           payloadSize: contentLength || 0,
           body,
@@ -1113,8 +1113,7 @@ export async function POST(request: NextRequest) {
     );
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     const duration = Date.now() - startTime;
     void logError({ error: err, context: 'webhooks/inbound POST' });
 
@@ -1126,7 +1125,7 @@ export async function POST(request: NextRequest) {
         entity: 'unknown',
         status: 'error',
         statusCode: 500,
-        errorMessage: err.message,
+        errorMessage: err instanceof Error ? err.message : String(err),
         recordId: null,
         payloadSize: 0,
         body,

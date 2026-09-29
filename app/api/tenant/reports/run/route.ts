@@ -8,15 +8,31 @@ import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { contacts, companies, deals, tasks, leads } from '@/drizzle/schema';
-import { eq, and, desc, sql, gt, lt } from 'drizzle-orm';
+import { eq, and, desc, sql, gt, lt, type SQL } from 'drizzle-orm';
+import type { Column } from 'drizzle-orm';
+import type { AnyPgTable } from 'drizzle-orm/pg-core';
 import { readJsonBody } from '@/lib/api/validate';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { logError } from '@/lib/errors-server';
 
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const REPORT_QUERIES: Record<string, any> = {
+type ReportColumn = string | SQL;
+
+interface ReportConfig {
+  table: AnyPgTable & {
+    tenantId: Column;
+    createdAt: Column;
+    deletedAt?: Column;
+    status?: Column;
+    stage?: Column;
+    leadStatus?: Column;
+  };
+  columns: ReportColumn[];
+  joins?: { table: AnyPgTable; field: string; as: string; select: Column | SQL }[];
+  groupBy?: string;
+  filters?: { field: string; value: string }[];
+}
+
+const REPORT_QUERIES: Record<string, ReportConfig> = {
   contacts: {
     table: contacts,
     columns: ['first_name', 'last_name', 'email', 'phone', 'company_id', 'lead_status', 'lifecycle_stage', 'score', 'created_at'],
@@ -64,59 +80,57 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       return NextResponse.json({ error: 'Invalid report type' }, { status: 400 });
     }
 
-    let query = db.select(reportConfig.columns || {}).from(reportConfig.table);
+    // The whole registry is dynamic (tables and columns come from config
+    // literals above), so the drizzle selection map and groupBy argument are
+    // reinterpreted through casts — the runtime values are unchanged.
+    const table = reportConfig.table;
+    const selection = (reportConfig.columns || {}) as unknown as Record<string, SQL>;
 
-    const conditions = [eq(reportConfig.table.tenantId, ctx.tenantId)];
+    const conditions: SQL[] = [eq(table.tenantId, ctx.tenantId)];
 
-    if ('deletedAt' in reportConfig.table) {
-      conditions.push(sql`${reportConfig.table.deletedAt} IS NULL`);
+    const deletedAt = table.deletedAt;
+    if (deletedAt) {
+      conditions.push(sql`${deletedAt} IS NULL`);
     }
 
     if (filters) {
-      /* eslint-disable @typescript-eslint/no-explicit-any */
-      if (filters.status && 'status' in reportConfig.table) {
-        conditions.push(eq((reportConfig.table as any).status, filters.status));
+      const status = table.status;
+      if (filters.status && status) {
+        conditions.push(eq(status, filters.status));
       }
-      if (filters.stage && 'stage' in reportConfig.table) {
-        conditions.push(eq((reportConfig.table as any).stage, filters.stage));
+      const stage = table.stage;
+      if (filters.stage && stage) {
+        conditions.push(eq(stage, filters.stage));
       }
-      if (filters.lead_status && 'leadStatus' in reportConfig.table) {
-        conditions.push(eq((reportConfig.table as any).leadStatus, filters.lead_status));
+      const leadStatus = table.leadStatus;
+      if (filters.lead_status && leadStatus) {
+        conditions.push(eq(leadStatus, filters.lead_status));
       }
-      /* eslint-enable @typescript-eslint/no-explicit-any */
       if (filters.created_after) {
-        conditions.push(gt(reportConfig.table.createdAt, new Date(filters.created_after)));
+        conditions.push(gt(table.createdAt, new Date(filters.created_after)));
       }
       if (filters.created_before) {
-        conditions.push(lt(reportConfig.table.createdAt, new Date(filters.created_before)));
+        conditions.push(lt(table.createdAt, new Date(filters.created_before)));
       }
     }
 
-    if (reportConfig.groupBy) {
-      query = db
-        .select(reportConfig.columns)
-        .from(reportConfig.table)
-        .where(and(...conditions))
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-        .groupBy(reportConfig.columns[0]) as any;
-    } else {
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      query = query.where(and(...conditions)).orderBy(desc(reportConfig.table.createdAt)).limit(limit) as any;
-    }
-
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const results = await query as any[];
+    const rows: unknown[] = reportConfig.groupBy
+      ? await db
+          .select(selection)
+          .from(table)
+          .where(and(...conditions))
+          .groupBy(reportConfig.columns[0] as unknown as SQL)
+      : await db
+          .select(selection)
+          .from(table)
+          .where(and(...conditions))
+          .orderBy(desc(table.createdAt))
+          .limit(limit);
 
     return NextResponse.json({
-      data: results,
+      data: rows,
       meta: {
-        count: results.length,
+        count: rows.length,
         report_type,
         generated_at: new Date().toISOString(),
       },
