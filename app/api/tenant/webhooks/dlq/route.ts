@@ -68,8 +68,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
         const { entries } = await dlq.listDLQEntries(ctx.tenantId, { limit: 1000, offset: 0, status: 'pending' });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const entryIds = entries.map((e: any) => e.id);
+        const entryIds = entries.map((e) => e.id);
         if (entryIds.length === 0) {
           return NextResponse.json({ succeeded: 0, failed: 0, message: 'No pending DLQ entries' });
         }

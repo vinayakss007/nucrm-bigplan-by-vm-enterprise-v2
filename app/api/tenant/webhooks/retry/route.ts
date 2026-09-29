@@ -51,8 +51,11 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       return NextResponse.json({ error: 'Delivery not found or not in failed state' }, { status: 404 });
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const row = delivery.rows[0] as any;
+    const row = delivery.rows[0] as {
+      url: string;
+      payload: unknown;
+      headers: unknown;
+    };
 
     // Re-send the webhook
     try {
@@ -60,7 +63,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(typeof row.headers === 'object' ? row.headers : {}),
+          ...(typeof row.headers === 'object' && row.headers !== null ? (row.headers as Record<string, string>) : {}),
         },
         body: typeof row.payload === 'string' ? row.payload : JSON.stringify(row.payload),
         signal: AbortSignal.timeout(10000), // 10s timeout
