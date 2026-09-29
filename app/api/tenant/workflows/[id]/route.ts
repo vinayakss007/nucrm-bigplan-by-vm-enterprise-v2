@@ -19,6 +19,12 @@ import { withApiRoute } from '@/lib/api/with-api-route';
  * GET /api/tenant/workflows/[id]
  * Get workflow details with actions
  */
+
+interface WorkflowActionInput {
+  action_type?: string | null;
+  action_config?: Record<string, unknown> | null;
+  condition_config?: Record<string, unknown> | null;
+}
 export const GET = withApiRoute(async (request: NextRequest,
   { params }: { params: Promise<{ id: string }> }) => {
   try {
@@ -123,8 +129,7 @@ export const PATCH = withApiRoute(async (request: NextRequest,
       // Update workflow fields
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const updateData: any = { updatedAt: new Date(), updatedBy: ctx.userId };
+      const updateData: Partial<typeof workflows.$inferInsert> = { updatedAt: new Date(), updatedBy: ctx.userId };
       if (name !== undefined) updateData.name = name;
       if (description !== undefined) updateData.description = description;
       if (status !== undefined) updateData.status = status;
@@ -146,14 +151,13 @@ export const PATCH = withApiRoute(async (request: NextRequest,
         if (actions.length > 0) {
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const actionValues = actions.map((action: any, index: number) => ({
+          const actionValues = (actions as WorkflowActionInput[]).map((action, index) => ({
             workflowId: id,
             tenantId: ctx.tenantId,
             orderIndex: index + 1,
-            actionType: action.action_type || 'send_email',
-            config: action.action_config || {},
-            conditionConfig: action.condition_config || {},
+            actionType: action.action_type ?? 'send_email',
+            config: action.action_config ?? {},
+            conditionConfig: action.condition_config ?? {},
           }));
 
           await tx.insert(workflowActions).values(actionValues);
