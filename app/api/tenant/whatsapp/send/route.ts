@@ -58,8 +58,9 @@ export const POST = withApiRoute(async (req: NextRequest) => {
 
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let requestBody: any;
+    let requestBody:
+      | { messaging_product: string; to: string; type: 'template'; template: Record<string, unknown> }
+      | { messaging_product: string; to: string; type: 'text'; text: { body: unknown } };
 
     if (message_type === 'template') {
       // Send template message
@@ -170,7 +171,12 @@ export const POST = withApiRoute(async (req: NextRequest) => {
         tenantId: ctx.tenantId,
         direction: 'outbound',
         contentType: message_type === 'template' ? 'template' : 'text',
-        content: message_type === 'template' ? `Template: ${template_name}` : (requestBody.text?.body || ''),
+        content:
+          message_type === 'template'
+            ? `Template: ${template_name}`
+            : 'text' in requestBody
+              ? String(requestBody.text.body ?? '')
+              : '',
         externalId: messageId,
         status: 'sent',
         metadata: responseData,
