@@ -8,10 +8,8 @@
   "app/api/user/profile/route.ts": 1,
   "app/api/webhooks/resend/route.ts": 1,
   "lib/api/validate.ts": 1,
-  "lib/automation/types.ts": 3,
   "lib/capture-error.ts": 1,
   "lib/db/cache.ts": 1,
   "lib/db/ensure-schema.ts": 1,
-  "lib/db/migration-safety.ts": 1,
-  "lib/utils.ts": 3
+  "lib/db/migration-safety.ts": 1
 }
