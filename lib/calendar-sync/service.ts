@@ -138,8 +138,8 @@ export async function syncCalendarEvents(
   // Sync events + integration config atomically
   try {
     await db.transaction(async (tx) => {
-      const inserts: any[] = [];
-      const updatePromises: Promise<any>[] = [];
+      const inserts: (typeof meetings.$inferInsert)[] = [];
+      const updatePromises: Promise<unknown>[] = [];
 
       for (const event of externalEvents) {
         const existing = existingByExternal.get(event.externalId!);

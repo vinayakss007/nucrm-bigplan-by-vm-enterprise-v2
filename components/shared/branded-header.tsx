@@ -11,7 +11,7 @@ interface BrandedHeaderProps {
 }
 
 export function BrandedHeader({ branding }: BrandedHeaderProps) {
-  const vars = brandingToCssVars(branding);
+  const vars: React.CSSProperties = brandingToCssVars(branding);
 
   const layoutClasses: Record<string, string> = {
     default: 'justify-between',
@@ -25,7 +25,7 @@ export function BrandedHeader({ branding }: BrandedHeaderProps) {
     <>
       <header
         className={`flex items-center px-6 py-4 border-b ${layoutClass}`}
-        style={{ backgroundColor: branding.primaryColor, color: '#ffffff', ...(vars as any) }}
+        style={{ backgroundColor: branding.primaryColor, color: '#ffffff', ...vars }}
       >
         <div className="flex items-center gap-3">
           {branding.logoUrl && (
