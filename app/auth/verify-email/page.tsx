@@ -33,8 +33,7 @@ function VerifyEmailContent() {
       firedRef.current = true;
       verifyMutation.mutate(token);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token]);
+  }, [token, verifyMutation]);
 
   const noToken = !token;
   const ok = verifyMutation.isSuccess && !!verifyMutation.data?.ok;
