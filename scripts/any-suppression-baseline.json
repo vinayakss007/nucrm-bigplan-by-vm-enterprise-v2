@@ -8,16 +8,12 @@
   "app/api/tenant/workspace/route.ts": 1,
   "app/api/user/profile/route.ts": 1,
   "app/api/webhooks/resend/route.ts": 1,
-  "lib/api/validate.ts": 3,
-  "lib/api-error.ts": 3,
+  "lib/api/validate.ts": 2,
   "lib/automation/types.ts": 3,
   "lib/capture-error.ts": 1,
   "lib/db/cache.ts": 1,
   "lib/db/ensure-schema.ts": 1,
   "lib/db/migration-safety.ts": 1,
   "lib/dev-logger.ts": 3,
-  "lib/env.ts": 4,
-  "lib/formula/engine.ts": 4,
-  "lib/restore/restore-executor.ts": 4,
   "lib/utils.ts": 3
 }
