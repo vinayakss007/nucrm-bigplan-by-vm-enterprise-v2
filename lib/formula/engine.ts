@@ -15,12 +15,11 @@
  * (GHSA-8gw3-rxh4-v6jx, GHSA-jc85-fpwf-qm7x) with NO fix available.
  */
 
-import { create, all, type FactoryFunctionMap } from 'mathjs';
+import { create, all } from 'mathjs';
 import { logger } from '@/lib/logger';
 
 // Create a restricted mathjs instance — no dangerous functions
-// mathjs types `all` as possibly undefined although the named export always exists.
-const math = create(all as FactoryFunctionMap);
+const math = create(all!);
 
 // Remove dangerous functions that could be abused
 const BLOCKED_FUNCTIONS = [
@@ -47,7 +46,7 @@ export class FormulaEngine {
    */
  
  
-  evaluate(formula: string, data: Record<string, unknown>): unknown {
+  evaluate(formula: string, data: Record<string, unknown>): number | string | null | undefined {
     if (!formula) return null;
 
     try {
@@ -65,7 +64,7 @@ export class FormulaEngine {
 
           cleanFormula = cleanFormula.replace(match, safeKey);
           const value = this.getNestedValue(data, rawKey);
-          variables[safeKey] = typeof value === 'number' ? value : (parseFloat(String(value)) || 0);
+          variables[safeKey] = typeof value === 'number' ? value : (parseFloat(String(value ?? '')) || 0);
         }
       }
 
@@ -103,7 +102,8 @@ export class FormulaEngine {
         return Math.round(result * 100) / 100;
       }
 
-      return result;
+      // mathjs yields undefined for an empty/whitespace expression — preserve that
+      return result as number | string | null | undefined;
     } catch (err) {
       logger.error('[FormulaEngine] Evaluation failed', { formula, error: err instanceof Error ? err.message : String(err) });
       return null;
@@ -113,10 +113,7 @@ export class FormulaEngine {
  
  
   private getNestedValue(obj: Record<string, unknown>, path: string): unknown {
-    return path.split('.').reduce<unknown>((acc, key) => {
-      if (acc && typeof acc === 'object') return (acc as Record<string, unknown>)[key];
-      return undefined;
-    }, obj);
+    return path.split('.').reduce<unknown>((acc, key) => (acc as Record<string, unknown> | undefined)?.[key], obj);
   }
 }
 

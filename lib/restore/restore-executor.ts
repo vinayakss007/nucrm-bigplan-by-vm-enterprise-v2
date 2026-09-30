@@ -403,13 +403,14 @@ export async function executeSelectiveRestore(
  
  
   } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
     const durationMs = Date.now() - startTime;
     onProgress({
       step: 'failed',
       currentCount: 0,
       totalCount: 0,
       status: 'failed',
-      message: `Restore failed: ${error instanceof Error ? error.message : String(error)}`,
+      message: `Restore failed: ${errorMsg}`,
     });
     
     return {
@@ -418,7 +419,7 @@ export async function executeSelectiveRestore(
       recordsPerTable,
       durationMs,
       unparsedStatements,
-      error: error instanceof Error ? error.message : String(error),
+      error: errorMsg,
     };
   }
 }
@@ -447,8 +448,8 @@ export async function countExistingRecords(
 
 export async function validateTenant(tenantId: string): Promise<{
   valid: boolean;
-  // Matches the columns actually selected by the findFirst below — not the
-  // full tenants row.
+ 
+ 
   tenant?: { id: string; name: string; slug: string; status: string };
   error?: string;
 }> {
