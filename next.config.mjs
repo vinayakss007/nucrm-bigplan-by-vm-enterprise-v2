@@ -97,7 +97,9 @@ let nextConfig = {
 if (process.env.SENTRY_ORG && process.env.SENTRY_PROJECT && process.env.SENTRY_AUTH_TOKEN) {
   try {
     const { withSentryConfig } = await import('@sentry/nextjs');
-    nextConfig = withSentryConfig(nextConfig, { org: process.env.SENTRY_ORG, project: process.env.SENTRY_PROJECT, authToken: process.env.SENTRY_AUTH_TOKEN, silent: true, widenClientFileUpload: true, hideSourceMaps: true });
+    // `hideSourceMaps` was removed in SDK v9 with no replacement; the SDK emits
+    // hidden source maps by default, so the key was silently ignored.
+    nextConfig = withSentryConfig(nextConfig, { org: process.env.SENTRY_ORG, project: process.env.SENTRY_PROJECT, authToken: process.env.SENTRY_AUTH_TOKEN, silent: true, widenClientFileUpload: true });
   } catch (e) { console.error('[next.config] Sentry config failed:', e); }
 }
 // Bundle analyzer for `ANALYZE=true npm run build`
