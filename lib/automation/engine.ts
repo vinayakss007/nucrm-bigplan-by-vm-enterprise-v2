@@ -125,8 +125,8 @@ function meetsConditions(conditions: AutomationCondition[], data: Record<string,
     switch (cond.operator) {
       case 'equals':          return String(fieldVal) === String(cond.value);
       case 'not_equals':      return String(fieldVal) !== String(cond.value);
-      case 'contains':        return String(fieldVal ?? '').includes(cond.value);
-      case 'not_contains':    return !String(fieldVal ?? '').includes(cond.value);
+      case 'contains':        return String(fieldVal ?? '').includes(String(cond.value));
+      case 'not_contains':    return !String(fieldVal ?? '').includes(String(cond.value));
       case 'greater_than':    return Number(fieldVal) > Number(cond.value);
       case 'less_than':       return Number(fieldVal) < Number(cond.value);
       case 'is_empty':        return fieldVal == null || fieldVal === '';
