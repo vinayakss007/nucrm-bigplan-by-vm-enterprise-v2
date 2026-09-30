@@ -22,6 +22,11 @@ it('passes the configured preprod environment and release to Sentry init', async
   expect(init).toHaveBeenCalledWith(expect.objectContaining({
     environment: 'preprod',
     release: 'test-release',
-    sendDefaultPii: false,
   }));
+
+  // v11 removed `sendDefaultPii`; privacy now rests on not opting in via
+  // `dataCollection`, so assert the absence of both rather than `: false`.
+  const options = init.mock.calls[0]?.[0] ?? {};
+  expect(options).not.toHaveProperty('sendDefaultPii');
+  expect(options).not.toHaveProperty('dataCollection');
 });

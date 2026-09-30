@@ -10,7 +10,8 @@ Sentry.init({
   environment: process.env['NEXT_PUBLIC_SENTRY_ENVIRONMENT'] || process.env['NODE_ENV'] || 'development',
   ...(process.env['NEXT_PUBLIC_SENTRY_RELEASE'] ? { release: process.env['NEXT_PUBLIC_SENTRY_RELEASE'] } : {}),
 
-  sendDefaultPii: false,
+  // v11 removed `sendDefaultPii`; the SDK now treats anything other than an
+  // explicit `dataCollection` opt-in as off, so PII is still never sent.
 
   // 100% in dev, 10% in production
   tracesSampleRate: process.env['NODE_ENV'] === "development" ? 1.0 : 0.1,
