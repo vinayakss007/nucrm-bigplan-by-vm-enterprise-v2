@@ -1,5 +1,3 @@
 {
-  "app/api/tenant/api-keys/[id]/route.ts": 3,
-  "lib/api/validate.ts": 2,
-  "lib/dev-logger.ts": 3
+  "lib/api/validate.ts": 1
 }
