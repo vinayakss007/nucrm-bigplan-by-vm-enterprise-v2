@@ -90,8 +90,7 @@ export function withValidation<T>(
     request: Request,
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ctx: any,
+    ctx: Record<string, unknown>,
     body: T
   ) => Promise<NextResponse> | NextResponse
 ) {
