@@ -1,17 +1,5 @@
 {
   "app/api/tenant/api-keys/[id]/route.ts": 3,
-  "app/api/tenant/partners/[id]/deals/route.ts": 1,
-  "app/api/tenant/reports/[id]/route.ts": 1,
-  "app/api/tenant/tickets/[id]/route.ts": 1,
-  "app/api/tenant/webhooks/[id]/deliveries/route.ts": 1,
-  "app/api/tenant/whatsapp/templates/route.ts": 1,
-  "app/api/tenant/workspace/route.ts": 1,
-  "app/api/user/profile/route.ts": 1,
-  "app/api/webhooks/resend/route.ts": 1,
   "lib/api/validate.ts": 2,
-  "lib/capture-error.ts": 1,
-  "lib/db/cache.ts": 1,
-  "lib/db/ensure-schema.ts": 1,
-  "lib/db/migration-safety.ts": 1,
   "lib/dev-logger.ts": 3
 }

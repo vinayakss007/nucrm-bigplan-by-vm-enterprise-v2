@@ -35,8 +35,7 @@ export async function ensureSchema(): Promise<{ ready: boolean; missing: string[
     return { ready: missing.length === 0, missing };
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
-    return { ready: false, missing: ['db_connection_failed: ' + err.message] };
+  } catch (err) {
+    return { ready: false, missing: ['db_connection_failed: ' + (err instanceof Error ? err.message : String(err))] };
   }
 }

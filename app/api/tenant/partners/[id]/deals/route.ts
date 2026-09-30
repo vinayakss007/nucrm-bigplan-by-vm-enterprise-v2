@@ -89,16 +89,16 @@ export const POST = withApiRoute(async (request: NextRequest,
 
     return NextResponse.json({ data: registration }, { status: 201 });
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
     await logError({ error: err, context: 'tenant partner deals POST', requestMethod: 'POST' });
 
     // Return 404 for partner-not-found, 400 for partner-inactive
-    if (err.message === 'Partner not found') {
-      return NextResponse.json({ error: err.message }, { status: 404 });
+    if (message === 'Partner not found') {
+      return NextResponse.json({ error: message }, { status: 404 });
     }
-    if (err.message === 'Partner is not active') {
-      return NextResponse.json({ error: err.message }, { status: 400 });
+    if (message === 'Partner is not active') {
+      return NextResponse.json({ error: message }, { status: 400 });
     }
 
     return apiError(err);

@@ -336,8 +336,7 @@ async function handleSoftBounce(email: string): Promise<void> {
       const lockedContact = locked[0];
       if (!lockedContact) return null;
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const meta = (lockedContact.metadata as any) || {};
+      const meta = (lockedContact.metadata as Record<string, unknown> | null) ?? {};
       const bounces: string[] = Array.isArray(meta.softBounces) ? meta.softBounces : [];
 
       // Prune bounces outside the window, then append the current one.
