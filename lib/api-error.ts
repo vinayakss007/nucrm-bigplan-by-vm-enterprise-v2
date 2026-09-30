@@ -31,7 +31,7 @@ import { ConcurrencyError, InvalidExpectedUpdatedAtError } from '@/lib/concurren
  * Always reports 5xx errors to Sentry.
  *
  * Usage:
- *   } catch (err) { return apiError(err); }
+ *   } catch (err: any) { return apiError(err); }
  */
 export function apiError(err: unknown, message = 'Internal server error', status = 500) {
   const isDev = process.env.NODE_ENV === 'development';
@@ -98,10 +98,10 @@ export function apiError(err: unknown, message = 'Internal server error', status
 /**
  * Safe error handler for catch blocks that previously leaked err.message.
  * Use this as a drop-in replacement for:
- *   catch (err) { return NextResponse.json({ error: (err as Error).message }, { status: 500 }); }
+ *   catch (err: any) { return NextResponse.json({ error: err.message }, { status: 500 }); }
  *
  * Now use:
- *   catch (err) { return apiError(err); }
+ *   catch (err: any) { return apiError(err); }
  */
 export function safeApiError(err: unknown) {
   return apiError(err, 'Internal server error', 500);

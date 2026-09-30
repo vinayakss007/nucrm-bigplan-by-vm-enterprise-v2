@@ -13,8 +13,5 @@
   "lib/db/cache.ts": 1,
   "lib/db/ensure-schema.ts": 1,
   "lib/db/migration-safety.ts": 1,
-  "lib/env.ts": 4,
-  "lib/formula/engine.ts": 4,
-  "lib/restore/restore-executor.ts": 4,
   "lib/utils.ts": 3
 }

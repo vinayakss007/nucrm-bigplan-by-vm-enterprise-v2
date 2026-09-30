@@ -163,8 +163,7 @@ export async function createPreRestoreSnapshot(
   tables: string[]
 ): Promise<string> {
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const snapshotData: Record<string, any[]> = {};
+  const snapshotData: Record<string, Record<string, unknown>[]> = {};
   let totalRecords = 0;
   
   for (const table of tables) {
@@ -206,8 +205,7 @@ export async function rollbackToSnapshot(snapshotId: string, tenantId: string): 
   }
   
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const snapshotData = snapshot.snapshotData as Record<string, any[]>;
+  const snapshotData = snapshot.snapshotData as Record<string, Record<string, unknown>[]>;
   
   await db.transaction(async (tx) => {
     for (const [table, rows] of Object.entries(snapshotData)) {
@@ -218,7 +216,7 @@ export async function rollbackToSnapshot(snapshotId: string, tenantId: string): 
       
       // Restore from snapshot
       if (Array.isArray(rows) && rows.length > 0) {
-        const columns = Object.keys(rows[0]);
+        const columns = Object.keys(rows[0]!);
         const colIdents = columns.map(c => sql.identifier(c));
 
         const chunkSize = 1000;
@@ -404,15 +402,15 @@ export async function executeSelectiveRestore(
     
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (error: any) {
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
     const durationMs = Date.now() - startTime;
     onProgress({
       step: 'failed',
       currentCount: 0,
       totalCount: 0,
       status: 'failed',
-      message: `Restore failed: ${error.message}`,
+      message: `Restore failed: ${errorMsg}`,
     });
     
     return {
@@ -421,7 +419,7 @@ export async function executeSelectiveRestore(
       recordsPerTable,
       durationMs,
       unparsedStatements,
-      error: error.message,
+      error: errorMsg,
     };
   }
 }
@@ -452,8 +450,7 @@ export async function validateTenant(tenantId: string): Promise<{
   valid: boolean;
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  tenant?: any;
+  tenant?: { id: string; name: string; slug: string; status: string };
   error?: string;
 }> {
   const tenant = await db.query.tenants.findFirst({
