@@ -28,17 +28,16 @@ export const PATCH = withApiRoute(async (request: NextRequest) => {
 
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const updates: any = {
+    const updates: Partial<typeof users.$inferInsert> = {
       updatedAt: new Date()
     };
     
     if (v.first_name !== undefined) updates.fullName = (v.first_name ?? '').trim();
-    if (v.last_name !== undefined) updates.lastName = (v.last_name ?? '').trim();
     if (v.phone !== undefined) updates.phone = v.phone?.trim() || null;
     if (v.timezone !== undefined) updates.timezone = v.timezone;
     if (v.avatar_url !== undefined) updates.avatarUrl = v.avatar_url;
-    if (v.language !== undefined) updates.language = v.language;
+    // last_name / language have no users columns (drizzle .set would emit
+    // invalid SQL); fullName is the single name field stored.
 
     // Email change is auth-sensitive: normalize, enforce uniqueness explicitly
     // (a UNIQUE-constraint collision would otherwise surface as a generic 500),
