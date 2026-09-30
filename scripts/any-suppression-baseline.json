@@ -13,6 +13,5 @@
   "lib/db/cache.ts": 1,
   "lib/db/ensure-schema.ts": 1,
   "lib/db/migration-safety.ts": 1,
-  "lib/dev-logger.ts": 3,
-  "lib/utils.ts": 3
+  "lib/dev-logger.ts": 3
 }
