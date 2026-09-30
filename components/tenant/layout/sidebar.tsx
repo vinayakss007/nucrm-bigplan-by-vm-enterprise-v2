@@ -181,28 +181,35 @@ export default function TenantSidebar({ tenant, _profile, _roleSlug, permissions
   useEffect(() => {
     const abort = new AbortController();
     (async () => {
+      // Record what the server actually returned so the local fallback below
+      // fills gaps instead of overwriting hydrated state. Reading `pinned` /
+      // `openSections` here would always see the mount values (`[]` / `{}`),
+      // because the async body cannot observe state set earlier in itself.
+      let serverPinned: string[] | null = null;
+      let serverSections: Record<string, boolean> | null = null;
       try {
         const res = await fetch('/api/tenant/user/preferences', { signal: abort.signal });
         if (res.ok && !abort.signal.aborted) {
           const { data } = await res.json();
-          if (data?.pinned) setPinned(data.pinned);
-          if (data?.sections) setOpenSections(data.sections);
-          else setOpenSections(Object.fromEntries(NAV_SECTIONS.map(s => [s.id, !!s.defaultOpen])));
+          if (Array.isArray(data?.pinned) && data.pinned.length) serverPinned = data.pinned;
+          if (data?.sections && Object.keys(data.sections).length) serverSections = data.sections;
         }
       } catch (e) { if (e instanceof DOMException && e.name === 'AbortError') return; clientLogError('sidebar', e); }
 
-      // localStorage fallback for pinned
+      // localStorage fallback for whatever the server did not provide
       try {
-        if (!pinned.length) {
+        if (serverPinned) setPinned(serverPinned);
+        else {
           const p = localStorage.getItem(PIN_KEY);
           if (p) setPinned(JSON.parse(p));
         }
         const q = sessionStorage.getItem(FILTER_KEY);
         if (q) setQuery(q);
-        if (!Object.keys(openSections).length) {
+        if (serverSections) setOpenSections(serverSections);
+        else {
           const s = localStorage.getItem(SECTION_KEY);
           if (s) setOpenSections(JSON.parse(s));
-          else setOpenSections(Object.fromEntries(NAV_SECTIONS.map(s => [s.id, !!s.defaultOpen])));
+          else setOpenSections(Object.fromEntries(NAV_SECTIONS.map(sec => [sec.id, !!sec.defaultOpen])));
         }
 
         const cached = sessionStorage.getItem('nucrm.prefs.cache');
@@ -215,7 +222,6 @@ export default function TenantSidebar({ tenant, _profile, _roleSlug, permissions
       } catch (e) { if (e instanceof DOMException && e.name === 'AbortError') return; clientLogError('sidebar', e); }
     })();
     return () => abort.abort();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // React to live preference changes (Save on Preferences page emits this)
