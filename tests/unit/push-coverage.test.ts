@@ -59,7 +59,12 @@ vi.stubGlobal('fetch', mockFetch);
 describe('audit.ts', () => {
   beforeEach(() => {
     vi.resetModules();
-    vi.doMock('@/lib/logger', () => ({ logger: { error: vi.fn() } }));
+    // Stub the logger's whole surface, not just error(): vi.doMock survives
+    // resetModules(), so every later describe in this file imports this object,
+    // and sendEmail's failure path logs at warn for a missing provider.
+    vi.doMock('@/lib/logger', () => ({
+      logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+    }));
   });
 
   it('logAudit creates audit log', async () => {
@@ -596,9 +601,9 @@ describe('email/service - sendEmail', () => {
   });
 
   it('addTracking adds pixel', async () => {
-    const { addTracking } = await import('@/lib/email/service');
+    const { addTracking } = await import('@/lib/email/tracking');
     const r = addTracking('<html><body><p>C</p></body></html>', 'tr1', 'https://app.com');
-    expect(r).toContain('track/open?id=tr1');
+    expect(r).toContain('https://app.com/api/track/open?t=tr1');
   });
 });
 

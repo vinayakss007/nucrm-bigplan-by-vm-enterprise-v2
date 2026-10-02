@@ -577,17 +577,17 @@ describe('email/service - comprehensive', () => {
 
   describe('addTracking', () => {
     it('adds tracking pixel to HTML', async () => {
-      const { addTracking } = await import('@/lib/email/service');
+      const { addTracking } = await import('@/lib/email/tracking');
       
       const html = '<html><body><p>Content</p></body></html>';
       const result = addTracking(html, 'track-123', 'https://app.example.com');
       
-      expect(result).toContain('track/open?id=track-123');
+      expect(result).toContain('https://app.example.com/api/track/open?t=track-123');
       expect(result).toContain('<img');
     });
 
     it('handles HTML without body tag gracefully', async () => {
-      const { addTracking } = await import('@/lib/email/service');
+      const { addTracking } = await import('@/lib/email/tracking');
       
       const html = '<html><p>No body tag</p></html>';
       const result = addTracking(html, 'abc', 'https://app.com');
