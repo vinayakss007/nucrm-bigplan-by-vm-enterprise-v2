@@ -164,16 +164,16 @@ export function DataTable<TData, TValue>({
   // Clear selection when data changes (e.g. after bulk action, page change, or refresh)
   React.useEffect(() => {
     setRowSelection({})
-     
   }, [data])
 
-  // Reset select all matching when filters or page changes
+  // Clear select-all-matching only when the filter/page scope actually changes (ref keeps deps honest)
+  const selectionScope = `${externalGlobalFilter ?? ''}|${externalPageIndex ?? ''}|${pageIndex}`
+  const selectionScopeRef = React.useRef(selectionScope)
   React.useEffect(() => {
-    if (selectAllMatching) {
-      onSelectAllMatching?.(false)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [externalGlobalFilter, externalPageIndex, pageIndex])
+    if (selectionScopeRef.current === selectionScope) return
+    selectionScopeRef.current = selectionScope
+    if (selectAllMatching) onSelectAllMatching?.(false)
+  }, [selectionScope, selectAllMatching, onSelectAllMatching])
 
   const table = useReactTable({
     data,

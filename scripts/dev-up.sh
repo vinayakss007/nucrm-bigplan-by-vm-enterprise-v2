@@ -26,7 +26,7 @@
 #
 # ENV OVERRIDES:
 #   PGDATA   Postgres data dir      (default: /var/lib/pgsql/data)
-#   PGSOCK   Postgres socket dir    (default: /var/lib/pgsql/sockets)
+#   PGSOCK   Postgres socket dir    (default: /tmp/pgsql_sockets)
 #   PGBIN    Postgres bin dir       (default: auto-detected)
 #   DB_NAME  Database name          (default: nucrm)
 #   DB_USER  Database user/owner    (default: nucrm)
@@ -38,7 +38,7 @@ set -euo pipefail
 
 # ---- Config -----------------------------------------------------------------
 PGDATA="${PGDATA:-/var/lib/pgsql/data}"
-PGSOCK="${PGSOCK:-/var/lib/pgsql/sockets}"
+PGSOCK="${PGSOCK:-/tmp/pgsql_sockets}"
 DB_NAME="${DB_NAME:-nucrm}"
 DB_USER="${DB_USER:-nucrm}"
 DB_PASS="${DB_PASS:-nucrm}"
