@@ -183,6 +183,9 @@ vi.mock('@/lib/api-error', async () => {
 
 vi.mock('@/lib/email/service', () => ({
   sendEmail: vi.fn().mockResolvedValue({ success: true }),
+}));
+
+vi.mock('@/lib/email/tracking', () => ({
   createEmailTracking: vi.fn().mockResolvedValue(null),
   addTracking: vi.fn((html: string) => html),
 }));

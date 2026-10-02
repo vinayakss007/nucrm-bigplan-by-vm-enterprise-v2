@@ -195,28 +195,60 @@ describe('email/service', () => {
 
   describe('addTracking', () => {
     it('adds tracking pixel to HTML', async () => {
-      const { addTracking } = await import('@/lib/email/service');
+      const { addTracking } = await import('@/lib/email/tracking');
       
       const html = '<html><body><p>Content</p></body></html>';
       const result = addTracking(html, 'track-123', 'https://app.example.com');
       
-      expect(result).toContain('track/open?id=track-123');
+      expect(result).toContain('https://app.example.com/api/track/open?t=track-123');
       expect(result).toContain('<img');
     });
 
     it('replaces closing body tag', async () => {
-      const { addTracking } = await import('@/lib/email/service');
+      const { addTracking } = await import('@/lib/email/tracking');
       
       const html = '<body>Content</body>';
       const result = addTracking(html, 'abc', 'https://app.com');
       
       expect(result).toMatch(/<img[^>]+\/><\/body>$/);
     });
+
+    /**
+     * The pixel is a URL handed to a mail client, and the only thing that proves
+     * it works is the route it points at. A previous version rendered
+     * `/api/email/track/open?id=`, which matched no route: it fell through the
+     * auth middleware with a 401, so every sequence email recorded zero opens
+     * while the send itself reported success. This reads the route tree instead
+     * of restating the string, so path and query-name drift both fail here.
+     */
+    it('points at a real public route that reads the id under the same name', async () => {
+      const { readFileSync, existsSync } = await import('fs');
+      const { join } = await import('path');
+      const { addTracking } = await import('@/lib/email/tracking');
+
+      const html = addTracking('<html><body>X</body></html>', 'track-123', 'https://app.example.com');
+      const src = html.match(/src="([^"]+)"/)?.[1];
+      expect(src).toBeTruthy();
+
+      const url = new URL(src!);
+      expect(url.hostname).toBe('app.example.com');
+      // Tenant-scoped routes require auth, and a mail client rendering an image
+      // carries no session — the pixel endpoint is necessarily public.
+      expect(url.pathname.startsWith('/api/tenant/')).toBe(false);
+
+      const routeFile = join(process.cwd(), 'app', ...url.pathname.split('/').filter(Boolean), 'route.ts');
+      expect(existsSync(routeFile), `no route serves ${url.pathname}`).toBe(true);
+
+      const routeSource = readFileSync(routeFile, 'utf8');
+      for (const param of url.searchParams.keys()) {
+        expect(routeSource, `${url.pathname} never reads ?${param}=`).toContain(`get('${param}')`);
+      }
+    });
   });
 
   describe('createEmailTracking', () => {
     it('function is defined', async () => {
-      const { createEmailTracking } = await import('@/lib/email/service');
+      const { createEmailTracking } = await import('@/lib/email/tracking');
       expect(createEmailTracking).toBeDefined();
       expect(typeof createEmailTracking).toBe('function');
     });

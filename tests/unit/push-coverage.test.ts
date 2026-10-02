@@ -601,9 +601,9 @@ describe('email/service - sendEmail', () => {
   });
 
   it('addTracking adds pixel', async () => {
-    const { addTracking } = await import('@/lib/email/service');
+    const { addTracking } = await import('@/lib/email/tracking');
     const r = addTracking('<html><body><p>C</p></body></html>', 'tr1', 'https://app.com');
-    expect(r).toContain('track/open?id=tr1');
+    expect(r).toContain('https://app.com/api/track/open?t=tr1');
   });
 });
 
