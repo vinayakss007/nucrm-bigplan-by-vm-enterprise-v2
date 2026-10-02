@@ -32,7 +32,7 @@ export interface AuthContext {
   // built. Used to detect in-place permission edits (same roleSlug) so the
   // cached context is invalidated immediately instead of after the TTL.
   roleVersion?: number;
-  noWorkspace?: boolean; // FIX CRITICAL-07: Flag for superadmin without workspace
+  noWorkspace?: boolean;
   user?: {
     id: string;
     email: string;
