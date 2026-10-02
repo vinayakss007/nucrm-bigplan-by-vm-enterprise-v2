@@ -79,12 +79,14 @@ describe('db/rls', () => {
   describe.each([
     ['security', 'app.is_super_admin'],
     ['lookup', 'app.auth_lookup'],
+    ['tracking lookup', 'app.tracking_lookup'],
     ['user', 'app.current_user'],
   ] as const)('%s transaction context', (kind, guc) => {
     async function run(fn: (tx: unknown) => Promise<unknown>) {
       const rls = await import('@/lib/db/rls');
       if (kind === 'security') return rls.withSecurityContext(fn);
       if (kind === 'lookup') return rls.withAuthLookupContext(fn);
+      if (kind === 'tracking lookup') return rls.withTrackingLookupContext(fn);
       return rls.withUserContext('user-123', fn);
     }
 

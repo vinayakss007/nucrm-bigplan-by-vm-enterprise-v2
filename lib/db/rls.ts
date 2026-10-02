@@ -50,6 +50,18 @@ function hasTransaction(client: { transaction?: unknown }): boolean {
 export const NO_TENANT_SENTINEL = '00000000-0000-0000-0000-000000000000';
 
 /**
+ * Value carried by `app.current_user` when the request genuinely has no user.
+ * Same nil UUID, separate name, because the two GUCs mean different things:
+ * "no workspace selected" and "nobody is acting". `setUserContext` refuses an
+ * empty userId, and policies cast the setting to uuid, so a request that has to
+ * write tenant data while unauthenticated still needs a uuid-shaped value —
+ * `/api/track/open` stamping an "Email opened" activity for a recipient who is
+ * not a CRM user, for instance. It matches no `users` row, so any policy keyed
+ * on the actor stays closed.
+ */
+export const NO_USER_SENTINEL = '00000000-0000-0000-0000-000000000000';
+
+/**
  * Set tenant context for RLS policies.
  *
  * Call sites:
@@ -225,6 +237,39 @@ export async function withAuthLookupContext<T>(
   if (!hasTransaction(db)) return fn(db as unknown as Parameters<typeof fn>[0]);
   return await db.transaction(async (tx) => {
     await setAuthLookupContext(tx);
+    return fn(tx);
+  });
+}
+
+/**
+ * Mark the transaction as resolving an email-tracking id.
+ *
+ * `email_tracking` has only `tenant_isolation`, which compares tenant_id to
+ * app.current_tenant — a value the tracking endpoints do not know yet, because
+ * finding it is the point of the read. See 0105 for why this is its own GUC
+ * rather than a share of app.auth_lookup or app.is_super_admin.
+ */
+export async function setTrackingLookupContext(tx?: RlsTransaction): Promise<void> {
+  const client = tx || db;
+  if (isMockClient(client)) return;
+  const isLocal = tx ? sql`true` : sql`false`;
+  await client.execute(sql`SELECT set_config('app.tracking_lookup', 'true', ${isLocal})`);
+}
+
+/**
+ * Look up one `email_tracking` row by its unguessable id, from a request that
+ * has no tenant context (the open pixel, the click redirect).
+ *
+ * Keep the callback to the lookup itself and return only what the caller needs:
+ * this context can SELECT every tenant's tracking rows, so handing it back a
+ * whole-tenant query result would turn a narrow privilege into a broad one.
+ */
+export async function withTrackingLookupContext<T>(
+  fn: (tx: RlsTransaction) => Promise<T>
+): Promise<T> {
+  if (!hasTransaction(db)) return fn(db as unknown as Parameters<typeof fn>[0]);
+  return await db.transaction(async (tx) => {
+    await setTrackingLookupContext(tx);
     return fn(tx);
   });
 }

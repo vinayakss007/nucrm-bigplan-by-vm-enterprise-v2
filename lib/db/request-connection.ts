@@ -85,12 +85,13 @@ export function getPinnedClient(): PoolClient | undefined {
  * SQL that resets the tenant GUCs to empty (fail-closed) on a client. Kept in
  * sync with the pool.on('release') reset in lib/db/pool.ts.
  */
-// app.is_super_admin and app.auth_lookup are reset here too: both are meant to
-// be transaction-local (SET LOCAL via withSecurityContext/withAuthLookupContext)
-// but the helpers accept a bare client, and a privilege GUC that survives a
-// checkout would be handed to an unrelated request under PgBouncer.
+// app.is_super_admin, app.auth_lookup and app.tracking_lookup are reset here
+// too: all three are meant to be transaction-local (SET LOCAL via
+// withSecurityContext/withAuthLookupContext/withTrackingLookupContext) but the
+// helpers accept a bare client, and a privilege GUC that survives a checkout
+// would be handed to an unrelated request under PgBouncer.
 const RESET_TENANT_GUCS_SQL =
-  "SELECT set_config('app.current_tenant', '', false), set_config('app.current_user', '', false), set_config('app.is_super_admin', 'false', false), set_config('app.auth_lookup', '', false)";
+  "SELECT set_config('app.current_tenant', '', false), set_config('app.current_user', '', false), set_config('app.is_super_admin', 'false', false), set_config('app.auth_lookup', '', false), set_config('app.tracking_lookup', '', false)";
 
 /**
  * Per-pinned-client query serialization (#pinned-client-query-serialization).
