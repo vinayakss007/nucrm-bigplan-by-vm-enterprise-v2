@@ -33,6 +33,23 @@ function notGuarded(outcome: object): outcome is Guarded {
   return 'response' in outcome;
 }
 
+/**
+ * #661, applied to the console: members hold their resolved permissions in the
+ * auth-context cache, so a role edited here would not take effect for them until
+ * the TTL expired. Call this AFTER the transaction commits — these are redis
+ * round-trips, and awaiting them inside the transaction would hold both the row
+ * lock and a pooled connection open for the length of a cache flush. Best-effort:
+ * a miss degrades to the middleware's roleVersion re-check, never a failed write.
+ */
+async function invalidateMembers(userIds: string[], where: string): Promise<void> {
+  if (userIds.length === 0) return;
+  try {
+    await Promise.all(userIds.map((userId) => invalidateUserContexts(userId)));
+  } catch (e) {
+    await logError({ error: e, context: `superadmin/tenants/[id]/roles/[roleId] ${where} context invalidation` });
+  }
+}
+
 export const PATCH = withApiRoute(async (request: NextRequest, { params }: { params: Promise<{ id: string; roleId: string }> }) => {
   try {
     const limited = await rateLimitMutating(request, 'superadmin-roles', 'patch');
@@ -70,37 +87,32 @@ export const PATCH = withApiRoute(async (request: NextRequest, { params }: { par
         ? sent.expectedUpdatedAt
         : null;
 
-    const result = await withTenantContext<{ kind: 'response'; res: NextResponse } | { kind: 'row'; row: typeof roles.$inferSelect } | { kind: 'notFound' }>(
-      tenantId, ctx.userId, async (tx) => {
-        const guard = await concurrencyGuard(tx, roles, roleId, tenantId, expectedUpdatedAt);
-        if (guard) return { kind: 'response' as const, res: guard };
+    const result = await withTenantContext<
+      | { kind: 'response'; res: NextResponse }
+      | { kind: 'row'; row: typeof roles.$inferSelect; memberIds: string[] }
+      | { kind: 'notFound' }
+    >(tenantId, ctx.userId, async (tx) => {
+      const guard = await concurrencyGuard(tx, roles, roleId, tenantId, expectedUpdatedAt);
+      if (guard) return { kind: 'response' as const, res: guard };
 
-        const [row] = await tx.update(roles)
-          .set({ ...patch, updatedAt: new Date() })
-          .where(and(eq(roles.id, roleId), eq(roles.tenantId, tenantId), isNull(roles.deletedAt)))
-          .returning();
-        if (!row) return { kind: 'notFound' as const };
+      const [row] = await tx
+        .update(roles)
+        .set({ ...patch, updatedAt: new Date() })
+        .where(and(eq(roles.id, roleId), eq(roles.tenantId, tenantId), isNull(roles.deletedAt)))
+        .returning();
+      if (!row) return { kind: 'notFound' as const };
 
-        // #661, applied to the console: members of this tenant hold their resolved
-        // permissions in the auth-context cache, so an edit made here would not
-        // reach them until the TTL expired. Best-effort — a cache miss degrades to
-        // the middleware's roleVersion re-check, so never fail the write over it.
-        try {
-          const members = await tx
-            .select({ userId: tenantMembers.userId })
-            .from(tenantMembers)
-            .where(and(eq(tenantMembers.tenantId, tenantId), eq(tenantMembers.roleId, roleId)));
-          await Promise.all(members.map((m) => invalidateUserContexts(m.userId)));
-        } catch (e) {
-          await logError({ error: e, context: 'superadmin/tenants/[id]/roles/[roleId] PATCH context invalidation' });
-        }
-
-        return { kind: 'row' as const, row };
-      }
-    );
+      const members = await tx
+        .select({ userId: tenantMembers.userId })
+        .from(tenantMembers)
+        .where(and(eq(tenantMembers.tenantId, tenantId), eq(tenantMembers.roleId, roleId)));
+      return { kind: 'row' as const, row, memberIds: members.map((m) => m.userId) };
+    });
 
     if (notGuarded(result)) return result.res;
     if (result.kind === 'notFound') return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+    await invalidateMembers(result.memberIds, 'PATCH');
 
     await logSuperAdminAction({
       adminId: ctx.userId,
@@ -132,7 +144,10 @@ export const DELETE = withApiRoute(async (request: NextRequest, { params }: { pa
     }
 
     const result = await withTenantContext<
-      { kind: 'response'; res: NextResponse } | { kind: 'ok' } | { kind: 'notFound' } | { kind: 'system'; slug: string }
+      | { kind: 'response'; res: NextResponse }
+      | { kind: 'ok'; memberIds: string[] }
+      | { kind: 'notFound' }
+      | { kind: 'system'; slug: string }
     >(tenantId, ctx.userId, async (tx) => {
       const [role] = await tx
         .select({ slug: roles.slug, isSystem: roles.isSystem })
@@ -155,17 +170,11 @@ export const DELETE = withApiRoute(async (request: NextRequest, { params }: { pa
         .returning({ id: roles.id });
       if (!updated) return { kind: 'notFound' as const };
 
-      try {
-        const members = await tx
-          .select({ userId: tenantMembers.userId })
-          .from(tenantMembers)
-          .where(and(eq(tenantMembers.tenantId, tenantId), eq(tenantMembers.roleId, roleId)));
-        await Promise.all(members.map((m) => invalidateUserContexts(m.userId)));
-      } catch (e) {
-        await logError({ error: e, context: 'superadmin/tenants/[id]/roles/[roleId] DELETE context invalidation' });
-      }
-
-      return { kind: 'ok' as const };
+      const members = await tx
+        .select({ userId: tenantMembers.userId })
+        .from(tenantMembers)
+        .where(and(eq(tenantMembers.tenantId, tenantId), eq(tenantMembers.roleId, roleId)));
+      return { kind: 'ok' as const, memberIds: members.map((m) => m.userId) };
     });
 
     if (notGuarded(result)) return result.res;
@@ -173,6 +182,8 @@ export const DELETE = withApiRoute(async (request: NextRequest, { params }: { pa
     if (result.kind === 'system') {
       return NextResponse.json({ error: 'Cannot delete system roles' }, { status: 400 });
     }
+
+    await invalidateMembers(result.memberIds, 'DELETE');
 
     await logSuperAdminAction({
       adminId: ctx.userId,
