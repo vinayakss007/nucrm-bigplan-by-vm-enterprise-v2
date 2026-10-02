@@ -27,7 +27,6 @@
   "components/tenant/deals-data-table.tsx": 621,
   "components/tenant/deals-kanban.tsx": 664,
   "components/tenant/docs-client.tsx": 5511,
-  "components/tenant/layout/sidebar.tsx": 525,
   "components/tenant/lead-detail-client.tsx": 1076,
   "components/tenant/leads-client-new.tsx": 857,
   "components/tenant/leads-client.tsx": 939,
