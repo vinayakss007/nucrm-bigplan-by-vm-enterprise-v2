@@ -8,7 +8,7 @@ import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { roles, tenantMembers } from '@/drizzle/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, isNull } from 'drizzle-orm';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { updateRoleSchema } from '@/lib/api/schemas';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
@@ -31,21 +31,33 @@ export const PATCH = withApiRoute(async (request: NextRequest, { params }: any) 
     const rawBody = await readJsonBody(request);
     const validated = validateBody(updateRoleSchema, rawBody);
     if (validated instanceof NextResponse) return validated;
-    const { name, description, permissions } = validated.data;
+    const v = validated.data;
+
+    // Only the keys the caller actually sent. updateRoleSchema is
+    // createRoleSchema.partial(), and in zod v4 partial() keeps a field's
+    // default — so a request that never mentioned `permissions` still arrives
+    // validated as `{}`. Writing that back would strip every permission from a
+    // role someone only meant to rename.
+    const sent = rawBody && typeof rawBody === 'object' ? (rawBody as Record<string, unknown>) : {};
+    const patch: { name?: string; description?: string | null; permissions?: Record<string, boolean> } = {};
+    if ('name' in sent && v.name !== undefined) patch.name = v.name;
+    if ('description' in sent) patch.description = v.description || null;
+    if ('permissions' in sent) patch.permissions = v.permissions ?? {};
+    if (Object.keys(patch).length === 0) {
+      return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
+    }
 
     // Optimistic concurrency: reject if another update happened since client read
-    const expectedUpdatedAt = rawBody.expectedUpdatedAt ? new Date(rawBody.expectedUpdatedAt) : null;
+    const expectedUpdatedAt =
+      typeof sent.expectedUpdatedAt === 'string' || sent.expectedUpdatedAt instanceof Date
+        ? sent.expectedUpdatedAt
+        : null;
     const guard = await concurrencyGuard(db, roles, id, ctx.tenantId, expectedUpdatedAt);
     if (guard) return guard;
 
     const [row] = await db.update(roles)
-      .set({
-        name,
-        description: description || null,
-        permissions: permissions || {},
-        updatedAt: new Date(),
-      })
-      .where(and(eq(roles.id, id), eq(roles.tenantId, ctx.tenantId)))
+      .set({ ...patch, updatedAt: new Date() })
+      .where(and(eq(roles.id, id), eq(roles.tenantId, ctx.tenantId), isNull(roles.deletedAt)))
       .returning();
 
     if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
@@ -90,18 +102,40 @@ export const DELETE = withApiRoute(async (request: NextRequest, { params }: any)
     const { id } = await params;
 
     // Cannot delete default system roles
-    const role = await db.query.roles.findFirst({
-      where: and(eq(roles.id, id), eq(roles.tenantId, ctx.tenantId)),
-      columns: { slug: true }
-    });
+    const [role] = await db
+      .select({ slug: roles.slug, isSystem: roles.isSystem })
+      .from(roles)
+      .where(and(eq(roles.id, id), eq(roles.tenantId, ctx.tenantId), isNull(roles.deletedAt)))
+      .limit(1);
 
     if (!role) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    if (['admin', 'manager', 'sales', 'viewer'].includes(role.slug!)) {
+    // is_system is what provisioning writes (lib/tenants/provision.ts), the slug
+    // list is the older guard — either alone misses rows: tenants seeded before
+    // the column, and hand-made roles carrying a system slug without the flag.
+    if (role.isSystem || ['admin', 'manager', 'sales', 'viewer'].includes(role.slug)) {
       return NextResponse.json({ error: 'Cannot delete system roles' }, { status: 400 });
     }
 
-    await db.update(roles).set({ deletedAt: new Date() }).where(and(eq(roles.id, id), eq(roles.tenantId, ctx.tenantId)));
-    
+    const [removed] = await db
+      .update(roles)
+      .set({ deletedAt: new Date(), updatedAt: new Date() })
+      .where(and(eq(roles.id, id), eq(roles.tenantId, ctx.tenantId), isNull(roles.deletedAt)))
+      .returning({ id: roles.id });
+    if (!removed) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+    // Same #661 reasoning as the PATCH above, which this route never had: a
+    // member's resolved permissions live in the auth-context cache, so deleting
+    // their role left them holding that role's grants until the TTL expired.
+    try {
+      const members = await db
+        .select({ userId: tenantMembers.userId })
+        .from(tenantMembers)
+        .where(and(eq(tenantMembers.roleId, id), eq(tenantMembers.tenantId, ctx.tenantId)));
+      await Promise.all(members.map((m) => invalidateUserContexts(m.userId)));
+    } catch (e) {
+      await logError({ error: e, context: 'tenant/roles/[id] DELETE context invalidation' });
+    }
+
     return NextResponse.json({ ok: true });
  
  
