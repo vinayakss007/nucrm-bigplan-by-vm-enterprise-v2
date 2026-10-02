@@ -152,7 +152,10 @@ export function needsCsrfValidation(method: string, path: string, authMethod?: s
   if (path.startsWith('/api/forms/')) return false;
   if (path.startsWith('/api/leads/public/')) return false;
   if (path.startsWith('/api/setup/')) return false;
-  if (path.startsWith('/api/tenant/onboarding')) return false;
+  // #2220: /api/tenant/onboarding* is no longer exempt. The exemption was
+  // written for the pre-auth signup wizard, which has since been removed —
+  // the routes under it are requireAuth state-changers now, and the prefix
+  // also silently swallowed any future onboarding/* route.
 
   // Pre-auth auth routes — user has no CSRF cookie when making these requests
   // login/signup: session cookie not yet set
