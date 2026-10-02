@@ -166,9 +166,7 @@ export function DataTable<TData, TValue>({
     setRowSelection({})
   }, [data])
 
-  // Reset select all matching on real filter/page transitions. The scope ref
-  // lets selectAllMatching/onSelectAllMatching be honest dependencies without
-  // clearing the flag the moment it turns on.
+  // Clear select-all-matching only when the filter/page scope actually changes (ref keeps deps honest)
   const selectionScope = `${externalGlobalFilter ?? ''}|${externalPageIndex ?? ''}|${pageIndex}`
   const selectionScopeRef = React.useRef(selectionScope)
   React.useEffect(() => {
