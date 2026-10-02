@@ -164,13 +164,11 @@ export function DataTable<TData, TValue>({
   // Clear selection when data changes (e.g. after bulk action, page change, or refresh)
   React.useEffect(() => {
     setRowSelection({})
-     
   }, [data])
 
-  // Reset select all matching when filters or page changes. The scope ref
-  // makes the effect act only on real filter/page transitions, so
-  // selectAllMatching and onSelectAllMatching can be honest dependencies
-  // without the effect clearing the flag the moment it turns on.
+  // Reset select all matching on real filter/page transitions. The scope ref
+  // lets selectAllMatching/onSelectAllMatching be honest dependencies without
+  // clearing the flag the moment it turns on.
   const selectionScope = `${externalGlobalFilter ?? ''}|${externalPageIndex ?? ''}|${pageIndex}`
   const selectionScopeRef = React.useRef(selectionScope)
   React.useEffect(() => {
