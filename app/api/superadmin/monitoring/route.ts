@@ -20,10 +20,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
     // Helper function for safe queries
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const safeQuery = async (fn: () => Promise<any>, fallback: any) => {
+    const safeQuery = async <T>(fn: () => Promise<T>, fallback: T): Promise<T> => {
       try {
         const result = await fn();
         return result;
@@ -59,19 +56,12 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     }, []);
 
     // Get stats
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let stats: any = {};
+    let stats: Record<string, unknown> = {};
     try {
       const statsRes = await db.execute(sql`SELECT public.platform_stats() as data`).catch((err) => { void logError({ error: err, context: 'superadmin/monitoring platform_stats query' }); return { rows: [{ data: {} }] }; });
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      stats = (statsRes.rows[0] as any)?.data ?? {};
+            stats = (statsRes.rows[0] as { data?: Record<string, unknown> } | undefined)?.data ?? {};
       // Fill in missing fields computed from query data
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      if (stats.mrr === undefined) stats.mrr = planDist.reduce((s: number, p: any) => s + (p.priceMonthly || 0) * (p.tenantCount || 0), 0);
+      if (stats.mrr === undefined) stats.mrr = planDist.reduce((s: number, p) => s + Number(p.priceMonthly || 0) * Number(p.tenantCount || 0), 0);
       if (stats.trialing === undefined) stats.trialing = 0;
     } catch (err) {
       await logError({ error: err, context: 'superadmin/monitoring platform_stats processing' });
@@ -144,7 +134,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     }, []);
 
     // Get API usage stats (simulated from request logs if available)
-    const apiStats = await safeQuery(async () => {
+    const apiStats = await safeQuery<Record<string, unknown>>(async () => {
       return {
         requests_today: 0,
         requests_this_month: 0,
@@ -156,7 +146,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     }, {});
 
     // Get tenant activity (active in last 24h)
-    const activeTenants = await safeQuery(async () => {
+    const activeTenants = await safeQuery<{ rows: { count: number | string }[] }>(async () => {
       // sessions carries no tenant column (a user can belong to several
       // workspaces), so asking sessions for tenant_id raised 42703 on every
       // load and safeQuery handed back its fallback, which made the panel
@@ -167,20 +157,24 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       // connection can satisfy (it holds ~190 rows and a super-admin context
       // reads 0), so a membership join would report a permanent 0 that looks
       // like an honest answer.
-      return await db.execute(sql`
+      // db.execute() resolves to a QueryResult wrapper; only `rows` is read,
+      // so the result is reinterpreted through a cast — runtime unchanged.
+      const res = await db.execute(sql`
         SELECT COUNT(DISTINCT u.last_tenant_id) as count
         FROM public.sessions s
         JOIN users u ON u.id = s.user_id
         JOIN tenants t ON t.id = u.last_tenant_id
         WHERE s.created_at > now() - interval '24 hours'
       `);
+      return res as unknown as { rows: { count: number | string }[] };
     }, { rows: [{ count: 0 }] });
 
     // Get database size estimate
-    const dbSize = await safeQuery(async () => {
-      return await db.execute(sql`
+    const dbSize = await safeQuery<{ rows: { size: string }[] }>(async () => {
+      const res = await db.execute(sql`
         SELECT pg_size_pretty(pg_database_size(current_database())) as size
       `);
+      return res as unknown as { rows: { size: string }[] };
     }, { rows: [{ size: '0 B' }] });
 
     // #1093: add the standard `data` key additively; keep legacy top-level keys.
@@ -198,8 +192,8 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       // of this route reads `.rows[0]` (see platform_stats above). Indexing the
       // wrapper itself made both of these permanently fall through to the
       // literal 0 / '0 B' even when the query returned real numbers.
-      activeTenants: Number((activeTenants as { rows?: { count: number | string }[] }).rows?.[0]?.count ?? 0),
-      dbSize: String((dbSize as { rows?: { size: string }[] }).rows?.[0]?.size ?? '0 B'),
+      activeTenants: Number(activeTenants.rows[0]?.count ?? 0),
+      dbSize: String(dbSize.rows[0]?.size ?? '0 B'),
       // #674: in-memory pinned-connection leak detector stats (no DB access)
       connectionStats: {
         tracked: getTrackedCount(),

@@ -100,10 +100,7 @@ export const PATCH = withApiRoute(async (req: NextRequest) => {
     if (incoming.week_start && !VALID.week_start.includes(incoming.week_start))
       return NextResponse.json({ error: `week_start must be one of ${VALID.week_start.join(', ')}` }, { status: 400 });
     if (incoming.weekend_days && (!Array.isArray(incoming.weekend_days) ||
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-        incoming.weekend_days.some((d: any) => !VALID.weekend_days.includes(d))))
+      incoming.weekend_days.some((d: string) => !VALID.weekend_days.includes(d))))
       return NextResponse.json({ error: 'weekend_days must be a subset of weekday names' }, { status: 400 });
     if (incoming.number_format && !VALID.number_format.includes(incoming.number_format))
       return NextResponse.json({ error: 'number_format invalid' }, { status: 400 });
@@ -120,10 +117,7 @@ export const PATCH = withApiRoute(async (req: NextRequest) => {
       if (bh.end_time && !/^\d{2}:\d{2}$/.test(bh.end_time))
         return NextResponse.json({ error: 'business_hours.end_time must be HH:MM' }, { status: 400 });
       if (bh.working_days && (!Array.isArray(bh.working_days) ||
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-          bh.working_days.some((d: any) => !VALID.weekend_days.includes(d))))
+        bh.working_days.some((d: string) => !VALID.weekend_days.includes(d))))
         return NextResponse.json({ error: 'business_hours.working_days invalid' }, { status: 400 });
     }
 

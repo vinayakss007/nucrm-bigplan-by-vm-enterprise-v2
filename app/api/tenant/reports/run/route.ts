@@ -8,8 +8,8 @@ import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { contacts, companies, deals, tasks, leads } from '@/drizzle/schema';
-import { eq, and, desc, sql, gt, lt, inArray, getTableColumns, type SQL } from 'drizzle-orm';
-import type { PgTableWithColumns } from 'drizzle-orm/pg-core';
+import { eq, and, desc, sql, gt, lt, inArray, getTableColumns, type Column, type SQL } from 'drizzle-orm';
+import type { AnyPgTable } from 'drizzle-orm/pg-core';
 import { readJsonBody } from '@/lib/api/validate';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { logError } from '@/lib/errors-server';
@@ -64,6 +64,13 @@ export class UnusableReportFilterValueError extends Error {
   }
 }
 
+/** Registry entry: a real pg table plus the columns this builder reads. */
+type RegistryTable = AnyPgTable & {
+  tenantId: Column;
+  createdAt: Column;
+  deletedAt?: Column;
+};
+
 function columnsBySqlName(table: object): Map<string, unknown> {
   const out = new Map<string, unknown>();
   for (const col of Object.values(getTableColumns(table as never))) {
@@ -93,8 +100,7 @@ export function resolveField(tableKey: string, name: string): unknown {
   return col;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const TABLES: Record<string, PgTableWithColumns<any>> = { contacts, companies, deals, tasks, leads };
+const TABLES: Record<string, RegistryTable> = { contacts, companies, deals, tasks, leads };
 
 function buildSelection(tableKey: string, names: string[]): Record<string, unknown> {
   const out: Record<string, unknown> = {};
@@ -149,8 +155,7 @@ export function filterCondition(tableKey: string, field: string, raw: unknown): 
 // Aggregates keep their own selection because their shape is fixed: one
 // dimension plus the counts. Exported only so the test can render them.
 export const REPORT_AGGREGATES: Record<string, {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  table: PgTableWithColumns<any>;
+  table: RegistryTable;
   select: Record<string, unknown>;
   groupBy: SQL;
   where?: SQL;

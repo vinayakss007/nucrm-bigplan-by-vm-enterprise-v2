@@ -135,8 +135,7 @@ export const PATCH = withApiRoute(async (request: NextRequest,
 
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const updateData: any = {};
+    const updateData: Partial<typeof savedReports.$inferInsert> = {};
     if (name !== undefined) updateData.name = name;
     if (config !== undefined) updateData.config = config;
     if (is_public !== undefined) updateData.isPublic = is_public;

@@ -49,10 +49,7 @@ export interface TriggerPayload {
   tenantId: string;
   userId?: string;
   event: TriggerEvent;
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  data: Record<string, any>;
+  data: Record<string, unknown>;
   contactId?: string;
   dealId?: string;
 }
@@ -99,11 +96,7 @@ export async function evaluateAutomations(payload: TriggerPayload): Promise<void
             metadata: enrichedData,
           });
         });
-
-  
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } catch (err: any) {
+      } catch (err) {
         captureError(err, `automation:${automation.name}`);
 
         await db.insert(automationRuns).values({
@@ -112,7 +105,7 @@ export async function evaluateAutomations(payload: TriggerPayload): Promise<void
           triggerEvent: payload.event,
           status: 'failed',
           triggeredBy: payload.userId || null,
-          errorMessage: err.message,
+          errorMessage: err instanceof Error ? err.message : String(err),
           metadata: payload.data,
         }).catch((err) => captureError(err, 'automation:log-failed-run'));
       }
@@ -124,10 +117,7 @@ export async function evaluateAutomations(payload: TriggerPayload): Promise<void
   }
 }
 
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function meetsConditions(conditions: AutomationCondition[], data: Record<string, any>): boolean {
+function meetsConditions(conditions: AutomationCondition[], data: Record<string, unknown>): boolean {
   if (!Array.isArray(conditions) || conditions.length === 0) return true;
 
   return conditions.every((cond) => {
@@ -135,8 +125,8 @@ function meetsConditions(conditions: AutomationCondition[], data: Record<string,
     switch (cond.operator) {
       case 'equals':          return String(fieldVal) === String(cond.value);
       case 'not_equals':      return String(fieldVal) !== String(cond.value);
-      case 'contains':        return String(fieldVal ?? '').includes(cond.value);
-      case 'not_contains':    return !String(fieldVal ?? '').includes(cond.value);
+      case 'contains':        return String(fieldVal ?? '').includes(String(cond.value));
+      case 'not_contains':    return !String(fieldVal ?? '').includes(String(cond.value));
       case 'greater_than':    return Number(fieldVal) > Number(cond.value);
       case 'less_than':       return Number(fieldVal) < Number(cond.value);
       case 'is_empty':        return fieldVal == null || fieldVal === '';
@@ -146,22 +136,31 @@ function meetsConditions(conditions: AutomationCondition[], data: Record<string,
   });
 }
 
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function getNestedValue(obj: Record<string, any>, path: string): any {
-  return path.split('.').reduce((acc, key) => acc?.[key], obj);
+function getNestedValue(obj: Record<string, unknown>, path: string): unknown {
+  let acc: unknown = obj;
+  for (const key of path.split('.')) {
+    if (acc === null || typeof acc !== 'object') return undefined;
+    acc = (acc as Record<string, unknown>)[key];
+  }
+  return acc;
 }
 
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function executeAction(dbOrTx: NodePgDatabase | typeof db, action: AutomationAction, payload: TriggerPayload, enrichedData: Record<string, any>): Promise<void> {
+/**
+ * Read a payload value as a string (undefined when absent/null), so
+ * arbitrary tenant-record data can flow into string-typed columns and
+ * SDK params without an `any` escape hatch.
+ */
+function str(data: Record<string, unknown>, key: string): string | undefined {
+  const v = data[key];
+  return v == null ? undefined : String(v);
+}
+
+async function executeAction(dbOrTx: NodePgDatabase | typeof db, action: AutomationAction, payload: TriggerPayload, enrichedData: Record<string, unknown>): Promise<void> {
   const { type, config = {} } = action;
 
   switch (type) {
     case 'send_email': {
-      const to = config.to || enrichedData?.['email'];
+      const to = config.to || str(enrichedData, 'email');
       if (!to) return;
       await sendEmail({
         to,
@@ -172,7 +171,7 @@ async function executeAction(dbOrTx: NodePgDatabase | typeof db, action: Automat
     }
 
     case 'send_notification': {
-      const userId = config.user_id || enrichedData?.['assigned_to'] || payload.userId;
+      const userId = config.user_id || str(enrichedData, 'assigned_to') || payload.userId;
       if (!userId) return;
       await createNotification({
         userId,
@@ -187,7 +186,7 @@ async function executeAction(dbOrTx: NodePgDatabase | typeof db, action: Automat
 
     case 'update_field': {
       const { resource, id_field, field, value } = config;
-      const resourceId = enrichedData?.[id_field || 'id'];
+      const resourceId = str(enrichedData, id_field || 'id');
       if (!resourceId || !resource || !field) return;
 
       const allowed: Record<string, string[]> = {
@@ -211,13 +210,13 @@ async function executeAction(dbOrTx: NodePgDatabase | typeof db, action: Automat
     }
 
     case 'create_task': {
-      const contactId = enrichedData?.['contact_id'] || enrichedData?.['id'];
+      const contactId = str(enrichedData, 'contact_id') || str(enrichedData, 'id');
       await dbOrTx.insert(tasks).values({
         tenantId: payload.tenantId,
         title: interpolate(config.title || 'Follow up', enrichedData),
         priority: config.priority || 'medium',
         contactId: contactId || null,
-        dealId: enrichedData?.['deal_id'] || null,
+        dealId: str(enrichedData, 'deal_id') ?? null,
         assignedTo: config.assigned_to || payload.userId || null,
         createdBy: payload.userId || null,
         completed: false,
@@ -226,7 +225,7 @@ async function executeAction(dbOrTx: NodePgDatabase | typeof db, action: Automat
     }
 
     case 'enroll_sequence': {
-      const contactId = enrichedData?.['contact_id'] || enrichedData?.['id'];
+      const contactId = str(enrichedData, 'contact_id') || str(enrichedData, 'id');
       const sequenceId = config.sequence_id;
       if (!contactId || !sequenceId) return;
 
@@ -248,7 +247,7 @@ async function executeAction(dbOrTx: NodePgDatabase | typeof db, action: Automat
     }
 
     case 'log_call': {
-      const contactId = enrichedData?.['contact_id'] || enrichedData?.['id'];
+      const contactId = str(enrichedData, 'contact_id') || str(enrichedData, 'id');
       if (!contactId) return;
       await dbOrTx.insert(callLogs).values({
         tenantId: payload.tenantId,
@@ -257,13 +256,13 @@ async function executeAction(dbOrTx: NodePgDatabase | typeof db, action: Automat
         direction: config.direction || 'outbound',
         duration: config.duration || 0,
         notes: interpolate(config.notes || 'Automated call logged by workflow', enrichedData),
-        phoneNumber: config.phone_number || enrichedData?.['phone'] || null,
+        phoneNumber: config.phone_number || str(enrichedData, 'phone') || null,
       });
       break;
     }
 
     case 'send_whatsapp': {
-      const to = config.to || enrichedData?.['phone'];
+      const to = config.to || str(enrichedData, 'phone');
       if (!to) return;
       
       const integration = await db.query.integrations.findFirst({
@@ -326,18 +325,15 @@ async function executeAction(dbOrTx: NodePgDatabase | typeof db, action: Automat
           }),
           signal: AbortSignal.timeout(10_000),
         });
-  
-  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } catch (err: any) {
+      } catch (err) {
         await logError({ error: err, context: `automation: webhook ${config.url}` });
       }
       break;
     }
 
     case 'assign_contact': {
-      const contactId = enrichedData?.['contact_id'] || enrichedData?.['id'];
-      const assignTo = config.assigned_to || enrichedData?.['assigned_to'];
+      const contactId = str(enrichedData, 'contact_id') || str(enrichedData, 'id');
+      const assignTo = config.assigned_to || str(enrichedData, 'assigned_to');
       if (!contactId || !assignTo) return;
       await dbOrTx.update(contacts).set({ assignedTo: assignTo, updatedAt: new Date() })
         .where(and(eq(contacts.id, contactId), eq(contacts.tenantId, payload.tenantId)));
@@ -345,8 +341,8 @@ async function executeAction(dbOrTx: NodePgDatabase | typeof db, action: Automat
     }
 
     case 'create_deal': {
-      const contactId = enrichedData?.['contact_id'] || enrichedData?.['id'];
-      const companyId = enrichedData?.['company_id'] || null;
+      const contactId = str(enrichedData, 'contact_id') || str(enrichedData, 'id');
+      const companyId = str(enrichedData, 'company_id') ?? null;
       const pipelineId = config.pipeline_id || null;
       const stageId = config.stage_id || null;
       if (!stageId) return;
@@ -366,7 +362,7 @@ async function executeAction(dbOrTx: NodePgDatabase | typeof db, action: Automat
 
     case 'remove_tag': {
       const resource = config.resource || 'contacts';
-      const resourceId = enrichedData?.[config.id_field || 'id'];
+      const resourceId = str(enrichedData, config.id_field || 'id');
       const tagToRemove = config.tag;
       if (!resourceId || !tagToRemove) return;
 
@@ -385,7 +381,7 @@ async function executeAction(dbOrTx: NodePgDatabase | typeof db, action: Automat
     }
 
     case 'send_sms': {
-      const to = config.to || enrichedData?.['phone'];
+      const to = config.to || str(enrichedData, 'phone');
       if (!to) return;
       const smsIntegration = await db.query.integrations.findFirst({
         where: and(
@@ -425,10 +421,7 @@ async function executeAction(dbOrTx: NodePgDatabase | typeof db, action: Automat
   }
 }
 
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- template data comes from arbitrary tenant record payloads
-function interpolate(template: string, data: Record<string, any>, opts?: { escapeValues?: boolean }): string {
+function interpolate(template: string, data: Record<string, unknown>, opts?: { escapeValues?: boolean }): string {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key) => {
     const value = String(data[key] ?? '');
     return opts?.escapeValues ? escapeHtml(value) : value;
@@ -440,7 +433,6 @@ function interpolate(template: string, data: Record<string, any>, opts?: { escap
  * MUST be used whenever the result is rendered as HTML (e.g. email bodies)
  * to prevent XSS via user-controlled template variables.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function interpolateHtml(template: string, data: Record<string, any>): string {
+function interpolateHtml(template: string, data: Record<string, unknown>): string {
   return interpolate(template, data, { escapeValues: true });
 }

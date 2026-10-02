@@ -11,15 +11,13 @@
 import React, { lazy, Suspense, memo, ComponentType } from 'react';
 
 // Lazy load heavy components
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function lazyLoad<T extends ComponentType<any>>(
-  importFn: () => Promise<{ default: T }>,
+export function lazyLoad<P extends object>(
+  importFn: () => Promise<{ default: ComponentType<P> }>,
   fallback?: React.ReactNode
 ) {
   const LazyComponent = lazy(importFn);
-  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return function LazyWrapper(props: any) {
+
+  return function LazyWrapper(props: P) {
     return (
       <Suspense fallback={fallback || <LoadingSkeleton />}>
         <LazyComponent {...props} />
@@ -126,8 +124,7 @@ export function useDebounce<T>(value: T, delay: number): T {
 }
 
 // Memoized callback
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function useMemoCallback<T extends (...args: any[]) => any>(
+export function useMemoCallback<T extends (...args: never[]) => unknown>(
   callback: T,
   deps: React.DependencyList
 ): T {

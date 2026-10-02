@@ -122,10 +122,7 @@ export async function analyzeReply(input: AnalyzeReplyInput): Promise<ReplyAnaly
     });
 
     return parseAIResponse(response.text);
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     logger.error('[lead-warming] AI reply analysis failed', { error: err instanceof Error ? err.message : String(err) });
     // Fallback: rule-based analysis
     return fallbackAnalysis(input.replyContent);
@@ -393,16 +390,12 @@ export async function processIncomingReply(input: ProcessReplyInput): Promise<Re
       }
   
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (err: any) {
+    } catch (err) {
       logger.error('[lead-warming] Failed to update deal sentiment', { error: err instanceof Error ? err.message : String(err) });
     }
 
     return analysis;
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     logger.error('[lead-warming] processIncomingReply error', { error: err instanceof Error ? err.message : String(err) });
     return null;
   }
@@ -415,11 +408,8 @@ async function handleIntentActions(
   tx: typeof db,
   tenantId: string,
   replyId: string,
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  originalMessage: any,
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  contact: any,
+  originalMessage: typeof leadWarmingMessages.$inferSelect,
+  contact: { id: string; firstName: string | null; lastName: string | null; assignedTo: string | null } | undefined,
   analysis: ReplyAnalysis,
 ): Promise<void> {
   const ownerUserId = contact?.assignedTo;
@@ -433,7 +423,7 @@ async function handleIntentActions(
       type: 'lead_warming',
       title: `${contactName} replied with interest!`,
       body: analysis.summary,
-      link: `/tenant/contacts/${contact.id}`,
+      link: `/tenant/contacts/${contact?.id}`,
     });
 
     await tx.update(leadWarmingReplies)
@@ -456,7 +446,7 @@ async function handleIntentActions(
       title: `Follow up: ${contactName} — ${analysis.suggestedAction}`,
       description: `Reply analysis: ${analysis.summary}\n\nSuggested action: ${analysis.suggestedAction}\n\nOriginal reply:\n${originalMessage.body?.slice(0, 200)}`,
       assignedTo: ownerUserId,
-      contactId: contact.id,
+      contactId: contact?.id,
       priority: analysis.intent === 'interested' ? 'high' : 'medium',
       dueDate: new Date(Date.now() + daysUntilDue * 86400000),
       completed: false,
@@ -517,9 +507,7 @@ export async function analyzeUnprocessedReplies(limit: number = 50): Promise<{ p
       });
       processed++;
  
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (err: any) {
+    } catch (err) {
       logger.error('[lead-warming] Failed to analyze reply', { replyId: reply.id, error: err instanceof Error ? err.message : String(err) });
       errors++;
     }
@@ -544,10 +532,7 @@ function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, Number(value) || 0));
 }
 
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function cleanEntities(raw: any): Record<string, string> {
+function cleanEntities(raw: unknown): Record<string, string> {
   if (!raw || typeof raw !== 'object') return {};
   const cleaned: Record<string, string> = {};
   for (const [key, value] of Object.entries(raw)) {

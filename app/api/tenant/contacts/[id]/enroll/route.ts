@@ -14,10 +14,7 @@ import { eq, and, asc, sql } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const POST = withApiRoute(async (req: NextRequest, { params }: any) => {
+export const POST = withApiRoute(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -106,10 +103,7 @@ export const POST = withApiRoute(async (req: NextRequest, { params }: any) => {
   }
 });
 
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const DELETE = withApiRoute(async (req: NextRequest, { params }: any) => {
+export const DELETE = withApiRoute(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
   const limited = await rateLimitMutating(req, 'contacts', 'delete');
   if (limited) return limited;

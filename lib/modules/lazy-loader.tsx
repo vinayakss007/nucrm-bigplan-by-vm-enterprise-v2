@@ -45,8 +45,7 @@ function ModuleDisabledPlaceholder({ _moduleId }: { _moduleId: string }) {
 
 // ── Lazy Module Factory ──────────────────────────────────────────────────────
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type ComponentImport = () => Promise<{ default: React.ComponentType<any> }>;
+type ComponentImport<P> = () => Promise<{ default: React.ComponentType<P> }>;
 
 /**
  * Create a lazily-loaded component that only loads its JS bundle when:
@@ -59,10 +58,9 @@ type ComponentImport = () => Promise<{ default: React.ComponentType<any> }>;
  * @param importFn - Dynamic import function: () => import('./MyComponent')
  * @param options  - Optional configuration
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function lazyModule<P extends Record<string, any> = Record<string, never>>(
+export function lazyModule<P extends object = Record<string, never>>(
   moduleId: string,
-  importFn: ComponentImport,
+  importFn: ComponentImport<P>,
   options?: {
     /** Custom loading skeleton */
     loading?: React.ReactNode;

@@ -101,7 +101,7 @@ async function requireTenantCtxInner(): Promise<TenantContext> {
   // admits self-scoped reads (own memberships + the roles of tenants you belong
   // to); app.current_tenant stays empty, so no other tenant's rows are
   // reachable from here.
-  const row = await withUserContext(payload.userId, (tx: any) => tx
+  const row = await withUserContext(payload.userId, (tx) => tx
     .select({
       user_id: users.id,
       is_super_admin: users.isSuperAdmin,
@@ -131,18 +131,18 @@ async function requireTenantCtxInner(): Promise<TenantContext> {
     .where(eq(users.id, payload.userId))
     .orderBy(desc(sql`${tenantMembers.tenantId} = ${users.lastTenantId}`), tenantMembers.createdAt)
     .limit(1)
-    .then((res: any) => res[0])) as any;
+    .then((res) => res[0]));
 
   if (!row) {
     // Same chicken-and-egg: the super-admin probe also needs the proven-user
     // context to see its own row. Without it a first-run super admin would be
     // sent to /auth/no-workspace instead of /superadmin/dashboard.
-    const user = await withUserContext(payload.userId, (tx: any) => tx
+    const user = await withUserContext(payload.userId, (tx) => tx
       .select({ isSuperAdmin: users.isSuperAdmin })
       .from(users)
       .where(eq(users.id, payload.userId))
       .limit(1)
-      .then((res: any) => res[0])) as any;
+      .then((res) => res[0]));
     if (user?.isSuperAdmin) redirect('/superadmin/dashboard');
     redirect('/auth/no-workspace');
   }

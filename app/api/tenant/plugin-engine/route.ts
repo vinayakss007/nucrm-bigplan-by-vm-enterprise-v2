@@ -123,8 +123,7 @@ export const PATCH = withApiRoute(async (request: NextRequest) => {
 
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const updates: Record<string, any> = {};
+    const updates: Partial<typeof integrations.$inferInsert> = {};
     if (body['name']) updates['name'] = body['name'];
     if (body['config']) updates['config'] = body['config'];
     if (body['enabled'] !== undefined) updates['isActive'] = body['isActive'];

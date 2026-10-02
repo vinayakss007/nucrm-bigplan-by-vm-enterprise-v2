@@ -178,8 +178,7 @@ export const PATCH = withApiRoute(async (request: NextRequest, { params }: { par
 
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const updates: Record<string, any> = {};
+    const updates: Partial<typeof supportTickets.$inferInsert> = {};
 
     if (v.status) {
       updates['status'] = v.status;

@@ -54,8 +54,7 @@ export const PATCH = withApiRoute(async (req: NextRequest) => {
     const v = validated.data;
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const safe: Record<string, any> = {};
+    const safe: Record<string, unknown> = {};
     if (v['email_notifications'] !== undefined) safe['email_notifications'] = v['email_notifications'];
     if (v['push_notifications'] !== undefined) safe['push_notifications'] = v['push_notifications'];
     if (v['notification_frequency'] !== undefined) safe['notification_frequency'] = v['notification_frequency'];
@@ -64,8 +63,7 @@ export const PATCH = withApiRoute(async (req: NextRequest) => {
     if (v['notify_on_ticket_created'] !== undefined) safe['notify_on_ticket_created'] = v['notify_on_ticket_created'];
     if (v['notify_on_task_due'] !== undefined) safe['notify_on_task_due'] = v['notify_on_task_due'];
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const concurrencyWhere = concurrencyGuard(tenantMembers, (rawBody as any).expectedUpdatedAt);
+    const concurrencyWhere = concurrencyGuard(tenantMembers, rawBody.expectedUpdatedAt);
     const whereConditions = [
       eq(tenantMembers.userId, ctx.userId),
       eq(tenantMembers.tenantId, ctx.tenantId),

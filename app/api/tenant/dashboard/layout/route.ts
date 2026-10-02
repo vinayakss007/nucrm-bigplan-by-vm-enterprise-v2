@@ -9,6 +9,7 @@ import { resolveDashboardLayout, saveLayout } from '@/lib/dashboard/layout-resol
 import { db } from '@/drizzle/db';
 import { sql } from 'drizzle-orm';
 import { z } from 'zod';
+import type { DashboardLayout } from '@/types/dashboard';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
@@ -16,9 +17,13 @@ import { withApiRoute } from '@/lib/api/with-api-route';
  
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const dashboardLayoutSchema: z.ZodType<{ layout: any }> = z.object({
-  layout: z.array(z.record(z.string(), z.unknown())),
+const dashboardLayoutSchema: z.ZodType<{ layout: DashboardLayout }> = z.object({
+  layout: z.array(z.object({
+    widget: z.string(),
+    position: z.number(),
+    size: z.enum(['1x1', '2x1', '1x2', '2x2']),
+    config: z.record(z.string(), z.unknown()).optional(),
+  })),
 });
 
 export const GET = withApiRoute(async (request: NextRequest) => {

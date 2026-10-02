@@ -19,10 +19,10 @@ interface BrandingProviderProps {
 }
 
 export default function BrandingProvider({ branding, children }: BrandingProviderProps) {
-  const vars = brandingToCssVars(branding);
+  const vars: React.CSSProperties = brandingToCssVars(branding);
 
   return (
-    <div data-brand-root="true" style={{ display: 'contents', ...(vars as any) }}>
+    <div data-brand-root="true" style={{ display: 'contents', ...vars }}>
       {children}
     </div>
   );

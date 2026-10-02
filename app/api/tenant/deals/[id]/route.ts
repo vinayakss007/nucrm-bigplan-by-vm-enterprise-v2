@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { isWonStageName } from '@/lib/deals/won-stage';
 import { resolveDealStage, stageFailureMessage, normalizeStageField } from '@/lib/deals/resolve-stage';
 import { apiError } from '@/lib/api-error';
-import { requireAuth, requirePerm, can } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm, can, type AuthContext } from '@/lib/auth/middleware';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { updateDealSchema } from '@/lib/api/schemas';
 import { db } from '@/drizzle/db';
@@ -161,8 +161,7 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params:
     if (conflict) return conflict;
     
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const updateData: Record<string, any> = {
+    const updateData: Partial<typeof deals.$inferInsert> = {
       updatedAt: new Date(),
     };
 
@@ -172,12 +171,12 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params:
     // are columns on `deals`.
     if (v.title !== undefined) updateData.title = v.title;
     if (normalizedAmount !== undefined) updateData.amount = normalizedAmount;
-    if (v.close_date !== undefined) updateData.closeDate = v.close_date;
+    if (v.close_date !== undefined) updateData.closeDate = v.close_date ? new Date(v.close_date) : null;
     if (v.contact_id !== undefined) updateData.contactId = v.contact_id;
     if (v.company_id !== undefined) updateData.companyId = v.company_id;
     if (v.pipeline_id !== undefined) updateData.pipelineId = v.pipeline_id;
     if (v.assigned_to !== undefined) updateData.assignedTo = v.assigned_to;
-    if (v.description !== undefined) updateData.description = v.description;
+    // deals has no description column; this dead write would emit invalid SQL
     if (v.metadata !== undefined) updateData.metadata = v.metadata;
 
     if (resolvedStageId) {
@@ -367,8 +366,8 @@ export const DELETE = withApiRoute(async (req: NextRequest, { params }: { params
 });
 
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function handleDealWon(ctx: any, dealId: string, row: any) {
+async function handleDealWon(ctx: AuthContext, dealId: string, row: typeof deals.$inferSelect | undefined) {
+  if (!row) return;
   // Fire Webhooks
   await fireWebhooks(ctx.tenantId, 'deal.won', {
     id: dealId,

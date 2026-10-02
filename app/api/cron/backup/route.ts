@@ -192,10 +192,9 @@ export async function POST(request: NextRequest) {
       ...(offsiteError ? { offsite_error: offsiteError } : {}),
     });
 
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
+    const message = err instanceof Error ? (err.message ?? String(err)) : String(err);
+    const stack = err instanceof Error ? err.stack : undefined;
     const durationMs = Date.now() - t0;
     void logError({ error: err, context: 'cron/backup FAILED' });
 
@@ -203,7 +202,7 @@ export async function POST(request: NextRequest) {
       await tx.update(backupRecords)
         .set({
           status: 'failed',
-          errorMessage: err.message.slice(0, 500),
+          errorMessage: message.slice(0, 500),
           durationMs: durationMs
         })
         .where(eq(backupRecords.id, backup.id));
@@ -211,15 +210,15 @@ export async function POST(request: NextRequest) {
       await tx.insert(errorLogs).values({
         level: 'fatal',
         code: 'BACKUP_FAILED',
-        message: `Automated backup failed: ${err.message}`,
-        stack: err.stack?.slice(0, 2000)
+        message: `Automated backup failed: ${message}`,
+        stack: stack?.slice(0, 2000)
       });
     });
 
     // Alert super admin
     await alertSuperAdmin(
       'CRITICAL: Automated Database Backup FAILED',
-      `Time: ${new Date().toISOString()}\nError: ${err.message}\n\nManual backup required immediately:\n1. Check database connection\n2. Check disk space\n3. Run backup manually from superadmin console`
+      `Time: ${new Date().toISOString()}\nError: ${message}\n\nManual backup required immediately:\n1. Check database connection\n2. Check disk space\n3. Run backup manually from superadmin console`
     ).catch((err) => logError({ error: err, context: 'cron/backup async side-effect' }));
 
     return apiError(err);

@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { auditLogs, users, editHistory } from '@/drizzle/schema';
-import { eq, and, or, desc, sql, gte, lte, isNull, inArray } from 'drizzle-orm';
+import { eq, and, or, desc, sql, gte, lte, isNull, inArray, type SQL } from 'drizzle-orm';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { logError } from '@/lib/errors-server';
 import { escapeLike } from '@/lib/api/sanitize-like';
@@ -28,8 +28,7 @@ export const GET = withApiRoute(async (req: NextRequest) => {
     const dateTo = searchParams.get('to');
     const entityId = searchParams.get('entity_id');
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const filters: any[] = [
+    const filters: SQL[] = [
       eq(auditLogs.tenantId, ctx.tenantId),
       isNull(auditLogs.deletedAt),
     ];

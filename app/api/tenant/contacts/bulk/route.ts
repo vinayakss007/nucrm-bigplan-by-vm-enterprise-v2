@@ -15,7 +15,7 @@ import { escapeLike } from '@/lib/api/sanitize-like';
 import { NextRequest, NextResponse } from 'next/server';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { bulkUpdateSchema } from '@/lib/api/schemas';
-import { requireAuth, requirePerm } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm, type AuthContext } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { contacts, tenantMembers, sequences, sequenceEnrollments, segments, segmentMembers, companies, tenants } from '@/drizzle/schema';
 import { eq, and, sql, inArray, isNull, or, ilike } from 'drizzle-orm';
@@ -32,11 +32,11 @@ export const POST = withApiRoute(async (req: NextRequest) => {
   if (limited) return limited;
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let ctx: any;
+  let ctx!: AuthContext;
   try {
-    ctx = await requireAuth(req);
-    if (ctx instanceof NextResponse) return ctx;
+    const auth = await requireAuth(req);
+    if (auth instanceof NextResponse) return auth;
+    ctx = auth;
 
     const rawBody = await readJsonBody(req);
     const action = rawBody.action;

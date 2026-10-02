@@ -14,8 +14,7 @@
  */
 
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-interface CacheEntry { data: any; expires: number; }
+interface CacheEntry { data: unknown; expires: number; }
 const _cache = new Map<string, CacheEntry>();
 const _pending = new Map<string, Promise<unknown>>();
 const MAX_CACHE_ENTRIES = 500;

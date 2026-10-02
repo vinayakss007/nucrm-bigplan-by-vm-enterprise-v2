@@ -19,8 +19,7 @@ import { logError } from '@/lib/errors-server';
 
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const PATCH = withApiRoute(async (request: NextRequest, { params }: any) => {
+export const PATCH = withApiRoute(async (request: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
   const limited = await rateLimitMutating(request, 'roles', 'patch');
   if (limited) return limited;
@@ -90,8 +89,7 @@ export const PATCH = withApiRoute(async (request: NextRequest, { params }: any) 
 
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const DELETE = withApiRoute(async (request: NextRequest, { params }: any) => {
+export const DELETE = withApiRoute(async (request: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
   const limited = await rateLimitMutating(request, 'roles', 'delete');
   if (limited) return limited;
