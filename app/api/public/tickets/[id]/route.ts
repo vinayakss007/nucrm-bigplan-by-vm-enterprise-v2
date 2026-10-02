@@ -7,7 +7,7 @@ import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { supportTickets, ticketReplies } from '@/drizzle/schema';
-import { eq, and, asc } from 'drizzle-orm';
+import { eq, and, asc, sql } from 'drizzle-orm';
 import { resolvePortalIdentity, resolvePortalContact } from '@/lib/portal-auth';
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -55,6 +55,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   }
 }
 
+// #2217: this endpoint is customer-facing. Staff-internal replies must never
+// be listed here (NULL isInternal = public, so `IS NOT TRUE`, not `= false`),
+// and the ticket row is projected WITHOUT portal_token — that column is the
+// revocable bearer credential for this very route; echoing it to a
+// cookie-authed visitor turns a revocable session into a permanent link.
 async function ticketWithReplies(id: string, ticket: typeof supportTickets.$inferSelect) {
   const replies = await db
     .select({
@@ -66,8 +71,12 @@ async function ticketWithReplies(id: string, ticket: typeof supportTickets.$infe
       createdAt: ticketReplies.createdAt,
     })
     .from(ticketReplies)
-    .where(eq(ticketReplies.ticketId, id))
+    .where(and(
+      eq(ticketReplies.ticketId, id),
+      sql`${ticketReplies.isInternal} IS NOT TRUE`,
+    ))
     .orderBy(asc(ticketReplies.createdAt));
 
-  return NextResponse.json({ data: { ticket, replies } });
+  const { portalToken: _redacted, ...publicTicket } = ticket;
+  return NextResponse.json({ data: { ticket: publicTicket, replies } });
 }
