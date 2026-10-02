@@ -59,7 +59,12 @@ vi.stubGlobal('fetch', mockFetch);
 describe('audit.ts', () => {
   beforeEach(() => {
     vi.resetModules();
-    vi.doMock('@/lib/logger', () => ({ logger: { error: vi.fn() } }));
+    // Stub the logger's whole surface, not just error(): vi.doMock survives
+    // resetModules(), so every later describe in this file imports this object,
+    // and sendEmail's failure path logs at warn for a missing provider.
+    vi.doMock('@/lib/logger', () => ({
+      logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+    }));
   });
 
   it('logAudit creates audit log', async () => {

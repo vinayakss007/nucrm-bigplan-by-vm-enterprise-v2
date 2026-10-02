@@ -232,6 +232,13 @@ export function getEmailProviderStatus(): {
 }
 
 /**
+ * Whether this process has already reported the missing-provider state. Guard
+ * for the block in sendEmail below — see the comment there for why it is once
+ * and not per send.
+ */
+let missingProviderReported = false;
+
+/**
  * Send an email using whichever provider is configured.
  * Tries Resend first, falls back to SMTP.
  * In development with no provider configured, logs to console.
@@ -272,13 +279,21 @@ export async function sendEmail(payload: EmailPayload): Promise<SendResult> {
     return { success: true, provider: 'console (dev)' };
   }
 
-  // Production with NO provider configured — the exact #1041 scenario. Loudly
-  // record it rather than returning a result the caller may ignore.
-  await reportEmailFailure(
-    'No email provider configured (set RESEND_API_KEY or SMTP_HOST). Email was NOT sent.',
-    payload.subject,
-    recipients,
-  );
+  // Production with NO provider configured — the exact #1041 scenario. This is a
+  // deployment state, not a per-message fault: every transactional send (reset,
+  // invite, trial warning, cron alert) reaches this same line, so it wrote 42
+  // error-level rows over two days while repeating itself. Record it once per
+  // process at the severity a missing env var deserves; a provider that is
+  // configured and then rejects a send stays a per-send error above.
+  if (!missingProviderReported) {
+    missingProviderReported = true;
+    await reportEmailFailure(
+      'No email provider configured (set RESEND_API_KEY or SMTP_HOST). Email was NOT sent.',
+      payload.subject,
+      recipients,
+      'warning',
+    );
+  }
   return {
     success: false,
     error: 'No email provider configured. Set RESEND_API_KEY or SMTP_HOST in your environment.',
@@ -286,8 +301,13 @@ export async function sendEmail(payload: EmailPayload): Promise<SendResult> {
 }
 
 /** Record an email failure to the structured error log (best-effort, never throws). */
-async function reportEmailFailure(reason: string, subject: string, recipients: string): Promise<void> {
-  logger.error('[email] send failure', { reason, subject });
+async function reportEmailFailure(
+  reason: string,
+  subject: string,
+  recipients: string,
+  level: 'error' | 'warning' = 'error',
+): Promise<void> {
+  logger[level === 'warning' ? 'warn' : 'error']('[email] send failure', { reason, subject });
   try {
     const { logError } = await import('@/lib/errors-server');
     const { redactEmail } = await import('@/lib/logger/pii');
@@ -298,7 +318,7 @@ async function reportEmailFailure(reason: string, subject: string, recipients: s
     await logError({
       error: new Error(reason),
       context: 'email:send-failure',
-      level: 'error',
+      level,
       metadata: { subject, recipients: redacted },
     });
   } catch {

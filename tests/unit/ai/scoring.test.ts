@@ -13,7 +13,13 @@ const mkFrom = vi.fn(() => ({
   })),
 }));
 
-vi.mock('@/lib/ai/gateway', () => ({ chat: mockChat }));
+// Spread the real module so `GatewayError` is a genuine class: scoring.ts decides
+// whether a bulk failure is worth a per-lead log row with `err instanceof
+// GatewayError`, and a mock that omits the class makes that check throw.
+vi.mock('@/lib/ai/gateway', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/ai/gateway')>();
+  return { ...actual, chat: mockChat };
+});
 
 vi.mock('@/drizzle/db', () => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -158,6 +164,28 @@ describe('AI Scoring', () => {
       await expect(mod.bulkScoreLeads('t-1', 'u-1', 20))
         .rejects.toThrow('lead scoring failed for all 2 leads: Lead not found');
       expect(logError).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not spend one log row per lead on a tenant with no AI provider', async () => {
+      // The gateway refuses before any provider is called, so every lead in the
+      // batch fails with the identical sentence. This loop used to record one
+      // error-level row per lead - 80 of the 137 rows error_logs held on Oct 1.
+      // The aggregate throw below still names the reason once per call.
+      const { GatewayError } = await import('@/lib/ai/gateway');
+      mockBulkSelect.mockResolvedValueOnce([{ id: 'c-1' }, { id: 'c-2' }, { id: 'c-3' }]);
+      mockDbFindMany.mockResolvedValue([]);
+      mockDbFindFirst.mockResolvedValue({
+        id: 'c', firstName: 'F', lastName: 'L', email: 'f@l.com', jobTitle: null,
+        phone: null, leadSource: 'a', leadStatus: 'n', lifecycleStage: 'l',
+      });
+      mockChat.mockRejectedValue(
+        new GatewayError('no_provider_enabled', 'No AI provider is enabled.')
+      );
+
+      const { logError } = await import('@/lib/errors-server');
+      await expect(mod.bulkScoreLeads('t-1', 'u-1', 20))
+        .rejects.toThrow('lead scoring failed for all 3 leads: No AI provider is enabled.');
+      expect(logError).not.toHaveBeenCalled();
     });
 
     it('does not throw when nothing was due', async () => {

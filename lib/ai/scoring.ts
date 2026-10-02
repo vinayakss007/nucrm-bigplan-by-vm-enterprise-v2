@@ -14,7 +14,7 @@ import { db } from '@/drizzle/db';
 import { leadScoringRules } from '@/drizzle/schema/ai';
 import { contacts, contactScores } from '@/drizzle/schema/crm';
 import { eq, and, isNull, sql } from 'drizzle-orm';
-import { chat } from './gateway';
+import { chat, GatewayError } from './gateway';
 
 export interface ScoringResult {
   contactId: string;
@@ -157,6 +157,16 @@ Format: {"score": number, "reason": "brief explanation", "factors": {"factor_nam
 }
 
 /**
+ * GatewayError codes that mean "this tenant has not configured AI" rather than
+ * "this lead could not be scored". Both are thrown before any provider is
+ * called, so they repeat identically for every lead in the batch.
+ */
+function isProviderConfigState(err: unknown): boolean {
+  return err instanceof GatewayError
+    && (err.code === 'no_provider_enabled' || err.code === 'no_key_for_provider');
+}
+
+/**
  * Bulk score leads for a tenant.
  */
 export async function bulkScoreLeads(tenantId: string, userId: string, limit: number = 20) {
@@ -180,7 +190,16 @@ export async function bulkScoreLeads(tenantId: string, userId: string, limit: nu
       results.push(res);
     } catch (err) {
       firstError ??= err;
-      await logError({ error: err, context: `ai-scoring: bulkScoreLeads lead=${lead.id}` });
+      // A tenant with no AI provider enabled fails every selected lead on the
+      // same configuration check, and this loop logged one row per lead: 80 of
+      // the 137 error_logs rows across Oct 1 said the same sentence. The
+      // aggregate throw below already carries that reason once per call, so a
+      // config-state refusal is not re-recorded per lead. Anything else — a
+      // provider 500, an unparseable reply — is a real per-lead failure and
+      // stays in the log.
+      if (!isProviderConfigState(err)) {
+        await logError({ error: err, context: `ai-scoring: bulkScoreLeads lead=${lead.id}` });
+      }
     }
   }
 

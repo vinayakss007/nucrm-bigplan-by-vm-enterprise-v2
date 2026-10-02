@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+// reportEmailFailure reaches for this dynamically. Mocked so the missing-provider
+// path can be counted instead of trying to write error_logs from the test DB.
+vi.mock('@/lib/errors-server', () => ({ logError: vi.fn().mockResolvedValue(undefined) }));
+
 describe('email/service', () => {
   beforeEach(() => {
     vi.resetModules();
@@ -46,6 +50,30 @@ describe('email/service', () => {
       
       expect(result.success).toBe(false);
       expect(result.error).toContain('No email provider configured');
+    });
+
+    it('reports a missing provider once, at warning level, not per send', async () => {
+      // Every transactional email in a provider-less production build hit the
+      // same line, so it wrote 42 error-level rows across two days — drowning
+      // the real failures in error_logs and Sentry. The state is still recorded
+      // (it must not go silent, #1041) but once, and at the severity a missing
+      // env var actually has.
+      process.env.NODE_ENV = 'production';
+      const { sendEmail } = await import('@/lib/email/service');
+      const { logError } = await import('@/lib/errors-server');
+
+      for (const subject of ['Reset your password', 'Welcome aboard', 'Trial expiring']) {
+        const result = await sendEmail({ to: 'test@example.com', subject, html: '<p>x</p>' });
+        expect(result.success).toBe(false);
+      }
+
+      expect(logError).toHaveBeenCalledTimes(1);
+      expect(logError).toHaveBeenCalledWith(
+        expect.objectContaining({
+          context: 'email:send-failure',
+          level: 'warning',
+        })
+      );
     });
 
     it('handles array of recipients', async () => {
