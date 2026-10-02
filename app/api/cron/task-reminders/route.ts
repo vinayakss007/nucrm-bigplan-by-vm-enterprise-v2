@@ -7,8 +7,8 @@ import { verifySecret } from '@/lib/crypto';
 import { acquireLock } from '@/lib/cache';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
-import { tasks, tenantMembers, users, contacts } from '@/drizzle/schema';
-import { eq, and, isNull, sql } from 'drizzle-orm';
+import { tasks, tenantMembers, users, contacts, notifications } from '@/drizzle/schema';
+import { eq, and, isNull, sql, inArray } from 'drizzle-orm';
 import { sendEmail } from '@/lib/email/service';
 import { createNotification } from '@/lib/notifications';
 import { apiError } from '@/lib/api-error';
@@ -33,6 +33,11 @@ export async function POST(request: NextRequest) {
     let overdueCount = 0;
     let notified = 0;
     let notifyFailed = 0;
+    // #2224: this job fires hourly, so without an already-notified marker every
+    // due/overdue task got a fresh notification (and the 1-day-overdue email)
+    // up to 24x per day. The marker is the day's own notification row —
+    // (user, type, entity_id, created date) — checked once per tenant below.
+    let alreadyReminded = 0;
 
     // tasks, tenant_members, contacts and notifications all enforce plain
     // tenant_isolation with no super-admin branch, so this job has to run its
@@ -97,8 +102,34 @@ export async function POST(request: NextRequest) {
       dueTodayCount += dueToday.length;
       overdueCount += overdue.length;
 
+      // #2224 dedupe marker lookup: which (user, type, task) reminders already
+      // exist FOR TODAY in this tenant. `createNotification` writes entity_type
+      // and entity_id into the jsonb `metadata` column (GIN-indexed), so an
+      // existence check needs no schema change. Same task on the next calendar
+      // day misses this filter and is reminded again — one reminder per day.
+      const remindedKeys = new Set<string>();
+      if (dueToday.length + overdue.length > 0) {
+        const remindedToday = await db.select({
+          userId: notifications.userId,
+          type: notifications.type,
+          entityId: sql<string>`${notifications.metadata}->>'entity_id'`,
+        })
+        .from(notifications)
+        .where(and(
+          eq(notifications.tenantId, tenantId),
+          inArray(notifications.type, ['task_due', 'task_overdue']),
+          sql`${notifications.metadata}->>'entity_type' = 'task'`,
+          sql`(${notifications.createdAt})::date = ${today}::date`,
+        ));
+        for (const row of remindedToday) {
+          remindedKeys.add(`${row.userId}|${row.type}|${row.entityId}`);
+        }
+      }
+
       // Send in-app notifications for due today
       for (const task of dueToday) {
+        const marker = `${task.userId}|task_due|${task.id}`;
+        if (remindedKeys.has(marker)) { alreadyReminded++; continue; }
         // createNotification() reports a failed write by RETURNING FALSE, not by
         // throwing — after its retry is exhausted it only logs. Counting the
         // result rather than the attempt is what keeps this response honest: the
@@ -109,12 +140,14 @@ export async function POST(request: NextRequest) {
           title: `Task due today: ${task.title}`,
           body: task.contactFirst ? `Contact: ${task.contactFirst} ${task.contactLast}` : undefined,
           entity_type: 'task', entity_id: task.id,
-        })) notified++; else notifyFailed++;
+        })) { notified++; remindedKeys.add(marker); } else notifyFailed++;
       }
 
       // Send in-app notifications + email for overdue
       for (const task of overdue) {
         if (!task.dueDate) continue;
+        const marker = `${task.userId}|task_overdue|${task.id}`;
+        if (remindedKeys.has(marker)) { alreadyReminded++; continue; }
         const daysOverdue = Math.floor((Date.now() - new Date(task.dueDate).getTime()) / 86400000);
         const overdueDelivered = await createNotification({
           userId: task.userId, tenantId: task.tenantId, type: 'task_overdue',
@@ -122,8 +155,11 @@ export async function POST(request: NextRequest) {
           entity_type: 'task', entity_id: task.id,
         });
 
-        // Email for tasks overdue exactly 1 day (not every day — avoid spam)
-        if (daysOverdue === 1 && task.email) {
+        // Email for tasks overdue exactly 1 day (not every day — avoid spam).
+        // #2224: gated on the reminder marker too — the notification row IS the
+        // once-per-day marker, so the email rides its success: a run that finds
+        // the marker (or fails to insert) never re-emails for the same day.
+        if (daysOverdue === 1 && task.email && overdueDelivered) {
           const dueStr = new Date(task.dueDate).toISOString().split('T')[0];
           await sendEmail({
             to: task.email,
@@ -132,7 +168,7 @@ export async function POST(request: NextRequest) {
             text: `Task overdue: ${task.title} (due ${dueStr}). View: ${process.env.NEXT_PUBLIC_APP_URL}/tenant/tasks`,
           }).catch((err) => logError({ error: err, context: 'cron/task-reminders async side-effect' }));
         }
-        if (overdueDelivered) notified++; else notifyFailed++;
+        if (overdueDelivered) { notified++; remindedKeys.add(marker); } else notifyFailed++;
       }
     });
 
@@ -148,6 +184,10 @@ export async function POST(request: NextRequest) {
       overdue: overdueCount,
       notified,
       notify_failed: notifyFailed,
+      // #2224: how many task/day reminder pairs the dedupe marker suppressed on
+      // this run — the hourly no-op path. Healthy value on repeat runs is
+      // due_today + overdue here and notified: 0.
+      already_reminded: alreadyReminded,
     });
 
 
