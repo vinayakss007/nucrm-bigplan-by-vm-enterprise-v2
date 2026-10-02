@@ -122,12 +122,3 @@ export function useDebounce<T>(value: T, delay: number): T {
 
   return debouncedValue;
 }
-
-// Memoized callback
-export function useMemoCallback<T extends (...args: never[]) => unknown>(
-  callback: T,
-  deps: React.DependencyList
-): T {
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  return React.useCallback(callback, deps) as T;
-}

@@ -227,16 +227,16 @@ const virtualizer = useVirtualizer({
     enabled: virtualize,
   })
 
-  const selectedIds = React.useMemo(() => {
-    const selectedRows = table.getFilteredSelectedRowModel().rows
-    return selectedRows.map(row => (row.original as { id: string }).id)
-    // #665: depend on the selection STATE (rowSelection) and the current data,
-    // not the `table` instance. TanStack returns a STABLE table ref, so a
-    // `[table]` dependency computed once (with an empty selection) and never
-    // recomputed — bulk actions then received an empty selectedIds. rowSelection
-    // changes on every select/deselect; data changes on page/refresh.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [table, rowSelection, data])
+  // #665: compute during render instead of memoizing. TanStack caches the
+  // filtered-selected row model on the table's own state, so this reads live
+  // selection and data on every pass; a `[table]` memo once went stale (stable
+  // table ref → empty selectedIds for bulk actions), and memoizing on
+  // [rowSelection, data] was the suppression the ratchet kept tripping.
+  // Consumers only read this in render/handlers — no effect depends on the
+  // array identity.
+  const selectedIds = table
+    .getFilteredSelectedRowModel()
+    .rows.map(row => (row.original as { id: string }).id)
 
   // Derived values for select-all-matching feature (must be after table and selectedIds)
   const allPageSelected = table.getIsAllPageRowsSelected()
