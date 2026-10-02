@@ -81,10 +81,7 @@ interface RawConfig {
   point_in_time_recovery: string;
 }
 
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function parseConfig(rows: { key: string; value: any }[], tenantId: string): RawConfig | null {
+function parseConfig(rows: { key: string; value: unknown }[], tenantId: string): RawConfig | null {
   const prefix = `${CONFIG_KEY_PREFIX}${tenantId}`;
   const config: Record<string, string> = {};
   for (const row of rows) {

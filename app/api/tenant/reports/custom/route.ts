@@ -25,8 +25,7 @@ interface ReportConfig {
   type: 'contacts' | 'companies' | 'deals' | 'tasks' | 'leads' | 'pipeline' | 'revenue';
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  filters: Record<string, any>;
+  filters: Record<string, unknown>;
   columns: string[];
   groupBy?: string;
   sortBy?: string;

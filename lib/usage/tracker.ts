@@ -27,7 +27,7 @@ import {
   limitViolations,
 } from '@/drizzle/schema';
 import { and, eq, isNull, sql } from 'drizzle-orm';
-import type { AnyPgColumn } from 'drizzle-orm/pg-core';
+import type { AnyPgColumn, AnyPgTable } from 'drizzle-orm/pg-core';
 
 /** Resource categories that map to columns on the `plans` table. */
 export type LimitKind =
@@ -214,17 +214,16 @@ function todayDateString(): string {
 }
 
 async function countWhere(
-  table: unknown,
+  table: AnyPgTable,
   tenantCol: AnyPgColumn,
   deletedCol: AnyPgColumn,
   tenantId: string,
 ): Promise<number> {
-  // drizzle's `.from()` is generic over the table type; the helper is reused
-  // for several tables so we cast through `any` to keep one implementation.
+  // The helper is reused for several tables, so the table is widened to
+  // AnyPgTable and only the count expression is selected.
   const rows = await db
     .select({ c: sql<number>`count(*)::int` })
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .from(table as any)
+    .from(table)
     .where(and(eq(tenantCol, tenantId), isNull(deletedCol)));
   return rows[0]?.c ?? 0;
 }

@@ -172,8 +172,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
 
           // Add line items
           if (items?.length) {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const lineItems = items.map((item: any, idx: number) => {
+            const lineItems = items.map((item, idx) => {
               // Money-math correctness (#1497): use rounded money helpers and
               const base = lineTotal(item.quantity ?? 1, item.unit_price ?? 0);
               const lineTaxRate = money(item.tax_rate ?? 0);

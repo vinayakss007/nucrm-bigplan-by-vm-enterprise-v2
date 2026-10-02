@@ -98,10 +98,10 @@ if (process.env.SENTRY_ORG && process.env.SENTRY_PROJECT && process.env.SENTRY_A
   try {
     // `@sentry/nextjs/config`, not `@sentry/nextjs`: every build of 10.x prints a
     // warning that the old path stops working in v11, and this call is what
-    // uploads source maps. Bumping the SDK without this change would leave
-    // issues arriving with minified frames and no warning — silent, not loud.
+    // uploads source maps. `hideSourceMaps` was removed in SDK v9 with no
+    // replacement — the SDK emits hidden source maps by default now.
     const { withSentryConfig } = await import('@sentry/nextjs/config');
-    nextConfig = withSentryConfig(nextConfig, { org: process.env.SENTRY_ORG, project: process.env.SENTRY_PROJECT, authToken: process.env.SENTRY_AUTH_TOKEN, silent: true, widenClientFileUpload: true, hideSourceMaps: true });
+    nextConfig = withSentryConfig(nextConfig, { org: process.env.SENTRY_ORG, project: process.env.SENTRY_PROJECT, authToken: process.env.SENTRY_AUTH_TOKEN, silent: true, widenClientFileUpload: true });
   } catch (e) { console.error('[next.config] Sentry config failed:', e); }
 }
 // Bundle analyzer for `ANALYZE=true npm run build`

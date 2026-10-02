@@ -55,7 +55,15 @@ export const GET = withApiRoute(async (req: NextRequest) => {
       return NextResponse.json({ error: 'Failed to fetch templates from Meta' }, { status: 500 });
     }
 
-    const data = await response.json();
+    interface MetaTemplate {
+      name: string;
+      language: string;
+      category?: string;
+      status?: string;
+      components?: unknown;
+      [key: string]: unknown;
+    }
+    const data = (await response.json()) as { data?: MetaTemplate[] };
     const templates = data.data || [];
 
     return NextResponse.json({ data: templates });
@@ -106,13 +114,20 @@ export const POST = withApiRoute(async (req: NextRequest) => {
       return NextResponse.json({ error: 'Failed to sync templates' }, { status: 500 });
     }
 
-    const data = await response.json();
+    interface MetaTemplate {
+      name: string;
+      language: string;
+      category?: string;
+      status?: string;
+      components?: unknown;
+      [key: string]: unknown;
+    }
+    const data = (await response.json()) as { data?: MetaTemplate[] };
     const templates = data.data || [];
 
     // Store templates in DB
     if (templates.length > 0) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const values = templates.map((t: any) => ({
+      const values = templates.map((t) => ({
         tenantId: ctx.tenantId,
         name: t.name,
         language: t.language,

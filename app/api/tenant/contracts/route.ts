@@ -72,16 +72,15 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       // every create that omitted `type` fail on its own INSERT.
       contractType: contractType ?? 'service',
       status: status ?? 'draft',
-      startDate: new Date(startDate),
-      endDate: endDate ? new Date(endDate) : null,
+      startDate: new Date(startDate).toISOString().slice(0, 10),
+      endDate: endDate ? new Date(endDate).toISOString().slice(0, 10) : null,
       totalValue: totalValue ? String(totalValue) : null,
       billingFrequency: null,
       terms,
       notes: description,
       documentUrl: null,
       createdBy: userId,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any).returning();
+    }).returning();
 
     return NextResponse.json({ contract }, { status: 201 });
   } catch (error) {

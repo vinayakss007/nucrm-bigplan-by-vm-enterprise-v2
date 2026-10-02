@@ -93,17 +93,17 @@ export async function POST(request: NextRequest) {
   }
 
   // 3. Parse and validate body
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let body: any;
+  let body: Record<string, unknown>;
   try {
     body = await readJsonBody(request);
   } catch {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  const { emergency_key, email, new_password, disable_2fa = false } = body;
+  const { disable_2fa = false } = body;
+  const emergency_key = typeof body.emergency_key === 'string' ? body.emergency_key : '';
+  const email = typeof body.email === 'string' ? body.email : '';
+  const new_password = typeof body.new_password === 'string' ? body.new_password : '';
 
   if (!emergency_key || !email || !new_password) {
     return NextResponse.json(
@@ -163,10 +163,7 @@ export async function POST(request: NextRequest) {
   // 7. Reset password
   const hashedPassword = await bcrypt.hash(new_password, 12);
 
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const updateFields: any = {
+  const updateFields: Partial<typeof users.$inferInsert> = {
     passwordHash: hashedPassword,
     updatedAt: new Date(),
   };

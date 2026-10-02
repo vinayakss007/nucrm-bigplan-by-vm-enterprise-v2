@@ -122,8 +122,7 @@ export function validateEnv(): EnvConfig {
   } else {
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    try { validateNotWeak('JWT_SECRET', jwtSecret); } catch (e: any) { errors.push(e.message); }
+    try { validateNotWeak('JWT_SECRET', jwtSecret); } catch (e) { errors.push(e instanceof Error ? e.message : String(e)); }
   }
 
   // Validate SESSION_SECRET
@@ -135,8 +134,7 @@ export function validateEnv(): EnvConfig {
   } else {
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    try { validateNotWeak('SESSION_SECRET', sessionSecret); } catch (e: any) { errors.push(e.message); }
+    try { validateNotWeak('SESSION_SECRET', sessionSecret); } catch (e) { errors.push(e instanceof Error ? e.message : String(e)); }
   }
 
   // Validate NEXT_PUBLIC_APP_URL
@@ -183,8 +181,7 @@ export function validateEnv(): EnvConfig {
   } else {
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    try { validateNotWeak('CRON_SECRET', cronSecret); } catch (e: any) { errors.push(e.message); }
+    try { validateNotWeak('CRON_SECRET', cronSecret); } catch (e) { errors.push(e instanceof Error ? e.message : String(e)); }
   }
 
   // Validate ENCRYPTION_KEY (for backup encryption)
@@ -196,8 +193,7 @@ export function validateEnv(): EnvConfig {
   } else {
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    try { validateNotWeak('ENCRYPTION_KEY', encryptionKey); } catch (e: any) { errors.push(e.message); }
+    try { validateNotWeak('ENCRYPTION_KEY', encryptionKey); } catch (e) { errors.push(e instanceof Error ? e.message : String(e)); }
   }
 
   // Validate DATABASE_POOL_SIZE

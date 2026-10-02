@@ -10,7 +10,7 @@ import { requireModule } from '@/lib/modules/gate';
 import { createSigningRequest } from '@/lib/esignature';
 import { db } from '@/drizzle/db';
 import { signingRequests } from '@/drizzle/schema/esignature';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, type SQL } from 'drizzle-orm';
 import { readJsonBody } from '@/lib/api/validate';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
@@ -33,8 +33,7 @@ export const GET = withApiRoute(async (req: NextRequest) => {
 
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const filters: any[] = [eq(signingRequests.tenantId, ctx.tenantId)];
+    const filters: SQL[] = [eq(signingRequests.tenantId, ctx.tenantId)];
     if (status) {
       filters.push(eq(signingRequests.status, status));
     }

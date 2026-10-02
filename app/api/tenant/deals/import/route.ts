@@ -188,16 +188,17 @@ export const POST = withApiRoute(async (request: NextRequest) => {
             AND tm.status = 'active'
           LIMIT 1
         `);
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const userId = (result.rows[0] as any)?.id ?? null;
+        const userId = (result.rows[0] as { id: string } | undefined)?.id ?? null;
 
         if (!userId) return null;
         userCache[key] = userId;
         return userId;
       };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const insertBuffer: any[] = [];
+      // "tags" is not a deals column; drizzle drops unknown values() keys
+      // at SQL-build time, but the row objects carry it, so the buffer type
+      // keeps it to preserve the original shape.
+      const insertBuffer: (Partial<typeof deals.$inferInsert> & { tags?: string[] })[] = [];
 
       // Dedupe (#1122): match existing deals by (tenantId, title) OR externalId
       // (stored in metadata.external_id). Duplicates are skipped and reported.
@@ -240,8 +241,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
 
       for (const [index, row] of rows.entries()) {
         try {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const mapped: any = {};
+          const mapped: Record<string, string | undefined> = {};
           for (const [key, val] of Object.entries(row)) {
             const dbCol = COLUMN_MAP[key.toLowerCase().trim()];
             if (dbCol && val) mapped[dbCol] = val;
@@ -349,19 +349,18 @@ export const POST = withApiRoute(async (request: NextRequest) => {
           });
 
           if (insertBuffer.length >= BATCH_SIZE) {
-            await tx.insert(deals).values(insertBuffer);
+            await tx.insert(deals).values(insertBuffer as typeof deals.$inferInsert[]);
             results.imported += insertBuffer.length;
             insertBuffer.length = 0;
           }
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-        } catch (rowErr: any) {
-          results.errors.push(`Row ${index + 2}: ${rowErr.message}`);
+        } catch (rowErr) {
+          results.errors.push(`Row ${index + 2}: ${rowErr instanceof Error ? rowErr.message : String(rowErr)}`);
           results.skipped++;
         }
       }
 
       if (insertBuffer.length > 0) {
-        await tx.insert(deals).values(insertBuffer);
+        await tx.insert(deals).values(insertBuffer as unknown as typeof deals.$inferInsert[]);
         results.imported += insertBuffer.length;
       }
 

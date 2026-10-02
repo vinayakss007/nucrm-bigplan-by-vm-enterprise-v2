@@ -65,10 +65,9 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     return NextResponse.json({
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      backups: backups.map((b: any) => ({
+      backups: backups.map((b) => ({
         ...b,
-        file_size_formatted: formatFileSize(b.fileSize),
+        file_size_formatted: formatFileSize(b.fileSize ?? 0),
       })),
       stats: {
         total: Number(stats?.total ?? 0),

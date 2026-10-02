@@ -42,8 +42,7 @@ export async function POST(req: NextRequest) {
     const eligibleTenants = new Map(activeTenants.map((t) => [t.id, t] as const));
 
     let tenantsProcessed = 0;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const results: any[] = [];
+    const results: { tenantId: string; scoredCount: number }[] = [];
 
     // contacts and contact_scores (and lead_scoring_rules) enforce a plain
     // tenant_isolation policy with no super-admin branch, so an unscoped run

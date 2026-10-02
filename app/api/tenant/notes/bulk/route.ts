@@ -5,10 +5,11 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth, type AuthContext } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { notes, contacts, deals, leads, companies, tasks } from '@/drizzle/schema';
 import { eq, and, inArray, sql } from 'drizzle-orm';
+import type { AnyPgTable, PgColumn } from 'drizzle-orm/pg-core';
 import { logAudit } from '@/lib/audit';
 import { logError } from '@/lib/errors-server';
 import { readJsonBody } from '@/lib/api/validate';
@@ -17,8 +18,7 @@ import { withApiRoute } from '@/lib/api/with-api-route';
 const MAX_BULK = 500;
 const VALID_ENTITY_TYPES = ['contact', 'deal', 'lead', 'company', 'task'] as const;
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const entityTables: Record<string, { table: any; idField: any; tenantField: any }> = {
+const entityTables: Record<string, { table: AnyPgTable; idField: PgColumn; tenantField: PgColumn }> = {
   contact: { table: contacts, idField: contacts.id, tenantField: contacts.tenantId },
   deal: { table: deals, idField: deals.id, tenantField: deals.tenantId },
   lead: { table: leads, idField: leads.id, tenantField: leads.tenantId },
@@ -27,11 +27,11 @@ const entityTables: Record<string, { table: any; idField: any; tenantField: any 
 };
 
 export const POST = withApiRoute(async (req: NextRequest) => {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let ctx: any;
+  let ctx!: AuthContext;
   try {
-    ctx = await requireAuth(req);
-    if (ctx instanceof NextResponse) return ctx;
+    const auth = await requireAuth(req);
+    if (auth instanceof NextResponse) return auth;
+    ctx = auth;
 
     const body = await readJsonBody(req);
     const { entity_type, entity_ids, content } = body;
@@ -74,7 +74,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
         )
       );
 
-    const validIds = valid.map(r => r.id);
+    const validIds = valid.map((r) => r.id as string);
     if (!validIds.length) {
       return NextResponse.json({ error: 'No valid entities found' }, { status: 404 });
     }

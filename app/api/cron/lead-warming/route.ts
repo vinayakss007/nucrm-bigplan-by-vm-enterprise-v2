@@ -81,8 +81,7 @@ export async function POST(req: NextRequest) {
       }
     });
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const results: Record<string, any> = { warming: warmingTotals, replies: replyTotals };
+    const results: Record<string, unknown> = { warming: warmingTotals, replies: replyTotals };
     if (monthlyReset) {
       results['monthlyReset'] = true;
     }

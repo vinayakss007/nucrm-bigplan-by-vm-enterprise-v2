@@ -16,6 +16,12 @@ import { concurrencyGuard, concurrencyGuardById } from '@/lib/api/concurrency';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { logError } from '@/lib/errors-server';
 
+// Postgres driver errors carry a SQLSTATE `code` alongside Error.message.
+function isUniqueViolation(err: unknown): boolean {
+  return ((err as { code?: string }).code === '23505'
+    || (err instanceof Error && err.message.includes('unique constraint')));
+}
+
 export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
@@ -28,7 +34,6 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       .orderBy(asc(plans.sortOrder));
     
     return NextResponse.json({ data });
- 
  
   } catch (err) {
     await logError({ error: err, context: 'superadmin/plans GET', requestMethod: 'GET' });
@@ -83,11 +88,8 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     });
 
     return NextResponse.json({ data: row }, { status: 201 });
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
-    if (err.code === '23505' || err.message?.includes('unique constraint')) {
+  } catch (err) {
+    if (isUniqueViolation(err)) {
       return NextResponse.json({ error: 'A plan with this identifier already exists' }, { status: 409 });
     }
     await logError({ error: err, context: 'superadmin/plans POST', requestMethod: 'POST' });
@@ -113,10 +115,7 @@ export const PATCH = withApiRoute(async (request: NextRequest) => {
     const guardResponse = await concurrencyGuardById(db, plans, id, expectedUpdatedAt);
     if (guardResponse) return guardResponse;
 
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const updateData: any = { updatedAt: new Date() };
+    const updateData: Partial<typeof plans.$inferInsert> = { updatedAt: new Date() };
     
     if (v.name !== undefined) {
       updateData.name = v.name;
@@ -164,10 +163,8 @@ export const PATCH = withApiRoute(async (request: NextRequest) => {
 
     return NextResponse.json({ data: row });
  
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
-    if (err.code === '23505' || err.message?.includes('unique constraint')) {
+  } catch (err) {
+    if (isUniqueViolation(err)) {
       return NextResponse.json({ error: 'A plan with this name already exists' }, { status: 409 });
     }
     await logError({ error: err, context: 'superadmin/plans PATCH', requestMethod: 'PATCH' });
@@ -205,7 +202,6 @@ export const DELETE = withApiRoute(async (request: NextRequest) => {
     });
 
     return NextResponse.json({ ok: true });
- 
  
   } catch (err) {
     await logError({ error: err, context: 'superadmin/plans DELETE', requestMethod: 'DELETE' });

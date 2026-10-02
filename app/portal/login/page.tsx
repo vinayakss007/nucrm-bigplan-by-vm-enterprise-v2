@@ -88,8 +88,7 @@ function LoginInner() {
       autoLoggedInRef.current = true;
       loginMutation.mutate({ email: urlEmail, token: urlToken, tenantId: urlTenant });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams]);
+  }, [searchParams, loginMutation]);
 
   const fail = (msg: string) => { loginMutation.reset(); setLocalError(msg); };
 

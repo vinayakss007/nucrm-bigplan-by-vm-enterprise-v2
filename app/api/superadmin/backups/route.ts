@@ -59,8 +59,10 @@ export const GET = withApiRoute(async (request: NextRequest) => {
 
  
  
- // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const stats: any = statsRes || { totalBackups: 0, restorable: 0, deletedRecords: 0, updatedRecords: 0 };
+      const stats: {
+        totalBackups: number; restorable: number; deletedRecords: number; updatedRecords: number;
+        by_table?: { tableName: string; count: number }[];
+      } = statsRes || { totalBackups: 0, restorable: 0, deletedRecords: 0, updatedRecords: 0 };
       stats.by_table = tableStats;
 
       // #1300: standardize on { data }; keep top-level keys for backward compat.

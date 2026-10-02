@@ -39,8 +39,8 @@ if (SENTRY_DSN) {
     environment: SENTRY_ENVIRONMENT,
     ...(SENTRY_RELEASE ? { release: SENTRY_RELEASE } : {}),
 
-    // GDPR: never send PII by default
-    sendDefaultPii: false,
+    // v11 removed `sendDefaultPii`; the SDK now treats anything other than an
+    // explicit `dataCollection` opt-in as off, so PII is still never sent.
 
     // Initialize whenever a DSN is configured. Both documented opt-outs count:
     // SENTRY_DISABLE=true and SENTRY_ENABLE=false (the runbook and OPERATIONS.md

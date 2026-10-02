@@ -117,8 +117,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       if (!o) throw new Error('Failed to create order');
 
       if (items?.length) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const lineItems = items.map((item: any, idx: number) => ({
+        const lineItems = items.map((item, idx) => ({
           tenantId: ctx.tenantId,
           orderId: o.id,
           productId: null,
@@ -127,7 +126,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
           itemType: 'product',
           quantity: String(item.quantity || 1),
           unitPrice: String(item.unit_price || 0),
-          total: String(((parseFloat(item.quantity) || 1) * (parseFloat(item.unit_price) || 0)).toFixed(2)),
+          total: String(((item.quantity || 1) * (item.unit_price || 0)).toFixed(2)),
           sortOrder: idx,
         }));
 

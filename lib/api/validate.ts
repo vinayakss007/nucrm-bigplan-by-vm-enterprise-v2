@@ -90,8 +90,7 @@ export function withValidation<T>(
     request: Request,
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ctx: any,
+    ctx: Record<string, unknown>,
     body: T
   ) => Promise<NextResponse> | NextResponse
 ) {
@@ -148,8 +147,7 @@ export async function readJsonBody(request: Request): Promise<any> {
  * `apiError()` — it keeps the happy path free of response plumbing. This variant
  * suits routes that want to branch on the failure inline.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function safeJson(request: Request): Promise<{ data: any } | NextResponse> {
+export async function safeJson(request: Request): Promise<{ data: unknown } | NextResponse> {
   try {
     return { data: await readJsonBody(request) };
   } catch (e) {

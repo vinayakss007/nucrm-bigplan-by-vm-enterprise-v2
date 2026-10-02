@@ -8,7 +8,7 @@ import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { contacts, deals, companies, tasks, leads } from '@/drizzle/schema';
-import { eq, and, or, gte, lte, desc, sql, inArray, type SQLWrapper } from 'drizzle-orm';
+import { eq, and, or, gte, lte, desc, sql, inArray, type SQL, type SQLWrapper } from 'drizzle-orm';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
 import { withApiRoute } from '@/lib/api/with-api-route';
@@ -73,18 +73,12 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     const tid = ctx.tenantId;
     const pattern = q ? likePattern(String(q)) : null;
 
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let data: any[] = [];
+    let data: Record<string, unknown>[] = [];
     let total = 0;
 
     switch (type) {
       case 'contacts': {
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const conditions: any[] = [
+        const conditions: SQL[] = [
           eq(contacts.tenantId, tid),
           sql`${contacts.deletedAt} IS NULL`,
         ];
@@ -157,10 +151,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       }
 
       case 'deals': {
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const conditions: any[] = [
+        const conditions: SQL[] = [
           eq(deals.tenantId, tid),
           sql`${deals.deletedAt} IS NULL`,
         ];
@@ -304,10 +295,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       }
 
       case 'companies': {
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const conditions: any[] = [
+        const conditions: SQL[] = [
           eq(companies.tenantId, tid),
         ];
 
@@ -361,10 +349,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       }
 
       case 'tasks': {
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const conditions: any[] = [
+        const conditions: SQL[] = [
           eq(tasks.tenantId, tid),
         ];
 

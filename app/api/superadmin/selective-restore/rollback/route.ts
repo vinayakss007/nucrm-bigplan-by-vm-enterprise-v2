@@ -94,10 +94,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
         duration_ms: durationMs,
       });
 
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (err: any) {
+    } catch (err) {
       await logError({
         error: err,
         context: 'selective-restore/rollback',
@@ -109,7 +106,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
         .update(selectiveRestoreLogs)
         .set({ 
           status: 'failed',
-          errorMessage: err.message,
+          errorMessage: err instanceof Error ? err.message : String(err),
         })
         .where(eq(selectiveRestoreLogs.id, restore_log_id));
 
