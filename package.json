@@ -55,6 +55,7 @@
     "probe:rls": "npx tsx --import ./scripts/load-env.mjs scripts/probe-rls.mts",
     "db:triage": "npx tsx --import ./scripts/load-env.mjs scripts/triage-errors.mts",
     "cron:fire": "npx tsx --import ./scripts/load-env.mjs scripts/fire-cron.mts",
+    "sim:superadmin-roles": "npx tsx --tsconfig scripts/tsconfig.gate.json --import ./scripts/load-env.mjs scripts/sim-superadmin-roles.ts",
     "typecheck": "NODE_OPTIONS=\"--max-old-space-size=8192\" npx tsc --noEmit --pretty",
     "check": "npm run typecheck && npm run lint && npm run test:unit && echo '✅ All checks passed'",
     "premerge": "bash scripts/pre-merge-check.sh",
