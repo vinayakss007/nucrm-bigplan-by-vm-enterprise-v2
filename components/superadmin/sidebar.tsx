@@ -104,11 +104,14 @@ export default function SuperAdminSidebar({ profile, collapsed, onToggle }: Prop
 
   // Auto-open the section containing the active page
   useEffect(() => {
-    const active = SECTIONS.find(sec => sec.items.some(i => isActive(i.href)));
-    if (active && !openSections[active.id]) {
-      setOpenSections(prev => ({ ...prev, [active.id]: true }));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Inline the isActive check (it re-creates every render, so it cannot be
+    // a dependency); read openSections only through the functional updater so
+    // the state itself never needs to be a dependency.
+    const active = SECTIONS.find(sec => sec.items.some(i =>
+      pathname === i.href || (i.href !== '/superadmin/dashboard' && pathname.startsWith(i.href))
+    ));
+    if (!active) return;
+    setOpenSections(prev => (prev[active.id] ? prev : { ...prev, [active.id]: true }));
   }, [pathname]);
 
   const isActive = (href: string) =>

@@ -167,13 +167,17 @@ export function DataTable<TData, TValue>({
      
   }, [data])
 
-  // Reset select all matching when filters or page changes
+  // Reset select all matching when filters or page changes. The scope ref
+  // makes the effect act only on real filter/page transitions, so
+  // selectAllMatching and onSelectAllMatching can be honest dependencies
+  // without the effect clearing the flag the moment it turns on.
+  const selectionScope = `${externalGlobalFilter ?? ''}|${externalPageIndex ?? ''}|${pageIndex}`
+  const selectionScopeRef = React.useRef(selectionScope)
   React.useEffect(() => {
-    if (selectAllMatching) {
-      onSelectAllMatching?.(false)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [externalGlobalFilter, externalPageIndex, pageIndex])
+    if (selectionScopeRef.current === selectionScope) return
+    selectionScopeRef.current = selectionScope
+    if (selectAllMatching) onSelectAllMatching?.(false)
+  }, [selectionScope, selectAllMatching, onSelectAllMatching])
 
   const table = useReactTable({
     data,

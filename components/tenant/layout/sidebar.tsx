@@ -117,16 +117,19 @@ export default function TenantSidebar({ tenant, _profile, _roleSlug, permissions
   // Auto-open sections that contain a match while filtering
   useEffect(() => {
     if (!query) return;
-    const next = { ...openSections };
     const q = query.toLowerCase();
-    NAV_SECTIONS.forEach(sec => {
-      const hasMatch = sec.items.some(i =>
-        i.label.toLowerCase().includes(q) || (i.keywords ?? '').toLowerCase().includes(q)
-      );
-      if (hasMatch) next[sec.id] = true;
+    // Merge via the functional updater so `openSections` itself never needs
+    // to be a dependency (it only changes through our own setStates here).
+    setOpenSections(prev => {
+      const next = { ...prev };
+      NAV_SECTIONS.forEach(sec => {
+        const hasMatch = sec.items.some(i =>
+          i.label.toLowerCase().includes(q) || (i.keywords ?? '').toLowerCase().includes(q)
+        );
+        if (hasMatch) next[sec.id] = true;
+      });
+      return next;
     });
-    setOpenSections(next);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query]);
 
   // Auto-open settings when on a settings page
