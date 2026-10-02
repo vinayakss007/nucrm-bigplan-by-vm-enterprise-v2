@@ -126,6 +126,33 @@ function getSourceLocation(): { file: string; line: number; function: string } |
   };
 }
 
+/**
+ * Walk a wrapped error's `cause` chain collecting what each level knows.
+ *
+ * Same walk `lib/api/db-client-error.ts` does for status mapping: the SQLSTATE
+ * only ever lives on the inner pg error, never on drizzle's QueryFailedError.
+ * Bounded so a pathological chain cannot spin, and self-cause guarded.
+ */
+function errorCauseChain(error: unknown): { code: string | null; message: string; constraint?: string }[] {
+  const chain: { code: string | null; message: string; constraint?: string }[] = [];
+  let current: unknown = error instanceof Error ? error.cause : undefined;
+  for (let depth = 0; depth < 4 && current; depth += 1) {
+    if (typeof current === 'string') {
+      chain.push({ code: null, message: current });
+      break;
+    }
+    const e = current as { code?: unknown; sqlstate?: unknown; message?: unknown; constraint?: unknown; cause?: unknown };
+    const code = typeof e.code === 'string' ? e.code : typeof e.sqlstate === 'string' ? e.sqlstate : null;
+    const text = typeof e.message === 'string' ? e.message : '';
+    if (code || text) {
+      chain.push({ code, message: text, ...(typeof e.constraint === 'string' ? { constraint: e.constraint } : {}) });
+    }
+    if (e.cause === current) break;
+    current = e.cause;
+  }
+  return chain;
+}
+
 export async function logError(opts: {
   error: unknown;
   context?: string;
@@ -147,6 +174,17 @@ export async function logError(opts: {
   if (opts.error instanceof InvalidJsonBodyError) return;
   const level: ErrorLevel = opts.level ?? 'error';
   const msg = opts.error instanceof Error ? opts.error.message : String(opts.error ?? 'Unknown error');
+  // #44: drizzle's node-postgres driver rethrows as QueryFailedError — the SQL
+  // text becomes `message` and the pg error, the only object holding the
+  // SQLSTATE, moves to `cause`. Storing the top message alone made every RLS
+  // refusal, FK violation and CHECK drift read as "Failed query: select …",
+  // with the one line that explained it dropped. End the stored message with the
+  // root cause and keep the whole chain structured alongside it.
+  const causes = errorCauseChain(opts.error);
+  const root = causes.length > 0 ? causes[causes.length - 1] : null;
+  const message = root && root.message && !msg.includes(root.message)
+    ? `${msg} | caused by ${root.code ? `${root.code}: ` : ''}${root.message}`
+    : msg;
   const stack = opts.error instanceof Error ? opts.error.stack : undefined;
   const source = opts.sourceFile ? null : getSourceLocation();
   // Correlate the DB row, the Sentry event, and the request. The proxy/auth
@@ -166,7 +204,7 @@ export async function logError(opts: {
         source: 'logError.test-mode',
         outcome: 'db_write_skipped',
         level,
-        message: msg,
+        message,
         context: opts.context ?? null,
         requestId: requestId ?? null,
       }));
@@ -175,7 +213,7 @@ export async function logError(opts: {
       tenantId: opts.tenantId ?? null,
       userId: opts.userId ?? null,
       level,
-      message: msg,
+      message,
       stack: stack ?? null,
       context: {
         context: opts.context,
@@ -183,6 +221,7 @@ export async function logError(opts: {
         requestId,
         requestUrl: opts.requestUrl,
         requestMethod: opts.requestMethod,
+        ...(causes.length > 0 ? { errorCauses: causes } : {}),
         ...opts.metadata,
       },
     });
@@ -197,7 +236,7 @@ export async function logError(opts: {
       source: 'logError.fallback',
       outcome: 'db_write_failed',
       level,
-      message: msg,
+      message,
       context: opts.context ?? null,
       requestId: requestId ?? null,
       tenantId: opts.tenantId ?? null,
@@ -227,7 +266,7 @@ export async function logError(opts: {
     await forwardToLoki({
       error: opts.error,
       level,
-      message: msg,
+      message,
       context: opts.context,
       tenantId: opts.tenantId,
       userId: opts.userId,
