@@ -7,11 +7,23 @@ import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { contacts, deals, companies, tasks } from '@/drizzle/schema';
-import { eq, and, or, gte, lte, desc, sql, inArray, type SQL } from 'drizzle-orm';
+import { contacts, deals, companies, tasks, leads } from '@/drizzle/schema';
+import { eq, and, or, gte, lte, desc, sql, inArray, type SQL, type SQLWrapper } from 'drizzle-orm';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
 import { withApiRoute } from '@/lib/api/with-api-route';
+
+// Postgres' default LIKE escape character is a backslash, and this database runs
+// with standard_conforming_strings=on, so the `ESCAPE '\\'` clause every ILIKE
+// here used to carry was a *two*-character string and Postgres rejected it with
+// 22019 "invalid escape string". Any advanced search that included a `query`
+// threw — which is to say advanced search did not work at all. The clause is
+// gone (the default backslash does the same job) and the wildcards the user
+// typed are escaped here, so a search for "50%" means "50%" rather than
+// "everything starting with 50".
+function likePattern(value: string): string {
+  return `%${value.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`;
+}
 
 /**
  * Advanced Search API — Multi-field filtering with pagination
@@ -59,7 +71,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     const limit = Math.min(100, Math.max(1, rawLimit));
     const offset = (Math.max(1, page) - 1) * limit;
     const tid = ctx.tenantId;
-    const pattern = q ? `%${q.replace(/[\\%_]/g, '\\$&')}%` : null;
+    const pattern = q ? likePattern(String(q)) : null;
 
     let data: Record<string, unknown>[] = [];
     let total = 0;
@@ -73,15 +85,21 @@ export const POST = withApiRoute(async (request: NextRequest) => {
 
         if (pattern) {
           conditions.push(or(
-            sql`${contacts.firstName} ILIKE ${pattern} ESCAPE '\\\\'`,
-            sql`${contacts.lastName} ILIKE ${pattern} ESCAPE '\\\\'`,
-            sql`${contacts.email} ILIKE ${pattern} ESCAPE '\\\\'`,
-            sql`${contacts.phone} ILIKE ${pattern} ESCAPE '\\\\'`,
-            sql`(${contacts.firstName} || ' ' || ${contacts.lastName}) ILIKE ${pattern} ESCAPE '\\\\'`
+            sql`${contacts.firstName} ILIKE ${pattern}`,
+            sql`${contacts.lastName} ILIKE ${pattern}`,
+            sql`${contacts.email} ILIKE ${pattern}`,
+            sql`${contacts.phone} ILIKE ${pattern}`,
+            sql`(${contacts.firstName} || ' ' || ${contacts.lastName}) ILIKE ${pattern}`
           )!);
         }
         if (filters.status?.length) {
           conditions.push(inArray(contacts.leadStatus, filters.status));
+        }
+        // `source` is one of the two pickers this type offers, and the route
+        // never read it — selecting a source narrowed the result list on screen
+        // and then returned the unfiltered set.
+        if (filters.source?.length) {
+          conditions.push(inArray(contacts.leadSource, filters.source));
         }
         if (filters.dateFrom) {
           conditions.push(gte(contacts.createdAt, new Date(filters.dateFrom)));
@@ -139,10 +157,22 @@ export const POST = withApiRoute(async (request: NextRequest) => {
         ];
 
         if (pattern) {
-          conditions.push(sql`${deals.title} ILIKE ${pattern} ESCAPE '\\\\'`);
+          conditions.push(sql`${deals.title} ILIKE ${pattern}`);
         }
         if (filters.stage?.length) {
-          conditions.push(inArray(deals.stageId, filters.stage));
+          // deals.stage_id is a uuid; the stage picker sends stage *names*.
+          // Binding those names to stage_id made Postgres throw 22P02
+          // ("invalid input syntax for type uuid") on every stage filter, so
+          // resolve them through this tenant's deal_stages. The comparison is
+          // case-insensitive because the provisioned rows are capitalised
+          // ("Won") while the option values are lowercase ("won"); an exact
+          // match would quietly return nothing.
+          const names: string[] = (filters.stage as unknown[]).map((s) => String(s).toLowerCase());
+          conditions.push(sql`${deals.stageId} in (
+            select ds.id from deal_stages ds
+            where ds.tenant_id = ${tid}
+              and lower(ds.name) in (${sql.join(names.map((n: string) => sql`${n}`), sql`, `)})
+          )`);
         }
         if (filters.valueMin !== undefined) {
           conditions.push(gte(deals.amount, String(filters.valueMin)));
@@ -192,6 +222,78 @@ export const POST = withApiRoute(async (request: NextRequest) => {
         break;
       }
 
+      case 'leads': {
+        // The type picker offers Leads and its own docblock listed it, but this
+        // switch had no leads case, so leads fell through to `default` and
+        // every leads search answered 400 "Invalid type".
+        const conditions: SQLWrapper[] = [
+          eq(leads.tenantId, tid),
+          sql`${leads.deletedAt} IS NULL`,
+        ];
+
+        if (pattern) {
+          conditions.push(or(
+            sql`${leads.firstName} ILIKE ${pattern}`,
+            sql`${leads.lastName} ILIKE ${pattern}`,
+            sql`${leads.email} ILIKE ${pattern}`,
+            sql`${leads.phone} ILIKE ${pattern}`,
+            sql`${leads.companyName} ILIKE ${pattern}`
+          )!);
+        }
+        if (filters.status?.length) {
+          conditions.push(inArray(leads.leadStatus, filters.status));
+        }
+        if (filters.source?.length) {
+          conditions.push(inArray(leads.source, filters.source));
+        }
+        if (filters.dateFrom) {
+          conditions.push(gte(leads.createdAt, new Date(filters.dateFrom)));
+        }
+        if (filters.dateTo) {
+          conditions.push(lte(leads.createdAt, new Date(filters.dateTo)));
+        }
+
+        const where = and(...conditions);
+
+        const [rows, countResult] = await Promise.all([
+          db.select({
+            id: leads.id,
+            firstName: leads.firstName,
+            lastName: leads.lastName,
+            email: leads.email,
+            phone: leads.phone,
+            companyName: leads.companyName,
+            leadStatus: leads.leadStatus,
+            leadSource: leads.source,
+            score: leads.score,
+            createdAt: leads.createdAt,
+          })
+            .from(leads)
+            .where(where)
+            .orderBy(desc(leads.updatedAt))
+            .limit(limit)
+            .offset(offset),
+          db.select({ count: sql<number>`count(*)::int` })
+            .from(leads)
+            .where(where),
+        ]);
+
+        data = rows.map(r => ({
+          id: r.id,
+          first_name: r.firstName,
+          last_name: r.lastName,
+          email: r.email,
+          phone: r.phone,
+          company_name: r.companyName,
+          lead_status: r.leadStatus,
+          lead_source: r.leadSource,
+          score: r.score,
+          created_at: r.createdAt,
+        }));
+        total = countResult[0]?.count ?? 0;
+        break;
+      }
+
       case 'companies': {
         const conditions: SQL[] = [
           eq(companies.tenantId, tid),
@@ -199,8 +301,8 @@ export const POST = withApiRoute(async (request: NextRequest) => {
 
         if (pattern) {
           conditions.push(or(
-            sql`${companies.name} ILIKE ${pattern} ESCAPE '\\\\'`,
-            sql`${companies.domain} ILIKE ${pattern} ESCAPE '\\\\'`
+            sql`${companies.name} ILIKE ${pattern}`,
+            sql`${companies.domain} ILIKE ${pattern}`
           )!);
         }
         if (filters.industry?.length) {
@@ -252,7 +354,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
         ];
 
         if (pattern) {
-          conditions.push(sql`${tasks.title} ILIKE ${pattern} ESCAPE '\\\\'`);
+          conditions.push(sql`${tasks.title} ILIKE ${pattern}`);
         }
         if (filters.priority?.length) {
           conditions.push(inArray(tasks.priority, filters.priority));

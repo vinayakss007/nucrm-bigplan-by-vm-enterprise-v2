@@ -115,12 +115,22 @@ async function checkDatabase(): Promise<void> {
   if (!url) return; // reported by checkEnv
 
   // 5. TLS enforcement in production.
-  if (/sslmode=disable/i.test(url)) {
+  const sslmode = url.match(/[?&]sslmode=([^&#]+)/i)?.[1]?.toLowerCase();
+  if (sslmode === 'disable') {
     if (IS_PROD) {
       fail('db:tls', 'sslmode=disable in production exposes credentials + PII (SOC2/GDPR blocker)');
     } else {
       warn('db:tls', 'sslmode=disable — acceptable for local/dev only, never production');
     }
+  } else if (sslmode) {
+    // #1971: node-postgres v8 aliases prefer/require/verify-ca to verify-full
+    // and lets the URL param override the explicit ssl object built by
+    // pgSslConfig() — so any sslmode= in DATABASE_URL fights the documented
+    // DATABASE_SSL / DATABASE_SSL_REJECT_UNAUTHORIZED knobs.
+    warn(
+      'db:tls',
+      `sslmode=${sslmode} in DATABASE_URL overrides the shared TLS policy (pg v8 treats it as verify-full; DATABASE_SSL knobs silently do nothing). Drop the param and use DATABASE_SSL / DATABASE_SSL_REJECT_UNAUTHORIZED.`
+    );
   } else {
     ok('db:tls');
   }

@@ -14,6 +14,7 @@ import { requireAuth, requireCsrf } from '@/lib/auth/middleware';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { logError } from '@/lib/errors-server';
+import { clientDbErrorResponse } from '@/lib/api/db-client-error';
 
 export const GET = withApiRoute(async (request: NextRequest) => {
   try {
@@ -217,6 +218,10 @@ export const POST = withApiRoute(async (request: NextRequest) => {
 
     return NextResponse.json({ data: invoice }, { status: 201 });
   } catch (error) {
+    // A CHECK the caller's value violates is their fault, not ours — this route
+    // ends its own catch with a literal 500, so withApiRoute never sees it.
+    const clientErr = clientDbErrorResponse(error, 'POST');
+    if (clientErr) return clientErr;
     await logError({ error, context: 'tenant/invoices POST', requestMethod: 'POST' });
     return NextResponse.json({ error: 'Failed to create invoice' }, { status: 500 });
   }

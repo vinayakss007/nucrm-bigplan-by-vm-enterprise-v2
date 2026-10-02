@@ -14,6 +14,7 @@ import { getAtRiskDeals, AtRiskResult } from '@/lib/ai/at-risk';
 import { sendEmail } from '@/lib/email/service';
 import { formatCurrency } from '@/lib/utils';
 import { apiError } from '@/lib/api-error';
+import { sweepTenants } from '@/lib/cron/tenant-scope';
 
 export async function POST(request: NextRequest) {
   if (!verifySecret(request.headers.get('x-cron-secret'), process.env.CRON_SECRET)) {
@@ -28,18 +29,30 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    // 1. Fetch all active tenants
+    // 1. Fetch all active tenants. `tenants` carries tenants_read_all (USING
+    // true), so this read is fine unscoped and stays the job's own eligibility
+    // list — only active/trialing tenants get a digest, exactly as before.
     const activeTenants = await db.select({ id: tenants.id })
       .from(tenants)
       .where(and(isNull(tenants.deletedAt), sql`${tenants.status} IN ('active', 'trialing')`));
+    const eligibleTenantIds = new Set(activeTenants.map((t) => t.id));
 
+    let tenantsProcessed = 0;
     let totalDealsFlagged = 0;
     let totalEmailsSent = 0;
 
-    for (const tenant of activeTenants) {
+    // at_risk_rules (and contacts/companies, which getAtRiskDeals joins) enforce
+    // a plain tenant_isolation policy with no super-admin branch, so on the bare
+    // pool this job found no rules and no RLS-visible deals and mailed nobody
+    // while reporting ok. The digest has to be built once per tenant under that
+    // tenant's own context — see lib/cron/tenant-scope.ts.
+    const sweep = await sweepTenants('cron/process-at-risk', async (tenantId) => {
+      if (!eligibleTenantIds.has(tenantId)) return;
+      tenantsProcessed++;
+
       // 2. Get at-risk deals for this tenant
-      const atRiskDeals = await getAtRiskDeals(tenant.id);
-      if (atRiskDeals.length === 0) continue;
+      const atRiskDeals = await getAtRiskDeals(tenantId);
+      if (atRiskDeals.length === 0) return;
 
       totalDealsFlagged += atRiskDeals.length;
 
@@ -105,11 +118,14 @@ export async function POST(request: NextRequest) {
         
         totalEmailsSent++;
       }
-    }
+    });
 
     return NextResponse.json({
-      ok: true,
-      tenants_processed: activeTenants.length,
+      ok: sweep.failed.length === 0,
+      tenants_checked: sweep.visited,
+      tenants_skipped: sweep.skipped.length,
+      tenants_failed: sweep.failed.length,
+      tenants_processed: tenantsProcessed,
       deals_flagged: totalDealsFlagged,
       emails_sent: totalEmailsSent
     });

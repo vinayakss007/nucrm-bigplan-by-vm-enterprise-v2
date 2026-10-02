@@ -109,7 +109,7 @@ export default function BackupsDataTable({ initialBackups }: Props) {
   }
 
   const deleteBackup = useCallback(async (id: string) => {
-    await confirmThen('Delete this backup permanently?', async () => {
+    await confirmThen('Delete this backup record? The archive itself stays in storage until retention removes it.', async () => {
       const res = await fetch(`/api/superadmin/backups/${id}`, {
         method: 'DELETE',
       })
@@ -123,8 +123,9 @@ export default function BackupsDataTable({ initialBackups }: Props) {
   }, [loadData, pagination.pageIndex])
 
   const downloadBackup = async (id: string, _filePath: string) => {
-    toast.success('Download started')
-    // In production, this would trigger a signed URL download
+    // No success toast: the route refuses (409) a backup that was written to
+    // the app volume instead of object storage, and this line used to claim
+    // "Download started" before the request had even gone out.
     window.open(`/api/superadmin/backups/${id}/download`, '_blank')
   }
 

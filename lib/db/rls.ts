@@ -22,7 +22,7 @@ import { sql } from 'drizzle-orm';
 import { setTenantCarrier, clearTenantCarrier } from '@/lib/db/tenant-carrier';
 
 /** Drizzle transaction handle as passed to `with*Context` callbacks and `set*(…, tx)`. */
-type RlsTransaction = Parameters<Parameters<DbClient['transaction']>[0]>[0];
+export type RlsTransaction = Parameters<Parameters<DbClient['transaction']>[0]>[0];
 
 /**
  * Test seam: unit tests mock `@/drizzle/db` with plain `{ select, update,
@@ -38,6 +38,16 @@ function isMockClient(client: { execute?: unknown } | undefined): boolean {
 function hasTransaction(client: { transaction?: unknown }): boolean {
   return !!client && typeof client.transaction === 'function';
 }
+
+/**
+ * Value carried by `app.current_tenant` for a platform console session with no
+ * workspace selected. It has to parse as a uuid: every tenant-isolated policy
+ * casts the setting (`NULLIF(current_setting('app.current_tenant'),'')::uuid`),
+ * so a text sentinel made Postgres abort with `invalid input syntax for type
+ * uuid` and the whole super admin console 500ed as soon as an admin had no
+ * `users.last_tenant_id`. The nil UUID casts and matches no tenant row.
+ */
+export const NO_TENANT_SENTINEL = '00000000-0000-0000-0000-000000000000';
 
 /**
  * Set tenant context for RLS policies.

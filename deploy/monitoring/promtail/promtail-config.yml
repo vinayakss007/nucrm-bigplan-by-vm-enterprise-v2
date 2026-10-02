@@ -55,3 +55,23 @@ scrape_configs:
         labels:
           job: nucrm-redis
           __path__: /var/log/redis/*.log
+
+  # #2053: container stdout/stderr. Without this docker_sd job promtail
+  # discovers zero containers, so Loki silently holds no app/worker logs even
+  # though the pipeline looks configured. Requires the Docker socket mounted
+  # read-only into the promtail container (see the compose services).
+  - job_name: docker
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 10s
+    relabel_configs:
+      - source_labels: ["__meta_docker_container_name"]
+        regex: "/(.*)"
+        target_label: "container"
+      - source_labels: ["__meta_docker_container_log_stream"]
+        target_label: "stream"
+      - source_labels:
+          ["__meta_docker_container_label_com_docker_compose_service"]
+        target_label: "service"
+    pipeline_stages:
+      - docker: {}

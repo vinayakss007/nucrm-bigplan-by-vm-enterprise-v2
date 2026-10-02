@@ -257,6 +257,8 @@ export const PUT = withApiRoute(async (request: NextRequest) => {
           .values(settingsToInsert)
           .onConflictDoUpdate({
             target: [platformSettings.key, platformSettings.tenantId],
+            // partial index: the predicate must be restated for conflict inference
+            targetWhere: sql`${platformSettings.tenantId} is not null`,
             set: {
               value: sql`EXCLUDED.value`,
               updatedAt: new Date()

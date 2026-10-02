@@ -12,6 +12,7 @@ import { eq, and, lt, sql, notExists, inArray } from 'drizzle-orm';
 import { sendEmail } from '@/lib/email/service';
 import { apiError } from '@/lib/api-error';
 import { logError } from '@/lib/errors-server';
+import { withSecurityContext } from '@/lib/db/rls';
 
 export async function POST(request: NextRequest) {
   if (!verifySecret(request.headers.get('x-cron-secret'), process.env.CRON_SECRET)) {
@@ -28,7 +29,13 @@ export async function POST(request: NextRequest) {
     let expired=0, warned=0;
 
     // 1. Expire trials that ended
-    const justExpired = await db.update(tenants)
+    //
+    // This also needs the platform context. `tenants` is RLS-forced, and lib/db/pool.ts
+    // normalises every pooled checkout with app.is_super_admin='false', so on the bare
+    // `db` handle the UPDATE matched zero rows: not an error, a silent no-op that left
+    // expired trials marked 'trialing' forever. Migration 0100 added the super-admin
+    // UPDATE policy this now satisfies (verified: rowCount 0 -> 1).
+    const justExpired = await withSecurityContext((tx) => tx.update(tenants)
       .set({ status: 'trial_expired' })
       .where(and(
         eq(tenants.status, 'trialing'),
@@ -39,7 +46,7 @@ export async function POST(request: NextRequest) {
         name: tenants.name,
         billingEmail: tenants.billingEmail,
         ownerId: tenants.ownerId
-      });
+      }));
 
     if (justExpired.length > 0) {
       const tenantIds = justExpired.map(t => t.id);
@@ -75,7 +82,14 @@ export async function POST(request: NextRequest) {
     }
 
     // 2. Warn 3 days before expiry
-    const expiringSoon = await db.select({
+    //
+    // This runs under the platform context, not the bare pool. `activities` is
+    // tenant-scoped by RLS and a cron has no tenant to pin, so on the plain pool
+    // the dedup subquery could never see a prior marker AND the marker INSERT
+    // below died with 42501 — caught and logged, never surfaced. Together those
+    // two meant every run re-mailed every trialing tenant. Reads here only
+    // widen to what this job already needs; nothing tenant-authored runs inside.
+    const expiringSoon = await withSecurityContext((tx) => tx.select({
       id: tenants.id,
       name: tenants.name,
       billingEmail: tenants.billingEmail,
@@ -90,7 +104,7 @@ export async function POST(request: NextRequest) {
       eq(tenants.status, 'trialing'),
       sql`${tenants.trialEndsAt} BETWEEN now() AND now() + interval '3 days 1 hour'`,
       notExists(
-        db.select()
+        tx.select()
           .from(activities)
           .where(and(
             eq(activities.tenantId, tenants.id),
@@ -98,7 +112,7 @@ export async function POST(request: NextRequest) {
             sql`${activities.createdAt} > now() - interval '4 days'`
           ))
       )
-    ));
+    )));
 
     for (const t of expiringSoon) {
       if (!t.trialEndsAt) continue;
@@ -123,8 +137,10 @@ export async function POST(request: NextRequest) {
       // with onDelete 'set null'), so owner-less tenants get a tenant-scoped
       // marker with userId null. Without this, tenants with a null ownerId were
       // warned every single run because the notExists dedup check never found a
-      // prior marker.
-      await db.insert(activities).values({
+      // prior marker. Same reason it runs in its own platform context: on the
+      // bare pool this INSERT was refused by RLS (42501) and only ever showed up
+      // in error_logs, so the marker was never written for any tenant at all.
+      await withSecurityContext((tx) => tx.insert(activities).values({
         tenantId: t.id,
         userId: t.ownerId ?? null,
         eventType: 'trial_warning',
@@ -132,7 +148,7 @@ export async function POST(request: NextRequest) {
         entityType: 'tenant',
         entityId: t.id,
         action: 'trial_warning'
-      }).catch((err) => logError({ error: err, context: 'trial-check:dedup-insert' }));
+      })).catch((err) => logError({ error: err, context: 'trial-check:dedup-insert' }));
     }
 
     return NextResponse.json({ ok:true, expired, warned });

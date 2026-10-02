@@ -39,6 +39,27 @@ vi.mock('@/lib/auth/middleware', () => ({
   }),
 }));
 
+// tenant_modules isolates on app.current_tenant with no super-admin escape, so the
+// route reads and writes it inside the target tenant's context. Unit tests have no
+// pool, so run that callback against a drizzle-shaped stub transaction instead.
+const mockTx = vi.hoisted(() => ({
+  select: vi.fn(() => ({ from: vi.fn(() => ({ where: vi.fn().mockResolvedValue([]) })) })),
+  update: vi.fn(() => ({
+    set: vi.fn(() => ({
+      where: vi.fn(() => ({ returning: vi.fn().mockResolvedValue([{ moduleId: 'ai-assistant' }]) })),
+    })),
+  })),
+  insert: vi.fn(() => ({
+    values: vi.fn(() => ({
+      onConflictDoNothing: vi.fn().mockResolvedValue([]),
+      onConflictDoUpdate: vi.fn(() => ({ returning: vi.fn().mockResolvedValue([{ moduleId: 'ai-assistant' }]) })),
+    })),
+  })),
+}));
+vi.mock('@/lib/db/rls', () => ({
+  withTenantContext: (_tenantId: string, _userId: string, fn: (tx: typeof mockTx) => Promise<unknown>) => fn(mockTx),
+}));
+
 vi.mock('@/lib/audit/super-admin', () => ({
   logSuperAdminAction: vi.fn(),
 }));
@@ -72,16 +93,6 @@ describe('Tenant Feature Overrides API', () => {
   });
 
   it('POST update_features should update enabled features', async () => {
-    const mockUpdate = {
-      set: vi.fn().mockReturnValue({
-        where: vi.fn().mockResolvedValue(undefined),
-      }),
-    };
-
-    const { db } = await import('@/drizzle/db');
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (db as any).update = vi.fn().mockReturnValue(mockUpdate);
-
     const { POST } = await import('@/app/api/superadmin/tenants/[id]/modules/route');
     const req = new Request('http://localhost:3000/api/superadmin/tenants/t1/modules', {
       method: 'POST',
@@ -99,6 +110,9 @@ describe('Tenant Feature Overrides API', () => {
 
     expect(res.status).toBe(200);
     expect(body.success).toBe(true);
+    // The write must run through the tenant-scoped transaction, not the console
+    // connection — on the console connection RLS matches zero rows silently.
+    expect(mockTx.update).toHaveBeenCalled();
   });
 
   it('POST update_features should reject invalid features', async () => {

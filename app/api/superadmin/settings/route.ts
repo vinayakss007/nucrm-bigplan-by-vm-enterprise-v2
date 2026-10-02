@@ -155,13 +155,16 @@ export const POST = withApiRoute(async (request: NextRequest) => {
           .insert(platformSettings)
           .values(valuesToInsert)
           .onConflictDoUpdate({
-            target: [platformSettings.key, platformSettings.tenantId],
+            // The global (tenant-less) rows are unique on (key) with a partial
+            // predicate, so the target is key alone + that predicate.
+            target: [platformSettings.key],
+            targetWhere: sql`${platformSettings.tenantId} is null`,
             set: { value: sql`EXCLUDED.value`, updatedAt: new Date() },
           });
       }
     });
 
-    logSuperAdminAction({
+    await logSuperAdminAction({
       adminId: ctx.userId,
       adminEmail: ctx.user?.email || "",
       action: 'settings.changed',
@@ -171,7 +174,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     // Audit trail: log when secret updates are rejected (must use env vars)
     const rejectedSecretKeys = Object.keys(v).filter((k) => k in ENV_SECRET_MAP);
     if (rejectedSecretKeys.length > 0) {
-      logSuperAdminAction({
+      await logSuperAdminAction({
         adminId: ctx.userId,
         adminEmail: ctx.user?.email || "",
         action: 'settings.secrets_updated',

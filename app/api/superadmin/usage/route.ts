@@ -50,7 +50,11 @@ export const GET = withApiRoute(async (request: NextRequest) => {
         users: sql<number>`sum(${usageSnapshots.usersCount})::int`,
       })
       .from(usageSnapshots)
-      .where(sql`${usageSnapshots.snapshotDate} > CURRENT_DATE - 30`)
+      // snapshot_date is TEXT (the writer stores CURRENT_DATE::text), so this
+      // bound has to be text too — comparing text to a date raises 42883 and
+      // the growth series came back empty on every load of the usage page.
+      // ISO dates sort lexicographically, so a text lower bound is correct.
+      .where(sql`${usageSnapshots.snapshotDate} >= to_char(CURRENT_DATE - 30, 'YYYY-MM-DD')`)
       .groupBy(usageSnapshots.snapshotDate)
       .orderBy(usageSnapshots.snapshotDate)
       .catch((err) => { void logError({ error: err, context: 'superadmin/usage growth query' }); return []; }),

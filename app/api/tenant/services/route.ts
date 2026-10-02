@@ -18,10 +18,10 @@ export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
-    const { tenantId, userId: _userId, isSuperAdmin } = ctx;
+    const { tenantId, userId: _userId, isSuperAdmin, noWorkspace } = ctx;
 
     // Superadmin without tenant needs to use a real tenant
-    if (isSuperAdmin && (!tenantId || tenantId === '__superadmin_no_tenant__')) {
+    if (isSuperAdmin && (noWorkspace || !tenantId)) {
       return NextResponse.json({ 
         error: 'Superadmin must select a tenant workspace',
         code: 'SUPERADMIN_NO_TENANT'

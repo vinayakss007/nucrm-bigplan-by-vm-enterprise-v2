@@ -26,6 +26,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     }
 
     const limit = Math.min(Number(searchParams.get('limit') ?? '10'), 25);
+    const pattern = `%${escapeLike(q)}%`;
 
     const [tenantResults, userResults] = await Promise.all([
       db.select({
@@ -37,10 +38,14 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       })
       .from(tenants)
       .where(or(
-        ilike(tenants.name, `%${escapeLike(q)}%`),
-        ilike(tenants.slug, `%${escapeLike(q)}%`),
-        ilike(tenants.billingEmail, `%${escapeLike(q)}%`),
-        ilike(tenants.id, `%${escapeLike(q)}%`),
+        ilike(tenants.name, pattern),
+        ilike(tenants.slug, pattern),
+        ilike(tenants.billingEmail, pattern),
+        // "Search by id" has to compare the id as text: ILIKE against a uuid
+        // column is not a defined operator (Postgres: `operator does not exist:
+        // uuid ~~* unknown`), and because the arm is inside the shared OR it
+        // took the whole console search down, not just id lookups.
+        sql`${tenants.id}::text ilike ${pattern}`,
       ))
       .orderBy(desc(tenants.createdAt))
       .limit(limit),
@@ -53,9 +58,9 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       })
       .from(users)
       .where(or(
-        ilike(users.fullName, `%${escapeLike(q)}%`),
-        ilike(users.email, `%${escapeLike(q)}%`),
-        ilike(users.id, `%${escapeLike(q)}%`),
+        ilike(users.fullName, pattern),
+        ilike(users.email, pattern),
+        sql`${users.id}::text ilike ${pattern}`,
       ))
       .orderBy(desc(users.createdAt))
       .limit(limit),

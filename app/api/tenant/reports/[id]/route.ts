@@ -8,12 +8,20 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, can } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { savedReports, reportExecutions, users } from '@/drizzle/schema';
-import { eq, and, desc, sql } from 'drizzle-orm';
+import { eq, and, desc, isNull } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
 import { concurrencyGuard } from '@/lib/api/concurrency';
 import { logError } from '@/lib/errors-server';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { isUuid } from '@/lib/id';
+import { runReportForTenant } from '@/app/api/tenant/reports/run/route';
+
+function invalidReportId(id: string): NextResponse | null {
+  return isUuid(id)
+    ? null
+    : NextResponse.json({ error: 'Invalid report id' }, { status: 400 });
+}
 
 /**
  * GET /api/tenant/reports/[id]
@@ -29,6 +37,12 @@ export const GET = withApiRoute(async (request: NextRequest,
     }
 
     const { id } = await params;
+    // A path segment that is not a uuid used to reach Postgres, which answers
+    // `invalid input syntax for type uuid` and the route returned 500. That made
+    // /api/tenant/reports/usage — a URL a typo or a stale bookmark produces —
+    // look like an outage.
+    const badId = invalidReportId(id);
+    if (badId) return badId;
 
     const report = await db.select({
       id: savedReports.id,
@@ -50,7 +64,9 @@ export const GET = withApiRoute(async (request: NextRequest,
       eq(savedReports.id, id),
       // NOTE: tenant match required even for isPublic reports — a public
       // flag must never expose one tenant's report to another tenant.
-      eq(savedReports.tenantId, ctx.tenantId)
+      eq(savedReports.tenantId, ctx.tenantId),
+      // DELETE is a soft delete, so a tombstone is not readable/runnable.
+      isNull(savedReports.deletedAt)
     ))
     .limit(1);
 
@@ -97,6 +113,12 @@ export const PATCH = withApiRoute(async (request: NextRequest,
     }
 
     const { id } = await params;
+    // A path segment that is not a uuid used to reach Postgres, which answers
+    // `invalid input syntax for type uuid` and the route returned 500. That made
+    // /api/tenant/reports/usage — a URL a typo or a stale bookmark produces —
+    // look like an outage.
+    const badId = invalidReportId(id);
+    if (badId) return badId;
     const body = await readJsonBody(request);
 
     const expectedUpdatedAt = body.expectedUpdatedAt ? new Date(body.expectedUpdatedAt) : null;
@@ -125,7 +147,7 @@ export const PATCH = withApiRoute(async (request: NextRequest,
 
     const result = await db.update(savedReports)
       .set({ ...updateData, updatedAt: new Date() })
-      .where(and(eq(savedReports.id, id), eq(savedReports.tenantId, ctx.tenantId)))
+      .where(and(eq(savedReports.id, id), eq(savedReports.tenantId, ctx.tenantId), isNull(savedReports.deletedAt)))
       .returning();
 
     if (result.length === 0) {
@@ -160,10 +182,16 @@ export const DELETE = withApiRoute(async (request: NextRequest,
     }
 
     const { id } = await params;
+    // A path segment that is not a uuid used to reach Postgres, which answers
+    // `invalid input syntax for type uuid` and the route returned 500. That made
+    // /api/tenant/reports/usage — a URL a typo or a stale bookmark produces —
+    // look like an outage.
+    const badId = invalidReportId(id);
+    if (badId) return badId;
 
     const result = await db.update(savedReports)
       .set({ deletedAt: new Date() })
-      .where(and(eq(savedReports.id, id), eq(savedReports.tenantId, ctx.tenantId)))
+      .where(and(eq(savedReports.id, id), eq(savedReports.tenantId, ctx.tenantId), isNull(savedReports.deletedAt)))
       .returning();
 
     if (result.length === 0) {
@@ -196,16 +224,54 @@ export const POST = withApiRoute(async (request: NextRequest,
     }
 
     const { id } = await params;
+    // A path segment that is not a uuid used to reach Postgres, which answers
+    // `invalid input syntax for type uuid` and the route returned 500. That made
+    // /api/tenant/reports/usage — a URL a typo or a stale bookmark produces —
+    // look like an outage.
+    const badId = invalidReportId(id);
+    if (badId) return badId;
     const body = await readJsonBody(request);
-    const { filters = {} } = body;
 
-    // Execute report using database function (keeping sql.raw for DB function call)
-    const result = await db.execute(sql`SELECT public.execute_saved_report(${id}, ${ctx.userId}, 'manual', ${JSON.stringify(filters)}) as result`);
-    const reportResult = result.rows[0]?.['result'];
+    const [report] = await db
+      .select({ reportType: savedReports.reportType, config: savedReports.config })
+      .from(savedReports)
+      .where(and(eq(savedReports.id, id), eq(savedReports.tenantId, ctx.tenantId), isNull(savedReports.deletedAt)))
+      .limit(1);
+    if (!report) {
+      return NextResponse.json({ error: 'Report not found' }, { status: 404 });
+    }
+
+    // This used to call `public.execute_saved_report`, a plpgsql stub that
+    // returned `{rows: [], total: 0}` whatever the data was — so running any
+    // saved report looked like a tenant with nothing in it. The stored config
+    // supplies the filters and a request may override them.
+    const storedFilters = (report.config as { filters?: Record<string, unknown> } | null)?.filters;
+    const result = await runReportForTenant(ctx.tenantId, {
+      report_type: report.reportType,
+      filters: body.filters ?? storedFilters ?? {},
+      limit: body.limit,
+    });
+    if ('error' in result) {
+      return NextResponse.json({ error: result.error }, { status: result.status });
+    }
+
+    await db.update(savedReports)
+      .set({ lastRunAt: new Date(), updatedAt: new Date() })
+      .where(and(eq(savedReports.id, id), eq(savedReports.tenantId, ctx.tenantId)));
+
+    // The stub recorded nothing either, which is why the report's execution
+    // history was always empty rather than merely short.
+    await db.insert(reportExecutions).values({
+      tenantId: ctx.tenantId,
+      userId: ctx.userId,
+      reportId: id,
+      status: 'completed',
+      resultCount: result.rows.length,
+    });
 
     return NextResponse.json({
       ok: true,
-      data: reportResult,
+      data: { rows: result.rows, total: result.rows.length, page: 1 },
     });
  
  

@@ -136,7 +136,7 @@ describe('Auth Edge Cases (#666)', () => {
     it('allows super admin even without lastTenantId', async () => {
       mockRequireAuth.mockResolvedValue({
         userId: 'superadmin-001',
-        tenantId: '__superadmin_no_tenant__',
+        tenantId: '00000000-0000-0000-0000-000000000000',
         isSuperAdmin: true,
         isAdmin: true,
         permissions: { all: true },

@@ -201,7 +201,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       message: `Database restore completed from ${backup.storagePath} in ${durationMs}ms`,
     }).catch((err) => logError({ error: err, context: 'superadmin/restore async side-effect' }));
 
-    logSuperAdminAction({
+    await logSuperAdminAction({
       adminId: ctx.userId,
       adminEmail: ctx.user?.email || "",
       action: 'restore.executed',

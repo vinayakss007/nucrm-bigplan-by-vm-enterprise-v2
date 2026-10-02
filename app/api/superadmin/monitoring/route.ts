@@ -146,25 +146,36 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     }, {});
 
     // Get tenant activity (active in last 24h)
-    const activeTenants = await safeQuery(async (): Promise<Array<{ count?: number }>> => {
+    const activeTenants = await safeQuery<{ rows: { count: number | string }[] }>(async () => {
+      // sessions carries no tenant column (a user can belong to several
+      // workspaces), so asking sessions for tenant_id raised 42703 on every
+      // load and safeQuery handed back its fallback, which made the panel
+      // report 0 active tenants.
+      //
+      // The workspace a session was used in comes from users.last_tenant_id —
+      // NOT tenant_members, because that table has no policy a platform
+      // connection can satisfy (it holds ~190 rows and a super-admin context
+      // reads 0), so a membership join would report a permanent 0 that looks
+      // like an honest answer.
+      // db.execute() resolves to a QueryResult wrapper; only `rows` is read,
+      // so the result is reinterpreted through a cast — runtime unchanged.
       const res = await db.execute(sql`
-        SELECT COUNT(DISTINCT tenant_id) as count 
-        FROM public.sessions 
-        WHERE created_at > now() - interval '24 hours'
+        SELECT COUNT(DISTINCT u.last_tenant_id) as count
+        FROM public.sessions s
+        JOIN users u ON u.id = s.user_id
+        JOIN tenants t ON t.id = u.last_tenant_id
+        WHERE s.created_at > now() - interval '24 hours'
       `);
-      // node-postgres resolves execute() to a QueryResult object, not the row
-      // array; indexing it yields undefined and the payload falls back to 0.
-      // Pre-existing behavior, preserved.
-      return res as unknown as Array<{ count?: number }>;
-    }, [{ count: 0 }]);
+      return res as unknown as { rows: { count: number | string }[] };
+    }, { rows: [{ count: 0 }] });
 
     // Get database size estimate
-    const dbSize = await safeQuery(async (): Promise<Array<{ size?: string }>> => {
+    const dbSize = await safeQuery<{ rows: { size: string }[] }>(async () => {
       const res = await db.execute(sql`
         SELECT pg_size_pretty(pg_database_size(current_database())) as size
       `);
-      return res as unknown as Array<{ size?: string }>;
-    }, [{ size: '0 B' }]);
+      return res as unknown as { rows: { size: string }[] };
+    }, { rows: [{ size: '0 B' }] });
 
     // #1093: add the standard `data` key additively; keep legacy top-level keys.
     const payload = {
@@ -177,8 +188,12 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       restoreStatus,
       recentBackups,
       apiStats,
-      activeTenants: activeTenants[0]?.count || 0,
-      dbSize: dbSize[0]?.size || '0 B',
+      // db.execute() resolves to a result wrapper, not a rows array — the rest
+      // of this route reads `.rows[0]` (see platform_stats above). Indexing the
+      // wrapper itself made both of these permanently fall through to the
+      // literal 0 / '0 B' even when the query returned real numbers.
+      activeTenants: Number(activeTenants.rows[0]?.count ?? 0),
+      dbSize: String(dbSize.rows[0]?.size ?? '0 B'),
       // #674: in-memory pinned-connection leak detector stats (no DB access)
       connectionStats: {
         tracked: getTrackedCount(),

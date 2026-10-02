@@ -7,92 +7,16 @@ import { apiError } from '@/lib/api-error';
 import { verifySecret } from '@/lib/crypto';
 import { acquireLock } from '@/lib/cache';
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/drizzle/db';
 import { backupRecords, backupAlerts, errorLogs } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
+import { withSecurityContext } from '@/lib/db/rls';
 import { alertSuperAdmin } from '@/lib/email/service';
-import { exec as execCb } from 'child_process';
-import { promisify } from 'util';
-import { spawn } from 'child_process';
 import { ensureDir, deleteFile, getFileStats } from '@/lib/backups/runtime-fs';
 import { logError } from '@/lib/errors-server';
+import { getPgDumpVersion, runPgDump } from '@/lib/backups/backup-service';
 import { checksumFile, CHECKSUM_ALGORITHM } from '@/lib/backups/integrity';
 import { uploadBackupArtifact, purgeExpiredBackups, resolveRetentionDays } from '@/lib/backups/offsite';
 import { isS3Configured, describeS3ConfigGap } from '@/lib/storage/s3-config';
-
-const exec = promisify(execCb);
-
-/**
- * Safely run pg_dump with input validation.
- * All parameters are validated against allowlists to prevent command injection.
- * 
- * Supports two formats:
- * - 'full' | 'schema' → custom format (binary, compressed, for pg_restore)
- * - 'selective' → plain SQL with INSERTs (for selective tenant restore)
- */
-async function runPgDump(backupType: 'full' | 'schema' | 'selective', outputPath: string): Promise<void> {
-  // Validate DATABASE_URL format
-  const dbUrl = process.env.DATABASE_URL;
-  if (!dbUrl || (!dbUrl.startsWith('postgresql://') && !dbUrl.startsWith('postgres://'))) {
-    throw new Error('Invalid DATABASE_URL format');
-  }
-
-  // Validate backup type
-  if (!['full', 'schema', 'selective'].includes(backupType)) {
-    throw new Error('Invalid backup type');
-  }
-
-  // Validate output path - must be a safe absolute path
-  if (!outputPath.startsWith('/tmp/') && !outputPath.startsWith(process.env.BACKUP_LOCAL_DIR || '/invalid')) {
-    throw new Error('Invalid output path');
-  }
-
-  const args = [
-    dbUrl,
-    '--no-owner',
-    '--no-acl',
-    '-f', outputPath,
-  ];
-
-  if (backupType === 'schema') {
-    // Custom format with schema only
-    args.push('--format=custom', '--compress=9', '--schema-only');
-  } else if (backupType === 'selective') {
-    // Plain SQL with INSERTs — parseable by backup-parser.ts
-    args.push('--inserts', '--no-comments');
-  } else {
-    // 'full' — custom format for fast pg_restore
-    args.push('--format=custom', '--compress=9');
-  }
-
-  return new Promise((resolve, reject) => {
-    const child = spawn('pg_dump', args, {
-      timeout: 600_000,
-      stdio: ['pipe', 'pipe', 'pipe'],
-    });
-
-    let stderr = '';
-    child.stderr.on('data', (data) => { stderr += data.toString(); });
-
-    child.on('error', reject);
-    child.on('close', (code) => {
-      if (code === 0) resolve();
-      else reject(new Error(`pg_dump failed with code ${code}: ${stderr.slice(0, 500)}`));
-    });
-  });
-}
-
-/**
- * Safely run pg_dump --version
- */
-async function getPgDumpVersion(): Promise<string> {
-  try {
-    const { stdout } = await exec('pg_dump --version');
-    return stdout.trim();
-  } catch {
-    return 'unknown';
-  }
-}
 
 // Called daily by cron — runs pg_dump, uploads to S3/R2 or keeps local
 export async function POST(request: NextRequest) {
@@ -107,7 +31,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true, skipped: true, reason: 'lock-held' });
   }
 
-  const backupType = new URL(request.url).searchParams.get('type') || 'full';
+  const requestedType = new URL(request.url).searchParams.get('type') || 'full';
+  // Validated before it reaches either the backup_records enum or the filename:
+  // the old code interpolated `?type=` straight into
+  // `nucrm_${backupType}_${timestamp}`, so `?type=../../x` escaped the backup dir.
+  if (!['full', 'schema', 'selective'].includes(requestedType)) {
+    return NextResponse.json({ error: 'Invalid backup type' }, { status: 400 });
+  }
+  const backupType = requestedType as 'full' | 'schema' | 'selective';
   const t0 = Date.now();
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
   // Use correct extension for format: .dump for custom, .sql for INSERT format
@@ -117,12 +48,17 @@ export async function POST(request: NextRequest) {
   const localPath = `${localDir}/${filename}`;
 
   // Create backup record
-  const [backup] = await db.insert(backupRecords).values({
-    backupType: backupType as 'full' | 'schema' | 'selective',
+  //
+  // backup_records has one FOR ALL policy whose USING clause is `is_super_admin`, and
+  // Postgres reuses USING as WITH CHECK for an ALL-COMMANDS policy, so this INSERT is
+  // refused with 42501 on the bare pool handle (lib/db/pool.ts normalises every checkout
+  // to app.is_super_admin='false'). Same for the two write transactions below.
+  const [backup] = await withSecurityContext((tx) => tx.insert(backupRecords).values({
+    backupType,
     status: 'running',
     initiatedAuto: true,
     expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
-  }).returning();
+  }).returning());
 
   if (!backup) {
     return NextResponse.json({ error: 'Failed to create backup record' }, { status: 500 });
@@ -133,7 +69,7 @@ export async function POST(request: NextRequest) {
     await ensureDir(localDir);
 
     // Run pg_dump with safe parameterized execution
-    await runPgDump(backupType as 'full' | 'schema' | 'selective', localPath);
+    await runPgDump(backupType, localPath);
 
     const stats = await getFileStats(localPath);
     const sizeBytes = stats?.size || 0;
@@ -192,7 +128,7 @@ export async function POST(request: NextRequest) {
 
     // Mark completed and clear alerts atomically (transaction from #733),
     // carrying the checksum + off-site outcome from the backup hardening.
-    await db.transaction(async (tx) => {
+    await withSecurityContext(async (tx) => {
       await tx.update(backupRecords)
         .set({
           // Stays 'completed' even when the upload failed: the dump succeeded,
@@ -262,7 +198,7 @@ export async function POST(request: NextRequest) {
     const durationMs = Date.now() - t0;
     void logError({ error: err, context: 'cron/backup FAILED' });
 
-    await db.transaction(async (tx) => {
+    await withSecurityContext(async (tx) => {
       await tx.update(backupRecords)
         .set({
           status: 'failed',

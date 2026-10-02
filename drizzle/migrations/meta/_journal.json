@@ -645,6 +645,83 @@
       "when": 1788782400008,
       "tag": "0096_analytics_events_ingest_insert",
       "breakpoints": true
+    },
+    {
+      "idx": 91,
+      "version": "7",
+      "when": 1788782400008,
+      "tag": "0092_metrics_tables_superadmin_bypass",
+      "breakpoints": true
+    },
+    {
+      "idx": 92,
+      "version": "7",
+      "when": 1788782400009,
+      "tag": "0093_webhook_tables_superadmin_bypass",
+      "breakpoints": true
+    },
+    {
+      "idx": 93,
+      "version": "7",
+      "when": 1788782400010,
+      "tag": "0094_sa_audit_tenant_id_uuid",
+      "breakpoints": true
+    },
+    {
+      "idx": 94,
+      "version": "7",
+      "when": 1788782400011,
+      "tag": "0097_integrations_type_allows_webhook",
+      "breakpoints": true
+    },
+    {
+      "idx": 95,
+      "version": "7",
+      "when": 1788782400012,
+      "tag": "0098_tenant_hierarchy_party_access",
+      "breakpoints": true
+    },
+    {
+      "idx": 96,
+      "version": "7",
+      "when": 1788782400013,
+      "tag": "0099_api_keys_auth_lookup",
+      "breakpoints": true
+    },
+    {
+      "idx": 97,
+      "version": "7",
+      "when": 1788782400014,
+      "tag": "0100_tenants_super_admin_update",
+      "breakpoints": true
+    },
+    {
+      "idx": 98,
+      "version": "7",
+      "when": 1788782400015,
+      "tag": "0101_notifications_type_allows_app_vocabulary",
+      "breakpoints": true
+    },
+    {
+      "idx": 99,
+      "version": "7",
+      "when": 1788782400016,
+      "tag": "0102_ai_activity_action_allows_app_vocabulary",
+      "breakpoints": true
+    },
+    {
+      "idx": 100,
+      "version": "7",
+      "when": 1788782400017,
+      "tag": "0103_scheduled_reports_type_allows_exported_entities",
+      "breakpoints": true
+    },
+    {
+      "idx": 101,
+      "version": "7",
+      "when": 1788782400018,
+      "tag": "0104_integrations_type_allows_configured_providers",
+      "breakpoints": true
     }
   ]
 }

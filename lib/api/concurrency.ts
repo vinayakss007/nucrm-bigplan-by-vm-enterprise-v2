@@ -70,7 +70,17 @@ export function concurrencyGuard(
     const updatedAtCol = table.updatedAt;
     if (!updatedAtCol) return null;
 
-    return eq(updatedAtCol, timestamp);
+    // NOT eq(updatedAtCol, timestamp). Postgres keeps microseconds in
+    // `timestamptz`; a JS Date stops at milliseconds. Any row whose
+    // updated_at was written by the database (`default now()`, a `NOW()`
+    // migration, an insert in raw SQL) therefore carries sub-millisecond
+    // digits, and the equality can never match — the guarded UPDATE affects
+    // 0 rows and the caller reports a 409 that no client can clear by
+    // retrying. Branding failed this way for every freshly provisioned
+    // tenant. Truncating both sides also matches what the client can
+    // actually send back: expectedUpdatedAt arrives as an ISO string, which
+    // is millisecond precision by definition.
+    return updatedAtMs(table, timestamp);
   }
 
   // Overload 2 (5 args): db + table + id + tenantId + expectedUpdatedAt

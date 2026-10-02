@@ -151,7 +151,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
           },
         });
 
-      logSuperAdminAction({
+      await logSuperAdminAction({
         adminId: ctx.userId,
         adminEmail: ctx.user?.email || "",
         action: 'billing.overridden',
@@ -199,7 +199,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
           },
         });
 
-      logSuperAdminAction({
+      await logSuperAdminAction({
         adminId: ctx.userId,
         adminEmail: ctx.user?.email || "",
         action: 'settings.changed',
@@ -226,7 +226,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
         })
         .where(eq(usageAlerts.id, alert_id));
 
-      logSuperAdminAction({
+      await logSuperAdminAction({
         adminId: ctx.userId,
         adminEmail: ctx.user?.email || "",
         action: 'settings.changed',

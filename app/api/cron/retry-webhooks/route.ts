@@ -9,8 +9,13 @@ import { acquireLock } from '@/lib/cache';
 import { NextRequest, NextResponse } from 'next/server';
 import { retryFailedWebhooks } from '@/lib/webhooks';
 import { purgeOldDLQEntries } from '@/lib/webhooks/dlq';
+// The retry scan is cross-tenant and the DLQ purge writes dead_letter_queue,
+// whose policy admits only the super-admin context (NUCRM-A). Pin one client
+// and mark it so the helpers below inherit the context.
+import { withApiRoute } from '@/lib/api/with-api-route';
+import { setSuperAdminContext } from '@/lib/db/rls';
 
-export async function POST(req: NextRequest) {
+export const POST = withApiRoute(async (req: NextRequest) => {
   if (!verifySecret(req.headers.get('x-cron-secret'), process.env.CRON_SECRET)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
@@ -22,6 +27,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, skipped: true, reason: 'lock-held' });
   }
   try {
+    await setSuperAdminContext();
     const retried = await retryFailedWebhooks();
 
     // Purge dead letter queue entries older than 30 days
@@ -37,4 +43,4 @@ export async function POST(req: NextRequest) {
     void logError({ error: err, context: 'cron/retry-webhooks' });
     return NextResponse.json({ error: 'Failed to retry webhooks' }, { status: 500 });
   }
-}
+});

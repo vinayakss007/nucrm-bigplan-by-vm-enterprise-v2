@@ -142,6 +142,21 @@ export async function initiateShutdown(options: ShutdownOptions = {}): Promise<v
       console.log('[GracefulShutdown] All in-flight requests completed.');
     }
 
+    // Flush telemetry before anything can exit. The Sentry transport batches
+    // events and sends them on a timer, so an event captured moments before
+    // SIGTERM would otherwise die with the process — and the failure is silent,
+    // because logError's forward swallows everything. Bounded so a slow ingest
+    // endpoint can never hold the shutdown open past the orchestrator's limit.
+    try {
+      const Sentry = await import('@sentry/nextjs').catch(() => null);
+      if (Sentry?.flush) {
+        const flushed = await Sentry.flush(2_000);
+        if (!flushed) console.warn('[GracefulShutdown] Sentry flush timed out; buffered events may be lost.');
+      }
+    } catch (err) {
+      console.warn('[GracefulShutdown] Sentry flush failed:', err);
+    }
+
     // Drain the connection pool
     try {
       const pool = getPool();

@@ -10,6 +10,7 @@ import { db } from '@/drizzle/db';
 import { supportTickets, slaPolicies, slaBreaches, users, tenantMembers } from '@/drizzle/schema';
 import { eq, and, isNull, sql } from 'drizzle-orm';
 import { createNotification } from '@/lib/notifications';
+import { sweepTenants } from '@/lib/cron/tenant-scope';
 import { sendEmail } from '@/lib/email/service';
 import { apiError } from '@/lib/api-error';
 import { logError } from '@/lib/errors-server';
@@ -38,118 +39,135 @@ export async function POST(request: NextRequest) {
   try {
     const now = new Date();
 
-    // Fetch all active SLA policies
-    const policies = await db.query.slaPolicies.findMany({
-      where: eq(slaPolicies.isActive, true),
-    });
-
-    // Build a map: tenantId+priority -> policy
-    const policyMap = new Map<string, typeof policies[0]>();
-    for (const p of policies) {
-      policyMap.set(`${p.tenantId}:${p.priority}`, p);
-    }
-
-    // Fetch open/in_progress tickets that haven't been resolved
-    const openTickets = await db.select({
-      id: supportTickets.id,
-      tenantId: supportTickets.tenantId,
-      subject: supportTickets.subject,
-      priority: supportTickets.priority,
-      assignedTo: supportTickets.assignedTo,
-      createdAt: supportTickets.createdAt,
-      firstResponseAt: supportTickets.firstResponseAt,
-      resolvedAt: supportTickets.resolvedAt,
-      status: supportTickets.status,
-    })
-    .from(supportTickets)
-    .where(and(
-      isNull(supportTickets.deletedAt),
-      sql`${supportTickets.status} IN ('open', 'in_progress')`,
-    ));
-
-    // Fetch existing breaches to avoid duplicates and track escalation
-    const existingBreaches = await db.select({
-      id: slaBreaches.id,
-      tenantId: slaBreaches.tenantId,
-      entityType: slaBreaches.entityType,
-      entityId: slaBreaches.entityId,
-      breachType: slaBreaches.breachType,
-      escalationLevel: slaBreaches.escalationLevel,
-      resolvedAt: slaBreaches.resolvedAt,
-    })
-    .from(slaBreaches)
-    .where(eq(slaBreaches.entityType, 'ticket'));
-
-    // Index existing breaches by ticketId+breachType
-    const breachIndex = new Map<string, typeof existingBreaches[0]>();
-    for (const b of existingBreaches) {
-      if (!b.resolvedAt) {
-        breachIndex.set(`${b.entityId}:${b.breachType}`, b);
-      }
-    }
-
+    let ticketsChecked = 0;
     let newBreaches = 0;
     let escalations = 0;
     let notified = 0;
 
-    for (const ticket of openTickets) {
-      // Resolve SLA policy: use assigned policy, or fall back to priority defaults
-      const policy = policyMap.get(`${ticket.tenantId}:${ticket.priority}`);
-      const sla: SLADefinition = policy ? {
-        name: policy.name,
-        priority: policy.priority as SLADefinition['priority'],
-        responseTimeMinutes: policy.responseTimeMinutes,
-        resolutionTimeMinutes: policy.resolutionTimeMinutes,
-        escalationRules: (policy.escalationRules as SLADefinition['escalationRules']) ?? [],
-      } : {
-        name: `default-${ticket.priority}`,
-        priority: (ticket.priority as SLADefinition['priority']) || 'medium',
-        responseTimeMinutes: DEFAULT_SLA_TIMES[ticket.priority]?.response ?? DEFAULT_SLA_TIMES['medium']!.response,
-        resolutionTimeMinutes: DEFAULT_SLA_TIMES[ticket.priority]?.resolution ?? DEFAULT_SLA_TIMES['medium']!.resolution,
-        escalationRules: [],
-      };
+    // support_tickets, sla_policies, sla_breaches and notifications all enforce
+    // plain tenant_isolation with no super-admin branch, so this job has to run
+    // its body once per tenant — see lib/cron/tenant-scope.ts.
+    const sweep = await sweepTenants('cron/sla-check', async (tenantId) => {
+      // Fetch this tenant's active SLA policies, mapped tenantId+priority -> policy
+      const policies = await db.query.slaPolicies.findMany({
+        where: and(
+          eq(slaPolicies.tenantId, tenantId),
+          eq(slaPolicies.isActive, true),
+        ),
+      });
 
-      const result = checkSLABreach(sla, ticket.createdAt, ticket.firstResponseAt, ticket.resolvedAt, now);
+      const policyMap = new Map<string, typeof policies[0]>();
+      for (const p of policies) {
+        policyMap.set(`${p.tenantId}:${p.priority}`, p);
+      }
 
-      if (!result.breached) continue;
+      // Fetch open/in_progress tickets that haven't been resolved
+      const openTickets = await db.select({
+        id: supportTickets.id,
+        tenantId: supportTickets.tenantId,
+        subject: supportTickets.subject,
+        priority: supportTickets.priority,
+        assignedTo: supportTickets.assignedTo,
+        createdAt: supportTickets.createdAt,
+        firstResponseAt: supportTickets.firstResponseAt,
+        resolvedAt: supportTickets.resolvedAt,
+        status: supportTickets.status,
+      })
+      .from(supportTickets)
+      .where(and(
+        eq(supportTickets.tenantId, tenantId),
+        isNull(supportTickets.deletedAt),
+        sql`${supportTickets.status} IN ('open', 'in_progress')`,
+      ));
 
-      const existingBreach = breachIndex.get(`${ticket.id}:${result.breachType}`);
+      ticketsChecked += openTickets.length;
 
-      if (existingBreach) {
-        // Check if escalation level increased
-        if (result.escalationLevel > (existingBreach.escalationLevel ?? 0)) {
-          await db.update(slaBreaches)
-            .set({ escalationLevel: result.escalationLevel })
-            .where(eq(slaBreaches.id, existingBreach.id));
+      // Fetch existing breaches to avoid duplicates and track escalation
+      const existingBreaches = await db.select({
+        id: slaBreaches.id,
+        tenantId: slaBreaches.tenantId,
+        entityType: slaBreaches.entityType,
+        entityId: slaBreaches.entityId,
+        breachType: slaBreaches.breachType,
+        escalationLevel: slaBreaches.escalationLevel,
+        resolvedAt: slaBreaches.resolvedAt,
+      })
+      .from(slaBreaches)
+      .where(and(
+        eq(slaBreaches.tenantId, tenantId),
+        eq(slaBreaches.entityType, 'ticket'),
+      ));
 
-          // Send escalation notification
-          await sendEscalationNotification(ticket, result.breachType!, result.escalationLevel, result.minutesOverdue);
-          escalations++;
+      // Index existing breaches by ticketId+breachType
+      const breachIndex = new Map<string, typeof existingBreaches[0]>();
+      for (const b of existingBreaches) {
+        if (!b.resolvedAt) {
+          breachIndex.set(`${b.entityId}:${b.breachType}`, b);
+        }
+      }
+
+      for (const ticket of openTickets) {
+        // Resolve SLA policy: use assigned policy, or fall back to priority defaults
+        const policy = policyMap.get(`${ticket.tenantId}:${ticket.priority}`);
+        const sla: SLADefinition = policy ? {
+          name: policy.name,
+          priority: policy.priority as SLADefinition['priority'],
+          responseTimeMinutes: policy.responseTimeMinutes,
+          resolutionTimeMinutes: policy.resolutionTimeMinutes,
+          escalationRules: (policy.escalationRules as SLADefinition['escalationRules']) ?? [],
+        } : {
+          name: `default-${ticket.priority}`,
+          priority: (ticket.priority as SLADefinition['priority']) || 'medium',
+          responseTimeMinutes: DEFAULT_SLA_TIMES[ticket.priority]?.response ?? DEFAULT_SLA_TIMES['medium']!.response,
+          resolutionTimeMinutes: DEFAULT_SLA_TIMES[ticket.priority]?.resolution ?? DEFAULT_SLA_TIMES['medium']!.resolution,
+          escalationRules: [],
+        };
+
+        const result = checkSLABreach(sla, ticket.createdAt, ticket.firstResponseAt, ticket.resolvedAt, now);
+
+        if (!result.breached) continue;
+
+        const existingBreach = breachIndex.get(`${ticket.id}:${result.breachType}`);
+
+        if (existingBreach) {
+          // Check if escalation level increased
+          if (result.escalationLevel > (existingBreach.escalationLevel ?? 0)) {
+            await db.update(slaBreaches)
+              .set({ escalationLevel: result.escalationLevel })
+              .where(eq(slaBreaches.id, existingBreach.id));
+
+            // Send escalation notification
+            await sendEscalationNotification(ticket, result.breachType!, result.escalationLevel, result.minutesOverdue);
+            escalations++;
+            notified++;
+          }
+        } else {
+          // New breach — record it
+          await db.insert(slaBreaches).values({
+            tenantId: ticket.tenantId,
+            policyId: sla.name,
+            entityType: 'ticket',
+            entityId: ticket.id,
+            breachType: result.breachType!,
+            breachedAt: new Date(now.getTime() - result.minutesOverdue * 60 * 1000),
+            escalationLevel: result.escalationLevel,
+            notifiedUsers: [],
+          }).catch((err) => logError({ error: err, context: 'async-catch:sla-breach-insert' }));
+
+          // Send breach notification
+          await sendBreachNotification(ticket, result.breachType!, result.minutesOverdue, result.escalationLevel);
+          newBreaches++;
           notified++;
         }
-      } else {
-        // New breach — record it
-        await db.insert(slaBreaches).values({
-          tenantId: ticket.tenantId,
-          policyId: sla.name,
-          entityType: 'ticket',
-          entityId: ticket.id,
-          breachType: result.breachType!,
-          breachedAt: new Date(now.getTime() - result.minutesOverdue * 60 * 1000),
-          escalationLevel: result.escalationLevel,
-          notifiedUsers: [],
-        }).catch((err) => logError({ error: err, context: 'async-catch:sla-breach-insert' }));
-
-        // Send breach notification
-        await sendBreachNotification(ticket, result.breachType!, result.minutesOverdue, result.escalationLevel);
-        newBreaches++;
-        notified++;
       }
-    }
+    });
 
     return NextResponse.json({
-      ok: true,
-      tickets_checked: openTickets.length,
+      ok: sweep.failed.length === 0,
+      tenants_checked: sweep.visited,
+      tenants_skipped: sweep.skipped.length,
+      tenants_failed: sweep.failed.length,
+      tickets_checked: ticketsChecked,
       new_breaches: newBreaches,
       escalations,
       notified,

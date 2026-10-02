@@ -10,7 +10,7 @@ import { updateNotificationPrefsSchema } from '@/lib/api/schemas';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { tenantMembers } from '@/drizzle/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 import { concurrencyGuard, checkStaleUpdate } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
@@ -26,10 +26,17 @@ export const GET = withApiRoute(async (req: NextRequest) => {
         eq(tenantMembers.tenantId, ctx.tenantId),
         eq(tenantMembers.status, 'active')
       ),
-      columns: { notificationPrefs: true }
+      columns: { notificationPrefs: true, updatedAt: true }
     });
 
-    return NextResponse.json({ data: row?.notificationPrefs ?? {} });
+    // `updatedAt` is not decoration: PATCH only applies `expectedUpdatedAt` when
+    // the caller echoes back the row's current value, and this GET is the only
+    // place a client can read it. Omit it and the concurrency guard is
+    // unreachable — two admins editing prefs at once silently lose one edit.
+    return NextResponse.json({
+      data: row?.notificationPrefs ?? {},
+      updatedAt: row?.updatedAt?.toISOString() ?? null,
+    });
  
  
   } catch (err) { return apiError(err); }
@@ -65,14 +72,27 @@ export const PATCH = withApiRoute(async (req: NextRequest) => {
     if (concurrencyWhere) whereConditions.push(concurrencyWhere);
 
     const [updated] = await db.update(tenantMembers)
-      .set({ notificationPrefs: safe, updatedAt: new Date() })
+      // Merge, do not replace. `notification_prefs` is shared with
+      // /api/tenant/notifications/matrix, which stores its whole per-event
+      // channel grid under the `matrix` key of this same column. Assigning
+      // `safe` outright deleted that grid on every prefs save.
+      .set({
+        notificationPrefs: sql`
+          COALESCE(${tenantMembers.notificationPrefs}, '{}'::jsonb) || ${JSON.stringify(safe)}::jsonb
+        `,
+        updatedAt: new Date(),
+      })
       .where(and(...whereConditions))
-      .returning();
+      .returning({ notificationPrefs: tenantMembers.notificationPrefs, updatedAt: tenantMembers.updatedAt });
 
     const stale = checkStaleUpdate(updated);
     if (stale) return stale;
 
-    return NextResponse.json({ ok: true, data: safe });
+    return NextResponse.json({
+      ok: true,
+      data: updated!.notificationPrefs ?? {},
+      updatedAt: updated!.updatedAt?.toISOString() ?? null,
+    });
  
  
   } catch (err) { return apiError(err); }

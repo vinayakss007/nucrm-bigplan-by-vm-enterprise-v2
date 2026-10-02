@@ -18,7 +18,7 @@ vi.mock('next/server', () => ({
   },
 }));
 
-import { checkLimit } from '@/lib/usage/middleware';
+// NOTE: checkLimit is imported dynamically in tests that need to control USAGE_LIMITS env
 import { getUsageReport, recordViolation } from '@/lib/usage/tracker';
 import { notifyLimitHit } from '@/lib/usage/notifications';
 
@@ -42,22 +42,27 @@ beforeEach(() => {
 
 describe('checkLimit', () => {
   it('returns null for super admins', async () => {
+    const { checkLimit } = await import('@/lib/usage/middleware');
     const result = await checkLimit(ctx({ isSuperAdmin: true }), 'contacts');
     expect(result).toBeNull();
     expect(getUsageReport).not.toHaveBeenCalled();
   });
 
   it('returns null when tenantId is missing', async () => {
+    const { checkLimit } = await import('@/lib/usage/middleware');
     const result = await checkLimit(ctx({ tenantId: undefined }), 'contacts');
     expect(result).toBeNull();
   });
 
-  it('returns null when tenantId is __superadmin_no_tenant__', async () => {
-    const result = await checkLimit(ctx({ tenantId: '__superadmin_no_tenant__' }), 'contacts');
+  it('returns null when tenantId is the no-workspace sentinel', async () => {
+    const { checkLimit } = await import('@/lib/usage/middleware');
+    const { NO_TENANT_SENTINEL } = await import('@/lib/db/rls');
+    const result = await checkLimit(ctx({ tenantId: NO_TENANT_SENTINEL }), 'contacts');
     expect(result).toBeNull();
   });
 
   it('returns null when usage not exceeded', async () => {
+    const { checkLimit } = await import('@/lib/usage/middleware');
     vi.mocked(getUsageReport).mockResolvedValue({
       kind: 'contacts',
       actual: 5,
@@ -69,6 +74,7 @@ describe('checkLimit', () => {
   });
 
   it('returns null when limit is null (unlimited)', async () => {
+    const { checkLimit } = await import('@/lib/usage/middleware');
     vi.mocked(getUsageReport).mockResolvedValue({
       kind: 'contacts',
       actual: 100,
@@ -80,6 +86,9 @@ describe('checkLimit', () => {
   });
 
   it('returns null when enforcement is off (default)', async () => {
+    process.env['USAGE_LIMITS'] = 'off';
+    vi.resetModules();
+    const { checkLimit } = await import('@/lib/usage/middleware');
     vi.mocked(getUsageReport).mockResolvedValue({
       kind: 'contacts',
       actual: 15,
@@ -90,9 +99,11 @@ describe('checkLimit', () => {
     const result = await checkLimit(ctx(), 'contacts');
     expect(result).toBeNull();
     expect(recordViolation).toHaveBeenCalledWith('t1', 'contacts', 10, 15);
+    delete process.env['USAGE_LIMITS'];
   });
 
   it('returns 402 response when enforcement is on', async () => {
+    const { checkLimit } = await import('@/lib/usage/middleware');
     vi.mocked(getUsageReport).mockResolvedValue({
       kind: 'contacts',
       actual: 15,
@@ -109,6 +120,7 @@ describe('checkLimit', () => {
   });
 
   it('calls notifyLimitHit when violation is newly created', async () => {
+    const { checkLimit } = await import('@/lib/usage/middleware');
     vi.mocked(getUsageReport).mockResolvedValue({
       kind: 'deals',
       actual: 20,
@@ -126,6 +138,7 @@ describe('checkLimit', () => {
   });
 
   it('does not call notifyLimitHit when violation already exists', async () => {
+    const { checkLimit } = await import('@/lib/usage/middleware');
     vi.mocked(getUsageReport).mockResolvedValue({
       kind: 'deals',
       actual: 20,
@@ -139,6 +152,7 @@ describe('checkLimit', () => {
 
   it('opts.enforce overrides env USAGE_LIMITS', async () => {
     process.env['USAGE_LIMITS'] = 'on';
+    const { checkLimit } = await import('@/lib/usage/middleware');
     vi.mocked(getUsageReport).mockResolvedValue({
       kind: 'contacts',
       actual: 15,

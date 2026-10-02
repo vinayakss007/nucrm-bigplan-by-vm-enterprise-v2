@@ -7,6 +7,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { platformSettings } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
+import { decodeSettingValue } from '@/lib/api/setting-value';
+import { logger } from '@/lib/logger';
 
 const IP_WHITELIST_KEY = 'ip_whitelist';
 
@@ -26,13 +28,22 @@ export async function getTenantWhitelist(tenantId: string): Promise<string[]> {
     .limit(1);
 
   if (!setting?.value) return [];
-  
-  try {
-    return JSON.parse(String(setting.value));
-  } catch {
-    // Fallback to default on corrupted storage data
+
+  // `value` is jsonb, so the driver hands back a decoded array already. The old
+  // JSON.parse(String(value)) stringified that array through Array.prototype.join
+  // ("203.0.113.9"), threw, and the catch returned [] — which `checkIpWhitelist`
+  // reads as "no whitelist configured" and so allows every IP. A tenant that had
+  // configured a restriction would have been silently unprotected.
+  const decoded = decodeSettingValue<readonly string[] | null>(setting.value, null, 'array');
+  if (decoded === null) {
+    // Fail open, but loudly: an empty whitelist means "no restriction", so a row
+    // we cannot read must not look like a deliberate choice to allow everyone.
+    logger.warn('[ip-whitelist] Unreadable whitelist row, treating as no restriction', {
+      tenantId,
+    });
     return [];
   }
+  return decoded as string[];
 }
 
 function ipToLong(ip: string): number {

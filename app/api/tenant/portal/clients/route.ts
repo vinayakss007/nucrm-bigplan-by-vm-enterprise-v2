@@ -14,6 +14,7 @@ import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { logError } from '@/lib/errors-server';
+import { decodeSettingValue } from '@/lib/api/setting-value';
 
 const PORTAL_CONFIG_KEY = 'portal_config';
 
@@ -57,7 +58,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       ))
       .limit(1);
 
-    const config = configSetting?.value ? JSON.parse(String(configSetting.value)) : {};
+    const config = decodeSettingValue<Record<string, unknown>>(configSetting?.value, {}, 'object');
     if (!config.enabled) {
       return NextResponse.json({ error: 'Enable portal in settings first' }, { status: 400 });
     }

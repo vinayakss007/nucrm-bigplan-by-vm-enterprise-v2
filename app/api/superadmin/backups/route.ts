@@ -9,7 +9,7 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { backupRecords, backupSchedules, criticalDataBackups, tenants, users } from '@/drizzle/schema';
 import { eq, sql, desc } from 'drizzle-orm';
-import { createBackup } from '@/lib/backups/backup-service';
+import { createBackup, BackupConfigurationError } from '@/lib/backups/backup-service';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { createBackupSchema } from '@/lib/api/schemas';
 import { logSuperAdminAction } from '@/lib/audit/super-admin';
@@ -153,7 +153,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       const capture = new CriticalDataCapture();
       const result = await capture.restoreFromBackup(parsed.data.backupId);
 
-      logSuperAdminAction({
+      await logSuperAdminAction({
         adminId: ctx.userId,
         adminEmail: ctx.user?.email || "",
         action: 'restore.executed',
@@ -169,7 +169,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       initiatedAuto: false,
     });
 
-    logSuperAdminAction({
+    await logSuperAdminAction({
       adminId: ctx.userId,
       adminEmail: ctx.user?.email || "",
       action: 'backup.created',
@@ -191,6 +191,13 @@ export const POST = withApiRoute(async (request: NextRequest) => {
  
   } catch (err) { 
     await logError({ error: err, context: 'superadmin/backups POST', requestMethod: 'POST' });
+    // "Internal server error" sent the operator to the server logs for a
+    // refusal whose whole message is a config fix (no BYPASSRLS dump role, no
+    // DATABASE_URL). This route is super-admin-only, so naming it is safe and
+    // 503 says "retrying is pointless until the deployment changes".
+    if (err instanceof BackupConfigurationError) {
+      return NextResponse.json({ error: err.message }, { status: err.statusCode });
+    }
     return apiError(err); 
   }
 });

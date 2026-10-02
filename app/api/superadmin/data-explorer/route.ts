@@ -176,13 +176,33 @@ async function handleSearch(searchParams: URLSearchParams) {
     const page = Math.max(1, parseInt(searchParams.get('page') || '1'));
     const limit = Math.min(200, Math.max(1, parseInt(searchParams.get('limit') || '50')));
     const offset = (page - 1) * limit;
-    const sort = searchParams.get('sort') || 'created_at';
+    // `value` is the label the panel puts on a deal's money; the column is
+    // amount. Normalising it here keeps the per-table allowlist below a list of
+    // columns and nothing else.
+    const rawSort = searchParams.get('sort') || 'created_at';
+    const sort = rawSort === 'value' ? 'amount' : rawSort;
     const order = (searchParams.get('order') || 'desc').toUpperCase();
     const field = searchParams.get('field');
     const fieldValue = searchParams.get('value');
 
-    const allowedSortColumns = ['id', 'name', 'email', 'title', 'created_at', 'updated_at', 'amount', 'lead_status', 'lead_source', 'first_name', 'last_name', 'phone', 'company_name'];
-    const safeSort = allowedSortColumns.includes(sort) ? sort : 'created_at';
+    // Sorting has to be validated per table, not globally: one shared allowlist
+    // was applied to all six, so any column that exists on *some* searched table
+    // passed the check and still reached `ORDER BY <alias>.<column>` on a table
+    // that lacks it. `?type=tenants&sort=email`, `?type=deals&sort=phone` and
+    // `?type=contacts&sort=company_name` each answered 500. A column the queried
+    // table does not have falls back to created_at rather than throwing.
+    const SORT_FIELDS: Record<string, string[]> = {
+      tenants: ['id', 'name', 'slug', 'status', 'created_at', 'updated_at'],
+      contacts: ['id', 'first_name', 'last_name', 'email', 'phone', 'lead_status', 'lead_source', 'created_at', 'updated_at'],
+      leads: ['id', 'first_name', 'last_name', 'email', 'phone', 'lead_status', 'created_at', 'updated_at'],
+      deals: ['id', 'title', 'amount', 'close_date', 'created_at', 'updated_at'],
+      companies: ['id', 'name', 'industry', 'website', 'phone', 'created_at', 'updated_at'],
+      users: ['id', 'email', 'full_name', 'is_super_admin', 'created_at'],
+    };
+    const sortFieldFor = (kind: string): string => {
+      const allowed = SORT_FIELDS[kind] ?? [];
+      return allowed.includes(sort) ? sort : 'created_at';
+    };
     const safeOrder = order === 'ASC' ? 'ASC' : 'DESC';
 
  
@@ -190,7 +210,13 @@ async function handleSearch(searchParams: URLSearchParams) {
     const results: Record<string, unknown> = {};
     let totalAcrossAll = 0;
 
-    const buildConditions = (tableAlias: string, searchFields: string[]) => {
+    // `scopedToTenant` is not a stylistic flag: `tenants` and `users` have no
+    // tenant_id column, so the predicate the per-tenant tab adds has nowhere to
+    // bind there. Passing tenantId for either type answered 500
+    // (`column t.tenant_id does not exist`) — and the console does pass it,
+    // because listing tenants from within a tenant workspace is the whole point
+    // of the filter.
+    const buildConditions = (tableAlias: string, searchFields: string[], scopedToTenant = true) => {
       const conds = [];
       if (q) {
         // Escape LIKE metacharacters (%, _, \) so user input is matched
@@ -200,14 +226,16 @@ async function handleSearch(searchParams: URLSearchParams) {
         const searchConds = searchFields.map(f => sql`${sql.identifier(tableAlias)}.${sql.identifier(f)} ILIKE ${qPattern}`);
         conds.push(sql`(${sql.join(searchConds, sql` OR `)})`);
       }
-      if (tenantId) {
+      if (tenantId && scopedToTenant) {
         conds.push(sql`${sql.identifier(tableAlias)}.${sql.identifier('tenant_id')} = ${tenantId}`);
       }
       return conds;
     };
 
     if (type === 'all' || type === 'tenants') {
-      const conds = buildConditions('t', ['name', 'slug', 'billing_email']);
+      // The row IS the tenant, so the per-tenant filter is the primary key.
+      const conds = buildConditions('t', ['name', 'slug', 'billing_email'], false);
+      if (tenantId) conds.push(sql`t.id = ${tenantId}`);
       const where = conds.length ? sql`WHERE ${sql.join(conds, sql` AND `)}` : sql``;
 
       const totalRes = await db.execute(sql`SELECT count(*) FROM tenants t ${where}`);
@@ -222,7 +250,7 @@ async function handleSearch(searchParams: URLSearchParams) {
         LEFT JOIN public.plans p ON p.id = t.plan_id
         LEFT JOIN users u ON t.owner_id = u.id
         ${where}
-        ORDER BY ${sql.identifier('t')}.${sql.identifier(safeSort)} ${safeOrder === 'ASC' ? sql`ASC` : sql`DESC`}
+        ORDER BY ${sql.identifier('t')}.${sql.identifier(sortFieldFor('tenants'))} ${safeOrder === 'ASC' ? sql`ASC` : sql`DESC`}
         LIMIT ${limit} OFFSET ${offset}
       `);
 
@@ -251,7 +279,7 @@ async function handleSearch(searchParams: URLSearchParams) {
         JOIN tenants t ON c.tenant_id = t.id
         LEFT JOIN companies co ON c.company_id = co.id
         ${where}
-        ORDER BY ${sql.identifier('c')}.${sql.identifier(safeSort)} ${safeOrder === 'ASC' ? sql`ASC` : sql`DESC`}
+        ORDER BY ${sql.identifier('c')}.${sql.identifier(sortFieldFor('contacts'))} ${safeOrder === 'ASC' ? sql`ASC` : sql`DESC`}
         LIMIT ${limit} OFFSET ${offset}
       `);
 
@@ -277,7 +305,7 @@ async function handleSearch(searchParams: URLSearchParams) {
         FROM leads l
         JOIN tenants t ON l.tenant_id = t.id
         ${where}
-        ORDER BY ${sql.identifier('l')}.${sql.identifier(safeSort)} ${safeOrder === 'ASC' ? sql`ASC` : sql`DESC`}
+        ORDER BY ${sql.identifier('l')}.${sql.identifier(sortFieldFor('leads'))} ${safeOrder === 'ASC' ? sql`ASC` : sql`DESC`}
         LIMIT ${limit} OFFSET ${offset}
       `);
 
@@ -302,7 +330,7 @@ async function handleSearch(searchParams: URLSearchParams) {
         JOIN tenants t ON d.tenant_id = t.id
         LEFT JOIN contacts c ON d.contact_id = c.id
         ${where}
-        ORDER BY ${sql.identifier('d')}.${sql.identifier(safeSort === 'value' ? 'amount' : safeSort)} ${safeOrder === 'ASC' ? sql`ASC` : sql`DESC`}
+        ORDER BY ${sql.identifier('d')}.${sql.identifier(sortFieldFor('deals'))} ${safeOrder === 'ASC' ? sql`ASC` : sql`DESC`}
         LIMIT ${limit} OFFSET ${offset}
       `);
 
@@ -326,7 +354,7 @@ async function handleSearch(searchParams: URLSearchParams) {
         FROM companies co
         JOIN tenants t ON co.tenant_id = t.id
         ${where}
-        ORDER BY ${sql.identifier('co')}.${sql.identifier(safeSort)} ${safeOrder === 'ASC' ? sql`ASC` : sql`DESC`}
+        ORDER BY ${sql.identifier('co')}.${sql.identifier(sortFieldFor('companies'))} ${safeOrder === 'ASC' ? sql`ASC` : sql`DESC`}
         LIMIT ${limit} OFFSET ${offset}
       `);
 
@@ -335,10 +363,18 @@ async function handleSearch(searchParams: URLSearchParams) {
     }
 
     if (type === 'all' || type === 'users') {
-      const conds = buildConditions('u', ['email', 'full_name']);
+      // `users` has no tenant_id either — membership lives in tenant_members —
+      // so the filter binds to the join the data query already has, and the
+      // count query gains that same join so both halves agree on the row set.
+      const conds = buildConditions('u', ['email', 'full_name'], false);
+      if (tenantId) conds.push(sql`tm.tenant_id = ${tenantId}`);
       const where = conds.length ? sql`WHERE ${sql.join(conds, sql` AND `)}` : sql``;
 
-      const totalRes = await db.execute(sql`SELECT count(DISTINCT u.id) FROM users u ${where}`);
+      const totalRes = await db.execute(sql`
+        SELECT count(DISTINCT u.id) FROM users u
+        LEFT JOIN tenant_members tm ON tm.user_id = u.id
+        ${where}
+      `);
       const total = parseInt(((totalRes.rows[0] as Record<string, unknown>)?.count as string) || '0', 10);
 
       const dataRes = await db.execute(sql`
@@ -350,7 +386,7 @@ async function handleSearch(searchParams: URLSearchParams) {
         LEFT JOIN tenant_members tm ON tm.user_id = u.id
         LEFT JOIN tenants t ON tm.tenant_id = t.id
         ${where}
-        ORDER BY ${sql.identifier('u')}.${sql.identifier(safeSort)} ${safeOrder === 'ASC' ? sql`ASC` : sql`DESC`}
+        ORDER BY ${sql.identifier('u')}.${sql.identifier(sortFieldFor('users'))} ${safeOrder === 'ASC' ? sql`ASC` : sql`DESC`}
         LIMIT ${limit} OFFSET ${offset}
       `);
 
@@ -389,25 +425,32 @@ const deleteRecordSchema = z.object({
 });
 
 // Column allowlist per table for dynamic SQL updates (Issue #683)
+//
+// Every name here must be a real column: the PUT handler interpolates it as an
+// identifier after this check passes, so an entry that drifted from the schema
+// answers 500 ("column ... does not exist") to a super admin who did nothing
+// wrong. Several had — `active` is `is_active` on six of these tables,
+// email_templates has body_html/body_text rather than body, deal_stages orders
+// by `order`, and neither deals nor deal_stages has a probability.
 const ALLOWED_COLUMNS: Record<string, string[]> = {
   tenants: ['name', 'slug', 'subdomain', 'status', 'billing_email', 'plan_id', 'trial_ends_at'],
   contacts: ['first_name', 'last_name', 'email', 'phone', 'lead_status', 'lead_source', 'company_id', 'notes'],
   leads: ['first_name', 'last_name', 'email', 'phone', 'lead_status', 'lead_source', 'notes'],
-  deals: ['title', 'amount', 'stage_id', 'close_date', 'contact_id', 'company_id', 'notes', 'probability'],
+  deals: ['title', 'amount', 'stage_id', 'close_date', 'contact_id', 'company_id'],
   companies: ['name', 'industry', 'website', 'phone', 'address', 'notes'],
   tasks: ['title', 'description', 'due_date', 'status', 'priority', 'assigned_to'],
   users: ['full_name', 'email', 'is_super_admin'],
   roles: ['name', 'description'],
-  webhooks: ['url', 'events', 'active'],
-  api_keys: ['name', 'active'],
-  email_templates: ['name', 'subject', 'body', 'active'],
-  workflows: ['name', 'description', 'active'],
-  automations: ['name', 'description', 'active', 'trigger_type'],
-  forms: ['name', 'description', 'active'],
+  webhooks: ['url', 'events', 'is_active'],
+  api_keys: ['name', 'is_active'],
+  email_templates: ['name', 'subject', 'body_html', 'body_text'],
+  workflows: ['name', 'description', 'is_active'],
+  automations: ['name', 'description', 'is_active', 'trigger_type'],
+  forms: ['name', 'description', 'is_active'],
   pipelines: ['name', 'description'],
-  deal_stages: ['name', 'position', 'probability'],
+  deal_stages: ['name', 'order'],
   tags: ['name', 'color'],
-  modules: ['name', 'active'],
+  modules: ['name', 'is_available'],
 };
 
 export const PUT = withApiRoute(async (req: NextRequest) => {

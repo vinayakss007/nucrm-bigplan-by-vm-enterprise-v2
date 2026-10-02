@@ -124,7 +124,14 @@ export default function SuperAdminBackups() {
       });
       // #1090: do not console.log the backup result — it leaks backup metadata
       // into the browser console in production. Surface a status instead.
-      if (!res.ok) throw new Error('Manual backup failed. Check server logs.');
+      if (!res.ok) {
+        // The most common failure is a deployment-level refusal (no BYPASSRLS
+        // dump role, off-site storage rejected), and the API already explains
+        // it. Swallowing that into "check server logs" made an actionable
+        // message reachable only through Sentry.
+        const detail = await res.json().catch(() => ({} as { error?: string }));
+        throw new Error(detail.error || 'Manual backup failed. Check server logs.');
+      }
     },
     onSuccess: () => { setBackupError(null); loadBackups(); },
     onError: (e: Error) => { setBackupError(e.message || 'Manual backup failed. Check your connection and try again.'); },

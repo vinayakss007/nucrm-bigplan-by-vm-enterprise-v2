@@ -10,8 +10,11 @@ import { acquireLock } from '@/lib/cache';
 import { db } from '@/drizzle/db';
 import { backupRecords, backupAlerts } from '@/drizzle/schema';
 import { eq, desc } from 'drizzle-orm';
+import { withSecurityContext } from '@/lib/db/rls';
+import { logError } from '@/lib/errors-server';
 import { Pool } from 'pg';
 import { pgSslConfig } from '@/lib/db/ssl-config';
+import { pgLibpqEnv } from '@/lib/backups/backup-service';
 import { spawn } from 'child_process';
 import { createHash } from 'crypto';
 import { createReadStream, existsSync, mkdtempSync, rmSync } from 'fs';
@@ -52,7 +55,7 @@ function checksumFile(filePath: string): Promise<string> {
   });
 }
 
-function run(cmd: string, args: string[], env?: NodeJS.ProcessEnv): Promise<{ code: number; stderr: string }> {
+function run(cmd: string, args: string[], env?: Record<string, string>): Promise<{ code: number; stderr: string }> {
   return new Promise((resolve, reject) => {
     const child = spawn(cmd, args, {
       env: { ...process.env, ...env },
@@ -101,6 +104,26 @@ async function fetchFromS3(storagePath: string, destDir: string): Promise<string
   return dest;
 }
 
+/**
+ * Record why verification did not pass, in a place an operator can actually look.
+ *
+ * Both writes need the super-admin GUC: backup_alerts and backup_records each have a
+ * single FOR ALL policy whose USING clause is `is_super_admin`, and for an ALL-COMMANDS
+ * policy Postgres reuses USING as WITH CHECK — so on the bare pool handle (lib/db/pool.ts
+ * normalises every checkout to is_super_admin='false') the INSERT is refused with 42501.
+ * The old code wrapped that insert in `.catch(() => {})`, so every nightly
+ * failure vanished: run-cron.sh discards the response body, so nothing was left behind
+ * anywhere.
+ */
+async function recordFailure(alertType: string, message: string): Promise<void> {
+  try {
+    await withSecurityContext((tx) => tx.insert(backupAlerts).values({ alertType, message }));
+  } catch (err) {
+    void logError({ error: err, context: 'cron/backup-verify alert insert', level: 'warning', metadata: { alertType } });
+  }
+  void logError({ error: new Error(message), context: 'cron/backup-verify', level: 'warning', metadata: { alertType } });
+}
+
 export async function POST(request: NextRequest) {
   const secret = request.headers.get('x-cron-secret');
   if (!verifySecret(secret, process.env.CRON_SECRET)) {
@@ -114,7 +137,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true, skipped: true, reason: 'lock-held' });
   }
 
-  const databaseUrl = process.env.DATABASE_URL;
+  // The restore has to create a scratch database and load a dump that was taken
+  // outside RLS, so it runs with the same privileged connection as the dump
+  // (BACKUP_DATABASE_URL) and falls back to the app URL only when unset. The app
+  // role here has no CREATEDB, which is why verification can never pass without
+  // that setting — see PP-014/PP-015 in docs/infra/PREPROD-ISSUE-REGISTER.md.
+  const databaseUrl = process.env.BACKUP_DATABASE_URL || process.env.DATABASE_URL;
   if (!databaseUrl) {
     return NextResponse.json({ error: 'DATABASE_URL not configured' }, { status: 500 });
   }
@@ -136,8 +164,14 @@ export async function POST(request: NextRequest) {
       .limit(1);
 
     if (!backup) {
-      failures.push('No completed backup exists to verify');
-      throw new Error('no backup');
+      // Nothing to verify is not the same alarm as a corrupt backup. It means the
+      // platform `backup` job has never produced an artefact in backup_records, so
+      // there is no dump to restore — reporting it as "an unrestorable backup is not
+      // a backup, investigate immediately" pointed at the wrong thing. Keep the 5xx
+      // (run-cron.sh only pages on a non-2xx) but name the real cause and record it.
+      const reason = 'No completed backup in backup_records: the platform backup job has never produced an artefact, so restore verification has nothing to check.';
+      await recordFailure('no_backup_to_verify', reason);
+      return NextResponse.json({ ok: false, cause: 'no_backup_to_verify', failures: [reason] }, { status: 500 });
     }
     if (!backup.storagePath) {
       failures.push('Backup record has no storage_path — artefact is unlocatable');
@@ -206,10 +240,15 @@ export async function POST(request: NextRequest) {
 
     await mainPool.query(`CREATE DATABASE "${scratchDb}"`);
 
+    // Credentials go to the child via libpq PG* vars, not as a positional URL —
+    // a command-line argument is readable by any local process through
+    // `ps aux` / /proc/<pid>/cmdline. Same treatment pg_dump gets in
+    // lib/backups/backup-service.ts.
+    const restoreEnv = pgLibpqEnv(scratchUrl.toString());
     const isPlainSql = backup.backupType === 'selective' || localFile.endsWith('.sql');
     const restore = isPlainSql
-      ? await run('psql', [scratchUrl.toString(), '-v', 'ON_ERROR_STOP=1', '-f', localFile])
-      : await run('pg_restore', ['--no-owner', '--no-acl', '-d', scratchUrl.toString(), localFile]);
+      ? await run('psql', ['-v', 'ON_ERROR_STOP=1', '-f', localFile], restoreEnv)
+      : await run('pg_restore', ['--no-owner', '--no-acl', localFile], restoreEnv);
 
     if (restore.code !== 0) {
       failures.push(`Restore failed (exit ${restore.code}): ${restore.stderr.slice(0, 500)}`);
@@ -240,8 +279,11 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Persist result ───────────────────────────────────────────────────────
+    // Both writes need the super-admin GUC (see recordFailure) — on the bare handle
+    // the UPDATE threw 42501, so a verification that had run to completion still
+    // reported nothing and backup_records.last_verified_at never moved.
     const verifiedOk = failures.length === 0;
-    await db
+    await withSecurityContext((tx) => tx
       .update(backupRecords)
       .set({
         lastVerifiedAt: new Date(),
@@ -249,13 +291,13 @@ export async function POST(request: NextRequest) {
         verifyError: verifiedOk ? null : failures.join('; '),
         updatedAt: new Date(),
       })
-      .where(eq(backupRecords.id, backup.id));
+      .where(eq(backupRecords.id, backup.id)));
 
     if (!verifiedOk) {
-      await db.insert(backupAlerts).values({
+      await withSecurityContext((tx) => tx.insert(backupAlerts).values({
         alertType: 'verify_failed',
         message: failures.join(' | '),
-      });
+      }));
       await alertSuperAdmin(
         'CRITICAL: Backup verification FAILED',
         `Backup ${backup.id} (${backup.backupType}, ${backup.completedAt?.toISOString()}) failed verification:\n\n` +
@@ -275,16 +317,19 @@ export async function POST(request: NextRequest) {
   } catch (err) {
     if (failures.length > 0) {
       // We have specific diagnostics — return them even on a throw.
-      await db.insert(backupAlerts).values({
-        alertType: 'verify_failed',
-        message: failures.join(' | '),
-      }).catch(() => {});
+      await recordFailure('verify_failed', failures.join(' | '));
       await alertSuperAdmin(
         'CRITICAL: Backup verification FAILED',
         failures.map((f) => `  - ${f}`).join('\n')
       ).catch(() => {});
       return NextResponse.json({ ok: false, failures }, { status: 500 });
     }
+    // An unexpected throw here used to leave no trace beyond the 500 that
+    // run-cron.sh throws away. The common one is the scratch database: the app
+    // role has no CREATEDB on a managed Postgres, so `CREATE DATABASE` fails
+    // before any artefact is examined and the operator cannot tell that apart
+    // from a corrupt backup.
+    await recordFailure('verify_error', `backup-verify aborted: ${err instanceof Error ? err.message : String(err)}`);
     return apiError(err);
   } finally {
     // Always clean up the scratch database.

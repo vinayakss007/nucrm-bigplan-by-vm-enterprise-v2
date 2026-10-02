@@ -8,12 +8,13 @@ import { apiError } from '@/lib/api-error';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { platformSettings } from '@/drizzle/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
 import { logError } from '@/lib/errors-server';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { decodeSettingValue } from '@/lib/api/setting-value';
 
 const CUSTOM_REPORTS_KEY = 'custom_reports';
 
@@ -45,7 +46,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       ))
       .limit(1);
 
-    const reports: ReportConfig[] = setting?.value ? JSON.parse(String(setting.value)) : [];
+    const reports = decodeSettingValue<ReportConfig[]>(setting?.value, [], 'array');
 
     return NextResponse.json({ data: reports });
  
@@ -91,7 +92,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       ))
       .limit(1);
 
-    const reports: ReportConfig[] = setting?.value ? JSON.parse(String(setting.value)) : [];
+    const reports = decodeSettingValue<ReportConfig[]>(setting?.value, [], 'array');
     reports.push(newReport);
 
     await db
@@ -103,6 +104,8 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       })
       .onConflictDoUpdate({
         target: [platformSettings.tenantId, platformSettings.key],
+        // partial index: the predicate must be restated for conflict inference
+        targetWhere: sql`${platformSettings.tenantId} is not null`,
         set: { value: JSON.stringify(reports), updatedAt: new Date() },
       });
 
@@ -133,7 +136,7 @@ export const DELETE = withApiRoute(async (request: NextRequest) => {
       ))
       .limit(1);
 
-    const reports: ReportConfig[] = setting?.value ? JSON.parse(String(setting.value)) : [];
+    const reports = decodeSettingValue<ReportConfig[]>(setting?.value, [], 'array');
     const filtered = reports.filter(r => r.id !== id);
 
     await db

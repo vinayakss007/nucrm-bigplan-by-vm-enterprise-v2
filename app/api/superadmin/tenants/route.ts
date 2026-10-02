@@ -17,9 +17,12 @@ import { hashPassword } from '@/lib/auth/session';
 import { logSuperAdminAction } from '@/lib/audit/super-admin';
 import { invalidateTenantCache } from '@/lib/cache';
 import { addJob } from '@/lib/queue';
-import { concurrencyGuard } from '@/lib/api/concurrency';
+import { concurrencyGuard, updatedAtMs } from '@/lib/api/concurrency';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { logError } from '@/lib/errors-server';
+import { setTenantContext, withTenantContext } from '@/lib/db/rls';
+import { provisionTenantWorkspace } from '@/lib/tenants/provision';
+import { installDefaultModules } from '@/lib/modules/auto-install';
 
 export const GET = withApiRoute(async (request: NextRequest) => {
   try {
@@ -151,7 +154,8 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       }
 
       const trialEndsAt = new Date();
-      trialEndsAt.setDate(trialEndsAt.getDate() + (trial_days || 14));
+      // `??`, not `||`: an explicit 0-day trial means no trial, not the default.
+      trialEndsAt.setDate(trialEndsAt.getDate() + (trial_days ?? 14));
 
       const [tenant] = await tx
         .insert(tenants)
@@ -167,27 +171,28 @@ export const POST = withApiRoute(async (request: NextRequest) => {
         })
         .returning();
 
-      if (ownerId) {
-        await tx
-          .insert(tenantMembers)
-          .values({
-            tenantId: tenant!.id,
-            userId: ownerId,
-            roleSlug: 'admin',
-            status: 'active',
-          })
-          .onConflictDoNothing();
-
+      if (ownerId && tenant) {
+        // roles / tenant_members / pipelines / deal_stages / tenant_modules all
+        // isolate on app.current_tenant and have no super-admin escape hatch, so
+        // the platform console's connection cannot write them until this new
+        // tenant's own context exists. SET LOCAL (tx is passed) keeps it scoped
+        // to this transaction — the same move handleSignup makes.
+        await setTenantContext(tenant.id, ownerId, tx);
         await tx
           .update(users)
-          .set({ lastTenantId: tenant!.id })
+          .set({ lastTenantId: tenant.id })
           .where(eq(users.id, ownerId));
+        await provisionTenantWorkspace(tx, {
+          tenantId: tenant.id,
+          userId: ownerId,
+          planId: plan_id ?? 'free',
+        });
       }
 
       return { tenant, owner: ownerId ? { id: ownerId, email: owner_email, temp_password } : null };
     });
 
-    logSuperAdminAction({
+    await logSuperAdminAction({
       adminId: ctx.userId,
       adminEmail: ctx.user?.email || "",
       action: 'tenant.created',
@@ -253,15 +258,32 @@ export const PATCH = withApiRoute(async (request: NextRequest) => {
     const guard = await concurrencyGuard(db, tenants, id, null, expectedUpdatedAt);
     if (guard) return guard;
 
+    // Only add the stale-row predicate when the caller actually opted in.
+    // `new Date(undefined)` is an Invalid Date and pg then throws
+    // "RangeError: Invalid time value", so an unguarded PATCH — which is what
+    // the panel sends — used to answer 500 for every tenant edit.
+    const conditions = [eq(tenants.id, id)];
+    if (expectedUpdatedAt) conditions.push(updatedAtMs(tenants, expectedUpdatedAt));
+
     const [row] = await db
       .update(tenants)
       .set({ ...mappedUpdates, updatedAt: new Date() })
-      .where(and(eq(tenants.id, id), eq(tenants.updatedAt, new Date(expectedUpdatedAt!))))
+      .where(and(...conditions))
       .returning();
 
     if (!row) return NextResponse.json({ error: 'Tenant was modified by another user — please refresh' }, { status: 409 });
 
-    logSuperAdminAction({
+    // Changing the plan used to move only the label: an upgrade left the
+    // customer on the old tier's module set. Install the new plan's defaults on
+    // top of what they already have — additive, because modules bought
+    // separately must never be switched off by a plan change.
+    if (mappedUpdates.planId) {
+      await withTenantContext(id, ctx.userId, async (tx) => {
+        await installDefaultModules(id, mappedUpdates.planId as string, undefined, tx);
+      });
+    }
+
+    await logSuperAdminAction({
       adminId: ctx.userId,
       adminEmail: ctx.user?.email || "",
       action: mappedUpdates.planId ? 'tenant.plan_changed' : 'tenant.settings_changed',
@@ -345,10 +367,28 @@ export const DELETE = withApiRoute(async (request: NextRequest) => {
       // append-only trigger. A lawful tenant erasure is exactly what that
       // escape hatch is for, so opt in explicitly and transaction-scoped —
       // without this the delete fails with a confusing trigger error.
-      await db.transaction(async (tx) => {
+      const purgeBlocked = await db.transaction(async (tx) => {
         await tx.execute(sql`SET LOCAL app.allow_audit_purge = 'on'`);
-        await tx.delete(tenants).where(eq(tenants.id, id));
+        const purged = await tx
+          .delete(tenants)
+          .where(eq(tenants.id, id))
+          .returning({ id: tenants.id });
+        return purged.length === 0;
       });
+
+      // `tenants` carries no DELETE policy, so under forced row security the
+      // statement above silently matches zero rows. Answering {ok:true} told an
+      // admin a customer had been permanently erased when nothing had changed.
+      // Suspension remains the supported way to cut off access.
+      if (purgeBlocked) {
+        return NextResponse.json(
+          {
+            error:
+              'Permanent deletion is not permitted by the database (no DELETE policy on tenants). The tenant is suspended, which already blocks all access.',
+          },
+          { status: 409 },
+        );
+      }
 
       // Post-deletion cleanup: purge cached data for the deleted tenant.
       // Redis keys prefixed with the tenant ID (feature flags, widget cache,
@@ -373,7 +413,7 @@ export const DELETE = withApiRoute(async (request: NextRequest) => {
         .update(tenants)
         .set({ status: 'suspended', deletedAt: new Date(), updatedAt: new Date() })
         .where(eq(tenants.id, id));
-      logSuperAdminAction({
+      await logSuperAdminAction({
         adminId: ctx.userId,
         adminEmail: ctx.user?.email || "",
         action: 'tenant.suspended',

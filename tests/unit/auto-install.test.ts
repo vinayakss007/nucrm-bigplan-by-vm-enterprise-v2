@@ -72,11 +72,15 @@ describe('getDefaultModulesForPlan', () => {
     expect(result).toContain('forms-builder');
   });
 
-  it('returns enterprise modules for enterprise plan', async () => {
+  it('returns the whole registered catalogue for enterprise', async () => {
     const { getDefaultModulesForPlan } = await import('@/lib/modules/auto-install');
+    const { BUILTIN_MODULES } = await import('@/lib/modules/registry');
     const result = getDefaultModulesForPlan('enterprise');
-    expect(result).toContain('industry-templates');
-    expect(result).toContain('analytics-pro');
+    // Enterprise is derived from the registry, not hand-listed: a new module is in
+    // the top tier by default, which is what the plan promises.
+    expect(result).toEqual(BUILTIN_MODULES.map(m => m.id));
+    expect(result).toContain('core-crm');
+    expect(result).toContain('forms-builder');
   });
 });
 
