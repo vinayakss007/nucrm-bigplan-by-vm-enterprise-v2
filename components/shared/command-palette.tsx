@@ -260,8 +260,7 @@ const _SHORTCUT_ITEMS: CommandItem[] = [
 ]
 
 // Simple fuzzy search
-function fuzzyMatch(query: string, text: string): boolean {
-  const queryLower = query.toLowerCase()
+function fuzzyMatch(query: string, text: string): boolean {  const queryLower = query.toLowerCase()
   const textLower = text.toLowerCase()
   
   // Exact match
@@ -277,12 +276,23 @@ function fuzzyMatch(query: string, text: string): boolean {
   return queryIndex === queryLower.length
 }
 
+/**
+ * Fail-closed visibility check: an item that declares a permission is hidden
+ * unless the viewer actually holds it. Unknown permissions hide the item.
+ */
+function canSeeItem(permission: string | undefined, isSuperAdmin: boolean): boolean {
+  if (!permission) return true
+  if (permission === 'is_super_admin') return isSuperAdmin
+  return false
+}
+
 interface CommandPaletteProps {
   open: boolean
   onOpenChange: (open: boolean) => void
+  isSuperAdmin: boolean
 }
 
-export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
+export function CommandPalette({ open, onOpenChange, isSuperAdmin }: CommandPaletteProps) {
   const [search, setSearch] = useState('')
   const [selectedIndex, setSelectedIndex] = useState(0)
   const [recentItems, setRecentItems] = useState<RecentItem[]>([])
@@ -330,7 +340,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
       return []
     }
 
-    const allItems = [...NAVIGATION_ITEMS.filter(i => !i.permission || i.permission === 'is_super_admin'), ...CREATE_ITEMS]
+    const allItems = [...NAVIGATION_ITEMS.filter(i => canSeeItem(i.permission, isSuperAdmin)), ...CREATE_ITEMS]
     
     return allItems.filter(item => {
       // Search in label
@@ -339,7 +349,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
       if (item.keywords?.some(keyword => fuzzyMatch(search, keyword))) return true
       return false
     }).slice(0, 10) // Limit results
-  }, [search])
+  }, [search, isSuperAdmin])
 
   // Group items by category
   const groupedItems = useMemo(() => {
@@ -349,8 +359,10 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
 
     const groups: Record<string, CommandItem[]> = {}
 
-    if (recentItems.length > 0) {
-      groups['recents'] = recentItems.map(r => ({
+    const visibleRecents = recentItems.filter(r =>
+      canSeeItem(NAVIGATION_ITEMS.find(i => i.id === r.id)?.permission, isSuperAdmin))
+    if (visibleRecents.length > 0) {
+      groups['recents'] = visibleRecents.map(r => ({
         id: r.id,
         label: r.label,
         icon: NAVIGATION_ITEMS.find(i => i.id === r.id)?.icon || Globe,
@@ -359,11 +371,11 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
       }))
     }
 
-    groups['navigation'] = NAVIGATION_ITEMS.filter(i => !i.permission || i.permission === 'is_super_admin')
+    groups['navigation'] = NAVIGATION_ITEMS.filter(i => canSeeItem(i.permission, isSuperAdmin))
     groups['create'] = CREATE_ITEMS
 
     return groups
-  }, [search, filteredItems, recentItems])
+  }, [search, filteredItems, recentItems, isSuperAdmin])
 
   // Flatten for keyboard navigation
   const allVisibleItems = useMemo(() => {

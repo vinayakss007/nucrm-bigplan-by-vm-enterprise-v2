@@ -181,7 +181,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
               duration_ms: result.durationMs,
             });
 
-            logSuperAdminAction({
+            await logSuperAdminAction({
               adminId: ctx.userId,
               adminEmail: ctx.user?.email || "",
               action: 'restore.executed',
@@ -202,7 +202,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
               message: 'Restore failed. Data has been rolled back to pre-restore state.',
             });
 
-            logSuperAdminAction({
+            await logSuperAdminAction({
               adminId: ctx.userId,
               adminEmail: ctx.user?.email || "",
               action: 'restore.executed',

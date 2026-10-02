@@ -9,7 +9,7 @@ import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { platformSettings } from '@/drizzle/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 import { readJsonBody } from '@/lib/api/validate';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
@@ -79,6 +79,9 @@ export const PUT = withApiRoute(async (request: NextRequest) => {
       })
       .onConflictDoUpdate({
         target: [platformSettings.tenantId, platformSettings.key],
+        // idx_platform_settings_tenant_unique is partial, so the conflict target
+        // has to restate its predicate or Postgres cannot infer the index.
+        targetWhere: sql`${platformSettings.tenantId} is not null`,
         set: { value: String(retention_days), updatedAt: new Date() },
       });
 

@@ -14,6 +14,7 @@ import { db } from '@/drizzle/db';
 import { scheduledReports } from '@/drizzle/schema';
 import { eq, and, isNull, sql } from 'drizzle-orm';
 import { acquireLock, releaseLock } from '@/lib/cache';
+import { sweepTenants } from '@/lib/cron/tenant-scope';
 
 const REPORT_LOCK_KEY = 'cron:scheduled-report-delivery';
 const REPORT_LOCK_TTL = 120; // 2 minutes
@@ -33,19 +34,43 @@ const REPORT_LOCK_TTL = 120; // 2 minutes
 
 type ExportEntityType = 'contacts' | 'deals' | 'tasks' | 'companies';
 
-/** Map a scheduled report's type to an entity supported by generateExportData */
+/**
+ * Map a scheduled report's type to an entity supported by generateExportData.
+ *
+ * The `default` branch used to return 'contacts'. That was not a fallback, it
+ * was a wrong answer: the create route validates `type` as free text
+ * (app/api/tenant/reports/scheduled/route.ts:26 — z.string().trim().min(1)
+ * .max(50)) and this function had explicit `case 'leads'` / `case 'summary'`
+ * arms, so both were reachable. Either emailed a CONTACTS CSV on schedule, with
+ * a filename and subject line that said otherwise. Nothing logged, because from
+ * the job's perspective the delivery succeeded.
+ *
+ * An unmapped type now throws. The caller already catches per report, records it
+ * via logError and advances nextRunAt with a failure counter, so the report
+ * retries for MAX_CONSECUTIVE_FAILURES cycles and then lands in status='error'
+ * where the UI shows it — visible, and fixable by mapping the type properly or
+ * removing the option, not by shipping the wrong data.
+ *
+ * Migration 0103 widens chk_scheduled_reports_type to allow 'deals', 'tasks' and
+ * 'companies' (the three real entities handled above); 'leads' and 'summary' are
+ * deliberately left out so the constraint, not this function, decides they are
+ * unsupported.
+ */
 function exportEntityFor(reportType: string): ExportEntityType {
   switch (reportType) {
+    case 'contacts':
+      return 'contacts';
     case 'deals':
       return 'deals';
     case 'tasks':
       return 'tasks';
     case 'companies':
       return 'companies';
-    case 'leads':
-    case 'summary':
     default:
-      return 'contacts';
+      throw new Error(
+        `scheduled-report type '${reportType}' has no export entity; refusing to send the wrong data. `
+        + `Supported: ${(['contacts', 'deals', 'tasks', 'companies'] as const).join(', ')}.`,
+      );
   }
 }
 
@@ -131,125 +156,142 @@ export async function POST(req: NextRequest) {
   }
 
   let delivered = 0;
+  let totalDue = 0;
   try {
-    const dueRows = await db
-      .select({
-        id: scheduledReports.id,
-        tenantId: scheduledReports.tenantId,
-        name: scheduledReports.name,
-        type: scheduledReports.type,
-        frequency: scheduledReports.frequency,
-        recipients: scheduledReports.recipients,
-        format: scheduledReports.format,
-        config: scheduledReports.config,
-      })
-      .from(scheduledReports)
-      .where(and(
-        eq(scheduledReports.status, 'active'),
-        isNull(scheduledReports.deletedAt),
-        sql`${scheduledReports.nextRunAt} <= NOW()`
-      ))
-      .limit(50);
+    // scheduled_reports — and the entity tables generateExportData reads through
+    // the shared db handle — enforce plain tenant_isolation with no super-admin
+    // branch, so this job must run its body once per tenant. See
+    // lib/cron/tenant-scope.ts.
+    const sweep = await sweepTenants('cron/scheduled-report-delivery', async (tenantId) => {
+      const dueRows = await db
+        .select({
+          id: scheduledReports.id,
+          tenantId: scheduledReports.tenantId,
+          name: scheduledReports.name,
+          type: scheduledReports.type,
+          frequency: scheduledReports.frequency,
+          recipients: scheduledReports.recipients,
+          format: scheduledReports.format,
+          config: scheduledReports.config,
+        })
+        .from(scheduledReports)
+        .where(and(
+          eq(scheduledReports.tenantId, tenantId),
+          eq(scheduledReports.status, 'active'),
+          isNull(scheduledReports.deletedAt),
+          sql`${scheduledReports.nextRunAt} <= NOW()`
+        ))
+        .limit(50);
 
-    for (const report of dueRows) {
-      try {
-        // #1276: A scheduled report is tenant-scoped and already authorized at
-        // scheduling time, so it runs with a system/cron identity rather than an
-        // empty userId. generateExportData scopes every query by tenantId only
-        // (it does not filter or gate by userId), so passing a stable system
-        // marker keeps behaviour identical while avoiding the empty-string that
-        // could trip user-level access checks if the export layer adds them.
-        const csv = await generateExportData({
-          tenantId: report.tenantId,
-          userId: 'system:cron',
-          entityType: exportEntityFor(report.type),
-        });
+      totalDue += dueRows.length;
 
-        const recipients = (Array.isArray(report.recipients) ? report.recipients : [])
-          .map(r => String(r))
-          .filter(r => typeof r === 'string' && r.includes('@'));
+      for (const report of dueRows) {
+        try {
+          // #1276: A scheduled report is tenant-scoped and already authorized at
+          // scheduling time, so it runs with a system/cron identity rather than an
+          // empty userId. generateExportData scopes every query by tenantId only
+          // (it does not filter or gate by userId), so passing a stable system
+          // marker keeps behaviour identical while avoiding the empty-string that
+          // could trip user-level access checks if the export layer adds them.
+          const csv = await generateExportData({
+            tenantId: report.tenantId,
+            userId: 'system:cron',
+            entityType: exportEntityFor(report.type),
+          });
 
-        if (recipients.length === 0) {
-          console.warn(`[scheduled-report] ${report.id}: no recipients, skipping send`);
-        } else {
-          // #1614: deliver the report as a real file attachment instead of
-          // inlining the CSV into the HTML body. CSV by default; render a PDF
-          // via lib/pdf when the report's configured format is 'pdf'.
-          const format = String(report.format || 'csv').toLowerCase();
-          const safeName = toSafeFilename(report.name);
-          let attachment: EmailAttachment;
-          if (format === 'pdf') {
-            const { columns, rows } = parseCsv(csv || '');
-            const pdfBuffer = await renderReportPdf({
-              title: report.name,
-              columns,
-              rows,
-            });
-            attachment = {
-              filename: `${safeName}.pdf`,
-              content: pdfBuffer,
-              contentType: 'application/pdf',
-            };
+          const recipients = (Array.isArray(report.recipients) ? report.recipients : [])
+            .map(r => String(r))
+            .filter(r => typeof r === 'string' && r.includes('@'));
+
+          if (recipients.length === 0) {
+            console.warn(`[scheduled-report] ${report.id}: no recipients, skipping send`);
           } else {
-            attachment = {
-              filename: `${safeName}.csv`,
-              content: Buffer.from(csv || '', 'utf8'),
-              contentType: 'text/csv',
-            };
+            // #1614: deliver the report as a real file attachment instead of
+            // inlining the CSV into the HTML body. CSV by default; render a PDF
+            // via lib/pdf when the report's configured format is 'pdf'.
+            const format = String(report.format || 'csv').toLowerCase();
+            const safeName = toSafeFilename(report.name);
+            let attachment: EmailAttachment;
+            if (format === 'pdf') {
+              const { columns, rows } = parseCsv(csv || '');
+              const pdfBuffer = await renderReportPdf({
+                title: report.name,
+                columns,
+                rows,
+              });
+              attachment = {
+                filename: `${safeName}.pdf`,
+                content: pdfBuffer,
+                contentType: 'application/pdf',
+              };
+            } else {
+              attachment = {
+                filename: `${safeName}.csv`,
+                content: Buffer.from(csv || '', 'utf8'),
+                contentType: 'text/csv',
+              };
+            }
+
+            await sendEmail({
+              to: recipients,
+              subject: `Scheduled report: ${report.name} (${report.format?.toUpperCase?.() ?? 'CSV'})`,
+              text: `Your scheduled report ${report.name} (${report.type}) is attached.`,
+              html: `<p>Your scheduled report <strong>${escapeHtml(report.name)}</strong> (${escapeHtml(report.type)}) is attached.</p>`,
+              attachments: [attachment],
+            });
           }
 
-          await sendEmail({
-            to: recipients,
-            subject: `Scheduled report: ${report.name} (${report.format?.toUpperCase?.() ?? 'CSV'})`,
-            text: `Your scheduled report ${report.name} (${report.type}) is attached.`,
-            html: `<p>Your scheduled report <strong>${escapeHtml(report.name)}</strong> (${escapeHtml(report.type)}) is attached.</p>`,
-            attachments: [attachment],
-          });
+          // Success: reset the failure counter and advance to the next run.
+          const baseConfig = (report.config && typeof report.config === 'object')
+            ? report.config as Record<string, unknown>
+            : {};
+          const { _failureCount: _fc, _lastError: _le, ...cleanConfig } = baseConfig;
+          void _fc; void _le;
+          await db.update(scheduledReports).set({
+            lastRunAt: new Date(),
+            nextRunAt: computeNextRunAt(report.frequency),
+            status: 'active',
+            config: cleanConfig,
+            updatedAt: new Date(),
+          }).where(eq(scheduledReports.id, report.id));
+
+          delivered += 1;
+        } catch (err) {
+          // #1466: A single transient failure must NOT permanently disable the
+          // report. Previously we set status='error' and left nextRunAt in the
+          // past — but the due query only selects status='active', so the report
+          // was never retried and silently died. Instead, keep it active and
+          // advance nextRunAt so it retries next cycle, tracking consecutive
+          // failures; only give up (status='error') after MAX_CONSECUTIVE_FAILURES.
+          await logError({ error: err, context: 'scheduled-report-delivery' });
+          const MAX_CONSECUTIVE_FAILURES = 5;
+          const baseConfig = (report.config && typeof report.config === 'object')
+            ? report.config as Record<string, unknown>
+            : {};
+          const failureCount = (Number(baseConfig['_failureCount']) || 0) + 1;
+          const giveUp = failureCount >= MAX_CONSECUTIVE_FAILURES;
+          await db.update(scheduledReports).set({
+            status: giveUp ? 'error' : 'active',
+            nextRunAt: giveUp ? null : computeNextRunAt(report.frequency),
+            config: {
+              ...baseConfig,
+              _failureCount: failureCount,
+              _lastError: err instanceof Error ? err.message.slice(0, 500) : String(err).slice(0, 500),
+            },
+            updatedAt: new Date(),
+          }).where(eq(scheduledReports.id, report.id));
         }
-
-        // Success: reset the failure counter and advance to the next run.
-        const baseConfig = (report.config && typeof report.config === 'object')
-          ? report.config as Record<string, unknown>
-          : {};
-        const { _failureCount: _fc, _lastError: _le, ...cleanConfig } = baseConfig;
-        void _fc; void _le;
-        await db.update(scheduledReports).set({
-          lastRunAt: new Date(),
-          nextRunAt: computeNextRunAt(report.frequency),
-          status: 'active',
-          config: cleanConfig,
-          updatedAt: new Date(),
-        }).where(eq(scheduledReports.id, report.id));
-
-        delivered += 1;
-      } catch (err) {
-        // #1466: A single transient failure must NOT permanently disable the
-        // report. Previously we set status='error' and left nextRunAt in the
-        // past — but the due query only selects status='active', so the report
-        // was never retried and silently died. Instead, keep it active and
-        // advance nextRunAt so it retries next cycle, tracking consecutive
-        // failures; only give up (status='error') after MAX_CONSECUTIVE_FAILURES.
-        await logError({ error: err, context: 'scheduled-report-delivery' });
-        const MAX_CONSECUTIVE_FAILURES = 5;
-        const baseConfig = (report.config && typeof report.config === 'object')
-          ? report.config as Record<string, unknown>
-          : {};
-        const failureCount = (Number(baseConfig['_failureCount']) || 0) + 1;
-        const giveUp = failureCount >= MAX_CONSECUTIVE_FAILURES;
-        await db.update(scheduledReports).set({
-          status: giveUp ? 'error' : 'active',
-          nextRunAt: giveUp ? null : computeNextRunAt(report.frequency),
-          config: {
-            ...baseConfig,
-            _failureCount: failureCount,
-            _lastError: err instanceof Error ? err.message.slice(0, 500) : String(err).slice(0, 500),
-          },
-          updatedAt: new Date(),
-        }).where(eq(scheduledReports.id, report.id));
       }
-    }
+    });
 
-    return NextResponse.json({ ok: true, delivered, skipped: dueRows.length - delivered });
+    return NextResponse.json({
+      ok: sweep.failed.length === 0,
+      delivered,
+      skipped: totalDue - delivered,
+      tenants_checked: sweep.visited,
+      tenants_skipped: sweep.skipped.length,
+      tenants_failed: sweep.failed.length,
+    });
   } catch (err) {
     await logError({ error: err, context: 'scheduled-report-delivery' });
     return NextResponse.json({ ok: false, error: 'Failed to deliver scheduled reports' }, { status: 500 });

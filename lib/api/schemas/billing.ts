@@ -115,11 +115,35 @@ export const subscriptionQuerySchema = z.object({
 });
 
 // ── Contract schemas ──
+/**
+ * Mirrors `chk_contracts_contract_type` exactly. The column is NOT NULL and the
+ * check has no NULL escape, so a value outside this list cannot be stored — the
+ * route used to default to `'other'`, which the database then refused, and the
+ * create form offered `sales` and `other` as choices. Exported so the picker in
+ * app/tenant/contracts is rendered from the same list instead of drifting again.
+ */
+export const CONTRACT_TYPES = [
+  'service', 'nda', 'sla', 'partnership', 'employment', 'vendor', 'non_compete',
+  'licensing', 'consulting', 'master_service', 'statement_of_work', 'amendment',
+  'end_user_license',
+] as const;
+
+/** Display names for the picker, keyed off CONTRACT_TYPES so it cannot drift. */
+export const CONTRACT_TYPE_LABELS: Record<ContractType, string> = {
+  service: 'Service', nda: 'NDA', sla: 'SLA', partnership: 'Partnership',
+  employment: 'Employment', vendor: 'Vendor', non_compete: 'Non-compete',
+  licensing: 'Licensing', consulting: 'Consulting', master_service: 'Master service',
+  statement_of_work: 'Statement of work', amendment: 'Amendment',
+  end_user_license: 'End-user licence',
+};
+
+export type ContractType = typeof CONTRACT_TYPES[number];
+
 export const createContractSchema = z.object({
   title: requiredString.max(200),
   contact_id: uuid,
   company_id: uuid,
-  type: z.string().trim().max(100).nullable().optional(),
+  type: z.enum(CONTRACT_TYPES).nullable().optional(),
   status: z.enum(['draft', 'active', 'expired', 'terminated', 'renewed', 'signed', 'pending_approval']).optional().default('draft'),
   start_date: z.string().date().default(() => new Date().toISOString().split('T')[0]!),
   end_date: z.string().date().optional().nullable(),

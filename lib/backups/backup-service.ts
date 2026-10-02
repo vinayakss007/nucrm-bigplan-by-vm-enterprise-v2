@@ -9,6 +9,8 @@ import { eq, sql } from 'drizzle-orm';
 import { spawn, exec as execCb } from 'child_process';
 import { promisify } from 'util';
 import path from 'path';
+import { Pool } from 'pg';
+import { pgSslConfig } from '@/lib/db/ssl-config';
 import { checksumFile, CHECKSUM_ALGORITHM } from './integrity';
 import { uploadBackupArtifact } from './offsite';
 import { encryptBackupFile, isEncryptionEnabled } from './encrypt';
@@ -53,31 +55,96 @@ async function getPgDumpVersion(): Promise<string> {
   }
 }
 
-export async function runPgDump(backupType: string, outputPath: string): Promise<void> {
-  // PP-014/PP-015 (#2050/#2051): pg_dump runs `SET row_security = off`, which
-  // PostgreSQL only honours for superuser/BYPASSRLS roles, while every tenant
-  // table is FORCE ROW LEVEL SECURITY — the app role can never produce a
-  // complete dump. Aim the dump at BACKUP_DATABASE_URL when configured.
-  const dbUrl = process.env.BACKUP_DATABASE_URL || process.env.DATABASE_URL;
-  if (!dbUrl || (!dbUrl.startsWith('postgresql://') && !dbUrl.startsWith('postgres://'))) {
-    throw new Error('Invalid DATABASE_URL format');
+export { getPgDumpVersion };
+
+/**
+ * The deployment is misconfigured for backups — nothing crashed, and no retry
+ * will help until an operator changes something. Carries a status + a message
+ * safe to show a super admin, so the panel can name the fix instead of sending
+ * everyone to the server logs.
+ */
+export class BackupConfigurationError extends Error {
+  readonly statusCode = 503;
+  constructor(message: string) {
+    super(message);
+    this.name = 'BackupConfigurationError';
+  }
+}
+
+/**
+ * Refuse to dump unless the target role can bypass row-level security.
+ *
+ * pg_dump emits `SET row_security = off` before it reads anything, and
+ * PostgreSQL honours that only for a superuser or a BYPASSRLS role. Every
+ * tenant table in this schema is created `WITH (force_row_security = true)` /
+ * FORCE ROW LEVEL SECURITY, which keeps the tenant policy applied even to the
+ * table owner. So a dump taken as the application role reads **zero rows** from
+ * those tables and pg_dump still exits 0: the run is recorded `completed`, the
+ * artefact has a plausible size (schema + global tables), and the first restore
+ * that needs it recovers an empty CRM. PP-014/PP-015
+ * (docs/infra/PREPROD-ISSUE-REGISTER.md).
+ *
+ * Checking is cheap (one query, one throwaway connection) and turns that
+ * undetectable data-loss outcome into an error that names the fix.
+ */
+export async function assertDumpRoleCanReadAllTenants(dbUrl: string): Promise<void> {
+  const pool = new Pool({
+    connectionString: dbUrl,
+    ssl: pgSslConfig(),
+    max: 1,
+    connectionTimeoutMillis: 10_000,
+  });
+
+  let role: string;
+  let canBypass: boolean;
+  try {
+    const result = await pool.query<{ role: string; super: boolean; bypass: boolean }>(
+      `select current_user::text as role, r.rolsuper, r.rolbypassrls
+         from pg_roles r
+        where r.rolname = current_user`,
+    );
+    const row = result.rows[0];
+    if (!row) {
+      throw new BackupConfigurationError(
+        `Backup refused: the role for ${redactUrl(dbUrl)} does not exist in pg_roles`,
+      );
+    }
+    role = row.role;
+    canBypass = row.super || row.bypass;
+  } finally {
+    await pool.end();
   }
 
-  if (!['full', 'schema', 'selective'].includes(backupType)) {
-    throw new Error('Invalid backup type');
+  if (!canBypass) {
+    throw new BackupConfigurationError(
+      `Backup refused: pg_dump role "${role}" is neither superuser nor BYPASSRLS. ` +
+      'pg_dump runs `SET row_security = off`, which Postgres ignores for such a role, and ' +
+      'every tenant table is FORCE ROW LEVEL SECURITY — the dump would contain zero tenant ' +
+      'rows yet still report success. Set BACKUP_DATABASE_URL to a connection as a role with ' +
+      'BYPASSRLS (see PP-014/PP-015 in docs/infra/PREPROD-ISSUE-REGISTER.md) before enabling ' +
+      'backups.',
+    );
   }
+}
 
-  const resolvedOutputPath = path.resolve(outputPath);
-  const localDir = path.resolve(process.env.BACKUP_LOCAL_DIR || '/tmp/nucrm-backups');
-  if (!resolvedOutputPath.startsWith('/tmp/') && !resolvedOutputPath.startsWith(localDir)) {
-    throw new Error('Invalid output path');
+/** Connection strings carry passwords; only ever surface the host/database half. */
+function redactUrl(url: string): string {
+  try {
+    const parsed = new URL(url);
+    return `${parsed.host}${parsed.pathname}`;
+  } catch {
+    return '(unparseable connection string)';
   }
+}
 
-  // Parse the connection string and pass credentials to pg_dump via the
-  // environment (libpq PG* vars) rather than as a positional CLI argument.
-  // A URL argument leaks user:password to `ps aux` and /proc/<pid>/cmdline,
-  // where any local process can read it. libpq reads these env vars instead,
-  // and the child's environment is not exposed by the process listing.
+/**
+ * libpq PG* variables for a connection string, so a `pg_dump` / `pg_restore` /
+ * `psql` child process gets its credentials from the environment instead of the
+ * command line (`ps aux` and /proc/<pid>/cmdline are readable by any local
+ * process). Shared with app/api/cron/backup-verify, which restores with
+ * pg_restore/psql and had the URL as a positional argument.
+ */
+export function pgLibpqEnv(dbUrl: string): Record<string, string> {
   let parsed: URL;
   try {
     parsed = new URL(dbUrl);
@@ -97,6 +164,38 @@ export async function runPgDump(backupType: string, outputPath: string): Promise
   // so TLS behavior is preserved now that the URL is no longer passed directly.
   const sslmode = parsed.searchParams.get('sslmode');
   if (sslmode) pgEnv.PGSSLMODE = sslmode;
+
+  return pgEnv;
+}
+
+export async function runPgDump(backupType: string, outputPath: string): Promise<void> {
+  // PP-014/PP-015 (#2050/#2051): pg_dump runs `SET row_security = off`, which
+  // PostgreSQL only honours for superuser/BYPASSRLS roles, while every tenant
+  // table is FORCE ROW LEVEL SECURITY — the app role can never produce a
+  // complete dump. Aim the dump at BACKUP_DATABASE_URL when configured.
+  const dbUrl = process.env.BACKUP_DATABASE_URL || process.env.DATABASE_URL;
+  if (!dbUrl || (!dbUrl.startsWith('postgresql://') && !dbUrl.startsWith('postgres://'))) {
+    throw new BackupConfigurationError('Backup refused: no usable DATABASE_URL / BACKUP_DATABASE_URL for pg_dump');
+  }
+
+  await assertDumpRoleCanReadAllTenants(dbUrl);
+
+  if (!['full', 'schema', 'selective'].includes(backupType)) {
+    throw new Error('Invalid backup type');
+  }
+
+  const resolvedOutputPath = path.resolve(outputPath);
+  const localDir = path.resolve(process.env.BACKUP_LOCAL_DIR || '/tmp/nucrm-backups');
+  if (!resolvedOutputPath.startsWith('/tmp/') && !resolvedOutputPath.startsWith(localDir)) {
+    throw new Error('Invalid output path');
+  }
+
+  // Parse the connection string and pass credentials to pg_dump via the
+  // environment (libpq PG* vars) rather than as a positional CLI argument.
+  // A URL argument leaks user:password to `ps aux` and /proc/<pid>/cmdline,
+  // where any local process can read it. libpq reads these env vars instead,
+  // and the child's environment is not exposed by the process listing.
+  const pgEnv = pgLibpqEnv(dbUrl);
 
   const args = [
     '--no-owner',

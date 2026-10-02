@@ -86,3 +86,8 @@ PAGE_TEST_RESULTS.txt
 
 # #2123: bind-mounted secret files for docker-compose.secrets.yml — never commit
 secrets/
+
+# Qoder CLI local-scope settings: per-machine MCP paths (browser binaries,
+# output dirs) and any operator tooling. Deliberately not shared; the
+# committable equivalent is .qoder/settings.json, which does not exist here.
+.qoder/settings.local.json

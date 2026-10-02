@@ -22,8 +22,9 @@ if (SENTRY_DSN) {
     // GDPR: never send PII by default
     sendDefaultPii: false,
 
-    // Initialize whenever a DSN is configured; explicit opt-out is SENTRY_DISABLE=true
-    enabled: process.env['SENTRY_DISABLE'] !== 'true',
+    // Initialize whenever a DSN is configured; both documented opt-outs count
+    // (SENTRY_DISABLE=true or SENTRY_ENABLE=false — see sentry.server.config.ts).
+    enabled: process.env['SENTRY_DISABLE'] !== 'true' && process.env['SENTRY_ENABLE'] !== 'false',
     tracesSampleRate: 0.2,
     beforeSend(event) {
       return scrubPii(event);

@@ -14,6 +14,7 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { logError } from '@/lib/errors-server';
+import { clientDbErrorResponse } from '@/lib/api/db-client-error';
 
 export const GET = withApiRoute(async (request: NextRequest) => {
   try {
@@ -67,7 +68,9 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       companyId: companyId || null,
       title,
       contractNumber: null,
-      contractType: contractType || 'other',
+      // 'other' is not in chk_contracts_contract_type, so this default made
+      // every create that omitted `type` fail on its own INSERT.
+      contractType: contractType ?? 'service',
       status: status ?? 'draft',
       startDate: new Date(startDate),
       endDate: endDate ? new Date(endDate) : null,
@@ -82,6 +85,10 @@ export const POST = withApiRoute(async (request: NextRequest) => {
 
     return NextResponse.json({ contract }, { status: 201 });
   } catch (error) {
+    // Postgres rejecting the caller's status is a bad request, not a server
+    // fault; this literal 500 hid it from withApiRoute's classifier.
+    const clientErr = clientDbErrorResponse(error, 'POST');
+    if (clientErr) return clientErr;
     await logError({ error, context: 'tenant/contracts POST', requestMethod: 'POST' });
     return NextResponse.json({ error: 'Failed to create contract' }, { status: 500 });
   }

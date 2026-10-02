@@ -36,6 +36,7 @@ import { eq } from 'drizzle-orm';
 import { getProviderKey, type KeyType } from './secrets';
 import { checkCredits, deductCredits, isCentralizedProvider } from './credits';
 import { safeFetch } from '@/lib/security/ssrf';
+import { logError } from '@/lib/errors-server';
 
 export type GatewayMessage = { role: 'user' | 'assistant'; content: string };
 
@@ -369,8 +370,13 @@ async function logActivity(p: LogPayload): Promise<string | null> {
     }).returning({ id: aiActivity.id });
     return row?.id ?? null;
   } catch (err) {
-    // Never let activity logging break the actual call
-    console.warn('[ai gateway] activity log failed:', (err as Error).message);
+    // Never let activity logging break the actual call — but never hide it
+    // either. This console.warn is why `ai_activity` holds zero rows while five
+    // AI features kept "recording" usage: chk_ai_activity_action rejects
+    // insights / email_draft / auto_followup / score_lead / sentiment_analysis,
+    // so the usage and credit rows those features are supposed to bill for were
+    // discarded without a trace.
+    void logError({ error: err, context: `ai gateway activity-log action=${p.action}` });
     return null;
   }
 }

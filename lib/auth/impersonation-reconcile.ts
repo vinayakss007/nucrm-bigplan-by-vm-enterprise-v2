@@ -15,8 +15,9 @@
  * changes reverted from the recorded original state.
  */
 import { db } from '@/drizzle/db';
-import { sql } from 'drizzle-orm';
-import { setSuperAdminContext } from '@/lib/db/rls';
+import { users, tenantMembers, sessions, impersonationSessions } from '@/drizzle/schema';
+import { eq, and, isNull, isNotNull, lt } from 'drizzle-orm';
+import { setSuperAdminContext, setTenantContext } from '@/lib/db/rls';
 import { logError } from '@/lib/errors-server';
 
 // Impersonation tokens are minted with a 1-day expiry; a session with no
@@ -40,18 +41,30 @@ const FAIL_CLOSED: OriginalMembershipState = { existed: false, status: 'active',
  * means the row was created for impersonation alone.
  */
 export function parseOriginalMembershipState(notes: unknown): OriginalMembershipState {
-  if (typeof notes === 'string' && notes.length > 0) {
-    try {
-      const parsed = JSON.parse(notes) as { originalMembershipState?: OriginalMembershipState };
-      const state = parsed.originalMembershipState;
-      if (state && typeof state.existed === 'boolean' && typeof state.roleSlug === 'string' && typeof state.status === 'string') {
-        return state;
-      }
-    } catch {
-      /* fall through to fail-closed default */
-    }
+  const state = parseImpersonationNotes(notes).originalMembershipState;
+  if (state && typeof state.existed === 'boolean' && typeof state.roleSlug === 'string' && typeof state.status === 'string') {
+    return state;
   }
   return FAIL_CLOSED;
+}
+
+export interface ImpersonationNotes {
+  originalMembershipState?: OriginalMembershipState;
+  /** sha256 of the token handed to the browser for the impersonated user. */
+  tokenHash?: string;
+  /** sha256 of the admin's own credential, parked while impersonating. */
+  adminTokenHash?: string;
+}
+
+export function parseImpersonationNotes(notes: unknown): ImpersonationNotes {
+  if (typeof notes === 'string' && notes.length > 0) {
+    try {
+      return JSON.parse(notes) as ImpersonationNotes;
+    } catch {
+      /* fall through to the empty record */
+    }
+  }
+  return {};
 }
 
 export interface ReconcileResult {
@@ -59,8 +72,23 @@ export interface ReconcileResult {
   failed: number;
 }
 
+interface StaleSession {
+  sessionId: string;
+  impersonatorId: string;
+  tenantId: string;
+  notes: unknown;
+}
+
 /**
  * End stale impersonation sessions and revert the membership they upgraded.
+ *
+ * impersonation_sessions and tenant_members isolate on app.current_tenant with
+ * no super-admin escape, so a platform-wide `SELECT ... WHERE ended_at IS NULL`
+ * cannot see anything — it matched zero rows and the sweep quietly reconciled
+ * nothing. The tenant is therefore taken from the impersonator's own
+ * `users.last_tenant_id`, which impersonate/start writes and only stop clears,
+ * and each tenant is swept in its own context.
+ *
  * Each session is reconciled in its own transaction so one failure cannot
  * poison the rest of the batch (a caught error aborts the whole Postgres
  * transaction, not just the failing statement).
@@ -68,49 +96,77 @@ export interface ReconcileResult {
 export async function reconcileStaleImpersonations(): Promise<ReconcileResult> {
   const cutoff = new Date(Date.now() - STALE_GRACE_MS);
 
-  // tenant_members and impersonation_sessions are tenant-protected under
-  // fail-closed RLS; this is a platform-wide maintenance sweep, so the read
-  // runs with the super-admin context too.
-  const stale = await db.transaction(async (tx) => {
+  // `users` is only readable with the platform context; a super admin still
+  // pointing at a tenant is the handle on a possibly-open impersonation there.
+  const candidates = await db.transaction(async (tx) => {
     await setSuperAdminContext(tx);
-    const res = await tx.execute(sql`
-      SELECT id, impersonator_id, tenant_id, notes
-      FROM impersonation_sessions
-      WHERE ended_at IS NULL AND started_at < ${cutoff}
-      ORDER BY started_at
-      LIMIT ${RECONCILE_BATCH}
-    `);
-    return res.rows as Record<string, unknown>[];
+    return tx
+      .select({
+        impersonatorId: users.id,
+        tenantId: users.lastTenantId,
+      })
+      .from(users)
+      .where(and(eq(users.isSuperAdmin, true), isNotNull(users.lastTenantId)));
   });
+
+  const stale: StaleSession[] = [];
+  for (const { impersonatorId, tenantId } of candidates) {
+    if (!tenantId) continue;
+    if (stale.length >= RECONCILE_BATCH) break;
+    const found = await db.transaction(async (tx) => {
+      await setSuperAdminContext(tx);
+      await setTenantContext(tenantId, impersonatorId, tx);
+      return await tx
+        .select({
+          id: impersonationSessions.id,
+          notes: impersonationSessions.notes,
+        })
+        .from(impersonationSessions)
+        .where(and(
+          eq(impersonationSessions.impersonatorId, impersonatorId),
+          eq(impersonationSessions.tenantId, tenantId),
+          isNull(impersonationSessions.endedAt),
+          lt(impersonationSessions.startedAt, cutoff),
+        ))
+        .orderBy(impersonationSessions.startedAt);
+    });
+    for (const row of found) {
+      stale.push({ sessionId: row.id, impersonatorId, tenantId, notes: row.notes });
+    }
+  }
 
   let reconciled = 0;
   let failed = 0;
   for (const raw of stale) {
-    const sessionId = raw.id as string;
-    const impersonatorId = raw.impersonator_id as string;
-    const tenantId = raw.tenant_id as string;
+    const { sessionId, impersonatorId, tenantId } = raw;
     const state = parseOriginalMembershipState(raw.notes);
+    const targetHash = parseImpersonationNotes(raw.notes).tokenHash;
     try {
       await db.transaction(async (tx) => {
         await setSuperAdminContext(tx);
+        await setTenantContext(tenantId, impersonatorId, tx);
         if (state.existed) {
-          await tx.execute(sql`
-            UPDATE tenant_members
-            SET status = ${state.status}, role_slug = ${state.roleSlug}, updated_at = NOW()
-            WHERE tenant_id = ${tenantId} AND user_id = ${impersonatorId}
-          `);
+          await tx
+            .update(tenantMembers)
+            .set({ status: state.status, roleSlug: state.roleSlug, updatedAt: new Date() })
+            .where(and(eq(tenantMembers.tenantId, tenantId), eq(tenantMembers.userId, impersonatorId)));
         } else {
-          await tx.execute(sql`
-            DELETE FROM tenant_members
-            WHERE tenant_id = ${tenantId} AND user_id = ${impersonatorId}
-          `);
+          await tx
+            .delete(tenantMembers)
+            .where(and(eq(tenantMembers.tenantId, tenantId), eq(tenantMembers.userId, impersonatorId)));
+        }
+        // Only the impersonated identity's session is dropped. The parked admin
+        // credential is that console user's own login session, shared across
+        // impersonations and not ours to end here; the impersonation-minted ones
+        // this sweep predates expire on their own 24h TTL.
+        if (typeof targetHash === 'string' && targetHash.length > 0) {
+          await tx.delete(sessions).where(eq(sessions.tokenHash, targetHash));
         }
         // Guard on ended_at IS NULL so a concurrent stop() wins cleanly.
-        await tx.execute(sql`
-          UPDATE impersonation_sessions
-          SET ended_at = NOW(), updated_at = NOW()
-          WHERE id = ${sessionId} AND ended_at IS NULL
-        `);
+        await tx
+          .update(impersonationSessions)
+          .set({ endedAt: new Date(), updatedAt: new Date() })
+          .where(and(eq(impersonationSessions.id, sessionId), isNull(impersonationSessions.endedAt)));
       });
       reconciled++;
     } catch (err) {

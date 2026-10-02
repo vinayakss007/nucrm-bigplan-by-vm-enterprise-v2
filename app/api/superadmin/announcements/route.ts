@@ -75,7 +75,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       })
       .returning();
 
-    logSuperAdminAction({
+    await logSuperAdminAction({
       adminId: ctx.userId,
       adminEmail: ctx.user?.email || "",
       action: 'settings.changed',
@@ -123,7 +123,7 @@ export const PATCH = withApiRoute(async (request: NextRequest) => {
 
     if (!row) return NextResponse.json({ error: 'Announcement was modified by another user — please refresh' }, { status: 409 });
 
-    logSuperAdminAction({
+    await logSuperAdminAction({
       adminId: ctx.userId,
       adminEmail: ctx.user?.email || "",
       action: 'settings.changed',
@@ -154,7 +154,7 @@ export const DELETE = withApiRoute(async (request: NextRequest) => {
 
     await db.delete(announcements).where(eq(announcements.id, result.data.id));
 
-    logSuperAdminAction({
+    await logSuperAdminAction({
       adminId: ctx.userId,
       adminEmail: ctx.user?.email || "",
       action: 'settings.changed',

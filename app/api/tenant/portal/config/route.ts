@@ -8,12 +8,13 @@ import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { platformSettings } from '@/drizzle/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 import { readJsonBody } from '@/lib/api/validate';
 import { z } from 'zod';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { logError } from '@/lib/errors-server';
+import { decodeSettingValue } from '@/lib/api/setting-value';
 
 const PORTAL_CONFIG_KEY = 'portal_config';
 
@@ -44,13 +45,13 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       ))
       .limit(1);
 
-    const config = setting?.value ? JSON.parse(String(setting.value)) : {
+    const config = decodeSettingValue<Record<string, unknown>>(setting?.value, {
       enabled: false,
       allow_quotes: true,
       allow_invoices: true,
       allow_cases: true,
       custom_message: '',
-    };
+    }, 'object');
 
     return NextResponse.json({ data: config });
  
@@ -93,6 +94,8 @@ export const PUT = withApiRoute(async (request: NextRequest) => {
       })
       .onConflictDoUpdate({
         target: [platformSettings.tenantId, platformSettings.key],
+        // partial index: the predicate must be restated for conflict inference
+        targetWhere: sql`${platformSettings.tenantId} is not null`,
         set: { value: JSON.stringify(config), updatedAt: new Date() },
       });
 

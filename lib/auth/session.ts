@@ -30,6 +30,7 @@ function getJwtSecret(): Uint8Array {
   return _jwtSecret;
 }
 const SESSION_COOKIE = 'nucrm_session';
+const IMPERSONATION_COOKIE = 'nucrm_impersonation';
 const SESSION_EXPIRES_DAYS = 30;
 
 // ── Password validation ──────────────────────────────────────
@@ -119,6 +120,37 @@ export async function clearSessionCookie() {
   cookieStore.delete(SESSION_COOKIE);
 }
 
+// ── Impersonation cookie ─────────────────────────────────────
+export const IMPERSONATION_COOKIE_NAME = IMPERSONATION_COOKIE;
+
+/**
+ * Park the super admin's own credential while `nucrm_session` carries the
+ * impersonated tenant user's token. Without this, starting an impersonation
+ * would log the admin out of the console with no way back: the stop endpoint
+ * needs a super admin, and the only session the browser still presents is the
+ * target user's.
+ *
+ * The value is a separate short-lived token, never a copy of the admin's
+ * login cookie, so it can be revoked with the impersonation record that
+ * created it, and it only ever reaches the browser that started the
+ * impersonation.
+ */
+export async function setImpersonationTokenCookie(token: string, maxAgeDays = 1) {
+  const cookieStore = await cookies();
+  cookieStore.set(IMPERSONATION_COOKIE, token, {
+    httpOnly: true,
+    secure: process.env['NODE_ENV'] === 'production' ? true : process.env['COOKIE_SECURE'] !== 'false',
+    sameSite: 'strict',
+    maxAge: maxAgeDays * 24 * 60 * 60,
+    path: '/',
+  });
+}
+
+export async function clearImpersonationTokenCookie() {
+  const cookieStore = await cookies();
+  cookieStore.delete(IMPERSONATION_COOKIE);
+}
+
 // ── Get current user from session ────────────────────────────
  
 export interface CurrentUser {
@@ -130,23 +162,29 @@ export interface CurrentUser {
   lastTenantId: string | null;
 }
 
-export async function getCurrentUser(): Promise<CurrentUser | null> {
-  const token = await getSessionToken();
-  if (!token) return null;
-
+/**
+ * Resolve the account a token belongs to.
+ *
+ * `getCurrentUser()` is the normal path (the request's own session cookie).
+ * Impersonation stop needs the same check for a *different* cookie — the
+ * admin's parked credential — so the lookup is shared rather than duplicated.
+ *
+ * It runs in the pre-auth resolution context: this resolves an identity *from*
+ * a token, so no tenant GUC can be trusted to be set yet — the only user that
+ * may be named is the one the verified token already carries, which is why the
+ * read stays scoped to that principal's own rows.
+ */
+export async function getCurrentUserForToken(token: string): Promise<CurrentUser | null> {
   const payload = await verifyToken(token);
   if (!payload) return null;
 
   const tokenHash = await hashToken(token);
 
-  // Verify session still exists in DB.
-  //
-  // PP-026: this is a *pre-auth* read — performing it is what proves who the
-  // caller is — so it cannot run on the plain pool, where every policy on
-  // `sessions`/`users` keys off an identity that does not exist yet. The userId
-  // comes from the verified token above (never from client input), so
-  // withAuthResolutionContext scopes the read to this principal's own rows.
-  const results = await withAuthResolutionContext(payload.userId, async (tx) =>
+  // Verify the session row still exists — PP-026: this is a *pre-auth* read,
+  // performing it is what proves who the caller is, so it cannot run on the
+  // plain pool, where every policy on `sessions`/`users` keys off an identity
+  // that does not exist yet.
+  const results = await withAuthResolutionContext<CurrentUser[]>(payload.userId, async (tx) =>
     await tx.select({
       id: users.id,
       email: users.email,
@@ -165,4 +203,11 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
   );
 
   return results[0] ?? null;
+}
+
+export async function getCurrentUser(): Promise<CurrentUser | null> {
+  const token = await getSessionToken();
+  if (!token) return null;
+
+  return getCurrentUserForToken(token);
 }

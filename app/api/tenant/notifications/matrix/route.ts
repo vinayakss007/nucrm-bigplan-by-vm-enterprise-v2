@@ -19,7 +19,7 @@ import { db } from '@/drizzle/db';
 import { tenantMembers } from '@/drizzle/schema';
 import { and, eq, sql } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
-import { concurrencyGuard } from '@/lib/api/concurrency';
+import { concurrencyGuard, checkStaleUpdate } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
 import { withApiRoute } from '@/lib/api/with-api-route';
@@ -78,7 +78,9 @@ export const GET = withApiRoute(async (req: NextRequest) => {
         eq(tenantMembers.tenantId, ctx.tenantId),
         eq(tenantMembers.status, 'active')
       ),
-      columns: { notificationPrefs: true },
+      // updatedAt is the value PATCH expects back as `expectedUpdatedAt`; a
+      // client cannot opt into the guard without reading it somewhere.
+      columns: { notificationPrefs: true, updatedAt: true },
     });
 
     const stored = ((row?.notificationPrefs as Record<string, unknown>)?.matrix ?? {}) as Record<string, Record<Channel, boolean>>;
@@ -95,7 +97,11 @@ export const GET = withApiRoute(async (req: NextRequest) => {
       };
     }
 
-    return NextResponse.json({ matrix, channels: CHANNELS });
+    return NextResponse.json({
+      matrix,
+      channels: CHANNELS,
+      updatedAt: (row as { updatedAt?: Date } | undefined)?.updatedAt?.toISOString() ?? null,
+    });
  
  
   } catch (err) {
@@ -129,11 +135,15 @@ export const PATCH = withApiRoute(async (req: NextRequest) => {
       };
     }
 
-    const expectedUpdatedAt = body.expectedUpdatedAt ? new Date(body.expectedUpdatedAt) : null;
-    const guard = await concurrencyGuard(db, tenantMembers, ctx.userId, ctx.tenantId, expectedUpdatedAt);
-    if (guard) return guard;
+    // The 5-argument overload of concurrencyGuard matches on `table.id`, and
+    // tenant_members.id is its own surrogate key — not the user id. Passing
+    // ctx.userId there looked the row up by the wrong column, so any request
+    // that sent expectedUpdatedAt found nothing and answered 404. The fragment
+    // overload compares updated_at inside the (user, tenant, status) predicate
+    // this update already uses.
+    const guard = concurrencyGuard(tenantMembers, body.expectedUpdatedAt);
 
-    await db
+    const [updated] = await db
       .update(tenantMembers)
       .set({
         notificationPrefs: sql`
@@ -148,10 +158,19 @@ export const PATCH = withApiRoute(async (req: NextRequest) => {
       .where(and(
         eq(tenantMembers.userId, ctx.userId),
         eq(tenantMembers.tenantId, ctx.tenantId),
-        eq(tenantMembers.status, 'active')
-      ));
+        eq(tenantMembers.status, 'active'),
+        ...(guard ? [guard] : []),
+      ))
+      .returning({ updatedAt: tenantMembers.updatedAt });
 
-    return NextResponse.json({ ok: true, count: Object.keys(safe).length });
+    const stale = checkStaleUpdate(updated);
+    if (stale) return stale;
+
+    return NextResponse.json({
+      ok: true,
+      count: Object.keys(safe).length,
+      updatedAt: updated!.updatedAt?.toISOString() ?? null,
+    });
  
  
   } catch (err) {

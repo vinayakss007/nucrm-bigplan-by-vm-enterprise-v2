@@ -173,13 +173,23 @@ export async function bulkScoreLeads(tenantId: string, userId: string, limit: nu
     .limit(limit);
 
   const results = [];
+  let firstError: unknown;
   for (const lead of toScore) {
     try {
       const res = await scoreLead(tenantId, userId, lead.id);
       results.push(res);
     } catch (err) {
+      firstError ??= err;
       await logError({ error: err, context: `ai-scoring: bulkScoreLeads lead=${lead.id}` });
     }
+  }
+
+  // Partial failure still returns what scored. But when every selected lead
+  // failed, an empty array is indistinguishable from "nothing was due" — the
+  // cron reported ok:true through a tenant having no AI provider configured.
+  if (toScore.length > 0 && results.length === 0) {
+    const reason = firstError instanceof Error ? `: ${firstError.message}` : '';
+    throw new Error(`lead scoring failed for all ${toScore.length} leads${reason}`);
   }
 
   return results;

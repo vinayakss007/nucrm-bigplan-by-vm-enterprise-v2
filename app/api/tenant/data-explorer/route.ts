@@ -175,6 +175,15 @@ export const GET = withApiRoute(async (req: NextRequest) => {
   }
 });
 
+// Accepted as text and handed to Postgres for the `::timestamptz` cast, which
+// knows how to read its own output format (including the microsecond digits).
+// The JS check exists only to answer 400 rather than 500: new Date() is used as
+// a validity test, never as the value that reaches the query.
+const editTimestampSchema = z.string().min(1).refine(
+  (raw) => !Number.isNaN(new Date(raw).getTime()),
+  { message: 'expectedUpdatedAt must be an ISO 8601 timestamp' },
+);
+
 const updateSchema = z.object({
   table: z.enum(['contacts', 'leads', 'deals', 'companies', 'tasks']),
   id: z.string().min(1),
@@ -183,7 +192,16 @@ const updateSchema = z.object({
   // Optimistic concurrency (#680): when supplied, the inline edit only applies
   // if the row's updated_at still matches. Opt-in — omitting it keeps the prior
   // last-write-wins behaviour.
-  expectedUpdatedAt: z.string().datetime().optional(),
+  //
+  // Parsed with new Date() rather than z.string().datetime() because the stamp
+  // this guard exists to echo back does not come from JSON: the list view reads
+  // updated_at through a raw db.execute(), and node-postgres hands timestamptz
+  // back as Postgres' own text — "2026-09-29 09:52:19.079633+00", space
+  // separated, microsecond, +00 — which datetime() rejected with a 400. So the
+  // only stamp a client could obtain from this feature was one this feature
+  // refused to accept, and the guard could never be exercised. An
+  // unparseable value is still a 400, never a silently skipped check.
+  expectedUpdatedAt: editTimestampSchema.optional(),
 });
 
 // Explicit per-table allowlist of editable columns.
@@ -242,7 +260,7 @@ export const PUT = withApiRoute(async (req: NextRequest) => {
     // precision so the comparison survives the JS/pg round-trip (pg keeps
     // microseconds, JS Date only ms).
     const versionCond = expectedUpdatedAt
-      ? sql` AND date_trunc('millisecond', updated_at::timestamptz) = date_trunc('millisecond', ${new Date(expectedUpdatedAt)}::timestamptz)`
+      ? sql` AND date_trunc('millisecond', updated_at::timestamptz) = date_trunc('millisecond', ${expectedUpdatedAt}::timestamptz)`
       : sql``;
 
     const result = await db.execute(sql`

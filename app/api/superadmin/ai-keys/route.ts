@@ -121,7 +121,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
       newData: { provider, keyPrefix: result.keyPrefix },
     });
 
-    logSuperAdminAction({
+    await logSuperAdminAction({
       adminId: ctx.userId,
       adminEmail: ctx.user?.email || "",
       action: 'api_key.created',
@@ -160,7 +160,7 @@ export const DELETE = withApiRoute(async (req: NextRequest) => {
       newData: { provider },
     });
 
-    logSuperAdminAction({
+    await logSuperAdminAction({
       adminId: ctx.userId,
       adminEmail: ctx.user?.email || "",
       action: 'api_key.revoked',

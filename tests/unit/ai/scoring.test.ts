@@ -146,5 +146,24 @@ describe('AI Scoring', () => {
         expect.objectContaining({ context: 'ai-scoring: bulkScoreLeads lead=c-ok' })
       );
     });
+
+    it('throws when every selected lead failed, naming the reason', async () => {
+      // An empty result must not look like "nothing was due": that is how a
+      // tenant with no AI provider reported a clean run.
+      mockBulkSelect.mockResolvedValueOnce([{ id: 'c-1' }, { id: 'c-2' }]);
+      mockDbFindMany.mockResolvedValue([]);
+      mockDbFindFirst.mockResolvedValue(null);
+
+      const { logError } = await import('@/lib/errors-server');
+      await expect(mod.bulkScoreLeads('t-1', 'u-1', 20))
+        .rejects.toThrow('lead scoring failed for all 2 leads: Lead not found');
+      expect(logError).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not throw when nothing was due', async () => {
+      mockBulkSelect.mockResolvedValueOnce([]);
+
+      await expect(mod.bulkScoreLeads('t-1', 'u-1', 20)).resolves.toEqual([]);
+    });
   });
 });

@@ -1,4 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { PgDialect } from 'drizzle-orm/pg-core';
+
+const { executed } = vi.hoisted(() => ({ executed: [] as unknown[] }));
 
 // #1615: routes/pages now run inside withPinnedConnection (via withApiRoute /
 // withTenantScope). In unit tests there is no real pool, so stub the primitive
@@ -35,13 +38,16 @@ vi.mock('@/lib/api-error', () => ({
 
 vi.mock('@/drizzle/db', () => ({
   db: {
-    execute: vi.fn(async () => ({
-      rows: [
-        { label: 'new', value: 15 },
-        { label: 'contacted', value: 8 },
-        { label: 'qualified', value: 5 },
-      ],
-    })),
+    execute: vi.fn(async (query: unknown) => {
+      executed.push(query);
+      return {
+        rows: [
+          { label: 'new', value: 15 },
+          { label: 'contacted', value: 8 },
+          { label: 'qualified', value: 5 },
+        ],
+      };
+    }),
   },
 }));
 
@@ -200,8 +206,14 @@ describe('POST /api/tenant/reports/builder', () => {
       },
     });
 
+    // A groupBy outside the allowlist is bad input, not a server fault. It used
+    // to be answered 500 by a Postgres "column does not exist" from the
+    // injection string reaching the query; the allowlist check now runs before
+    // any SQL is built, so nothing reaches the database at all.
     const response = await POST(request);
-    expect(response.status).toBe(500);
+    expect(response.status).toBe(400);
+    const json = await response.json();
+    expect(json.error).toContain('Invalid groupBy');
   });
 });
 
@@ -275,7 +287,142 @@ describe('expanded entities', () => {
       },
     });
 
+    // total_amount is a valid metricField for invoices but not a dimension, and
+    // an unusable groupBy is a 400 now rather than a 500 from the database.
     const response = await POST(request);
-    expect(response.status).toBe(500);
+    expect(response.status).toBe(400);
+    const json = await response.json();
+    expect(json.error).toContain('Invalid groupBy');
+  });
+});
+
+/**
+ * POST documented `filters`, forwarded them to the engine, and the engine never
+ * read them — a caller narrowing a report got the unfiltered totals with no
+ * signal that the narrowing had been dropped.
+ */
+describe('report builder filters', () => {
+  const render = (): { sql: string; params: unknown[] } => {
+    const last = executed[executed.length - 1];
+    return new PgDialect().sqlToQuery(last as never);
+  };
+
+  beforeEach(() => {
+    executed.length = 0;
+  });
+
+  it('narrows the query by one value', async () => {
+    const { POST } = await import('@/app/api/tenant/reports/builder/route');
+
+    const response = await POST(testRequest('/api/tenant/reports/builder', {
+      method: 'POST',
+      body: {
+        entity: 'contacts',
+        metric: 'count',
+        groupBy: 'lead_source',
+        filters: { lead_status: 'won' },
+      },
+    }));
+
+    expect(response.status).toBe(200);
+    const query = render();
+    expect(query.sql).toContain('(COALESCE("lead_status"::text, \'Unknown\')) = $2');
+    expect(query.params).toContain('won');
+  });
+
+  it('widens a list of values into one predicate', async () => {
+    const { POST } = await import('@/app/api/tenant/reports/builder/route');
+
+    await POST(testRequest('/api/tenant/reports/builder', {
+      method: 'POST',
+      body: {
+        entity: 'tasks',
+        metric: 'count',
+        groupBy: 'assigned_to',
+        filters: { priority: ['high', 'urgent'] },
+      },
+    }));
+
+    const query = render();
+    expect(query.sql).toContain('in (');
+    expect(query.params).toContain('high');
+    expect(query.params).toContain('urgent');
+  });
+
+  it('keeps the filter value a bound parameter, never SQL text', async () => {
+    const { POST } = await import('@/app/api/tenant/reports/builder/route');
+
+    await POST(testRequest('/api/tenant/reports/builder', {
+      method: 'POST',
+      body: {
+        entity: 'contacts',
+        metric: 'count',
+        groupBy: 'lead_source',
+        filters: { lead_status: "x'; DROP TABLE contacts;--" },
+      },
+    }));
+
+    const query = render();
+    expect(query.sql).not.toContain('DROP TABLE');
+    expect(query.params.some(p => String(p).includes('DROP TABLE'))).toBe(true);
+  });
+
+  it('rejects a filter on a field that is not a dimension', async () => {
+    const { POST } = await import('@/app/api/tenant/reports/builder/route');
+
+    const response = await POST(testRequest('/api/tenant/reports/builder', {
+      method: 'POST',
+      body: {
+        entity: 'contacts',
+        metric: 'count',
+        groupBy: 'lead_source',
+        filters: { password_hash: 'x' },
+      },
+    }));
+
+    expect(response.status).toBe(400);
+    const json = await response.json();
+    expect(json.error).toContain('Invalid filter field');
+    // rejected before anything was built, so nothing reached the database
+    expect(executed).toHaveLength(0);
+  });
+
+  it('answers a mistyped date with 400 instead of a driver error', async () => {
+    const { POST } = await import('@/app/api/tenant/reports/builder/route');
+
+    const response = await POST(testRequest('/api/tenant/reports/builder', {
+      method: 'POST',
+      body: {
+        entity: 'contacts',
+        metric: 'count',
+        groupBy: 'lead_status',
+        dateRange: { from: 'last tuesday' },
+      },
+    }));
+
+    expect(response.status).toBe(400);
+    const json = await response.json();
+    expect(json.error).toContain('dateRange.from is not a valid date');
+    expect(executed).toHaveLength(0);
+  });
+
+  it('ignores a filter whose value box is empty', async () => {
+    const { POST } = await import('@/app/api/tenant/reports/builder/route');
+
+    const response = await POST(testRequest('/api/tenant/reports/builder', {
+      method: 'POST',
+      body: {
+        entity: 'contacts',
+        metric: 'count',
+        groupBy: 'lead_source',
+        filters: { lead_status: '' },
+      },
+    }));
+
+    expect(response.status).toBe(200);
+    // groupBy is lead_source; lead_status must not appear at all.
+    const query = render();
+    expect(query.sql).not.toContain('"lead_status"');
+    expect(query.params).not.toContain('');
   });
 });

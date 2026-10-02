@@ -9,6 +9,40 @@ const mockUpdateSet = vi.fn().mockReturnValue({ where: mockUpdateWhere });
 const mockSendEmail = vi.fn().mockResolvedValue({ success: true });
 const mockLock = { acquired: true, value: 'lock-1' };
 
+type SweepResult = {
+  visited: number;
+  skipped: Array<{ tenantId: string; reason: string }>;
+  failed: Array<{ tenantId: string; error: string }>;
+};
+
+const MOCK_TENANT_ID = 't1';
+
+// Mirrors lib/cron/tenant-scope.ts: runs the sweep body once for a fixed
+// tenant and records (rather than rethrows) a body that throws, so the route's
+// per-tenant failure reporting can be asserted without a real database.
+async function sweepOnce(
+  _context: string,
+  body: (tenantId: string) => Promise<void>,
+): Promise<SweepResult> {
+  const sweep: SweepResult = { visited: 0, skipped: [], failed: [] };
+  try {
+    await body(MOCK_TENANT_ID);
+    sweep.visited = 1;
+  } catch (err) {
+    sweep.failed.push({
+      tenantId: MOCK_TENANT_ID,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+  return sweep;
+}
+
+const mockSweepTenants = vi.fn(sweepOnce);
+
+vi.mock('@/lib/cron/tenant-scope', () => ({
+  sweepTenants: mockSweepTenants,
+}));
+
 vi.mock('@/drizzle/db', () => ({
   db: {
     select: vi.fn().mockReturnValue({ from: mockSelectFrom }),
@@ -84,6 +118,9 @@ describe('scheduled report delivery cron', () => {
     vi.clearAllMocks();
     mockSelectResult.mockResolvedValue([]);
     mockUpdateWhere.mockResolvedValue([]);
+    // clearAllMocks wipes implementations; restore the fixed-tenant sweep so
+    // individual tests can still override it (e.g. reject the due query).
+    mockSweepTenants.mockImplementation(sweepOnce);
     // clearAllMocks wipes the spy implementation; restore the real renderer so
     // PDF-format tests produce genuine '%PDF-' bytes unless a test overrides it.
     const actual = await vi.importActual<typeof import('@/lib/pdf/render')>('@/lib/pdf/render');
@@ -121,6 +158,17 @@ describe('scheduled report delivery cron', () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.delivered).toBe(1);
+    // Per-tenant sweep reporting: one tenant visited, none skipped or failed.
+    expect(body.ok).toBe(true);
+    expect(body.tenants_checked).toBe(1);
+    expect(body.tenants_skipped).toBe(0);
+    expect(body.tenants_failed).toBe(0);
+    // The sweep runs under this job's named context.
+    expect(mockSweepTenants.mock.calls[0][0]).toBe('cron/scheduled-report-delivery');
+    // The due-query WHERE carries an explicit tenant filter for the swept
+    // tenant, so a NULL-tenant row can never be picked up by the wrong tenant.
+    const { eq } = await import('drizzle-orm');
+    expect(eq).toHaveBeenCalledWith('tenant_id', MOCK_TENANT_ID);
 
     expect(mockSendEmail).toHaveBeenCalledTimes(1);
     const payload = mockSendEmail.mock.calls[0][0] as {
@@ -315,5 +363,62 @@ describe('scheduled report delivery cron', () => {
     const body = await res.json();
     expect(body.skipped).toBe(true);
     expect(mockSelectResult).not.toHaveBeenCalled();
+    expect(mockSweepTenants).not.toHaveBeenCalled();
+  });
+
+  it('reports a failed tenant instead of a green response when the sweep body throws', async () => {
+    // The due-query itself throwing (inside the tenant body) is recorded by
+    // sweepTenants, so the route must surface ok:false + tenants_failed rather
+    // than silently claiming a clean run.
+    mockSelectResult.mockRejectedValueOnce(new Error('rls exploded'));
+
+    const { POST } = await import('@/app/api/cron/scheduled-report-delivery/route');
+    const res = await POST(makeRequest());
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+    expect(body.tenants_checked).toBe(0);
+    expect(body.tenants_failed).toBe(1);
+    expect(body.delivered).toBe(0);
+  });
+
+  it('refuses to deliver a type it cannot map instead of emailing the contacts export', async () => {
+    // exportEntityFor() used to `default: return 'contacts'`, so a report saved
+    // as type='leads' emailed a contacts CSV with a leads filename and subject —
+    // a successful-looking delivery of the wrong data, with nothing logged. It
+    // must now throw before generateExportData runs, so no mail goes out.
+    mockSelectResult.mockResolvedValue([{
+      id: 'r-lead',
+      tenantId: 't1',
+      name: 'Lead Funnel',
+      type: 'leads',
+      frequency: 'daily',
+      recipients: ['owner@example.com'],
+      format: 'csv',
+      status: 'active',
+      deletedAt: null,
+      nextRunAt: new Date(Date.now() - 60_000),
+      lastRunAt: null,
+      updatedAt: new Date(),
+      config: {},
+    }]);
+
+    const { POST } = await import('@/app/api/cron/scheduled-report-delivery/route');
+    const res = await POST(makeRequest());
+    const body = await res.json();
+
+    const { generateExportData } = await import('@/lib/export');
+    const { logError } = await import('@/lib/errors-server');
+
+    expect(mockSendEmail).not.toHaveBeenCalled();
+    expect(generateExportData).not.toHaveBeenCalled();
+    expect(body.delivered).toBe(0);
+    expect(body.skipped).toBe(1);
+    // Loud, not silent: the refusal has to reach error_logs or the report just
+    // stops arriving and nobody knows why.
+    expect(logError).toHaveBeenCalledWith(expect.objectContaining({
+      context: 'scheduled-report-delivery',
+    }));
   });
 });

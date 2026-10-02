@@ -10,6 +10,7 @@ import { logger } from '@/lib/logger';
 import { sendCriticalErrorAlert } from '@/lib/critical-error-alert';
 import { InvalidJsonBodyError } from '@/lib/api/validate';
 import { ConcurrencyError, InvalidExpectedUpdatedAtError } from '@/lib/concurrency';
+import { clientErrorFromDbCode, currentHttpMethod } from '@/lib/api/db-client-error';
 
 /**
  * @deprecated Use `handleError()` from `@/lib/errors` for new code.
@@ -38,6 +39,15 @@ export function apiError(err: unknown, message = 'Internal server error', status
   const isDev = process.env.NODE_ENV === 'development';
   const errMsg = err instanceof Error ? err.message : String(err);
 
+  // Postgres raised a client-input error (bad uuid in the path, duplicate key,
+  // dangling reference). withApiRoute maps these for errors that escape the
+  // handler, but most routes catch their own DB errors and land here first, so
+  // without this branch ~90 [id] endpoints answered 500, filed a Sentry issue
+  // and paged an operator for what the caller mistyped. Same classifier as the
+  // wrapper, so the two paths cannot disagree. Computed before the log line so
+  // that reports the status actually returned, not the caller's hardcoded 500.
+  const dbClientError = clientErrorFromDbCode(err, currentHttpMethod() ?? 'POST');
+
   // Structured log line for every apiError call. PII-safe by design: only the
   // message and the first stack frame are recorded — never full stacks, bodies
   // or request payloads. lib/logger does not import this module, so there is no
@@ -46,8 +56,12 @@ export function apiError(err: unknown, message = 'Internal server error', status
     ? err.stack.split('\n')[1]?.trim()
     : undefined;
   logger.error('[api]', {
-    status,
+    status: dbClientError?.status ?? status,
     message: errMsg,
+    // Which constraint refused the row is the difference between "the caller
+    // mistyped" and "our enum and the table's CHECK disagree" — the latter is
+    // invisible in the SQL text, which drizzle has already flattened to $n.
+    ...(dbClientError?.constraint ? { constraint: dbClientError.constraint } : {}),
     ...(stackTopLine ? { stack: stackTopLine } : {}),
   });
 
@@ -76,6 +90,10 @@ export function apiError(err: unknown, message = 'Internal server error', status
   // not a server fault, so answer 400 without paging anyone.
   if (err instanceof InvalidExpectedUpdatedAtError) {
     return NextResponse.json({ error: err.message }, { status: err.statusCode });
+  }
+
+  if (dbClientError) {
+    return NextResponse.json({ error: dbClientError.message }, { status: dbClientError.status });
   }
 
   // Use centralized logError (coordinates with errors.ts)

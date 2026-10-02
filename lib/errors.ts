@@ -20,6 +20,7 @@
 import 'server-only';
 import { NextResponse } from 'next/server';
 import { ErrorCode, InvalidJsonBodyError, type ApiError } from '@/lib/errors-shared';
+import { clientErrorFromDbCode, currentHttpMethod } from '@/lib/api/db-client-error';
 
 export { ErrorCode, type ApiError } from '@/lib/errors-shared';
 export type { ErrorLevel } from '@/lib/errors-shared';
@@ -145,6 +146,20 @@ export function handleError(error: unknown): NextResponse<ApiError> {
   // console/DB noise of a server-side failure.
   if (error instanceof InvalidJsonBodyError) {
     return new ValidationError('Invalid JSON body').toResponse();
+  }
+
+  // Same rule as apiError(): a uuid that will not cast, a duplicate key or a
+  // dangling reference is the caller's fault. Must precede logError — the pg
+  // driver names every query failure "DatabaseError", so the name test below
+  // would otherwise record a typo as a DB outage.
+  const dbClientError = clientErrorFromDbCode(error, currentHttpMethod() ?? 'POST');
+  if (dbClientError) {
+    const code = dbClientError.status === 404
+      ? ErrorCode.RESOURCE_NOT_FOUND
+      : dbClientError.status === 409
+        ? ErrorCode.DB_DUPLICATE_KEY
+        : ErrorCode.VALIDATION_ERROR;
+    return new AppError(dbClientError.message, code, dbClientError.status).toResponse();
   }
 
   logError({ error, context: 'handleError' });

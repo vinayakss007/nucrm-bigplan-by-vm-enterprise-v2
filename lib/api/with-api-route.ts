@@ -57,6 +57,7 @@ import { NextResponse } from 'next/server';
 import { withPinnedConnection } from '@/lib/db/request-connection';
 import { runWithTenantCarrier } from '@/lib/db/tenant-carrier';
 import { trackRequestStart, trackRequestEnd } from '@/lib/db/graceful-shutdown';
+import { clientErrorFromDbCode, runWithHttpMethod } from '@/lib/api/db-client-error';
 import { metrics } from '@/lib/metrics';
 
 /**
@@ -67,36 +68,6 @@ function normalizeMetricPath(pathname: string): string {
   return pathname
     .replace(/\/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}(?=\/|$)/g, '/[id]')
     .replace(/\/\d+(?=\/|$)/g, '/[id]');
-}
-
-/**
- * Map the Postgres constraint/cast errors that prove out as client problems
- * when a handler let them escape, at the single route chokepoint, instead of
- * a generic 500 (+ Sentry noise for user-input mistakes):
- *
- * - 22P02 uuid cast — ~30 [id] routes have no isEntityId() guard, so probing
- *   /api/tenant/<thing>/foobar used to 500 (Sentry NUCRM-Y/W/X class, #2131).
- *   A bad PATH id -> 404 (not a uuid cannot name an entity); on POST the bad
- *   uuid is almost always a body reference -> 400.
- * - 23505 unique_violation — the roles route already answers 409 for a
- *   duplicate name; unhandled escapes elsewhere get the same status.
- * - 23503 foreign_key_violation — create/update referencing a nonexistent
- *   id is bad client input -> 400.
- *
- * Everything else (including 22P02 on non-uuid types) still propagates so
- * real server bugs keep surfacing as 500s.
- */
-function clientErrorFromDbCode(err: unknown, method: string): { status: number; message: string } | null {
-  const e = err as { code?: string; message?: string } | null;
-  const code = e?.code;
-  if (code === '22P02' && /uuid/i.test(String(e?.message))) {
-    return method === 'POST'
-      ? { status: 400, message: 'Invalid identifier in request body' }
-      : { status: 404, message: 'Not found' };
-  }
-  if (code === '23505') return { status: 409, message: 'Conflict: value already exists' };
-  if (code === '23503') return { status: 400, message: 'Invalid reference' };
-  return null;
 }
 
 /**
@@ -154,8 +125,10 @@ export function withApiRoute<C = unknown>(
       // PP-027: tenant-carrier scope wraps the pinned connection so the identity
       // requireAuth() proves stays visible to bare db.transaction() calls under
       // PgBouncer transaction pooling (no-op cost without PgBouncer).
-      const response = await runWithTenantCarrier(() =>
-        withPinnedConnection(async () => handler(request, context))
+      const response = await runWithHttpMethod(metricMethod, () =>
+        runWithTenantCarrier(() =>
+          withPinnedConnection(async () => handler(request, context))
+        )
       );
       metricStatus = response instanceof Response ? response.status : 500;
       return response;

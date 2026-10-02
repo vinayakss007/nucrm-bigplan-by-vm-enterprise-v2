@@ -5,110 +5,176 @@
  */
 import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
-import { validateBody, readJsonBody } from '@/lib/api/validate';
-import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { users, tenantMembers } from '@/drizzle/schema';
-import { eq, and, sql } from 'drizzle-orm';
+import { users, tenantMembers, sessions, impersonationSessions } from '@/drizzle/schema';
+import { eq, and, desc, isNull } from 'drizzle-orm';
 import { logSuperAdminAction } from '@/lib/audit/super-admin';
+import { requireCsrf } from '@/lib/auth/middleware';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { setSuperAdminContext, setTenantContext, type RlsTransaction as Tx } from '@/lib/db/rls';
+import {
+  IMPERSONATION_COOKIE_NAME,
+  clearImpersonationTokenCookie,
+  getCurrentUserForToken,
+  setSessionCookie,
+} from '@/lib/auth/session';
+import { parseImpersonationNotes, parseOriginalMembershipState } from '@/lib/auth/impersonation-reconcile';
 import { logError } from '@/lib/errors-server';
-
-const schema = z.object({ sessionId: z.string().min(1) });
 
 /**
  * POST /api/superadmin/impersonate/stop
- * End current impersonation session
+ *
+ * End the impersonation this browser is holding, hand the admin's own session
+ * back and undo the membership the start endpoint upgraded.
+ *
+ * The caller cannot be identified from `nucrm_session`: starting an
+ * impersonation replaces it with the target user's token, so requireAuth here
+ * would report a tenant member and every stop would 403. Instead the admin's
+ * credential — parked in its own httpOnly cookie at start — is verified against
+ * `sessions` and must still belong to a super admin.
+ *
+ * No session id is taken from the client: what gets ended is the admin's own
+ * live impersonation, which that credential resolves.
  */
 export const POST = withApiRoute(async (request: NextRequest) => {
   try {
-    const ctx = await requireAuth(request);
-    if (ctx instanceof NextResponse) return ctx;
-    if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Super admin required' }, { status: 403 });
-    
-    const body = await readJsonBody(request);
-    const validated = validateBody(schema, body);
-    if (validated instanceof NextResponse) return validated;
-    const { sessionId } = validated.data;
-
-    // Fetch impersonation session to retrieve original membership state before deleting it
-    const sessionRes = await db.execute(sql`
-      SELECT impersonator_id, tenant_id, notes
-      FROM impersonation_sessions
-      WHERE id = ${sessionId}::uuid AND ended_at IS NULL
-      LIMIT 1
-    `);
-
-    const sessionRow = (sessionRes.rows?.[0] as Record<string, unknown>) || null;
-    const impersonatorId = sessionRow?.impersonator_id as string | undefined;
-    const tenantId = sessionRow?.tenant_id as string | undefined;
-
-    // Parse the original membership state saved at impersonation start
-    let originalMembershipState: {
-      existed: boolean;
-      status: string;
-      roleSlug: string;
-    } | null = null;
-    if (sessionRow?.notes) {
-      try {
-        const parsed = JSON.parse(sessionRow.notes as string);
-        originalMembershipState = parsed.originalMembershipState || null;
-      } catch {
-        // Malformed notes — safest to revert to non-member
-        originalMembershipState = { existed: false, status: 'active', roleSlug: 'member' };
-      }
+    const adminToken = request.cookies.get(IMPERSONATION_COOKIE_NAME)?.value;
+    if (!adminToken) {
+      return NextResponse.json({ error: 'No impersonation session for this browser' }, { status: 403 });
     }
 
-    // The impersonation teardown must be atomic: ending the session, restoring
-    // (or removing) the superadmin's original membership, and clearing their
-    // last tenant all describe one consistent "back to superadmin" state. A
-    // partial failure would strand the admin with elevated tenant access.
-    await db.transaction(async (tx) => {
-      // End impersonation session (deletes session + creates audit log)
-      await tx.execute(sql`SELECT public.end_impersonation(${sessionId})`);
+    const admin = await getCurrentUserForToken(adminToken);
+    if (!admin) {
+      await clearImpersonationTokenCookie();
+      return NextResponse.json({ error: 'Impersonation credential is no longer valid' }, { status: 401 });
+    }
+    if (!admin.isSuperAdmin) {
+      return NextResponse.json({ error: 'Super admin required' }, { status: 403 });
+    }
 
-      // Restore the superadmin's original tenant membership state
-      if (impersonatorId && tenantId) {
-        if (originalMembershipState?.existed) {
-          // Restore to the original role and status
-          await tx
-            .update(tenantMembers)
-            .set({
-              status: originalMembershipState.status,
-              roleSlug: originalMembershipState.roleSlug,
-            })
-            .where(and(
-              eq(tenantMembers.tenantId, tenantId),
-              eq(tenantMembers.userId, impersonatorId),
-            ));
-        } else {
-          // Membership was created solely for impersonation — remove it
-          await tx
-            .delete(tenantMembers)
-            .where(and(
-              eq(tenantMembers.tenantId, tenantId),
-              eq(tenantMembers.userId, impersonatorId),
-            ));
-        }
+    // #1835 defense-in-depth, after the caller is identified: middleware does
+    // validate CSRF for this path, but this route is the one mutating endpoint
+    // that cannot call requireAuth(), so it asserts the double-submit token
+    // itself rather than relying on the global layer alone.
+    const csrf = requireCsrf(request);
+    if (csrf) return csrf;
+
+    // The tenant comes from the admin's own record, never from the request:
+    // impersonate/start writes it, and it is the only handle on which tenant's
+    // context can open the impersonation row.
+    const tenantId = admin.lastTenantId;
+    if (!tenantId) {
+      await clearImpersonationTokenCookie();
+      return NextResponse.json({ ok: true, message: 'Impersonation ended', alreadyEnded: true });
+    }
+
+    const outcome = await withImpersonationContext(tenantId, admin.id, async (tx) => {
+      const [session] = await tx
+        .select({
+          id: impersonationSessions.id,
+          targetUserId: impersonationSessions.targetUserId,
+          notes: impersonationSessions.notes,
+        })
+        .from(impersonationSessions)
+        .where(and(
+          eq(impersonationSessions.impersonatorId, admin.id),
+          eq(impersonationSessions.tenantId, tenantId),
+          isNull(impersonationSessions.endedAt),
+        ))
+        .orderBy(desc(impersonationSessions.startedAt))
+        .limit(1);
+
+      if (!session) return { ended: false as const };
+
+      const notes = parseImpersonationNotes(session.notes);
+      const originalMembershipState = parseOriginalMembershipState(session.notes);
+
+      // The impersonated login dies with the record; the admin's parked session
+      // stays, because it is about to become their active one again.
+      if (notes.tokenHash) {
+        await tx.delete(sessions).where(eq(sessions.tokenHash, notes.tokenHash));
       }
 
-      // Clear last tenant
+      await tx
+        .update(impersonationSessions)
+        .set({ endedAt: new Date(), updatedAt: new Date() })
+        .where(and(eq(impersonationSessions.id, session.id), isNull(impersonationSessions.endedAt)));
+
+      // tenant_members isolates on app.current_tenant with no super-admin escape,
+      // so the tenant context above is what lets this revert reach a row at all —
+      // without it the statement matched nothing and left the admin as tenant admin.
+      let membershipReverted: boolean;
+      if (originalMembershipState.existed) {
+        const restored = await tx
+          .update(tenantMembers)
+          .set({
+            status: originalMembershipState.status,
+            roleSlug: originalMembershipState.roleSlug,
+            updatedAt: new Date(),
+          })
+          .where(and(
+            eq(tenantMembers.tenantId, tenantId),
+            eq(tenantMembers.userId, admin.id),
+          ))
+          .returning({ id: tenantMembers.id });
+        membershipReverted = restored.length > 0;
+      } else {
+        const removed = await tx
+          .delete(tenantMembers)
+          .where(and(
+            eq(tenantMembers.tenantId, tenantId),
+            eq(tenantMembers.userId, admin.id),
+          ))
+          .returning({ id: tenantMembers.id });
+        membershipReverted = removed.length > 0;
+      }
+
       await tx
         .update(users)
         .set({ lastTenantId: null, updatedAt: new Date() })
-        .where(eq(users.id, ctx.userId));
+        .where(eq(users.id, admin.id));
+
+      return {
+        ended: true as const,
+        sessionId: session.id,
+        targetUserId: session.targetUserId,
+        membershipReverted,
+        originalMembershipState,
+      };
     });
 
-    logSuperAdminAction({
-      adminId: ctx.userId,
-      adminEmail: ctx.user?.email || "",
+    if (!outcome.ended) {
+      await clearImpersonationTokenCookie();
+      return NextResponse.json({ ok: true, message: 'Impersonation ended', alreadyEnded: true });
+    }
+
+    if (!outcome.membershipReverted) {
+      void logError({
+        error: new Error('Impersonation ended but the tenant membership could not be reverted'),
+        context: 'superadmin/impersonate/stop POST',
+        level: 'error',
+        metadata: { sessionId: outcome.sessionId, adminId: admin.id, tenantId },
+      });
+    }
+
+    // Hand the browser back its own session before the parked credential is
+    // dropped, otherwise the response leaves a super admin logged out.
+    await setSessionCookie(adminToken, 1);
+    await clearImpersonationTokenCookie();
+
+    await logSuperAdminAction({
+      adminId: admin.id,
+      adminEmail: admin.email,
       action: 'user.impersonation_ended',
       targetType: 'user',
-      metadata: { sessionId, originalMembershipState },
+      targetId: outcome.targetUserId,
+      tenantId,
+      ipAddress: request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || undefined,
+      userAgent: (request.headers.get('user-agent') || '').slice(0, 255) || undefined,
+      metadata: { sessionId: outcome.sessionId, originalMembershipState: outcome.originalMembershipState },
     });
 
-    return NextResponse.json({ ok: true, message: 'Impersonation ended' });
+    return NextResponse.json({ ok: true, message: 'Impersonation ended', sessionId: outcome.sessionId });
  
  
   } catch (err) {
@@ -118,28 +184,14 @@ export const POST = withApiRoute(async (request: NextRequest) => {
 });
 
 /**
- * GET /api/superadmin/impersonate/active
- * Get active impersonation sessions
+ * One transaction carrying both contexts the teardown needs: the platform
+ * context for `sessions`/`users`, and the target tenant's context for
+ * `impersonation_sessions`/`tenant_members`.
  */
-export const GET = withApiRoute(async (request: NextRequest) => {
-  try {
-    const ctx = await requireAuth(request);
-    if (ctx instanceof NextResponse) return ctx;
-    if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Super admin required' }, { status: 403 });
-
-    // Using execute for view access
-    const res = await db.execute(sql`
-      SELECT id, super_admin_id, user_id, tenant_id, started_at, expires_at 
-      FROM public.active_impersonation_sessions
-      LIMIT 50
-    `);
-
-    return NextResponse.json({ data: res.rows });
- 
- 
-  } catch (err) {
-    await logError({ error: err, context: 'superadmin/impersonate/stop GET', requestMethod: 'GET' });
-    return apiError(err);
-  }
-});
-
+async function withImpersonationContext<T>(tenantId: string, adminId: string, fn: (tx: Tx) => Promise<T>): Promise<T> {
+  return db.transaction(async (tx) => {
+    await setSuperAdminContext(tx);
+    await setTenantContext(tenantId, adminId, tx);
+    return fn(tx);
+  });
+}

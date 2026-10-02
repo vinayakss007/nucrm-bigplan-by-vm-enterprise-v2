@@ -17,6 +17,7 @@ import { eq, and, isNull, lte, sql, inArray } from 'drizzle-orm';
 import { logger } from '@/lib/logger';
 import { sendEmail } from '@/lib/email/service';
 import { createNotification } from '@/lib/notifications';
+import { sweepTenants } from '@/lib/cron/tenant-scope';
 import { apiError } from '@/lib/api-error';
 import { logError } from '@/lib/errors-server';
 
@@ -36,127 +37,146 @@ export async function POST(request: NextRequest) {
 
   try {
     let remindersSent = 0;
+    let pastDueCount = 0;
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    for (const days of REMINDER_DAYS) {
-      const targetDate = new Date(today);
-      targetDate.setDate(targetDate.getDate() + days);
-      const targetStr = targetDate.toISOString().split('T')[0];
+    // service_subscriptions, activities and notifications each enforce a plain
+    // tenant_isolation policy with no super-admin branch, so the bare `db`
+    // handle (whose tenant GUC the pool pins to '') sees none of their rows.
+    // The work has to run once per tenant — see lib/cron/tenant-scope.ts.
+    const sweep = await sweepTenants('cron/subscription-renewal-check', async (tenantId) => {
+      for (const days of REMINDER_DAYS) {
+        const targetDate = new Date(today);
+        targetDate.setDate(targetDate.getDate() + days);
+        const targetStr = targetDate.toISOString().split('T')[0];
 
-      // Find active subscriptions ending on exactly `days` from now
-      const endingSoon = await db.select({
-        id: serviceSubscriptions.id,
-        name: serviceSubscriptions.name,
-        planName: serviceSubscriptions.planName,
-        status: serviceSubscriptions.status,
-        currentPeriodEnd: serviceSubscriptions.currentPeriodEnd,
-        amount: serviceSubscriptions.amount,
-        autoRenew: serviceSubscriptions.autoRenew,
-        tenantId: serviceSubscriptions.tenantId,
-        contactId: serviceSubscriptions.contactId,
-      })
-      .from(serviceSubscriptions)
-      .where(and(
-        eq(serviceSubscriptions.status, 'active'),
-        isNull(serviceSubscriptions.deletedAt),
-        sql`(${serviceSubscriptions.currentPeriodEnd})::date = ${targetStr}::date`,
-      ));
-
-      if (endingSoon.length === 0) continue;
-
-      const endingSoonIds = endingSoon.map(sub => sub.id);
-
-      const allAlreadySent = await db.select({ entityId: activities.entityId })
-        .from(activities)
+        // Find active subscriptions ending on exactly `days` from now
+        const endingSoon = await db.select({
+          id: serviceSubscriptions.id,
+          name: serviceSubscriptions.name,
+          planName: serviceSubscriptions.planName,
+          status: serviceSubscriptions.status,
+          currentPeriodEnd: serviceSubscriptions.currentPeriodEnd,
+          amount: serviceSubscriptions.amount,
+          autoRenew: serviceSubscriptions.autoRenew,
+          tenantId: serviceSubscriptions.tenantId,
+          contactId: serviceSubscriptions.contactId,
+        })
+        .from(serviceSubscriptions)
         .where(and(
-          eq(activities.entityType, 'subscription'),
-          inArray(activities.entityId, endingSoonIds),
-          eq(activities.eventType, 'subscription_renewal_reminder'),
-          sql`${activities.metadata}->>'reminder_days' = ${String(days)}`,
+          eq(serviceSubscriptions.tenantId, tenantId),
+          eq(serviceSubscriptions.status, 'active'),
+          isNull(serviceSubscriptions.deletedAt),
+          sql`(${serviceSubscriptions.currentPeriodEnd})::date = ${targetStr}::date`,
         ));
 
-      const sentSet = new Set(allAlreadySent.map(a => a.entityId));
+        if (endingSoon.length === 0) continue;
 
-      for (const sub of endingSoon) {
-        // Deduplication
-        if (sentSet.has(sub.id)) continue;
+        const endingSoonIds = endingSoon.map(sub => sub.id);
 
-        // Find tenant members to notify
-        const members = await db.select({
-          userId: users.id,
-          email: users.email,
-          fullName: users.fullName,
-        })
-        .from(users)
-        .innerJoin(
-          sql`(SELECT user_id FROM tenant_members WHERE tenant_id = ${sub.tenantId} AND status = 'active') tm`,
-          sql`tm.user_id = ${users.id}`
-        )
-        .limit(5);
+        const allAlreadySent = await db.select({ entityId: activities.entityId })
+          .from(activities)
+          .where(and(
+            eq(activities.tenantId, tenantId),
+            eq(activities.entityType, 'subscription'),
+            inArray(activities.entityId, endingSoonIds),
+            eq(activities.eventType, 'subscription_renewal_reminder'),
+            sql`${activities.metadata}->>'reminder_days' = ${String(days)}`,
+          ));
 
-        const endDate = new Date(sub.currentPeriodEnd ?? new Date());
-        const dateStr = endDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+        const sentSet = new Set(allAlreadySent.map(a => a.entityId));
 
-        for (const member of members) {
-          await createNotification({
-            userId: member.userId,
-            tenantId: sub.tenantId,
-            type: 'subscription_renewal',
-            title: `Subscription "${sub.name}" renews in ${days} days`,
-            body: `${sub.planName || 'Plan'} renews on ${dateStr}. Amount: $${Number(sub.amount || 0).toFixed(2)}/${sub.autoRenew ? 'auto-renews' : 'manual renewal'}`,
-            link: `/tenant/subscriptions/${sub.id}`,
-            entity_type: 'subscription',
-            entity_id: sub.id,
-            metadata: { subscription_id: sub.id, reminder_days: days, end_date: sub.currentPeriodEnd },
-          }).catch((err) => logError({ error: err, context: 'subscription-renewal-notification' }));
+        for (const sub of endingSoon) {
+          // Deduplication
+          if (sentSet.has(sub.id)) continue;
 
-          if (member.email) {
-            await sendEmail({
-              to: member.email,
-              subject: `Subscription "${sub.name}" renews in ${days} days`,
-              html: `<div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px">
+          // Find tenant members to notify
+          const members = await db.select({
+            userId: users.id,
+            email: users.email,
+            fullName: users.fullName,
+          })
+          .from(users)
+          .innerJoin(
+            sql`(SELECT user_id FROM tenant_members WHERE tenant_id = ${sub.tenantId} AND status = 'active') tm`,
+            sql`tm.user_id = ${users.id}`
+          )
+          .limit(5);
+
+          const endDate = new Date(sub.currentPeriodEnd ?? new Date());
+          const dateStr = endDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+
+          for (const member of members) {
+            await createNotification({
+              userId: member.userId,
+              tenantId: sub.tenantId,
+              type: 'subscription_renewal',
+              title: `Subscription "${sub.name}" renews in ${days} days`,
+              body: `${sub.planName || 'Plan'} renews on ${dateStr}. Amount: $${Number(sub.amount || 0).toFixed(2)}/${sub.autoRenew ? 'auto-renews' : 'manual renewal'}`,
+              link: `/tenant/subscriptions/${sub.id}`,
+              entity_type: 'subscription',
+              entity_id: sub.id,
+              metadata: { subscription_id: sub.id, reminder_days: days, end_date: sub.currentPeriodEnd },
+            }).catch((err) => logError({ error: err, context: 'subscription-renewal-notification' }));
+
+            if (member.email) {
+              await sendEmail({
+                to: member.email,
+                subject: `Subscription "${sub.name}" renews in ${days} days`,
+                html: `<div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px">
                 <h2 style="color:#111827">Subscription Renewal Reminder</h2>
                 <p style="color:#6b7280">Hi ${member.fullName || 'there'},</p>
                 <p style="color:#6b7280">The subscription <strong>${sub.name}</strong> (${sub.planName || 'Plan'}) renews on <strong>${dateStr}</strong> (${days} days).</p>
                 <p style="color:#6b7280">Amount: $${Number(sub.amount || 0).toFixed(2)} — ${sub.autoRenew ? 'Auto-renewal enabled' : 'Manual renewal required'}</p>
                 <a href="${process.env.NEXT_PUBLIC_APP_URL}/tenant/subscriptions/${sub.id}" style="display:inline-block;background:#7c3aed;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;margin-top:16px">View Subscription →</a>
               </div>`,
-              text: `Subscription "${sub.name}" renews on ${dateStr} (${days} days). Amount: $${Number(sub.amount || 0).toFixed(2)}. View: ${process.env.NEXT_PUBLIC_APP_URL}/tenant/subscriptions/${sub.id}`,
-            }).catch((err) => logError({ error: err, context: 'subscription-renewal-email' }));
+                text: `Subscription "${sub.name}" renews on ${dateStr} (${days} days). Amount: $${Number(sub.amount || 0).toFixed(2)}. View: ${process.env.NEXT_PUBLIC_APP_URL}/tenant/subscriptions/${sub.id}`,
+              }).catch((err) => logError({ error: err, context: 'subscription-renewal-email' }));
+            }
           }
-        }
 
-        await db.insert(activities).values({
-          tenantId: sub.tenantId,
-          entityType: 'subscription',
-          entityId: sub.id,
-          eventType: 'subscription_renewal_reminder',
-          description: `Renewal reminder sent: ${sub.name} renews in ${days} days`,
-          metadata: { reminder_days: days, end_date: sub.currentPeriodEnd },
-        }).catch((err) => {
-          logger.warn('[cron-subscription] Failed to log activity', {
-            subscriptionId: sub.id, error: err instanceof Error ? err.message : String(err),
+          await db.insert(activities).values({
+            tenantId: sub.tenantId,
+            entityType: 'subscription',
+            entityId: sub.id,
+            eventType: 'subscription_renewal_reminder',
+            description: `Renewal reminder sent: ${sub.name} renews in ${days} days`,
+            metadata: { reminder_days: days, end_date: sub.currentPeriodEnd },
+          }).catch((err) => {
+            logger.warn('[cron-subscription] Failed to log activity', {
+              subscriptionId: sub.id, error: err instanceof Error ? err.message : String(err),
+            });
           });
-        });
 
-        remindersSent++;
+          remindersSent++;
+        }
       }
-    }
 
-    // Mark past-due subscriptions
-    const pastDue = await db.update(serviceSubscriptions)
-      .set({ status: 'past_due', updatedAt: new Date() })
-      .where(and(
-        eq(serviceSubscriptions.status, 'active'),
-        eq(serviceSubscriptions.autoRenew, false),
-        lte(serviceSubscriptions.currentPeriodEnd, new Date().toISOString().slice(0, 10)),
-        isNull(serviceSubscriptions.deletedAt),
-      ))
-      .returning({ id: serviceSubscriptions.id });
+      // Mark past-due subscriptions
+      const pastDue = await db.update(serviceSubscriptions)
+        .set({ status: 'past_due', updatedAt: new Date() })
+        .where(and(
+          eq(serviceSubscriptions.tenantId, tenantId),
+          eq(serviceSubscriptions.status, 'active'),
+          eq(serviceSubscriptions.autoRenew, false),
+          lte(serviceSubscriptions.currentPeriodEnd, new Date().toISOString().slice(0, 10)),
+          isNull(serviceSubscriptions.deletedAt),
+        ))
+        .returning({ id: serviceSubscriptions.id });
 
-    return NextResponse.json({ ok: true, remindersSent, pastDue: pastDue.length });
+      pastDueCount += pastDue.length;
+    });
+
+    return NextResponse.json({
+      ok: sweep.failed.length === 0,
+      tenants_checked: sweep.visited,
+      tenants_skipped: sweep.skipped.length,
+      tenants_failed: sweep.failed.length,
+      remindersSent,
+      pastDue: pastDueCount,
+    });
   } catch (err) {
     void logError({ error: err, context: 'cron/subscription-renewal-check' });
     return apiError(err);

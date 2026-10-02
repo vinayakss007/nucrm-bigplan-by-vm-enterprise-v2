@@ -18,6 +18,7 @@
  */
 import { NextResponse } from 'next/server';
 import type { AuthContext } from '@/lib/auth/middleware';
+import { NO_TENANT_SENTINEL } from '@/lib/db/rls';
 import { getUsageReport, recordViolation, type LimitKind } from './tracker';
 import { notifyLimitHit } from './notifications';
 import { logger } from '@/lib/logger';
@@ -39,7 +40,7 @@ export async function checkLimit(
   opts: CheckLimitOptions = {},
 ): Promise<NextResponse | null> {
   if (ctx.isSuperAdmin) return null;
-  if (!ctx.tenantId || ctx.tenantId === '__superadmin_no_tenant__') return null;
+  if (!ctx.tenantId || ctx.tenantId === NO_TENANT_SENTINEL) return null;
 
   const report = await getUsageReport(ctx.tenantId, kind);
   if (!report.exceeded) return null;

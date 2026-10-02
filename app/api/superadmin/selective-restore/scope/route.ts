@@ -15,6 +15,7 @@ import { extractTenantSQL } from '@/lib/restore/backup-parser';
 import { countExistingRecords, validateTenant } from '@/lib/restore/restore-executor';
 import { existsSync } from 'fs';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { withTenantContext } from '@/lib/db/rls';
 import { logError } from '@/lib/errors-server';
 
 const scopeSchema = z.object({
@@ -51,12 +52,17 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     // If user_id or contact_id provided, verify they exist in tenant
     if (user_id) {
       const { users, tenantMembers } = await import('@/drizzle/schema');
-      const [userExists] = await db
-        .select({ id: users.id })
-        .from(users)
-        .innerJoin(tenantMembers, eq(tenantMembers.userId, users.id))
-        .where(and(eq(users.id, user_id), eq(tenantMembers.tenantId, tenant_id)))
-        .limit(1);
+      // tenant_members has no super-admin escape, so this membership check only
+      // finds anything inside the target tenant's context. On the console
+      // connection it matched no rows and every user-filtered restore was
+      // rejected as "User not found in this tenant".
+      const [userExists] = await withTenantContext<{ id: string }[]>(tenant_id, ctx.userId, tx =>
+        tx
+          .select({ id: users.id })
+          .from(users)
+          .innerJoin(tenantMembers, eq(tenantMembers.userId, users.id))
+          .where(and(eq(users.id, user_id), eq(tenantMembers.tenantId, tenant_id)))
+          .limit(1));
       if (!userExists) {
         return NextResponse.json({ error: 'User not found in this tenant' }, { status: 400 });
       }

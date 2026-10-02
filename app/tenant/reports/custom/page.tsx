@@ -4,7 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
 import { FilePlus, Play, Save, Trash2, Download, Plus, X, Filter, Columns } from 'lucide-react';
@@ -12,41 +12,56 @@ import { cn, formatDate } from '@/lib/utils';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import toast from 'react-hot-toast';
 
-const REPORT_TYPES = [
-  { id: 'contacts', label: 'Contacts', columns: ['first_name','last_name','email','phone','job_title','lead_status','lead_source','score','lifecycle_stage','company_name','city','country','created_at'] },
-  { id: 'deals', label: 'Deals', columns: ['title','value','stage','probability','close_date','first_name','last_name','company_name','created_at'] },
-  { id: 'leads', label: 'Leads', columns: ['first_name','last_name','email','phone','title','company_name','lead_status','lead_source','score','created_at'] },
-  { id: 'companies', label: 'Companies', columns: ['name','industry','size','phone','website','address','created_at'] },
-  { id: 'tasks', label: 'Tasks', columns: ['title','description','priority','due_date','completed','first_name','last_name','assigned_to','created_at'] },
-] as const;
+import { REPORT_COLUMNS } from '@/lib/reports/report-columns';
+import {
+  fromStoredFilters,
+  isTimestampColumnValue,
+  toStoredFilters,
+  REPORT_FILTER_OPS,
+  type ReportFilterRow,
+  type StoredFilters,
+} from '@/lib/reports/report-filters';
 
-const FILTER_OPS = [
-  { id: 'equals', label: 'Equals' },
-  { id: 'contains', label: 'Contains' },
-  { id: 'gt', label: 'Greater than' },
-  { id: 'lt', label: 'Less than' },
-  { id: 'in', label: 'In' },
-] as const;
+// The column list is the API's, not a copy kept in sync by hand: the pickers
+// used to offer deals.value, companies.size and tasks.completed while the
+// report returned other keys, so those columns were blank for every customer
+// who chose them.
+const REPORT_LABELS = {
+  contacts: 'Contacts',
+  deals: 'Deals',
+  leads: 'Leads',
+  companies: 'Companies',
+  tasks: 'Tasks',
+} as const;
 
-type ReportTypeId = typeof REPORT_TYPES[number]['id'];
+type ReportTypeId = keyof typeof REPORT_LABELS;
+
+const REPORT_TYPES: { id: ReportTypeId; label: string; columns: string[] }[] =
+  (Object.entries(REPORT_LABELS) as [ReportTypeId, string][]).map(([id, label]) => ({
+    id,
+    label,
+    columns: REPORT_COLUMNS[id],
+  }));
+
+function columnsFor(id: ReportTypeId): string[] {
+  return REPORT_TYPES.find(r => r.id === id)?.columns ?? [];
+}
 
 interface SavedReport {
   id: string;
   name: string;
   type: ReportTypeId;
   description: string;
-  filters: Record<string, string>;
+  // Both shapes occur: this page wrote the array form until it was changed to
+  // the record the run endpoint actually consumes.
+  filters: StoredFilters | ReportFilter[];
   columns: string[];
   groupBy?: string;
   sortBy?: string;
   sortOrder?: 'asc' | 'desc';
 }
 
-interface ReportFilter {
-  column: string;
-  op: string;
-  value: string;
-}
+type ReportFilter = ReportFilterRow;
 
 type ReportRow = Record<string, string | number | boolean | null | undefined>;
 
@@ -55,7 +70,7 @@ const CUSTOM_REPORTS_QUERY = ['tenant', 'reports', 'custom'] as const;
 export default function CustomReportBuilder() {
   const queryClient = useQueryClient();
   const [reportType, setReportType] = useState<ReportTypeId>('contacts');
-  const [selectedColumns, setSelectedColumns] = useState<string[]>([]);
+  const [selectedColumns, setSelectedColumns] = useState<string[]>(() => columnsFor('contacts').slice(0, 5));
   const [filters, setFilters] = useState<ReportFilter[]>([]);
   const [results, setResults] = useState<ReportRow[]>([]);
   const [reportName, setReportName] = useState('');
@@ -71,10 +86,13 @@ export default function CustomReportBuilder() {
   const savedReports: SavedReport[] = savedData?.data ?? [];
   const loadSaved = () => queryClient.invalidateQueries({ queryKey: CUSTOM_REPORTS_QUERY });
 
-  // Reset the visible columns whenever the report type changes.
-  useEffect(() => {
-    setSelectedColumns(currentType.columns.slice(0, 5));
-  }, [reportType, currentType.columns]);
+  // Picking a type swaps the column picker, so the visible columns have to be
+  // reseeded. As an effect keyed on reportType this also fired when a *saved*
+  // report set the type, throwing away the columns that report had stored.
+  const pickReportType = (next: ReportTypeId) => {
+    setReportType(next);
+    setSelectedColumns(REPORT_TYPES.find(r => r.id === next)!.columns.slice(0, 5));
+  };
 
   const toggleColumn = (col: string) => {
     setSelectedColumns(prev => prev.includes(col) ? prev.filter(c => c !== col) : [...prev, col]);
@@ -95,7 +113,10 @@ export default function CustomReportBuilder() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           report_type: reportType,
-          filters: filters.reduce<Record<string, string>>((acc, f) => { if (f.value) acc[f.column] = f.value; return acc; }, {}),
+          // The operator the user picked has to travel with the value. This used
+          // to send `{ [column]: value }`, so "contains" and "in" were silently
+          // downgraded on the way to the server.
+          filters: toStoredFilters(filters),
           limit: 500,
         }),
       });
@@ -129,7 +150,9 @@ export default function CustomReportBuilder() {
           name: reportName,
           type: reportType,
           columns: selectedColumns,
-          filters,
+          // Stored in the same shape that is sent to /run, so saving a report
+          // and running it cannot drift apart.
+          filters: toStoredFilters(filters),
         }),
       });
       if (!res.ok) {
@@ -149,7 +172,7 @@ export default function CustomReportBuilder() {
   const loadReport = (r: SavedReport) => {
     setReportType(r.type);
     setSelectedColumns(r.columns || []);
-    setFilters(r.filters ? Object.entries(r.filters).map(([column, value]) => ({ column, op: 'equals', value: String(value) })) : []);
+    setFilters(fromStoredFilters(r.filters));
     setReportName(r.name);
     setShowSaved(false);
   };
@@ -228,7 +251,7 @@ export default function CustomReportBuilder() {
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Report Type</p>
             <div className="space-y-1">
               {REPORT_TYPES.map(r => (
-                <button key={r.id} onClick={() => setReportType(r.id)}
+                <button key={r.id} onClick={() => pickReportType(r.id)}
                   className={cn('w-full px-3 py-2 rounded-lg text-xs text-left transition-colors',
                     reportType === r.id ? 'bg-violet-50 dark:bg-violet-950/30 text-violet-600 font-semibold' : 'hover:bg-accent')}>
                   {r.label}
@@ -277,7 +300,7 @@ export default function CustomReportBuilder() {
                     <select value={f.op} onChange={e => updateFilter(i, 'op', e.target.value)}
                       aria-label={`Filter operator for filter ${i + 1}`}
                       className="w-24 px-2 py-1.5 rounded-lg border border-border bg-transparent text-xs focus:outline-none focus:ring-1 focus:ring-violet-500">
-                      {FILTER_OPS.map(op => <option key={op.id} value={op.id}>{op.label}</option>)}
+                      {REPORT_FILTER_OPS.map(op => <option key={op.id} value={op.id}>{op.label}</option>)}
                     </select>
                     <input value={f.value} onChange={e => updateFilter(i, 'value', e.target.value)}
                       aria-label={`Filter value for filter ${i + 1}`}
@@ -344,7 +367,7 @@ export default function CustomReportBuilder() {
                           <td key={col} className="px-4 py-2 text-xs text-muted-foreground max-w-[200px] truncate">
                             {row[col] === null || row[col] === undefined ? '—' :
                               typeof row[col] === 'number' && (row[col] as number) > 1000 ? `$${(row[col] as number).toLocaleString()}` :
-                              typeof row[col] !== 'boolean' && String(row[col]).includes('T') ? formatDate(String(row[col])) :
+                              isTimestampColumnValue(row[col]) ? formatDate(String(row[col])) :
                               String(row[col])}
                           </td>
                         ))}

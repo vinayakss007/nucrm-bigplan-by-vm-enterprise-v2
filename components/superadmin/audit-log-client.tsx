@@ -5,7 +5,7 @@
  */
 'use client';
 import { useState, useMemo, useCallback, useEffect } from 'react';
-import { Shield, Search, User, X, ChevronDown, Download, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Shield, ShieldCheck, Search, User, X, ChevronDown, Download, ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn, formatDateTimeShort, formatRelativeTime } from '@/lib/utils';
 
 const ACTION_CFG: Record<string, { color: string; bg: string }> = {
@@ -56,6 +56,20 @@ interface AuditLogResponse {
   offset: number;
 }
 
+// Mirrors SuperAdminVerificationResult in lib/audit/super-admin.ts. Every row in
+// this table carries a hash over its own contents and a link to the row before
+// it, so a rewritten or deleted entry breaks the chain — but only if somebody
+// runs the check.
+interface ChainVerification {
+  valid: boolean;
+  totalChecked: number;
+  brokenAtIndex: number | null;
+  brokenEntryId: string | null;
+  details: string;
+  unlinkedRows?: number;
+  brokenAtReason?: 'link' | 'content' | 'never-hashed';
+}
+
 function toCSV(logs: AuditLogEntry[]): string {
   const header = 'Timestamp,Admin Email,Action,Target Type,Target ID,Target Name,Tenant,IP Address\n';
   const rows = logs.map(l =>
@@ -101,6 +115,9 @@ export default function AuditLogClient() {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [chain, setChain] = useState<ChainVerification | null>(null);
+  const [verifying, setVerifying] = useState(false);
+  const [chainError, setChainError] = useState<string | null>(null);
 
   const fetchLogs = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
@@ -174,6 +191,22 @@ export default function AuditLogClient() {
     setPage(0);
   };
 
+  const handleVerifyChain = useCallback(async () => {
+    setVerifying(true);
+    setChainError(null);
+    try {
+      const res = await fetch('/api/super-admin/audit-logs?verify=1');
+      if (!res.ok) throw new Error(`http=${res.status}`);
+      const body = await res.json() as { verification: ChainVerification };
+      setChain(body.verification);
+    } catch (e) {
+      setChain(null);
+      setChainError((e as Error)?.message ?? 'verification failed');
+    } finally {
+      setVerifying(false);
+    }
+  }, []);
+
   const hasFilters = search || actionF || targetF || tenantSearch || dateFrom || dateTo;
   const inp = "px-3 py-1.5 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-amber-500";
 
@@ -184,11 +217,36 @@ export default function AuditLogClient() {
           <h1 className="text-lg font-bold flex items-center gap-2"><Shield className="w-5 h-5" />Super Admin Audit Log</h1>
           <p className="text-sm text-muted-foreground">{total} total events</p>
         </div>
-        <button onClick={handleExport}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-xs text-muted-foreground hover:bg-accent transition-colors">
-          <Download className="w-3 h-3" />Export CSV
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={handleVerifyChain} disabled={verifying}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-xs text-muted-foreground hover:bg-accent transition-colors disabled:opacity-50">
+            <ShieldCheck className="w-3 h-3" />{verifying ? 'Verifying…' : 'Verify chain'}
+          </button>
+          <button onClick={handleExport}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-xs text-muted-foreground hover:bg-accent transition-colors">
+            <Download className="w-3 h-3" />Export CSV
+          </button>
+        </div>
       </div>
+
+      {chainError && (
+        <p className="text-xs text-red-600 dark:text-red-400">Chain verification failed: {chainError}</p>
+      )}
+      {chain && (
+        <p className={cn('text-xs', chain.valid ? 'text-emerald-700 dark:text-emerald-400'
+          : chain.brokenAtReason === 'never-hashed' ? 'text-amber-700 dark:text-amber-400'
+            : 'text-red-700 dark:text-red-400')}>
+          {chain.valid ? 'Chain intact'
+            // A row the audit writer never produced is a data-quality fault, not
+            // evidence of an intruder; the verifier walks past it and checks
+            // everything after, so saying "BROKEN" here sent someone looking for
+            // a tamperer over a leftover debugging row.
+            : chain.brokenAtReason === 'never-hashed'
+              ? `Chain has an unverifiable row at ${chain.brokenAtIndex ?? '?'} (${chain.brokenEntryId?.slice(0, 8) ?? 'unknown id'}) — never hashed by the audit writer`
+              : `Chain BROKEN at row ${chain.brokenAtIndex ?? '?'} (${chain.brokenEntryId?.slice(0, 8) ?? 'unknown id'})`}
+          {' — '}{chain.details}
+        </p>
+      )}
 
       {/* Filters */}
       <div className="flex flex-wrap gap-2">

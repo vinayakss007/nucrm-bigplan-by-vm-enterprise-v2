@@ -72,7 +72,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       })
       .returning();
 
-    logSuperAdminAction({
+    await logSuperAdminAction({
       adminId: ctx.userId,
       adminEmail: ctx.user?.email || "",
       action: 'subscription.plan_changed',
@@ -152,7 +152,7 @@ export const PATCH = withApiRoute(async (request: NextRequest) => {
 
     if (!row) return NextResponse.json({ error: 'Plan was modified by another user — please refresh' }, { status: 409 });
 
-    logSuperAdminAction({
+    await logSuperAdminAction({
       adminId: ctx.userId,
       adminEmail: ctx.user?.email || "",
       action: 'subscription.plan_changed',
@@ -196,7 +196,7 @@ export const DELETE = withApiRoute(async (request: NextRequest) => {
 
     await db.delete(plans).where(eq(plans.id, id));
 
-    logSuperAdminAction({
+    await logSuperAdminAction({
       adminId: ctx.userId,
       adminEmail: ctx.user?.email || "",
       action: 'subscription.plan_changed',

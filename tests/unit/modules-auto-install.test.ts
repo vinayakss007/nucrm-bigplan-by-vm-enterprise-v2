@@ -95,12 +95,29 @@ describe('auto-install', () => {
       expect(modules.length).toBe(12);
     });
 
-    it('returns enterprise plan modules including industry-templates', async () => {
+    it('returns the entire registered catalogue for enterprise, and nothing less', async () => {
       const { getDefaultModulesForPlan } = await import('@/lib/modules/auto-install');
-      const modules = getDefaultModulesForPlan('enterprise');
-      expect(modules).toContain('industry-templates');
-      expect(modules).toContain('analytics-pro');
-      expect(modules.length).toBe(13);
+      const { BUILTIN_MODULES } = await import('@/lib/modules/registry');
+      // Enterprise is derived from the registry rather than hand-listed, so a module
+      // added to BUILTIN_MODULES must show up here without editing this test.
+      expect(getDefaultModulesForPlan('enterprise')).toEqual(BUILTIN_MODULES.map(m => m.id));
+      for (const id of ['core-crm', 'automation-basic', 'automation-pro', 'ai-assistant', 'forms-builder']) {
+        expect(getDefaultModulesForPlan('enterprise')).toContain(id);
+      }
+    });
+
+    it('every lower tier is a subset of enterprise', async () => {
+      const { getDefaultModulesForPlan } = await import('@/lib/modules/auto-install');
+      const { BUILTIN_MODULES } = await import('@/lib/modules/registry');
+      const registered = new Set(BUILTIN_MODULES.map(m => m.id));
+      const enterprise = new Set(getDefaultModulesForPlan('enterprise'));
+      // Only tiers whose hand-listed ids exist in this suite's trimmed registry can
+      // be compared; unregistered ids are covered by the module-registry tests.
+      for (const plan of ['free', 'starter']) {
+        const modules = getDefaultModulesForPlan(plan).filter(id => registered.has(id));
+        expect(modules.length).toBeGreaterThan(0);
+        for (const id of modules) expect(enterprise.has(id)).toBe(true);
+      }
     });
 
     it('falls back to free modules for unknown plan id', async () => {

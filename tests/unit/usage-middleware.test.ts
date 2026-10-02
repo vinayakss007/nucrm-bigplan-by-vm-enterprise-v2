@@ -54,9 +54,10 @@ describe('checkLimit', () => {
     expect(result).toBeNull();
   });
 
-  it('returns null when tenantId is __superadmin_no_tenant__', async () => {
+  it('returns null when tenantId is the no-workspace sentinel', async () => {
     const { checkLimit } = await import('@/lib/usage/middleware');
-    const result = await checkLimit(ctx({ tenantId: '__superadmin_no_tenant__' }), 'contacts');
+    const { NO_TENANT_SENTINEL } = await import('@/lib/db/rls');
+    const result = await checkLimit(ctx({ tenantId: NO_TENANT_SENTINEL }), 'contacts');
     expect(result).toBeNull();
   });
 

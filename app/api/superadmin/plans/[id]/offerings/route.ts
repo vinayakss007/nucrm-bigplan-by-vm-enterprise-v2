@@ -106,7 +106,7 @@ export const PUT = withApiRoute(async (req: NextRequest,
         .where(eq(modules.id, item.module_id));
     }
 
-    logSuperAdminAction({
+    await logSuperAdminAction({
       adminId: ctx.userId,
       adminEmail: ctx.user?.email || '',
       action: 'settings.changed',

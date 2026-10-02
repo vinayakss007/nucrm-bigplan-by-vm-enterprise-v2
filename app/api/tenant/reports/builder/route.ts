@@ -21,12 +21,13 @@ import { withApiRoute } from '@/lib/api/with-api-route';
  * POST /api/tenant/reports/builder
  *
  * Body: {
- *   entity: 'contacts' | 'deals' | 'tasks' | 'companies' | 'activities',
+ *   entity: 'contacts' | 'deals' | 'tasks' | 'companies' | 'activities'
+ *           | 'quotes' | 'invoices' | 'tickets' | 'leads',
  *   metric: 'count' | 'sum' | 'avg',
- *   metricField?: string,           // Required for sum/avg (e.g., 'value' for deals)
+ *   metricField?: string,           // Required for sum/avg (e.g. 'amount' for deals)
  *   groupBy: string,                // Field to group by (e.g., 'lead_status', 'stage', 'priority')
  *   dateRange?: { from: string, to: string },
- *   filters?: Record<string, string | string[]>,
+ *   filters?: Record<string, string | string[]>,  // equality on a groupBy-able field
  *   limit?: number,                 // Max groups to return (default 20)
  * }
  *
@@ -105,6 +106,12 @@ export const POST = withApiRoute(async (request: NextRequest) => {
  
  
   } catch (err) {
+    // A dimension the schema cannot answer is bad input. It used to surface as
+    // a 500 with a Postgres "column does not exist" behind it, which is both
+    // the wrong status and a free error-log flood from a dropdown choice.
+    if (err instanceof UnresolvableDimensionError || err instanceof InvalidReportInputError) {
+      return NextResponse.json({ error: err.message }, { status: 400 });
+    }
     return apiError(err);
   }
 });
@@ -131,6 +138,14 @@ interface ReportResult {
 }
 
 // Allowed group-by fields per entity (whitelist to prevent SQL injection)
+//
+// These ids are the public contract the builder UI renders from GET below, and
+// three of them do not name a real column: deals group by a uuid FK (`stage`,
+// stored as `stage_id`), while companies/activities lost a prefix in the schema
+// (`size` → `company_size`, `type` → `event_type`). Passing them straight to
+// sql.identifier() produced `column "stage" does not exist` — a 500 on the most
+// obvious grouping of the most obvious entity. resolveGroupExpression() maps
+// them; anything it cannot map is a client error, not a server error.
 const ALLOWED_GROUP_FIELDS: Record<string, string[]> = {
   contacts: ['lead_status', 'lead_source', 'created_at_month', 'created_at_week', 'company_id'],
   deals: ['stage', 'created_at_month', 'created_at_week', 'close_date_month', 'assigned_to'],
@@ -144,9 +159,13 @@ const ALLOWED_GROUP_FIELDS: Record<string, string[]> = {
 };
 
 // Allowed metric fields per entity
+//
+// `win_probability` is not a column on deals, so the "Avg Probability" option
+// this list used to carry threw on every request. Removed from here and from
+// the advertised options below rather than aliased to something unrelated.
 const ALLOWED_METRIC_FIELDS: Record<string, string[]> = {
   contacts: ['score'],
-  deals: ['amount', 'win_probability'],
+  deals: ['amount'],
   tasks: [],
   companies: [],
   activities: [],
@@ -156,24 +175,100 @@ const ALLOWED_METRIC_FIELDS: Record<string, string[]> = {
   leads: ['score', 'value'],
 };
 
+/** Public dimension id → the column it actually lives in, where they differ. */
+const GROUP_COLUMN_ALIAS: Record<string, string> = {
+  size: 'company_size',
+  type: 'event_type',
+};
+
+/** Thrown for a dimension the schema cannot answer, so POST can 400 it. */
+export class UnresolvableDimensionError extends Error {}
+
+/** Bad input the caller can fix, answered 400 instead of reaching Postgres. */
+export class InvalidReportInputError extends Error {}
+
+/**
+ * A `dateRange` bound as a Date. `new Date('last tuesday')` is an object whose
+ * getTime() is NaN, and binding it produced a driver-level error and a 500 for
+ * what is a mistyped date in a UI field.
+ */
+function boundDate(value: string, field: string): Date {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    throw new InvalidReportInputError(`${field} is not a valid date: ${String(value).slice(0, 40)}`);
+  }
+  return parsed;
+}
+
+/**
+ * Equality against the expression the chart groups on, so a filter value is a
+ * label the caller can actually see. `stage` resolves to the stage's name and
+ * `completed` to 'Completed'/'Pending' the same way the bars are labelled,
+ * rather than to the uuid or the boolean behind them.
+ */
+function buildFilterConditions(entity: string, filters: Record<string, unknown>): import('drizzle-orm').SQL[] {
+  const allowed = ALLOWED_GROUP_FIELDS[entity] ?? [];
+  const conditions: import('drizzle-orm').SQL[] = [];
+  for (const [field, raw] of Object.entries(filters ?? {})) {
+    if (!allowed.includes(field)) {
+      throw new UnresolvableDimensionError(
+        `Invalid filter field '${field}' for ${entity}. Allowed: ${allowed.join(', ')}`,
+      );
+    }
+    const values = (Array.isArray(raw) ? raw : [raw])
+      .map(v => (v === null || v === undefined ? '' : String(v)))
+      .filter(v => v !== '');
+    if (values.length === 0) continue;
+    const expr = resolveGroupExpression(entity, field);
+    conditions.push(values.length === 1
+      ? sql`(${expr}) = ${values[0]}`
+      : sql`(${expr}) in (${sql.join(values.map(v => sql`${v}`), sql`, `)})`);
+  }
+  return conditions;
+}
+
+export function resolveGroupExpression(entity: string, groupBy: string): import('drizzle-orm').SQL {
+  // Time-based grouping
+  if (groupBy === 'created_at_month') return sql`TO_CHAR(created_at, 'YYYY-MM')`;
+  if (groupBy === 'created_at_week') return sql`TO_CHAR(created_at, 'IYYY-IW')`;
+  if (groupBy === 'close_date_month') return sql`TO_CHAR(close_date, 'YYYY-MM')`;
+
+  // Boolean fields
+  if (groupBy === 'completed') return sql`CASE WHEN completed THEN 'Completed' ELSE 'Pending' END`;
+
+  // Deals store a stage_id uuid; grouping on it directly would label every bar
+  // with an unparseable id, so resolve the stage's name instead. Correlated on
+  // the outer FROM, which is always the entity's own table.
+  if (entity === 'deals' && groupBy === 'stage') {
+    return sql`COALESCE((SELECT ds.name FROM deal_stages ds WHERE ds.id = stage_id)::text, 'Unknown')`;
+  }
+
+  const column = GROUP_COLUMN_ALIAS[groupBy] ?? groupBy;
+  return sql`COALESCE(${sql.identifier(column)}::text, 'Unknown')`;
+}
+
 async function executeReport(params: ReportParams): Promise<ReportResult> {
-  const { entity, metric, metricField, groupBy, dateRange, tenantId, limit } = params;
+  const { entity, metric, metricField, groupBy, dateRange, filters, tenantId, limit } = params;
 
   // Validate groupBy field
   const allowedFields = ALLOWED_GROUP_FIELDS[entity] || [];
   if (!allowedFields.includes(groupBy)) {
-    throw new Error(`Invalid groupBy field '${groupBy}' for ${entity}. Allowed: ${allowedFields.join(', ')}`);
+    throw new UnresolvableDimensionError(
+      `Invalid groupBy field '${groupBy}' for ${entity}. Allowed: ${allowedFields.join(', ')}`,
+    );
   }
 
   // Validate metricField
   if (metricField) {
     const allowedMetrics = ALLOWED_METRIC_FIELDS[entity] || [];
     if (!allowedMetrics.includes(metricField)) {
-      throw new Error(`Invalid metricField '${metricField}' for ${entity}. Allowed: ${allowedMetrics.join(', ')}`);
+      throw new UnresolvableDimensionError(
+        `Invalid metricField '${metricField}' for ${entity}. Allowed: ${allowedMetrics.join(', ')}`,
+      );
     }
   }
 
-  const groupSql = buildGroupExpression(groupBy);
+  const groupSql = resolveGroupExpression(entity, groupBy);
   const metricSql = buildMetricExpression(metric, metricField);
 
   // Build WHERE clause
@@ -194,11 +289,16 @@ async function executeReport(params: ReportParams): Promise<ReportResult> {
   conditions.push(sql`${sql.identifier(tableName)}.tenant_id = ${tenantId}`);
 
   if (dateRange?.from) {
-    conditions.push(sql`${sql.identifier(tableName)}.created_at >= ${new Date(dateRange.from)}`);
+    conditions.push(sql`${sql.identifier(tableName)}.created_at >= ${boundDate(dateRange.from, 'dateRange.from')}`);
   }
   if (dateRange?.to) {
-    conditions.push(sql`${sql.identifier(tableName)}.created_at <= ${new Date(dateRange.to)}`);
+    conditions.push(sql`${sql.identifier(tableName)}.created_at <= ${boundDate(dateRange.to, 'dateRange.to')}`);
   }
+
+  // `filters` was accepted by POST, forwarded here, and then never read: a
+  // caller narrowing a report got the unfiltered numbers with no indication the
+  // narrowing had been dropped.
+  conditions.push(...buildFilterConditions(entity, filters));
 
   if (['contacts', 'deals', 'tasks', 'companies', 'activities', 'quotes', 'invoices', 'tickets', 'leads'].includes(entity)) {
     conditions.push(sql`${sql.identifier(tableName)}.deleted_at IS NULL`);
@@ -234,20 +334,6 @@ async function executeReport(params: ReportParams): Promise<ReportResult> {
   }
 
   return { data, total };
-}
-
-function buildGroupExpression(groupBy: string): import('drizzle-orm').SQL {
-  // Time-based grouping
-  if (groupBy === 'created_at_month') return sql`TO_CHAR(created_at, 'YYYY-MM')`;
-  if (groupBy === 'created_at_week') return sql`TO_CHAR(created_at, 'IYYY-IW')`;
-  if (groupBy === 'close_date_month') return sql`TO_CHAR(close_date, 'YYYY-MM')`;
-
-  // Boolean fields
-  if (groupBy === 'completed') return sql`CASE WHEN completed THEN 'Completed' ELSE 'Pending' END`;
-
-  // Direct column reference (already validated against whitelist;
-  // sql.identifier guarantees it cannot break out of the identifier quoting)
-  return sql`COALESCE(${sql.identifier(groupBy)}::text, 'Unknown')`;
 }
 
 function buildMetricExpression(metric: string, metricField?: string): import('drizzle-orm').SQL {
@@ -296,7 +382,6 @@ export const GET = withApiRoute(async (request: NextRequest) => {
             { id: 'count', label: 'Count' },
             { id: 'sum', label: 'Total Value', field: 'amount' },
             { id: 'avg', label: 'Avg Value', field: 'amount' },
-            { id: 'avg', label: 'Avg Probability', field: 'win_probability' },
           ],
         },
         {

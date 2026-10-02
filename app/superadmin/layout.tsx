@@ -6,7 +6,7 @@
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { verifyToken } from '@/lib/auth/session';
-import { db } from '@/drizzle/db';
+import { withUserContext, withSecurityContext } from '@/lib/db/rls';
 import { users, tenants } from '@/drizzle/schema';
 import { eq, sql, count } from 'drizzle-orm';
 import SuperAdminShell from '@/components/superadmin/shell';
@@ -26,7 +26,12 @@ export default async function SuperAdminLayout({ children }: { children: React.R
   const payload = await verifyToken(token);
   if (!payload) redirect('/auth/login');
 
-  const [user] = await db.select({
+  // RLS on `users` is fail-closed: with no context this select returns zero
+  // rows and a genuine super admin is bounced to /tenant/dashboard. Under
+  // PgBouncer session pooling the GUC left by middleware can mask that on a
+  // reused connection, so the bounce looks intermittent. Scope the read to the
+  // verified JWT identity instead.
+  const [user] = await withUserContext(payload.userId, async (tx) => await tx.select({
     id: users.id,
     email: users.email,
     fullName: users.fullName,
@@ -34,7 +39,7 @@ export default async function SuperAdminLayout({ children }: { children: React.R
   })
   .from(users)
   .where(eq(users.id, payload.userId))
-  .limit(1);
+  .limit(1));
 
   if (!user?.isSuperAdmin) redirect('/tenant/dashboard');
 
@@ -46,13 +51,14 @@ export default async function SuperAdminLayout({ children }: { children: React.R
     is_super_admin: user.isSuperAdmin,
   };
 
-  // Quick platform stats for header
-  const [stats] = await db.select({
+  // Quick platform stats for header — platform-wide, so it needs the
+  // super-admin context rather than a tenant scope.
+  const [stats] = await withSecurityContext(async (tx) => await tx.select({
     total_tenants: count(),
     active_tenants: sql<number>`count(*) FILTER (WHERE ${tenants.status} = 'active')::int`,
     open_errors: sql<number>`(SELECT count(*)::int FROM error_logs WHERE resolved = false AND level IN ('error','fatal'))`,
   })
-  .from(tenants)
+  .from(tenants))
   .catch((error): PlatformStats[] => {
     void logError({ error, context: 'superadmin/layout stats query failed' });
     return [{ total_tenants: 0, active_tenants: 0, open_errors: 0 }];

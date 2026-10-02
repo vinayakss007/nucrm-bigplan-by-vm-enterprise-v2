@@ -13,7 +13,7 @@ import { db } from '@/drizzle/db';
 import { users, tenantMembers, tenants } from '@/drizzle/schema';
 import { eq, and, sql, ilike, desc, or } from 'drizzle-orm';
 import { hashPassword, validatePassword } from '@/lib/auth/session';
-import { concurrencyGuard } from '@/lib/api/concurrency';
+import { concurrencyGuard, updatedAtMs } from '@/lib/api/concurrency';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { logError } from '@/lib/errors-server';
 
@@ -176,7 +176,7 @@ export const PATCH = withApiRoute(async (request: NextRequest) => {
       const [updated] = await db
         .update(users)
         .set(updates)
-        .where(and(eq(users.id, v.id), eq(users.updatedAt, new Date(expectedUpdatedAt as string | number | Date))))
+        .where(expectedUpdatedAt ? and(eq(users.id, v.id), updatedAtMs(users, expectedUpdatedAt)) : eq(users.id, v.id))
         .returning({
           id: users.id,
           email: users.email,
@@ -195,7 +195,7 @@ export const PATCH = withApiRoute(async (request: NextRequest) => {
     const [updated] = await db
       .update(users)
       .set(updates)
-      .where(and(eq(users.id, v.id), eq(users.updatedAt, new Date(expectedUpdatedAt as string | number | Date))))
+      .where(expectedUpdatedAt ? and(eq(users.id, v.id), updatedAtMs(users, expectedUpdatedAt)) : eq(users.id, v.id))
       .returning({
         id: users.id,
         email: users.email,

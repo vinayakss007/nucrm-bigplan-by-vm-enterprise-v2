@@ -137,7 +137,7 @@ export const PATCH = withApiRoute(async (req: NextRequest) => {
     // (fire-and-forget; logSuperAdminAction swallows its own errors so a logging
     // failure never breaks the update response). Record only WHICH top-level
     // settings sub-trees changed — never the values, which may hold secrets.
-    logSuperAdminAction({
+    await logSuperAdminAction({
       adminId: ctx.userId,
       adminEmail: ctx.user?.email || '',
       action: 'tenant.settings_changed',

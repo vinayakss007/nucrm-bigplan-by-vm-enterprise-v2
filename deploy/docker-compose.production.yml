@@ -160,6 +160,10 @@ services:
       - SENTRY_DSN=${SENTRY_DSN:-}
       - NEXT_PUBLIC_SENTRY_DSN=${NEXT_PUBLIC_SENTRY_DSN:-}
       - SENTRY_DISABLE=${SENTRY_DISABLE:-false}
+      # The runbook and docs/OPERATIONS.md have always told operators SENTRY_ENABLE
+      # is the telemetry switch, but it was never passed into the container, so the
+      # code could not see it. Both spellings now reach sentry.*.config.ts.
+      - SENTRY_ENABLE=${SENTRY_ENABLE:-}
       - SENTRY_TRACES_SAMPLE_RATE=${SENTRY_TRACES_SAMPLE_RATE:-0.1}
       - SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT:-production}
       - SENTRY_RELEASE=${SENTRY_RELEASE:-}

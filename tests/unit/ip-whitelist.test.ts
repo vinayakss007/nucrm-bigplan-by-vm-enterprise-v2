@@ -259,6 +259,66 @@ describe('getIpWhitelistEnabled', () => {
   });
 });
 
+// The column is jsonb, so in production the driver returns a decoded array, not
+// the JSON text these older tests mock. Reading it with JSON.parse(String(v))
+// threw, the catch returned [], and checkIpWhitelist treated "no entries" as
+// "no restriction" — every tenant with a whitelist configured was unprotected.
+describe('whitelist stored as decoded jsonb (production shape)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function mockValue(value: any) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (db.select as any).mockReturnValue({
+      from: vi.fn(() => ({
+        where: vi.fn(() => ({
+          limit: vi.fn(() => Promise.resolve([{ value }])),
+        })),
+      })),
+    });
+  }
+
+  it('getTenantWhitelist returns the array as-is', async () => {
+    mockValue(['203.0.113.9', '198.51.100.0/24']);
+
+    const { getTenantWhitelist } = await import('@/lib/ip-whitelist');
+    await expect(getTenantWhitelist('tenant-1')).resolves.toEqual(['203.0.113.9', '198.51.100.0/24']);
+  });
+
+  it('blocks an IP outside a decoded array instead of failing open', async () => {
+    mockValue(['203.0.113.9']);
+
+    const { checkIpWhitelist } = await import('@/lib/ip-whitelist');
+    const result = await checkIpWhitelist(mockRequest('10.0.0.99'), 'tenant-1');
+
+    expect(result).not.toBeNull();
+    expect(result!.status).toBe(403);
+  });
+
+  it('honours CIDR entries inside a decoded array', async () => {
+    mockValue(['198.51.100.0/24']);
+
+    const { checkIpWhitelist } = await import('@/lib/ip-whitelist');
+    await expect(checkIpWhitelist(mockRequest('198.51.100.42'), 'tenant-1')).resolves.toBeNull();
+  });
+
+  it('getIpWhitelistEnabled is true for a decoded array', async () => {
+    mockValue(['203.0.113.9']);
+
+    const { getIpWhitelistEnabled } = await import('@/lib/ip-whitelist');
+    await expect(getIpWhitelistEnabled('tenant-1')).resolves.toBe(true);
+  });
+
+  it('a non-array row degrades to no restriction rather than throwing', async () => {
+    mockValue({ unexpected: 'shape' });
+
+    const { getTenantWhitelist } = await import('@/lib/ip-whitelist');
+    await expect(getTenantWhitelist('tenant-1')).resolves.toEqual([]);
+  });
+});
+
 describe('getTenantWhitelist', () => {
   beforeEach(() => {
     vi.clearAllMocks();
