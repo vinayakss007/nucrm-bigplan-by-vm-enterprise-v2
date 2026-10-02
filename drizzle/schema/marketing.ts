@@ -59,7 +59,7 @@ export const sequenceStepLogs = pgTable('sequence_step_logs', {
   enrollmentId: uuid('enrollment_id').notNull().references(() => sequenceEnrollments.id, { onDelete: 'cascade' }),
   stepId: uuid('step_id').references(() => sequenceSteps.id, { onDelete: 'set null' }),
   tenantId: utils.tenantId(),
-  status: text('status').notNull().default('pending'), // 'pending', 'sent', 'skipped', 'failed', 'cancelled'
+  status: text('status').notNull().default('pending'), // 'pending', 'sending', 'sent', 'skipped', 'failed', 'cancelled'
   scheduledAt: timestamp('scheduled_at', { withTimezone: true }),
   executedAt: timestamp('executed_at', { withTimezone: true }),
   errorMessage: text('error_message'),
