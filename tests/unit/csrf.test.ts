@@ -126,7 +126,13 @@ describe('auth/csrf', () => {
     expect(needsCsrfValidation('POST', '/api/forms/submit')).toBe(false);
     expect(needsCsrfValidation('POST', '/api/leads/public/capture')).toBe(false);
     expect(needsCsrfValidation('POST', '/api/setup/init')).toBe(false);
-    expect(needsCsrfValidation('POST', '/api/tenant/onboarding/step')).toBe(false);
+  });
+
+  // #2220: the pre-auth wizard exemption was removed — /api/tenant/onboarding*
+  // are requireAuth state-changers and must validate.
+  it('needsCsrfValidation returns TRUE for tenant onboarding (#2220)', async () => {
+    const { needsCsrfValidation } = await import('@/lib/auth/csrf');
+    expect(needsCsrfValidation('POST', '/api/tenant/onboarding/step')).toBe(true);
   });
 
   it('needsCsrfValidation returns false for auth pre-auth routes', async () => {
