@@ -59,7 +59,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     const limit = Math.min(100, Math.max(1, rawLimit));
     const offset = (Math.max(1, page) - 1) * limit;
     const tid = ctx.tenantId;
-    const pattern = q ? `%${q}%` : null;
+    const pattern = q ? `%${q.replace(/[\\%_]/g, '\\$&')}%` : null;
 
     let data: Record<string, unknown>[] = [];
     let total = 0;
