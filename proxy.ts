@@ -217,6 +217,27 @@ const PUBLIC_PATHS = [
 
 const PUBLIC_PREFIXES = ['/_next', '/favicon', '/images', '/static', '/icons', '/api/v2', '/fonts', '/sounds', '/videos', '/api/tenant/forms/public'];
 
+/**
+ * #2215: surfaces that legitimately consume `ak_` API keys. The gateway
+ * catch-alls (/api/v1/*, /api/v2/*) and the internal tenant API they proxy to
+ * (/api/tenant/*) are the only code paths that call tryApiKeyAuth()/
+ * resolveGatewayTenant(). Everywhere else a Bearer `ak_*` is a failed
+ * credential, not a pass-through ticket.
+ */
+const API_KEY_ALLOWED_PREFIXES = ['/api/v1/', '/api/v2/', '/api/tenant/'];
+/**
+ * #2215: login-adjacent routes are NEVER API-key surfaces, even under the
+ * allowed prefixes. An `ak_` Bearer here used to skip JWT verification, CSRF
+ * and edge rate limiting outright, which made the deprecated v1 login
+ * anonymously brute-forceable with a junk `Bearer ak_x` header.
+ */
+const API_KEY_DENIED_PREFIXES = ['/api/v1/auth', '/api/v2/auth', '/api/tenant/portal/login'];
+
+function isApiKeyAllowedPath(pathname: string): boolean {
+  if (API_KEY_DENIED_PREFIXES.some(p => pathname === p || pathname.startsWith(p + '/'))) return false;
+  return API_KEY_ALLOWED_PREFIXES.some(p => pathname.startsWith(p));
+}
+
 // #1992: exact matches hit a Set first so the common public routes
 // (/api/health, /auth/login, ...) skip the ~70-entry linear scan.
 const PUBLIC_PATH_SET = new Set(PUBLIC_PATHS);
@@ -391,19 +412,50 @@ export async function proxy(request: NextRequest) {
     });
   }
 
-  const cookieToken = request.cookies.get('nucrm_session')?.value;
+  const cookieTokenRaw = request.cookies.get('nucrm_session')?.value;
   const authHeader = request.headers.get('authorization');
   const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
-  const token = cookieToken || bearerToken;
 
-  // NOTE: API keys (ak_*) are not JWTs — skip JWT verification and pass through
-  // to route handlers where tryApiKeyAuth() handles them properly.
-  if (bearerToken?.startsWith('ak_')) {
+  // #2215: the ak_* pass-through is NO LONGER unconditional. It used to skip
+  // JWT verification, CSRF and edge rate limiting on EVERY path, which turned
+  // every protected route — including the deprecated, auth-adjacent
+  // POST /api/v1/auth/login — into an anonymously brute-forceable endpoint for
+  // anyone shipping a junk `Bearer ak_x` header ("API keys are not JWTs" was
+  // true, but it was also the only pre-handler auth check the bypass had).
+  // Keys are now only passed through on the data-API surfaces that actually
+  // consume them (never /api/v1/auth*, /api/v2/auth*, portal login), and even
+  // there they get an IP-keyed edge budget so an unvalidated junk key cannot
+  // flood the origin. Key validity itself is still checked by tryApiKeyAuth()
+  // in the route layer — the edge cannot do DB lookups.
+  if (bearerToken?.startsWith('ak_') && isApiRequest(pathname)) {
+    if (!isApiKeyAllowedPath(pathname)) {
+      return NextResponse.json(
+        { error: 'API keys are only accepted on /api/v1, /api/v2 and /api/tenant data routes' },
+        { status: 401, headers: apiErrorHeaders(requestId) }
+      );
+    }
+    if (!shouldBypassRateLimit(pathname)) {
+      const ip = getClientIp(request);
+      const result = edgeLimiter.check(`rl:apikey-edge:${ip}`, RATE_LIMIT_API_KEY, RATE_LIMIT_WINDOW_MS);
+      if (!result.allowed) {
+        return buildRateLimitResponse(requestId, result, origin);
+      }
+      const response = nextWithRequestId(request, requestId);
+      response.headers.set('x-request-id', requestId);
+      setCORS(response, origin, pathname);
+      applyRateLimitHeaders(response, result);
+      return response;
+    }
     const response = nextWithRequestId(request, requestId);
     response.headers.set('x-request-id', requestId);
     setCORS(response, origin, pathname);
     return response;
   }
+
+  // #2215: `ak_` values are API-key bearer credentials only — they were never
+  // valid session cookies, and must not enter the JWT path from either source.
+  const cookieToken = cookieTokenRaw && !cookieTokenRaw.startsWith('ak_') ? cookieTokenRaw : null;
+  const token = cookieToken || (isApiRequest(pathname) ? bearerToken : null);
 
   if (!token) {
     if (isApiRequest(pathname)) {
@@ -416,14 +468,11 @@ export async function proxy(request: NextRequest) {
     return redirect;
   }
 
-  // API key tokens are validated by requireAuth in route handlers, not here.
-  // Skip JWT verification and pass through to let the route handler authenticate.
-  if (token.startsWith('ak_')) {
-    const response = nextWithRequestId(request, requestId);
-    response.headers.set('x-request-id', requestId);
-    setCORS(response, origin, pathname);
-    return response;
-  }
+  // #2215: the old second `token.startsWith('ak_')` pass-through lived here.
+  // After the gated branch above, `token` can no longer be an API key (cookie
+  // ak_ values are sanitized away and bearer ak_ values are handled or
+  // rejected), so it has been removed — an `ak_` value reaching jwtVerify here
+  // correctly fails with 401 instead of buying an unthrottled edge bypass.
 
   try {
     let sub: string;

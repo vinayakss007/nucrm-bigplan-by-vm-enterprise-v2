@@ -265,6 +265,52 @@ describe('proxy middleware', () => {
     });
   });
 
+  // #2215: the `ak_` Bearer pass-through used to skip JWT verification, CSRF
+  // and edge rate limiting on EVERY path — which made the deprecated
+  // POST /api/v1/auth/login anonymously brute-forceable with a junk
+  // `Bearer ak_x`. It is now gated to the data-API surfaces and rate limited.
+  describe('ak_ API-key pass-through gating (#2215)', () => {
+    it('rejects a junk ak_ Bearer on /api/v1/auth/login with 401 instead of bypassing', async () => {
+      const { proxy } = await import('@/proxy');
+      const res = await proxy(makeReq('/api/v1/auth/login', {
+        method: 'POST',
+        headers: { authorization: 'Bearer ak_live_deadbeef' },
+      }));
+      expect(res.status).toBe(401);
+      expect(res._isNext).toBeUndefined();
+    });
+
+    it('rejects ak_ Bearer on non-key surfaces (e.g. tenant dashboard page)', async () => {
+      const { proxy } = await import('@/proxy');
+      // Non-API page path: no cookie -> redirect to login, not a pass-through.
+      const res = await proxy(makeReq('/tenant/dashboard', {
+        headers: { authorization: 'Bearer ak_live_deadbeef' },
+      }));
+      expect(res._isRedirect).toBe(true);
+      expect(res._isNext).toBeUndefined();
+    });
+
+    it('passes ak_ Bearer through on /api/v1 data routes WITH an IP-keyed edge budget', async () => {
+      const { proxy } = await import('@/proxy');
+      const res = await proxy(makeReq('/api/v1/leads', {
+        headers: { authorization: 'Bearer ak_live_deadbeef' },
+      }));
+      expect(res._isNext).toBe(true);
+      expect(edgeCheckMock).toHaveBeenCalled();
+      const key = edgeCheckMock.mock.calls[0][0] as string;
+      expect(key).toMatch(/^rl:apikey-edge:/);
+    });
+
+    it('treats an ak_ value in the session cookie as no token (never a JWT bypass)', async () => {
+      const { proxy } = await import('@/proxy');
+      const res = await proxy(makeReq('/api/tenant/contacts', {
+        cookies: { nucrm_session: 'ak_live_deadbeef' },
+      }));
+      expect(res.status).toBe(401);
+      expect(mockJwtVerify).not.toHaveBeenCalled();
+    });
+  });
+
   describe('requestId', () => {
     it('sets x-request-id on responses', async () => {
       const { proxy } = await import('@/proxy');

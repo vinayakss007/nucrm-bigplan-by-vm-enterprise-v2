@@ -8,7 +8,7 @@
  * Validates API keys and sets auth context
  */
 
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { logError } from '@/lib/errors-server';
 import { db } from '@/drizzle/db';
 import { apiKeys, apiKeyUsage, users } from '@/drizzle/schema';
@@ -128,6 +128,28 @@ export function hasScope(ctx: AuthContext, requiredScope: string): boolean {
   if (ctx.permissions[`${resource}:all`]) return true;
   
   return false;
+}
+
+/**
+ * #2215: enforce an API key's scopes at the route layer.
+ *
+ * Before this, no v1 data route (nor the v1/v2 gateway catch-alls) ever
+ * consulted the key's `scopes` — a valid `ak_` key, even one with an empty
+ * scope list, had full read/write on everything the gateway exposed. This
+ * helper denies a key that lacks the required scope while leaving JWT
+ * consumers completely untouched (their authorization stays role-based via
+ * can()/requirePerm()), so minting a narrow key now actually means something
+ * and a leaked scopeless key is inert outside `all`/`*:all` grants.
+ *
+ * Returns null when the request may proceed, or a ready-to-return 403.
+ */
+export function requireApiKeyScope(ctx: AuthContext, requiredScope: string): NextResponse | null {
+  if (ctx.authMethod !== 'api_key') return null;
+  if (hasScope(ctx, requiredScope)) return null;
+  return NextResponse.json(
+    { error: `API key scope required: ${requiredScope}`, code: 'API_KEY_SCOPE_DENIED' },
+    { status: 403 }
+  );
 }
 
 /**

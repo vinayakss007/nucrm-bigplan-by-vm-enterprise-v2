@@ -236,6 +236,18 @@ export async function requireAuth(request: NextRequest): Promise<AuthContext | N
     // Try API key auth first
     const apiKeyCtx = await tryApiKeyAuth(request);
     if (apiKeyCtx) {
+      // #2215: an `ak_` key resolves to exactly ONE tenant (api_keys.tenant_id,
+      // keyHash is unique). A client that also sends X-Tenant-ID is trying to
+      // widen the key past its own workspace — reject instead of silently
+      // ignoring, so overrides fail loudly at the auth layer on every surface
+      // (the v1/v2 gateway catch-alls forward all original headers).
+      const claimedTenant = request.headers.get('x-tenant-id');
+      if (claimedTenant && claimedTenant !== apiKeyCtx.tenantId) {
+        return NextResponse.json(
+          { error: 'X-Tenant-ID does not match the tenant bound to this API key' },
+          { status: 403 }
+        );
+      }
       apiKeyCtx.authMethod = 'api_key';
       await setTenantContext(apiKeyCtx.tenantId, apiKeyCtx.userId);
       requestContext.set(requestId, { ...apiKeyCtx, cachedAt: Date.now() });
