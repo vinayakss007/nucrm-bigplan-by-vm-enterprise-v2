@@ -40,10 +40,13 @@ export async function GET(request: NextRequest) {
       }
     }
   } else if (authHeader?.startsWith('Bearer ')) {
-    const { verifyToken } = await import('@/lib/auth/session');
-    const payload = await verifyToken(authHeader.slice(7));
-    if (payload) {
-      userId = payload.userId;
+    // #2216: verifyToken alone accepts JWTs whose session was revoked
+    // (logout/admin-kill) for the full 30-day token lifetime — go through
+    // getCurrentUserForToken so the sessions row check applies here too.
+    const { getCurrentUserForToken } = await import('@/lib/auth/session');
+    const user = await getCurrentUserForToken(authHeader.slice(7));
+    if (user) {
+      userId = user.id;
       tenantId = request.headers.get('x-tenant-id') || undefined;
     }
   }

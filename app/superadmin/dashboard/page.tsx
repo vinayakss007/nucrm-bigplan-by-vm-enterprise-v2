@@ -5,7 +5,7 @@
  */
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
-import { verifyToken } from '@/lib/auth/session';
+import { getCurrentUserForToken } from '@/lib/auth/session';
 import { withUserContext, withSecurityContext } from '@/lib/db/rls';
 import { users, tenants, plans, errorLogs } from '@/drizzle/schema';
 import { eq, and, sql, desc, between } from 'drizzle-orm';
@@ -16,17 +16,18 @@ export default async function SuperAdminDashboard() {
   const cookieStore = await cookies();
   const token = cookieStore.get('nucrm_session')?.value;
   if (!token) redirect('/auth/login');
-  const payload = await verifyToken(token);
+  // #2216: a revoked (logged-out) JWT must not keep the platform console open.
+  const payload = await getCurrentUserForToken(token);
   if (!payload) redirect('/auth/login');
 
   // See app/superadmin/layout.tsx: this read must carry the verified identity
   // or fail-closed RLS returns zero rows and bounces a real super admin.
-  const [user] = await withUserContext(payload.userId, async (tx) => await tx.select({
+  const [user] = await withUserContext(payload.id, async (tx) => await tx.select({
     isSuperAdmin: users.isSuperAdmin,
     fullName: users.fullName,
   })
   .from(users)
-  .where(eq(users.id, payload.userId))
+  .where(eq(users.id, payload.id))
   .limit(1));
 
   if (!user?.isSuperAdmin) redirect('/tenant/dashboard');

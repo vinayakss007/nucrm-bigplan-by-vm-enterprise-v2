@@ -5,7 +5,7 @@
  */
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
-import { verifyToken } from '@/lib/auth/session';
+import { getCurrentUserForToken } from '@/lib/auth/session';
 import { withUserContext, withSecurityContext } from '@/lib/db/rls';
 import { users, tenants } from '@/drizzle/schema';
 import { eq, sql, count } from 'drizzle-orm';
@@ -23,7 +23,8 @@ export default async function SuperAdminLayout({ children }: { children: React.R
   const cookieStore = await cookies();
   const token = cookieStore.get('nucrm_session')?.value;
   if (!token) redirect('/auth/login');
-  const payload = await verifyToken(token);
+  // #2216: a revoked (logged-out) JWT must not keep the platform console open.
+  const payload = await getCurrentUserForToken(token);
   if (!payload) redirect('/auth/login');
 
   // RLS on `users` is fail-closed: with no context this select returns zero
@@ -31,14 +32,14 @@ export default async function SuperAdminLayout({ children }: { children: React.R
   // PgBouncer session pooling the GUC left by middleware can mask that on a
   // reused connection, so the bounce looks intermittent. Scope the read to the
   // verified JWT identity instead.
-  const [user] = await withUserContext(payload.userId, async (tx) => await tx.select({
+  const [user] = await withUserContext(payload.id, async (tx) => await tx.select({
     id: users.id,
     email: users.email,
     fullName: users.fullName,
     isSuperAdmin: users.isSuperAdmin,
   })
   .from(users)
-  .where(eq(users.id, payload.userId))
+  .where(eq(users.id, payload.id))
   .limit(1));
 
   if (!user?.isSuperAdmin) redirect('/tenant/dashboard');
