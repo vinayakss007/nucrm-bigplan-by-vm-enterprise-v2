@@ -21,7 +21,7 @@
  * relies on ambient cookie credentials with no CSRF defense.
  *
  * The allowlist mirrors needsCsrfValidation(): webhooks, cron, public forms,
- * public leads, setup, tenant onboarding, and the pre-auth auth routes. These
+ * public leads, setup, and the pre-auth auth routes. These
  * are either unauthenticated or authenticated by signature/secret rather than a
  * session cookie, so CSRF does not apply.
  */
@@ -58,7 +58,6 @@ const EXEMPT_PREFIXES = [
   '/api/forms/',
   '/api/leads/public/',
   '/api/setup/',
-  '/api/tenant/onboarding',
 ];
 const EXEMPT_EXACT = new Set([
   '/api/auth/login',

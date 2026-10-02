@@ -172,8 +172,9 @@ describe('needsCsrfValidation', () => {
     expect(needsCsrfValidation('POST', '/api/setup/complete')).toBe(false);
   });
 
-  it('returns false for tenant onboarding', () => {
-    expect(needsCsrfValidation('POST', '/api/tenant/onboarding')).toBe(false);
+  it('validates tenant onboarding again (#2220: the pre-auth wizard exemption is gone)', () => {
+    expect(needsCsrfValidation('POST', '/api/tenant/onboarding')).toBe(true);
+    expect(needsCsrfValidation('POST', '/api/tenant/onboarding/complete')).toBe(true);
   });
 
   it('returns false for login', () => {
