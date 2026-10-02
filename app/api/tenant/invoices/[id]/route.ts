@@ -15,7 +15,32 @@ import { eq, and, sql } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
+import { recalculateInvoicePayments } from '@/lib/billing/payments';
 import { withApiRoute } from '@/lib/api/with-api-route';
+
+/**
+ * #2226: statuses that describe how much the customer has actually paid.
+ * They are computed from the invoice_payments ledger by
+ * recalculateInvoicePayments() and must never be hand-set — a `paid` invoice
+ * with zero recorded payments inflates revenue reports keyed on status.
+ */
+const LEDGER_OWNED_STATUSES = ['paid', 'partially_paid'] as const;
+
+/**
+ * #2226: fields the payment summary (amountPaid/balanceDue/status) is derived
+ * from. Editing any of them must re-run recalculateInvoicePayments() in the
+ * same transaction, otherwise a paid invoice whose totalAmount is raised keeps
+ * a stale balanceDue and the ledger silently disagrees with the invoice.
+ */
+const LEDGER_AFFECTING_FIELDS = [
+  'subtotal',
+  'discountType',
+  'discountValue',
+  'discountAmount',
+  'taxRate',
+  'taxAmount',
+  'totalAmount',
+] as const;
 
 export const GET = withApiRoute(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
@@ -119,12 +144,26 @@ export const PUT = withApiRoute(async (req: NextRequest, { params }: { params: P
       }
     }
 
-    // Handle status-specific timestamp updates
+    // #2226: same reasoning as amountPaid/balanceDue above — 'paid' and
+    // 'partially_paid' describe the ledger, so the payments endpoints own those
+    // transitions. Left unchecked, status:'paid' could be set with zero
+    // payments recorded (and paidAt auto-stamped below).
+    if (typeof body.status === 'string' && (LEDGER_OWNED_STATUSES as readonly string[]).includes(body.status)) {
+      return NextResponse.json(
+        {
+          error:
+            `status '${body.status}' is derived from the payment ledger and cannot be set directly. ` +
+            `Record a payment via POST /api/tenant/invoices/${invoiceId}/payments — ` +
+            'amountPaid, balanceDue, status and paidAt are recomputed from it.',
+        },
+        { status: 422 }
+      );
+    }
+
+    // Handle status-specific timestamp updates.
+    // #2226: no paidAt stamping here — paidAt is owned by the ledger recalculation.
     if (body.status === 'sent' && !body.sentAt) {
       allowedFields['sentAt'] = new Date();
-    }
-    if (body.status === 'paid' && !body.paidAt) {
-      allowedFields['paidAt'] = new Date();
     }
     if (body.status === 'cancelled' && !body.cancelledAt) {
       allowedFields['cancelledAt'] = new Date();
@@ -153,15 +192,42 @@ export const PUT = withApiRoute(async (req: NextRequest, { params }: { params: P
     if (guard) return guard;
 
 
-    const [updated] = await db
-      .update(invoices)
-      .set({
-        ...allowedFields,
-        updatedAt: new Date(),
-        updatedBy: ctx.userId,
-      })
-      .where(and(eq(invoices.id, invoiceId), eq(invoices.tenantId, ctx.tenantId)))
-      .returning();
+    // #2226: when the money on the invoice changes, the payment summary derived
+    // from it (amountPaid/balanceDue/status/paidAt) must be recomputed from the
+    // ledger in the SAME transaction — otherwise a PATCHed totalAmount leaves a
+    // stale balanceDue and revenue rows silently drift from the payments.
+    const ledgerAffected = LEDGER_AFFECTING_FIELDS.some((field) => field in allowedFields);
+
+    const patch = {
+      ...allowedFields,
+      updatedAt: new Date(),
+      updatedBy: ctx.userId,
+    };
+
+    let updated: typeof invoices.$inferSelect | undefined;
+    if (ledgerAffected) {
+      updated = await db.transaction(async (tx) => {
+        const [row] = await tx
+          .update(invoices)
+          .set(patch)
+          .where(and(eq(invoices.id, invoiceId), eq(invoices.tenantId, ctx.tenantId)))
+          .returning();
+        await recalculateInvoicePayments(tx, invoiceId, ctx.tenantId);
+        // Re-read after the recalc so the response reflects the recomputed summary.
+        const [fresh] = await tx
+          .select()
+          .from(invoices)
+          .where(and(eq(invoices.id, invoiceId), eq(invoices.tenantId, ctx.tenantId)))
+          .limit(1);
+        return fresh ?? row;
+      });
+    } else {
+      [updated] = await db
+        .update(invoices)
+        .set(patch)
+        .where(and(eq(invoices.id, invoiceId), eq(invoices.tenantId, ctx.tenantId)))
+        .returning();
+    }
 
     await logAudit({
       tenantId: ctx.tenantId,
