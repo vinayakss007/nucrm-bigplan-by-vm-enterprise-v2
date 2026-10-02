@@ -14,6 +14,7 @@ import { db } from '@/drizzle/db';
 import { tasks, contacts, users } from '@/drizzle/schema';
 import { eq, and, sql, desc, count, asc } from 'drizzle-orm';
 import { requireAuth } from '@/lib/auth/require-auth';
+import { requireApiKeyScope } from '@/lib/auth/api-key';
 import { limiters } from '@/lib/rate-limit';
 import { handleError, ValidationError } from '@/lib/errors';
 import { devLogger } from '@/lib/dev-logger';
@@ -23,6 +24,10 @@ export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+
+    // #2215: an `ak_` key must actually carry the deals:read scope.
+    const scopeDenied = requireApiKeyScope(ctx, 'tasks:read');
+    if (scopeDenied) return scopeDenied;
 
     const rateCheck = await limiters.contacts.check(`tasks:${ctx.tenantId}`);
     if (!rateCheck.allowed) {
@@ -102,6 +107,10 @@ export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+
+    // #2215: writes through an `ak_` key require the deals:write scope.
+    const scopeDenied = requireApiKeyScope(ctx, 'tasks:write');
+    if (scopeDenied) return scopeDenied;
 
     const rateCheck = await limiters.contacts.check(`tasks:${ctx.tenantId}`);
     if (!rateCheck.allowed) {
