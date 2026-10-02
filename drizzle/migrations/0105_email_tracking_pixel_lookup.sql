@@ -28,6 +28,15 @@
 -- platform's widest context. This grants one table, reads only, and the write
 -- half still has to open its own withTenantContext() transaction — so widening
 -- SELECT cannot let anyone move another tenant's counters.
-CREATE POLICY "email_tracking_pixel_lookup" ON "email_tracking" FOR SELECT USING (
-  (current_setting('app.tracking_lookup', true))::text = 'true'
-);
+--
+-- Written as a drop-then-create DO block (0100's shape) rather than a bare
+-- CREATE POLICY, so that applying it by hand and having a later `db:migrate`
+-- replay it are the same no-op instead of a duplicate-object abort.
+DO $$
+BEGIN
+  DROP POLICY IF EXISTS "email_tracking_pixel_lookup" ON "email_tracking";
+  CREATE POLICY "email_tracking_pixel_lookup" ON "email_tracking"
+    AS PERMISSIVE
+    FOR SELECT
+    USING (((current_setting('app.tracking_lookup', true))::text = 'true'::text));
+END $$;
