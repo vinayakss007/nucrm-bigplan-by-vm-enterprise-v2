@@ -54,6 +54,7 @@
     "probe:sql": "npx tsx --import ./scripts/load-env.mjs scripts/probe-sql.mts",
     "probe:rls": "npx tsx --import ./scripts/load-env.mjs scripts/probe-rls.mts",
     "probe:write-contexts": "npx tsx --tsconfig scripts/tsconfig.gate.json --import ./scripts/load-env.mjs scripts/probe-write-contexts.ts",
+    "probe:open-tracking": "npx tsx --tsconfig scripts/tsconfig.gate.json --import ./scripts/load-env.mjs scripts/probe-open-tracking.ts",
     "db:triage": "npx tsx --import ./scripts/load-env.mjs scripts/triage-errors.mts",
     "cron:fire": "npx tsx --import ./scripts/load-env.mjs scripts/fire-cron.mts",
     "sim:superadmin-roles": "npx tsx --tsconfig scripts/tsconfig.gate.json --import ./scripts/load-env.mjs scripts/sim-superadmin-roles.ts",
