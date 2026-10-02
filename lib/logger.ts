@@ -7,6 +7,7 @@ import fs from 'fs';
 import path from 'path';
 import { getCurrentRequestId } from '@/lib/tenant/request-context';
 import { streamLog } from '@/lib/log-stream';
+import { redactQueryParams, redactedErrorForSinks } from '@/lib/error-redaction';
 
 /**
  * Structured Logger (replaces console.log/error)
@@ -60,24 +61,49 @@ function enrich(meta?: Record<string, unknown>): Record<string, unknown> {
   return { requestId, ...meta };
 }
 
+/**
+ * #62: the shape almost every catch block logs is `{ error: err.message }`, and
+ * a failed query's message ends with every value bound into it. These lines go
+ * to stdout, nucrm.log and Loki, so redact at the one place all three are
+ * written instead of asking 40 call sites to remember.
+ */
+function redactValue(value: unknown): unknown {
+  if (typeof value === 'string') return redactQueryParams(value);
+  if (value instanceof Error) return redactedErrorForSinks(value, redactQueryParams(value.message));
+  return value;
+}
+
+function redactMeta(meta?: Record<string, unknown>): Record<string, unknown> | undefined {
+  if (!meta) return meta;
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(meta)) out[key] = redactValue(value);
+  return out;
+}
+
 export const logger = {
   info: (message: string, meta?: Record<string, unknown>) => {
-    const logEntry = { level: 'info', ts: new Date().toISOString(), msg: message, ...enrich(meta) };
+    const safeMessage = redactQueryParams(message);
+    const extra = enrich(redactMeta(meta));
+    const logEntry = { level: 'info', ts: new Date().toISOString(), msg: safeMessage, ...extra };
     console.log(JSON.stringify(logEntry));
     writeToFile(logEntry);
-    streamLog('info', message, enrich(meta));
+    streamLog('info', safeMessage, extra);
   },
   warn: (message: string, meta?: Record<string, unknown>) => {
-    const logEntry = { level: 'warn', ts: new Date().toISOString(), msg: message, ...enrich(meta) };
+    const safeMessage = redactQueryParams(message);
+    const extra = enrich(redactMeta(meta));
+    const logEntry = { level: 'warn', ts: new Date().toISOString(), msg: safeMessage, ...extra };
     console.warn(JSON.stringify(logEntry));
     writeToFile(logEntry);
-    streamLog('warn', message, enrich(meta));
+    streamLog('warn', safeMessage, extra);
   },
   error: (message: string, meta?: Record<string, unknown>) => {
-    const logEntry = { level: 'error', ts: new Date().toISOString(), msg: message, ...enrich(meta) };
+    const safeMessage = redactQueryParams(message);
+    const extra = enrich(redactMeta(meta));
+    const logEntry = { level: 'error', ts: new Date().toISOString(), msg: safeMessage, ...extra };
     console.error(JSON.stringify(logEntry));
     writeToFile(logEntry);
-    streamLog('error', message, enrich(meta));
+    streamLog('error', safeMessage, extra);
   },
 };
 

@@ -5,6 +5,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { logError } from '@/lib/errors-server';
+import { errorText, truncateForStore } from '@/lib/error-redaction';
 import { acquireLock } from '@/lib/cache';
 import { db } from '@/drizzle/db';
 import { sql } from 'drizzle-orm';
@@ -244,7 +245,11 @@ async function backupSingleTenant(
 
 
   } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : String(err);
+    // #62: `err.message` is drizzle's query echo for a DB failure, and the
+    // export step binds whole tenant tables into one statement — the stored
+    // value here reached 82,645 characters of live business data, then went out
+    // in the alert email too. errorText() keeps the SQL and drops the values.
+    const errorMessage = truncateForStore(errorText(err), 2_000);
     await db.execute(sql`
       UPDATE tenant_backup_records SET status = 'failed', error_message = ${errorMessage}, completed_at = NOW() WHERE id = ${backupRecord.id}`
     );
