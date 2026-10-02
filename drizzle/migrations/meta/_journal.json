@@ -722,6 +722,13 @@
       "when": 1788782400018,
       "tag": "0104_integrations_type_allows_configured_providers",
       "breakpoints": true
+    },
+    {
+      "idx": 102,
+      "version": "7",
+      "when": 1788782400019,
+      "tag": "0105_email_tracking_pixel_lookup",
+      "breakpoints": true
     }
   ]
 }

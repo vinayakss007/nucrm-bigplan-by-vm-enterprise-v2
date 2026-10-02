@@ -18,11 +18,11 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { logError } from '@/lib/errors-server';
-import { db } from '@/drizzle/db';
 import { emailTracking, activities } from '@/drizzle/schema';
 import { eq, and, isNull, sql } from 'drizzle-orm';
 import { isPrivateIpv4, isPrivateIpv6, isBlockedHostname } from '@/lib/security/ssrf';
 import { checkPublicRateLimit } from '@/lib/rate-limit-simple';
+import { withTenantContext, withTrackingLookupContext, NO_USER_SENTINEL } from '@/lib/db/rls';
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -74,15 +74,22 @@ export async function GET(req: NextRequest) {
   let row: TrackingRow | null = null;
   if (trackId && trackIdIsPlausible) {
     try {
-      const found = await db.query.emailTracking.findFirst({
-        where: and(eq(emailTracking.id, trackId), isNull(emailTracking.deletedAt)),
-        columns: {
-          id: true,
-          contactId: true,
-          tenantId: true,
-          clickCount: true
-        }
-      });
+      // This read decides whether the caller's URL is honoured, so it has to
+      // work from a connection with no tenant GUC at all. Without the lookup
+      // context the query returned nothing even for a genuine row, which made
+      // the #1981 gate fail closed every real link — recipients of a wrapped
+      // URL landed on '/' instead of the destination.
+      const found = await withTrackingLookupContext((tx) =>
+        tx.query.emailTracking.findFirst({
+          where: and(eq(emailTracking.id, trackId), isNull(emailTracking.deletedAt)),
+          columns: {
+            id: true,
+            contactId: true,
+            tenantId: true,
+            clickCount: true
+          }
+        })
+      );
       row = found ?? null;
     } catch (err) {
       void logError({ error: err, context: 'track/click lookup', level: 'warning' });
@@ -95,7 +102,9 @@ export async function GET(req: NextRequest) {
     // Record click — fire and forget
     Promise.resolve().then(async () => {
       try {
-        await db.transaction(async (tx) => {
+        // The counter update and the activity row are both checked against
+        // app.current_tenant, so they need the tenant the tracking row named.
+        await withTenantContext(tracked.tenantId, NO_USER_SENTINEL, async (tx) => {
           await tx.update(emailTracking)
             .set({
               clickedAt: sql`COALESCE(${emailTracking.clickedAt}, now())`,
