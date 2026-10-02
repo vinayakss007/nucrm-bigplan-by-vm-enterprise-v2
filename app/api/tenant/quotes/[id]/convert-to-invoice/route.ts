@@ -132,22 +132,11 @@ export const POST = withApiRoute(async (req: NextRequest, { params }: { params: 
             );
           }
 
-          // Activity
-          try {
-            await tx.insert(activities).values({
-              tenantId: ctx.tenantId,
-              userId: ctx.userId,
-              entityType: 'quote',
-              entityId: id,
-              contactId: quote.contactId,
-              dealId: quote.dealId ?? null,
-              eventType: 'quote_converted',
-              description: `Quote "${quote.title}" converted to invoice ${invoiceNumber}`,
-              metadata: { quote_id: id, invoice_id: inv.id, invoice_number: invoiceNumber },
-            });
-          } catch (err) {
-            console.warn('[convert-to-invoice] activity insert failed:', (err as Error).message);
-          }
+          // #2222: the activity row is logged AFTER commit (below), not here.
+          // A try/catch inside the tx is a trap: the failed insert aborts the
+          // Postgres transaction, so the next statement (`tx.update(quotes)`)
+          // dies with 25P02 and the whole conversion 500s anyway — the
+          // "non-fatal" warning just hides which statement actually broke.
 
           // Update the quote status to 'accepted'
           await tx.update(quotes).set({
@@ -170,6 +159,21 @@ export const POST = withApiRoute(async (req: NextRequest, { params }: { params: 
     if (!invoice) {
       return NextResponse.json({ error: 'Failed to create invoice' }, { status: 500 });
     }
+
+    // #2222: non-critical activity row written AFTER commit on the regular
+    // pool — its failure can no longer abort (or silently poison) the
+    // conversion transaction.
+    await db.insert(activities).values({
+      tenantId: ctx.tenantId,
+      userId: ctx.userId,
+      entityType: 'quote',
+      entityId: id,
+      contactId: quote.contactId,
+      dealId: quote.dealId ?? null,
+      eventType: 'quote_converted',
+      description: `Quote "${quote.title}" converted to invoice ${invoice.invoiceNumber ?? ''}`,
+      metadata: { quote_id: id, invoice_id: invoice.id, invoice_number: invoice.invoiceNumber ?? null },
+    }).catch(err => void logError({ error: err, context: 'convert-to-invoice activity', tenantId: ctx.tenantId, level: 'warning' }));
 
     await logAudit({
       tenantId: ctx.tenantId,

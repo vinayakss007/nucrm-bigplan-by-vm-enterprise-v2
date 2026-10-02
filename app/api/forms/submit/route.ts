@@ -215,24 +215,6 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // Save message as a separate note if present
-      if (contactId && message) {
-        await tx.insert(activities).values({
-          tenantId: form.tenantId,
-          contactId: contactId,
-          eventType: 'note',
-          metadata: {
-            message: message,
-            form_id: form.id,
-            form_name: form.name
-          },
-          entityType: 'contact',
-          entityId: contactId,
-          action: 'form_message',
-          description: `Sent message via form "${form.name}"`
-        }).catch(err => void logError({ error: err, context: 'forms/submit save-note', tenantId: form.tenantId, level: 'warning' }));
-      }
-
       // 4. Record the submission
       await tx.insert(formSubmissions).values({
         tenantId: form.tenantId,
@@ -243,13 +225,35 @@ export async function POST(req: NextRequest) {
       });
 
       // 5. Update submission count
+      // #2222: no .catch() inside the transaction — in Postgres ANY
+      // failed statement aborts the whole tx, so a swallowed error here
+      // either poisoned the statements before it or turned the eventual
+      // COMMIT into a silent ROLLBACK while the caller still answered
+      // ok:true. A counter update failing now fails the submission loudly.
       await tx.update(forms)
         .set({ submissionsCount: sql`${forms.submissionsCount} + 1` })
-        .where(eq(forms.id, form.id))
-        .catch(async (err) => {
-          console.warn('[FormsSubmit] failed to update submissionsCount:', err.message);
-        });
+        .where(eq(forms.id, form.id));
     });
+
+    // Save message as a separate note if present — non-critical, so it runs
+    // AFTER commit on the regular pool (#2222): its failure must not abort
+    // the transaction that carries the lead itself.
+    if (contactId && message) {
+      await db.insert(activities).values({
+        tenantId: form.tenantId,
+        contactId: contactId,
+        eventType: 'note',
+        metadata: {
+          message: message,
+          form_id: form.id,
+          form_name: form.name
+        },
+        entityType: 'contact',
+        entityId: contactId,
+        action: 'form_message',
+        description: `Sent message via form "${form.name}"`
+      }).catch(err => void logError({ error: err, context: 'forms/submit save-note', tenantId: form.tenantId, level: 'warning' }));
+    }
 
 
     // 6. Trigger Calculations & Automations
