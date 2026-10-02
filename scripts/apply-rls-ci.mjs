@@ -12,23 +12,34 @@
  * tables and exits non-zero if it is not.
  */
 import { execSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, '..', 'drizzle', 'migrations');
 
-const RLS_MIGRATION_TAGS = [
-  '0015_rls_policies',
-  '0019_fix_rls_notifications',
-  '0031_rls_remaining_tables',
-  '0037_tenant_isolation_hardening',
-  '0039_rls_fail_closed_policy',
-  '0054_rls_phase0',
-  '0060_add_tenantid_rls',
-  '0068_force_rls_owner',
-];
+// #2232: discover RLS/security-policy migrations instead of a hand-maintained
+// whitelist — the old list stopped at 0068, so 0088-0096 (NULL-tenant leak
+// closure, member-read, superadmin bypass) were never applied in CI and any
+// regression of an 0088-class bug passed green. Match is deliberately wide:
+// files that cannot re-run on a pushed schema are reported skipped, not fatal,
+// so over-inclusion costs noise while under-inclusion costs safety.
+const RLS_TAG_RE = /rls|isolation|polic|bypass|member_read|tenant_reference|force_/i;
+
+function discoverRlsTags() {
+  return readdirSync(migrationsDir)
+    .filter((f) => f.endsWith('.sql') && !f.endsWith('.down.sql'))
+    .map((f) => f.replace(/\.sql$/, ''))
+    .filter((tag) => RLS_TAG_RE.test(tag))
+    .sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+}
+
+const RLS_MIGRATION_TAGS = discoverRlsTags();
+if (RLS_MIGRATION_TAGS.length === 0) {
+  console.error('[apply-rls-ci] RLS discovery matched zero migrations — pattern or migrations dir broken');
+  process.exit(1);
+}
 
 function main() {
   const databaseUrl = process.env.DATABASE_URL;
@@ -101,6 +112,19 @@ function main() {
   if (!allOk) {
     console.error('\nERROR: RLS not enabled on all core tables');
     process.exit(1);
+  }
+
+  // #2232: surface the full isolation picture (enabled+forced, policy count,
+  // NULL-tenant gaps) from the dedicated verifier. Non-fatal here: the CI
+  // connection may legitimately own the schema, which the verifier flags.
+  try {
+    execSync('npx tsx scripts/verify-tenant-isolation.ts', {
+      stdio: 'inherit',
+      timeout: 120000,
+      cwd: join(__dirname, '..'),
+    });
+  } catch (e) {
+    console.warn(`[apply-rls-ci] verify-tenant-isolation reported gaps (non-fatal): ${String(e.message).slice(0, 120)}`);
   }
 
   console.log('\n✅ RLS migrations applied and verified');
