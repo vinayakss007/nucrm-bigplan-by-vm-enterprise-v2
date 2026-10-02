@@ -7,6 +7,15 @@ import { errorLogs } from '@/drizzle/schema/support';
 import { sendCriticalErrorAlert } from '@/lib/critical-error-alert';
 import { getCurrentRequestId } from '@/lib/tenant/request-context';
 import { InvalidJsonBodyError } from '@/lib/errors-shared';
+import {
+  MAX_STORED_MESSAGE,
+  MAX_STORED_STACK,
+  errorStackText,
+  errorText,
+  redactedErrorForSinks,
+  redactQueryParams,
+  truncateForStore,
+} from '@/lib/error-redaction';
 
 type ErrorLevel = 'warning' | 'error' | 'fatal';
 
@@ -143,7 +152,7 @@ function errorCauseChain(error: unknown): { code: string | null; message: string
     }
     const e = current as { code?: unknown; sqlstate?: unknown; message?: unknown; constraint?: unknown; cause?: unknown };
     const code = typeof e.code === 'string' ? e.code : typeof e.sqlstate === 'string' ? e.sqlstate : null;
-    const text = typeof e.message === 'string' ? e.message : '';
+    const text = typeof e.message === 'string' ? redactQueryParams(e.message) : '';
     if (code || text) {
       chain.push({ code, message: text, ...(typeof e.constraint === 'string' ? { constraint: e.constraint } : {}) });
     }
@@ -173,7 +182,7 @@ export async function logError(opts: {
   // the critical-alert keeps clients from paging anyone.
   if (opts.error instanceof InvalidJsonBodyError) return;
   const level: ErrorLevel = opts.level ?? 'error';
-  const msg = opts.error instanceof Error ? opts.error.message : String(opts.error ?? 'Unknown error');
+  const msg = errorText(opts.error);
   // #44: drizzle's node-postgres driver rethrows as QueryFailedError — the SQL
   // text becomes `message` and the pg error, the only object holding the
   // SQLSTATE, moves to `cause`. Storing the top message alone made every RLS
@@ -182,10 +191,17 @@ export async function logError(opts: {
   // root cause and keep the whole chain structured alongside it.
   const causes = errorCauseChain(opts.error);
   const root = causes.length > 0 ? causes[causes.length - 1] : null;
-  const message = root && root.message && !msg.includes(root.message)
-    ? `${msg} | caused by ${root.code ? `${root.code}: ` : ''}${root.message}`
-    : msg;
-  const stack = opts.error instanceof Error ? opts.error.stack : undefined;
+  // #62: that same QueryFailedError appends `params: <every bound value>`, so
+  // the stored row carried the tenant's data — 82,345 of the 82,645 characters
+  // in the worst preprod row. Redaction happens here, at the one funnel every
+  // structured server error flows through, rather than at each call site.
+  const message = truncateForStore(
+    root && root.message && !msg.includes(root.message)
+      ? `${msg} | caused by ${root.code ? `${root.code}: ` : ''}${root.message}`
+      : msg,
+    MAX_STORED_MESSAGE,
+  );
+  const stack = truncateForStore(errorStackText(opts.error) ?? '', MAX_STORED_STACK) || undefined;
   const source = opts.sourceFile ? null : getSourceLocation();
   // Correlate the DB row, the Sentry event, and the request. The proxy/auth
   // middleware put the id in AsyncLocalStorage; callers may still override.
@@ -253,7 +269,10 @@ export async function logError(opts: {
   // expected errors; the DB row is always written above regardless.
   if (opts.captureToSentry !== false) {
     await forwardToSentry({
-      error: opts.error,
+      // The raw Error is not passed on: Sentry renders `event.message` from
+      // error.message, which for a failed query is the parameter dump. The copy
+      // keeps name, stack and the deepest cause (the SQLSTATE).
+      error: redactedErrorForSinks(opts.error, message),
       level,
       context: opts.context,
       tenantId: opts.tenantId,

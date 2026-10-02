@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { db } from '@/drizzle/db';
+import { errorText, truncateForStore } from '@/lib/error-redaction';
 import { backupRecords } from '@/drizzle/schema';
 import { eq, sql } from 'drizzle-orm';
 import { spawn, exec as execCb } from 'child_process';
@@ -361,11 +362,13 @@ export async function createBackup(options: BackupOptions): Promise<BackupResult
  
   } catch (err: unknown) {
     const durationMs = Date.now() - t0;
-    const errMessage = err instanceof Error ? err.message : String(err);
+    // #62: slice(500) alone still kept whatever drizzle echoed before `params:`;
+    // redact first so bound values never reach backup_records.
+    const errMessage = truncateForStore(errorText(err), 500);
     await db.update(backupRecords)
       .set({
         status: 'failed',
-        errorMessage: errMessage.slice(0, 500),
+        errorMessage: errMessage,
         durationMs
       })
       .where(eq(backupRecords.id, backup.id));
