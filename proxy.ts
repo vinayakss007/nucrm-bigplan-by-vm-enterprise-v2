@@ -16,6 +16,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { jwtVerify } from 'jose';
 import { getCsrfTokenFromCookie, getCsrfTokenFromHeader, needsCsrfValidation, validateCsrfToken } from '@/lib/auth/csrf';
 import { edgeLimiter, getRateLimitHeaders, shouldBypassRateLimit } from '@/lib/rate-limit-edge';
+import { getClientIp as gatedClientIp } from '@/lib/client-ip';
 
 const JWT_SECRET_ENV = process.env['JWT_SECRET'];
 const JWT_SECRET = JWT_SECRET_ENV ? new TextEncoder().encode(JWT_SECRET_ENV) : null;
@@ -268,8 +269,12 @@ function applyRateLimitHeaders(response: NextResponse, result: { allowed: boolea
   }
 }
 
+// #2219: the old local version trusted the raw first `x-forwarded-for` entry.
+// nginx APPENDS to XFF (`$proxy_add_x_forwarded_for`), so that entry is
+// attacker-controlled and rotating it nullified the rl:pub/rl:csrf limits.
+// Delegate to the central TRUST_PROXY-gated helper (#1249).
 function getClientIp(request: NextRequest): string {
-  return request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
+  return gatedClientIp(request);
 }
 
 function buildRateLimitResponse(requestId: string, result: { allowed: boolean; remaining: number; reset: number; limit: number }, origin: string | null): NextResponse {
