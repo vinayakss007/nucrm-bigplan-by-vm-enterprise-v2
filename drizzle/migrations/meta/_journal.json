@@ -729,6 +729,13 @@
       "when": 1788782400019,
       "tag": "0105_email_tracking_pixel_lookup",
       "breakpoints": true
+    },
+    {
+      "idx": 103,
+      "version": "7",
+      "when": 1788782400020,
+      "tag": "0106_sequence_step_logs_allows_sending",
+      "breakpoints": true
     }
   ]
 }
