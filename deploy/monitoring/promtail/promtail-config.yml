@@ -10,33 +10,50 @@ clients:
   - url: http://loki:3100/loki/api/v1/push
 
 scrape_configs:
-  - job_name: app-logs
-    static_configs:
-      - targets: [localhost]
-        labels:
-          job: nucrm-app
-          __path__: /var/log/app/*.log
-    pipeline_stages:
-      - regex:
-          expression: '^(?P<level>\w+)\s+(?P<timestamp>\S+)\s+\[(?P<requestId>[^\]]+)\]\s+(?P<message>.*)'
-      - labels:
-          level:
-          requestId:
+  # ── Container stdout/stderr (#2053) ────────────────────────────────────────
+  #
+  # This is the only job that can reach the application's logs. The app, worker,
+  # realtime, nginx and redis containers write to stdout and nothing else: the
+  # file jobs that used to sit here pointed at `/var/log/app` (does not exist on
+  # this host) and `/var/log/redis` (redis logs to stdout inside its container),
+  # so promtail discovered zero targets and Loki silently held no application
+  # logs while the pipeline looked configured.
+  #
+  # Requires the Docker socket mounted read-only (see the compose services).
+  #
+  # Deliberately NO `docker: {}` pipeline stage. That stage parses Docker's
+  # json-file format (`{"log":…}`), which only appears when the log files are
+  # tailed directly; over the daemon API docker_sd reads, lines arrive plain.
+  # Applied to a plain line the stage fails to unmarshal and drops the entry,
+  # which would reproduce the exact silent-empty-store failure this job exists
+  # to fix.
+  - job_name: docker
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 10s
+    relabel_configs:
+      # docker_sd_configs takes no `labels:` block in Promtail 3.0 (the parser
+      # rejects it outright), so the job name is applied as a constant relabel.
+      - target_label: "job"
+        replacement: "nucrm-container"
+      - source_labels: ["__meta_docker_container_name"]
+        regex: "/(.*)"
+        target_label: "container"
+      - source_labels: ["__meta_docker_container_log_stream"]
+        target_label: "stream"
+      - source_labels:
+          ["__meta_docker_container_label_com_docker_compose_service"]
+        target_label: "service"
+      # Loki stores what promtail pushes. Tailing either of them makes the
+      # pipeline read its own output, which grows without bound.
+      - source_labels:
+          ["__meta_docker_container_label_com_docker_compose_service"]
+        regex: "(promtail|loki)"
+        action: "drop"
 
-  - job_name: nginx-logs
-    static_configs:
-      - targets: [localhost]
-        labels:
-          job: nucrm-nginx
-          __path__: /var/log/nginx/*.log
-    pipeline_stages:
-      - regex:
-          expression: '(?P<remote_addr>\S+)\s+-\s+(?P<remote_user>\S*)\s+\[(?P<timestamp>[^\]]+)\]\s+"(?P<method>\S+)\s+(?P<path>\S+)\s+(?P<proto>\S+)"\s+(?P<status>\d{3})\s+(?P<bytes>\d+)\s+"(?P<referer>[^"]*)"\s+"(?P<user_agent>[^"]*)"'
-      - labels:
-          method:
-          status:
-          path:
-
+  # ── Postgres — the one service that really is a host process ───────────────
+  # `/var/log/postgresql` exists on this host; Postgres is not a container, so
+  # the docker job above cannot see it.
   - job_name: postgres-logs
     static_configs:
       - targets: [localhost]
@@ -48,30 +65,3 @@ scrape_configs:
           expression: '(?P<timestamp>\S+)\s+(?P<pid>\d+)\s+(?P<level>\w+):\s+(?P<message>.*)'
       - labels:
           level:
-
-  - job_name: redis-logs
-    static_configs:
-      - targets: [localhost]
-        labels:
-          job: nucrm-redis
-          __path__: /var/log/redis/*.log
-
-  # #2053: container stdout/stderr. Without this docker_sd job promtail
-  # discovers zero containers, so Loki silently holds no app/worker logs even
-  # though the pipeline looks configured. Requires the Docker socket mounted
-  # read-only into the promtail container (see the compose services).
-  - job_name: docker
-    docker_sd_configs:
-      - host: unix:///var/run/docker.sock
-        refresh_interval: 10s
-    relabel_configs:
-      - source_labels: ["__meta_docker_container_name"]
-        regex: "/(.*)"
-        target_label: "container"
-      - source_labels: ["__meta_docker_container_log_stream"]
-        target_label: "stream"
-      - source_labels:
-          ["__meta_docker_container_label_com_docker_compose_service"]
-        target_label: "service"
-    pipeline_stages:
-      - docker: {}
