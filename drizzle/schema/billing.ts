@@ -422,7 +422,12 @@ export const webhookEvents = pgTable('webhook_events', {
   // failed → processing threw (kept for audit; the claim row is deleted on
   // failure so provider retries re-process — see lib/webhooks/idempotency).
   status: text('status').notNull().default('claimed'),
-  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  // #2237: 0087 declared this `DEFAULT now()` but NULLABLE, and the stale-claim
+  // sweep in lib/webhooks/idempotency.ts keyed on `created_at < cutoff` — a
+  // NULL row could never be reclaimed, wedging the UNIQUE(provider, event_id)
+  // claim forever. Migration 0109 backfills and enforces NOT NULL; the sweeper
+  // additionally treats NULL as stale so pre-0109 databases self-heal.
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   processedAt: timestamp('processed_at', { withTimezone: true }),
 }, (table) => {
   return {
