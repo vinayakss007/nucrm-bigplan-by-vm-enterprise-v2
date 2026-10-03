@@ -9,7 +9,7 @@ import { createOrderSchema } from '@/lib/api/schemas';
 import { parsePageLimit } from '@/lib/api/query-params';
 import { db } from '@/drizzle/db';
 import { orders, orderLineItems } from '@/drizzle/schema';
-import { eq, and, desc, sql, count } from 'drizzle-orm';
+import { eq, and, desc, sql, count, isNull } from 'drizzle-orm';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
@@ -30,7 +30,9 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     const contactId = searchParams.get('contactId');
     const { page, limit, offset } = parsePageLimit(searchParams);
 
-    const whereConditions = [eq(orders.tenantId, tenantId)];
+    // Soft-deleted orders (deletedAt set by DELETE /orders/[id]) must not
+    // appear in the list or inflate the pagination total (#2236).
+    const whereConditions = [eq(orders.tenantId, tenantId), isNull(orders.deletedAt)];
 
     if (status) {
       whereConditions.push(eq(orders.status, status));
@@ -42,7 +44,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
 
     const results = await db.select().from(orders).where(and(...whereConditions)).orderBy(desc(orders.createdAt)).limit(limit).offset(offset);
 
-    const [countResult] = await db.select({ count: count() }).from(orders).where(eq(orders.tenantId, tenantId));
+    const [countResult] = await db.select({ count: count() }).from(orders).where(and(eq(orders.tenantId, tenantId), isNull(orders.deletedAt)));
     const total = countResult?.count ?? 0;
 
     return NextResponse.json({ 
