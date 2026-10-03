@@ -9,12 +9,28 @@ import { emailOpens, emailClicks } from '@/drizzle/schema/email-tracking';
 import { tenants } from '@/drizzle/schema/core';
 import { eq } from 'drizzle-orm';
 import { checkPublicRateLimit } from '@/lib/rate-limit-simple';
+import { safeRedirectTarget } from '@/lib/security/redirect-target';
+import { logError } from '@/lib/errors-server';
 
 /**
  * Email Open/Click Tracking Endpoints
  *
  * Public endpoints (no auth required) - called from tracking pixel and link redirects.
  * IDs are passed via query parameters.
+ *
+ * Open-redirect hardening (#2267, same class as #2218): the `?url=` of a click
+ * request is the only caller-controlled redirect input this route has, so it is
+ * validated through the shared `safeRedirectTarget()` guard (absolute http(s),
+ * public host, no credentials, no protocol-relative/relative/smuggled schemes)
+ * BEFORE it is persisted to `emailClicks.linkUrl` and again implicitly at
+ * redirect time — the `Location` handed to the browser is byte-for-byte the
+ * validated string, never the raw parameter. The old hand-rolled host blocklist
+ * is gone; it missed whole private ranges, embedded credentials and
+ * whitespace-smuggled schemes, and it duplicated logic that now lives in one
+ * place (`lib/security/redirect-target.ts` + `lib/security/ssrf`).
+ *
+ * A failed click-tracking write must never wedge the redirect: the insert runs
+ * in its own try/catch, reports through `logError`, and the 302 still happens.
  */
 
 // 1x1 transparent GIF pixel (base64 decoded)
@@ -64,51 +80,36 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ error: 'url parameter required' }, { status: 400 });
       }
 
-      // Validate URL to prevent open redirect attacks
-      let parsedUrl: URL;
-      try {
-        parsedUrl = new URL(linkUrl);
-      } catch {
-        return NextResponse.json({ error: 'Invalid URL' }, { status: 400 });
-      }
-
-      // Only allow http and https protocols
-      if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
-        return NextResponse.json({ error: 'Invalid URL protocol' }, { status: 400 });
-      }
-
-      // Reject localhost and internal network addresses
-      const hostname = parsedUrl.hostname.toLowerCase();
-      const blockedHosts = ['localhost', '127.0.0.1', '0.0.0.0', '[::1]', '169.254.169.254'];
-      if (blockedHosts.includes(hostname) || hostname.endsWith('.local') || hostname.endsWith('.internal')) {
+      // #2267: validate at WRITE time with the shared guard. Only the validated
+      // destination is ever persisted to `emailClicks.linkUrl` or handed to the
+      // browser, so a hostile `?url=` can neither become a stored redirect nor
+      // a live 302. Unsafe targets get the same plain 4xx this route already
+      // used for malformed ones — never a redirect to the attacker's URL.
+      const destination = safeRedirectTarget(linkUrl);
+      if (destination === null) {
+        console.warn('[email-track] click refused unsafe redirect target');
         return NextResponse.json({ error: 'Invalid redirect target' }, { status: 400 });
       }
 
-      // Block private IP ranges (SSRF prevention)
-      const ipRegex = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
-      const ipMatch = hostname.match(ipRegex);
-      if (ipMatch) {
-        const octets = ipMatch.slice(1).map(Number);
-        const a = octets[0] ?? 0;
-        const b = octets[1] ?? 0;
-        // 10.x.x.x, 172.16-31.x.x, 192.168.x.x
-        if (a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168)) {
-          return NextResponse.json({ error: 'Invalid redirect target' }, { status: 400 });
-        }
+      // Log click — best effort. A failing write (RLS refusal, DB blip) must
+      // not wedge the redirect: catch it, report through the repo logger, and
+      // still send the reader to the validated destination below.
+      try {
+        await db.insert(emailClicks).values({
+          tenantId,
+          contactId: contactId || null,
+          campaignId: campaignId || null,
+          emailId: emailId || null,
+          linkUrl: destination,
+          ipAddress: req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || null,
+        });
+      } catch (err) {
+        void logError({ error: err, context: 'tenant/email/track click-log', level: 'warning' });
       }
 
-      // Log click
-      await db.insert(emailClicks).values({
-        tenantId,
-        contactId: contactId || null,
-        campaignId: campaignId || null,
-        emailId: emailId || null,
-        linkUrl,
-        ipAddress: req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || null,
-      });
-
-      // 302 redirect to destination
-      return NextResponse.redirect(linkUrl, 302);
+      // 302 redirect to destination — `destination` is the exact string
+      // `safeRedirectTarget()` approved (absolute http(s), public host).
+      return NextResponse.redirect(destination, 302);
     }
 
     // Default: tracking pixel (open tracking)
@@ -133,8 +134,9 @@ export async function GET(req: NextRequest) {
         'Expires': '0',
       },
     });
-  } catch {
+  } catch (err) {
     // Even on error, return the pixel to avoid broken images
+    void logError({ error: err, context: 'tenant/email/track', level: 'warning' });
     return new NextResponse(TRACKING_PIXEL, {
       status: 200,
       headers: { 'Content-Type': 'image/gif', 'Cache-Control': 'no-store' },
