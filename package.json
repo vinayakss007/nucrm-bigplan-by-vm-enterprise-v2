@@ -50,6 +50,7 @@
     "guard:boundaries": "node scripts/check-route-boundaries.mjs",
     "guard:filesize": "node scripts/check-file-size.mjs",
     "guard:any-suppressions": "node scripts/check-any-suppressions.mjs",
+    "guard:running-config": "node scripts/check-running-config-drift.mjs",
     "guard:vocab": "npx tsx --import ./scripts/load-env.mjs scripts/check-constraint-vocab.mts",
     "probe:sql": "npx tsx --import ./scripts/load-env.mjs scripts/probe-sql.mts",
     "probe:rls": "npx tsx --import ./scripts/load-env.mjs scripts/probe-rls.mts",
