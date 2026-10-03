@@ -546,10 +546,27 @@ async function phaseG(s: RunState): Promise<void> {
   if (s.b.client.session) stale.prime('nucrm_session', s.b.client.session);
   if (s.b.client.csrf) stale.prime('nucrm_csrf_token', s.b.client.csrf);
 
+  // Sessions are keyed by sha256(token), the same way lib/auth/session.hashToken
+  // stores them, so the row can be counted without ever logging the token.
+  const tokenHash = s.b.client.session
+    ? createHash('sha256').update(s.b.client.session).digest('hex')
+    : '';
+  const rowsLive = await countOf(
+    `SELECT count(*)::int AS c FROM sessions WHERE token_hash = '${tokenHash}'`
+  );
+  check('G2a  the live session has a sessions row to revoke',
+    rowsLive === 1, `sessions_by_token_hash=${rowsLive}`);
+
   const out = await call(s.b.client, '/api/auth/logout', { withCsrf: true, body: {} });
   check('G2  POST /api/auth/logout -> 2xx and clears the session cookie',
     out.status >= 200 && out.status < 300 && !s.b.client.session,
     `HTTP ${out.status} · local cookie dropped=${!s.b.client.session}`);
+
+  const rowsAfter = await countOf(
+    `SELECT count(*)::int AS c FROM sessions WHERE token_hash = '${tokenHash}'`
+  );
+  check('G2b  logout deleted the sessions row (RLS cannot match zero rows here)',
+    rowsAfter === 0, `sessions_left=${rowsAfter}`);
 
   const replay = await call(stale, '/api/tenant/me', { method: 'GET' });
   check('G3  replaying the revoked session -> 401 (killed in DB, not just client-side)',

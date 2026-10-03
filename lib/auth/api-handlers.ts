@@ -4,12 +4,11 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/drizzle/db';
 import { users, sessions, tenants, roles, tenantMembers, emailVerifications, pipelines, dealStages, platformSettings } from '@/drizzle/schema';
 import { onboardingProgress } from '@/drizzle/schema';
 import { isNull } from 'drizzle-orm';
 import { eq, and } from 'drizzle-orm';
-import { hashPassword, verifyPassword, createToken, hashToken, makeSessionCookieString, clearSessionCookie, validatePassword } from '@/lib/auth/session';
+import { hashPassword, verifyPassword, createToken, hashToken, verifyToken, makeSessionCookieString, clearSessionCookie, validatePassword } from '@/lib/auth/session';
 import { generateCsrfToken, setCsrfCookie, requestIsHttps } from '@/lib/auth/csrf';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { sendEmail, sendWebhookNotification, sendTelegram } from '@/lib/email/service';
@@ -476,12 +475,46 @@ export async function POST_signup(request: NextRequest) {
 }
 
 // ── Logout ────────────────────────────────────────────────────
+/**
+ * Delete the caller's own sessions row so logout revokes server-side, not just
+ * the cookie.
+ *
+ * `sessions` is FORCE ROW LEVEL SECURITY and `sessions_user_own` only matches
+ * when app.current_user names the row's user_id. The previous code issued
+ * db.delete() on the bare pool, where that GUC is empty: RLS matched zero rows,
+ * the statement still reported success, the cookie was cleared and the client
+ * got {ok:true} — while the token stayed valid in the database until its
+ * natural expiry, so a replayed cookie kept authenticating after logout.
+ *
+ * Verifying the JWT first is what supplies the scoped context, so only a caller
+ * holding a signature-valid token can revoke the session it names.
+ */
+async function revokeSessionRow(token: string): Promise<void> {
+  const payload = await verifyToken(token).catch(() => null);
+  const userId = payload?.userId;
+  if (!userId) return;
+  const tokenHash = await hashToken(token);
+  const revoked = await withUserContext(userId, async (tx) =>
+    await tx
+      .delete(sessions)
+      .where(and(eq(sessions.tokenHash, tokenHash), eq(sessions.userId, userId)))
+      .returning({ id: sessions.id })
+  ).catch((err) => {
+    logger.error('[auth/logout] session revoke failed', { error: err instanceof Error ? err.message : String(err) });
+    return null;
+  });
+  if (revoked !== null && revoked.length === 0) {
+    // Loud on purpose: a zero-row revoke is the same silent failure this path
+    // used to be, just observed instead of assumed.
+    logger.warn('[auth/logout] sessions row still live after revoke attempt', { userId });
+  }
+}
+
 export async function POST_logout(request: NextRequest) {
   try {
     const token = request.cookies.get('nucrm_session')?.value;
     if (token) {
-      const tokenHash = await hashToken(token);
-      await db.delete(sessions).where(eq(sessions.tokenHash, tokenHash)).catch((e) => { logger.error('[auth/logout] Failed to delete session', { error: e instanceof Error ? e.message : String(e) }); });
+      await revokeSessionRow(token);
     }
     await clearSessionCookie();
     const logoutResponse = NextResponse.json({ ok:true });
