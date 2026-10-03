@@ -7,23 +7,11 @@ import { db } from '@/drizzle/db';
 import { sql, type SQL } from 'drizzle-orm';
 import { isValidTableName } from '@/lib/sql-allowlist';
 import { logger } from '@/lib/logger';
-
-/**
- * Parameterized junction table deletes.
- * Returns a Drizzle SQL fragment — no raw SQL, no string interpolation.
- */
-function junctionDelete(table: string, tenantId: string): SQL {
-  switch (table) {
-    case 'contact_emails':
-      return sql`DELETE FROM contact_emails WHERE contact_id IN (SELECT id FROM contacts WHERE tenant_id = ${tenantId})`;
-    case 'contact_tags':
-      return sql`DELETE FROM contact_tags WHERE contact_id IN (SELECT id FROM contacts WHERE tenant_id = ${tenantId})`;
-    case 'lead_tags':
-      return sql`DELETE FROM lead_tags WHERE lead_id IN (SELECT id FROM leads WHERE tenant_id = ${tenantId})`;
-    default:
-      throw new Error(`Unknown junction table: ${table}`);
-  }
-}
+import {
+  tenantRestoreLockId,
+  TenantRestoreConflictError,
+} from '@/lib/tenant-restore-lock';
+import { deleteTenantDataInTx } from '@/lib/tenant-restore-wipe';
 
 /**
  * TenantDataImporter
@@ -86,116 +74,16 @@ export class TenantDataImporter {
   }
 
   /**
-   * Delete all existing data for this tenant (before restore)
+   * Delete all existing data for this tenant (before restore).
+   *
+   * Legacy tolerant path (per-table warnings, its own transaction). The
+   * restore flow uses `restore()` below, which wipes inside the SAME
+   * transaction as the import so a failed import rolls the wipe back (#2225).
    */
   async deleteExistingData(skipTables: string[] = []): Promise<void> {
     try {
       await db.transaction(async (tx) => {
-        // Delete in reverse dependency order (children before parents)
-        const deleteOrder = [
-          'deal_products',
-          'quote_line_items',
-          'quotes',
-          'price_book_entries',
-          'price_books',
-          'products',
-          'workflow_action_logs',
-          'workflow_execution_logs',
-          'workflow_actions',
-          'workflows',
-          'automation_runs',
-          'automation_workflows',
-          'automations',
-          'sequence_step_logs',
-          'sequence_steps',
-          'sequence_enrollments',
-          'sequences',
-          'whatsapp_messages',
-          'email_warmup_logs',
-          'email_warmup_pool',
-          'email_warmup_configs',
-          'call_notes',
-          'call_recordings',
-          'conversation_keywords',
-          'conversation_metrics',
-          'churn_predictions',
-          'deal_forecasts',
-          'revenue_projections',
-          'pipeline_health_metrics',
-          'ai_usage_logs',
-          'contact_scores',
-          'ai_email_drafts',
-          'ai_insights',
-          'report_executions',
-          'saved_reports',
-          'dashboards',
-          'failed_webhooks',
-          'webhook_deliveries',
-          'webhook_inbound_logs',
-          'webhooks',
-          'api_key_usage',
-          'api_keys',
-          'impersonation_sessions',
-          'audit_logs',
-          'contact_merge_history',
-          'contact_lifecycle_history',
-          'lead_activities',
-          'lead_scoring_rules',
-          'sso_providers',
-          'integrations',
-          'record_permissions',
-          'field_permissions',
-          'file_uploads',
-          'file_attachments',
-          'notes',
-          'form_submissions',
-          'forms',
-          'tenant_modules',
-          'modules',
-          'meetings',
-          'email_log',
-          'email_tracking',
-          'email_templates',
-          'contact_emails',
-          'contact_tags',
-          'lead_tags',
-          'billing_events',
-          'usage_snapshots',
-          'usage_alerts',
-          'limit_violations',
-          'custom_field_defs',
-          'onboarding_progress',
-          'subscriptions',
-          'invitations',
-          'tenant_members',
-          'roles',
-          'tags',
-          'tasks',
-          'notifications',
-          'activities',
-          'deals',
-          'deal_stages',
-          'pipelines',
-          'leads',
-          'contacts',
-          'companies',
-        ];
-
-        for (const table of deleteOrder) {
-          if (skipTables.includes(table)) continue;
-          try {
-            // Junction tables without tenant_id — delete via parent table's tenant_id
-            const JUNCTION_TABLES = ['contact_emails', 'contact_tags', 'lead_tags'];
-            if (JUNCTION_TABLES.includes(table)) {
-              await tx.execute(junctionDelete(table, this.tenantId));
-            } else {
-              // Standard tables with tenant_id column
-              await tx.execute(sql`DELETE FROM ${sql.identifier(table)} WHERE tenant_id = ${this.tenantId}`);
-            }
-          } catch (e) {
-            console.warn('[Import] Delete failed for table:', table, e);
-          }
-        }
+        await deleteTenantDataInTx(tx, this.tenantId, { skipTables, failFast: false });
       });
     } catch (err) {
       throw new Error(`Delete failed: ${err instanceof Error ? err.message : String(err)}`);
@@ -203,13 +91,77 @@ export class TenantDataImporter {
   }
 
   /**
+   * Atomic wipe + import in ONE transaction (#2225).
+   *
+   * WHY THIS EXISTS
+   * ---------------
+   * The old restore path committed the delete in transaction #1 and imported
+   * in transaction #2. Any failure between the two (bad row cast, FK order,
+   * OOM, process restart) left the tenant's live data deleted with only a
+   * partial re-import — the worst possible failure mode for a *recovery*
+   * endpoint. Here the wipe and the import share a single transaction: any
+   * failure rolls everything back and the tenant's old data stays intact.
+   *
+   * The first statement takes `pg_try_advisory_xact_lock` on a per-tenant
+   * key (the same key the route holds as a session lock for the whole
+   * restore), so two restores can never interleave even if both callers pass
+   * the route-level check at the same instant. A loser fails fast with
+   * `TenantRestoreConflictError` and its (empty) transaction rolls back.
+   *
+   * Unlike `importAll`, failures are NOT swallowed inside the transaction:
+   * Postgres aborts the whole transaction at the first failed statement
+   * (25P02), so catching and "continuing" only hides the loss — every later
+   * statement would fail anyway and the final COMMIT would silently discard
+   * everything. Fail-fast + rollback is the honest behavior.
+   */
+  async restore(
+    tables: Record<string, { columns: string[]; rows: Record<string, unknown>[] }>,
+    options: { deleteExisting?: boolean; skipTables?: string[] } = {},
+  ): Promise<TenantImportResult> {
+    const { deleteExisting = false, skipTables = [] } = options;
+    const result: TenantImportResult = {
+      tablesRestored: 0,
+      recordsRestored: 0,
+      errors: [],
+    };
+    const lockId = tenantRestoreLockId(this.tenantId);
+
+    await db.transaction(async (tx) => {
+      const lockRes = await tx.execute(
+        sql`SELECT pg_try_advisory_xact_lock(${lockId}) AS acquired`
+      ) as unknown as { rows?: { acquired?: boolean }[] };
+      if (!lockRes?.rows?.[0]?.acquired) {
+        throw new TenantRestoreConflictError(this.tenantId);
+      }
+
+      if (deleteExisting) {
+        await deleteTenantDataInTx(tx, this.tenantId, { skipTables, failFast: true });
+      }
+
+      for (const [tableName, tableData] of Object.entries(tables)) {
+        const inserted = await this.importTable(tx, tableName, tableData, { failFast: true });
+        result.tablesRestored++;
+        result.recordsRestored += inserted;
+      }
+    });
+
+    return result;
+  }
+
+  /**
    * Import a single table
+   *
+   * `failFast` (used by the atomic restore, #2225) lets every statement error
+   * propagate so the surrounding transaction rolls back instead of pressing
+   * on in an aborted (25P02) transaction and losing everything at COMMIT.
    */
   private async importTable(
     tx: TenantImportTx,
     tableName: string,
-    tableData: { columns: string[]; rows: Record<string, unknown>[] }
+    tableData: { columns: string[]; rows: Record<string, unknown>[] },
+    options: { failFast?: boolean } = {},
   ): Promise<number> {
+    const failFast = options.failFast === true;
     if (tableData.rows.length === 0) return 0;
 
     // Table allowlist: only permit known tenant-scoped tables
@@ -222,10 +174,10 @@ export class TenantDataImporter {
     for (const row of tableData.rows) {
       const columns = Object.keys(row);
       const values = Object.values(row);
+      if (columns.length === 0) continue;
 
       // Determine conflict column — usually 'id'
       const conflictColumn = columns.includes('id') ? 'id' : (columns[0] ?? 'id');
-      if (columns.length === 0) continue;
 
       // Build parameterized INSERT using Drizzle's sql template for safety
       const colList = sql.join(columns.map(c => sql.identifier(c)), sql`, `);
@@ -233,13 +185,21 @@ export class TenantDataImporter {
 
       const query = sql`INSERT INTO ${sql.identifier(tableName)} (${colList}) VALUES (${placeholders}) ON CONFLICT (${sql.identifier(conflictColumn)}) DO NOTHING`;
 
-      try {
+      const runInsert = async (): Promise<void> => {
         const result = await tx.execute(query) as unknown as { rowCount?: number | null };
         if (result.rowCount && result.rowCount > 0) {
           inserted++;
         }
-      } catch (err) {
-        console.warn(`[Import] Row insert failed in ${tableName}:`, err instanceof Error ? err.message : String(err));
+      };
+
+      if (failFast) {
+        await runInsert();
+      } else {
+        try {
+          await runInsert();
+        } catch (err) {
+          console.warn(`[Import] Row insert failed in ${tableName}:`, err instanceof Error ? err.message : String(err));
+        }
       }
     }
 
