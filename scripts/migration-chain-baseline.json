@@ -1,0 +1,17 @@
+{
+  "_comment": "Known migration-chain defects. Shrink this file as they are fixed; the guard fails on any NEW one and hints when one disappears. Regenerate: node scripts/check-migration-chain.mjs --update",
+  "counts": {
+    "files": 107,
+    "entries": 105
+  },
+  "violations": {
+    "missing": [
+      "missing:0059_custom_entities",
+      "missing:0091_usage_snapshots_superadmin_bypass"
+    ],
+    "orphans": [],
+    "dupIdx": ["dupIdx:91"],
+    "dupWhen": ["dupWhen:1788782400008"],
+    "order": ["order:0092_metrics_tables_superadmin_bypass"]
+  }
+}
