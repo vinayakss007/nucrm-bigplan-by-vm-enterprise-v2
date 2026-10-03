@@ -21,6 +21,11 @@
  *
  * Bytes are compared, not inodes: an identical rewrite is harmless, and two
  * unrelated files can share a name.
+ *
+ * The same blind spot exists for a value compose bakes into the container at
+ * create time rather than mounting, so `stop_grace_period` is compared against
+ * the running `HostConfig.StopTimeout` too — since PP-029 that number is the
+ * bound on how long a redeploy waits for live work.
  */
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -80,9 +85,81 @@ function remoteDigest(name, dst) {
   }
 }
 
+/**
+ * The other half of "is the running container the committed one": bind-mounted
+ * file *contents* are compared above, but a service-level knob that compose
+ * bakes into the container at create time is invisible to that check. Since
+ * PP-029 the `app` service's `stop_grace_period` is load-bearing — it is the
+ * real bound on how long a redeploy waits for live work — and a value edited in
+ * the file without a recreate, or tuned with `docker update` by hand, silently
+ * stops matching what a stop actually honours.
+ */
+const DEFAULT_STOP_TIMEOUT_S = 10; // Docker's own default when nothing is declared
+
+function parseComposeDuration(text) {
+  const units = [...String(text).matchAll(/(\d+)\s*([hms])/g)];
+  if (!units.length || units.map((u) => u[0]).join('') !== String(text)) return null;
+  const scale = { h: 3600, m: 60, s: 1 };
+  return units.reduce((total, [, n, u]) => total + Number(n) * scale[u], 0);
+}
+
+/** `com.docker.compose.project.config_files` is the exact `-f` list the running project used. */
+function configFilesOf(name) {
+  const out = execFileSync('docker', ['inspect', '-f',
+    '{{ index .Config.Labels "com.docker.compose.project.config_files" }}', name],
+  { encoding: 'utf8' }).trim();
+  return out ? out.split(',') : [];
+}
+
+const composeCache = new Map();
+/** Declared `stop_grace_period` per service, from the resolved (merged) compose config. */
+function declaredGrace(files) {
+  if (!composeCache.has(files.join(','))) {
+    let parsed = null;
+    try {
+      const args = ['compose'];
+      for (const f of files) args.push('-f', f);
+      args.push('config', '--format', 'json');
+      parsed = JSON.parse(execFileSync('docker', args, { encoding: 'utf8', maxBuffer: MAX_BYTES })).services || {};
+    } catch {
+      parsed = null; // no docker/compose in this environment, or the files are gone
+    }
+    composeCache.set(files.join(','), parsed);
+  }
+  return composeCache.get(files.join(','));
+}
+
+/** Docker stores this on `.Config`, not `.HostConfig`; unset prints as `<nil>` and means 10 s. */
+function runningStopTimeout(name) {
+  const raw = execFileSync('docker', ['inspect', '-f', '{{.Config.StopTimeout}}', name],
+    { encoding: 'utf8' }).trim();
+  // An explicit `0` (kill immediately) is a real value and must not collapse into
+  // the default, so only the template's own empty render counts as unset.
+  return raw === '<nil>' || raw === '<no value>' || raw === '' ? DEFAULT_STOP_TIMEOUT_S : Number(raw);
+}
+
+function stopGraceCheck(name) {
+  const service = execFileSync('docker', ['inspect', '-f',
+    '{{ index .Config.Labels "com.docker.compose.service" }}', name],
+  { encoding: 'utf8' }).trim();
+  const files = configFilesOf(name);
+  const key = files.join(',');
+  const declared = files.length ? declaredGrace(files) : null;
+  if (!declared || !declared[service]) {
+    return { skipKey: key || name, skip: `stop_grace_period unchecked for ${key || '(container without a config_files label)'} — resolved compose config is not readable here` };
+  }
+  const raw = declared[service].stop_grace_period;
+  const want = raw === undefined ? DEFAULT_STOP_TIMEOUT_S : parseComposeDuration(raw);
+  if (want === null) return { skipKey: key, skip: `${name} — unparsable stop_grace_period "${raw}"` };
+  return { name, service, want, got: runningStopTimeout(name), declared: raw === undefined ? `(default ${DEFAULT_STOP_TIMEOUT_S}s)` : String(raw) };
+}
+
 const drift = [];
+const graceDrift = [];
 const ok = [];
 const unchecked = [];
+let graceOk = 0;
+const skippedGrace = new Set();
 
 for (const name of containers()) {
   for (const m of fileMounts(name)) {
@@ -93,21 +170,38 @@ for (const name of containers()) {
     if (host === ctr) ok.push(`${name}  ${m.dst}`);
     else drift.push({ name, src: m.src, dst: m.dst, host, ctr });
   }
+  try {
+    const g = stopGraceCheck(name);
+    if (g.skip) {
+      // One line per compose file-set, not per container: 17 services sharing an
+      // unreadable config would otherwise bury the bind-mount results above.
+      if (!skippedGrace.has(g.skipKey)) { skippedGrace.add(g.skipKey); unchecked.push(g.skip); }
+    } else if (g.want === g.got) graceOk++;
+    else graceDrift.push(g);
+  } catch (err) {
+    unchecked.push(`${name} — stop_grace_period check failed: ${err instanceof Error ? err.message : err}`);
+  }
 }
 
 console.log(`running-config drift: ${ok.length} identical · ${drift.length} drifted · ${unchecked.length} unchecked`);
+console.log(`stop_grace_period: ${graceOk} match the running container · ${graceDrift.length} drifted`);
 for (const d of drift) {
   console.log(`  DRIFT  ${d.name}  ${d.src}\n         repo=${d.host} running=${d.ctr} — the container is NOT serving the committed file`);
 }
+for (const g of graceDrift) {
+  console.log(`  DRIFT  ${g.name} ${g.service}  stop_grace_period: compose=${g.declared} (${g.want}s) running=${g.got}s`);
+}
 for (const u of unchecked) console.log(`  ?      ${u}`);
 
-if (drift.length > 0) {
+if (drift.length > 0 || graceDrift.length > 0) {
   // Compose takes SERVICE names, not container names, so the command printed
   // here is copy-pasteable.
-  const services = [...new Set(drift.map((d) => execFileSync('docker', ['inspect', '-f',
-    '{{ index .Config.Labels "com.docker.compose.service" }}', d.name],
-  { encoding: 'utf8' }).trim() || d.name))];
-  console.log('\n  A reload cannot fix this — a file bind mount pins an inode, so only recreation re-attaches it:');
+  const serviceOf = (name) => execFileSync('docker', ['inspect', '-f',
+    '{{ index .Config.Labels "com.docker.compose.service" }}', name],
+  { encoding: 'utf8' }).trim() || name;
+  const services = [...new Set([...drift.map((d) => d.name), ...graceDrift.map((g) => g.name)].map(serviceOf))];
+  console.log('\n  A reload cannot fix this — a file bind mount pins an inode and HostConfig is fixed at create time,');
+  console.log('  so only recreation re-attaches the mount or re-applies the declared stop grace:');
   console.log(`    cd deploy && docker compose -f docker-compose.production.yml -f docker-compose.preprod.yml up -d --force-recreate ${services.join(' ')}`);
   process.exit(1);
 }

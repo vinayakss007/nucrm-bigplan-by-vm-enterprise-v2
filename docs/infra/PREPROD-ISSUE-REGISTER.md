@@ -567,9 +567,15 @@ RESULT: bootstrap, login, brute-force and tenant isolation all behave as specifi
   not an established explanation and the mechanism is **unresolved**. It no longer matters for the
   fix — nothing in the signal path depends on the counter any more — but it does mean
   `isShuttingDown()` may not flip for `/api/system/ready` during a drain, and that a future
-  `globalThis`/`Symbol.for` share would need its own proof. `guard:running-config` is blind to
-  `stop_grace_period` (8 identical / 0 drifted after the change), so the compose value is guarded
-  by nothing.
+  `globalThis`/`Symbol.for` share would need its own proof.
+- **Guard gap closed.** `guard:running-config` compared bind-mounted file bytes only, so it
+  reported "8 identical · 0 drifted" straight through a `stop_grace_period` edit: the value compose
+  bakes into the container at create time was checked by nothing. `scripts/check-running-config-drift.mjs`
+  now compares every live container's `.Config.StopTimeout` against the declared value from the
+  resolved (merged) config of that container's own `config_files` label, and fails the run on
+  drift. Verified both ways on preprod: 17 services match / 0 drifted as shipped, and declaring
+  `90s` while 120 s runs produces `DRIFT nucrm-app app stop_grace_period: compose=1m30s (90s)
+running=120s` with exit 1 and the `--force-recreate app` command to fix it.
 - **Regression gate.** `tests/unit/graceful-shutdown-next-drain.test.ts` (10 cases) pins the four
   properties the status codes cannot show: `pool.end()` is skipped when the drain times out, the
   Next-owned path never ends the pool and never waits on the counter, Sentry still flushes, and
@@ -578,8 +584,12 @@ RESULT: bootstrap, login, brute-force and tenant isolation all behave as specifi
   version matched `endPool:\s*false` anywhere and **passed with both flags flipped to `true`**,
   because the prose comment above the call names them. That mutation was run again after narrowing
   and now fails as intended.
-- **Not done.** Wrapping the remaining cron routes is still owed; the drain now leaves them alone
-  instead of killing their pool, but a job that outruns `stop_grace_period` still dies at SIGKILL.
+- **Not done.** Wrapping the remaining cron routes is still owed, for reasons that are now about
+  error shape and status mapping rather than the drain. Whether `server.close()` waits an
+  _unwrapped_ long-running handler too was **not measured** — the live proof above used a wrapped
+  route, and the unwrapped candidates (`/api/cron/backup`, `scheduled-report-delivery`,
+  `process-sequences`) all have side effects, so stopping a container inside one of them is not a
+  test to run casually. A job that outruns `stop_grace_period` dies at SIGKILL either way.
 
 ## PP-030 — 🚨 A Redis-less `acquireLock` looks exactly like a held lock, so 20 cron jobs report `ok: true` and do nothing _(S1 · Scheduling)_
 
