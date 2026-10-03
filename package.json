@@ -91,6 +91,8 @@
     "backup:verify": "npx tsx scripts/verify-backup.ts",
     "backup:restore": "npx tsx scripts/restore-db.ts",
     "preflight": "npx tsx scripts/preflight.ts",
+    "db:provision-app-role": "npx tsx scripts/provision-app-role.mjs",
+    "db:check-role-privileges": "npx tsx scripts/check-db-role-privileges.mjs",
     "infra:check": "bash deploy/scripts/infra-readiness.sh",
     "dr": "npx tsx scripts/dr.ts",
     "db:restore": "npx tsx scripts/restore-db.ts",
