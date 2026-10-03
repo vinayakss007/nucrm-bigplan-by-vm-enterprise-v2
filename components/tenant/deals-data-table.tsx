@@ -5,11 +5,13 @@
  */
 "use client"
 
-import { useState, useCallback, useMemo, useEffect } from 'react'
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useOpenCreateParam } from '@/hooks/use-open-create-param'
 import { Plus, MoreHorizontal, Edit, Trash2, DollarSign, Tag, UserPlus, ArrowRightLeft, Trophy, Layers, Archive, RotateCcw } from 'lucide-react'
 import { cn, formatCurrency, formatDate, toSnakeCase } from '@/lib/utils'
+import { fetchJsonSafe } from '@/lib/fetch-json'
+import InlineErrorState from '@/components/shared/inline-error-state'
 import { clientLogWarn, clientLogError } from '@/lib/client-logger'
 import { DataTable, ColumnDef, createSortableHeader, type BulkAction } from '@/components/ui/data-table'
 import { useSubmitLock } from '@/hooks/use-submit-lock'
@@ -91,24 +93,25 @@ export default function DealsDataTable({ initialDeals, contacts: initialContacts
     description: '',
   })
   const [selectAllMatching, setSelectAllMatching] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const loadAbort = useRef<AbortController | null>(null); const filterDebounce = useRef<ReturnType<typeof setTimeout>>(undefined)
 
+  // #2231: explicit error state keeps the previous rows; aborted superseded requests never write state.
   const loadData = useCallback(async (page = 0, filterOverride?: string, pageSizeOverride?: number) => {
     setLoading(true)
     const size = pageSizeOverride ?? pagination.pageSize
-    const params = new URLSearchParams({
-      limit: String(size),
-      offset: String(page * size),
-    })
+    const params = new URLSearchParams({ limit: String(size), offset: String(page * size) })
     const q = filterOverride !== undefined ? filterOverride : globalFilter
     if (q) params.set('q', q)
-    try {
-      const res = await fetch(`/api/tenant/deals?${params}`)
-      const data = await res.json()
-      setDeals((data.data ?? []).map((d: Record<string, unknown>) => toSnakeCase(d)))
-      setTotal(data.total ?? 0)
-    } catch (error) {
-      clientLogError('deals:load', error)
-    }
+    loadAbort.current?.abort()
+    const controller = new AbortController(); loadAbort.current = controller
+    const result = await fetchJsonSafe<{ data?: Deal[]; total?: number }>(`/api/tenant/deals?${params}`, { signal: controller.signal })
+    if (result.status === 'aborted') return
+    if (result.status === 'ok') {
+      setDeals((result.data.data ?? []).map((d) => toSnakeCase(d)))
+      setTotal(typeof result.data.total === 'number' ? result.data.total : 0)
+      setLoadError(null)
+    } else { setLoadError(result.message) }
     setSelectAllMatching(false)
     setLoading(false)
   }, [pagination.pageSize, globalFilter])
@@ -127,26 +130,22 @@ export default function DealsDataTable({ initialDeals, contacts: initialContacts
 
   const handleGlobalFilterChange = useCallback((filter: string) => {
     setGlobalFilter(filter)
-    loadData(0, filter)
+    // #2231: debounce (was one fetch per keystroke); with the abort in loadData, stale responses can't win.
+    clearTimeout(filterDebounce.current)
+    filterDebounce.current = setTimeout(() => loadData(0, filter), 350)
   }, [loadData])
 
-  // Load pipelines/stages once for the bulk-stage selector
+  // Load pipelines/stages once for the bulk-stage selector (#2231: failures log instead of faking zero stages).
   useEffect(() => {
-    let cancelled = false
-    fetch('/api/tenant/pipelines')
-      .then(r => r.ok ? r.json() : { data: [] })
-      .then((d: { data?: { id: string; name: string; stages: { id: string; name: string }[] }[] }) => {
-        if (cancelled) return
+    const controller = new AbortController()
+    fetchJsonSafe<{ data?: { id: string; name: string; stages?: { id: string; name: string }[] }[] }>('/api/tenant/pipelines', { signal: controller.signal })
+      .then(d => {
+        if (d.status !== 'ok') { if (d.status === 'error') clientLogError('deals:stages-fetch', new Error(d.message)); return }
         const flat: { id: string; name: string; pipeline: string }[] = []
-        for (const p of d.data ?? []) {
-          for (const s of p.stages ?? []) {
-            flat.push({ id: s.id, name: s.name, pipeline: p.name })
-          }
-        }
+        for (const p of d.data.data ?? []) for (const s of p.stages ?? []) flat.push({ id: s.id, name: s.name, pipeline: p.name })
         setStages(flat)
       })
-      .catch((e) => clientLogError('deals:stages-fetch', e))
-    return () => { cancelled = true }
+    return () => { controller.abort() }
   }, [])
 
   // #2230 — in-flight lock + error toast; a throwing fetch used to leave
@@ -445,6 +444,7 @@ export default function DealsDataTable({ initialDeals, contacts: initialContacts
         <div>
           <h1 className="text-lg font-bold">Deals</h1>
           <p className="text-sm text-muted-foreground">{total.toLocaleString()} total</p>
+          {loadError && <InlineErrorState className="mt-1" message={`Failed to load deals — showing previous results. ${loadError}`} onRetry={() => void loadData(pagination.pageIndex)} />}
         </div>
         {permissions.canCreate && (
           <Button onClick={() => setShowAdd(!showAdd)}>

@@ -13,6 +13,9 @@ import { useTheme } from 'next-themes';
 import { clientLogError } from '@/lib/client-logger';
 import Link from 'next/link';
 import { cn, formatCurrency, getInitials, formatRelativeTime, toSnakeCase } from '@/lib/utils';
+import { fetchJsonSafe } from '@/lib/fetch-json';
+import { deriveViewState } from '@/lib/view-state';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import BugReportButton from '@/components/shared/bug-report-button';
 import type {
@@ -27,6 +30,7 @@ export default function TenantHeader({ tenant, profile, roleSlug, onToggleSideba
   const [query, setQuery]         = useState('');
   const [results, setResults]     = useState<HeaderSearchResults | null>(null);
   const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
   const [showDrop, setShowDrop]   = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showNotifPanel, setShowNotifPanel] = useState(false);
@@ -34,6 +38,7 @@ export default function TenantHeader({ tenant, profile, roleSlug, onToggleSideba
   const router                    = useRouter();
   const inputRef                  = useRef<HTMLInputElement>(null);
   const timerRef                  = useRef<NodeJS.Timeout>(undefined);
+  const searchAbortRef            = useRef<AbortController | null>(null);
   const searchRef                 = useRef<HTMLDivElement>(null);
   const profileRef                = useRef<HTMLDivElement>(null);
   const notifRef                  = useRef<HTMLDivElement>(null);
@@ -54,7 +59,10 @@ export default function TenantHeader({ tenant, profile, roleSlug, onToggleSideba
   // that unmounts on many route transitions; without this, a 250ms setTimeout
   // scheduled just before navigation fires doSearch -> setState on an unmounted
   // component.
-  useEffect(() => () => clearTimeout(timerRef.current), []);
+  useEffect(() => () => {
+    clearTimeout(timerRef.current);
+    searchAbortRef.current?.abort();
+  }, []);
 
   const loadNotifications = useCallback(async (signal?: AbortSignal) => {
     try {
@@ -92,12 +100,32 @@ export default function TenantHeader({ tenant, profile, roleSlug, onToggleSideba
     }
   }, [router]);
 
+  // #2231: never leave `searching` stuck true and never render a failure as
+  // "No results". fetchJsonSafe discriminates ok/error/abort; the previous
+  // in-flight request is aborted so an older response can't clobber a newer
+  // one (out-of-order typing).
   const doSearch = useCallback(async (q: string) => {
-    if (!q.trim()) { setResults(null); setSearching(false); return; }
+    if (!q.trim()) { setResults(null); setSearchError(null); setSearching(false); return; }
+    searchAbortRef.current?.abort();
+    const controller = new AbortController();
+    searchAbortRef.current = controller;
     setSearching(true);
-    const res = await fetch(`/api/tenant/search?q=${encodeURIComponent(q)}&limit=20`);
-    const data = await res.json();
-    setResults(data); setSearching(false); setShowDrop(true);
+    setSearchError(null);
+    setShowDrop(true);
+    const result = await fetchJsonSafe<HeaderSearchResults>(
+      `/api/tenant/search?q=${encodeURIComponent(q)}&limit=20`, { signal: controller.signal },
+    );
+    if (result.status === 'aborted') return; // a newer search owns the UI now
+    setSearching(false);
+    if (result.status === 'error') {
+      setResults(null);
+      setSearchError(result.message);
+      clientLogError('header:search', new Error(result.message));
+    } else {
+      setResults(result.data);
+      setSearchError(null);
+    }
+    setShowDrop(true);
   }, []);
 
   const markNotifRead = async (id: string) => {
@@ -111,7 +139,7 @@ export default function TenantHeader({ tenant, profile, roleSlug, onToggleSideba
   const handleChange = (val: string) => {
     setQuery(val);
     clearTimeout(timerRef.current);
-    if (!val.trim()) { setResults(null); setShowDrop(false); return; }
+    if (!val.trim()) { setResults(null); setSearchError(null); setShowDrop(false); return; }
     timerRef.current = setTimeout(() => doSearch(val), 250);
   };
 
@@ -125,6 +153,13 @@ export default function TenantHeader({ tenant, profile, roleSlug, onToggleSideba
   };
 
   const total = results ? (results.contacts?.length??0)+(results.leads?.length??0)+(results.deals?.length??0)+(results.companies?.length??0)+(results.tasks?.length??0) : 0;
+  // #2231: error and empty are distinct outcomes — a failed request must never
+  // render as "No results", and a genuine zero-match reply still does.
+  const searchView = deriveViewState({
+    isLoading: searching,
+    isError: searchError !== null,
+    data: results ? (total > 0 ? [true] : []) : null,
+  });
   const initials = getInitials(profile?.full_name || profile?.email || 'U');
 
   return (
@@ -150,20 +185,24 @@ export default function TenantHeader({ tenant, profile, roleSlug, onToggleSideba
             onFocus={() => { if (results) setShowDrop(true); }}
             onKeyDown={e => {
               if (e.key==='Enter') { setShowDrop(true); }
-              if (e.key==='Escape') { setShowDrop(false); setQuery(''); setResults(null); }
+              if (e.key==='Escape') { setShowDrop(false); setQuery(''); setResults(null); setSearchError(null); }
             }}
             placeholder="Search leads, contacts, deals, companies..."
             data-testid="search-input"
             data-search
             className="w-full pl-8 pr-8 py-1.5 text-sm bg-muted/40 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500 focus:bg-background transition-colors"
           />
-          {query && <button type="button" aria-label="Clear search" onClick={()=>{setQuery('');setResults(null);setShowDrop(false);}} className="absolute right-2 top-1/2 -translate-y-1/2 min-h-11 min-w-11 flex items-center justify-center text-muted-foreground hover:text-foreground"><X className="w-3.5 h-3.5" aria-hidden="true"/></button>}
+          {query && <button type="button" aria-label="Clear search" onClick={()=>{setQuery('');setResults(null);setSearchError(null);setShowDrop(false);}} className="absolute right-2 top-1/2 -translate-y-1/2 min-h-11 min-w-11 flex items-center justify-center text-muted-foreground hover:text-foreground"><X className="w-3.5 h-3.5" aria-hidden="true"/></button>}
         </div>
 
         {/* Search dropdown */}
         {showDrop && query && (
           <div className="absolute top-full mt-1.5 left-0 right-0 bg-card border border-border rounded-xl shadow-xl z-50 overflow-hidden max-h-96 overflow-y-auto">
-            {total === 0 && !searching ? (
+            {searchView === 'loading' ? (
+              <div className="px-4 py-5 text-center text-sm text-muted-foreground" role="status">Searching…</div>
+            ) : searchView === 'error' ? (
+              <div className="p-3"><InlineErrorState message={searchError ?? 'Search failed.'} onRetry={() => void doSearch(query)} /></div>
+            ) : searchView === 'empty' ? (
               <div className="px-4 py-5 text-center text-sm text-muted-foreground">No results for "{query}"</div>
             ) : (
               <>
