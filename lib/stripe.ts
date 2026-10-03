@@ -100,9 +100,7 @@ async function stripeRequest<T = unknown>(
   endpoint: string,
   method: 'GET' | 'POST' | 'DELETE' = 'GET',
   body?: Record<string, unknown>,
-  // #2228: forwarded as the `Idempotency-Key` header. Only meaningful for
-  // mutating calls (POST/DELETE); Stripe replays the first response for a
-  // repeated key (24 h window) instead of applying the mutation twice.
+  // #2228: sent as `Idempotency-Key` — a repeat key (24 h) replays Stripe's first response.
   opts?: { idempotencyKey?: string },
 ): Promise<T> {
   const headers: Record<string, string> = {
@@ -340,9 +338,7 @@ export async function getSubscription(subscriptionId: string): Promise<StripeSub
 }
 
 export async function cancelSubscription(subscriptionId: string, atPeriodEnd = true, idempotencyKey?: string): Promise<StripeSubscription> {
-  // #2228: idempotency key so a client retry of the cancel POST cannot
-  // replay as a second mutation (DELETE after a cached cancel is a no-op
-  // via Stripe's replay, but the point is the mutation is applied once).
+  // #2228: one intent, one mutation — a client retry replays the key.
   if (atPeriodEnd) {
     return stripeRequest(`/subscriptions/${subscriptionId}`, 'POST', {
       cancel_at_period_end: 'true',
@@ -361,9 +357,8 @@ export async function updateSubscription(subscriptionId: string, params: {
   priceId?: string;
   quantity?: number;
   metadata?: Record<string, string>;
-  // #2228: deterministic key derived from the billing INTENT (see
-  // lib/billing-idempotency.ts). Retries of the same intent replay Stripe's
-  // first response instead of double-applying proration.
+  // #2228: deterministic key from the billing intent (lib/billing-idempotency.ts)
+  // — retries of one intent replay the first response, never re-prorate.
   idempotencyKey?: string;
 }): Promise<StripeSubscription> {
   const body: Record<string, unknown> = {};

@@ -38,11 +38,13 @@ const journal = JSON.parse(readFileSync(JOURNAL_FILE, 'utf8')) as {
 };
 
 describe(`migration ${TAG} (#2228 / #2257)`, () => {
-  it('is registered in _journal.json as the latest entry with increasing idx/when', () => {
+  it('is registered in _journal.json with increasing idx/when', () => {
     const entry = journal.entries.find((e) => e.tag === TAG);
     expect(entry, `${TAG} missing from _journal.json — migrate.ts would never apply it`).toBeDefined();
     const pos = journal.entries.indexOf(entry!);
-    expect(pos).toBe(journal.entries.length - 1);
+    // Only relative monotonicity is guarded — future migrations append
+    // after this one, so it must NOT be asserted as the last entry.
+    expect(pos).toBeGreaterThan(0);
     const prev = journal.entries[pos - 1];
     expect(entry!.idx).toBeGreaterThan(prev.idx);
     expect(entry!.when).toBeGreaterThan(prev.when);

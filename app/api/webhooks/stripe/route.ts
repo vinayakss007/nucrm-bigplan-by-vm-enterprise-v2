@@ -6,8 +6,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyWebhookSignature, isStripeConfigured, StripeError, type StripeWebhookEvent } from '@/lib/stripe';
 import { db } from '@/drizzle/db';
-import { tenants, subscriptions } from '@/drizzle/schema';
+import { tenants } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
+import { syncSubscriptionRow, markSubscriptionCanceled } from '@/lib/stripe-subscription-sync';
 import { apiError } from '@/lib/api-error';
 import { sendAdminTelegram } from '@/lib/telegram-admin';
 import { acquireLock, releaseLock } from '@/lib/cache/index';
@@ -287,53 +288,6 @@ async function handleSubscriptionUpdated(subscription: StripeSubscriptionLike) {
   console.log(`[Stripe] Tenant ${tenantId} subscription updated: stripeStatus=${status} -> status=${nuCrmStatus}, plan=${planId}`);
 }
 
-/**
- * #2228 — bring the local `subscriptions` row in line with the Stripe event.
- * Matched on stripe_subscription_id (not tenant) because that is the exact
- * entity Stripe just described. Fields absent from the payload are left
- * untouched; the update is value-idempotent, so a webhook retry after a
- * partial failure is harmless.
- */
-async function syncSubscriptionRow(
-  subscription: StripeSubscriptionLike,
-  planId: string | null,
-  nuCrmStatus: string,
-): Promise<void> {
-  if (!subscription.id) return;
-
-  // subscriptions.status vocabulary in this app is 'canceled' (one L) — the
-  // tenants mapping above uses 'cancelled'; normalize before persisting.
-  const subStatus = nuCrmStatus === 'cancelled' ? 'canceled' : nuCrmStatus;
-
-  const updates: {
-    status: string;
-    updatedAt: Date;
-    planId?: string;
-    cancelAtPeriodEnd?: boolean;
-    currentPeriodStart?: Date;
-    currentPeriodEnd?: Date;
-  } = {
-    status: subStatus,
-    updatedAt: new Date(),
-  };
-  if (planId) updates.planId = planId;
-  if (typeof subscription.cancel_at_period_end === 'boolean') {
-    updates.cancelAtPeriodEnd = subscription.cancel_at_period_end;
-  }
-  // #1915: API 2025+ may omit the root period fields; only write what the
-  // payload actually carries.
-  if (typeof subscription.current_period_start === 'number') {
-    updates.currentPeriodStart = new Date(subscription.current_period_start * 1000);
-  }
-  if (typeof subscription.current_period_end === 'number') {
-    updates.currentPeriodEnd = new Date(subscription.current_period_end * 1000);
-  }
-
-  await db.update(subscriptions)
-    .set(updates)
-    .where(eq(subscriptions.stripeSubscriptionId, subscription.id));
-}
-
 async function handleSubscriptionDeleted(subscription: StripeSubscriptionLike) {
   // #1640: mirror handleSubscriptionUpdated — resolve the tenant by metadata
   // first, then fall back to the Stripe customer id so genuine cancellations
@@ -357,15 +311,7 @@ async function handleSubscriptionDeleted(subscription: StripeSubscriptionLike) {
 
   // #2228: close the loop — the subscriptions row must reach 'canceled' too,
   // otherwise the upgrade/cancel routes keep operating on a stale row.
-  if (subscription.id) {
-    await db.update(subscriptions)
-      .set({
-        status: 'canceled',
-        cancelAtPeriodEnd: false,
-        updatedAt: new Date(),
-      })
-      .where(eq(subscriptions.stripeSubscriptionId, subscription.id));
-  }
+  await markSubscriptionCanceled(subscription.id);
 
   console.log(`[Stripe] Tenant ${tenantId} subscription cancelled — downgraded to free`);
 }
