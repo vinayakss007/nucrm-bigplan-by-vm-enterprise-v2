@@ -50,7 +50,9 @@ describe(`migration ${TAG} (#2234)`, () => {
     const idx = journal.entries.indexOf(entry!);
     // The historical journal has known duplicate idx values and gaps (#682), so
     // only monotonicity relative to the previous entry is asserted here.
-    expect(idx).toBe(journal.entries.length - 1);
+    // Future migrations append after this one — asserting "last entry" made
+    // every later migration PR red (see #2228's 0108 entry).
+    expect(idx).toBeGreaterThan(0);
     const prev = journal.entries[idx - 1];
     expect(entry!.idx).toBeGreaterThan(prev.idx);
     expect(entry!.when).toBeGreaterThan(prev.when);
