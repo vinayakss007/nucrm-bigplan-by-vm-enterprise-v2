@@ -11,6 +11,7 @@ import { eq } from 'drizzle-orm';
 import { syncSubscriptionRow, markSubscriptionCanceled } from '@/lib/stripe-subscription-sync';
 import { apiError } from '@/lib/api-error';
 import { sendAdminTelegram } from '@/lib/telegram-admin';
+import { logger } from '@/lib/logger';
 import { acquireLock, releaseLock } from '@/lib/cache/index';
 import { claimWebhookEvent, completeWebhookEvent, releaseWebhookEvent } from '@/lib/webhooks/idempotency';
 import { fireWebhooks } from '@/lib/webhooks';
@@ -105,7 +106,7 @@ export async function POST(request: NextRequest) {
   const lockKey = `stripe:evt:${eventId}`;
   const { acquired, value: lockValue } = await acquireLock(lockKey, IDEMPOTENCY_TTL);
   if (!acquired) {
-    console.log(`[Stripe Webhook] Duplicate event ${eventId} — skipping`);
+    logger.info(`[Stripe Webhook] Duplicate event ${eventId} — skipping`);
     return NextResponse.json({ received: true, duplicate: true });
   }
 
@@ -114,11 +115,11 @@ export async function POST(request: NextRequest) {
   // delivery wins, with or without Redis.
   const claimed = await claimWebhookEvent({ provider: 'stripe', eventId, eventType });
   if (!claimed) {
-    console.log(`[Stripe Webhook] Duplicate event ${eventId} (ledger) — skipping`);
+    logger.info(`[Stripe Webhook] Duplicate event ${eventId} (ledger) — skipping`);
     return NextResponse.json({ received: true, duplicate: true });
   }
 
-  console.log(`[Stripe Webhook] Processing event: ${eventType} (${eventId})`);
+  logger.info(`[Stripe Webhook] Processing event: ${eventType} (${eventId})`);
 
   try {
     switch (eventType) {
@@ -148,7 +149,7 @@ export async function POST(request: NextRequest) {
       }
 
       default:
-        console.log(`[Stripe Webhook] Unhandled event: ${eventType}`);
+        logger.info(`[Stripe Webhook] Unhandled event: ${eventType}`);
     }
 
     await completeWebhookEvent('stripe', eventId);
@@ -197,7 +198,7 @@ async function handleCheckoutCompleted(session: StripeSessionLike) {
     })
     .where(eq(tenants.id, tenantId));
 
-  console.log(`[Stripe] Tenant ${tenantId} activated with plan ${planId}`);
+  logger.info(`[Stripe] Tenant ${tenantId} activated with plan ${planId}`);
 }
 
 async function handleSubscriptionUpdated(subscription: StripeSubscriptionLike) {
@@ -259,7 +260,7 @@ async function handleSubscriptionUpdated(subscription: StripeSubscriptionLike) {
   });
   const terminalStatuses = new Set(['suspended', 'deleted', 'cancelled']);
   if (existing && terminalStatuses.has(existing.status) && nuCrmStatus === 'active') {
-    console.log(`[Stripe] Tenant ${tenantId} is '${existing.status}'; not re-activating from subscription.updated`);
+    logger.info(`[Stripe] Tenant ${tenantId} is '${existing.status}'; not re-activating from subscription.updated`);
     await db.update(tenants)
       .set({ planId: planId || undefined, updatedAt: new Date() })
       .where(eq(tenants.id, tenantId));
@@ -285,7 +286,7 @@ async function handleSubscriptionUpdated(subscription: StripeSubscriptionLike) {
   // it from the event payload (Stripe is the source of truth here).
   await syncSubscriptionRow(subscription, planId, nuCrmStatus);
 
-  console.log(`[Stripe] Tenant ${tenantId} subscription updated: stripeStatus=${status} -> status=${nuCrmStatus}, plan=${planId}`);
+  logger.info(`[Stripe] Tenant ${tenantId} subscription updated: stripeStatus=${status} -> status=${nuCrmStatus}, plan=${planId}`);
 }
 
 async function handleSubscriptionDeleted(subscription: StripeSubscriptionLike) {
@@ -313,7 +314,7 @@ async function handleSubscriptionDeleted(subscription: StripeSubscriptionLike) {
   // otherwise the upgrade/cancel routes keep operating on a stale row.
   await markSubscriptionCanceled(subscription.id);
 
-  console.log(`[Stripe] Tenant ${tenantId} subscription cancelled — downgraded to free`);
+  logger.info(`[Stripe] Tenant ${tenantId} subscription cancelled — downgraded to free`);
 }
 
  
@@ -370,7 +371,7 @@ async function handlePaymentSucceeded(invoice: StripeInvoiceLike) {
       void logError({ error: e, context: 'webhooks/stripe automation import', level: 'warning' });
     }
 
-    console.log(`[Stripe] Payment succeeded for tenant ${tenant.id}`);
+    logger.info(`[Stripe] Payment succeeded for tenant ${tenant.id}`);
   }
 }
 
@@ -388,7 +389,7 @@ async function handlePaymentFailed(invoice: StripeInvoiceLike) {
       .set({ status: 'past_due', updatedAt: new Date() })
       .where(eq(tenants.id, tenant.id));
 
-    console.log(`[Stripe] Payment failed for tenant ${tenant.id} — marked as past_due`);
+    logger.warn(`[Stripe] Payment failed for tenant ${tenant.id} — marked as past_due`);
 
     sendAdminTelegram({
       icon: '💳',
