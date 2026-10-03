@@ -219,6 +219,17 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
+    # PP-029: Docker's 10 s default never applied, because the process exited on
+    # its own — and the `pool.end()` on that path is what made a measured stop take
+    # 35.93 s. Now that Next.js owns the exit and awaits `server.close()` for every
+    # open connection, this is the real bound on how long a redeploy will wait for
+    # live work: SIGTERM → drain → SIGKILL after 120 s.
+    # Deliberately not larger. `/api/cron/backup`'s pg_dump has a 10-minute
+    # timeout, and letting the grace period chase it would turn every deploy that
+    # overlaps the nightly window into a 10-minute outage. Jobs that long are
+    # protected by their own lock + idempotency (PP-030), not here; a stop inside
+    # their window still costs up to this value.
+    stop_grace_period: 120s
     restart: unless-stopped
     networks:
       - nucrm-net

@@ -33,8 +33,41 @@ export interface ShutdownOptions {
    * Next.js also bundles for the Edge runtime (where `process.exit` is
    * unsupported and triggers "A Node.js API is used" build warnings). Set false
    * in tests to keep the process alive.
+   *
+   * `instrumentation.ts` sets it false (PP-029): the Next.js server process owns
+   * its own signal handler, awaits `server.close()` for every open connection and
+   * exits 143, so exiting here first would pre-empt a drain that is strictly
+   * better informed than ours. Verified live: with the flag false, a request that
+   * was 1 s into its 3.8 s handler at SIGTERM still returned 200, and the process
+   * exited 143 2.7 s later. True is the right default for any caller that owns its
+   * process lifecycle outright — today there is none: `worker.ts:667` and
+   * `realtime.ts:224` install their own handlers and never reach this module.
    */
   exitProcess?: boolean;
+  /**
+   * When true (the default), a successful drain calls `pool.end()`.
+   *
+   * `instrumentation.ts` sets it false (PP-029) for two reasons, one measured and
+   * one observed-but-unexplained.
+   *
+   * Measured: `pool.end()` has no timeout of its own — pg-pool waits for every
+   * *checked-out* client — so on a process whose connections belong to Next.js it
+   * is a hang rather than a cleanup. A preprod stop took 35.93 s for exactly that
+   * reason, with two leaked connections holding it open.
+   *
+   * Observed: every drain logs `0 in-flight request(s)` even with several wrapped
+   * handlers provably mid-request (PP-028's 200 ms statements make a request last
+   * seconds, and the stop was timed inside one). Why the increments do not reach
+   * this module's copy of `inFlightCount` is **not established** — the server
+   * bundle carries the shutdown text in a single chunk, so plain duplication is
+   * not the proven explanation. The fix deliberately stops depending on the
+   * counter instead of guessing at its cause.
+   *
+   * Leaving the pool open costs nothing here; the sockets die with the process
+   * and Postgres/PgBouncer reap the backends. True is right for a process that
+   * owns its own exit and therefore needs the polite close.
+   */
+  endPool?: boolean;
 }
 
 // -------------------------------------------------------------------
@@ -119,27 +152,40 @@ export async function initiateShutdown(options: ShutdownOptions = {}): Promise<v
 
   shuttingDown = true;
   const { drainTimeoutMs = 30_000, onShutdownStart, onShutdownComplete } = options;
+  const endPool = options.endPool !== false;
 
   console.log('[GracefulShutdown] Shutdown initiated. Stopping new requests...');
   onShutdownStart?.();
 
   shutdownPromise = (async () => {
-    // Wait for in-flight queries/requests to finish
-    const deadline = Date.now() + drainTimeoutMs;
-    console.log(
-      `[GracefulShutdown] Waiting for ${inFlightCount} in-flight request(s) to complete (timeout: ${drainTimeoutMs}ms)...`
-    );
-
-    while (inFlightCount > 0 && Date.now() < deadline) {
-      await sleep(100);
-    }
-
-    if (inFlightCount > 0) {
-      console.warn(
-        `[GracefulShutdown] Timed out waiting for ${inFlightCount} in-flight request(s). Proceeding with pool drain.`
+    // Wait for in-flight queries/requests to finish — but only when this module
+    // is the one that has to make them finish. With `endPool: false` the process
+    // is Next.js's, and its cleanup is awaiting every open connection on its own
+    // copy of the truth (PP-029); waiting here would just stack a second,
+    // less-informed drain on top and add latency to the stop for no benefit.
+    if (!endPool) {
+      console.log(
+        `[GracefulShutdown] ${inFlightCount} in-flight request(s) counted here; ` +
+          `the Next.js server owns the drain and the exit.`
       );
     } else {
-      console.log('[GracefulShutdown] All in-flight requests completed.');
+      const deadline = Date.now() + drainTimeoutMs;
+      console.log(
+        `[GracefulShutdown] Waiting for ${inFlightCount} in-flight request(s) to complete (timeout: ${drainTimeoutMs}ms)...`
+      );
+
+      while (inFlightCount > 0 && Date.now() < deadline) {
+        await sleep(100);
+      }
+
+      if (inFlightCount > 0) {
+        console.warn(
+          `[GracefulShutdown] Timed out waiting for ${inFlightCount} in-flight request(s). ` +
+            `Leaving the pool open — work this module cannot see is still running.`
+        );
+      } else {
+        console.log('[GracefulShutdown] All in-flight requests completed.');
+      }
     }
 
     // Flush telemetry before anything can exit. The Sentry transport batches
@@ -157,13 +203,30 @@ export async function initiateShutdown(options: ShutdownOptions = {}): Promise<v
       console.warn('[GracefulShutdown] Sentry flush failed:', err);
     }
 
-    // Drain the connection pool
-    try {
-      const pool = getPool();
-      await pool.end();
-      console.log('[GracefulShutdown] Connection pool drained.');
-    } catch (err) {
-      console.error('[GracefulShutdown] Error draining pool:', err);
+    // Drain the connection pool — but only if this process is ours to close.
+    // PP-029: `pool.end()` can never make a running query finish faster; it can
+    // only make its next checkout fail, and it has no timeout of its own —
+    // pg-pool waits for every checked-out client. On the Next-owned process that
+    // is a hang, not a cleanup: a measured stop took 35.93 s for exactly that
+    // reason, with two leaked connections holding it open. Ending the pool at a
+    // moment like that is also how a redeploy killed `/api/cron/backup`'s pg_dump
+    // and `scheduled-report-delivery`'s SMTP mid-flight. Leaving it open costs
+    // nothing — the sockets close with the process and Postgres/PgBouncer reap
+    // the backends.
+    if (!endPool) {
+      console.log('[GracefulShutdown] Leaving the connection pool open — the exiting process owns it.');
+    } else if (inFlightCount > 0) {
+      console.warn(
+        `[GracefulShutdown] Skipped pool.end() with ${inFlightCount} request(s) still in flight.`
+      );
+    } else {
+      try {
+        const pool = getPool();
+        await pool.end();
+        console.log('[GracefulShutdown] Connection pool drained.');
+      } catch (err) {
+        console.error('[GracefulShutdown] Error draining pool:', err);
+      }
     }
 
     console.log('[GracefulShutdown] Shutdown complete.');

@@ -20,16 +20,31 @@ export async function register() {
     // requests and close the DB pool before exit. Without this, container
     // orchestrators (K8s, ECS) kill the process mid-request during deploys.
     const { registerShutdownHandlers } = await import("./lib/db/graceful-shutdown");
-    // The handler drains and then exits (process.exit lives inside the Node-only
-    // graceful-shutdown module, not here — instrumentation.ts is also bundled for
-    // the Edge runtime, which doesn't support process.exit).
+    // PP-029: Next.js registers its own SIGTERM/SIGINT handler
+    // (next/dist/server/lib/start-server.js:389) whose cleanup awaits
+    // `server.close()` — which is what actually stops the port and waits for every
+    // open connection, including Server Component renders and streamed responses
+    // this process cannot see — and then exits 143 (:370). Both handlers run for
+    // the same signal, so ours must not compete with it:
+    //  * `exitProcess: false` — `process.exit(0)` here pre-empted Next's drain and
+    //    cut live requests off mid-statement (measured: ExitCode 0 → 143).
+    //  * `endPool: false` — `pool.end()` waits for every *checked-out* client with
+    //    no timeout of its own, so on leaked connections it hung the stop
+    //    (measured: 35.93 s for a pool of 2 stuck clients) and otherwise only made
+    //    in-flight work's next checkout fail. Nothing needs the polite close when
+    //    the process is about to exit and the sockets go with it.
+    // `drainTimeoutMs` is intentionally not set: with endPool false the drain loop
+    // is skipped, because the counter below is module state that Next's bundle may
+    // not share with the one `withApiRoute` increments — and its wait would only
+    // duplicate a better-informed one Next is already doing.
     registerShutdownHandlers({
-      drainTimeoutMs: 25_000, // K8s default terminationGracePeriodSeconds is 30
+      exitProcess: false,
+      endPool: false,
       onShutdownStart: () => {
-        console.log('[instrumentation] Graceful shutdown: draining...');
+        console.log('[instrumentation] Graceful shutdown: handing the drain to Next.js...');
       },
       onShutdownComplete: () => {
-        console.log('[instrumentation] Graceful shutdown: complete. Exiting.');
+        console.log('[instrumentation] Graceful shutdown: complete. Next.js owns the exit.');
       },
     });
 
