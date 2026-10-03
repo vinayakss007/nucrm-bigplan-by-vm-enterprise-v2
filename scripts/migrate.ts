@@ -6,154 +6,34 @@ import { Pool } from 'pg';
 import * as schema from '../drizzle/schema';
 import { pgSslConfig } from '../lib/db/ssl-config';
 import { runRecoveryStamp } from './migrate-recovery';
+import {
+  buildLedgerInsert,
+  planMigrations,
+  runFreshReplay,
+  type FreshReplayStats,
+  type LedgerRowLike,
+  type PlannedFile,
+} from './migrate-fresh';
 import * as fs from 'fs';
 import * as path from 'path';
 import { createInterface } from 'readline';
 
 /**
- * Execute SQL statements from a migration file with error tolerance.
+ * Fresh-replay branch (#2254 / #2235): statement splitting, the "already
+ * exists" error allowlist, ledger stamping and CONCURRENTLY handling all
+ * live in the pure, unit-tested helpers in `./migrate-fresh.ts`.
  *
- * Drizzle's built-in migrator wraps each migration in a transaction and
- * stops on the first error.  When a fresh database runs all 59 migrations
- * from scratch, later migrations (e.g. 0003) may contain CREATE TABLE or
- * CREATE INDEX statements for objects already created by an earlier
- * migration (0000/0002).  Drizzle also strips `IF NOT EXISTS` from
- * statements, so the only way to make this idempotent is to execute each
- * statement individually and skip "already exists" errors.
- *
- * Tolerated error codes:
- *   42P07  duplicate_table / duplicate_object  (relation already exists)
- *   42710  duplicate_object                    (index/constraint already exists)
- *   42703  undefined_column                     (migration references column that doesn't exist — non-destructive)
- *   42P01  undefined_table                     (DROP TABLE/INDEX IF EXISTS fallback)
- *   42P11  undefined_object                    (DROP CONSTRAINT IF EXISTS fallback)
+ * History (kept for the next reader):
+ *   - Drizzle's built-in migrator wraps each migration in ONE transaction and
+ *     stops on the first error. On an empty ledger, later hand-written files
+ *     (e.g. 0003) re-create objects built by 0000/0002, so the whole file
+ *     rolled back — hence the separate replay branch.
+ *   - The old replay tolerated 42703/42P01/42P11, stripped CONCURRENTLY, and
+ *     never stamped `drizzle.__drizzle_migrations`. That produced false-green
+ *     runs, lock storms, and a ledger that re-replayed ~2,919 statements
+ *     (incl. DROP TABLE/DELETE/UPDATE) on every subsequent `db:migrate`.
+ *     All three are fixed in migrate-fresh.ts; see its header comment.
  */
-const TOLERATED_CODES = new Set(['42P07', '42710', '42703', '42P01', '42P11']);
-
-/**
- * Splits SQL into statements on semicolons while respecting dollar-quoted
- * blocks ($$…$$), named dollar tags ($tag$…$tag$), and single-quoted
- * string literals.  Semicolons inside those contexts are never treated
- * as statement terminators.
- */
-function splitSql(sql: string): string[] {
-  const stmts: string[] = [];
-  let current = '';
-  let i = 0;
-  while (i < sql.length) {
-    // Dollar-quoted block: $$ or $tag$
-    if (sql[i] === '$') {
-      const tagMatch = sql.slice(i).match(/^\$([^$]*)\$/);
-      if (tagMatch) {
-        const tag = tagMatch[0];
-        current += tag;
-        i += tag.length;
-        let closeIdx = sql.indexOf(tag, i);
-        while (closeIdx !== -1) {
-          current += sql.slice(i, closeIdx + tag.length);
-          i = closeIdx + tag.length;
-          closeIdx = sql.indexOf(tag, i);
-        }
-        continue;
-      }
-    }
-    // Single-quoted string literal (handles escaped '' inside)
-    if (sql[i] === "'") {
-      current += sql[i]; i++;
-      while (i < sql.length) {
-        if (sql[i] === "'" && sql[i + 1] === "'") {
-          current += "''"; i += 2;
-        } else if (sql[i] === "'") {
-          current += "'"; i++; break;
-        } else {
-          current += sql[i]; i++;
-        }
-      }
-      continue;
-    }
-    // Single-line comment
-    if (sql[i] === '-' && sql[i + 1] === '-') {
-      const nl = sql.indexOf('\n', i);
-      if (nl === -1) { current += sql.slice(i); i = sql.length; }
-      else { current += sql.slice(i, nl + 1); i = nl + 1; }
-      continue;
-    }
-    // Block comment
-    if (sql[i] === '/' && sql[i + 1] === '*') {
-      const close = sql.indexOf('*/', i + 2);
-      if (close === -1) { current += sql.slice(i); i = sql.length; }
-      else { current += sql.slice(i, close + 2); i = close + 2; }
-      continue;
-    }
-    // Semicolon = statement terminator
-    if (sql[i] === ';') {
-      current += ';';
-      stmts.push(current);
-      current = '';
-      i++;
-      while (i < sql.length && (sql[i] === '\n' || sql[i] === '\r' || sql[i] === ' ' || sql[i] === '\t')) i++;
-      continue;
-    }
-    current += sql[i];
-    i++;
-  }
-  if (current.trim()) stmts.push(current);
-  return stmts;
-}
-
-async function runMigrationFile(
-  client: { query: (text: string) => Promise<unknown> },
-  filePath: string,
-  fileName: string,
-  dryRun: boolean,
-): Promise<{ applied: number; skipped: number; errors: string[] }> {
-  let content = fs.readFileSync(filePath, 'utf-8');
-  // Strip DOWN section — some hand-written migrations include rollback
-  // statements after a "-- DOWN" marker; we only apply the UP portion.
-  const downIdx = content.search(/^--\s*DOWN\s*$/m);
-  if (downIdx !== -1) {
-    content = content.slice(0, downIdx);
-  }
-  // Use Drizzle's statement-breakpoint markers when present; fall back to
-  // a dollar-quoted-aware splitter for hand-written migrations (e.g., 0028)
-  const hasBreakpoints = content.includes('--> statement-breakpoint');
-  let rawStatements: string[];
-  if (hasBreakpoints) {
-    rawStatements = content.split('--> statement-breakpoint').map((s) => s.trim()).filter(Boolean);
-  } else {
-    // Split on semicolons that are NOT inside dollar-quoted blocks ($$...$$)
-    rawStatements = splitSql(content).map((s) => s.trim()).filter(Boolean);
-  }
-  // Strip CONCURRENTLY — can't run inside a transaction block; safe for fresh DB
-  const statements = rawStatements.map((s) => s.replace(/\bCONCURRENTLY\b/g, '')).filter(Boolean);
-
-  let applied = 0;
-  let skipped = 0;
-  const errors: string[] = [];
-
-  for (const stmt of statements) {
-    if (dryRun) {
-      applied++;
-      continue;
-    }
-    try {
-      await client.query(stmt);
-      applied++;
-    } catch (err: unknown) {
-      // If the statement opened a transaction that is now in error state,
-      // issue ROLLBACK to reset the connection so the next statement succeeds.
-      try { await client.query('ROLLBACK'); } catch { /* already rolled back */ }
-
-      const pgErr = err as { code?: string; message?: string };
-      if (pgErr.code && TOLERATED_CODES.has(pgErr.code)) {
-        skipped++;
-      } else {
-        errors.push(`[${fileName}] ${pgErr.code || 'UNKNOWN'}: ${pgErr.message?.split('\n')[0] || stmt.slice(0, 120)}`);
-      }
-    }
-  }
-  return { applied, skipped, errors };
-}
 
 const args = process.argv.slice(2);
 const isDryRun = args.includes('--dry-run');
@@ -174,6 +54,42 @@ async function confirm(prompt: string): Promise<boolean> {
       resolve(answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes');
     });
   });
+}
+
+/** Read every row of the ledger drizzle's migrator consults. */
+async function readLedgerRows(pool: Pool): Promise<LedgerRowLike[]> {
+  const res = await pool.query<{ hash: string; created_at: string | null }>(
+    `SELECT "hash", "created_at" FROM "drizzle"."__drizzle_migrations"`,
+  );
+  return res.rows.map((r) => ({ hash: r.hash, createdAt: r.created_at === null ? null : Number(r.created_at) }));
+}
+
+/** Print the --dry-run plan: per journal entry, already-stamped vs would-be
+ *  replayed, with the hash/created_at the run would stamp. Read-only. */
+function printDryRunPlan(plan: PlannedFile[], ledgerAvailable: boolean): void {
+  const replay = plan.filter((p) => p.action === 'replay');
+  const stamped = plan.filter((p) => p.action === 'skip-stamped');
+  const missing = plan.filter((p) => p.action === 'missing-file');
+
+  console.log(`[migrate] DRY RUN — plan for ${plan.length} journal entr(ies):`);
+  for (const p of plan) {
+    console.log(`  - ${p.tag.padEnd(40)} [${p.action}] created_at=${p.createdAt} hash=${(p.hash ?? '-').slice(0, 12)} (${p.reason})`);
+  }
+  console.log(`[migrate] Summary: ${stamped.length} already stamped, ${replay.length} to replay, ${missing.length} missing file(s).`);
+  if (ledgerAvailable) {
+    console.log('[migrate] Plan reflects the live drizzle.__drizzle_migrations ledger.');
+  } else {
+    console.log('[migrate] WARNING: ledger table is not readable yet — every entry is shown as pending;');
+    console.log('[migrate] a real run creates the table and evaluates the empty-ledger recovery path first.');
+  }
+  if (missing.length > 0) {
+    console.log('[migrate] WARNING: a real run FAILS on missing journal files (#2254 fail-loud).');
+  }
+  if (!ledgerAvailable || stamped.length === 0) {
+    console.log('[migrate] NOTE: with an empty ledger the real run replays every file (fresh path) and');
+    console.log('[migrate] stamps each one into drizzle.__drizzle_migrations after it applies (#2254).');
+  }
+  console.log('[migrate] Dry-run complete. No migrations applied.');
 }
 
 async function main() {
@@ -211,12 +127,19 @@ async function main() {
     console.log(`  - ${entry.tag}`);
   }
 
-  if (isDryRun) {
-    console.log('[migrate] Dry-run complete. No migrations applied.');
-    process.exit(0);
-  }
+  const readFileOrNull = (tag: string): string | null => {
+    const p = path.join(MIGRATIONS_DIR, `${tag}.sql`);
+    return fs.existsSync(p) ? fs.readFileSync(p, 'utf-8') : null;
+  };
+  const statMtimeOrNull = (tag: string): number | null => {
+    const p = path.join(MIGRATIONS_DIR, `${tag}.sql`);
+    return fs.existsSync(p) ? fs.statSync(p).mtimeMs : null;
+  };
 
-  if (!isYes) {
+  // NOTE: --dry-run no longer exits here. It now connects (read-only), reads
+  // the real ledger, and prints the full plan (which files are already
+  // stamped vs would be replayed) before any write happens (#2254 AC).
+  if (!isYes && !isDryRun) {
     // Non-interactive contexts (CI, deploy scripts, piped stdin) cannot answer
     // an interactive y/N prompt — the readline question would hang until the
     // job times out. Detect that and decide without blocking:
@@ -287,6 +210,27 @@ async function main() {
     lockClient.release();
     await pool.end();
     process.exit(1);
+  }
+
+  // ── --dry-run: print the plan, change nothing (#2254 AC / #521 safety) ──
+  // Read-only: consult the live ledger (if the table exists), classify every
+  // journal entry as already-stamped / replay / missing-file, then exit 0.
+  // Deliberately stops BEFORE the extension/ledger writes below.
+  if (isDryRun) {
+    let ledgerRows: LedgerRowLike[] = [];
+    let ledgerAvailable = true;
+    try {
+      ledgerRows = await readLedgerRows(pool);
+    } catch {
+      ledgerAvailable = false; // fresh DB: "drizzle"."__drizzle_migrations" not created yet
+    }
+    printDryRunPlan(planMigrations(journal.entries, ledgerRows, readFileOrNull, statMtimeOrNull), ledgerAvailable);
+    try {
+      await lockClient.query(`SELECT pg_advisory_unlock($1)`, [MIGRATION_LOCK_KEY]);
+    } catch { /* auto-releases on disconnect */ }
+    lockClient.release();
+    await pool.end();
+    process.exit(0);
   }
 
   // Required PostgreSQL extensions.
@@ -376,61 +320,133 @@ async function main() {
     10,
   );
 
-  // ── Fresh migration: execute statement-by-statement ───────────────────
+  // ── Fresh migration: replay files + STAMP the ledger (#2254) ───────────
   //
-  // Drizzle's migrate() wraps each migration file in a transaction and
-  // strips IF NOT EXISTS.  When all 59 migrations run from scratch on a
-  // fresh DB, later files (0003+) re-create tables already built by
-  // 0000/0002, causing "42P07 relation already exists" inside the tx,
-  // which rolls back the entire migration.
+  // Drizzle's migrate() wraps each migration file in a transaction and stops
+  // on the first error. On an empty ledger, later hand-written files (0003+)
+  // re-create tables already built by 0000/0002, causing "42P07 relation
+  // already exists" inside the tx, which rolls back the entire migration.
   //
-  // To avoid this, the fresh path reads each SQL file, splits by
-  // statement-breakpoint, and executes every statement individually,
-  // skipping tolerated "already exists" errors.  Incremental migrations
-  // (ledger already has entries) continue using drizzle's built-in
-  // migrator since there's no overlap risk.
+  // The fresh path therefore replays each file itself — but under the OLD
+  // behaviour it never wrote to drizzle.__drizzle_migrations, so every future
+  // db:migrate replayed ~2,919 statements (incl. 3 DROP TABLE, ~8 DELETE,
+  // ~40 UPDATE) over live data (#2254), tolerated destructive errors
+  // (42703/42P01/42P11) as "skipped" (#2235), and stripped CONCURRENTLY.
+  //
+  // New behaviour (all logic in ./migrate-fresh.ts, unit-tested):
+  //   - planMigrations(): skip files whose hash OR created_at is already in
+  //     the ledger (idempotent, resumable);
+  //   - applyMigrationFile(): per-chunk transactions with per-statement
+  //     savepoints; only "already exists" (42P07/42710) is tolerated — any
+  //     other error ROLLS BACK the file and ABORTS the run non-zero;
+  //   - CREATE INDEX CONCURRENTLY is preserved and executed OUTSIDE the
+  //     transaction;
+  //   - each successfully applied file is stamped immediately with
+  //     (hash = sha256 of the file bytes — same as drizzle-kit computes,
+  //      created_at = journal entry.when ms, fallback file mtime);
+  //   - post-run verification re-derives the plan: every journal entry must
+  //     now read as skip-stamped, otherwise the next run would replay and we
+  //     exit 1.
+  // Incremental migrations (ledger non-empty) keep using drizzle's built-in
+  // migrator unchanged.
   const freshPath = freshRowCount === 0 && journal.entries.length > 0;
 
   if (freshPath) {
-    const migrationsDir = MIGRATIONS_DIR;
-    const journalFiles = journal.entries.map((e: { tag: string }) => `${e.tag}.sql`);
+    const freshPlan = planMigrations(journal.entries, await readLedgerRows(pool), readFileOrNull, statMtimeOrNull);
+    const toReplay = freshPlan.filter((p) => p.action === 'replay').length;
+    const alreadyStamped = freshPlan.filter((p) => p.action === 'skip-stamped').length;
+    console.log(`[migrate] Fresh path: ${toReplay} file(s) to replay, ${alreadyStamped} already stamped, ${freshPlan.length} journal entr(ies) total.`);
+
+    // Newer drizzle-kit versions add an "fk_updates" column to the ledger;
+    // include it (=0/false) only when it exists on this DB.
+    const fkRes = await pool.query<{ data_type: string }>(
+      `SELECT data_type FROM information_schema.columns
+        WHERE table_schema = 'drizzle' AND table_name = '__drizzle_migrations' AND column_name = 'fk_updates'`,
+    );
+    const fkColumn = fkRes.rows[0]?.data_type ?? null;
+
+    // #2235: the "does not exist" file-order quirks (0002/0004 → repaired by
+    // 0046) may ONLY be tolerated when the public schema is verifiably empty
+    // before the first statement — with zero tables there is no data to
+    // clobber. On any other DB these errors abort the run.
+    const tablesRes = await pool.query<{ cnt: string }>(
+      `SELECT COUNT(*)::text AS cnt FROM information_schema.tables WHERE table_schema = 'public'`,
+    );
+    const publicTableCount = parseInt(tablesRes.rows[0].cnt, 10);
+    const zeroTableFreshBuild = publicTableCount === 0;
+    console.log(`[migrate] Public schema has ${publicTableCount} table(s) before replay — ` +
+      (zeroTableFreshBuild
+        ? 'true zero-table build ("does not exist" file-order quirks tolerated, e.g. 0004 → repaired by 0046).'
+        : 'partial/legacy state: every non-"already exists" statement error ABORTS the run (#2235).'));
+
     const client = await pool.connect();
+    let stats: FreshReplayStats;
     try {
-      let totalApplied = 0;
-      let totalSkipped = 0;
-      const allErrors: string[] = [];
-
-      for (const file of journalFiles) {
-        const filePath = path.join(migrationsDir, file);
-        if (!fs.existsSync(filePath)) {
-          console.error(`[migrate] WARNING: Migration file not found: ${file}`);
-          continue;
-        }
-        const result = await runMigrationFile(client, filePath, file, isDryRun);
-        totalApplied += result.applied;
-        totalSkipped += result.skipped;
-        allErrors.push(...result.errors);
-        if (result.errors.length > 0) {
-          console.error(`[migrate] ${file}: ${result.errors.length} error(s)`);
-        } else {
-          console.log(`[migrate] ${file}: ${result.applied} applied, ${result.skipped} skipped (already exists)`);
-        }
-      }
-
-      if (allErrors.length > 0) {
-        console.error(`\n[migrate] FATAL: ${allErrors.length} migration error(s):`);
-        for (const e of allErrors) console.error(`  ${e}`);
-        process.exit(1);
-      }
-
-      if (!isDryRun) {
-        console.log(`[migrate] Fresh migration complete — ${totalApplied} statements applied, ${totalSkipped} skipped (already exists)`);
-      } else {
-        console.log(`[migrate] Dry-run complete — ${totalApplied} statements would be applied.`);
-      }
+      stats = await runFreshReplay({
+        client,
+        plan: freshPlan,
+        readFile: readFileOrNull,
+        zeroTableFreshBuild,
+        stamp: async (row) => {
+          const { text, params } = buildLedgerInsert(row, fkColumn);
+          await pool.query(text, params);
+        },
+      });
     } finally {
       client.release();
     }
+
+    if (stats.fatal.length > 0) {
+      console.error(`\n[migrate] FATAL: fresh replay aborted with ${stats.fatal.length} error(s):`);
+      for (const e of stats.fatal) console.error(`  ${e}`);
+      console.error('[migrate] The failing file was NOT stamped; files stamped so far are recorded.');
+      console.error('[migrate] Fix the underlying SQL (this run no longer swallows real errors — #2235),');
+      console.error('[migrate] then re-run db:migrate to resume.');
+      try {
+        await lockClient.query(`SELECT pg_advisory_unlock($1)`, [MIGRATION_LOCK_KEY]);
+      } catch { /* auto-releases on disconnect */ }
+      lockClient.release();
+      await pool.end();
+      process.exit(1);
+    }
+
+    // Backfill pass: entries the plan skipped by HASH-match (the journal has
+    // identical-content no-op files that share a sha256 but have distinct
+    // `when`s) still need their own created_at row — drizzle's no-op decision
+    // reads max(created_at), so a missing created_at would replay from there.
+    const ledgerRowsNow = await readLedgerRows(pool);
+    const stampedCreatedAts = new Set(ledgerRowsNow.map((r) => Number(r.createdAt)));
+    let backfilled = 0;
+    for (const p of freshPlan) {
+      if (p.action === 'missing-file' || p.hash === null || stampedCreatedAts.has(p.createdAt)) continue;
+      const { text, params } = buildLedgerInsert({ hash: p.hash, createdAt: p.createdAt }, fkColumn);
+      await pool.query(text, params);
+      stampedCreatedAts.add(p.createdAt);
+      backfilled++;
+    }
+    if (backfilled > 0) {
+      console.log(`[migrate] Backfilled ${backfilled} ledger row(s) for entries whose file content duplicates an earlier stamped file`);
+    }
+
+    console.log(`[migrate] Fresh migration complete — ${stats.applied} statements applied (${stats.concurrent} CONCURRENTLY outside transactions), ${stats.skipped} skipped (already exists)`
+      + (stats.skippedZeroTableQuirk > 0 ? `, ${stats.skippedZeroTableQuirk} skipped (file-order quirk, zero-table build)` : '')
+      + `, ${stats.stampedTags.length} ledger row(s) stamped this run.`);
+
+    // Post-run verification: the ledger must now cover EVERY journal entry,
+    // otherwise the next db:migrate would replay again — the exact #2254 bug.
+    const verifyPlan = planMigrations(journal.entries, await readLedgerRows(pool), readFileOrNull, statMtimeOrNull);
+    const unstamped = verifyPlan.filter((p) => p.action !== 'skip-stamped');
+    if (unstamped.length > 0) {
+      console.error(`[migrate] FATAL: ledger still missing ${unstamped.length} entr(s): ${unstamped.map((p) => p.tag).join(', ')}`);
+      console.error('[migrate] Refusing to report success: the next db:migrate would replay these files.');
+      try {
+        await lockClient.query(`SELECT pg_advisory_unlock($1)`, [MIGRATION_LOCK_KEY]);
+      } catch { /* auto-releases on disconnect */ }
+      lockClient.release();
+      await pool.end();
+      process.exit(1);
+    }
+    console.log(`[migrate] Ledger verified: all ${journal.entries.length} journal entries stamped — subsequent db:migrate runs are no-ops.`);
   } else {
     console.log('[migrate] Applying pending migrations with drizzle-orm migrator...');
     await migrate(db, { migrationsFolder: './drizzle/migrations' });
