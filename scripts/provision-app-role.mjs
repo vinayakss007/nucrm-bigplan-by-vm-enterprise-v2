@@ -22,7 +22,6 @@
  *   SKIP_VERIFY=1       optional — provision without the re-verify step
  */
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Pool } from 'pg';
