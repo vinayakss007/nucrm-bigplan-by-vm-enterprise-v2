@@ -132,4 +132,46 @@ describe('cron/auto-backup skip alerting (#2127)', () => {
     expect(sendAlertEmailMock).not.toHaveBeenCalled();
     expect(exportAllMock).toHaveBeenCalledTimes(1);
   });
+
+  it('#71: a tenant whose write fails is still attempted-and-counted, and the rest of the run continues', async () => {
+    // The live shape of this failure: tenant 9d899b56's payload breached the
+    // inline size CHECK (SQLSTATE 23514), backupSingleTenant rethrew, and that
+    // escape ended the whole 02:00 run at tenant 29 of 61 — the tenants after
+    // it were never attempted, were not reported as skipped, and the schedule
+    // bookkeeping (next_run_at) never advanced.
+    let attempted = 0;
+    exportAllMock.mockImplementation(async () => {
+      attempted++;
+      if (attempted === 2) throw new Error('chk_tenant_backup_records_backup_data_size: 23514');
+      return { dataSize: 1, tableCount: 1, totalRecords: 1, tables: {} };
+    });
+    const executed: string[] = [];
+    mockExecute.mockImplementation(async (query: unknown) => {
+      const text = sqlText(query);
+      executed.push(text);
+      if (text.includes('FROM backup_schedules')) {
+        return rows([{ id: 's1', tenant_id: null, schedule_type: 'daily', backup_type: 'full', retention_days: 90 }]);
+      }
+      if (text.includes('SELECT id FROM tenants')) {
+        return rows([{ id: 't1' }, { id: 't2' }, { id: 't3' }]);
+      }
+      if (text.includes('owner_id FROM tenants')) {
+        return rows([{ owner_id: 'user-1' }]);
+      }
+      if (text.includes('INSERT INTO tenant_backup_records')) {
+        return rows([{ id: 'b' + attempted }]);
+      }
+      return rows([]);
+    });
+
+    const { POST } = await import('@/app/api/cron/auto-backup/route');
+    const res = await POST({ headers: new Map() } as never);
+    const body = await res.json();
+
+    expect(attempted).toBe(3);
+    expect(body.scheduled.errors).toBe(1);
+    expect(body.scheduled.failedTenants).toEqual(['t2']);
+    // The doomed schedule must not stay due forever.
+    expect(executed.some((t) => t.includes('UPDATE backup_schedules SET last_run_at'))).toBe(true);
+  });
 });
