@@ -1,342 +1,100 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-vi.mock('@/drizzle/db', () => ({
-  db: {
-    select: vi.fn(() => ({
-      from: vi.fn(() => ({
-        where: vi.fn(() => ({
-          limit: vi.fn(() => Promise.resolve([])),
-        })),
+// getTenantWhitelist reads through the transaction it is handed, so the fake tx
+// is where the whitelist row comes from.
+let currentRows: { value: unknown }[] = [];
+let lookupThrows = false;
+const tx = {
+  select: vi.fn(() => ({
+    from: vi.fn(() => ({
+      where: vi.fn(() => ({
+        limit: vi.fn(async () => {
+          if (lookupThrows) throw new Error('row-level security');
+          return currentRows;
+        }),
       })),
     })),
-  },
-}));
+  })),
+};
 
+const withTenantContext = vi.fn(async (_t: string, _u: string, fn: (tx: unknown) => Promise<unknown>) =>
+  await fn(tx));
+
+vi.mock('@/drizzle/db', () => ({ db: { select: vi.fn() } }));
 vi.mock('@/drizzle/schema', () => ({
-  platformSettings: {
-    id: 'id', tenantId: 'tenant_id', key: 'key', value: 'value',
-  },
+  platformSettings: { id: 'id', tenantId: 'tenant_id', key: 'key', value: 'value' },
 }));
-
 vi.mock('drizzle-orm', () => ({
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   eq: vi.fn((...args: any[]) => ['eq', ...args]),
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   and: vi.fn((...args: any[]) => ['and', ...args]),
 }));
+vi.mock('@/lib/db/rls', () => ({
+  withTenantContext: (...args: unknown[]) => withTenantContext(...(args as [string, string, (t: unknown) => Promise<unknown>])),
+}));
 
-import { db } from '@/drizzle/db';
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function mockRequest(ip: string | null): any {
-  return {
-    headers: { get: (name: string) => {
-      if (name === 'x-forwarded-for') return ip;
-      if (name === 'x-real-ip') return null;
-      return null;
-    }},
-  };
+async function gate(ip: string, tenantId = 'tenant-1') {
+  const { checkLoginIpAllowed } = await import('@/lib/ip-whitelist');
+  return await checkLoginIpAllowed(tenantId, 'user-1', ip);
 }
 
-describe('checkIpWhitelist', () => {
+describe('checkLoginIpAllowed', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    currentRows = [];
+    lookupThrows = false;
   });
 
-  it('returns null when whitelist is empty (no IP restriction)', async () => {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (db.select as any).mockReturnValue({
-      from: vi.fn(() => ({
-        where: vi.fn(() => ({
-          limit: vi.fn(() => Promise.resolve([])),
-        })),
-      })),
-    });
-
-    const { checkIpWhitelist } = await import('@/lib/ip-whitelist');
-    const req = mockRequest('10.0.0.1');
-    const result = await checkIpWhitelist(req, 'tenant-1');
-
-    expect(result).toBeNull();
+  it('reads the whitelist inside the tenant context, not on a bare connection', async () => {
+    currentRows = [{ value: JSON.stringify(['10.0.0.1']) }];
+    await gate('10.0.0.1');
+    expect(withTenantContext).toHaveBeenCalledWith('tenant-1', 'user-1', expect.any(Function));
   });
 
-  it('returns null when whitelist value is empty array', async () => {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (db.select as any).mockReturnValue({
-      from: vi.fn(() => ({
-        where: vi.fn(() => ({
-          limit: vi.fn(() => Promise.resolve([{ value: '[]' }])),
-        })),
-      })),
-    });
-
-    const { checkIpWhitelist } = await import('@/lib/ip-whitelist');
-    const req = mockRequest('10.0.0.1');
-    const result = await checkIpWhitelist(req, 'tenant-1');
-
-    expect(result).toBeNull();
+  it('allows when no whitelist is configured', async () => {
+    currentRows = [];
+    expect(await gate('10.0.0.1')).toEqual({ allowed: true, reason: 'no-whitelist' });
+    currentRows = [{ value: '[]' }];
+    expect(await gate('10.0.0.1').then((r) => r.reason)).toBe('no-whitelist');
   });
 
-  it('allows access when client IP is in whitelist', async () => {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (db.select as any).mockReturnValue({
-      from: vi.fn(() => ({
-        where: vi.fn(() => ({
-          limit: vi.fn(() => Promise.resolve([{ value: JSON.stringify(['10.0.0.1', '10.0.0.2']) }])),
-        })),
-      })),
-    });
-
-    const { checkIpWhitelist } = await import('@/lib/ip-whitelist');
-    const req = mockRequest('10.0.0.1');
-    const result = await checkIpWhitelist(req, 'tenant-1');
-
-    expect(result).toBeNull();
+  it('allows an IP on the list and blocks one that is not', async () => {
+    currentRows = [{ value: JSON.stringify(['10.0.0.1', '10.0.0.2']) }];
+    expect(await gate('10.0.0.2')).toEqual({ allowed: true, reason: 'matched' });
+    expect(await gate('10.0.0.99')).toEqual({ allowed: false, reason: 'not-matched' });
   });
 
-  it('blocks access when client IP is not in whitelist', async () => {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (db.select as any).mockReturnValue({
-      from: vi.fn(() => ({
-        where: vi.fn(() => ({
-          limit: vi.fn(() => Promise.resolve([{ value: JSON.stringify(['10.0.0.1', '10.0.0.2']) }])),
-        })),
-      })),
-    });
-
-    const { checkIpWhitelist } = await import('@/lib/ip-whitelist');
-    const req = mockRequest('10.0.0.99');
-    const result = await checkIpWhitelist(req, 'tenant-1');
-
-    expect(result).not.toBeNull();
-    expect(result!.status).toBe(403);
+  it('matches CIDR ranges and rejects addresses outside them', async () => {
+    currentRows = [{ value: JSON.stringify(['10.0.0.0/24']) }];
+    expect(await gate('10.0.0.50').then((r) => r.reason)).toBe('matched');
+    expect(await gate('10.0.1.1').then((r) => r.reason)).toBe('not-matched');
   });
 
-  it('returns 403 with error message for blocked IPs', async () => {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (db.select as any).mockReturnValue({
-      from: vi.fn(() => ({
-        where: vi.fn(() => ({
-          limit: vi.fn(() => Promise.resolve([{ value: JSON.stringify(['192.168.1.1']) }])),
-        })),
-      })),
-    });
-
-    const { checkIpWhitelist } = await import('@/lib/ip-whitelist');
-    const req = mockRequest('10.0.0.5');
-    const result = await checkIpWhitelist(req, 'tenant-1');
-
-    const body = await result!.json();
-    expect(body.error).toBe('Access denied from your IP address');
-    expect(body.code).toBe('ERR_IP_NOT_ALLOWED');
+  it('matches across the high octets, where the first octet would sign the mask', async () => {
+    currentRows = [{ value: JSON.stringify(['203.0.113.0/24']) }];
+    expect(await gate('203.0.113.77').then((r) => r.reason)).toBe('matched');
+    expect(await gate('203.0.114.77').then((r) => r.reason)).toBe('not-matched');
   });
 
-  it('supports CIDR notation in whitelist', async () => {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (db.select as any).mockReturnValue({
-      from: vi.fn(() => ({
-        where: vi.fn(() => ({
-          limit: vi.fn(() => Promise.resolve([{ value: JSON.stringify(['10.0.0.0/24']) }])),
-        })),
-      })),
-    });
-
-    const { checkIpWhitelist } = await import('@/lib/ip-whitelist');
-    const req = mockRequest('10.0.0.50');
-    const result = await checkIpWhitelist(req, 'tenant-1');
-
-    expect(result).toBeNull();
+  it('does not evaluate when the client IP is not an IPv4 address', async () => {
+    currentRows = [{ value: JSON.stringify(['10.0.0.1']) }];
+    expect(await gate('unknown')).toEqual({ allowed: true, reason: 'unknown-client-ip' });
+    expect(await gate('2001:db8::1').then((r) => r.reason)).toBe('unknown-client-ip');
   });
 
-  it('blocks CIDR range mismatches', async () => {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (db.select as any).mockReturnValue({
-      from: vi.fn(() => ({
-        where: vi.fn(() => ({
-          limit: vi.fn(() => Promise.resolve([{ value: JSON.stringify(['10.0.0.0/24']) }])),
-        })),
-      })),
-    });
-
-    const { checkIpWhitelist } = await import('@/lib/ip-whitelist');
-    const req = mockRequest('10.0.1.1');
-    const result = await checkIpWhitelist(req, 'tenant-1');
-
-    expect(result).not.toBeNull();
-    expect(result!.status).toBe(403);
+  it('fails open, not closed, when the row cannot be read', async () => {
+    lookupThrows = true;
+    expect(await gate('10.0.0.1').then((r) => r.reason)).toBe('lookup-failed');
   });
 
-  it('falls back to unknown IP when no headers present', async () => {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (db.select as any).mockReturnValue({
-      from: vi.fn(() => ({
-        where: vi.fn(() => ({
-          limit: vi.fn(() => Promise.resolve([{ value: JSON.stringify(['10.0.0.1']) }])),
-        })),
-      })),
-    });
-
-    const { checkIpWhitelist } = await import('@/lib/ip-whitelist');
-    const req = { headers: { get: () => null } };
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const result = await checkIpWhitelist(req as any, 'tenant-1');
-
-    expect(result).not.toBeNull();
-    expect(result!.status).toBe(403);
+  it('treats an unreadable whitelist value as no restriction', async () => {
+    currentRows = [{ value: 'not-json' }];
+    expect(await gate('10.0.0.1').then((r) => r.reason)).toBe('no-whitelist');
   });
 
-  it('handles malformed whitelist JSON gracefully returns empty array', async () => {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (db.select as any).mockReturnValue({
-      from: vi.fn(() => ({
-        where: vi.fn(() => ({
-          limit: vi.fn(() => Promise.resolve([{ value: 'not-json' }])),
-        })),
-      })),
-    });
-
-    const { checkIpWhitelist } = await import('@/lib/ip-whitelist');
-    const req = mockRequest('10.0.0.1');
-    const result = await checkIpWhitelist(req, 'tenant-1');
-
-    expect(result).toBeNull();
-  });
-
-  it('handles x-real-ip fallback when x-forwarded-for is missing', async () => {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (db.select as any).mockReturnValue({
-      from: vi.fn(() => ({
-        where: vi.fn(() => ({
-          limit: vi.fn(() => Promise.resolve([{ value: JSON.stringify(['192.168.1.1']) }])),
-        })),
-      })),
-    });
-
-    const { checkIpWhitelist } = await import('@/lib/ip-whitelist');
-    const req = { headers: { get: (name: string) => name === 'x-real-ip' ? '192.168.1.1' : null } };
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const result = await checkIpWhitelist(req as any, 'tenant-1');
-
-    expect(result).toBeNull();
-  });
-});
-
-describe('getIpWhitelistEnabled', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('returns false when no whitelist configured', async () => {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (db.select as any).mockReturnValue({
-      from: vi.fn(() => ({
-        where: vi.fn(() => ({
-          limit: vi.fn(() => Promise.resolve([])),
-        })),
-      })),
-    });
-
-    const { getIpWhitelistEnabled } = await import('@/lib/ip-whitelist');
-    const result = await getIpWhitelistEnabled('tenant-1');
-
-    expect(result).toBe(false);
-  });
-
-  it('returns true when whitelist has entries', async () => {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (db.select as any).mockReturnValue({
-      from: vi.fn(() => ({
-        where: vi.fn(() => ({
-          limit: vi.fn(() => Promise.resolve([{ value: JSON.stringify(['10.0.0.1']) }])),
-        })),
-      })),
-    });
-
-    const { getIpWhitelistEnabled } = await import('@/lib/ip-whitelist');
-    const result = await getIpWhitelistEnabled('tenant-1');
-
-    expect(result).toBe(true);
-  });
-});
-
-// The column is jsonb, so in production the driver returns a decoded array, not
-// the JSON text these older tests mock. Reading it with JSON.parse(String(v))
-// threw, the catch returned [], and checkIpWhitelist treated "no entries" as
-// "no restriction" — every tenant with a whitelist configured was unprotected.
-describe('whitelist stored as decoded jsonb (production shape)', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  function mockValue(value: any) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (db.select as any).mockReturnValue({
-      from: vi.fn(() => ({
-        where: vi.fn(() => ({
-          limit: vi.fn(() => Promise.resolve([{ value }])),
-        })),
-      })),
-    });
-  }
-
-  it('getTenantWhitelist returns the array as-is', async () => {
-    mockValue(['203.0.113.9', '198.51.100.0/24']);
-
-    const { getTenantWhitelist } = await import('@/lib/ip-whitelist');
-    await expect(getTenantWhitelist('tenant-1')).resolves.toEqual(['203.0.113.9', '198.51.100.0/24']);
-  });
-
-  it('blocks an IP outside a decoded array instead of failing open', async () => {
-    mockValue(['203.0.113.9']);
-
-    const { checkIpWhitelist } = await import('@/lib/ip-whitelist');
-    const result = await checkIpWhitelist(mockRequest('10.0.0.99'), 'tenant-1');
-
-    expect(result).not.toBeNull();
-    expect(result!.status).toBe(403);
-  });
-
-  it('honours CIDR entries inside a decoded array', async () => {
-    mockValue(['198.51.100.0/24']);
-
-    const { checkIpWhitelist } = await import('@/lib/ip-whitelist');
-    await expect(checkIpWhitelist(mockRequest('198.51.100.42'), 'tenant-1')).resolves.toBeNull();
-  });
-
-  it('getIpWhitelistEnabled is true for a decoded array', async () => {
-    mockValue(['203.0.113.9']);
-
-    const { getIpWhitelistEnabled } = await import('@/lib/ip-whitelist');
-    await expect(getIpWhitelistEnabled('tenant-1')).resolves.toBe(true);
-  });
-
-  it('a non-array row degrades to no restriction rather than throwing', async () => {
-    mockValue({ unexpected: 'shape' });
-
-    const { getTenantWhitelist } = await import('@/lib/ip-whitelist');
-    await expect(getTenantWhitelist('tenant-1')).resolves.toEqual([]);
-  });
-});
-
-describe('getTenantWhitelist', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('handles corrupted storage data gracefully and returns empty array', async () => {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (db.select as any).mockReturnValue({
-      from: vi.fn(() => ({
-        where: vi.fn(() => ({
-          limit: vi.fn(() => Promise.resolve([{ value: '{invalid' }])),
-        })),
-      })),
-    });
-
-    const { getTenantWhitelist } = await import('@/lib/ip-whitelist');
-    const result = await getTenantWhitelist('tenant-1');
-
-    expect(result).toEqual([]);
+  it('skips the whole check when the account has no workspace yet', async () => {
+    expect(await gate('10.0.0.1', '')).toEqual({ allowed: true, reason: 'no-tenant' });
+    expect(withTenantContext).not.toHaveBeenCalled();
   });
 });

@@ -59,6 +59,9 @@ jobs:
       - name: no-explicit-any suppression ratchet (#1268)
         run: npm run guard:any-suppressions
 
+      - name: Migration chain guard (#46)
+        run: npm run guard:chain
+
   test-unit:
     name: Unit Tests
     runs-on: ubuntu-latest

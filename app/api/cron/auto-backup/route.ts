@@ -92,6 +92,8 @@ async function runScheduledBackups() {
   // #2127: a run that reports success while silently excluding tenants is
   // worse than a failure — track who was skipped so we can alert loudly.
   const skippedTenants: string[] = [];
+  // #71: same honesty for tenants whose own backup failed mid-run.
+  const failedTenants: string[] = [];
 
   // Get all enabled schedules that are due
   const schedules = await db.execute(sql`
@@ -125,20 +127,43 @@ async function runScheduledBackups() {
   for (const schedule of rows) {
     try {
       if (schedule.tenant_id) {
-        // Per-tenant backup
-        const res = await backupSingleTenant(schedule.tenant_id, schedule) as BackupResult | undefined;
-        if (res?.skipped) {
-          skipped++;
-          if (res.tenantId) skippedTenants.push(String(res.tenantId));
+        // Per-tenant backup. A failure here must still let the schedule
+        // bookkeeping below advance, or next_run_at stays in the past and the
+        // same doomed backup re-runs on every cron tick.
+        try {
+          const res = await backupSingleTenant(schedule.tenant_id, schedule) as BackupResult | undefined;
+          if (res?.skipped) {
+            skipped++;
+            if (res.tenantId) skippedTenants.push(String(res.tenantId));
+          }
+        } catch (err) {
+          errors++;
+          failedTenants.push(String(schedule.tenant_id));
+          void logError({ error: err, context: 'cron/auto-backup tenant schedule', level: 'warning', metadata: { scheduleId: schedule.id, tenantId: schedule.tenant_id } });
         }
       } else {
         // Global — backup ALL tenants
         const tenants = await db.execute(sql`SELECT id FROM tenants WHERE status != ${'suspended'}`);
         for (const tenant of tenants.rows as { id: string }[]) {
-          const res = await backupSingleTenant(tenant.id, schedule) as BackupResult | undefined;
-          if (res?.skipped) {
-            skipped++;
-            if (res.tenantId) skippedTenants.push(String(res.tenantId));
+          // #71: one tenant must not end the run. backupSingleTenant rethrows
+          // after marking its row 'failed', and that escape used to skip every
+          // remaining tenant as well as the bookkeeping below. Measured on
+          // preprod: one tenant whose payload breached the inline size CHECK
+          // aborted the 02:00 run at tenant 29 of 61, and the other 32 were
+          // never even attempted — invisible, because they are neither
+          // completed nor in skippedTenants. The 'failed' row and its alert
+          // email are already written by the callee, so swallowing here costs
+          // nothing but the collateral damage.
+          try {
+            const res = await backupSingleTenant(tenant.id, schedule) as BackupResult | undefined;
+            if (res?.skipped) {
+              skipped++;
+              if (res.tenantId) skippedTenants.push(String(res.tenantId));
+            }
+          } catch (err) {
+            errors++;
+            failedTenants.push(String(tenant.id));
+            void logError({ error: err, context: 'cron/auto-backup global tenant', level: 'warning', metadata: { scheduleId: schedule.id, tenantId: tenant.id } });
           }
         }
       }
@@ -171,7 +196,7 @@ async function runScheduledBackups() {
     }
   }
 
-  return { backupsRun, errors, skipped, skippedTenants };
+  return { backupsRun, errors, skipped, skippedTenants, failedTenants };
 }
 
 // ── Backup Single Tenant ─────────────────────────────────────────────────────
