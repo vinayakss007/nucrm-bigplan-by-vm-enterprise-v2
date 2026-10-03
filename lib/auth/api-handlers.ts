@@ -4,12 +4,11 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/drizzle/db';
 import { users, sessions, tenants, roles, tenantMembers, emailVerifications, pipelines, dealStages, platformSettings } from '@/drizzle/schema';
 import { onboardingProgress } from '@/drizzle/schema';
 import { isNull } from 'drizzle-orm';
 import { eq, and } from 'drizzle-orm';
-import { hashPassword, verifyPassword, createToken, hashToken, makeSessionCookieString, clearSessionCookie, validatePassword } from '@/lib/auth/session';
+import { hashPassword, verifyPassword, createToken, hashToken, makeSessionCookieString, validatePassword } from '@/lib/auth/session';
 import { generateCsrfToken, setCsrfCookie, requestIsHttps } from '@/lib/auth/csrf';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { sendEmail, sendWebhookNotification, sendTelegram } from '@/lib/email/service';
@@ -22,6 +21,7 @@ import { installDefaultModules } from '@/lib/modules/auto-install';
 import { withSecurityContext, withTenantContext, withUserContext, withAuthLookupContext, setTenantContext } from '@/lib/db/rls';
 import { isBlocked, recordFailedAttempt, recordSuccessfulLogin } from '@/lib/security/brute-force';
 import { getClientIp } from '@/lib/client-ip';
+import { checkLoginIpAllowed } from '@/lib/ip-whitelist';
 import { validateBody, readJsonBody, InvalidJsonBodyError } from '@/lib/api/validate';
 import { loginSchema, signupSchema } from '@/lib/api/schemas';
 import { redactEmail } from '@/lib/logger/pii';
@@ -129,6 +129,22 @@ export async function POST_login(request: NextRequest) {
       await recordFailedAttempt(email, ip, userAgent, 'Invalid credentials');
       logger.warn('Login failed', { email, ip });
       return loginRespond(request, isForm, { error:'Invalid email or password' }, 401);
+    }
+
+    // #15: the settings page wrote this list and reported success, but nothing
+    // ever read it — a tenant believed it had IP-restricted sign-in while any
+    // address could authenticate. Checked here, at sign-in, before a session
+    // exists; an existing session is deliberately not cut mid-work.
+    if (user.lastTenantId) {
+      const gate = await checkLoginIpAllowed(user.lastTenantId, user.id, ip);
+      if (!gate.allowed) {
+        await recordFailedAttempt(email, ip, userAgent, 'IP not in tenant allow list');
+        logger.warn('Login denied by IP allow list', { email, ip, tenantId: user.lastTenantId });
+        return loginRespond(request, isForm, {
+          error: "Your IP address isn't on this workspace's allow list. Contact your administrator.",
+          code: 'ERR_IP_NOT_ALLOWED',
+        }, 403);
+      }
     }
 
     // Record successful login
@@ -472,26 +488,5 @@ export async function POST_signup(request: NextRequest) {
     }
     devLogger.error(err as Error, '[auth/signup]');
     return NextResponse.json({ error: 'Signup failed. Please try again.' }, { status:500 });
-  }
-}
-
-// ── Logout ────────────────────────────────────────────────────
-export async function POST_logout(request: NextRequest) {
-  try {
-    const token = request.cookies.get('nucrm_session')?.value;
-    if (token) {
-      const tokenHash = await hashToken(token);
-      await db.delete(sessions).where(eq(sessions.tokenHash, tokenHash)).catch((e) => { logger.error('[auth/logout] Failed to delete session', { error: e instanceof Error ? e.message : String(e) }); });
-    }
-    await clearSessionCookie();
-    const logoutResponse = NextResponse.json({ ok:true });
-    logoutResponse.headers.set('Set-Cookie', 'nucrm_csrf_token=; Path=/; SameSite=Strict; Max-Age=0');
-    return logoutResponse;
-  } catch (e) {
-    logger.error('[auth/logout] Logout error, clearing cookies anyway', { error: e instanceof Error ? e.message : String(e) });
-    await clearSessionCookie();
-    const logoutResponse = NextResponse.json({ ok:true });
-    logoutResponse.headers.set('Set-Cookie', 'nucrm_csrf_token=; Path=/; SameSite=Strict; Max-Age=0');
-    return logoutResponse;
   }
 }

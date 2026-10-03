@@ -1,5 +1,16 @@
 # Migration chain: current state and required repair
 
+> **Correction (2026-10-03).** Every count below is measured against the
+> _manifest_, not the directory: `scripts/migrate.ts` and drizzle's
+> `readMigrationFiles()` both loop `journal.entries`, so a `.sql` file that is
+> absent from `_journal.json` is invisible to both and can never be applied —
+> not to a live database, not to a DR rebuild. As of today the journal is
+> missing `0059_custom_entities` and `0091_usage_snapshots_superadmin_bypass`
+> and carries a duplicated `idx`/`when` pair, so "PASS — applies all 81
+> migrations" means _all 81 that the journal lists_. `npm run guard:chain`
+> (`scripts/check-migration-chain.mjs`) now fails CI on any new omission;
+> the current defects are baselined until #74 repairs them.
+
 **Status (updated 2026-08-29): the production runner `npm run db:migrate` DOES
 build a full schema from an empty database. Drizzle's native `migrate()` path
 (`npm run db:verify-chain`) still cannot — the two lineages collide there.**

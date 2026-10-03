@@ -11,6 +11,7 @@ import { eq, and, isNull } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { logError } from '@/lib/errors-server';
+import { setSuperAdminContext } from '@/lib/db/rls';
 
 // Object storage hands out a URL the browser fetches directly; a 5-minute
 // lifetime is enough to start one download and short enough that a leaked link
@@ -38,6 +39,10 @@ export const GET = withApiRoute(async (req: NextRequest,
     if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
     const { id } = await params;
+
+    // PP-031: this read is deny-by-default RLS with no super-admin GUC, so it
+    // found nothing and the Download button 404'd on archives that exist.
+    await setSuperAdminContext();
 
     const [backup] = await db
       .select({
