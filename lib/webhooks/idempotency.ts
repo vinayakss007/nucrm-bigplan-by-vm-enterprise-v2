@@ -22,7 +22,7 @@
  */
 import { withSecurityContext } from '@/lib/db/rls';
 import { webhookEvents } from '@/drizzle/schema';
-import { eq, and, lt } from 'drizzle-orm';
+import { eq, and, lt, or, isNull } from 'drizzle-orm';
 import { logger } from '@/lib/logger';
 
 /** Age after which a 'claimed' row is assumed orphaned (worker crashed). */
@@ -63,6 +63,15 @@ export async function claimWebhookEvent(opts: {
   // older than STALE_CLAIM_MS means the worker died mid-processing (crash,
   // deploy, OOM) without releasing. Steal it so the retry still processes;
   // the UPDATE's WHERE makes the steal atomic under concurrency.
+  //
+  // #2237: `created_at` was nullable until migration 0109 (manual fix / bad
+  // backfill could leave it NULL), and a bare `lt(createdAt, cutoff)` never
+  // matches NULL — one such row would wedge its UNIQUE(provider, event_id)
+  // claim forever and the provider event would stay "already processed",
+  // silently skipping money handlers. NULL age is unknowable, so treat it as
+  // stale-first (IS NULL branch ordered before the lt branch): the steal below
+  // stamps created_at = now(), which heals the row permanently.
+  const staleBefore = new Date(Date.now() - STALE_CLAIM_MS);
   const [stolen] = await tx
     .update(webhookEvents)
     .set({ createdAt: new Date() })
@@ -70,7 +79,10 @@ export async function claimWebhookEvent(opts: {
       eq(webhookEvents.provider, opts.provider),
       eq(webhookEvents.eventId, opts.eventId),
       eq(webhookEvents.status, 'claimed'),
-      lt(webhookEvents.createdAt, new Date(Date.now() - STALE_CLAIM_MS)),
+      or(
+        isNull(webhookEvents.createdAt),
+        lt(webhookEvents.createdAt, staleBefore),
+      ),
     ))
     .returning({ id: webhookEvents.id });
   return !!stolen;

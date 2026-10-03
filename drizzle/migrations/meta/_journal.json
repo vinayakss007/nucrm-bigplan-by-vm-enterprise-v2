@@ -750,6 +750,13 @@
       "when": 1788782400022,
       "tag": "0108_invoices_quote_id_unique",
       "breakpoints": true
+    },
+    {
+      "idx": 106,
+      "version": "7",
+      "when": 1788782400023,
+      "tag": "0109_webhook_events_created_at_not_null",
+      "breakpoints": true
     }
   ]
 }
