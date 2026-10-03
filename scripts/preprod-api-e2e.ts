@@ -197,8 +197,12 @@ function gateCreateAdminWithoutKey(): { status: number; out: string } {
   // scripts/tsconfig.gate.json maps the `server-only` marker (stripped by the
   // Next compiler in real builds, unresolvable under plain tsx) to the empty
   // test shim so the route module can be imported outside Next.
+  // The child must run against the SAME tree this harness was loaded from.
+  // Hardcoding '/app' made it exec the image's own copy of scripts/ and
+  // node_modules even when the working tree is mounted elsewhere, so the gate
+  // died on MODULE_NOT_FOUND and A2 reported a harness bug as an app failure.
   const r = spawnSync('node_modules/.bin/tsx', ['--tsconfig', 'scripts/tsconfig.gate.json', 'scripts/preprod-api-e2e-gate.ts'], {
-    cwd: '/app',
+    cwd: process.cwd(),
     encoding: 'utf8',
     env: { ...process.env, NODE_ENV: 'production' },
     timeout: 150_000,
@@ -652,6 +656,18 @@ async function phaseH(s: RunState): Promise<void> {
   const usersN = await countOf('SELECT count(*)::int AS c FROM users');
   const tenantsN = await countOf('SELECT count(*)::int AS c FROM tenants');
   const superAdmins = await countOf('SELECT count(*)::int AS c FROM users WHERE is_super_admin');
+  // Delete exactly what this run wrote, then prove it is gone. Every address it
+  // signs up is `<role>.<nonce>@<domain>`, so the nonce scopes its own rows and
+  // nobody else's. Phase E only ever deleted the `brute` address, so the
+  // wrong-password probes in A and the rotation logins in F stayed behind — the
+  // table grew a little on every generation, which is what this check now catches.
+  // The absolute table size is NOT assertable: `cleanup_login_data` keeps 30 days
+  // of history and pre-prod is shared, so it is reported, never required.
+  const runEmails = `%${NONCE.toLowerCase()}@${EMAIL_DOMAIN}`;
+  await withSecurityContext(async (tx) =>
+    await tx.execute(sql`DELETE FROM login_attempts WHERE email LIKE ${runEmails}`));
+  const ownAttempts = await withSecurityContext(async (tx) =>
+    await tx.execute(sql`SELECT count(*)::int AS c FROM login_attempts WHERE email LIKE ${runEmails}`));
   const attemptsLeft = await countOf('SELECT count(*)::int AS c FROM login_attempts');
   console.log(`  per-workspace rows read: ${per.length}`);
   console.log(`  totals: ${JSON.stringify(totals)}`);
@@ -671,8 +687,9 @@ async function phaseH(s: RunState): Promise<void> {
     (totals.verifications ?? 0) >= 1, `email_verifications=${totals.verifications}`);
   check('H5  seeded contact survives as the isolation fixture',
     (totals.contacts ?? 0) >= 1, `contacts=${totals.contacts} id=${s.contactId}`);
-  check('H6  brute-force rows for this run were cleaned up',
-    attemptsLeft < 50, `login_attempts_left=${attemptsLeft}`);
+  check('H6  every login_attempts row this run created is gone',
+    Number(rowsOf(ownAttempts)[0]?.['c'] ?? -1) === 0,
+    `this_run_rows_left=${rowsOf(ownAttempts)[0]?.['c']} · table_total=${attemptsLeft} (30-day retention trigger)`);
 
   const blind = await rawRows('SELECT count(*)::int AS c FROM users');
   const blindContacts = await rawRows('SELECT count(*)::int AS c FROM contacts');
@@ -704,6 +721,37 @@ async function phaseH(s: RunState): Promise<void> {
 }
 
 // ── Runner ────────────────────────────────────────────────────────────────
+/**
+ * Limiter buckets are keyed `v1_rate:<action>:<ip>`, and the synthetic
+ * addresses above come off a per-process counter, so every run presents the
+ * same 198.51.100.10, .11, … Within a 60-minute window the fourth
+ * forgot-password call is therefore legitimately limited — gen-15's F4 FAIL was
+ * the limiter working correctly against a bucket an earlier run had filled.
+ * Clear only this harness's own TEST-NET-2 keys (a range reserved for
+ * documentation, which no real visitor can present), so a genuine user's
+ * bucket is never released and the assertion below tests the endpoint again.
+ */
+async function resetOwnRateBuckets(): Promise<void> {
+  const url = process.env.REDIS_URL;
+  if (!url) { note('rate buckets: REDIS_URL unset, limits may carry over from an earlier run'); return; }
+  const { default: Redis } = await import('ioredis');
+  const redis = new Redis(url, { maxRetriesPerRequest: 2, lazyConnect: true });
+  try {
+    let cleared = 0;
+    let cursor = '0';
+    do {
+      const [next, keys] = await redis.scan(cursor, 'MATCH', '*rate:v1_rate:*:198.51.100.*', 'COUNT', 200);
+      cursor = next;
+      if (keys.length > 0) cleared += await redis.del(...keys);
+    } while (cursor !== '0');
+    note(`rate buckets cleared for this harness's TEST-NET-2 addresses: ${cleared}`);
+  } catch (err) {
+    note(`rate buckets NOT cleared — limiter-sensitive checks may inherit an earlier run: ${err instanceof Error ? err.message : String(err)}`);
+  } finally {
+    redis.disconnect();
+  }
+}
+
 async function main(): Promise<void> {
   const s: RunState = {
     sa: { email: mkEmail('platform-admin'), client: new Client(mkIp()), userId: '', tenantId: '' },
@@ -717,6 +765,8 @@ async function main(): Promise<void> {
   console.log('║  NuCRM PRE-PROD LIVE API E2E — real committed writes');
   console.log(`║  run=${NONCE}  target=${BASE_URL}  x-setup-key=${SETUP_KEY ? 'loaded' : 'MISSING'}`);
   console.log('╚════════════════════════════════════════════════════════════════════════');
+
+  await resetOwnRateBuckets();
 
   const started = Date.now();
   const phases: [string, (st: RunState) => Promise<void>][] = [
