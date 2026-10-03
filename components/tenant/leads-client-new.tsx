@@ -24,6 +24,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import toast from 'react-hot-toast';
+import { useSubmitLock } from '@/hooks/use-submit-lock';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import { useDeleteWithUndo } from '@/lib/use-delete-with-undo';
 import LeadImportModal from '@/components/tenant/lead-import-modal';
@@ -120,7 +121,6 @@ function QuickAddModal({ companies, teamMembers, contacts, onClose, onSuccess }:
   const [services, setServices] = useState<ServiceOpt[]>([]);
 
   const [data,setData]=useState({first_name:'',last_name:'',email:'',phone:'',title:'',company_name:'',lead_source:'website',budget:'',timeline:'',authority_level:'unknown',assigned_to:'',tags:'',requested_product_id:'',requested_service_id:'',notes:'',expected_value:''});
-  const [saving,setSaving]=useState(false);
 
   // Load product & service catalogues for the "What They Want" picker
   useEffect(() => {
@@ -167,23 +167,22 @@ function QuickAddModal({ companies, teamMembers, contacts, onClose, onSuccess }:
     setShowContactDropdown(false);
   };
 
-  const handle=async(e:React.FormEvent)=>{
-    e.preventDefault();setSaving(true);
-    try{
-      const tagsArray = data.tags ? data.tags.split(',').map(t => t.trim()).filter(Boolean) : [];
-      const body: Record<string, unknown> = { ...data, tags: tagsArray };
-      if (selectedContactId) body.contact_id = selectedContactId;
-      // Map form fields to schema field names
-      if (data.requested_product_id) body.requested_product_id = data.requested_product_id;
-      if (data.requested_service_id) body.requested_service_id = data.requested_service_id;
-      if (data.notes) body.notes = data.notes;
-      if (data.expected_value) body.value = data.expected_value;
-      const res=await fetch('/api/tenant/leads',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-      const json=await res.json();
-      if(!res.ok){toast.error(json.error||'Failed');return;}
-      toast.success('Lead created!');onSuccess();onClose();
-    }finally{setSaving(false);}
-  };
+  // #2230 — in-flight lock + toast on failure (the old try/finally without catch swallowed network errors).
+  const { isPending: saving, run: submitLead } = useSubmitLock(async () => {
+    const tagsArray = data.tags ? data.tags.split(',').map(t => t.trim()).filter(Boolean) : [];
+    const body: Record<string, unknown> = { ...data, tags: tagsArray };
+    if (selectedContactId) body.contact_id = selectedContactId;
+    // Map form fields to schema field names
+    if (data.requested_product_id) body.requested_product_id = data.requested_product_id;
+    if (data.requested_service_id) body.requested_service_id = data.requested_service_id;
+    if (data.notes) body.notes = data.notes;
+    if (data.expected_value) body.value = data.expected_value;
+    const res=await fetch('/api/tenant/leads',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const json=await res.json().catch(() => ({}) as {error?:string});
+    if(!res.ok) throw new Error(json.error||'Failed to create lead');
+    toast.success('Lead created!');onSuccess();onClose();
+  });
+  const handle=(e:React.FormEvent)=>{e.preventDefault();void submitLead();};
   const inp="w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/50 transition-shadow";
   const lbl="block text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wide";
   return (
@@ -490,8 +489,9 @@ export default function LeadsClientNew({ permissions, teamMembers, companies, co
   };
 
   const updateLeadStatus=async(id:string,status:string)=>{
-    const res=await fetch(`/api/tenant/leads/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({lead_status:status})});
-    if(res.ok){toast.success('Status updated');load(offset,activeStatus,debouncedSearch);}else toast.error('Failed');
+    try{const res=await fetch(`/api/tenant/leads/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({lead_status:status})});
+    if(res.ok){toast.success('Status updated');load(offset,activeStatus,debouncedSearch);}else{const j=await res.json().catch(() => ({}) as {error?:string});toast.error(j.error||'Failed to update status');}
+    }catch(err){clientLogWarn('leads-client-new','Failed to update lead status',err);toast.error('Failed to update status');}
   };
 
   const deleteLead=async(id:string,name:string)=>{
