@@ -146,6 +146,14 @@ export const invoices = pgTable('invoices', {
   companyIdx: index('idx_invoices_company').on(table.companyId),
   statusIdx: index('idx_invoices_status').on(table.tenantId, table.status),
   dueDateIdx: index('idx_invoices_due_date').on(table.dueDate),
+  // #2228 / #2257: DB-level guard for the quote→invoice race. The convert
+  // route's SELECT-then-INSERT pre-check runs OUTSIDE the transaction, so two
+  // concurrent POSTs both passed and each inserted an invoice for the same
+  // quote; the existing 23505-retry loop could never fire because nothing was
+  // unique. Partial: only live rows count (soft-deleted invoices must not
+  // block a legitimate reconversion), and NULL quote_id (invoices not born
+  // from a quote) never collides — Postgres UNIQUE treats NULLs as distinct.
+  quoteUidIdx: uniqueIndex('uq_invoices_quote_id').on(table.quoteId).where(sql`${table.deletedAt} IS NULL`),
   activeIdx: utils.activeIdx(table),
 }));
 

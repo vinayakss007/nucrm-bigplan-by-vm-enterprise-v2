@@ -99,12 +99,20 @@ function getWebhookSecret(): string {
 async function stripeRequest<T = unknown>(
   endpoint: string,
   method: 'GET' | 'POST' | 'DELETE' = 'GET',
-  body?: Record<string, unknown>
+  body?: Record<string, unknown>,
+  // #2228: forwarded as the `Idempotency-Key` header. Only meaningful for
+  // mutating calls (POST/DELETE); Stripe replays the first response for a
+  // repeated key (24 h window) instead of applying the mutation twice.
+  opts?: { idempotencyKey?: string },
 ): Promise<T> {
   const headers: Record<string, string> = {
     'Authorization': `Bearer ${getStripeKey()}`,
     'Content-Type': 'application/x-www-form-urlencoded',
   };
+
+  if (opts?.idempotencyKey && method !== 'GET') {
+    headers['Idempotency-Key'] = opts.idempotencyKey;
+  }
 
   const options: RequestInit = { method, headers };
 
@@ -331,25 +339,32 @@ export async function getSubscription(subscriptionId: string): Promise<StripeSub
   return stripeRequest(`/subscriptions/${subscriptionId}`);
 }
 
-export async function cancelSubscription(subscriptionId: string, atPeriodEnd = true): Promise<StripeSubscription> {
+export async function cancelSubscription(subscriptionId: string, atPeriodEnd = true, idempotencyKey?: string): Promise<StripeSubscription> {
+  // #2228: idempotency key so a client retry of the cancel POST cannot
+  // replay as a second mutation (DELETE after a cached cancel is a no-op
+  // via Stripe's replay, but the point is the mutation is applied once).
   if (atPeriodEnd) {
     return stripeRequest(`/subscriptions/${subscriptionId}`, 'POST', {
       cancel_at_period_end: 'true',
-    });
+    }, { idempotencyKey });
   }
-  return stripeRequest(`/subscriptions/${subscriptionId}`, 'DELETE');
+  return stripeRequest(`/subscriptions/${subscriptionId}`, 'DELETE', undefined, { idempotencyKey });
 }
 
-export async function resumeSubscription(subscriptionId: string): Promise<StripeSubscription> {
+export async function resumeSubscription(subscriptionId: string, idempotencyKey?: string): Promise<StripeSubscription> {
   return stripeRequest(`/subscriptions/${subscriptionId}`, 'POST', {
     cancel_at_period_end: 'false',
-  });
+  }, { idempotencyKey });
 }
 
 export async function updateSubscription(subscriptionId: string, params: {
   priceId?: string;
   quantity?: number;
   metadata?: Record<string, string>;
+  // #2228: deterministic key derived from the billing INTENT (see
+  // lib/billing-idempotency.ts). Retries of the same intent replay Stripe's
+  // first response instead of double-applying proration.
+  idempotencyKey?: string;
 }): Promise<StripeSubscription> {
   const body: Record<string, unknown> = {};
 
@@ -366,7 +381,7 @@ export async function updateSubscription(subscriptionId: string, params: {
     body['metadata'] = params.metadata;
   }
 
-  return stripeRequest(`/subscriptions/${subscriptionId}`, 'POST', body);
+  return stripeRequest(`/subscriptions/${subscriptionId}`, 'POST', body, { idempotencyKey: params.idempotencyKey });
 }
 
 // ── Subscription Schedules (downgrades at period end) ────────────────────────

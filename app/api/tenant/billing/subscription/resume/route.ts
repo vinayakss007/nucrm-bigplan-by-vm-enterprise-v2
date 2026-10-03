@@ -10,6 +10,7 @@ import { db } from '@/drizzle/db';
 import { billingEvents, subscriptions } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
 import { isStripeConfigured, resumeSubscription } from '@/lib/stripe';
+import { deriveSubscriptionActionIdempotencyKey } from '@/lib/billing-idempotency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
@@ -57,7 +58,14 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       return NextResponse.json({ error: 'Subscription is not scheduled to cancel' }, { status: 400 });
     }
 
-    const stripeSub = await resumeSubscription(currentSub.stripeSubscriptionId);
+    // #2228: deterministic idempotency key — retrying this POST cannot
+    // replay as a second mutation against Stripe.
+    const idempotencyKey = deriveSubscriptionActionIdempotencyKey(
+      'resume',
+      ctx.tenantId,
+      currentSub.stripeSubscriptionId,
+    );
+    const stripeSub = await resumeSubscription(currentSub.stripeSubscriptionId, idempotencyKey);
 
     await db.transaction(async (tx) => {
       await tx.update(subscriptions).set({
