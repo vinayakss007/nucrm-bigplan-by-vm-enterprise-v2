@@ -454,8 +454,16 @@ async function phaseE(): Promise<void> {
   const persisted = await withSecurityContext(async (tx) =>
     await tx.execute(sql`SELECT count(*)::int AS c FROM login_attempts WHERE email = ${email}`));
   const seen = Number(rowsOf(persisted)[0]?.['c'] ?? 0);
+  // E1 passing while E2 sees nothing has two very different meanings, so tell
+  // them apart: rows that exist but are invisible to this context, versus a
+  // 429 that came from the in-memory/IP limiter and never touched login_attempts.
+  const blockRows = await withSecurityContext(async (tx) =>
+    await tx.execute(sql`SELECT identifier_type AS t, count(*)::int AS c FROM login_blocks WHERE identifier IN (${email}, ${client.ip}) GROUP BY identifier_type`));
+  const attemptsAllTime = await withSecurityContext(async (tx) =>
+    await tx.execute(sql`SELECT count(*)::int AS c FROM login_attempts`));
   check('E2  every failed attempt landed in login_attempts',
-    seen >= Math.min(attempts, 5), `rows=${seen} (attempts made=${attempts})`);
+    seen >= Math.min(attempts, 5),
+    `rows=${seen} (attempts made=${attempts}) · rows_all_time=${Number(rowsOf(attemptsAllTime)[0]?.['c'] ?? 0)} · blocks=[${rowsOf(blockRows).map((r) => `${r['t']}:${r['c']}`).join(' ')}]`);
 
   const otherIp = await call(new Client(mkIp()), '/api/auth/login', { body: { email, password: 'WrongPassword!1x' } });
   check('E3  blocked email stays blocked from a different IP',
