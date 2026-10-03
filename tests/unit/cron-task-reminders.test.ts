@@ -53,19 +53,26 @@ vi.mock('@/lib/cron/tenant-scope', () => ({
 
 // Records every condition node the route attaches to a SELECT (from / join /
 // where) so tenant filters can be asserted without a live connection.
-type SelectCall = { nodes: Array<{ kind: string; cond: unknown }>; rows: unknown[] };
+type SelectCall = { nodes: Array<{ kind: string; cond: unknown }>; rows: unknown[]; fromTable: string };
 const selectCalls: SelectCall[] = [];
 let dueTodayRows: unknown[] = [];
 let overdueRows: unknown[] = [];
+// Rows the #2224 dedupe marker lookup returns: notifications already created
+// TODAY for these (user, type, task) triples. Empty = first run of the day.
+let remindedRows: Array<{ userId: string; type: string; entityId: string }> = [];
 
 vi.mock('@/drizzle/db', () => ({
   db: {
     select: () => {
-      const call: SelectCall = { nodes: [], rows: [] };
+      const call: SelectCall = { nodes: [], rows: [], fromTable: '' };
       selectCalls.push(call);
       let sawLeftJoin = false;
       const chain: Record<string, unknown> = {};
-      chain.from = () => chain;
+      chain.from = (source: unknown) => {
+        const table = source as Record<symbol, unknown> | undefined;
+        call.fromTable = String(table?.[Symbol.for('drizzle:Name')] ?? '');
+        return chain;
+      };
       // Joins take (table, on-condition): capture the on-condition, not the table.
       chain.innerJoin = (_table: unknown, cond?: unknown) => {
         call.nodes.push({ kind: 'innerJoin', cond });
@@ -78,6 +85,11 @@ vi.mock('@/drizzle/db', () => ({
       };
       chain.where = (cond: unknown) => {
         call.nodes.push({ kind: 'where', cond });
+        if (call.fromTable === 'notifications') {
+          // The dedupe marker lookup — rows are already in their final shape.
+          call.rows = remindedRows;
+          return Promise.resolve(call.rows);
+        }
         // dueToday query leftJoins contacts; the overdue query does not.
         const base = sawLeftJoin ? dueTodayRows : overdueRows;
         // Rows come back scoped to whichever tenant the sweep is running for.
@@ -100,6 +112,14 @@ function makeRow(overrides: Record<string, unknown>) {
     dueDate: new Date(),
     ...overrides,
   };
+}
+
+/** Rendered bound values + column names of the #2224 dedupe-marker SELECT. */
+function markerLookupPredicates(): string {
+  return selectCalls
+    .filter((call) => call.fromTable === 'notifications')
+    .map((call) => renderValues(call.nodes.find((n) => n.kind === 'where')?.cond))
+    .join(' | ');
 }
 
 /** Column names a Drizzle condition actually references. */
@@ -138,6 +158,7 @@ describe('POST /api/cron/task-reminders', () => {
     sweepResult = { visited: 1, skipped: [], failed: [] };
     dueTodayRows = [makeRow({ id: 'due-1', contactFirst: 'Jane', contactLast: 'Doe' })];
     overdueRows = [makeRow({ id: 'over-1', dueDate: new Date(Date.now() - 1.5 * 86400000) })];
+    remindedRows = [];
     mockAcquireLock.mockReset();
     mockAcquireLock.mockResolvedValue({ acquired: true });
     mockSweepTenants.mockClear();
@@ -151,8 +172,9 @@ describe('POST /api/cron/task-reminders', () => {
     const res = await runCron();
 
     expect(mockSweepTenants).toHaveBeenCalledWith('cron/task-reminders', expect.any(Function));
-    // Two tenant-table SELECTs per swept tenant: due-today and overdue.
-    expect(selectCalls).toHaveLength(2);
+    // Three SELECTs per swept tenant: due-today, overdue, and the #2224
+    // dedupe-marker lookup over notifications.
+    expect(selectCalls).toHaveLength(3);
 
     // The response carries the sweep counters alongside the original fields.
     expect(res.body).toEqual({
@@ -164,6 +186,7 @@ describe('POST /api/cron/task-reminders', () => {
       overdue: 1,
       notified: 2,
       notify_failed: 0,
+      already_reminded: 0,
     });
   });
 
@@ -172,8 +195,8 @@ describe('POST /api/cron/task-reminders', () => {
     sweepResult = { visited: 2, skipped: [], failed: [] };
     await runCron();
 
-    // One due-today + one overdue SELECT per tenant.
-    expect(selectCalls).toHaveLength(4);
+    // Due-today + overdue + dedupe-marker SELECT per tenant.
+    expect(selectCalls).toHaveLength(6);
     for (const call of selectCalls) {
       const conds = conditionsForTenantFiltering(call);
       expect(conds.length).toBeGreaterThan(0);
@@ -219,6 +242,82 @@ describe('POST /api/cron/task-reminders', () => {
     expect(mockSendEmail).toHaveBeenCalledWith(expect.objectContaining({ to: 'rep@example.com' }));
   });
 
+  // #2224: the cron fires hourly; without a per-day marker every due/overdue
+  // task produced ~24 notifications and ~24 emails per day. The marker is the
+  // day's own notification row, checked once per tenant per run.
+  it('#2224 suppresses both notification and email when today\'s marker exists', async () => {
+    remindedRows = [
+      { userId: 'user-1', type: 'task_due', entityId: 'due-1' },
+      { userId: 'user-1', type: 'task_overdue', entityId: 'over-1' },
+    ];
+    const res = await runCron();
+
+    expect(mockCreateNotification).not.toHaveBeenCalled();
+    expect(mockSendEmail).not.toHaveBeenCalled();
+    expect(res.body).toMatchObject({
+      ok: true, notified: 0, notify_failed: 0, already_reminded: 2,
+    });
+  });
+
+  it('#2224 still emails when the overdue notification lands for the first time today', async () => {
+    // Only the task_due marker exists — the task_overdue reminder is fresh, so
+    // the notification is created and the 1-day-overdue email fires once.
+    remindedRows = [{ userId: 'user-1', type: 'task_due', entityId: 'due-1' }];
+    const res = await runCron();
+
+    expect(mockCreateNotification).toHaveBeenCalledTimes(1);
+    expect(mockCreateNotification).toHaveBeenCalledWith(expect.objectContaining({ type: 'task_overdue' }));
+    expect(mockSendEmail).toHaveBeenCalledTimes(1);
+    expect(res.body).toMatchObject({ ok: true, notified: 1, already_reminded: 1 });
+  });
+
+  it('#2224 sends no email when the overdue notification insert fails (no marker written)', async () => {
+    mockCreateNotification.mockResolvedValue(false);
+    overdueRows = [makeRow({ id: 'over-1', dueDate: new Date(Date.now() - 1.5 * 86400000) })];
+    const res = await runCron();
+
+    // The failed insert writes no marker, so the next hourly run retries —
+    // but this run must not email, or a persisting failure would re-email 24×.
+    expect(mockSendEmail).not.toHaveBeenCalled();
+    expect(res.body).toMatchObject({ ok: false, notified: 0, notify_failed: 2, already_reminded: 0 });
+  });
+
+  it('#2224 scopes the marker to the current UTC day — the next day reminds again', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2026-06-15T10:00:00.000Z'));
+      dueTodayRows = [makeRow({ id: 'due-1' })];
+      overdueRows = [];
+
+      // Run 1 (first of the day): no marker -> notification created, and the
+      // marker lookup binds today's UTC date.
+      let res = await runCron();
+      expect(res.body).toMatchObject({ ok: true, notified: 1, already_reminded: 0 });
+      expect(markerLookupPredicates()).toContain('2026-06-15');
+
+      // Run 2, same day: the run-1 notification IS the marker -> nothing fires.
+      selectCalls.length = 0;
+      remindedRows = [{ userId: 'user-1', type: 'task_due', entityId: 'due-1' }];
+      res = await runCron();
+      expect(res.body).toMatchObject({ ok: true, notified: 0, already_reminded: 1 });
+
+      // Next day: yesterday's marker falls outside the date predicate (the real
+      // DB returns nothing for the new day) and the bound date advanced, so the
+      // task is reminded exactly once again.
+      vi.setSystemTime(new Date('2026-06-16T10:00:00.000Z'));
+      selectCalls.length = 0;
+      remindedRows = [];
+      res = await runCron();
+      expect(res.body).toMatchObject({ ok: true, notified: 1, already_reminded: 0 });
+      expect(markerLookupPredicates()).toContain('2026-06-16');
+
+      // One notification per day per task across three hourly-style runs.
+      expect(mockCreateNotification).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('is not ok when a tenant failed, while still reporting what ran', async () => {
     sweepResult = { visited: 1, skipped: [], failed: [{ tenantId: OTHER_TENANT, error: 'boom' }] };
     const res = await runCron();
@@ -241,6 +340,7 @@ describe('POST /api/cron/task-reminders', () => {
       overdue: 0,
       notified: 0,
       notify_failed: 0,
+      already_reminded: 0,
     });
   });
 
