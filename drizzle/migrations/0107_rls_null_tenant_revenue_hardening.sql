@@ -1,4 +1,4 @@
--- 0106: close the NULL-tenant RLS gap on the five revenue tables (#2234).
+-- 0107: close the NULL-tenant RLS gap on the five revenue tables (#2234).
 --
 -- WHY
 -- ---
@@ -116,7 +116,7 @@ BEGIN
       INTO nulls;
     IF nulls > 0 THEN
       RAISE EXCEPTION
-        '0106 (#2234): % row(s) in % still have tenant_id IS NULL after backfill from %.% — these rows cannot be attributed to a tenant. Reassign them to the correct parent (or delete them deliberately), then re-run.',
+        '0107 (#2234): % row(s) in % still have tenant_id IS NULL after backfill from %.% — these rows cannot be attributed to a tenant. Reassign them to the correct parent (or delete them deliberately), then re-run.',
         nulls, spec.table_name, spec.table_name, spec.parent_col;
     END IF;
 
@@ -155,10 +155,10 @@ BEGIN
           'ALTER TABLE %I ADD CONSTRAINT %I FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE',
           spec.table_name, spec.table_name || '_tenant_id_fkey'
         );
-        RAISE NOTICE '0106: %: restored tenant_id FK to tenants', spec.table_name;
+        RAISE NOTICE '0107: %: restored tenant_id FK to tenants', spec.table_name;
       EXCEPTION
         WHEN duplicate_object THEN
-          RAISE NOTICE '0106: %: tenant_id FK already present under another definition', spec.table_name;
+          RAISE NOTICE '0107: %: tenant_id FK already present under another definition', spec.table_name;
       END;
     END IF;
 

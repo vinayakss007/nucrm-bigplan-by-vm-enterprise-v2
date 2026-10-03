@@ -15,6 +15,7 @@ import { db } from '@/drizzle/db';
 import { contacts, companies } from '@/drizzle/schema';
 import { eq, and, or, ilike, sql, desc, count } from 'drizzle-orm';
 import { requireAuth } from '@/lib/auth/require-auth';
+import { requireApiKeyScope } from '@/lib/auth/api-key';
 import { limiters } from '@/lib/rate-limit';
 import { handleError, ValidationError } from '@/lib/errors';
 import { devLogger } from '@/lib/dev-logger';
@@ -40,6 +41,10 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     // Authenticate and get tenant context
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+
+    // #2215: an `ak_` key must actually carry the contacts:read scope.
+    const scopeDenied = requireApiKeyScope(ctx, 'contacts:read');
+    if (scopeDenied) return scopeDenied;
     
     // Rate limiting
     const rateCheck = await limiters.contacts.check(`contacts:${ctx.tenantId}`);
@@ -134,6 +139,10 @@ export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+
+    // #2215: writes through an `ak_` key require the contacts:write scope.
+    const scopeDenied = requireApiKeyScope(ctx, 'contacts:write');
+    if (scopeDenied) return scopeDenied;
     
     // Rate limiting
     const rateCheck = await limiters.contacts.check(`contacts:${ctx.tenantId}`);

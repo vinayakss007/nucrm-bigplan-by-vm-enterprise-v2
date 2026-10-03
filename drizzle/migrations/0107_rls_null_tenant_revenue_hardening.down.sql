@@ -1,6 +1,6 @@
--- 0106 rollback (#2234).
+-- 0107 rollback (#2234).
 --
--- Restores the pre-0106 policy definitions verbatim: the 0039-era
+-- Restores the pre-0107 policy definitions verbatim: the 0039-era
 -- `tenant_id IS NULL OR tenant_id = current_setting(...)` FOR ALL policy with NO
 -- WITH CHECK on the five revenue tables. Restoring them is a rollback, not an
 -- endorsement — that shape is exactly the cross-tenant leak #2234 describes

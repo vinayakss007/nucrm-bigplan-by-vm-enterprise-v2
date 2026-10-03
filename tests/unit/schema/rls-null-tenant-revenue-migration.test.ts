@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 /**
- * #2234 — static guard for migration 0106 (NULL-tenant RLS hardening on the
+ * #2234 — static guard for migration 0107 (NULL-tenant RLS hardening on the
  * five revenue tables).
  *
  * The live behaviour (NULL-tenant rows visible to every tenant, INSERT/UPDATE
@@ -24,11 +24,11 @@ import { join } from 'node:path';
  */
 
 const MIGRATIONS_DIR = join(import.meta.dirname!, '../../../drizzle/migrations');
-const UP_FILE = join(MIGRATIONS_DIR, '0106_rls_null_tenant_revenue_hardening.sql');
-const DOWN_FILE = join(MIGRATIONS_DIR, '0106_rls_null_tenant_revenue_hardening.down.sql');
+const UP_FILE = join(MIGRATIONS_DIR, '0107_rls_null_tenant_revenue_hardening.sql');
+const DOWN_FILE = join(MIGRATIONS_DIR, '0107_rls_null_tenant_revenue_hardening.down.sql');
 const JOURNAL_FILE = join(MIGRATIONS_DIR, 'meta', '_journal.json');
 
-const TAG = '0106_rls_null_tenant_revenue_hardening';
+const TAG = '0107_rls_null_tenant_revenue_hardening';
 
 const TABLES = ['invoice_line_items', 'order_line_items', 'invoice_payments', 'quote_line_items', 'deal_stages'] as const;
 
@@ -117,7 +117,7 @@ describe(`migration ${TAG} (#2234)`, () => {
     expect(sql).toContain('CREATE INDEX IF NOT EXISTS');
   });
 
-  it('down file restores the pre-0106 (0039-era) policy shape for all five tables', () => {
+  it('down file restores the pre-0107 (0039-era) policy shape for all five tables', () => {
     for (const table of TABLES) {
       expect(downSql).toContain(`DROP POLICY IF EXISTS "tenant_isolation" ON "${table}";`);
       const create = downSql.slice(downSql.indexOf(`CREATE POLICY "tenant_isolation" ON "${table}"`));

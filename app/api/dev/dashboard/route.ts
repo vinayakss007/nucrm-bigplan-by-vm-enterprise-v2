@@ -38,7 +38,7 @@ async function requireSuperAdmin(req: NextRequest): Promise<{ userId: string; is
 
   // In development, verify super admin authentication
   try {
-    const { verifyToken } = await import('@/lib/auth/session');
+    const { getCurrentUserForToken } = await import('@/lib/auth/session');
 
     // Get token from cookie in the request
     const tokenCookie = req.cookies.get('nucrm_session')?.value;
@@ -46,8 +46,10 @@ async function requireSuperAdmin(req: NextRequest): Promise<{ userId: string; is
       return null;
     }
 
-    const payload = await verifyToken(tokenCookie);
-    if (!payload) {
+    // #2216: verifyToken alone keeps accepting revoked/logged-out JWTs until
+    // they expire; getCurrentUserForToken also requires a live sessions row.
+    const tokenUser = await getCurrentUserForToken(tokenCookie);
+    if (!tokenUser) {
       return null;
     }
 
@@ -58,7 +60,7 @@ async function requireSuperAdmin(req: NextRequest): Promise<{ userId: string; is
     })
     .from(users)
     .where(and(
-      eq(users.id, payload.userId),
+      eq(users.id, tokenUser.id),
       sql`deleted_at IS NULL`
     ))
     .limit(1);
@@ -67,7 +69,7 @@ async function requireSuperAdmin(req: NextRequest): Promise<{ userId: string; is
       return null;
     }
 
-    return { userId: payload.userId, isSuperAdmin: true };
+    return { userId: tokenUser.id, isSuperAdmin: true };
   } catch {
     return null;
   }

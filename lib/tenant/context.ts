@@ -5,7 +5,7 @@
  */
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
-import { verifyToken } from '@/lib/auth/session';
+import { getCurrentUserForToken } from '@/lib/auth/session';
 import { db } from '@/drizzle/db';
 import { tenants, users, plans, tenantMembers, roles } from '@/drizzle/schema';
 import { eq, and, or, sql, desc } from 'drizzle-orm';
@@ -86,7 +86,10 @@ async function requireTenantCtxInner(): Promise<TenantContext> {
     redirect('/setup');
   }
 
-  const payload = await verifyToken(token);
+  // #2216: verifyToken alone kept serving revoked/logged-out JWTs for the
+  // full 30-day lifetime — getCurrentUserForToken also requires a live
+  // sessions row.
+  const payload = await getCurrentUserForToken(token);
   if (!payload) redirect('/auth/login');
 
   // PP-026: turning a cookie into an identity is a PRE-AUTH READ, but every
@@ -101,7 +104,7 @@ async function requireTenantCtxInner(): Promise<TenantContext> {
   // admits self-scoped reads (own memberships + the roles of tenants you belong
   // to); app.current_tenant stays empty, so no other tenant's rows are
   // reachable from here.
-  const row = await withUserContext(payload.userId, (tx) => tx
+  const row = await withUserContext(payload.id, (tx) => tx
     .select({
       user_id: users.id,
       is_super_admin: users.isSuperAdmin,
@@ -128,7 +131,7 @@ async function requireTenantCtxInner(): Promise<TenantContext> {
     .innerJoin(tenants, eq(tenants.id, tenantMembers.tenantId))
     .leftJoin(plans, eq(plans.id, tenants.planId))
     .leftJoin(roles, eq(roles.id, tenantMembers.roleId))
-    .where(eq(users.id, payload.userId))
+    .where(eq(users.id, payload.id))
     .orderBy(desc(sql`${tenantMembers.tenantId} = ${users.lastTenantId}`), tenantMembers.createdAt)
     .limit(1)
     .then((res) => res[0]));
@@ -137,10 +140,10 @@ async function requireTenantCtxInner(): Promise<TenantContext> {
     // Same chicken-and-egg: the super-admin probe also needs the proven-user
     // context to see its own row. Without it a first-run super admin would be
     // sent to /auth/no-workspace instead of /superadmin/dashboard.
-    const user = await withUserContext(payload.userId, (tx) => tx
+    const user = await withUserContext(payload.id, (tx) => tx
       .select({ isSuperAdmin: users.isSuperAdmin })
       .from(users)
-      .where(eq(users.id, payload.userId))
+      .where(eq(users.id, payload.id))
       .limit(1)
       .then((res) => res[0]));
     if (user?.isSuperAdmin) redirect('/superadmin/dashboard');

@@ -734,7 +734,14 @@
       "idx": 103,
       "version": "7",
       "when": 1788782400020,
-      "tag": "0106_rls_null_tenant_revenue_hardening",
+      "tag": "0106_sequence_step_logs_allows_sending",
+      "breakpoints": true
+    },
+    {
+      "idx": 104,
+      "version": "7",
+      "when": 1788782400021,
+      "tag": "0107_rls_null_tenant_revenue_hardening",
       "breakpoints": true
     }
   ]

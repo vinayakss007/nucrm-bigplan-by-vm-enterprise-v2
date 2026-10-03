@@ -10,7 +10,7 @@ import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { cookies } from 'next/headers';
-import { verifyToken } from '@/lib/auth/session';
+import { getCurrentUserForToken } from '@/lib/auth/session';
 import { db } from '@/drizzle/db';
 import { invitations, tenants, users, roles, tenantMembers } from '@/drizzle/schema';
 import { eq, and, gt, isNull, sql } from 'drizzle-orm';
@@ -23,8 +23,10 @@ export async function POST(request: NextRequest) {
     const cookieStore = await cookies();
     const token = cookieStore.get('nucrm_session')?.value;
     if (!token) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
-    const payload = await verifyToken(token);
-    if (!payload) return NextResponse.json({ error: 'Invalid session' }, { status: 401 });
+    // #2216: require a live sessions row, not just a valid JWT signature.
+    const session = await getCurrentUserForToken(token);
+    if (!session) return NextResponse.json({ error: 'Invalid session' }, { status: 401 });
+    const userId = session.id;
 
     const limited = await checkRateLimit(request, { action: 'accept-invite', max: 10, windowMinutes: 15 });
     if (limited) return limited;
@@ -55,7 +57,7 @@ export async function POST(request: NextRequest) {
     if (!inv) return NextResponse.json({ error: 'Invitation not found or expired' }, { status: 404 });
 
     const user = await db.query.users.findFirst({
-      where: eq(users.id, payload.userId),
+      where: eq(users.id, userId),
       columns: { email: true }
     });
 
@@ -77,7 +79,7 @@ export async function POST(request: NextRequest) {
       await tx.insert(tenantMembers)
         .values({
           tenantId: inv.tenantId,
-          userId: payload.userId,
+          userId: userId,
           roleSlug: inv.roleSlug,
           roleId: role?.id || null,
           status: 'active',
@@ -103,7 +105,7 @@ export async function POST(request: NextRequest) {
       // Update user's last tenant
       await tx.update(users)
         .set({ lastTenantId: inv.tenantId })
-        .where(eq(users.id, payload.userId));
+        .where(eq(users.id, userId));
 
       // Update tenant user count
       const memberCount = await tx
