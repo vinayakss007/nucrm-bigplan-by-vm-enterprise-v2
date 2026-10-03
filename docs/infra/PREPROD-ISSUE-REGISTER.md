@@ -48,7 +48,7 @@ Severity: **S1** blocks go-live · **S2** broken feature or security weakness ·
 | PP-021 | S3  | Performance   | Sentry `NUCRM-1`: N+1 query on `GET /api/metrics` (12 events)                                                                         | 📌 INFO                  |
 | PP-022 | S3  | RLS           | `super_admin_audit_logs.tenant_id` is `text`, so the standard policy can't apply                                                      | 📌 INFO                  |
 | PP-028 | S1  | Performance   | Every DB statement costs a flat ~200 ms — statement _count_ is the real budget                                                        | 🔬 MEASURED              |
-| PP-029 | S2  | Deploy        | Our SIGTERM handler exits before Next.js drains; long cron jobs die mid-work                                                          | 🔬 DIAGNOSED             |
+| PP-029 | S2  | Deploy        | Our SIGTERM handler exited before Next.js drained; `pool.end()` hung the stop 35.93 s                                                 | ✅ FIXED + live-verified |
 | PP-030 | S1  | Scheduling    | `acquireLock` fail-closed is indistinguishable from a held lock → 20 cron jobs report `ok:true` and do nothing when Redis isn't ready | 🔬 MEASURED              |
 | PP-031 | S2  | RLS + query   | Super-admin Backups console returns nothing: swallowed `uuid = text` join, RLS-blind `backup_schedules` read and writes               | ✅ FIXED + live-verified |
 | PP-032 | S2  | Data model    | Panel reads `backup_records` (4 failed rows), nightly job writes `tenant_backup_records` (144 rows) — two tables, no shared view      | 🚨 OPEN (decision)       |
@@ -528,26 +528,58 @@ RESULT: bootstrap, login, brute-force and tenant isolation all behave as specifi
 - **Open.** Attribution needs provider-side visibility (UpCloud query logging / a co-located
   scratch DB to compare). Until then treat statement count as the budget.
 
-## PP-029 — 🚨 Our own SIGTERM handler exits before Next.js can drain _(S2 · Deploy)_
+## PP-029 — ✅ Our own SIGTERM handler exited before Next.js could drain _(S2 · Deploy) — FIXED + live-verified_
 
-- **Cause.** `instrumentation.ts:26` registers the shutdown handlers without
-  `exitProcess: false`, so `lib/db/graceful-shutdown.ts:100` calls `process.exit(0)` as soon as
-  `initiateShutdown()` resolves. That drain waits on `inFlightCount`, which only
-  `withApiRoute` increments (`lib/api/with-api-route.ts:109`/`:163`) — and 19 of 22 cron routes
-  are not wrapped, so the counter is normally 0 and the "drain" is Sentry flush (≤2 s) +
-  `pool.end()` and then exit, pre-empting Next.js's own `server.close()`.
-- **Correction.** The earlier note "Next.js kills PID 1 in ~100 ms" is **wrong**: `node` _is_
-  PID 1 (`/proc/1/exe` → `/usr/local/bin/node`, no children — the stock `node:26-alpine`
-  entrypoint `exec`s the server), StopSignal is the default SIGTERM, and no compose file sets
-  `stop_grace_period`, so Docker's default 10 s never binds because the process exits sooner.
-- **Consequence.** Long-running cron work dies mid-statement at every redeploy: `/api/cron/backup`
-  kills its `pg_dump` child (10-minute timeout) leaving a partial dump; `backup-verify` kills
-  `pg_restore`/`psql`; `process-sequences` and `scheduled-report-delivery` die mid-SMTP;
-  `recurring-invoice-generator` can half-commit. Streaming downloads are cut too, because the
-  wrapper's `finally` fires at handler _return_, not at stream end.
-- **Fix (not applied).** `exitProcess: false` at `instrumentation.ts:26`, plus
-  `stop_grace_period` on the `app` service for jobs that legitimately outrun 10 s, plus wrapping
-  the remaining cron routes. Live proof needs a container stop, so it is pending a deploy window.
+- **Cause.** `instrumentation.ts` registered the shutdown handlers with the defaults, so
+  `lib/db/graceful-shutdown.ts` called `process.exit(0)` as soon as `initiateShutdown()`
+  resolved, and called `pool.end()` on the way there. Next.js registers a handler for the same
+  signal (`next/dist/server/lib/start-server.js:389`) whose cleanup awaits `server.close()` and
+  then exits 143 (`:370`). Both listeners run for one signal, so ours pre-empted a drain that is
+  strictly better informed — it can see every open connection, including Server Component renders,
+  streamed responses and the unwrapped cron handlers (19 of 22 cron routes were unwrapped) that
+  `inFlightCount` cannot.
+- **Corrections, both of them ours.** The earlier note "Next.js kills PID 1 in ~100 ms" is
+  **wrong**: `node` _is_ PID 1 (`/proc/1/exe` → `/usr/local/bin/node`, no children — the stock
+  `node:26-alpine` entrypoint `exec`s the server) and StopSignal is the default SIGTERM. And the
+  "~2 s drain" estimate was **wrong too**: the measured stop before the fix took **35.93 s** and
+  exited **0**, because `pool.end()` has no timeout of its own — pg-pool waits for every
+  _checked-out_ client — and two connections had leaked (PP-028's flat ~200 ms per statement is
+  what makes a checkout outlive its request). No compose file set `stop_grace_period`, so
+  Docker's default 10 s never bound: the process was going to exit on its own, and the pool close
+  was the thing holding it open.
+- **Fix (applied, deployed).** `exitProcess: false` **and** `endPool: false` at the one
+  instrumentation call site, plus `stop_grace_period: 120s` on the `app` service. `endPool` is a
+  new option, defaulting to `true` so the polite close survives for any caller that owns its whole
+  process (today `worker.ts:667` and `realtime.ts:224` install their own handlers and never call
+  this module, so nothing depends on that default). It also skips the drain wait: with the exit
+  handed to Next.js, waiting on a counter this process provably cannot see is latency for no
+  safety.
+- **Verified live, with timestamps.** One wrapped request in flight (`GET
+/api/superadmin/monitoring`, 3 807 ms), SIGTERM at 16:03:30.25:
+  `[GracefulShutdown] Shutdown complete.` at **16:03:30.32** (38 ms after the signal — we no
+  longer wait or close anything), the process lived until **16:03:33.06** and exited **143**, and
+  the client received **HTTP 200 with its 14 rows**. That 2.7 s gap is `server.close()` finishing
+  the request; before the fix it was cut off. Post-fix stops measure **1.70 s / 2.19 s / 2.94 s**
+  and `ExitCode=143`; `docker inspect` confirms `StopTimeout=120` on the live container.
+- **Still open (and now harmless).** Every run logs `0 in-flight request(s) counted here`, even
+  with 3 sweeps actively inside 1.8–3.6 s requests. Only one server chunk in the image carries the
+  `graceful-shutdown` text (`chunks/[root-of-the-server]__1uu948p._.js`), so module duplication is
+  not an established explanation and the mechanism is **unresolved**. It no longer matters for the
+  fix — nothing in the signal path depends on the counter any more — but it does mean
+  `isShuttingDown()` may not flip for `/api/system/ready` during a drain, and that a future
+  `globalThis`/`Symbol.for` share would need its own proof. `guard:running-config` is blind to
+  `stop_grace_period` (8 identical / 0 drifted after the change), so the compose value is guarded
+  by nothing.
+- **Regression gate.** `tests/unit/graceful-shutdown-next-drain.test.ts` (10 cases) pins the four
+  properties the status codes cannot show: `pool.end()` is skipped when the drain times out, the
+  Next-owned path never ends the pool and never waits on the counter, Sentry still flushes, and
+  `process.exit` is not called. The call-site case asserts on the extracted
+  `registerShutdownHandlers({...})` argument object, not on a whole-file substring: the first
+  version matched `endPool:\s*false` anywhere and **passed with both flags flipped to `true`**,
+  because the prose comment above the call names them. That mutation was run again after narrowing
+  and now fails as intended.
+- **Not done.** Wrapping the remaining cron routes is still owed; the drain now leaves them alone
+  instead of killing their pool, but a job that outruns `stop_grace_period` still dies at SIGKILL.
 
 ## PP-030 — 🚨 A Redis-less `acquireLock` looks exactly like a held lock, so 20 cron jobs report `ok: true` and do nothing _(S1 · Scheduling)_
 
