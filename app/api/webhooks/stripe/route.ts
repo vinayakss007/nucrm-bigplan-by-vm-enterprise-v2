@@ -8,6 +8,7 @@ import { verifyWebhookSignature, isStripeConfigured, StripeError, type StripeWeb
 import { db } from '@/drizzle/db';
 import { tenants } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
+import { syncSubscriptionRow, markSubscriptionCanceled } from '@/lib/stripe-subscription-sync';
 import { apiError } from '@/lib/api-error';
 import { sendAdminTelegram } from '@/lib/telegram-admin';
 import { acquireLock, releaseLock } from '@/lib/cache/index';
@@ -30,6 +31,8 @@ interface StripeSubscriptionLike {
   metadata?: StripeMetadata;
   items?: { data?: Array<{ price?: { id?: string } } | null> } | null;
   cancel_at_period_end?: boolean;
+  current_period_start?: number | null;
+  current_period_end?: number | null;
 }
 
 interface StripeSessionLike {
@@ -260,6 +263,11 @@ async function handleSubscriptionUpdated(subscription: StripeSubscriptionLike) {
     await db.update(tenants)
       .set({ planId: planId || undefined, updatedAt: new Date() })
       .where(eq(tenants.id, tenantId));
+    // #2228: still reconcile the subscriptions ROW from Stripe truth (the
+    // tenant-level terminal guard above is about ACCESS, not about the
+    // billing record), otherwise the row stays on the pre-upgrade plan
+    // forever when the upgrade route's local tx failed after charging.
+    await syncSubscriptionRow(subscription, planId, nuCrmStatus);
     return;
   }
 
@@ -270,6 +278,12 @@ async function handleSubscriptionUpdated(subscription: StripeSubscriptionLike) {
       updatedAt: new Date(),
     })
     .where(eq(tenants.id, tenantId));
+
+  // #2228: the subscriptions row used to be touched ONLY by app routes — the
+  // webhook synced tenants.status/planId but never subscriptions, so any
+  // Stripe-first/DB-second drift in the upgrade flow was permanent. Re-sync
+  // it from the event payload (Stripe is the source of truth here).
+  await syncSubscriptionRow(subscription, planId, nuCrmStatus);
 
   console.log(`[Stripe] Tenant ${tenantId} subscription updated: stripeStatus=${status} -> status=${nuCrmStatus}, plan=${planId}`);
 }
@@ -294,6 +308,10 @@ async function handleSubscriptionDeleted(subscription: StripeSubscriptionLike) {
       updatedAt: new Date(),
     })
     .where(eq(tenants.id, tenantId));
+
+  // #2228: close the loop — the subscriptions row must reach 'canceled' too,
+  // otherwise the upgrade/cancel routes keep operating on a stale row.
+  await markSubscriptionCanceled(subscription.id);
 
   console.log(`[Stripe] Tenant ${tenantId} subscription cancelled — downgraded to free`);
 }

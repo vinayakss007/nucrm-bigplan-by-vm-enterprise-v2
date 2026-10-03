@@ -743,6 +743,13 @@
       "when": 1788782400021,
       "tag": "0107_rls_null_tenant_revenue_hardening",
       "breakpoints": true
+    },
+    {
+      "idx": 105,
+      "version": "7",
+      "when": 1788782400022,
+      "tag": "0108_invoices_quote_id_unique",
+      "breakpoints": true
     }
   ]
 }

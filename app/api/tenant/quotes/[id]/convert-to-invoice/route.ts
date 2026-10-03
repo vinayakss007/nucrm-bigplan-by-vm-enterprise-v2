@@ -21,6 +21,25 @@ import { logAudit } from '@/lib/audit';
 import { readJsonBody } from '@/lib/api/validate';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
+/**
+ * #2228: a 23505 raised by the partial unique index uq_invoices_quote_id
+ * means someone else converted this quote first — it is NOT the generic
+ * invoice-number collision the retry loop exists for. Checks the constraint
+ * name on the error and its cause (node-postgres errors surface the raw
+ * driver object via `cause` under some drizzle versions).
+ */
+function isQuoteUniqueViolation(err: unknown): boolean {
+  const candidates = [err, (err as { cause?: unknown })?.cause];
+  return candidates.some((c) => {
+    if (!c) return false;
+    const e = c as { code?: string; constraint?: string; message?: string };
+    const codeOk = e.code === '23505' || String(e.message ?? '').includes('23505');
+    const constraintOk = e.constraint === 'uq_invoices_quote_id'
+      || String(e.message ?? '').includes('uq_invoices_quote_id');
+    return codeOk && constraintOk;
+  });
+}
+
 export const POST = withApiRoute(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
     const ctx = await requireAuth(req);
@@ -150,6 +169,25 @@ export const POST = withApiRoute(async (req: NextRequest, { params }: { params: 
         });
         break; // success
       } catch (err: unknown) {
+        // #2228 / #2257: the partial unique index uq_invoices_quote_id
+        // (migration 0108) is now the arbiter for concurrent converts of the
+        // same quote — the pre-check above only short-circuits the common
+        // case and cannot win races. The loser of the race lands here with
+        // 23505 on THAT constraint (not the invoice-number unique, which the
+        // FOR UPDATE lock + retry loop handle): do NOT retry (every retry
+        // violates again) and do NOT surface a 500 — answer the same 409 +
+        // winner invoice id the pre-check would have given.
+        if (isQuoteUniqueViolation(err)) {
+          const raced = await db.query.invoices.findFirst({
+            where: and(eq(invoices.quoteId, id), isNull(invoices.deletedAt)),
+          });
+          if (raced) {
+            return NextResponse.json({ error: 'Quote already converted to invoice', invoiceId: raced.id }, { status: 409 });
+          }
+          // Index violated but no live row visible (e.g. winner was
+          // soft-deleted concurrently): still cleaner than a 500.
+          return NextResponse.json({ error: 'Quote already converted to invoice' }, { status: 409 });
+        }
         const isUniqueViolation = err instanceof Error && ((err as { code?: string }).code === '23505' || err.message.includes('unique'));
         if (isUniqueViolation && attempt < MAX_RETRIES - 1) continue;
         throw err;
