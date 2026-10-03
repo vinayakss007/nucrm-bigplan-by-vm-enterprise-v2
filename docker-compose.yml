@@ -317,8 +317,9 @@ services:
     container_name: nucrm-prometheus
     profiles: ["monitoring"]
     # prometheus.yml references a bearer-token credentials_file for the app
-    # scrape. Write it from the env (empty in dev is fine — dev /api/metrics does
-    # not require the secret) before launching Prometheus.
+    # scrape. Write it from the env before launching Prometheus. #2221:
+    # /api/metrics now fails CLOSED in EVERY environment when METRICS_SECRET
+    # is unset — leave it empty here and the scrape gets 503 by design.
     entrypoint:
       - /bin/sh
       - -c

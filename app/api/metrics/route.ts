@@ -7,12 +7,21 @@ import { NextRequest } from 'next/server';
 import { db } from '@/drizzle/db';
 import { sql } from 'drizzle-orm';
 import { exportPrometheusMetrics as exportAppMetrics } from '@/lib/metrics';
+import { createHash, timingSafeEqual } from 'crypto';
 import IORedis from 'ioredis';
 
 export const dynamic = 'force-dynamic';
 
-const METRICS_SECRET = process.env['METRICS_SECRET'] || '';
 const REDIS_URL = process.env['REDIS_URL'] || 'redis://localhost:6379';
+
+// #2221: constant-time comparison — `!==` leaks the secret prefix via timing
+// and both operands are hashed to fixed length first so timingSafeEqual
+// cannot throw (or early-return) on a length mismatch.
+function secretsEqual(provided: string, expected: string): boolean {
+  const a = createHash('sha256').update(provided).digest();
+  const b = createHash('sha256').update(expected).digest();
+  return timingSafeEqual(a, b);
+}
 
 function push(metrics: string[], name: string, help: string, type: string, value: number, labels = '') {
   // One non-finite sample line (NaN/Infinity) makes Prometheus reject the
@@ -43,21 +52,24 @@ function withTimeout<T>(p: Promise<T>, label: string): Promise<T> {
 }
 
 export async function GET(request: NextRequest) {
-  // Fail closed: in production, metrics require an explicit METRICS_SECRET.
-  if (!METRICS_SECRET && process.env['NODE_ENV'] === 'production') {
+  // #2221: fail CLOSED everywhere, not just production — a staging/dev deploy
+  // with NODE_ENV != 'production' used to expose full DB/pool/tenant-count
+  // metrics world-readable. No METRICS_SECRET configured → no metrics, in any
+  // environment. Read per-request (module-load capture made the gate
+  // untestable and silently froze whatever value the boot process had).
+  const metricsSecret = process.env['METRICS_SECRET'] || '';
+  if (!metricsSecret) {
     return new Response('# metrics disabled: METRICS_SECRET not configured\n', {
       status: 503,
       headers: { 'Content-Type': 'text/plain' },
     });
   }
 
-  if (METRICS_SECRET) {
-    const auth = request.headers.get('authorization');
-    const headerSecret = request.headers.get('x-metrics-secret');
-    const provided = auth?.startsWith('Bearer ') ? auth.slice(7) : headerSecret;
-    if (provided !== METRICS_SECRET) {
-      return new Response('# Unauthorized\n', { status: 401, headers: { 'Content-Type': 'text/plain' } });
-    }
+  const auth = request.headers.get('authorization');
+  const headerSecret = request.headers.get('x-metrics-secret');
+  const provided = auth?.startsWith('Bearer ') ? auth.slice(7) : headerSecret;
+  if (!provided || !secretsEqual(provided, metricsSecret)) {
+    return new Response('# Unauthorized\n', { status: 401, headers: { 'Content-Type': 'text/plain' } });
   }
 
   const metrics: string[] = [];

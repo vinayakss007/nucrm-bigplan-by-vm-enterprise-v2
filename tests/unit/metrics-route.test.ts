@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // #2118: during pool saturation /api/metrics must NOT all-or-nothing 500 —
 // the DB gauges in particular have to keep moving (or explicitly report the
@@ -71,19 +71,26 @@ vi.mock('@/drizzle/db', () => ({
 import { NextRequest } from 'next/server';
 import { GET } from '@/app/api/metrics/route';
 
-function metricsReq() {
-  // CI jobs export METRICS_SECRET for the whole run (ci.yml), and the route
-  // captures it at module load — so the scrape must present the token there.
-  const secret = process.env.METRICS_SECRET;
+// #2221: the route now reads METRICS_SECRET per request and FAILS CLOSED when
+// it is unset — in EVERY environment, not only production. Tests pin the env
+// explicitly instead of relying on whatever CI happened to export.
+const TEST_METRICS_SECRET = 'metrics-secret-for-tests';
+
+function metricsReq(headers?: Record<string, string>) {
   return new NextRequest('http://localhost/api/metrics', {
-    headers: secret ? { authorization: `Bearer ${secret}` } : {},
+    headers: headers ?? { authorization: `Bearer ${TEST_METRICS_SECRET}` },
   });
 }
 
 describe('GET /api/metrics section isolation (#2118)', () => {
   beforeEach(() => {
+    vi.stubEnv('METRICS_SECRET', TEST_METRICS_SECRET);
     redisMock.heartbeat = null;
     mockExecute.mockReset();
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
   });
 
   it('emits live DB gauges and fresh counts when everything answers', async () => {
@@ -156,5 +163,55 @@ describe('GET /api/metrics section isolation (#2118)', () => {
     expect(body).not.toContain('nucrm_cache_up 0');
     expect(body.match(/^nucrm_cache_up /m)).toHaveLength(1);
     expect(body).not.toContain('nucrm_worker_uptime_seconds');
+  });
+});
+
+// #2221: the old gate (1) compared the secret with `!==` (non-constant-time),
+// (2) only checked when METRICS_SECRET was set, and (3) fail-closed ONLY in
+// production — a staging deploy with NODE_ENV != 'production' and no secret
+// served DB/pool/tenant-count metrics world-readable. Now: always-on gate,
+// constant-time compare, module-load capture removed.
+describe('GET /api/metrics auth gate (#2221 fail closed + constant-time)', () => {
+  beforeEach(() => {
+    mockExecute.mockReset();
+    healthyDb('1');
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('serves the scrape to the correct bearer secret', async () => {
+    vi.stubEnv('METRICS_SECRET', TEST_METRICS_SECRET);
+    const res = await GET(metricsReq());
+    expect(res.status).toBe(200);
+  });
+
+  it('serves the scrape to the correct x-metrics-secret header', async () => {
+    vi.stubEnv('METRICS_SECRET', TEST_METRICS_SECRET);
+    const res = await GET(metricsReq({ 'x-metrics-secret': TEST_METRICS_SECRET }));
+    expect(res.status).toBe(200);
+  });
+
+  it('rejects a wrong secret with 401 and collects nothing', async () => {
+    vi.stubEnv('METRICS_SECRET', TEST_METRICS_SECRET);
+    const res = await GET(metricsReq({ authorization: 'Bearer definitely-not-the-secret' }));
+    expect(res.status).toBe(401);
+    expect(mockExecute).not.toHaveBeenCalled();
+  });
+
+  it('rejects a missing credential with 401 when a secret is configured', async () => {
+    vi.stubEnv('METRICS_SECRET', TEST_METRICS_SECRET);
+    const res = await GET(metricsReq({}));
+    expect(res.status).toBe(401);
+    expect(mockExecute).not.toHaveBeenCalled();
+  });
+
+  it('fails closed with 503 when METRICS_SECRET is unset — even outside production', async () => {
+    vi.stubEnv('METRICS_SECRET', '');
+    vi.stubEnv('NODE_ENV', 'development');
+    const res = await GET(metricsReq());
+    expect(res.status).toBe(503);
+    expect(mockExecute).not.toHaveBeenCalled();
   });
 });
