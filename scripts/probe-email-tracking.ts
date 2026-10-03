@@ -29,8 +29,9 @@
  *      0105 applied; this check is the live gate on that migration).
  *   3. GET /api/track/open?t=<id> increments open_count, stamps opened_at and,
  *      when the row names a contact, writes the one "Email opened" activity.
- *   4. GET /api/track/click?t=<id>&url=<wrapped> redirects to the wrapped URL
- *      (not '/'), increments click_count and stamps clicked_at.
+ *   4. GET /api/track/click?t=<id>&l=<link> redirects to the destination the
+ *      sender registered on the row (#2218) — a hostile &url= is ignored —
+ *      increments click_count and stamps clicked_at. A forged id 404s.
  *   5. Teardown leaves nothing behind.
  *
  * SAFETY: writes only into a SIM tenant (name LIKE 'SIM%'), the rows are deleted
@@ -48,10 +49,11 @@ import { pgSslConfig } from '../lib/db/ssl-config';
 const SUBJECT = 'probe-email-tracking — not a real message';
 const RECIPIENT = 'probe-email-tracking@example.test';
 const CONTAINER = 'nucrm-app';
-/** The destination a sender would wrap. Pre-encoded exactly as a mail client
- *  would send it, because the route decodeURIComponent()s the param. */
-const WRAPPED = 'https%3A%2F%2Fexample.com%2Fprobe-click';
+/** The destination the sender registered on the row (#2218: the click route
+ *  redirects to THIS stored value, never to a `?url=` the caller types). */
+const CLICK_LINK_ID = 'probe';
 const WRAPPED_EXPECT = 'https://example.com/probe-click';
+const CLICK_METADATA = JSON.stringify({ clickLinks: { [CLICK_LINK_ID]: WRAPPED_EXPECT } });
 
 const results: { name: string; ok: boolean; detail: string }[] = [];
 function check(name: string, ok: boolean, detail = ''): boolean {
@@ -146,9 +148,9 @@ async function main(): Promise<void> {
   // ── Seed a tracking row exactly as the sender would ────────────────────────
   const seeded = await inContext(pool, { tenantId: fix.tenant_id, userId: fix.owner_id }, (query) =>
     query(
-      `INSERT INTO email_tracking (id, tenant_id, contact_id, recipient, subject, sent_at, open_count, click_count)
-       VALUES ($1, $2, $3, $4, $5, now(), 0, 0) RETURNING id`,
-      [probeId, fix.tenant_id, fix.contact_id, RECIPIENT, SUBJECT],
+      `INSERT INTO email_tracking (id, tenant_id, contact_id, recipient, subject, sent_at, open_count, click_count, metadata)
+       VALUES ($1, $2, $3, $4, $5, now(), 0, 0, $6::jsonb) RETURNING id`,
+      [probeId, fix.tenant_id, fix.contact_id, RECIPIENT, SUBJECT, CLICK_METADATA],
     )
   );
   check('seeded an email_tracking row through the tenant context a sender uses', seeded.rowCount === 1, probeId);
@@ -227,17 +229,35 @@ async function main(): Promise<void> {
     }
 
     // ── 4. The live click ───────────────────────────────────────────────────
+    // Deliberately carries a hostile `?url=` too: #2218 was exactly this — a
+    // real token plus an attacker-typed destination. The route must answer with
+    // the URL the SENDER registered on the row and ignore the parameter.
     try {
-      const out = fetchInContainer(`/api/track/click?t=${probeId}&url=${WRAPPED}`, 'location');
+      const phish = encodeURIComponent('https://phish.example.test/steal');
+      const out = fetchInContainer(
+        `/api/track/click?t=${probeId}&l=${CLICK_LINK_ID}&url=${phish}`,
+        'location',
+      );
       const [, location] = out.split(' ');
-      console.log(`         GET /api/track/click?t=…&url=… → ${out}`);
+      console.log(`         GET /api/track/click?t=…&l=…&url=<hostile> → ${out}`);
       check(
-        'a real tracking id makes the click redirect to the wrapped URL, not /',
+        'a real tracking id redirects to the destination registered on the row, not to ?url= and not to /',
         location === WRAPPED_EXPECT,
         `location=${location ?? 'none'}`,
       );
     } catch (err) {
       check('the running container answered the click request', false, (err as Error).message.split('\n')[0]);
+    }
+
+    // …and a token nobody mailed must not redirect at all (#2218: 404, no oracle).
+    try {
+      const forged = randomUUID();
+      const out = fetchInContainer(`/api/track/click?t=${forged}&url=${encodeURIComponent('https://phish.example.test/')}`, 'location');
+      const [status] = out.split(' ');
+      console.log(`         GET /api/track/click?t=<forged>&url=… → ${out}`);
+      check('a forged tracking id is refused with 404 instead of a redirect', status === '404', `status=${status ?? 'none'}`);
+    } catch (err) {
+      check('the running container answered the forged click request', false, (err as Error).message.split('\n')[0]);
     }
     await new Promise((r) => setTimeout(r, 1_500));
 
