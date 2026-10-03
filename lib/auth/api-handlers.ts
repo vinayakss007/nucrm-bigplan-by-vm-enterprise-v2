@@ -21,6 +21,7 @@ import { installDefaultModules } from '@/lib/modules/auto-install';
 import { withSecurityContext, withTenantContext, withUserContext, withAuthLookupContext, setTenantContext } from '@/lib/db/rls';
 import { isBlocked, recordFailedAttempt, recordSuccessfulLogin } from '@/lib/security/brute-force';
 import { getClientIp } from '@/lib/client-ip';
+import { checkLoginIpAllowed } from '@/lib/ip-whitelist';
 import { validateBody, readJsonBody, InvalidJsonBodyError } from '@/lib/api/validate';
 import { loginSchema, signupSchema } from '@/lib/api/schemas';
 import { redactEmail } from '@/lib/logger/pii';
@@ -128,6 +129,22 @@ export async function POST_login(request: NextRequest) {
       await recordFailedAttempt(email, ip, userAgent, 'Invalid credentials');
       logger.warn('Login failed', { email, ip });
       return loginRespond(request, isForm, { error:'Invalid email or password' }, 401);
+    }
+
+    // #15: the settings page wrote this list and reported success, but nothing
+    // ever read it — a tenant believed it had IP-restricted sign-in while any
+    // address could authenticate. Checked here, at sign-in, before a session
+    // exists; an existing session is deliberately not cut mid-work.
+    if (user.lastTenantId) {
+      const gate = await checkLoginIpAllowed(user.lastTenantId, user.id, ip);
+      if (!gate.allowed) {
+        await recordFailedAttempt(email, ip, userAgent, 'IP not in tenant allow list');
+        logger.warn('Login denied by IP allow list', { email, ip, tenantId: user.lastTenantId });
+        return loginRespond(request, isForm, {
+          error: "Your IP address isn't on this workspace's allow list. Contact your administrator.",
+          code: 'ERR_IP_NOT_ALLOWED',
+        }, 403);
+      }
     }
 
     // Record successful login
