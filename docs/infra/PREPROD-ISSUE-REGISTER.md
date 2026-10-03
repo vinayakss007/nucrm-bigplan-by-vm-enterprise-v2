@@ -684,6 +684,12 @@ RESULT: bootstrap, login, brute-force and tenant isolation all behave as specifi
   text side (`tenants.id::text = metadata->>'tenant_id'`) so a malformed value stays a non-match
   instead of becoming a `22P02`. This is why the empty-list measurement in PP-031 did not move
   after the security context was added.
+- **Regression gate:** `tests/unit/superadmin-backups-rls-context.test.ts` (15 cases) pins the two
+  properties a status code cannot show — the context is set on every branch that needs it, and is
+  **never** set for a non-super-admin. The `?list=recent` join case renders the `ON` clause through
+  the real `PgDialect`, so it asserts on the SQL that reaches Postgres rather than on a mock's
+  shape: reverting the `::text` cast fails it with `"tenants"."id" = …metadata->>'tenant_id'`
+  printed verbatim. That mutation check was run, not assumed.
 - **PP-032 — see its own section below.**
 
 ## PP-032 — 🚨 The Backups panel and the nightly backup job use two different tables _(S2 · data model)_
