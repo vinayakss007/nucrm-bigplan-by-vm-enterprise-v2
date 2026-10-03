@@ -187,8 +187,17 @@ export function withApiRoute<C = unknown>(
  * callback's return value and propagates errors (including Next.js
  * redirect()/notFound() control-flow throws).
  */
-export function withTenantScope<T>(fn: () => Promise<T>): Promise<T> {
-  // PP-027: same carrier scope as withApiRoute, for Server Components that
-  // run `db.transaction()` after requireTenantCtx() returns.
-  return runWithTenantCarrier(() => withPinnedConnection(fn));
+export async function withTenantScope<T>(fn: () => Promise<T>): Promise<T> {
+  // PP-029: count the render as in-flight work. The shutdown drain only knew
+  // about `withApiRoute` handlers, so a page that was still holding a DB
+  // connection looked like an idle process and the pool closed underneath it.
+  // try/finally because redirect() and notFound() throw on purpose.
+  trackRequestStart();
+  try {
+    // PP-027: same carrier scope as withApiRoute, for Server Components that
+    // run `db.transaction()` after requireTenantCtx() returns.
+    return await runWithTenantCarrier(() => withPinnedConnection(fn));
+  } finally {
+    trackRequestEnd();
+  }
 }
