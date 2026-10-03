@@ -20,6 +20,7 @@
  *   isolation  POST /api/tenant/contacts        GET  /api/tenant/contacts/[id]
  *   lockout    bad passwords -> 429 + login_attempts/blocks
  *   password   POST /api/user/password          forgot -> reset -> login
+ *   ip-allowlist PUT/GET/DELETE /api/tenant/security/ip-whitelist -> sign-in 403/200
  *
  * Requests never leave the process: `next/server`'s NextRequest is constructed
  * per call and the Set-Cookie headers are replayed by hand, so this validates
@@ -720,6 +721,118 @@ async function phaseH(s: RunState): Promise<void> {
   try { chmodSync('/tmp/nucrm-e2e-credentials.txt', 0o600); } catch { /* best effort */ }
 }
 
+// ── Phase J — tenant IP allow list actually gates sign-in (#15) ───────────
+/**
+ * The settings page has always accepted an IP allow list and answered
+ * `{ok:true}`, but nothing read it back, so a tenant could believe it had
+ * restricted sign-in while any address on the internet could authenticate.
+ * This phase drives the real customer-settings endpoints — never a direct row
+ * write — and then proves the login route is the one that refuses:
+ *
+ *   no list          -> sign-in allowed            (empty list = unrestricted)
+ *   list without me  -> 403 ERR_IP_NOT_ALLOWED     (the row is enforced)
+ *   list with me     -> sign-in allowed            (and the entry is accurate)
+ *
+ * The address asserted on is read back out of `login_attempts`, i.e. the IP the
+ * *server* attributed to the request, not the one this harness claimed in
+ * `x-forwarded-for`. TRUST_PROXY decides whether those two agree, and the test
+ * must not depend on that.
+ *
+ * Scope note: this reaches the app directly, so it proves the gate evaluates the
+ * same IP the brute-force limiter and the audit row already use. What a real
+ * visitor presents is nginx's job (`$remote_addr` since #2116) and is verified
+ * there, not here.
+ */
+async function phaseJ(s: RunState): Promise<void> {
+  phase('J · Tenant IP allow list enforced at sign-in');
+  if (!s.a.tenantId || !s.a.userId) {
+    skip('J1-J6  IP allow list', 'no workspace-A ids captured — nothing to restrict');
+    return;
+  }
+
+  // TEST-NET-3 (203.0.113.0/24) is reserved for documentation, so this entry can
+  // never accidentally match a real client of the harness.
+  const NOT_MY_IP = '203.0.113.200';
+  const admin = new Client(mkIp());
+  const probe = new Client(mkIp());
+  let authed = admin;
+  const body = { email: s.a.email, password: RESET_PASSWORD };
+
+  const boot = await call(admin, '/api/auth/login', { body });
+  check('J0  sign-in is unrestricted while no list exists',
+    boot.status === 200, `HTTP ${boot.status} · ${boot.text.slice(0, 120)}`);
+  if (boot.status !== 200) return;
+
+  const runEmails = `%${NONCE.toLowerCase()}@${EMAIL_DOMAIN}`;
+  // Login issues exactly one session per user (the old rows are deleted first),
+  // so whichever client last signed in is the only one that can still reach the
+  // settings API. That matters here: the list can only be removed by a session
+  // that is already on it, since re-authenticating from a fresh harness IP is
+  // now precisely what the gate refuses.
+  try {
+    const saved = await call(admin, '/api/tenant/security/ip-whitelist', {
+      method: 'PUT', withCsrf: true, body: { ips: [NOT_MY_IP], enabled: true },
+    });
+    check('J1  workspace admin saves an allow list through the settings API',
+      saved.status >= 200 && saved.status < 300 && field(saved.json, 'enabled') === true,
+      `HTTP ${saved.status} · ${saved.text.slice(0, 140)}`);
+
+    const readback = await call(admin, '/api/tenant/security/ip-whitelist');
+    const data = (field(readback.json, 'data') ?? {}) as Record<string, unknown>;
+    const ips = Array.isArray(data['ips']) ? (data['ips'] as string[]) : [];
+    check('J2  GET reads the list back through the same policy (jsonb, not a joined string)',
+      ips.length === 1 && ips[0] === NOT_MY_IP, `HTTP ${readback.status} · ips=${JSON.stringify(ips)}`);
+
+    const denied = await call(probe, '/api/auth/login', { body });
+    check('J3  sign-in from an address off the list -> 403 ERR_IP_NOT_ALLOWED',
+      denied.status === 403 && str(denied.json, 'code') === 'ERR_IP_NOT_ALLOWED',
+      `HTTP ${denied.status} · ${denied.text.slice(0, 140)}`);
+
+    // The password was correct, so a denial here can only have come from the
+    // list. Prove the refusal is auditable and capture the server-side IP.
+    const seen = await withSecurityContext(async (tx) =>
+      await tx.execute(sql`SELECT ip_address FROM login_attempts
+        WHERE email = ${s.a.email} AND failure_reason = 'IP not in tenant allow list'
+        ORDER BY attempted_at DESC LIMIT 1`));
+    const serverIp = String(rowsOf(seen)[0]?.['ip_address'] ?? '');
+    check('J4  the refusal is recorded in login_attempts with the server-attributed IP',
+      serverIp !== '', `ip_address=${serverIp || 'no row'}`);
+
+    if (serverIp) {
+      const widened = await call(admin, '/api/tenant/security/ip-whitelist', {
+        method: 'PUT', withCsrf: true, body: { ips: [NOT_MY_IP, serverIp], enabled: true },
+      });
+      const allowed = await call(probe, '/api/auth/login', { body });
+      if (allowed.status === 200) authed = probe;
+      check('J5  the same client is admitted once its own address is on the list',
+        widened.status < 300 && allowed.status === 200,
+        `PUT HTTP ${widened.status} · login HTTP ${allowed.status} for ${serverIp}`);
+    } else {
+      skip('J5  admitted once listed', 'no attributed IP to add (J4 failed)');
+    }
+  } finally {
+    // A leftover list would lock out every later run of this workspace (and this
+    // row is the only tenant-owned state the phase creates), so removal is
+    // asserted, not assumed.
+    const off = await call(authed, '/api/tenant/security/ip-whitelist', { method: 'DELETE', withCsrf: true });
+    const cleared = await call(authed, '/api/tenant/security/ip-whitelist');
+    const cd = (field(cleared.json, 'data') ?? {}) as Record<string, unknown>;
+    const left = Array.isArray(cd['ips']) ? (cd['ips'] as string[]) : [];
+    check('J6  removing the list restores unrestricted sign-in (delete really deletes)',
+      off.status >= 200 && off.status < 300 && left.length === 0 && cd['enabled'] === false,
+      `DELETE HTTP ${off.status} · ips=${JSON.stringify(left)}`);
+
+    await call(authed, '/api/auth/logout', { withCsrf: true, body: {} });
+    // J's own attempts (one denial, several successes) would otherwise age into
+    // the 30-day retention window and skew H6's per-run accounting on the next gen.
+    await withSecurityContext(async (tx) =>
+      await tx.execute(sql`DELETE FROM login_attempts WHERE email LIKE ${runEmails}`));
+    const residue = await withSecurityContext(async (tx) =>
+      await tx.execute(sql`SELECT count(*)::int AS c FROM login_attempts WHERE email LIKE ${runEmails}`));
+    note(`J hygiene: login_attempts rows left by this run = ${rowsOf(residue)[0]?.['c']}`);
+  }
+}
+
 // ── Runner ────────────────────────────────────────────────────────────────
 /**
  * Limiter buckets are keyed `v1_rate:<action>:<ip>`, and the synthetic
@@ -772,6 +885,9 @@ async function main(): Promise<void> {
   const phases: [string, (st: RunState) => Promise<void>][] = [
     ['A', phaseA], ['B', phaseB], ['C', phaseC], ['D', phaseD],
     ['E', phaseE], ['F', phaseF], ['G', phaseG], ['I', phaseI], ['H', phaseH],
+    // Last: it writes a tenant setting and deliberately fails one login, so it
+    // must not be able to perturb any phase that counts those rows.
+    ['J', phaseJ],
   ];
   for (const [label, fn] of phases) {
     try {
