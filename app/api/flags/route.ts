@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAllFlags } from '@/lib/flags';
 import { db } from '@/drizzle/db';
-import { sessions } from '@/drizzle/schema';
+import { sessions, tenantMembers } from '@/drizzle/schema';
 import { eq, and, gt } from 'drizzle-orm';
 import { checkRateLimit } from '@/lib/rate-limit';
 
@@ -20,7 +20,6 @@ export async function GET(request: NextRequest) {
   const authHeader = request.headers.get('authorization');
 
   let userId: string | undefined;
-  let tenantId: string | undefined;
 
   if (sessionCookie) {
     const { verifyToken, hashToken } = await import('@/lib/auth/session');
@@ -36,7 +35,6 @@ export async function GET(request: NextRequest) {
         .limit(1);
       if (results[0]) {
         userId = results[0].userId;
-        tenantId = request.headers.get('x-tenant-id') || undefined;
       }
     }
   } else if (authHeader?.startsWith('Bearer ')) {
@@ -47,7 +45,6 @@ export async function GET(request: NextRequest) {
     const user = await getCurrentUserForToken(authHeader.slice(7));
     if (user) {
       userId = user.id;
-      tenantId = request.headers.get('x-tenant-id') || undefined;
     }
   }
   // #1150: only authenticated callers receive the flag set. Returning flags to
@@ -56,6 +53,25 @@ export async function GET(request: NextRequest) {
   // callers get an empty map.
   if (!userId) {
     return NextResponse.json({ flags: {} });
+  }
+
+  // #2221: X-Tenant-ID is attacker-controlled. The gateway validates
+  // tenant_members for the same header (lib/api/gateway.ts) before honoring
+  // it; without the same check here any authenticated user could enumerate
+  // other tenants' flag overrides / kill-switch state.
+  const tenantId = request.headers.get('x-tenant-id') || undefined;
+  if (tenantId) {
+    const membership = await db.select({ id: tenantMembers.id })
+      .from(tenantMembers)
+      .where(and(
+        eq(tenantMembers.tenantId, tenantId),
+        eq(tenantMembers.userId, userId),
+        eq(tenantMembers.status, 'active'),
+      ))
+      .limit(1);
+    if (!membership[0]) {
+      return NextResponse.json({ error: 'Not a member of this tenant' }, { status: 403 });
+    }
   }
 
   const flags = await getAllFlags({ tenantId, userId });

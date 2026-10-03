@@ -11,7 +11,7 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { platformSettings } from '@/drizzle/schema';
 import { eq, and, like, sql } from 'drizzle-orm';
-import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from 'crypto';
+import { createCipheriv, randomBytes, scryptSync } from 'crypto';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { concurrencyGuard } from '@/lib/api/concurrency';
 import { withApiRoute } from '@/lib/api/with-api-route';
@@ -19,6 +19,16 @@ import { logError } from '@/lib/errors-server';
 
 const ALGORITHM = 'aes-256-gcm';
 const CONFIG_KEY_PREFIX = 'tenant_backup_config:';
+
+// #2221: masked-display pattern shared with app/api/superadmin/settings —
+// reads show `****<last4>`, and an echoed mask on write means "unchanged".
+const MASKED_VALUE_PATTERN = /^\*{4}/;
+
+function maskAccessKey(value: string): string {
+  if (!value) return '';
+  if (value.length <= 4) return '****';
+  return `****${value.slice(-4)}`;
+}
 
 // ── Encryption helpers ─────────────────────────────────────────
 
@@ -46,23 +56,6 @@ function encrypt(plaintext: string): string {
   const authTag = cipher.getAuthTag().toString('hex');
 
   return `${iv.toString('hex')}:${authTag}:${encrypted}`;
-}
-
-function decrypt(ciphertext: string): string {
-  const key = getEncryptionKey();
-  const [ivHex, authTagHex, encryptedHex] = ciphertext.split(':');
-  if (!ivHex || !authTagHex || !encryptedHex) {
-    throw new Error('Invalid encrypted data format');
-  }
-
-  const iv = Buffer.from(ivHex, 'hex');
-  const authTag = Buffer.from(authTagHex, 'hex');
-  const decipher = createDecipheriv(ALGORITHM, key, iv);
-  decipher.setAuthTag(authTag);
-
-  let decrypted = decipher.update(encryptedHex, 'hex', 'utf8');
-  decrypted += decipher.final('utf8');
-  return decrypted;
 }
 
 // ── Parse config from DB rows ──────────────────────────────────
@@ -114,6 +107,13 @@ export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+    // #2221: PUT/DELETE already require admin; GET exposed the S3 access key
+    // (and, via the now-removed dead decrypt path, a decrypted secret key in
+    // memory one edit away from being echoed) to every tenant member. Backup
+    // credentials are an admin-surface — gate reads the same way.
+    if (!ctx.isAdmin) {
+      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+    }
 
     const rows = await db
       .select({ 
@@ -132,15 +132,6 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       return NextResponse.json({ data: null });
     }
 
-    let _decryptedSecret = '';
-    if (raw.secret_key_encrypted) {
-      try {
-        _decryptedSecret = decrypt(raw.secret_key_encrypted);
-      } catch (err) {
-        await logError({ error: err, context: 'backup config decryption failed', tenantId: ctx.tenantId, userId: ctx.userId, requestMethod: 'GET' });
-      }
-    }
-
     const updatedAt = rows[0]?.updatedAt ?? null;
 
     return NextResponse.json({
@@ -148,7 +139,9 @@ export const GET = withApiRoute(async (request: NextRequest) => {
         tenant_id: raw.tenant_id,
         endpoint_url: raw.endpoint_url,
         bucket: raw.bucket,
-        access_key: raw.access_key,
+        // #2221: masked display only — the plaintext access key never leaves
+        // the server. PUT treats a echoed `****…` value as "unchanged".
+        access_key: maskAccessKey(raw.access_key),
         region: raw.region,
         backup_type: raw.backup_type,
         enabled: raw.enabled === 'true',
@@ -205,6 +198,27 @@ export const PUT = withApiRoute(async (request: NextRequest) => {
 
     const prefix = `${CONFIG_KEY_PREFIX}${ctx.tenantId}`;
 
+    // #2221: GET now returns a masked display value (`****last4`). A save that
+    // echoes that mask unchanged must keep the stored access key instead of
+    // overwriting it with the mask — same convention as secret_key (blank /
+    // masked = leave as-is).
+    let effectiveAccessKey = access_key.trim();
+    if (MASKED_VALUE_PATTERN.test(effectiveAccessKey)) {
+      const [storedAccessKeyRow] = await db
+        .select({ value: platformSettings.value })
+        .from(platformSettings)
+        .where(and(
+          eq(platformSettings.tenantId, ctx.tenantId),
+          eq(platformSettings.key, `${prefix}:access_key`),
+        ))
+        .limit(1);
+      const stored = typeof storedAccessKeyRow?.value === 'string' ? storedAccessKeyRow.value : '';
+      if (!stored) {
+        return NextResponse.json({ error: 'Access key is required' }, { status: 400 });
+      }
+      effectiveAccessKey = stored;
+    }
+
     let secretValue = '';
     if (secret_key && secret_key.trim()) {
       secretValue = encrypt(secret_key.trim());
@@ -213,7 +227,7 @@ export const PUT = withApiRoute(async (request: NextRequest) => {
     const fields: Record<string, string> = {
       endpoint_url: endpoint_url.trim(),
       bucket: bucket.trim(),
-      access_key: access_key.trim(),
+      access_key: effectiveAccessKey,
       region: region.trim(),
       backup_type,
       enabled: String(enabled),
@@ -273,7 +287,9 @@ export const PUT = withApiRoute(async (request: NextRequest) => {
         tenant_id: ctx.tenantId,
         endpoint_url: endpoint_url.trim(),
         bucket: bucket.trim(),
-        access_key: access_key.trim(),
+        // #2221: masked display, same as GET — the write response must not
+        // become an alternate leak channel for the plaintext key.
+        access_key: maskAccessKey(effectiveAccessKey),
         region: region.trim(),
         backup_type,
         enabled,
