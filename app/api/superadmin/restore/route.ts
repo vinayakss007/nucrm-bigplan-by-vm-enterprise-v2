@@ -17,6 +17,7 @@ import { downloadFromS3, checkFileExists, deleteFile } from '@/lib/restore/runti
 import { logError } from '@/lib/errors-server';
 import { logSuperAdminAction } from '@/lib/audit/super-admin';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { setSuperAdminContext } from '@/lib/db/rls';
 
 /**
  * Safely run pg_restore with input validation.
@@ -97,6 +98,11 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Super admin required' }, { status: 403 });
 
+    // PP-031: backupRecords is deny-by-default RLS; only app.is_super_admin
+    // admits a platform-wide read, and the plain `db` handle set nothing, so
+    // the Restore page listed zero of the 132 stored backups.
+    await setSuperAdminContext();
+
     const backups = await db
       .select({
         id: backupRecords.id,
@@ -145,7 +151,21 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     const body = await readJsonBody(request);
     const validated = validateBody(restoreSchema, body);
     if (validated instanceof NextResponse) return validated;
-    const { backup_id, confirm_restore: _confirm_restore } = validated.data;
+    const { backup_id, confirm_restore } = validated.data;
+
+    // pg_restore --clean replaces live data with the archive, and restoreSchema
+    // only required a boolean, not a true one. Nothing ever hit that gap because
+    // PP-031 made the lookup below answer 404 for every id. Enforce the flag the
+    // way selective-restore/execute:52 does for REPLACE mode.
+    if (!confirm_restore) {
+      return NextResponse.json(
+        { error: 'Set confirm_restore: true to restore. This replaces live data with the backup.' },
+        { status: 400 },
+      );
+    }
+
+    // PP-031: same RLS-blind read as GET; without it a real backup id 404s.
+    await setSuperAdminContext();
 
     const [backup] = await db
       .select()

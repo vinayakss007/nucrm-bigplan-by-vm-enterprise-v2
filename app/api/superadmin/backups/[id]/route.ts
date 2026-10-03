@@ -12,6 +12,7 @@ import { apiError } from '@/lib/api-error';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { logError } from '@/lib/errors-server';
 import { logSuperAdminAction } from '@/lib/audit/super-admin';
+import { setSuperAdminContext } from '@/lib/db/rls';
 
 /**
  * GET /api/superadmin/backups/[id]
@@ -34,6 +35,13 @@ export const GET = withApiRoute(async (req: NextRequest,
     if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
     const { id } = await params;
+
+    // PP-031: tenant_backup_records is deny-by-default RLS and its policy only
+    // admits a platform read through app.is_super_admin, which the plain `db`
+    // handle never sets. Without this the query returns zero rows and every
+    // "View" click 404s on a backup that exists. Safe on this connection:
+    // withApiRoute pins it and the release reset clears the GUC.
+    await setSuperAdminContext();
 
     const [backup] = await db
       .select()
@@ -58,6 +66,10 @@ export const DELETE = withApiRoute(async (req: NextRequest,
     if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
     const { id } = await params;
+
+    // PP-031: without the platform context the UPDATE matches zero rows, so a
+    // soft delete would answer 404 for a row that exists (see GET above).
+    await setSuperAdminContext();
 
     // The deleted_at predicate makes a second click a 404 rather than a no-op
     // that reports success, so the console cannot show "Backup deleted" twice

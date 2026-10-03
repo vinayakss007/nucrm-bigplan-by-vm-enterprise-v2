@@ -23,33 +23,35 @@ Severity: **S1** blocks go-live · **S2** broken feature or security weakness ·
 
 ## Summary
 
-| ID     | Sev | Area          | Issue (one line)                                                                                                                      | Status              |
-| ------ | --- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ------------------- |
-| PP-001 | S2  | Deploy        | `nginx` reported `(unhealthy)` while serving 200s — probe hit IPv6 `::1`                                                              | ✅ FIXED & VERIFIED |
-| PP-002 | S2  | Deploy        | `app` reported `(unhealthy)` for the same `localhost` → `::1` reason                                                                  | ✅ FIXED & VERIFIED |
-| PP-003 | S1  | Setup         | First-run setup form **always 403** — key sent in body, route reads header                                                            | 🔧 FIXED IN TREE    |
-| PP-004 | S2  | Backups       | Failed `pg_dump` left a partial dump that passes sanity checks                                                                        | 🔧 FIXED IN TREE    |
-| PP-005 | S2  | Build         | `NEXT_PUBLIC_APP_URL` hardcoded to `http://localhost:3000` in the image bundle                                                        | ✅ FIXED & VERIFIED |
-| PP-006 | S2  | Build         | `next build` TypeScript step OOMs on Node's default heap                                                                              | ✅ FIXED & VERIFIED |
-| PP-007 | S1  | Build         | `realtime.ts` (socket.io server) shipped in **no** image                                                                              | ✅ FIXED & VERIFIED |
-| PP-008 | S1  | Compose       | Undeclared `alertmanagerdata` volume aborted the whole compose project                                                                | ✅ FIXED & VERIFIED |
-| PP-009 | S1  | Compose       | `minio/minio:latest`, `minio/mc:latest`, `edoburu/pgbouncer:1.23` no longer resolve                                                   | ✅ FIXED & VERIFIED |
-| PP-010 | S1  | RLS / Setup   | **First super-admin insert is rejected by RLS** — even with a correct setup key                                                       | 🔧 FIXED IN TREE    |
-| PP-011 | S1  | RLS / Signup  | **Public signup is rejected by RLS** (`users_insert_auth` unsatisfiable pre-auth)                                                     | 🔧 FIXED IN TREE    |
-| PP-012 | S1  | RLS / Auth    | `login_attempts` write+read blocked → brute-force lockout silently inert                                                              | 🔧 FIXED IN TREE    |
-| PP-013 | S1  | RLS           | Tenant-isolation gate FAILED — 5 RLS-disabled, 10 policy-less, 6 NULL-tenant leaky                                                    | ✅ FIXED & VERIFIED |
-| PP-014 | S1  | Backups       | `pg_dump` fails as the app role (`FORCE ROW LEVEL SECURITY` + `row_security=off`)                                                     | 🚨 OPEN             |
-| PP-015 | S1  | Backups       | `BACKUP_DATABASE_URL` still points at the RLS-bound `nucrm` role                                                                      | 🚨 OPEN             |
-| PP-016 | S3  | Observability | Sentry events carry no `environment`/`release` (should be `preprod`)                                                                  | ⏸️ BLOCKED          |
-| PP-017 | S3  | Observability | promtail `docker_sd_configs` unset → Loki gets no container logs                                                                      | ⏸️ BLOCKED          |
-| PP-018 | S2  | Storage       | UpCloud Managed Object Storage `CreateBucket` → AccessDenied; buckets absent                                                          | ⏸️ BLOCKED          |
-| PP-019 | S2  | Integrations  | `RESEND_API_KEY`, `ANTHROPIC_API_KEY` missing → those features degrade silently                                                       | ⏸️ BLOCKED          |
-| PP-020 | S2  | Hardening     | UFW + SSH hardening and `infra-readiness.sh` not yet applied                                                                          | ⏸️ BLOCKED          |
-| PP-021 | S3  | Performance   | Sentry `NUCRM-1`: N+1 query on `GET /api/metrics` (12 events)                                                                         | 📌 INFO             |
-| PP-022 | S3  | RLS           | `super_admin_audit_logs.tenant_id` is `text`, so the standard policy can't apply                                                      | 📌 INFO             |
-| PP-028 | S1  | Performance   | Every DB statement costs a flat ~200 ms — statement _count_ is the real budget                                                        | 🔬 MEASURED         |
-| PP-029 | S2  | Deploy        | Our SIGTERM handler exits before Next.js drains; long cron jobs die mid-work                                                          | 🔬 DIAGNOSED        |
-| PP-030 | S1  | Scheduling    | `acquireLock` fail-closed is indistinguishable from a held lock → 20 cron jobs report `ok:true` and do nothing when Redis isn't ready | 🔬 MEASURED         |
+| ID     | Sev | Area          | Issue (one line)                                                                                                                      | Status                   |
+| ------ | --- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
+| PP-001 | S2  | Deploy        | `nginx` reported `(unhealthy)` while serving 200s — probe hit IPv6 `::1`                                                              | ✅ FIXED & VERIFIED      |
+| PP-002 | S2  | Deploy        | `app` reported `(unhealthy)` for the same `localhost` → `::1` reason                                                                  | ✅ FIXED & VERIFIED      |
+| PP-003 | S1  | Setup         | First-run setup form **always 403** — key sent in body, route reads header                                                            | 🔧 FIXED IN TREE         |
+| PP-004 | S2  | Backups       | Failed `pg_dump` left a partial dump that passes sanity checks                                                                        | 🔧 FIXED IN TREE         |
+| PP-005 | S2  | Build         | `NEXT_PUBLIC_APP_URL` hardcoded to `http://localhost:3000` in the image bundle                                                        | ✅ FIXED & VERIFIED      |
+| PP-006 | S2  | Build         | `next build` TypeScript step OOMs on Node's default heap                                                                              | ✅ FIXED & VERIFIED      |
+| PP-007 | S1  | Build         | `realtime.ts` (socket.io server) shipped in **no** image                                                                              | ✅ FIXED & VERIFIED      |
+| PP-008 | S1  | Compose       | Undeclared `alertmanagerdata` volume aborted the whole compose project                                                                | ✅ FIXED & VERIFIED      |
+| PP-009 | S1  | Compose       | `minio/minio:latest`, `minio/mc:latest`, `edoburu/pgbouncer:1.23` no longer resolve                                                   | ✅ FIXED & VERIFIED      |
+| PP-010 | S1  | RLS / Setup   | **First super-admin insert is rejected by RLS** — even with a correct setup key                                                       | 🔧 FIXED IN TREE         |
+| PP-011 | S1  | RLS / Signup  | **Public signup is rejected by RLS** (`users_insert_auth` unsatisfiable pre-auth)                                                     | 🔧 FIXED IN TREE         |
+| PP-012 | S1  | RLS / Auth    | `login_attempts` write+read blocked → brute-force lockout silently inert                                                              | 🔧 FIXED IN TREE         |
+| PP-013 | S1  | RLS           | Tenant-isolation gate FAILED — 5 RLS-disabled, 10 policy-less, 6 NULL-tenant leaky                                                    | ✅ FIXED & VERIFIED      |
+| PP-014 | S1  | Backups       | `pg_dump` fails as the app role (`FORCE ROW LEVEL SECURITY` + `row_security=off`)                                                     | 🚨 OPEN                  |
+| PP-015 | S1  | Backups       | `BACKUP_DATABASE_URL` still points at the RLS-bound `nucrm` role                                                                      | 🚨 OPEN                  |
+| PP-016 | S3  | Observability | Sentry events carry no `environment`/`release` (should be `preprod`)                                                                  | ⏸️ BLOCKED               |
+| PP-017 | S3  | Observability | promtail `docker_sd_configs` unset → Loki gets no container logs                                                                      | ⏸️ BLOCKED               |
+| PP-018 | S2  | Storage       | UpCloud Managed Object Storage `CreateBucket` → AccessDenied; buckets absent                                                          | ⏸️ BLOCKED               |
+| PP-019 | S2  | Integrations  | `RESEND_API_KEY`, `ANTHROPIC_API_KEY` missing → those features degrade silently                                                       | ⏸️ BLOCKED               |
+| PP-020 | S2  | Hardening     | UFW + SSH hardening and `infra-readiness.sh` not yet applied                                                                          | ⏸️ BLOCKED               |
+| PP-021 | S3  | Performance   | Sentry `NUCRM-1`: N+1 query on `GET /api/metrics` (12 events)                                                                         | 📌 INFO                  |
+| PP-022 | S3  | RLS           | `super_admin_audit_logs.tenant_id` is `text`, so the standard policy can't apply                                                      | 📌 INFO                  |
+| PP-028 | S1  | Performance   | Every DB statement costs a flat ~200 ms — statement _count_ is the real budget                                                        | 🔬 MEASURED              |
+| PP-029 | S2  | Deploy        | Our SIGTERM handler exits before Next.js drains; long cron jobs die mid-work                                                          | 🔬 DIAGNOSED             |
+| PP-030 | S1  | Scheduling    | `acquireLock` fail-closed is indistinguishable from a held lock → 20 cron jobs report `ok:true` and do nothing when Redis isn't ready | 🔬 MEASURED              |
+| PP-031 | S2  | RLS + query   | Super-admin Backups console returns nothing: swallowed `uuid = text` join, RLS-blind `backup_schedules` read and writes               | ✅ FIXED + live-verified |
+| PP-032 | S2  | Data model    | Panel reads `backup_records` (4 failed rows), nightly job writes `tenant_backup_records` (144 rows) — two tables, no shared view      | 🚨 OPEN (decision)       |
 
 ## Sentry issues → register entries
 
@@ -588,6 +590,120 @@ RESULT: bootstrap, login, brute-force and tenant isolation all behave as specifi
   Separately: `getRedisClient()` (`lib/cache/index.ts:101`) builds the client lazily on first
   call, so the very first `acquireLock` after boot necessarily sees `status = 'connect'` — warm
   it in `instrumentation.ts` instead, or gate `/api/cron/*` on cache readiness.
+
+## PP-031 — 🚨 The super-admin Backups console returns nothing: a swallowed `uuid = text` join, two RLS-blind writes, and an empty Schedules tab _(S2 · RLS + query bug)_
+
+- **Measured, live.** `GET /api/superadmin/backups?list=recent` answers
+  `200 {"data":[],"backups":[]}`, `GET /api/superadmin/backups` (the Schedules tab) answered
+  `200` with **0 rows** while `backup_schedules` holds a live global monthly schedule, and the
+  soft-DELETE on a backup row answered `404 Backup not found`.
+- **Correction to the first diagnosis of this issue.** It was written as "reads
+  `tenant_backup_records` without a security context". Two facts in `pg_policies` say otherwise,
+  and both were measured after the fix was already in the tree: `backup_records` (the table
+  `drizzle`'s `backupRecords` actually maps to — see PP-032) has `backup_records_read_all`
+  with `USING (true)`, so **no read of it was ever RLS-blocked**; its write policy
+  `backup_records_super_admin_write` (cmd `ALL`) is what needs `app.is_super_admin`. The empty
+  list was a query error, not RLS (PP-031b). The genuinely RLS-blind statements are the
+  `backup_schedules` read/write and the `backup_records` write.
+- **Cause, as measured.** Three separate things, only one of them RLS:
+  1. `?list=recent` threw `42883` on a `uuid = text` join and its `.catch(() => [])` turned that
+     into an empty `200` (PP-031b).
+  2. `backup_schedules` — the Schedules tab — is guarded by `tenant_isolation`, whose expression
+     does contain a super-admin branch (`NULLIF(current_setting('app.is_super_admin'), '')`,
+     confirmed in `pg_policies` for both `qual` and `with_check`), but the route queried through
+     the plain `db` handle, which sets no GUC → `200` with 0 rows.
+  3. Writes. `backup_records` is guarded for writes by `backup_records_super_admin_write`
+     (`cmd = ALL`, keyed on the same GUC), so the soft DELETE in `backups/[id]` matched zero rows
+     and answered `404` for a row that exists, and POST's `tenant_id` metadata write silently
+     dropped the tenant. Only 9 of the 52 super-admin routes establish a context at all.
+- **Why it is worse than an error.** Every one of the three answers HTTP `200` (or a plausible
+  `404`) and logs nothing the operator reads. The admin's Backups tab renders "no backups have
+  ever been taken"; every action behind it 404s on ids the page cannot list.
+- **Not the same defect as PP-008/#7.** Those are tables whose policy has _no_ super-admin
+  branch and therefore need a migration. Here the branch exists in every case and the route never
+  asks for it: a **code fix**, no schema change, so no migration approval is required.
+- **Careful with `?list=recent`.** That branch is deliberately _not_ super-admin-only: for a
+  non-admin it filters on `metadata->>'tenant_id' = ctx.tenantId`. The context may therefore be
+  set only on the `ctx.isSuperAdmin` path, or the fix would widen a tenant-scoped read.
+- **Latent sibling.** `recent-activity` reads `audit_logs` the same way; it looks healthy today
+  only because `audit_logs` is empty (0 rows measured). Same fix, same reasoning.
+- **Found by** `npm run sweep:superadmin-get`, which prints a row count per route precisely so a
+  `200` with an empty collection stops being invisible. That run reported 17 such routes; 13 of
+  them are genuinely empty tables (`announcements`, `support_tickets`, `super_admin_backups`,
+  `tenant_members`, `api_keys_registry`, `token_budgets`, `usage_alerts`,
+  `critical_data_backups`, `audit_logs` — all counted at 0), and the 4 backup routes above are
+  the ones with real data behind them.
+- **Fix (as shipped).** `setSuperAdminContext()` is called on the request's pinned connection
+  immediately after each `ctx.isSuperAdmin` gate — in `backups/route.ts` (critical branch, the
+  super-admin half of `?list=recent`, the schedules branch, POST and PATCH), `backups/[id]/route.ts`
+  (GET + DELETE), `backups/[id]/download/route.ts` and `restore/route.ts` (GET + POST).
+  Session-scoped rather than `withSecurityContext()` per query because these handlers make 3–4
+  statements each and PP-028 prices one statement at ~200 ms; `withApiRoute` pins the client and
+  `RESET_TENANT_GUCS_SQL` (`lib/db/request-connection.ts:94`) clears `app.is_super_admin` on
+  release, which is what makes the wider scope safe. It also reaches helpers that take `db`
+  itself (`concurrencyGuard` in PATCH), which a `tx` would not.
+- **`?list=recent` is not widened.** The GUC is set only under `if (ctx.isSuperAdmin)`; a
+  non-admin request never sets it, so its read stays inside RLS for its own tenant rather than
+  relying on the `metadata->>'tenant_id'` filter alone.
+- **Writes were checked before relying on this.** `tenant_backup_records`, `backup_schedules` and
+  `critical_data_backups` all carry the super-admin branch in _both_ halves of `tenant_isolation`
+  (`pg_policies.qual` and `with_check`), so PATCHing a schedule or stamping `deleted_at` is
+  admitted too — before the fix those matched zero rows and answered `Schedule not found` /
+  `Backup not found` for ids that exist.
+- **A second defect surfaced while making the restore POST reachable.** That handler had
+  destructured `confirm_restore` as `_confirm_restore` and never read it, so the flag whose entire
+  job is to authorise `pg_restore --clean` (a replace-live-data operation) was decorative. It only
+  looked harmless because PP-031 made the route answer 404 for every id — fixing the read would
+  have shipped a live, unconfirmed data replacement. The POST now returns 400 unless
+  `confirm_restore` is `true`, matching `selective-restore/execute/route.ts:52`. No UI ever called
+  this endpoint (the Restore page posts to selective-restore), so the guard cannot break a flow.
+- **Full-panel gate after the fix:** `43 GET route(s) · 0 5xx · 2 4xx · 17 200-but-empty`. Both
+  4xx are now correct answers — the `409` above, and `templates/[id]` probed with `id=random`
+  because `templates` holds 0 rows, so the sweep has no real id to use.
+- **Verified live after the rebuild** (`npm run sweep:superadmin-get --only backups`, as the
+  super admin against the deployed container):
+  | route                                                      | before                        | after                                                                              |
+  | ---------------------------------------------------------- | ----------------------------- | ---------------------------------------------------------------------------------- |
+  | `GET /api/superadmin/backups` (Schedules)                  | `200`, 0 rows                 | `200`, **1 row**                                                                   |
+  | `GET /api/superadmin/backups?list=recent`                  | `200`, `[]` (42883 swallowed) | returns rows — the sweep resolved **`id=list`**                                    |
+  | `GET /api/superadmin/backups/7fa11a9b-…`                   | `404` (with a fabricated id)  | **`200`** with a real id                                                           |
+  | `GET /api/superadmin/backups/7fa11a9b-…/download`          | `404`                         | **`409`** — correct: that row is `status='failed'`, so there is no archive to sign |
+  | `error_logs` rows for the `select "backup_records"…` query | 3 found                       | **0** since the deploy                                                             |
+- **Two routes still answer an empty list, and both are now honest zeros, not blind reads.**
+  `/api/superadmin/restore` filters `backup_records.status = 'completed'` and all 4 rows are
+  `failed`; `/api/superadmin/selective-restore/backups` reads `super_admin_backups`, measured at
+  0 rows. The sweep's `--fail-empty` gate is still worth reading as "go check the table", not
+  "go fix the route" — which is exactly how PP-032 was found.
+- **PP-031b — the list query could never have returned rows.** `?list=recent` joined
+  `tenants.id = ${backupRecords.metadata}->>'tenant_id'`, i.e. **uuid = text**, which Postgres
+  rejects with `42883 operator does not exist` — on _every_ request, for admins and tenants alike.
+  The branch ends in `.catch(() => [])`, so the 42883 was logged and answered as
+  `200 {"data":[],"backups":[]}`. Proved by reading `error_logs` (three
+  `Failed query: select "backup_records"."id" …` rows whose tail is `s not exist: uuid = text`)
+  and by re-running the join with the cast. Fixed at `backups/route.ts:106` by comparing on the
+  text side (`tenants.id::text = metadata->>'tenant_id'`) so a malformed value stays a non-match
+  instead of becoming a `22P02`. This is why the empty-list measurement in PP-031 did not move
+  after the security context was added.
+- **PP-032 — see its own section below.**
+
+## PP-032 — 🚨 The Backups panel and the nightly backup job use two different tables _(S2 · data model)_
+
+- `drizzle/schema/infra.ts:148` binds `backupRecords` to **`backup_records`**, which is what every
+  panel route (list, `[id]`, download, restore) reads and what `lib/backups/backup-service.ts:244`
+  inserts into. `app/api/cron/auto-backup/route.ts:248` writes **`tenant_backup_records`** with raw
+  SQL. Nothing joins the two.
+- **Measured.** `backup_records` = 4 rows, `status` all `failed`, 0 `completed`;
+  `tenant_backup_records` = 144 rows, 138 `completed`. The nightly run therefore produces 138
+  restorable tenant archives the console cannot list, and the console's own 4 attempts failed for
+  the #50 reason (the app image ships no `pg_dump`).
+- **Consequence.** The admin sees "no backups have ever been taken" and a Restore page with an
+  empty dropdown even though the platform has been backing every tenant up. `restore` is not
+  RLS-blind — it filters `status='completed'` on a table that has none.
+- **Not fixed, deliberately.** Choosing the panel's data source is a product decision with three
+  plausible answers (read `tenant_backup_records`; have the cron write both; or migrate one table
+  onto the other), and each changes what "Restore" means for a per-tenant inline JSON dump versus
+  a whole-database `pg_dump`. A one-line query rewrite here would silently redefine the feature.
+- **Task:** #79.
 
 ## Running the pre-prod flow simulator
 
