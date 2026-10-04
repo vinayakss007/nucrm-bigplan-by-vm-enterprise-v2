@@ -118,14 +118,29 @@ Handles high/medium priority feature work, frontend, and UX issues:
 - **App**: `http://34.70.191.180:3000` — currently running in dev mode
 - **Sign in**: `t@t.com` / `password123`
 - **Build**: `npm run build` succeeds (needs ~5min, large project)
-- **Tests**: 160/160 pass across 6 files. Full suite times out — run individual test files
+- **Tests**: 462 files matched by `find tests -name '*.test.*' | wc -l` — 425 under `tests/unit`, 25
+  under `tests/integration`, 11 under `tests/dashboard`, 1 elsewhere. Playwright e2e specs are `.spec.ts`
+  and are not in that count. Re-measured 2026-10-04; the "160/160 across 6 files" this line used to carry
+  predates the suite by weeks and is not a current pass rate — run `npm test` for that.
 - **Seed**: `npm run seed:dev` or `npm run start-clean` (auto-seeds)
 - **Migrations**: `npm run db:migrate` (proper Drizzle migrations, not `drizzle-kit push`)
 
 ### Deploy (IMPORTANT — read before touching deploy)
 
-- **App runs via pm2** (`nucrm-prod`, `next start -p 3099` behind nginx on 80/3000), **NOT Docker**. Docker hosts only monitoring (prometheus/grafana/promtail/alertmanager). pm2 auto-start on boot is enabled.
-- **The deploy host IS this dev machine** (`/home/vinayak_shruti_biz`). The Deploy workflow (`.github/workflows/deploy.yml`) SSHes in, checks out the CI-tested commit, `npm ci` + `npm run build`, `pm2 restart web`, gates on `127.0.0.1:3099/api/health`, rolls back on failure, then returns repo to `main`.
+- **Two topologies, and this line used to conflate them.** On **this** host the app runs in **Docker**:
+  `nucrm-app`, `nucrm-nginx` and `nucrm-pgbouncer` are live containers (`docker ps --format
+'{{.Names}}'`), started from `deploy/docker-compose.production.yml` +
+  `deploy/docker-compose.preprod.yml`, `pm2` is **not installed** here (`command -v pm2` finds nothing),
+  and `PGBOUNCER_ENABLED=true` is set in the preprod overlay, so pooling is on. The **production VM**,
+  described by `.github/workflows/deploy.yml`, is a different shape: pm2 (`nucrm-prod`, `next start` on 3099) with a `git checkout --force` rollout and a `127.0.0.1:3099/api/health` gate. The previous
+  version of this line said "app runs via pm2, **NOT Docker**", which broke any agent working here: it
+  went looking for a pm2 process that does not exist on this machine and concluded the app was down.
+  Assume Docker unless you have positively confirmed you are on the production VM.
+- **The deploy host is not this machine.** This repo lives at `/srv/nucrm`; the path this line used to
+  name, `/home/vinayak_shruti_biz`, does not exist here (`ls` it). The Deploy workflow
+  (`.github/workflows/deploy.yml`) SSHes to the production VM, checks out the CI-tested commit,
+  `npm ci` + `npm run build`, `pm2 restart web`, gates on `127.0.0.1:3099/api/health`, rolls back on
+  failure, then returns that repo to `main` — all of which happens over there, not here.
 - **VM external IP is EPHEMERAL** — changes on every reboot. Current: `34.57.42.29` (ssh: user `vinayak_shruti_biz`, key `~/.ssh/deploy_key`, matches `~/.ssh/authorized_keys`). When the deploy fails with `dial tcp ...:22: connection refused/timeout`, run `curl -s ifconfig.me`, then `gh secret set DEPLOY_HOST --body "<new-ip>"`.
 - Deploy history: 200+ runs, 0 successes before 2026-08-01. Fixed: compose file invalid (duplicate `loki` service from bad merge 64085d44 + missing `pgdata` volume), deploy script targeted a nonexistent `app` Docker service (it's pm2, service name `web` in compose), stale `DEPLOY_HOST`, wrong SSH action input (`command_timeout`, not `timeout`).
 - **The deploy's `git checkout --force <sha>` can leave this repo in detached HEAD** — run `git checkout main && git pull` after a deploy finishes if you see `## HEAD (no branch)`. The fixed script now returns to main automatically.
