@@ -23,45 +23,45 @@ Severity: **S1** blocks go-live · **S2** broken feature or security weakness ·
 
 ## Summary
 
-| ID     | Sev | Area               | Issue (one line)                                                                                                                                                                                                                              | Status                                                   |
-| ------ | --- | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
-| PP-001 | S2  | Deploy             | `nginx` reported `(unhealthy)` while serving 200s — probe hit IPv6 `::1`                                                                                                                                                                      | ✅ FIXED & VERIFIED                                      |
-| PP-002 | S2  | Deploy             | `app` reported `(unhealthy)` for the same `localhost` → `::1` reason                                                                                                                                                                          | ✅ FIXED & VERIFIED                                      |
-| PP-003 | S1  | Setup              | First-run setup form **always 403** — key sent in body, route reads header                                                                                                                                                                    | 🔧 FIXED IN TREE                                         |
-| PP-004 | S2  | Backups            | Failed `pg_dump` left a partial dump that passes sanity checks                                                                                                                                                                                | 🔧 FIXED IN TREE                                         |
-| PP-005 | S2  | Build              | `NEXT_PUBLIC_APP_URL` hardcoded to `http://localhost:3000` in the image bundle                                                                                                                                                                | ✅ FIXED & VERIFIED                                      |
-| PP-006 | S2  | Build              | `next build` TypeScript step OOMs on Node's default heap                                                                                                                                                                                      | ✅ FIXED & VERIFIED                                      |
-| PP-007 | S1  | Build              | `realtime.ts` (socket.io server) shipped in **no** image                                                                                                                                                                                      | ✅ FIXED & VERIFIED                                      |
-| PP-008 | S1  | Compose            | Undeclared `alertmanagerdata` volume aborted the whole compose project                                                                                                                                                                        | ✅ FIXED & VERIFIED                                      |
-| PP-009 | S1  | Compose            | `minio/minio:latest`, `minio/mc:latest`, `edoburu/pgbouncer:1.23` no longer resolve                                                                                                                                                           | ✅ FIXED & VERIFIED                                      |
-| PP-010 | S1  | RLS / Setup        | **First super-admin insert is rejected by RLS** — even with a correct setup key                                                                                                                                                               | 🔧 FIXED IN TREE                                         |
-| PP-011 | S1  | RLS / Signup       | **Public signup is rejected by RLS** (`users_insert_auth` unsatisfiable pre-auth)                                                                                                                                                             | 🔧 FIXED IN TREE                                         |
-| PP-012 | S1  | RLS / Auth         | `login_attempts` write+read blocked → brute-force lockout silently inert                                                                                                                                                                      | 🔧 FIXED IN TREE                                         |
-| PP-013 | S1  | RLS                | Tenant-isolation gate FAILED — 5 RLS-disabled, 10 policy-less, 6 NULL-tenant leaky                                                                                                                                                            | ✅ FIXED & VERIFIED                                      |
-| PP-014 | S1  | Backups            | `pg_dump` fails as the app role (`FORCE ROW LEVEL SECURITY` + `row_security=off`)                                                                                                                                                             | 🚨 OPEN                                                  |
-| PP-015 | S1  | Backups            | `BACKUP_DATABASE_URL` still points at the RLS-bound `nucrm` role                                                                                                                                                                              | 🚨 OPEN                                                  |
-| PP-016 | S3  | Observability      | Sentry events carry no `release`; `environment` **is** set and ingest is verified working — see the 2026-10-04 addendum                                                                                                                       | 🔎 RE-MEASURED (release + API read scope open)           |
-| PP-017 | S3  | Observability      | promtail `docker_sd_configs` unset → Loki gets no container logs                                                                                                                                                                              | ⏸️ BLOCKED                                               |
-| PP-018 | S2  | Storage            | UpCloud Managed Object Storage `CreateBucket` → AccessDenied; buckets absent                                                                                                                                                                  | ⏸️ BLOCKED                                               |
-| PP-019 | S2  | Integrations       | `RESEND_API_KEY`, `ANTHROPIC_API_KEY` missing → those features degrade silently                                                                                                                                                               | ⏸️ BLOCKED                                               |
-| PP-020 | S2  | Hardening          | UFW + SSH hardening and `infra-readiness.sh` not yet applied                                                                                                                                                                                  | ⏸️ BLOCKED                                               |
-| PP-021 | S3  | Performance        | Sentry `NUCRM-1`: N+1 query on `GET /api/metrics` (12 events)                                                                                                                                                                                 | 📌 INFO                                                  |
-| PP-022 | S3  | RLS                | `super_admin_audit_logs.tenant_id` is `text`, so the standard policy can't apply                                                                                                                                                              | 📌 INFO                                                  |
-| PP-028 | S1  | Performance        | Every DB statement costs a flat ~200 ms — statement _count_ is the real budget                                                                                                                                                                | 🔬 MEASURED                                              |
-| PP-029 | S2  | Deploy             | Our SIGTERM handler exited before Next.js drained; `pool.end()` hung the stop 35.93 s                                                                                                                                                         | ✅ FIXED + live-verified                                 |
-| PP-030 | S1  | Scheduling         | `acquireLock` fail-closed is indistinguishable from a held lock → 20 cron jobs report `ok:true` and do nothing when Redis isn't ready                                                                                                         | 🔬 MEASURED                                              |
-| PP-031 | S2  | RLS + query        | Super-admin Backups console returns nothing: swallowed `uuid = text` join, RLS-blind `backup_schedules` read and writes                                                                                                                       | ✅ FIXED + live-verified                                 |
-| PP-032 | S2  | Data model         | Panel reads `backup_records` (4 failed rows), nightly job writes `tenant_backup_records` (144 rows) — two tables, no shared view                                                                                                              | 🚨 OPEN (decision)                                       |
-| PP-033 | S1  | Deploy + obs       | BuildKit cache filled root to 84% with no bound; `docker system df` under-reports it and the 80% disk alert was never live                                                                                                                    | ✅ FIXED + live-verified                                 |
-| PP-034 | S1  | Observability      | Alertmanager has **never delivered an alert** — `host.docker.internal` does not resolve in its container and the receiver was never installed (~10.8k failed notifications, still counting)                                                   | 🔧 PARTIAL IN TREE (needs recreate + a real receiver)    |
-| PP-035 | S1  | Privacy            | Sentry v11 `dataCollection` defaults to **collecting everything**, and `sentry.client.config.ts` (the only file with `scrubPii`) is not in the Turbopack browser bundle — so the browser has sent PII unscrubbed                              | 🔧 FIXED IN TREE (not live until #84)                    |
-| PP-036 | S2  | Performance        | Every sign-in paid ~830 ms to read one settings row — the IP allow-list gate is 4 statements at PP-028's flat 200 ms, and it runs for tenants that have no list                                                                               | 🔧 FIXED IN TREE (not live until #84)                    |
-| PP-037 | S2  | Performance        | Sign-in asked "are you blocked?" **twice**, in two security contexts — 8 statements, live-measured at 1 608 ms, against a table that holds no row for almost every caller                                                                     | 🔧 FIXED IN TREE (live-measured, not deployed until #84) |
-| PP-038 | S2  | Auth + brute force | The form-encoded sign-in path took the email raw while the JSON path lowercases it: one lockout comes off that account, and a correct password typed with a capital letter fails                                                              | 🔧 FIXED IN TREE (not live until #84)                    |
-| PP-039 | S2  | Performance        | Resolving _one_ session token cost **two** `set_config` round-trips, because the acting-user and pre-auth-read GUCs were applied one statement at a time — paid by every authenticated request                                                | 🔧 FIXED IN TREE (live-measured, not deployed until #84) |
-| PP-040 | S2  | Schema drift       | Two live tables (`ai_providers`, `tenant_ai_credentials`) come from migrations 0013/0018 and are declared by **no** schema file — `npm run db:sync` would drop them, and `drift-check` printed them as `[info]` under "No drift ✓"            | 🔧 GUARD SHIPPED · tables need a decision                |
-| PP-041 | S2  | Migrations         | Two applied migrations (`0059`, `0091`) are absent from `_journal.json`, so a fresh database never creates `custom_entities` or the `usage_snapshots` bypass — and `verify-migration-chain` only checks the other direction                   | 🚨 OPEN                                                  |
-| PP-042 | S3  | RLS + gates        | `ai_providers` is the only one of 226 tables with neither RLS nor a policy, and `db:verify-isolation` cannot see it (every check filters to tables having `tenant_id`). Reachability audit also corrects PP-040: no code touches either table | 🚨 OPEN                                                  |
+| ID     | Sev | Area               | Issue (one line)                                                                                                                                                                                                                   | Status                                                   |
+| ------ | --- | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| PP-001 | S2  | Deploy             | `nginx` reported `(unhealthy)` while serving 200s — probe hit IPv6 `::1`                                                                                                                                                           | ✅ FIXED & VERIFIED                                      |
+| PP-002 | S2  | Deploy             | `app` reported `(unhealthy)` for the same `localhost` → `::1` reason                                                                                                                                                               | ✅ FIXED & VERIFIED                                      |
+| PP-003 | S1  | Setup              | First-run setup form **always 403** — key sent in body, route reads header                                                                                                                                                         | 🔧 FIXED IN TREE                                         |
+| PP-004 | S2  | Backups            | Failed `pg_dump` left a partial dump that passes sanity checks                                                                                                                                                                     | 🔧 FIXED IN TREE                                         |
+| PP-005 | S2  | Build              | `NEXT_PUBLIC_APP_URL` hardcoded to `http://localhost:3000` in the image bundle                                                                                                                                                     | ✅ FIXED & VERIFIED                                      |
+| PP-006 | S2  | Build              | `next build` TypeScript step OOMs on Node's default heap                                                                                                                                                                           | ✅ FIXED & VERIFIED                                      |
+| PP-007 | S1  | Build              | `realtime.ts` (socket.io server) shipped in **no** image                                                                                                                                                                           | ✅ FIXED & VERIFIED                                      |
+| PP-008 | S1  | Compose            | Undeclared `alertmanagerdata` volume aborted the whole compose project                                                                                                                                                             | ✅ FIXED & VERIFIED                                      |
+| PP-009 | S1  | Compose            | `minio/minio:latest`, `minio/mc:latest`, `edoburu/pgbouncer:1.23` no longer resolve                                                                                                                                                | ✅ FIXED & VERIFIED                                      |
+| PP-010 | S1  | RLS / Setup        | **First super-admin insert is rejected by RLS** — even with a correct setup key                                                                                                                                                    | 🔧 FIXED IN TREE                                         |
+| PP-011 | S1  | RLS / Signup       | **Public signup is rejected by RLS** (`users_insert_auth` unsatisfiable pre-auth)                                                                                                                                                  | 🔧 FIXED IN TREE                                         |
+| PP-012 | S1  | RLS / Auth         | `login_attempts` write+read blocked → brute-force lockout silently inert                                                                                                                                                           | 🔧 FIXED IN TREE                                         |
+| PP-013 | S1  | RLS                | Tenant-isolation gate FAILED — 5 RLS-disabled, 10 policy-less, 6 NULL-tenant leaky                                                                                                                                                 | ✅ FIXED & VERIFIED                                      |
+| PP-014 | S1  | Backups            | `pg_dump` fails as the app role (`FORCE ROW LEVEL SECURITY` + `row_security=off`)                                                                                                                                                  | 🚨 OPEN                                                  |
+| PP-015 | S1  | Backups            | `BACKUP_DATABASE_URL` still points at the RLS-bound `nucrm` role                                                                                                                                                                   | 🚨 OPEN                                                  |
+| PP-016 | S3  | Observability      | Sentry events carry no `release`; `environment` **is** set and ingest is verified working — see the 2026-10-04 addendum                                                                                                            | 🔎 RE-MEASURED (release + API read scope open)           |
+| PP-017 | S3  | Observability      | promtail `docker_sd_configs` unset → Loki gets no container logs                                                                                                                                                                   | ⏸️ BLOCKED                                               |
+| PP-018 | S2  | Storage            | UpCloud Managed Object Storage `CreateBucket` → AccessDenied; buckets absent                                                                                                                                                       | ⏸️ BLOCKED                                               |
+| PP-019 | S2  | Integrations       | `RESEND_API_KEY`, `ANTHROPIC_API_KEY` missing → those features degrade silently                                                                                                                                                    | ⏸️ BLOCKED                                               |
+| PP-020 | S2  | Hardening          | UFW + SSH hardening and `infra-readiness.sh` not yet applied                                                                                                                                                                       | ⏸️ BLOCKED                                               |
+| PP-021 | S3  | Performance        | Sentry `NUCRM-1`: N+1 query on `GET /api/metrics` (12 events)                                                                                                                                                                      | 📌 INFO                                                  |
+| PP-022 | S3  | RLS                | `super_admin_audit_logs.tenant_id` is `text`, so the standard policy can't apply                                                                                                                                                   | 📌 INFO                                                  |
+| PP-028 | S1  | Performance        | Every DB statement costs a flat ~200 ms — statement _count_ is the real budget                                                                                                                                                     | 🔬 MEASURED                                              |
+| PP-029 | S2  | Deploy             | Our SIGTERM handler exited before Next.js drained; `pool.end()` hung the stop 35.93 s                                                                                                                                              | ✅ FIXED + live-verified                                 |
+| PP-030 | S1  | Scheduling         | `acquireLock` fail-closed is indistinguishable from a held lock → 20 cron jobs report `ok:true` and do nothing when Redis isn't ready                                                                                              | 🔬 MEASURED                                              |
+| PP-031 | S2  | RLS + query        | Super-admin Backups console returns nothing: swallowed `uuid = text` join, RLS-blind `backup_schedules` read and writes                                                                                                            | ✅ FIXED + live-verified                                 |
+| PP-032 | S2  | Data model         | Panel reads `backup_records` (4 failed rows), nightly job writes `tenant_backup_records` (144 rows) — two tables, no shared view                                                                                                   | 🚨 OPEN (decision)                                       |
+| PP-033 | S1  | Deploy + obs       | BuildKit cache filled root to 84% with no bound; `docker system df` under-reports it and the 80% disk alert was never live                                                                                                         | ✅ FIXED + live-verified                                 |
+| PP-034 | S1  | Observability      | Alertmanager has **never delivered an alert** — `host.docker.internal` does not resolve in its container and the receiver was never installed (~10.8k failed notifications, still counting)                                        | 🔧 PARTIAL IN TREE (needs recreate + a real receiver)    |
+| PP-035 | S1  | Privacy            | Sentry v11 `dataCollection` defaults to **collecting everything**, and `sentry.client.config.ts` (the only file with `scrubPii`) is not in the Turbopack browser bundle — so the browser has sent PII unscrubbed                   | 🔧 FIXED IN TREE (not live until #84)                    |
+| PP-036 | S2  | Performance        | Every sign-in paid ~830 ms to read one settings row — the IP allow-list gate is 4 statements at PP-028's flat 200 ms, and it runs for tenants that have no list                                                                    | 🔧 FIXED IN TREE (not live until #84)                    |
+| PP-037 | S2  | Performance        | Sign-in asked "are you blocked?" **twice**, in two security contexts — 8 statements, live-measured at 1 608 ms, against a table that holds no row for almost every caller                                                          | 🔧 FIXED IN TREE (live-measured, not deployed until #84) |
+| PP-038 | S2  | Auth + brute force | The form-encoded sign-in path took the email raw while the JSON path lowercases it: one lockout comes off that account, and a correct password typed with a capital letter fails                                                   | 🔧 FIXED IN TREE (not live until #84)                    |
+| PP-039 | S2  | Performance        | Resolving _one_ session token cost **two** `set_config` round-trips, because the acting-user and pre-auth-read GUCs were applied one statement at a time — paid by every authenticated request                                     | 🔧 FIXED IN TREE (live-measured, not deployed until #84) |
+| PP-040 | S2  | Schema drift       | Two live tables (`ai_providers`, `tenant_ai_credentials`) come from migrations 0013/0018 and are declared by **no** schema file — `npm run db:sync` would drop them, and `drift-check` printed them as `[info]` under "No drift ✓" | 🔧 GUARD SHIPPED · tables need a decision                |
+| PP-041 | S2  | Migrations         | Two applied migrations (`0059`, `0091`) are absent from `_journal.json`, so a fresh database never creates `custom_entities` or the `usage_snapshots` bypass — and `verify-migration-chain` only checks the other direction        | 🚨 OPEN                                                  |
+| PP-042 | S3  | RLS + gates        | `ai_providers` is the only one of 226 tables with neither RLS nor a policy, and `db:verify-isolation` is structurally blind to it — every check filters to tables that have a `tenant_id` column                                   | 🚨 OPEN                                                  |
 
 ## Sentry issues → register entries
 
@@ -1298,6 +1298,121 @@ inferred.
   `scripts/drift-check.ts` exiting 1 — and CI does not run it.
 - **Files:** `scripts/drift-check.ts`, `README.md`
 - **Task:** #88 (this), #75 (statement cost), #84 (deploy — unrelated, this is an ops script).
+
+## PP-041 — 🚨 Two applied migrations are not in the journal, so no fresh database can ever get them _(S2 · Migrations)_
+
+**Found:** 2026-10-04, while reconciling the table counts behind PP-040.
+
+- **First, the arithmetic that fooled an earlier pass of this file.** `drizzle/migrations/` holds **213**
+  `.sql` files, but that is **107 up-migrations + 106 `.down.sql`** twins — `0036_backup_records_checksum`
+  is the one migration with no down file. `meta/_journal.json` has **105** entries, and its `idx` values
+  are not contiguous. Comparing files to journal entries:
+  ```bash
+  python3 - <<'EOF'
+  import json, os
+  j = json.load(open('drizzle/migrations/meta/_journal.json'))
+  tags = {e['tag'] for e in j['entries']}
+  files = sorted(f[:-4] for f in os.listdir('drizzle/migrations')
+                 if f.endswith('.sql') and not f.endswith('.down.sql'))
+  print(len(files), 'up files |', len(j['entries']), 'journal entries')
+  print('files not in journal:', [t for t in files if t not in tags])
+  EOF
+  # 107 up files | 105 journal entries
+  # files not in journal: ['0059_custom_entities', '0091_usage_snapshots_superadmin_bypass']
+  ```
+- **They are applied in preprod.** `custom_entities` and `custom_entity_data` exist; `usage_snapshots`
+  carries exactly one policy named `tenant_isolation`, which is what 0091's `DROP POLICY IF EXISTS` +
+  `CREATE POLICY` produces. So preprod is _ahead_ of the journal, not behind it.
+- **Why that is dangerous and not a curiosity.** `scripts/migrate.ts:210` iterates `journal.entries`.
+  A migration with no journal entry is invisible to `npm run db:migrate` forever. Rebuild a database —
+  new region, DR restore, a CI e2e schema — and `custom_entities`/`custom_entity_data` are never created
+  and the `usage_snapshots` super-admin bypass is never installed. The second one is the exact failure
+  0091 was written to fix: its header says the weekly snapshot cron "died with an RLS violation every
+  run (NUCRM-D)". That fix is unreproducible. Nothing fails loudly, because preprod — where we test —
+  already has the objects.
+- **The chain verifier only looks the other way.** `scripts/verify-migration-chain.ts:79` reports
+  "A journal entry has no corresponding .sql file". There is no check for the reverse, and the script
+  applies migrations _in journal order_, so a scratch database it builds is silently missing the same
+  two objects. The gate that exists to prove the chain is whole passes on a broken chain.
+- **Ledger, and a real collision in it.** The ledger is `drizzle.__drizzle_migrations` — not in `public`,
+  which is why filtering `pg_tables` for it returns nothing:
+  ```sql
+  select count(*), count(distinct created_at) from drizzle.__drizzle_migrations;  -- 99 | 98
+  ```
+  Two journal entries share one `when`: `1788782400008` → `0092_metrics_tables_superadmin_bypass` **and**
+  `0096_analytics_events_ingest_insert`. `migrate.ts` advances by comparing folderMillis against the
+  newest `created_at` — its own comment at line 341 says "not by hash" — so a duplicate timestamp cannot
+  distinguish them. Any repair that inserts journal entries has to respect that ordering scheme or it
+  re-creates this ambiguity.
+- **The unbooked tail is not an outage.** Six journal migrations (0101–0106) are live but have no ledger
+  row. All six were verified present: `chk_notifications_type`, `chk_ai_activity_action`,
+  `chk_scheduled_reports_type`, `chk_integrations_type`, the `email_tracking_pixel_lookup` policy, and
+  `chk_sequence_step_logs_status` including `'sending'`. Every one is `DROP … IF EXISTS` + `ADD`/`CREATE`,
+  so a replay is idempotent and harmless. Recorded so nobody mistakes the 99-vs-105 gap for unapplied work.
+- **Fix, when someone takes it.** (1) Add the two entries to `_journal.json` with non-colliding `when`
+  values, or fold both into one new numbered migration; (2) add the reverse check — up-file without a
+  journal entry → exit 1 — to `verify-migration-chain.ts`; (3) neither `db:verify-isolation` nor
+  `verify-migration-chain` is wired into CI (`grep` of `.github/workflows/*.yml` for either name returns
+  nothing), so the guard that would catch this does not run on any push.
+- **Not done.** This is a tree-and-ledger read; no migration, journal or script was modified.
+
+## PP-042 — 🚨 `ai_providers` has no RLS and no policy, and the isolation gate is structurally blind to it _(S3 · RLS + gates)_
+
+**Found:** 2026-10-04. Companion to PP-040, and it corrects one of that entry's premises.
+
+- **The single exception in the database.**
+  ```sql
+  select c.relname, c.relrowsecurity, c.relforcerowsecurity,
+         (select count(*) from pg_policies p where p.tablename = c.relname) as policies
+  from pg_class c join pg_namespace n on n.oid = c.relnamespace
+  where n.nspname = 'public' and c.relkind = 'r'
+    and not exists (select 1 from pg_policies p where p.tablename = c.relname);
+  -- ai_providers | f | f | 0
+  ```
+  One row out of 226. The README's "277 policies on **225** tables" is 226 minus this table; that number
+  was this entry's tell.
+- **The gate cannot see it, by construction.** `scripts/verify-tenant-isolation.ts:86`:
+  `const tenantScoped = rows.filter((r) => r.tenant_id_type !== null)`. Every subsequent check —
+  RLS enabled, forced, policy present, NULL-tenant leak — derives from `tenantScoped`. A table with no
+  `tenant_id` column is never examined. PP-013's sweep was "RLS disabled on a table **with** `tenant_id`"
+  (5 tables) and "no `tenant_isolation` policy" (10 tables); `ai_providers` matches neither class, so it
+  survived both. Note the column is `relrowsecurity`, not `relrowselection` — a wrong name here errors
+  out rather than returning a misleading empty set, but only if you run it.
+- **Owner-exemption is the mechanism, and it cuts both ways.** `nucrm` is neither `rolsuper` nor
+  `rolbypassrls`, and `relacl` is empty on all three AI tables (owner-only grants). That sounds safe, but
+  the app connects **as the owner** — and a table owner is exempt from RLS unless
+  `FORCE ROW LEVEL SECURITY` is set. `tenant_ai_credentials` is `rowsecurity=t, relforcerowsecurity=t`
+  precisely so the owner stays bound; `ai_providers` has neither flag, so every statement the app issues
+  against it runs with no policy and no owner restriction. Read _and_ write — including
+  `default_base_url`, which is where outbound provider calls are pointed.
+- **Reachability, line by line.** PP-040 was revised the same morning and now agrees that neither table is
+  read by application code; the evidence is recorded here anyway because the two passes worked
+  independently and the grep is exact. Every `ai_providers` reference is to a **JSONB key inside
+  `tenants.settings`**, never the table:
+  ```
+  lib/ai/gateway.ts:143                           (t?.settings)['ai_providers']
+  app/api/tenant/ai/status/route.ts:43            (t?.settings)['ai_providers']
+  app/api/tenant/admin/ai-providers/route.ts:188   '{ai_providers}'   -- jsonb_set path
+  ```
+  `tenant_ai_credentials` appears nowhere in `.ts`/`.tsx` at all. So the live provider config lives in
+  `tenants.settings->'ai_providers'` plus `ai_provider_secrets` (which is what `drizzle/schema/ai.ts:12`
+  means by "Replaces the previous `tenants.settings.ai_providers.<id>.api_key_set`"), and the two 0013
+  tables are **unreachable dead weight** — `ai_providers`' 6 rows are seed data, `tenant_ai_credentials`
+  is empty. Two things follow that PP-040 does not cover: declaring them in `drizzle/schema/ai.ts` would
+  enshrine two dead tables and load them onto every future `drizzle-kit generate` diff, and PP-040's new
+  `drift-check` guard errors on `ai_providers (6 rows)` for a table nothing reads — a correct alarm about
+  a destructive command, but pointed at a table that should be dropped rather than protected.
+- **What that changes.** PP-040 offered "declare both in `drizzle/schema/ai.ts`" as an option. Declaring
+  them would enshrine two dead tables and make every future `drizzle-kit generate` diff carry them.
+  The defensible choices are now: drop both in a numbered migration (safe — nothing reads them, and the
+  drop is reversible by re-running 0013), or keep `ai_providers` as a genuine platform catalogue and
+  give it `ENABLE` + `FORCE ROW LEVEL SECURITY` with an explicit read-all / platform-write policy.
+- **The gate fix is independent of the decision.** `verify-tenant-isolation` should report any
+  `public` table with `relrowsecurity = false` regardless of whether it has a `tenant_id`, and treat a
+  table with zero policies as a finding in its own right. Otherwise the next unpoliced global table is
+  invisible for the same reason this one was.
+- **Not done.** No table dropped, no policy added, no script changed — the reachability audit and the
+  evidence above are the deliverable, and the decision is PP-040's to take.
 
 ## Running the pre-prod flow simulator
 

@@ -180,8 +180,18 @@ npm run guard:schemas
 
 > **Note:** 226 live vs 224 declared is a real 2-table gap: `ai_providers` and
 > `tenant_ai_credentials` exist in preprod but no schema file describes them (reverse drift — nothing
-> is declared-but-missing). Measured 2026-10-04 against preprod. The per-file breakdown below
-> describes the core domains and is a representative reference, not the full list.
+> is declared-but-missing). Neither is read by application code — the `ai_providers` hits in the AI
+> gateway and routes are the `tenants.settings -> 'ai_providers'` **jsonb key**, not the table — and
+> `ai_providers` is the only one of the 226 with RLS off and zero policies, which
+> `npm run db:verify-isolation` cannot report because every check it runs filters to tables that have a
+> `tenant_id` column. Tracked as PP-040 / PP-042. Measured 2026-10-04 against preprod. The per-file
+> breakdown below describes the core domains and is a representative reference, not the full list.
+
+> **Migration counts:** `drizzle/migrations/` holds 213 `.sql` files = **107 up-migrations + 106
+> `.down.sql`** twins (`0036_backup_records_checksum` has no down). `meta/_journal.json` tracks 105, and
+> `0059_custom_entities` / `0091_usage_snapshots_superadmin_bypass` are applied in preprod but absent from
+> it — so `npm run db:migrate`, which iterates the journal, will never create them on a fresh database.
+> Tracked as PP-041.
 
 ### Schema Files
 
