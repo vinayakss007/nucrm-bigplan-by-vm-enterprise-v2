@@ -2199,8 +2199,10 @@ status=0/SUCCESS)`, and the journal for that invocation is exactly one line: `do
   `docker system df` → `Build Cache 285 94 151.3GB 0B` (reclaimable **0 B**). `docker builder du` → reclaimable
   **114.9 GB / 191 records**. Anything monitoring this host via `docker system df` — including the alert that was supposed to
   make the 380 GB incident impossible — reads the cache as unremovable. Note also that `system df`'s "94 ACTIVE" is the
-  complement of `builder du`'s 94 `false`: the same 94 records, opposite labels, and CLI 29.8.0 names the column
-  `RECLAIMABLE` where older docs call it `Active`. Read `builder du`, not `system df`, for build cache.
+  complement of `builder du`'s 94 `false` — equal counts, which is what you would expect if one instrument means "in use"
+  and the other "not reclaimable" about the same set, though that identity is inference from the count rather than a
+  per-record join. CLI 29.8.0 heads that column `RECLAIMABLE` (four columns: ID, RECLAIMABLE, SIZE, LAST ACCESSED).
+  Read `builder du`, not `system df`, for build cache.
 - **Where the bytes actually live** (this is why `/var/lib/docker` looks innocent): `du -xsh /var/lib/*` →
   `/var/lib/containerd` **166 GB**, `/var/lib/docker` 6.8 GB; inside containerd,
   `io.containerd.snapshotter.v1.overlayfs/snapshots` **159 GB** and `io.containerd.content.v1.content` 7.3 GB, while
