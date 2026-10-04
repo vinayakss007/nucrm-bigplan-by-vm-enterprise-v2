@@ -5,6 +5,7 @@
  */
 import { createHash } from 'crypto';
 import { cookies } from 'next/headers';
+import { resolveCookieSecure } from '@/lib/auth/cookie-security';
 import { db } from '@/drizzle/db';
 import { portalClients } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
@@ -47,10 +48,11 @@ export function encodePortalSessionCookie(email: string, tenantId: string, acces
   }), 'utf8').toString('base64url');
 }
 
-export function portalSessionCookieOptions(expiresAt: Date) {
+export function portalSessionCookieOptions(expiresAt: Date, requestHttps = false) {
   return {
     httpOnly: true,
-    secure: process.env['NODE_ENV'] === 'production',
+    // #2275: central Secure resolution (COOKIE_SECURE > prod fail-closed > https).
+    secure: resolveCookieSecure(requestHttps),
     sameSite: 'lax' as const,
     path: '/',
     expires: expiresAt,
