@@ -6,7 +6,7 @@
 
 **Multi-tenant Enterprise SaaS CRM** — Next.js 16 (React 19), PostgreSQL, Drizzle ORM, TypeScript.  
 Self-hosted with a full plugin engine, workflow automation, AI-powered insights, a public
-marketing website, and 223 database tables.
+marketing website, and 224 database tables.
 
 > **📚 Documentation:** the full product documentation lives in **[`docs/`](./docs/README.md)**,
 > split into **[Public docs](./docs/public/README.md)** (users, workspace admins, developers) and
@@ -138,7 +138,7 @@ src/
 │   ├── marketing/                # Public marketing site content (features, pricing, etc.)
 │   └── export/                   # Data export
 ├── drizzle/
-│   ├── schema/                   # 46 schema files, 223 tables
+│   ├── schema/                   # 46 schema files, 224 tables
 │   └── migrations/               # DDL + indexes + RLS policies
 ├── hooks/                        # Custom React hooks
 ├── types/                        # TypeScript type definitions
@@ -155,7 +155,7 @@ src/
 
 ---
 
-## Database — 223 declared / 226 live tables
+## Database — 224 declared / 226 live tables
 
 46 schema files across 13 domains, with full RLS (Row-Level Security): **277 policies on 225
 tables**.
@@ -164,8 +164,10 @@ tables**.
 commands:
 
 ```sh
-# tables declared in the Drizzle schema (223)
-grep -rhoE "pgTable\('[a-z_]+'" drizzle/schema/ | sed "s/pgTable('//" | sort -u | wc -l
+# tables declared in the Drizzle schema (224). Count the declarations, not the name literals:
+# `drizzle/schema/files.ts` puts `pgTable(` and `'storage_documents'` on separate lines, so the
+# `pgTable\('…'` grep an earlier revision of this file recommended returns 223.
+grep -rho "pgTable(" drizzle --include='*.ts' | wc -l
 
 # tables that actually exist in the connected database (226). Note the inner `sh -c`: the app
 # image's psql is fine, but $DATABASE_URL only exists inside the container.
@@ -176,9 +178,10 @@ docker exec nucrm-app sh -c 'psql "$DATABASE_URL" -tAc \
 npm run guard:schemas
 ```
 
-> **Note:** 226 live vs 223 declared is a real 3-table gap — the database has tables no schema file
-> describes. Measured 2026-10-04 against preprod. The per-file breakdown below describes the core
-> domains and is a representative reference, not the full list.
+> **Note:** 226 live vs 224 declared is a real 2-table gap: `ai_providers` and
+> `tenant_ai_credentials` exist in preprod but no schema file describes them (reverse drift — nothing
+> is declared-but-missing). Measured 2026-10-04 against preprod. The per-file breakdown below
+> describes the core domains and is a representative reference, not the full list.
 
 ### Schema Files
 
@@ -662,7 +665,7 @@ All API endpoints except auth/public require either:
 
 **Catalog: [`docs/COMPONENTS.md`](docs/COMPONENTS.md)** — adoption counts, which component to use
 for which job, and what is already dead. Read it before adding a UI component: destructive confirms
-go through `confirmThen()` (79 files do), not a hand-rolled `<Dialog>`.
+go through `confirmThen()` (80 files do), not a hand-rolled `<Dialog>`.
 
 `badge`, `bottom-sheet`, `bulk-action-bar`, `button`, `card`, `checkbox`, `confirm-dialog`, `data-table`, `data-table-optimized`, `delete-confirm`, `dialog`, `dropdown-menu`, `error-boundary`, `inline-edit`, `input`, `language-switcher`, `mobile-card`, `optimized-image`, `pull-to-refresh`, `skeleton`, `skip-link`, `swipeable`, `table`, `index`
 
@@ -855,33 +858,33 @@ Copyright (c) 2026 abetworks.in. All Rights Reserved.
 
 ## Quick Stats
 
-| Metric            | Value     |
-| ----------------- | --------- |
-| Database Tables   | 223       |
-| Schema Files      | 46        |
-| API Routes        | 507       |
-| Total Pages       | 227       |
-| Tenant Pages      | 149       |
-| Super Admin Pages | 31        |
-| Portal Pages      | 9         |
-| Auth Pages        | 8         |
-| Marketing Pages   | 17        |
-| UI Components     | 24        |
-| Tenant Components | 82        |
-| Unit Tests        | 425 files |
-| Integration Tests | 25 files  |
+| Metric             | Value     |
+| ------------------ | --------- |
+| Database Tables    | 224       |
+| Schema Files       | 46        |
+| API Routes         | 507       |
+| Total Pages        | 227       |
+| Tenant Pages       | 149       |
+| Super Admin Pages  | 31        |
+| Portal Pages       | 9         |
+| Auth Pages         | 8         |
+| Marketing Pages    | 17        |
+| UI Components      | 24        |
+| Tenant Components  | 82        |
+| Unit Tests         | 425 files |
+| Integration Tests  | 25 files  |
+| E2E Tests          | 6 specs   |
+| Total Test Files   | 462       |
+| npm Scripts        | 96        |
+| Node Version       | >=22      |
+| Next.js Version    | 16.3.6    |
+| React Version      | 19.3.0    |
+| TypeScript Version | 5.9.3     |
 
-> Measured 2026-10-04, not estimated. Re-derive with: `grep -rhoE "pgTable\('[a-z_]+'" drizzle/schema/
-| sed "s/pgTable('//" | sort -u | wc -l` (tables) · `ls drizzle/schema/*.ts | wc -l` (schema files) ·
-> `find app/api -name route.ts | wc -l` (routes) · `find app -name page.tsx | wc -l` (pages) ·
-> `ls components/ui/*.tsx \| grep -vc stories` (UI components) · `find components/tenant -name '*.tsx'
-| wc -l` · `find tests -name '*.test.*' \| wc -l`. Note this table and the sections above it were
-> both stale when measured (schema files said 60+, actual 46; API routes said ~490, actual 507;
-> unit tests said ~350, actual 425).
-> | E2E Tests | 6 specs |
-> | Total Test Files | 462 |
-> | npm Scripts | 79 |
-> | Node Version | >=22 |
-> | Next.js Version | 16.3.3 |
-> | React Version | 19 |
-> | TypeScript Version | 5.9 |
+> Measured 2026-10-04, not estimated. Re-derive with: `grep -rho "pgTable(" drizzle --include='*.ts' | wc -l`
+> (tables) · `ls drizzle/schema/*.ts | wc -l` (schema files) · `find app/api -name route.ts | wc -l`
+> (routes) · `find app -name page.tsx | wc -l` (pages) · `ls components/ui/*.tsx | grep -vc stories`
+> (UI components) · `find components/tenant -name '*.tsx' | wc -l` · `find tests -name '*.test.*' | wc -l`
+> (all test files) · `node -e "console.log(Object.keys(require('./package.json').scripts).length)"`
+> (npm scripts). Note this table and the sections above it were both stale when measured (schema files
+> said 60+, actual 46; API routes said ~490, actual 507; unit tests said ~350, actual 425).
