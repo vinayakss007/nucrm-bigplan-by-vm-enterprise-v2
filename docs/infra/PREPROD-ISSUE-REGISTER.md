@@ -23,37 +23,38 @@ Severity: **S1** blocks go-live · **S2** broken feature or security weakness ·
 
 ## Summary
 
-| ID     | Sev | Area          | Issue (one line)                                                                                                                                                                            | Status                                                |
-| ------ | --- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
-| PP-001 | S2  | Deploy        | `nginx` reported `(unhealthy)` while serving 200s — probe hit IPv6 `::1`                                                                                                                    | ✅ FIXED & VERIFIED                                   |
-| PP-002 | S2  | Deploy        | `app` reported `(unhealthy)` for the same `localhost` → `::1` reason                                                                                                                        | ✅ FIXED & VERIFIED                                   |
-| PP-003 | S1  | Setup         | First-run setup form **always 403** — key sent in body, route reads header                                                                                                                  | 🔧 FIXED IN TREE                                      |
-| PP-004 | S2  | Backups       | Failed `pg_dump` left a partial dump that passes sanity checks                                                                                                                              | 🔧 FIXED IN TREE                                      |
-| PP-005 | S2  | Build         | `NEXT_PUBLIC_APP_URL` hardcoded to `http://localhost:3000` in the image bundle                                                                                                              | ✅ FIXED & VERIFIED                                   |
-| PP-006 | S2  | Build         | `next build` TypeScript step OOMs on Node's default heap                                                                                                                                    | ✅ FIXED & VERIFIED                                   |
-| PP-007 | S1  | Build         | `realtime.ts` (socket.io server) shipped in **no** image                                                                                                                                    | ✅ FIXED & VERIFIED                                   |
-| PP-008 | S1  | Compose       | Undeclared `alertmanagerdata` volume aborted the whole compose project                                                                                                                      | ✅ FIXED & VERIFIED                                   |
-| PP-009 | S1  | Compose       | `minio/minio:latest`, `minio/mc:latest`, `edoburu/pgbouncer:1.23` no longer resolve                                                                                                         | ✅ FIXED & VERIFIED                                   |
-| PP-010 | S1  | RLS / Setup   | **First super-admin insert is rejected by RLS** — even with a correct setup key                                                                                                             | 🔧 FIXED IN TREE                                      |
-| PP-011 | S1  | RLS / Signup  | **Public signup is rejected by RLS** (`users_insert_auth` unsatisfiable pre-auth)                                                                                                           | 🔧 FIXED IN TREE                                      |
-| PP-012 | S1  | RLS / Auth    | `login_attempts` write+read blocked → brute-force lockout silently inert                                                                                                                    | 🔧 FIXED IN TREE                                      |
-| PP-013 | S1  | RLS           | Tenant-isolation gate FAILED — 5 RLS-disabled, 10 policy-less, 6 NULL-tenant leaky                                                                                                          | ✅ FIXED & VERIFIED                                   |
-| PP-014 | S1  | Backups       | `pg_dump` fails as the app role (`FORCE ROW LEVEL SECURITY` + `row_security=off`)                                                                                                           | 🚨 OPEN                                               |
-| PP-015 | S1  | Backups       | `BACKUP_DATABASE_URL` still points at the RLS-bound `nucrm` role                                                                                                                            | 🚨 OPEN                                               |
-| PP-016 | S3  | Observability | Sentry events carry no `release`; `environment` **is** set and ingest is verified working — see the 2026-10-04 addendum                                                                     | 🔎 RE-MEASURED (release + API read scope open)        |
-| PP-017 | S3  | Observability | promtail `docker_sd_configs` unset → Loki gets no container logs                                                                                                                            | ⏸️ BLOCKED                                            |
-| PP-018 | S2  | Storage       | UpCloud Managed Object Storage `CreateBucket` → AccessDenied; buckets absent                                                                                                                | ⏸️ BLOCKED                                            |
-| PP-019 | S2  | Integrations  | `RESEND_API_KEY`, `ANTHROPIC_API_KEY` missing → those features degrade silently                                                                                                             | ⏸️ BLOCKED                                            |
-| PP-020 | S2  | Hardening     | UFW + SSH hardening and `infra-readiness.sh` not yet applied                                                                                                                                | ⏸️ BLOCKED                                            |
-| PP-021 | S3  | Performance   | Sentry `NUCRM-1`: N+1 query on `GET /api/metrics` (12 events)                                                                                                                               | 📌 INFO                                               |
-| PP-022 | S3  | RLS           | `super_admin_audit_logs.tenant_id` is `text`, so the standard policy can't apply                                                                                                            | 📌 INFO                                               |
-| PP-028 | S1  | Performance   | Every DB statement costs a flat ~200 ms — statement _count_ is the real budget                                                                                                              | 🔬 MEASURED                                           |
-| PP-029 | S2  | Deploy        | Our SIGTERM handler exited before Next.js drained; `pool.end()` hung the stop 35.93 s                                                                                                       | ✅ FIXED + live-verified                              |
-| PP-030 | S1  | Scheduling    | `acquireLock` fail-closed is indistinguishable from a held lock → 20 cron jobs report `ok:true` and do nothing when Redis isn't ready                                                       | 🔬 MEASURED                                           |
-| PP-031 | S2  | RLS + query   | Super-admin Backups console returns nothing: swallowed `uuid = text` join, RLS-blind `backup_schedules` read and writes                                                                     | ✅ FIXED + live-verified                              |
-| PP-032 | S2  | Data model    | Panel reads `backup_records` (4 failed rows), nightly job writes `tenant_backup_records` (144 rows) — two tables, no shared view                                                            | 🚨 OPEN (decision)                                    |
-| PP-033 | S1  | Deploy + obs  | BuildKit cache filled root to 84% with no bound; `docker system df` under-reports it and the 80% disk alert was never live                                                                  | ✅ FIXED + live-verified                              |
-| PP-034 | S1  | Observability | Alertmanager has **never delivered an alert** — `host.docker.internal` does not resolve in its container and the receiver was never installed (~10.8k failed notifications, still counting) | 🔧 PARTIAL IN TREE (needs recreate + a real receiver) |
+| ID     | Sev | Area          | Issue (one line)                                                                                                                                                                                                 | Status                                                |
+| ------ | --- | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| PP-001 | S2  | Deploy        | `nginx` reported `(unhealthy)` while serving 200s — probe hit IPv6 `::1`                                                                                                                                         | ✅ FIXED & VERIFIED                                   |
+| PP-002 | S2  | Deploy        | `app` reported `(unhealthy)` for the same `localhost` → `::1` reason                                                                                                                                             | ✅ FIXED & VERIFIED                                   |
+| PP-003 | S1  | Setup         | First-run setup form **always 403** — key sent in body, route reads header                                                                                                                                       | 🔧 FIXED IN TREE                                      |
+| PP-004 | S2  | Backups       | Failed `pg_dump` left a partial dump that passes sanity checks                                                                                                                                                   | 🔧 FIXED IN TREE                                      |
+| PP-005 | S2  | Build         | `NEXT_PUBLIC_APP_URL` hardcoded to `http://localhost:3000` in the image bundle                                                                                                                                   | ✅ FIXED & VERIFIED                                   |
+| PP-006 | S2  | Build         | `next build` TypeScript step OOMs on Node's default heap                                                                                                                                                         | ✅ FIXED & VERIFIED                                   |
+| PP-007 | S1  | Build         | `realtime.ts` (socket.io server) shipped in **no** image                                                                                                                                                         | ✅ FIXED & VERIFIED                                   |
+| PP-008 | S1  | Compose       | Undeclared `alertmanagerdata` volume aborted the whole compose project                                                                                                                                           | ✅ FIXED & VERIFIED                                   |
+| PP-009 | S1  | Compose       | `minio/minio:latest`, `minio/mc:latest`, `edoburu/pgbouncer:1.23` no longer resolve                                                                                                                              | ✅ FIXED & VERIFIED                                   |
+| PP-010 | S1  | RLS / Setup   | **First super-admin insert is rejected by RLS** — even with a correct setup key                                                                                                                                  | 🔧 FIXED IN TREE                                      |
+| PP-011 | S1  | RLS / Signup  | **Public signup is rejected by RLS** (`users_insert_auth` unsatisfiable pre-auth)                                                                                                                                | 🔧 FIXED IN TREE                                      |
+| PP-012 | S1  | RLS / Auth    | `login_attempts` write+read blocked → brute-force lockout silently inert                                                                                                                                         | 🔧 FIXED IN TREE                                      |
+| PP-013 | S1  | RLS           | Tenant-isolation gate FAILED — 5 RLS-disabled, 10 policy-less, 6 NULL-tenant leaky                                                                                                                               | ✅ FIXED & VERIFIED                                   |
+| PP-014 | S1  | Backups       | `pg_dump` fails as the app role (`FORCE ROW LEVEL SECURITY` + `row_security=off`)                                                                                                                                | 🚨 OPEN                                               |
+| PP-015 | S1  | Backups       | `BACKUP_DATABASE_URL` still points at the RLS-bound `nucrm` role                                                                                                                                                 | 🚨 OPEN                                               |
+| PP-016 | S3  | Observability | Sentry events carry no `release`; `environment` **is** set and ingest is verified working — see the 2026-10-04 addendum                                                                                          | 🔎 RE-MEASURED (release + API read scope open)        |
+| PP-017 | S3  | Observability | promtail `docker_sd_configs` unset → Loki gets no container logs                                                                                                                                                 | ⏸️ BLOCKED                                            |
+| PP-018 | S2  | Storage       | UpCloud Managed Object Storage `CreateBucket` → AccessDenied; buckets absent                                                                                                                                     | ⏸️ BLOCKED                                            |
+| PP-019 | S2  | Integrations  | `RESEND_API_KEY`, `ANTHROPIC_API_KEY` missing → those features degrade silently                                                                                                                                  | ⏸️ BLOCKED                                            |
+| PP-020 | S2  | Hardening     | UFW + SSH hardening and `infra-readiness.sh` not yet applied                                                                                                                                                     | ⏸️ BLOCKED                                            |
+| PP-021 | S3  | Performance   | Sentry `NUCRM-1`: N+1 query on `GET /api/metrics` (12 events)                                                                                                                                                    | 📌 INFO                                               |
+| PP-022 | S3  | RLS           | `super_admin_audit_logs.tenant_id` is `text`, so the standard policy can't apply                                                                                                                                 | 📌 INFO                                               |
+| PP-028 | S1  | Performance   | Every DB statement costs a flat ~200 ms — statement _count_ is the real budget                                                                                                                                   | 🔬 MEASURED                                           |
+| PP-029 | S2  | Deploy        | Our SIGTERM handler exited before Next.js drained; `pool.end()` hung the stop 35.93 s                                                                                                                            | ✅ FIXED + live-verified                              |
+| PP-030 | S1  | Scheduling    | `acquireLock` fail-closed is indistinguishable from a held lock → 20 cron jobs report `ok:true` and do nothing when Redis isn't ready                                                                            | 🔬 MEASURED                                           |
+| PP-031 | S2  | RLS + query   | Super-admin Backups console returns nothing: swallowed `uuid = text` join, RLS-blind `backup_schedules` read and writes                                                                                          | ✅ FIXED + live-verified                              |
+| PP-032 | S2  | Data model    | Panel reads `backup_records` (4 failed rows), nightly job writes `tenant_backup_records` (144 rows) — two tables, no shared view                                                                                 | 🚨 OPEN (decision)                                    |
+| PP-033 | S1  | Deploy + obs  | BuildKit cache filled root to 84% with no bound; `docker system df` under-reports it and the 80% disk alert was never live                                                                                       | ✅ FIXED + live-verified                              |
+| PP-034 | S1  | Observability | Alertmanager has **never delivered an alert** — `host.docker.internal` does not resolve in its container and the receiver was never installed (~10.8k failed notifications, still counting)                      | 🔧 PARTIAL IN TREE (needs recreate + a real receiver) |
+| PP-035 | S1  | Privacy       | Sentry v11 `dataCollection` defaults to **collecting everything**, and `sentry.client.config.ts` (the only file with `scrubPii`) is not in the Turbopack browser bundle — so the browser has sent PII unscrubbed | 🔧 FIXED IN TREE (not live until #84)                 |
 
 ## Sentry issues → register entries
 
@@ -428,10 +429,15 @@ Everything above was written from a single event's metadata. I checked the runni
   `SENTRY_RELEASE` (or `NEXT_PUBLIC_SENTRY_RELEASE`) from the deploy pipeline with the git SHA, which
   also enables source maps and deploy records.
 - **Two more facts found while measuring, both worth knowing before the next incident.**
-  - The image ships skewed Sentry majors: `@sentry/node 10.75.0` next to `@sentry/core`,
-    `@sentry/nextjs`, `@sentry/browser` all at **11.1.0**, while `package.json` declares only
-    `@sentry/nextjs: ^11.1.0`. This is why `afterSendEvent` never fires — see the note below about
-    not trusting it as a delivery probe.
+  - ~~The image ships skewed Sentry majors: `@sentry/node 10.75.0` next to `@sentry/core`,
+    `@sentry/nextjs`, `@sentry/browser` all at **11.1.0**~~ — **retracted 2026-10-04, measurement
+    error.** `require('@sentry/node/package.json')` from the app root does print 10.75.0, but that
+    hoisted copy belongs to `lighthouse` (a devDependency). `npm ls @sentry/node` shows
+    `@sentry/nextjs@11.1.0 └── @sentry/node@11.1.0` nested under
+    `node_modules/@sentry/nextjs/node_modules/`, and no source file in this repo imports
+    `@sentry/*` except `@sentry/nextjs` (12 occurrences). The app therefore runs one coherent 11.1.0
+    chain. Whatever makes `afterSendEvent` silent, **it is not version skew, and it is still
+    unexplained.**
   - `SENTRY_AUTH_TOKEN` (187 chars, value never printed) **authenticates but has no read scope**:
     `GET /api/0/projects/asd-pz/nucrm/` and `GET /api/0/organizations` both return **403**, not 401 —
     the token is valid, the capability is absent. Consequence: nothing in this repo or CI can confirm
@@ -954,6 +960,86 @@ log nobody reads since it started.
   seen an actual notification land. The register previously listed alert rules as present and treated
   that as monitoring coverage; rules without delivery are telemetry nobody reads.
 - **Task:** #82 (measured), #83 (the remaining decision).
+
+## PP-035 — 🚨 Sentry's v11 `dataCollection` defaults to collecting **everything**, and the browser entry that actually ships had no scrubbing at all _(S1/S2 · Privacy)_
+
+Found while writing the `scrubPii` regression test for the `/g`-regex leak: the comment in our Sentry
+configs claimed the opposite of what the installed SDK does. Both halves were then measured, not
+inferred.
+
+- **Half 1 — defaults are ON.** `node_modules/@sentry/core/build/cjs/utils/data-collection/resolveDataCollectionOptions.js`
+  is 30 lines of `dc.x ?? DEFAULTS.x` with every `DEFAULTS` entry true. Proven by running it inside the
+  live `nucrm-app` container:
+  ```
+  node -e "console.log(JSON.stringify(require('<path>/resolveDataCollectionOptions.js').resolveDataCollectionOptions({})))"
+  {"userInfo":true,"cookies":true,"httpHeaders":{"request":true,"response":true},
+   "httpBodies":["incomingRequest","outgoingRequest","incomingResponse","outgoingResponse"],
+   "urlQueryParams":true,"graphQL":{"document":true,"variables":true},"genAI":{"inputs":true,"outputs":true},
+   "databaseQueryData":true,"queues":true,"stackFrameVariables":true,"frameContextLines":5}
+  ```
+  `sendDefaultPii` no longer exists in `@sentry/core` at all (grep → 0 hits). So the comment in all four
+  of our Sentry files — "the SDK now treats anything other than an explicit `dataCollection` opt-in as
+  off, so PII is still never sent" — described v10 and is **false for the v11.1.0 we run**. Omitting the
+  option was the maximum-PII setting; `beforeSend` was the only defence.
+- **Half 2 — and in the browser there was no defence.** Two files initialise Sentry on the client:
+  `sentry.client.config.ts` (has `beforeSend: scrubPii`) and `instrumentation-client.ts` (has none).
+  Only the second is in the shipped bundle. Measured against the deployed image (`/app/.next`, built
+  2026-10-03T15:36Z), using string literals because minification renames identifiers but never touches
+  strings:
+
+  | marker                         | file it comes from                            | `/app/.next/static` (browser) | `/app/.next/server` |
+  | ------------------------------ | --------------------------------------------- | ----------------------------- | ------------------- |
+  | `redacted-email`               | `sentry-pii-scrub.ts`                         | **0 files**                   | 4 files             |
+  | `nucrm-app`                    | `sentry.client.config.ts` `initialScope.tags` | **0 files**                   | —                   |
+  | `captureRouterTransitionStart` | `instrumentation-client.ts`                   | 3 files                       | —                   |
+  | `replaysSessionSampleRate`     | `instrumentation-client.ts`                   | 2 files                       | —                   |
+
+  Corroborating mechanism: `@sentry/nextjs` injects `sentry.client.config.ts` from a **webpack** plugin
+  (`build/cjs/config/webpack.js:342` `getClientSentryConfigFile`), and `next build` on Next 16.3.6 is a
+  Turbopack build — `/app/.next/turbopack` exists. The SDK's own double-init warning
+  (`build/cjs/client/index.js:37`) names exactly this pair of files. So `sentry.client.config.ts` is
+  dead code in this build: the browser has been sending cookies, headers, bodies, query strings,
+  stack-frame variables and 5 lines of source around every frame, **unscrubbed**, and has been doing so
+  for the whole life of the v11 upgrade. Session replay rates (10 % / 100 % on error) are configured
+  there too; replay masking behaviour was **not** measured and is a follow-up.
+
+- **Changed in the tree by this PR.**
+  - `sentry-data-collection.ts` (new) — one explicitly-all-off object, shared by all four init sites,
+    with the measured default list in its comment.
+  - `sentry.server.config.ts`, `sentry.edge.config.ts`, `sentry.client.config.ts`,
+    `instrumentation-client.ts` — each now passes `dataCollection: DATA_COLLECTION`, the false comment
+    is replaced by the true one, and `instrumentation-client.ts` additionally gained
+    `beforeSend: scrubPii` so the browser finally has the same second layer as the server.
+  - `sentry.client.config.ts` header now says out loud that it is **not** the live browser entry, so a
+    future reader cannot mistake an edit there for a shipped fix.
+  - `tests/unit/sentry-data-collection.test.ts` (new) — asserts through the SDK's own resolver that
+    `{}` collects everything, that our object resolves to **nothing** collected, and that
+    `Object.keys(DATA_COLLECTION)` equals the resolver's full field list. That last one is the upgrade
+    tripwire: a Sentry that adds a fifth collector fails CI instead of quietly collecting. Two further
+    tests read the four init-site files to catch `dataCollection`/`scrubPii` being dropped again.
+  - `tests/unit/sentry-pii-scrub.test.ts` (new) + the `sentry-pii-scrub.ts` fix it covers: a `/g` regex
+    used as an `.test()` guard carries `lastIndex` between calls, so the breadcrumb redaction fired
+    only intermittently and an address could go out unredacted. Also covers string-shaped cookies
+    (`sid=1; theme=dark`) passing through untouched and `query_string` being blanked instead of redacted.
+  - Verified: `tsc --noEmit` exit 0, `eslint --max-warnings=0` clean on the six touched files,
+    full `tests/unit` + `tests/dashboard` green (one pre-existing unrelated
+    `EnvironmentTeardownError` in `ai-auto-followup.test.ts`).
+- **Not covered by this fix — the residual list.** `scrubPii` still ignores `event.extra`, `event.tags`,
+  `event.request.data` (body text) and `event.user.id`. With `dataCollection` off, the SDK should not
+  populate the body/header/variable fields any more, but `lib/capture-error.ts` and every
+  `clientLogError(ctx, err, {…})` caller put **their own** data into `extra`/`tags`, and that path is
+  untouched. Anything a developer already writes into `extra` is still sent verbatim.
+- **What cannot be verified from here.** The claim "events contained cookies/headers/bodies" is a
+  statement about SDK behaviour plus config, proved by the resolver — **not** a statement about what is
+  in the Sentry project, because `SENTRY_AUTH_TOKEN` has no read scope (403, see PP-016). Nobody has
+  looked at a real browser event. Once the token gets `project:read`, the first check should be whether
+  historical events carry `request.cookies`/`request.data`.
+- **Not live.** This is tree-only. The deployed bundle is the one measured above; it changes on the
+  rebuild in **#84**.
+- **Lesson for this repo's docs.** A comment that says "the SDK is safe by default" is an assertion
+  about a dependency, and dependencies get upgraded. Where the claim is load-bearing for GDPR, the test
+  should read the dependency's own behaviour (the resolver here) rather than our copy of it.
+- **Task:** #82 (found during the Sentry check), #84 (deploy).
 
 ## Running the pre-prod flow simulator
 
