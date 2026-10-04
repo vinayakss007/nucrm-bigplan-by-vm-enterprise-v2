@@ -16,6 +16,12 @@ import { acquireLock, releaseLock } from '@/lib/cache/index';
 import { claimWebhookEvent, completeWebhookEvent, releaseWebhookEvent } from '@/lib/webhooks/idempotency';
 import { fireWebhooks } from '@/lib/webhooks';
 import { logError } from '@/lib/errors-server';
+import {
+  resolveCheckoutPlan,
+  planFromPriceId,
+  priceIdFromSubscription,
+  type CheckoutSessionLike,
+} from '@/lib/stripe-plan-resolution';
 
 const IDEMPOTENCY_TTL = 3600 * 24; // 24 hours
 
@@ -181,24 +187,61 @@ async function handleCheckoutCompleted(session: StripeSessionLike) {
     ? session.subscription
     : session.subscription?.id;
 
-  // Determine plan using the most reliable method available:
-  // 1. Try subscription object (price ID mapping)
-  // 2. Try line_items price ID
-  // 3. Fall back to amount heuristic (last resort)
-  const planId = determinePlanFromCheckoutSession(session);
+  // #2303: plan resolution is FAIL CLOSED. The price id — from the expanded
+  // subscription item, expanded line_items, or a fresh API retrieval of the
+  // session — is mapped against the env STRIPE_PRICE_* catalog. There is no
+  // amount heuristic and no `|| 'starter'` default: an unknown/unmapped price
+  // must NEVER activate a tenant with a guessed tier.
+  const resolution = await resolveCheckoutPlan(session as CheckoutSessionLike);
+
+  if (!resolution.ok) {
+    // Record the billing identifiers so ops can reconcile, but keep the tenant
+    // in the non-entitled 'past_due' state (never 'active', planId untouched).
+    await db.update(tenants)
+      .set({
+        stripeCustomerId: customerId,
+        stripeSubscriptionId: subscriptionId,
+        status: 'past_due',
+        billingType: 'stripe',
+        updatedAt: new Date(),
+      })
+      .where(eq(tenants.id, tenantId));
+
+    const detail = resolution.priceId
+      ? `price '${resolution.priceId}' is not in the STRIPE_PRICE_* catalog`
+      : `no price id available (reason: ${resolution.reason})`;
+    void logError({
+      error: new Error(`[Stripe] checkout.session.completed fail-closed for tenant ${tenantId}: ${detail}`),
+      context: 'webhooks/stripe unmapped checkout price',
+      metadata: { tenantId, sessionId: session.id, subscriptionId, reason: resolution.reason, priceId: resolution.priceId },
+      level: 'error',
+    });
+    // Admin alert — the repo's established admin path (sendAdminTelegram).
+    sendAdminTelegram({
+      icon: '⚠️',
+      title: 'Stripe plan NOT activated (fail-closed)',
+      message:
+        `Tenant: \`${tenantId}\`\nSession: \`${session.id ?? 'unknown'}\`\n` +
+        `Reason: ${resolution.reason}\nPrice: \`${resolution.priceId ?? 'n/a'}\`\n` +
+        'Tenant kept past_due — verify STRIPE_PRICE_* config or the Stripe price, then re-deliver the event.',
+    }).catch((e) => void logError({ error: e, context: 'webhooks/stripe fail-closed admin telegram', level: 'warning' }));
+
+    logger.warn(`[Stripe] Tenant ${tenantId} checkout NOT activated (fail closed): ${detail}`);
+    return;
+  }
 
   await db.update(tenants)
     .set({
       stripeCustomerId: customerId,
       stripeSubscriptionId: subscriptionId,
-      planId: planId || 'starter',
+      planId: resolution.planId,
       status: 'active',
       billingType: 'stripe',
       updatedAt: new Date(),
     })
     .where(eq(tenants.id, tenantId));
 
-  logger.info(`[Stripe] Tenant ${tenantId} activated with plan ${planId}`);
+  logger.info(`[Stripe] Tenant ${tenantId} activated with plan ${resolution.planId} (price ${resolution.priceId}, source ${resolution.source})`);
 }
 
 async function handleSubscriptionUpdated(subscription: StripeSubscriptionLike) {
@@ -249,7 +292,9 @@ async function handleSubscriptionUpdated(subscription: StripeSubscriptionLike) {
   // which is already handled above; keep it referenced for clarity.
   void cancelAtPeriodEnd;
 
-  const planId = determinePlanFromSubscription(subscription);
+  // #2303: single price-id catalog (STRIPE_PRICE_* env) — an unmapped price
+  // yields null, which leaves planId untouched below (never coerced to a tier).
+  const planId = planFromPriceId(priceIdFromSubscription(subscription));
 
   // Do not resurrect a tenant that an admin (or a prior terminal event) has
   // already put into a terminal state. A routine metadata-only
@@ -424,70 +469,4 @@ async function resolveTenantId(subscription: StripeSubscriptionLike): Promise<st
     columns: { id: true },
   });
   return tenant?.id ?? null;
-}
-
-function determinePlanFromCheckoutSession(session: StripeSessionLike): string | null {
-  // Strategy 1: If the subscription is expanded (object with items), use price ID mapping
-  const subscription = session.subscription;
-  if (subscription && typeof subscription === 'object') {
-    const plan = determinePlanFromSubscription(subscription);
-    if (plan) return plan;
-  }
-
-  // Strategy 2: Extract price ID from session line_items (if expanded on the session)
-  const lineItems = session.line_items?.data;
-  if (Array.isArray(lineItems) && lineItems.length > 0) {
-    const priceId = lineItems[0]?.price?.id;
-    if (priceId) {
-      const plan = determinePlanFromPriceId(priceId);
-      if (plan) return plan;
-    }
-  }
-
-  // Strategy 3 (last-resort fallback): Amount-based heuristic.
-  // WARNING: This is fragile and will break if prices change. It exists only as a
-  // safety net when Stripe does not expand subscription or line_items on the session.
-  const amountTotal = session.amount_total; // in cents
-  if (!amountTotal) return null;
-
-  if (amountTotal <= 2900) return 'starter';
-  if (amountTotal <= 7900) return 'pro';
-  return 'enterprise';
-}
-
-/**
- * Map a Stripe price ID to a NuCRM plan using environment variable configuration.
- */
-function determinePlanFromPriceId(priceId: string): string | null {
-  const starterMonthly = process.env['STRIPE_PRICE_STARTER_MONTHLY'];
-  const starterYearly = process.env['STRIPE_PRICE_STARTER_YEARLY'];
-  const proMonthly = process.env['STRIPE_PRICE_PRO_MONTHLY'];
-  const proYearly = process.env['STRIPE_PRICE_PRO_YEARLY'];
-  const enterpriseMonthly = process.env['STRIPE_PRICE_ENTERPRISE_MONTHLY'];
-  const enterpriseYearly = process.env['STRIPE_PRICE_ENTERPRISE_YEARLY'];
-
-  if (priceId === starterMonthly || priceId === starterYearly) return 'starter';
-  if (priceId === proMonthly || priceId === proYearly) return 'pro';
-  if (priceId === enterpriseMonthly || priceId === enterpriseYearly) return 'enterprise';
-
-  return null;
-}
-
-function determinePlanFromSubscription(subscription: StripeSubscriptionLike): string | null {
-  const priceId = subscription.items?.data?.[0]?.price?.id;
-  if (!priceId) return null;
-
-  // Check against configured price IDs
-  const starterMonthly = process.env['STRIPE_PRICE_STARTER_MONTHLY'];
-  const starterYearly = process.env['STRIPE_PRICE_STARTER_YEARLY'];
-  const proMonthly = process.env['STRIPE_PRICE_PRO_MONTHLY'];
-  const proYearly = process.env['STRIPE_PRICE_PRO_YEARLY'];
-  const enterpriseMonthly = process.env['STRIPE_PRICE_ENTERPRISE_MONTHLY'];
-  const enterpriseYearly = process.env['STRIPE_PRICE_ENTERPRISE_YEARLY'];
-
-  if (priceId === starterMonthly || priceId === starterYearly) return 'starter';
-  if (priceId === proMonthly || priceId === proYearly) return 'pro';
-  if (priceId === enterpriseMonthly || priceId === enterpriseYearly) return 'enterprise';
-
-  return null;
 }

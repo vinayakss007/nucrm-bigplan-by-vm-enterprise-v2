@@ -422,7 +422,7 @@ export async function updateSchedulePhases(
  *   phase 0 — current price until current_period_end (unchanged billing)
  *   phase 1 — new price, ongoing, no proration
  * When phase 1 starts, Stripe emits customer.subscription.updated and the
- * existing webhook handler flips the plan via determinePlanFromPriceId.
+ * existing webhook handler flips the plan via planFromPriceId (#2303).
  */
 export async function scheduleDowngradeAtPeriodEnd(
   subscriptionId: string,
