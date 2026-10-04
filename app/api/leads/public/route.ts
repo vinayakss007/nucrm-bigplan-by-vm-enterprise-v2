@@ -16,6 +16,7 @@ import { leads, tenants, plans, companies, leadActivities, forms, formSubmission
 import { eq, and, sql, ilike, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { isEntityId } from '@/lib/id';
 import { createNotification } from '@/lib/notifications';
 import { fireWebhooks } from '@/lib/webhooks';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
@@ -83,6 +84,35 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid or inactive organization' }, { status: 404 });
     }
 
+    // #2334: `form_id` is caller-supplied on an UNAUTHENTICATED endpoint and was
+    // never validated two ways. (a) Shape: a non-uuid reached `eq(forms.id, …)`
+    // and Postgres answered `22P02 invalid input syntax for type uuid`, which
+    // surfaced as a 500 — the same class closed for /api/forms/submit in #2288.
+    // (b) Ownership: nothing proved the form belongs to THIS tenant, is active,
+    // or is not soft-deleted, so `forms.submissions_count` could be bumped on
+    // any foreign form and a submission row could be stamped with a form id from
+    // another workspace (the form FK is global, so Postgres accepts the pair).
+    // Ownership is checked BEFORE any write for that reason.
+    let formTenantId: string | null = null;
+    if (form_id) {
+      if (!isEntityId(form_id)) {
+        return NextResponse.json({ error: 'Invalid form id' }, { status: 400 });
+      }
+      const form = await db.query.forms.findFirst({
+        where: and(
+          eq(forms.id, form_id),
+          eq(forms.tenantId, tenant_id),
+          eq(forms.isActive, true),
+          isNull(forms.deletedAt),
+        ),
+        columns: { id: true, tenantId: true },
+      });
+      if (!form) {
+        return NextResponse.json({ error: 'Invalid or inactive form' }, { status: 404 });
+      }
+      formTenantId = form.tenantId;
+    }
+
     // Check contact limit before inserting
     const limitCheck = await db
       .select({ 
@@ -147,6 +177,30 @@ export async function POST(request: NextRequest) {
         columns: { id: true, tags: true, leadStatus: true, formSubmissionsCount: true }
       });
 
+      // #2334: recorded inside the capture transaction — for a NEW lead and for
+      // a repeat submission — so a submission that cannot be written does not
+      // leave a half-captured lead behind, and the counter bump carries the
+      // tenant predicate.
+      //
+      // `contactId` is deliberately NOT set to `leadId` any more. That column
+      // has FK `form_submissions.contact_id -> contacts.id` (validated on the
+      // live DB), while `leadId` names a row in `leads` — so every submission
+      // this endpoint ever attempted died in 23503 and the visitor got a 500.
+      // The lead side already carries the link (`leads.formId`), and
+      // `contact_id` is nullable by design (#1053).
+      const recordFormSubmission = async () => {
+        if (!form_id || !formTenantId) return;
+        await tx.insert(formSubmissions).values({
+          tenantId: formTenantId,
+          formId: form_id,
+          data: { first_name: safeFirst, last_name: safeLast, email: normalizedEmail, phone: phone.trim(), company: safeCompany, message: safeMessage, source: safeSource },
+        });
+
+        await tx.update(forms)
+          .set({ submissionsCount: sql`${forms.submissionsCount} + 1` })
+          .where(and(eq(forms.id, form_id), eq(forms.tenantId, formTenantId)));
+      };
+
       if (existingLead) {
         // Re-activate and update existing lead
         const newTags = Array.isArray(tags) ? tags : [];
@@ -168,6 +222,7 @@ export async function POST(request: NextRequest) {
           .returning({ id: leads.id });
 
         leadId = updated?.id ?? existingLead.id;
+        await recordFormSubmission();
         return;
       }
 
@@ -197,23 +252,9 @@ export async function POST(request: NextRequest) {
         activityType: 'created',
         description: `Lead captured via ${safeSource}${form_id ? ` (form: ${form_id})` : ''}`,
       });
+
+      await recordFormSubmission();
     });
-
-    // Insert into formSubmissions if form_id provided
-    if (form_id && leadId) {
-      await db.transaction(async (tx) => {
-        await tx.insert(formSubmissions).values({
-          tenantId: tenant_id,
-          formId: form_id,
-          contactId: leadId,
-          data: { first_name: safeFirst, last_name: safeLast, email: email.trim().toLowerCase(), phone: phone.trim(), company: safeCompany, message: safeMessage, source: safeSource },
-        });
-
-        await tx.update(forms)
-          .set({ submissionsCount: sql`${forms.submissionsCount} + 1` })
-          .where(eq(forms.id, form_id));
-      });
-    }
 
     // Notify workspace owner about new lead
     if (tenant.ownerId && leadId) {
