@@ -241,6 +241,105 @@ export async function recordInvoicePayment(
   });
 }
 
+export interface UpdatePaymentInput {
+  invoiceId: string;
+  paymentId: string;
+  tenantId: string;
+  userId: string;
+  amount?: number;
+  paymentDate?: string;
+  paymentMethod?: string | null;
+  reference?: string | null;
+  notes?: string | null;
+  /** Permit an edit that takes the invoice past its total. */
+  allowOverpayment?: boolean;
+}
+
+/**
+ * #2289: Correct a mis-keyed payment in place and recompute the invoice
+ * summary atomically. Before this, void + re-record was the only fix path,
+ * which loses the original row's identity and forces the reference (if any)
+ * to be recycled. Same overpayment policy as recordInvoicePayment: raising an
+ * amount past the outstanding balance is rejected unless allowOverpayment,
+ * and the rejection rolls the whole transaction back so neither the ledger
+ * row nor the summary keeps a partial edit.
+ */
+export async function updateInvoicePayment(input: UpdatePaymentInput): Promise<RecordPaymentResult> {
+  let amount: number | undefined;
+  if (input.amount !== undefined) {
+    amount = toCents(input.amount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      throw new PaymentError('Payment amount must be greater than zero', 400);
+    }
+  }
+
+  return db.transaction(async (tx) => {
+    const [payment] = await tx
+      .select()
+      .from(invoicePayments)
+      .where(
+        and(
+          eq(invoicePayments.id, input.paymentId),
+          eq(invoicePayments.invoiceId, input.invoiceId),
+          eq(invoicePayments.tenantId, input.tenantId),
+          sql`${invoicePayments.deletedAt} IS NULL`
+        )
+      )
+      .limit(1);
+
+    if (!payment) throw new PaymentError('Payment not found', 404);
+
+    const patch: Partial<typeof invoicePayments.$inferInsert> = {
+      updatedAt: new Date(),
+      updatedBy: input.userId,
+    };
+    if (amount !== undefined) patch.amount = amount.toFixed(2);
+    if (input.paymentDate !== undefined) patch.paymentDate = input.paymentDate;
+    if (input.paymentMethod !== undefined) patch.paymentMethod = input.paymentMethod;
+    if (input.reference !== undefined) patch.reference = input.reference;
+    if (input.notes !== undefined) patch.notes = input.notes;
+
+    let updated: typeof invoicePayments.$inferSelect | undefined;
+    try {
+      [updated] = await tx
+        .update(invoicePayments)
+        .set(patch)
+        .where(
+          and(
+            eq(invoicePayments.id, input.paymentId),
+            eq(invoicePayments.tenantId, input.tenantId)
+          )
+        )
+        .returning();
+    } catch (err: unknown) {
+      // Same partial unique index (tenant, reference) as the insert path in
+      // recordInvoicePayment — re-keying a reference can collide; answer 409,
+      // not 500.
+      if (typeof err === 'object' && err !== null && (err as { code?: unknown }).code === '23505') {
+        throw new PaymentError(
+          `A payment with reference '${input.reference}' already exists for this workspace`,
+          409
+        );
+      }
+      throw err;
+    }
+
+    if (!updated) throw new PaymentError('Payment not found', 404);
+
+    const totals = await recalculateInvoicePayments(tx, input.invoiceId, input.tenantId);
+
+    if (amount !== undefined && !input.allowOverpayment && totals.balanceDue < 0) {
+      throw new PaymentError(
+        `Edited payment takes the invoice ${Math.abs(totals.balanceDue).toFixed(2)} past its total. ` +
+          'Pass allow_overpayment to record it anyway.',
+        422
+      );
+    }
+
+    return { payment: updated as Record<string, unknown>, totals };
+  });
+}
+
 /**
  * Void a payment by soft-deleting it, then recompute the summary.
  *
