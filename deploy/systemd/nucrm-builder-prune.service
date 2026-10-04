@@ -1,0 +1,8 @@
+[Unit]
+Description=Cap the Docker BuildKit build cache (PP-033)
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/docker builder prune --force --max-used-space=40gb
