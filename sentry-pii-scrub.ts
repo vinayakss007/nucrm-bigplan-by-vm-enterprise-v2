@@ -23,12 +23,21 @@ export function scrubPii(event: any): any {
   // Strip query strings (may contain tokens/emails) from URLs.
   const req = event.request;
   if (req && typeof req === 'object') {
-    for (const key of ['url', 'query_string']) {
-      if (typeof req[key] === 'string') {
-        req[key] = req[key].split('?')[0];
-      }
+    if (typeof req.url === 'string') {
+      req.url = redactString(req.url.split('?')[0]);
     }
-    if (Array.isArray(req.cookies)) req.cookies = [];
+    // `query_string` is sent as its own field by Sentry's HTTP integration, so dropping
+    // the `?` from `url` above does not remove it. Redact rather than blank it: it is
+    // often the only clue to what the caller actually asked for.
+    if (typeof req.query_string === 'string') {
+      req.query_string = redactString(req.query_string);
+    }
+    // Strings are the shape a real cookie header arrives in (`sid=1; theme=dark`), and
+    // this is what the HTTP integration puts here — the array/object branches below are
+    // the ones that could ever fire before, so a plain string cookie passed straight
+    // through to Sentry with its session id intact.
+    if (typeof req.cookies === 'string') req.cookies = '';
+    else if (Array.isArray(req.cookies)) req.cookies = [];
     else if (req.cookies && typeof req.cookies === 'object') req.cookies = {};
     if (req.headers && typeof req.headers === 'object') {
       for (const h of Object.keys(req.headers)) {
@@ -70,7 +79,11 @@ export function scrubPii(event: any): any {
         for (const k of Object.keys(bc.data)) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const v = (bc.data as any)[k];
-          if (typeof v === 'string' && EMAIL_RE.test(v)) bc.data[k] = redactString(v);
+          // Unconditional, not `if (EMAIL_RE.test(v))`: EMAIL_RE is /g, and a global
+          // regex carries `lastIndex` between `.test()` calls, so the guard returned
+          // false for a value whose email sat before the previous match's end position
+          // and let that address go out unredacted. `replace` resets `lastIndex` itself.
+          if (typeof v === 'string') bc.data[k] = redactString(v);
           if (SENSITIVE_KEYS.test(k)) bc.data[k] = '[redacted]';
         }
       }
