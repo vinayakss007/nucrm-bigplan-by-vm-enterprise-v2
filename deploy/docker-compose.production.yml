@@ -442,6 +442,15 @@ services:
   alertmanager:
     image: prom/alertmanager:v0.27.0
     container_name: nucrm-alertmanager
+    # PP-034: alertmanager.yml dials http://host.docker.internal:9095/webhook, but this
+    # service was the only one of the four that needs it without `extra_hosts`, so the
+    # name never resolved here (10.8k `no such host` in its logs). `app`, `worker`,
+    # `pgbouncer` and `postgres-exporter` all already have this line.
+    # Note this only makes the URL resolvable — there is still nothing listening on 9095
+    # (`monitoring/alert-webhook.py` was never installed). Delivery stays broken until
+    # either that receiver runs or the URL points at an in-network service.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
       - ./monitoring/alertmanager/templates:/etc/alertmanager/templates:ro
