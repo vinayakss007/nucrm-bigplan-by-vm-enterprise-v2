@@ -14,6 +14,18 @@ import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { updateWebhookSchema } from '@/lib/api/schemas';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { checkSaveTimeUrlSafety } from '@/lib/security/ssrf';
+
+/**
+ * #2276: the signing secret is shown exactly once (at creation, POST).
+ * Read/update responses only ever expose a `****<last4>` mask, matching the
+ * backup-config contract (#2221). PATCH never accepts a secret change, so the
+ * stored secret is preserved untouched.
+ */
+function maskSecret(value: string): string {
+  if (value.length <= 4) return '****';
+  return `****${value.slice(-4)}`;
+}
 
 export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params: Promise<{ id: string }> | { id: string } }) => {
   try {
@@ -29,6 +41,19 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params:
     if (validated instanceof NextResponse) return validated;
     const body = validated.data;
     const { name, url, events, is_active } = body;
+
+    // #2276: validate a CHANGED target URL at save time with the shared SSRF
+    // host checks before anything is written. Delivery-time `safeFetch` still
+    // re-validates (incl. DNS rebinding) on every actual request.
+    if (url !== undefined) {
+      const urlRejection = checkSaveTimeUrlSafety(url);
+      if (urlRejection) {
+        return NextResponse.json(
+          { error: 'Validation failed', details: [{ field: 'url', message: urlRejection }] },
+          { status: 400 }
+        );
+      }
+    }
     
     // Get existing webhook to merge config
     const existing = await db.query.integrations.findFirst({
@@ -63,12 +88,20 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params:
       .returning();
     
     if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    
+
+    // #2276: never re-echo the plaintext signing secret on read/update —
+    // mask it (`****<last4>`) exactly like the backup-config route (#2221).
+    const returnedConfig = (row.config ?? {}) as Record<string, unknown>;
+    const maskedConfig = typeof returnedConfig['secret'] === 'string' && returnedConfig['secret'] !== ''
+      ? { ...returnedConfig, secret: maskSecret(returnedConfig['secret'] as string) }
+      : returnedConfig;
+
     return NextResponse.json({ 
       data: { 
         ...row, 
-        url: ((row.config as Record<string, unknown>)?.url as string | undefined),
-        events: ((row.config as Record<string, unknown>)?.events as string[] | undefined) 
+        config: maskedConfig,
+        url: (returnedConfig['url'] as string | undefined),
+        events: (returnedConfig['events'] as string[] | undefined) 
       } 
     });
  
