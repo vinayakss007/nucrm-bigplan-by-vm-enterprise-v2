@@ -637,7 +637,11 @@ All API endpoints except auth/public require either:
 
 ## Components
 
-### UI Components (25+, Radix-based)
+### UI Components (24, Radix-based)
+
+**Catalog: [`docs/COMPONENTS.md`](docs/COMPONENTS.md)** — adoption counts, which component to use
+for which job, and what is already dead. Read it before adding a UI component: destructive confirms
+go through `confirmThen()` (79 files do), not a hand-rolled `<Dialog>`.
 
 `badge`, `bottom-sheet`, `bulk-action-bar`, `button`, `card`, `checkbox`, `confirm-dialog`, `data-table`, `data-table-optimized`, `delete-confirm`, `dialog`, `dropdown-menu`, `error-boundary`, `inline-edit`, `input`, `language-switcher`, `mobile-card`, `optimized-image`, `pull-to-refresh`, `skeleton`, `skip-link`, `swipeable`, `table`, `index`
 
@@ -707,14 +711,14 @@ route/DB exercise → full suite: 5610 passed / 0 failed) is documented in
 
 ### Development
 
-| Script               | Description                      |
-| -------------------- | -------------------------------- |
-| `npm run dev`        | Start dev server (with DB sync)  |
-| `npm run dev:nosync` | Start dev server without DB sync |
-| `npm run dev:all`    | Start app + worker concurrently  |
-| `npm run worker`     | Start background worker          |
-| `npm run worker:dev` | Start worker in watch mode       |
-| `npm run storybook`  | Storybook component library      |
+| Script               | Description                                                                    |
+| -------------------- | ------------------------------------------------------------------------------ |
+| `npm run dev`        | Start dev server (with DB sync)                                                |
+| `npm run dev:nosync` | Start dev server without DB sync                                               |
+| `npm run dev:all`    | Start app + worker concurrently                                                |
+| `npm run worker`     | Start background worker                                                        |
+| `npm run worker:dev` | Start worker in watch mode                                                     |
+| `npm run storybook`  | **Cannot run** — Storybook is not installed (see docs/COMPONENTS.md, defect 3) |
 
 ### Quality
 
