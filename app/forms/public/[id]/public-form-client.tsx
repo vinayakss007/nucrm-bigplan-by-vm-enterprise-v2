@@ -8,6 +8,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { Loader2, CheckCircle, AlertCircle } from 'lucide-react';
 import { buildPublicFormSchema, validateForm, type PublicFormFieldDef } from '@/lib/validation/forms';
+import { getFieldIdentity } from '@/lib/forms/field-shape';
 
 interface FormSettings {
   success_message?: string;
@@ -138,8 +139,13 @@ export default function PublicFormClient({ form }: { form: FormProps }) {
 
   return (
     <form ref={containerRef} onSubmit={handleSubmit} className="space-y-5">
-      {fields.map((field) => (
-        <div key={field.id}>
+      {fields.map((field, index) => {
+        // #2287: key the value by the field identity (key ?? id ?? name), the
+        // same rule the public submit validator uses, so API-created forms
+        // (id-shaped fields) validate correctly client- and server-side.
+        const fid = getFieldIdentity(field) || `field_${index}`;
+        return (
+        <div key={field.id ?? fid}>
           <label className="block text-sm font-semibold mb-1.5">
             {field.label} {field.required && <span className="text-red-500">*</span>}
           </label>
@@ -148,15 +154,15 @@ export default function PublicFormClient({ form }: { form: FormProps }) {
             <textarea
               required={field.required}
               placeholder={field.placeholder}
-              value={formData[field.key] || ''}
-              onChange={(e) => handleChange(field.key, e.target.value)}
+              value={formData[fid] || ''}
+              onChange={(e) => handleChange(fid, e.target.value)}
               className="w-full px-4 py-3 rounded-xl border border-border bg-muted/20 focus:outline-none focus:ring-2 focus:ring-violet-500 transition-all min-h-[120px]"
             />
           ) : field.type === 'select' ? (
             <select
               required={field.required}
-              value={formData[field.key] || ''}
-              onChange={(e) => handleChange(field.key, e.target.value)}
+              value={formData[fid] || ''}
+              onChange={(e) => handleChange(fid, e.target.value)}
               className="w-full px-4 py-3 rounded-xl border border-border bg-muted/20 focus:outline-none focus:ring-2 focus:ring-violet-500 transition-all"
             >
               <option value="">Select an option...</option>
@@ -169,13 +175,14 @@ export default function PublicFormClient({ form }: { form: FormProps }) {
               type={field.type}
               required={field.required}
               placeholder={field.placeholder}
-              value={formData[field.key] || ''}
-              onChange={(e) => handleChange(field.key, e.target.value)}
+              value={formData[fid] || ''}
+              onChange={(e) => handleChange(fid, e.target.value)}
               className="w-full px-4 py-3 rounded-xl border border-border bg-muted/20 focus:outline-none focus:ring-2 focus:ring-violet-500 transition-all"
             />
           )}
         </div>
-      ))}
+        );
+      })}
 
       {error && (
         <div className="flex items-center gap-2 p-4 rounded-xl bg-red-50 text-red-600 text-sm animate-shake">

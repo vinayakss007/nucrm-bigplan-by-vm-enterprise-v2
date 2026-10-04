@@ -73,6 +73,15 @@ describe('Form Embed Widget (/api/embed/form.js)', () => {
     expect(js).toContain('Something went wrong');
   });
 
+  // #2287: the widget must key each input by the field identity
+  // (key ?? id ?? name) so submitted data matches the server required check
+  // for both stored shapes. Regex tolerates terser mangling/whitespace.
+  it('GET JS keys inputs by key ?? id ?? name (#2287)', async () => {
+    const res = await embedRoute.GET();
+    const js = await res.text();
+    expect(js).toMatch(/\.key\s*\|\|\s*\w+\.id\s*\|\|\s*\w+\.name/);
+  });
+
   it('OPTIONS returns CORS preflight headers', async () => {
     const res = await embedRoute.OPTIONS();
     expect(res.headers.get('access-control-allow-origin')).toBe('*');
@@ -102,6 +111,15 @@ import * as analyticsRoute from '@/app/api/tenant/forms/[id]/analytics/route';
 describe('Form Analytics POST (/api/tenant/forms/[id]/analytics)', () => {
   it('POST handler is exported', () => {
     expect(typeof analyticsRoute.POST).toBe('function');
+  });
+
+  // #2287: the widget must key each input by the field identity
+  // (key ?? id ?? name) so submitted data matches the server required check
+  // for both stored shapes. Regex tolerates terser mangling/whitespace.
+  it('GET JS keys inputs by key ?? id ?? name (#2287)', async () => {
+    const res = await embedRoute.GET();
+    const js = await res.text();
+    expect(js).toMatch(/\.key\s*\|\|\s*\w+\.id\s*\|\|\s*\w+\.name/);
   });
 
   it('OPTIONS returns CORS preflight headers', async () => {

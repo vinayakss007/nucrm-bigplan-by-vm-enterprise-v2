@@ -72,7 +72,10 @@ const WIDGET_JS = `
 
     for (var i = 0; i < fields.length; i++) {
       var f = fields[i];
-      var name = f.name || f.label || ('field_' + i);
+      // #2287: key the input by the field identity (key ?? id ?? name) so the
+      // submitted payload lines up with the server-side required check in
+      // lib/forms/field-shape (API-created forms store id, legacy key).
+      var name = f.key || f.id || f.name || f.label || ('field_' + i);
       var label = f.label || f.name || '';
       var type = f.type || 'text';
       var required = f.required ? ' required' : '';

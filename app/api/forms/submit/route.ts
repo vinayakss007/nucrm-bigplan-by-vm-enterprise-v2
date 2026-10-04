@@ -14,6 +14,7 @@ import { createNotification } from '@/lib/notifications';
 import { fireWebhooks } from '@/lib/webhooks';
 import { syncCalculatedFields } from '@/lib/formula/sync';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
+import { findMissingRequiredFields } from '@/lib/forms/field-shape';
 
 const formSubmitSchema = z.object({
   form_id: z.string().min(1, 'Form ID is required'),
@@ -21,26 +22,11 @@ const formSubmitSchema = z.object({
   values: z.record(z.string(), z.unknown()).optional().default({}),
 });
 
-/**
- * #1160: given a form's field definitions and the submitted data, return the
- * labels of any required fields that are missing/empty. Pure + exported so it
- * can be unit-tested without the route's DB machinery.
- */
-export function findMissingRequiredFields(
-  fields: unknown,
-  formData: Record<string, unknown>
-): string[] {
-  const defs = Array.isArray(fields)
-    ? (fields as Array<{ key?: string; label?: string; required?: boolean }>)
-    : [];
-  return defs
-    .filter((f) => f && f.required === true && typeof f.key === 'string' && f.key.length > 0)
-    .filter((f) => {
-      const val = formData[f.key as string];
-      return val === undefined || val === null || (typeof val === 'string' && val.trim() === '');
-    })
-    .map((f) => (f.label as string) || (f.key as string));
-}
+// #1160: required-field checker. #2287: the implementation now lives in
+// lib/forms/field-shape so every consumer (submit, embed widget, analytics,
+// public render paths) honors BOTH stored field shapes — legacy `{ key }` and
+// API-created `{ id }`. Re-exported for the existing #1160 unit tests/callers.
+export { findMissingRequiredFields };
 
 /**
  * Escape HTML entities in a string to prevent XSS when values are rendered.
