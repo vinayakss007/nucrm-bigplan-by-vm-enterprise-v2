@@ -418,362 +418,376 @@
     {
       "idx": 59,
       "version": "7",
+      "when": 1785931200000,
+      "tag": "0059_custom_entities",
+      "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
       "when": 1786018800000,
       "tag": "0060_add_tenantid_rls",
       "breakpoints": true
     },
     {
-      "idx": 60,
+      "idx": 61,
       "version": "7",
       "when": 1786105200000,
       "tag": "0061_fix_super_admin_audit_types",
       "breakpoints": true
     },
     {
-      "idx": 61,
+      "idx": 62,
       "version": "7",
       "when": 1786191600000,
       "tag": "0062_add_pageviews_lifecycle",
       "breakpoints": true
     },
     {
-      "idx": 62,
+      "idx": 63,
       "version": "7",
       "when": 1786278000000,
       "tag": "0063_add_missing_indexes",
       "breakpoints": true
     },
     {
-      "idx": 63,
+      "idx": 64,
       "version": "7",
       "when": 1786364400000,
       "tag": "0064_add_audit_fk_constraints",
       "breakpoints": true
     },
     {
-      "idx": 64,
+      "idx": 65,
       "version": "7",
       "when": 1786450800000,
       "tag": "0065_assignment_logs_uuid_columns",
       "breakpoints": true
     },
     {
-      "idx": 65,
+      "idx": 66,
       "version": "7",
       "when": 1786537200000,
       "tag": "0066_sla_breach_policy_uuid",
       "breakpoints": true
     },
     {
-      "idx": 66,
+      "idx": 67,
       "version": "7",
       "when": 1786710000000,
       "tag": "0067_ticket_portal_token",
       "breakpoints": true
     },
     {
-      "idx": 67,
+      "idx": 68,
       "version": "7",
       "when": 1786623600000,
       "tag": "0068_force_rls_owner",
       "breakpoints": true
     },
     {
-      "idx": 68,
+      "idx": 69,
       "version": "7",
       "when": 1787486400000,
       "tag": "0069_security_events_metadata_jsonb",
       "breakpoints": true
     },
     {
-      "idx": 69,
+      "idx": 70,
       "version": "7",
       "when": 1787572800000,
       "tag": "0070_support_tickets_sla_policy_id",
       "breakpoints": true
     },
     {
-      "idx": 70,
+      "idx": 71,
       "version": "7",
       "when": 1787659200000,
       "tag": "0071_schema_drift_backfill",
       "breakpoints": true
     },
     {
-      "idx": 71,
+      "idx": 72,
       "version": "7",
       "when": 1787745600000,
       "tag": "0072_whatsapp_msg_external_unique",
       "breakpoints": true
     },
     {
-      "idx": 72,
+      "idx": 73,
       "version": "7",
       "when": 1787832000000,
       "tag": "0073_add_missing_fk_references",
       "breakpoints": true
     },
     {
-      "idx": 73,
+      "idx": 74,
       "version": "7",
       "when": 1787918400000,
       "tag": "0074_leads_service_team_fk",
       "breakpoints": true
     },
     {
-      "idx": 74,
+      "idx": 75,
       "version": "7",
       "when": 1788004800000,
       "tag": "0075_missing_indexes",
       "breakpoints": true
     },
     {
-      "idx": 75,
+      "idx": 76,
       "version": "7",
       "when": 1788091200000,
       "tag": "0076_ondelete_rules",
       "breakpoints": true
     },
     {
-      "idx": 76,
+      "idx": 77,
       "version": "7",
       "when": 1788177600000,
       "tag": "0077_companies_status_assigned",
       "breakpoints": true
     },
     {
-      "idx": 77,
+      "idx": 78,
       "version": "7",
       "when": 1788264000000,
       "tag": "0078_drop_dead_backup_tables",
       "breakpoints": true
     },
     {
-      "idx": 78,
+      "idx": 79,
       "version": "7",
       "when": 1788350400000,
       "tag": "0079_trgm_search_indexes",
       "breakpoints": true
     },
     {
-      "idx": 79,
+      "idx": 80,
       "version": "7",
       "when": 1788436800000,
       "tag": "0080_drop_pipeline_stages",
       "breakpoints": true
     },
     {
-      "idx": 80,
+      "idx": 81,
       "version": "7",
       "when": 1788523200000,
       "tag": "0081_fix_usage_snapshot_function",
       "breakpoints": true
     },
     {
-      "idx": 81,
+      "idx": 82,
       "version": "7",
       "when": 1788609600000,
       "tag": "0082_analytics_events",
       "breakpoints": true
     },
     {
-      "idx": 82,
+      "idx": 83,
       "version": "7",
       "when": 1788696000000,
       "tag": "0083_approval_chain_steps",
       "breakpoints": true
     },
     {
-      "idx": 83,
+      "idx": 84,
       "version": "7",
       "when": 1788782400000,
       "tag": "0084_deals_won_at",
       "breakpoints": true
     },
     {
-      "idx": 84,
+      "idx": 85,
       "version": "7",
       "when": 1788782400001,
       "tag": "0085_dashboard_hot_path_indexes",
       "breakpoints": true
     },
     {
-      "idx": 85,
+      "idx": 86,
       "version": "7",
       "when": 1788782400002,
       "tag": "0086_invoice_payments_tenant_reference",
       "breakpoints": true
     },
     {
-      "idx": 86,
+      "idx": 87,
       "version": "7",
       "when": 1788782400003,
       "tag": "0087_webhook_events",
       "breakpoints": true
     },
     {
-      "idx": 87,
+      "idx": 88,
       "version": "7",
       "when": 1788782400004,
       "tag": "0088_rls_bootstrap_and_isolation",
       "breakpoints": true
     },
     {
-      "idx": 88,
+      "idx": 89,
       "version": "7",
       "when": 1788782400005,
       "tag": "0089_users_tenant_member_read",
       "breakpoints": true
     },
     {
-      "idx": 89,
+      "idx": 90,
       "version": "7",
       "when": 1788782400006,
       "tag": "0090_backup_tables_superadmin_bypass",
       "breakpoints": true
     },
     {
-      "idx": 90,
+      "idx": 91,
+      "version": "7",
+      "when": 1788782400091,
+      "tag": "0091_usage_snapshots_superadmin_bypass",
+      "breakpoints": true
+    },
+    {
+      "idx": 92,
       "version": "7",
       "when": 1788782400007,
       "tag": "0095_jsonb_helpers_qualified_calls",
       "breakpoints": true
     },
     {
-      "idx": 91,
+      "idx": 93,
       "version": "7",
       "when": 1788782400008,
       "tag": "0096_analytics_events_ingest_insert",
       "breakpoints": true
     },
     {
-      "idx": 91,
+      "idx": 94,
       "version": "7",
-      "when": 1788782400008,
+      "when": 1788782400092,
       "tag": "0092_metrics_tables_superadmin_bypass",
       "breakpoints": true
     },
     {
-      "idx": 92,
+      "idx": 95,
       "version": "7",
       "when": 1788782400009,
       "tag": "0093_webhook_tables_superadmin_bypass",
       "breakpoints": true
     },
     {
-      "idx": 93,
+      "idx": 96,
       "version": "7",
       "when": 1788782400010,
       "tag": "0094_sa_audit_tenant_id_uuid",
       "breakpoints": true
     },
     {
-      "idx": 94,
+      "idx": 97,
       "version": "7",
       "when": 1788782400011,
       "tag": "0097_integrations_type_allows_webhook",
       "breakpoints": true
     },
     {
-      "idx": 95,
+      "idx": 98,
       "version": "7",
       "when": 1788782400012,
       "tag": "0098_tenant_hierarchy_party_access",
       "breakpoints": true
     },
     {
-      "idx": 96,
+      "idx": 99,
       "version": "7",
       "when": 1788782400013,
       "tag": "0099_api_keys_auth_lookup",
       "breakpoints": true
     },
     {
-      "idx": 97,
+      "idx": 100,
       "version": "7",
       "when": 1788782400014,
       "tag": "0100_tenants_super_admin_update",
       "breakpoints": true
     },
     {
-      "idx": 98,
+      "idx": 101,
       "version": "7",
       "when": 1788782400015,
       "tag": "0101_notifications_type_allows_app_vocabulary",
       "breakpoints": true
     },
     {
-      "idx": 99,
+      "idx": 102,
       "version": "7",
       "when": 1788782400016,
       "tag": "0102_ai_activity_action_allows_app_vocabulary",
       "breakpoints": true
     },
     {
-      "idx": 100,
+      "idx": 103,
       "version": "7",
       "when": 1788782400017,
       "tag": "0103_scheduled_reports_type_allows_exported_entities",
       "breakpoints": true
     },
     {
-      "idx": 101,
+      "idx": 104,
       "version": "7",
       "when": 1788782400018,
       "tag": "0104_integrations_type_allows_configured_providers",
       "breakpoints": true
     },
     {
-      "idx": 102,
+      "idx": 105,
       "version": "7",
       "when": 1788782400019,
       "tag": "0105_email_tracking_pixel_lookup",
       "breakpoints": true
     },
     {
-      "idx": 103,
+      "idx": 106,
       "version": "7",
       "when": 1788782400020,
       "tag": "0106_sequence_step_logs_allows_sending",
       "breakpoints": true
     },
     {
-      "idx": 104,
+      "idx": 107,
       "version": "7",
       "when": 1788782400021,
       "tag": "0107_rls_null_tenant_revenue_hardening",
       "breakpoints": true
     },
     {
-      "idx": 105,
+      "idx": 108,
       "version": "7",
       "when": 1788782400022,
       "tag": "0108_invoices_quote_id_unique",
       "breakpoints": true
     },
     {
-      "idx": 106,
+      "idx": 109,
       "version": "7",
       "when": 1788782400023,
       "tag": "0109_webhook_events_created_at_not_null",
       "breakpoints": true
     },
     {
-      "idx": 107,
+      "idx": 110,
       "version": "7",
       "when": 1788782400024,
       "tag": "0110_schema_drift_missing_indexes",
       "breakpoints": true
     },
     {
-      "idx": 108,
+      "idx": 111,
       "version": "7",
       "when": 1788782400025,
       "tag": "0111_money_check_constraints",
       "breakpoints": true
     },
     {
-      "idx": 109,
+      "idx": 112,
       "version": "7",
       "when": 1788782400026,
       "tag": "0112_invoice_status_vocab",
