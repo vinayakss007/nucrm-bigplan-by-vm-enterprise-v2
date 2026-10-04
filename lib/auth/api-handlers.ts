@@ -19,7 +19,7 @@ import { randomBytes, createHash } from 'crypto';
 import { verifyTOTP } from '@/lib/auth/totp';
 import { installDefaultModules } from '@/lib/modules/auto-install';
 import { withSecurityContext, withTenantContext, withUserContext, withAuthLookupContext, setTenantContext } from '@/lib/db/rls';
-import { isBlocked, recordFailedAttempt, recordSuccessfulLogin } from '@/lib/security/brute-force';
+import { findLoginBlocks, recordFailedAttempt, recordSuccessfulLogin } from '@/lib/security/brute-force';
 import { getClientIp } from '@/lib/client-ip';
 import { checkLoginIpAllowed } from '@/lib/ip-whitelist';
 import { validateBody, readJsonBody, InvalidJsonBodyError } from '@/lib/api/validate';
@@ -66,7 +66,11 @@ export async function POST_login(request: NextRequest) {
 
     if (isForm) {
       const formData = await request.formData();
-      email = (formData.get('email') as string) || '';
+      // The JSON path lowercases through `loginSchema`; this path took the value
+      // raw. `login_blocks` rows are written with `email.toLowerCase()` and
+      // accounts are stored lowercased, so a form sign-in as "Admin@x.com" both
+      // skipped its own account lockout and could not find the user.
+      email = ((formData.get('email') as string) || '').trim().toLowerCase();
       password = (formData.get('password') as string) || '';
       remember_me = formData.get('remember_me') === 'on';
       totpToken = (formData.get('totp_token') as string) || undefined;
@@ -83,8 +87,13 @@ export async function POST_login(request: NextRequest) {
       totpToken = parsed.data.totp_token;
     }
 
+    // #85: one read answers both block checks. They were two security-context
+    // transactions, i.e. eight statements at PP-028's ~200 ms each, on every
+    // sign-in attempt. The decision order below is unchanged: IP still wins.
+    const blocks = await findLoginBlocks(ip, email);
+
     // Check if IP is blocked
-    const ipBlockCheck = await isBlocked(ip, 'ip');
+    const ipBlockCheck = blocks.ip;
     if (ipBlockCheck.blocked) {
       sendAdminTelegram({
         icon: '🛡️',
@@ -102,7 +111,7 @@ export async function POST_login(request: NextRequest) {
     if (limited) return limited;
 
     // Check if email is blocked
-    const emailBlockCheck = await isBlocked(email, 'email');
+    const emailBlockCheck = blocks.email;
     if (emailBlockCheck.blocked) {
       sendAdminTelegram({
         icon: '🛡️',
