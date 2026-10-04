@@ -6,7 +6,7 @@
 
 **Multi-tenant Enterprise SaaS CRM** — Next.js 16 (React 19), PostgreSQL, Drizzle ORM, TypeScript.  
 Self-hosted with a full plugin engine, workflow automation, AI-powered insights, a public
-marketing website, and 220+ database tables.
+marketing website, and 223 database tables.
 
 > **📚 Documentation:** the full product documentation lives in **[`docs/`](./docs/README.md)**,
 > split into **[Public docs](./docs/public/README.md)** (users, workspace admins, developers) and
@@ -26,9 +26,14 @@ git clone <repo-url>
 cd nucrm-enterprise
 cp .env.example .env.local   # Edit with your DB credentials
 npm install
-npm run db:sync              # Create all tables (220+)
+cp .env.example .env.local   # Edit with your DB credentials
+npm run db:migrate           # Apply migrations (NOT db:sync — see below)
 npm run dev                  # Start at localhost:3000
 ```
+
+> `npm run db:sync` is **guarded**: it exits 1 with "db:sync is dangerous — use db:migrate instead"
+> unless `CI=true`. It was the documented way to create tables for a long time; use `db:migrate`, or
+> `npm run setup`, which copies `.env.example` and migrates in one step.
 
 Then create the first admin:
 
@@ -70,12 +75,12 @@ curl -X POST http://localhost:3000/api/setup/create-admin \
 ```
 src/
 ├── app/                          # Next.js App Router
-│   ├── api/                      # ~490 API endpoints
+│   ├── api/                      # 507 API endpoints
 │   │   ├── auth/                 # JWT, OAuth, SSO, 2FA, password reset
 │   │   ├── tenant/               # All CRM operations (tenant-scoped)
 │   │   ├── superadmin/           # Platform management
 │   │   ├── public/               # Customer portal API
-│   │   ├── cron/                 # Scheduled jobs (~22 cron endpoints)
+│   │   ├── cron/                 # Scheduled jobs (22 cron endpoints)
 │   │   ├── webhooks/             # Inbound webhooks (Stripe, WhatsApp, Resend)
 │   │   ├── admin/                # Admin operations
 │   │   ├── v2/                   # API v2 routes
@@ -84,14 +89,14 @@ src/
 │   │   ├── embed/                # Embeddable form JS
 │   │   └── setup/                # Initial setup
 │   ├── (marketing)/              # 17 public marketing pages (landing, pricing, etc.)
-│   ├── tenant/                   # ~149 tenant-facing pages
-│   ├── superadmin/               # ~31 admin pages
+│   ├── tenant/                   # 149 tenant-facing pages
+│   ├── superadmin/               # 31 admin pages
 │   ├── portal/                   # 9 customer portal pages
 │   └── auth/                     # 8 auth pages (login, signup, 2FA, etc.)
 ├── components/
-│   ├── ui/                       # 25+ shared UI components (Radix-based)
-│   ├── tenant/                   # 60+ tenant-specific components
-│   ├── shared/                   # 20+ cross-cutting components
+│   ├── ui/                       # 24 shared UI components (Radix-based)
+│   ├── tenant/                   # 82 tenant-specific components
+│   ├── shared/                   # 26 cross-cutting components
 │   ├── marketing/                # Public marketing site components (hero, mocks, tour)
 │   ├── superadmin/               # Super admin components
 │   ├── branding/                 # Branding components
@@ -133,16 +138,16 @@ src/
 │   ├── marketing/                # Public marketing site content (features, pricing, etc.)
 │   └── export/                   # Data export
 ├── drizzle/
-│   ├── schema/                   # 60+ schema files, 220+ tables
+│   ├── schema/                   # 46 schema files, 223 tables
 │   └── migrations/               # DDL + indexes + RLS policies
 ├── hooks/                        # Custom React hooks
 ├── types/                        # TypeScript type definitions
-├── scripts/                      # ~25 dev/prod/utility scripts
+├── scripts/                      # 60 dev/prod/utility scripts
 ├── deploy/                       # Docker, nginx, pgbouncer, postgres configs
 ├── monitoring/                   # Grafana, Prometheus configs
 ├── tests/
-│   ├── unit/                     # ~350 unit test files
-│   ├── integration/              # ~21 integration test files
+│   ├── unit/                     # 425 unit test files
+│   ├── integration/              # 25 integration test files
 │   ├── e2e/                      # 6 Playwright E2E specs
 │   └── dashboard/                # dashboard widget tests
 └── docs/                         # Architecture, changelog, production readiness
@@ -150,14 +155,30 @@ src/
 
 ---
 
-## Database — 220+ Tables
+## Database — 223 declared / 226 live tables
 
-60+ schema files across 13 domains, with full RLS (Row-Level Security) for tenant isolation.
-Run `npm run verify-schema` to print the authoritative live table count for your checkout.
+46 schema files across 13 domains, with full RLS (Row-Level Security): **277 policies on 225
+tables**.
 
-> **Note:** the per-file table breakdown and full table list below describe the core domains and
-> are kept as a representative reference. The schema has grown past 220 tables; treat the live
-> database (or `verify-schema`) as the source of truth for exact counts.
+`npm run verify-schema` **does not exist** — it was cited here for a long time anyway. The real
+commands:
+
+```sh
+# tables declared in the Drizzle schema (223)
+grep -rhoE "pgTable\('[a-z_]+'" drizzle/schema/ | sed "s/pgTable('//" | sort -u | wc -l
+
+# tables that actually exist in the connected database (226). Note the inner `sh -c`: the app
+# image's psql is fine, but $DATABASE_URL only exists inside the container.
+docker exec nucrm-app sh -c 'psql "$DATABASE_URL" -tAc \
+  "select count(*) from pg_tables where schemaname = '"'"'public'"'"'"'
+
+# the schema-drift guard that does exist (Zod API schemas, not table counts)
+npm run guard:schemas
+```
+
+> **Note:** 226 live vs 223 declared is a real 3-table gap — the database has tables no schema file
+> describes. Measured 2026-10-04 against preprod. The per-file breakdown below describes the core
+> domains and is a representative reference, not the full list.
 
 ### Schema Files
 
@@ -280,7 +301,7 @@ Run `npm run verify-schema` to print the authoritative live table count for your
 
 | Feature              | Details                                                                |
 | -------------------- | ---------------------------------------------------------------------- |
-| **Tenant Isolation** | App-level + database RLS (20+ policies across all tables)              |
+| **Tenant Isolation** | App-level + database RLS (277 policies on 225 tables)                  |
 | **RBAC**             | Admin, manager, sales_rep, viewer + custom roles, granular permissions |
 | **Plan Gating**      | Feature access per plan (free/starter/pro/enterprise)                  |
 | **Usage Tracking**   | Per-tenant limits (contacts, deals, storage, API calls, AI credits)    |
@@ -431,12 +452,12 @@ All API endpoints except auth/public require either:
 | Password reset | 3 req/hour  | 1 hour   |
 | AI endpoints   | 30 req/hour | 1 hour   |
 
-### API Endpoints Overview (~490 routes)
+### API Endpoints Overview (507 routes)
 
 > The list below is a curated tour of the main endpoints. The full route surface is larger
-> (~490 `route.ts` handlers); browse the interactive docs at `/tenant/docs` for the complete set.
+> (507 `route.ts` handlers); browse the interactive docs at `/tenant/docs` for the complete set.
 
-#### Auth (20+ endpoints)
+#### Auth (21 endpoints)
 
 - `POST /api/auth/signup` — Create workspace + owner
 - `POST /api/auth/login` — Sign in with email/password
@@ -452,7 +473,7 @@ All API endpoints except auth/public require either:
 - `GET /api/auth/sso/[provider]` — SSO login
 - `POST /api/auth/accept-invite` — Accept workspace invite
 
-#### Tenant API (200+ endpoints)
+#### Tenant API (321 endpoints)
 
 **Core CRM:**
 
@@ -531,7 +552,7 @@ All API endpoints except auth/public require either:
 - `GET/POST /api/tenant/integrations` — Integrations configuration
 - `GET/POST /api/tenant/plugins` — Plugin management
 
-#### Super Admin (40+ endpoints)
+#### Super Admin (52 endpoints)
 
 - `GET /api/superadmin/tenants` — List all tenants
 - `GET /api/superadmin/tenants/[id]` — Tenant details
@@ -552,7 +573,7 @@ All API endpoints except auth/public require either:
 - `GET/POST /api/superadmin/templates` — Industry templates
 - `GET /api/superadmin/tickets` — All tenant tickets
 
-#### Cron Jobs (~22 endpoints)
+#### Cron Jobs (22 endpoints)
 
 - `GET /api/cron/auto-backup` — Automated database backup
 - `GET /api/cron/cleanup` — Data cleanup (expired sessions, trash)
@@ -592,9 +613,9 @@ All API endpoints except auth/public require either:
 
 ---
 
-## Pages (~227 page.tsx files)
+## Pages (227 page.tsx files)
 
-### Tenant Pages (~149)
+### Tenant Pages (149)
 
 | Area               | Pages                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -611,7 +632,7 @@ All API endpoints except auth/public require either:
 | **Settings**       | General, Profile, Preferences, Security, Team, Roles, Permissions, Pipelines, Custom fields, Tags, Picklists, Email, SMS, Webhooks, Integrations, Plugins, API keys, Branding, Billing, Backup, Audit, Compliance, SSO, Tax, Currency, Localization, Login policy, User defaults, Notifications, Out of office, Portal, SLA, Territories, Hierarchy, Import/Export, Sessions, Telegram, AI providers, AI templates, AI activity, At-risk rules, Lead scoring, Assignment rules, Bulk transfer, Industry templates |
 | **Other**          | Search, Calendar, Trash, Notifications, Onboarding, Trial expired, Visitors                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 
-### Super Admin Pages (~31)
+### Super Admin Pages (31)
 
 | Area           | Pages                                                                                                          |
 | -------------- | -------------------------------------------------------------------------------------------------------------- |
@@ -645,11 +666,11 @@ go through `confirmThen()` (79 files do), not a hand-rolled `<Dialog>`.
 
 `badge`, `bottom-sheet`, `bulk-action-bar`, `button`, `card`, `checkbox`, `confirm-dialog`, `data-table`, `data-table-optimized`, `delete-confirm`, `dialog`, `dropdown-menu`, `error-boundary`, `inline-edit`, `input`, `language-switcher`, `mobile-card`, `optimized-image`, `pull-to-refresh`, `skeleton`, `skip-link`, `swipeable`, `table`, `index`
 
-### Tenant Components (60+)
+### Tenant Components (82)
 
 `advanced-search`, `call-logger`, `contacts-client`, `contacts-data-table`, `companies-client`, `companies-data-table`, `deals-client`, `deals-data-table`, `deals-kanban`, `leads-client`, `leads-client-new`, `tasks-client`, `tasks-data-table`, `contact-detail-client`, `deal-detail-client`, `lead-detail-client`, `task-detail-client`, `project-detail-client`, `contact-merge-modal`, `contact-timeline`, `lead-import-modal`, `import-modal`, `dashboard-client`, `pagination`, `saved-views`, `report-builder`, `sequence-builder`, `sequences-client`, `workflow-builder`, `whatsapp-chat`, `onboarding-checklist`, `email-verify-banner`, `plan-limit-banner`, `product-entry-client`, `projects-data-table` + subdirectories: `ai/`, `analytics/`, `automation/`, `dashboard/`, `follow-ups/`, `forms/`, `integrations/`, `layout/`, `sequences/`, `settings/`
 
-### Shared Components (20+)
+### Shared Components (26)
 
 `animated-number`, `branded-header`, `breadcrumb`, `command-palette`, `confirm-polyfill`, `csrf-provider`, `empty-state`, `error-boundary`, `error-wrapper`, `impersonation-banner`, `lead-capture-form`, `offline-detector`, `pwa-install-prompt`, `route-error`, `save-shortcut`, `service-worker-registration`, `shortcuts-modal`, `simple-lead-form`, `theme-provider`, `user-preferences-applier`
 
@@ -720,8 +741,8 @@ route/DB exercise → full suite: 5610 passed / 0 failed) is documented in
 
 | Script               | Description                                                                    |
 | -------------------- | ------------------------------------------------------------------------------ |
-| `npm run dev`        | Start dev server (with DB sync)                                                |
-| `npm run dev:nosync` | Start dev server without DB sync                                               |
+| `npm run dev`        | `next dev` — DB sync was removed; identical to `dev:nosync`                    |
+| `npm run dev:nosync` | `next dev` — same command, kept only as an alias                               |
 | `npm run dev:all`    | Start app + worker concurrently                                                |
 | `npm run worker`     | Start background worker                                                        |
 | `npm run worker:dev` | Start worker in watch mode                                                     |
@@ -737,7 +758,7 @@ route/DB exercise → full suite: 5610 passed / 0 failed) is documented in
 | `npm run quality:full`     | Full quality check (typecheck + lint + tests + report) |
 | `npm run quality:report`   | Generate quality report                                |
 | `npm run quality:lint`     | ESLint with max warnings                               |
-| `npm run coverage`         | Test coverage report                                   |
+| `npm run test:coverage`    | Test coverage report (unit suite only)                 |
 | `npm run analyze:bundle`   | Bundle size analysis                                   |
 | `npm run lighthouse:audit` | Lighthouse performance audit                           |
 
@@ -834,25 +855,33 @@ Copyright (c) 2026 abetworks.in. All Rights Reserved.
 
 ## Quick Stats
 
-| Metric             | Value      |
-| ------------------ | ---------- |
-| Database Tables    | 220+       |
-| Schema Files       | 60+        |
-| API Routes         | ~490       |
-| Total Pages        | ~227       |
-| Tenant Pages       | ~149       |
-| Super Admin Pages  | ~31        |
-| Portal Pages       | 9          |
-| Auth Pages         | 8          |
-| Marketing Pages    | 17         |
-| UI Components      | 25+        |
-| Tenant Components  | 60+        |
-| Unit Tests         | ~350 files |
-| Integration Tests  | ~21 files  |
-| E2E Tests          | 6 specs    |
-| Total Test Files   | ~389       |
-| npm Scripts        | 79         |
-| Node Version       | >=22       |
-| Next.js Version    | 16.3.3     |
-| React Version      | 19         |
-| TypeScript Version | 5.9        |
+| Metric            | Value     |
+| ----------------- | --------- |
+| Database Tables   | 223       |
+| Schema Files      | 46        |
+| API Routes        | 507       |
+| Total Pages       | 227       |
+| Tenant Pages      | 149       |
+| Super Admin Pages | 31        |
+| Portal Pages      | 9         |
+| Auth Pages        | 8         |
+| Marketing Pages   | 17        |
+| UI Components     | 24        |
+| Tenant Components | 82        |
+| Unit Tests        | 425 files |
+| Integration Tests | 25 files  |
+
+> Measured 2026-10-04, not estimated. Re-derive with: `grep -rhoE "pgTable\('[a-z_]+'" drizzle/schema/
+| sed "s/pgTable('//" | sort -u | wc -l` (tables) · `ls drizzle/schema/*.ts | wc -l` (schema files) ·
+> `find app/api -name route.ts | wc -l` (routes) · `find app -name page.tsx | wc -l` (pages) ·
+> `ls components/ui/*.tsx \| grep -vc stories` (UI components) · `find components/tenant -name '*.tsx'
+| wc -l` · `find tests -name '*.test.*' \| wc -l`. Note this table and the sections above it were
+> both stale when measured (schema files said 60+, actual 46; API routes said ~490, actual 507;
+> unit tests said ~350, actual 425).
+> | E2E Tests | 6 specs |
+> | Total Test Files | 462 |
+> | npm Scripts | 79 |
+> | Node Version | >=22 |
+> | Next.js Version | 16.3.3 |
+> | React Version | 19 |
+> | TypeScript Version | 5.9 |
