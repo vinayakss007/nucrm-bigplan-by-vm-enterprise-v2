@@ -23,35 +23,37 @@ Severity: **S1** blocks go-live · **S2** broken feature or security weakness ·
 
 ## Summary
 
-| ID     | Sev | Area          | Issue (one line)                                                                                                                      | Status                   |
-| ------ | --- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
-| PP-001 | S2  | Deploy        | `nginx` reported `(unhealthy)` while serving 200s — probe hit IPv6 `::1`                                                              | ✅ FIXED & VERIFIED      |
-| PP-002 | S2  | Deploy        | `app` reported `(unhealthy)` for the same `localhost` → `::1` reason                                                                  | ✅ FIXED & VERIFIED      |
-| PP-003 | S1  | Setup         | First-run setup form **always 403** — key sent in body, route reads header                                                            | 🔧 FIXED IN TREE         |
-| PP-004 | S2  | Backups       | Failed `pg_dump` left a partial dump that passes sanity checks                                                                        | 🔧 FIXED IN TREE         |
-| PP-005 | S2  | Build         | `NEXT_PUBLIC_APP_URL` hardcoded to `http://localhost:3000` in the image bundle                                                        | ✅ FIXED & VERIFIED      |
-| PP-006 | S2  | Build         | `next build` TypeScript step OOMs on Node's default heap                                                                              | ✅ FIXED & VERIFIED      |
-| PP-007 | S1  | Build         | `realtime.ts` (socket.io server) shipped in **no** image                                                                              | ✅ FIXED & VERIFIED      |
-| PP-008 | S1  | Compose       | Undeclared `alertmanagerdata` volume aborted the whole compose project                                                                | ✅ FIXED & VERIFIED      |
-| PP-009 | S1  | Compose       | `minio/minio:latest`, `minio/mc:latest`, `edoburu/pgbouncer:1.23` no longer resolve                                                   | ✅ FIXED & VERIFIED      |
-| PP-010 | S1  | RLS / Setup   | **First super-admin insert is rejected by RLS** — even with a correct setup key                                                       | 🔧 FIXED IN TREE         |
-| PP-011 | S1  | RLS / Signup  | **Public signup is rejected by RLS** (`users_insert_auth` unsatisfiable pre-auth)                                                     | 🔧 FIXED IN TREE         |
-| PP-012 | S1  | RLS / Auth    | `login_attempts` write+read blocked → brute-force lockout silently inert                                                              | 🔧 FIXED IN TREE         |
-| PP-013 | S1  | RLS           | Tenant-isolation gate FAILED — 5 RLS-disabled, 10 policy-less, 6 NULL-tenant leaky                                                    | ✅ FIXED & VERIFIED      |
-| PP-014 | S1  | Backups       | `pg_dump` fails as the app role (`FORCE ROW LEVEL SECURITY` + `row_security=off`)                                                     | 🚨 OPEN                  |
-| PP-015 | S1  | Backups       | `BACKUP_DATABASE_URL` still points at the RLS-bound `nucrm` role                                                                      | 🚨 OPEN                  |
-| PP-016 | S3  | Observability | Sentry events carry no `environment`/`release` (should be `preprod`)                                                                  | ⏸️ BLOCKED               |
-| PP-017 | S3  | Observability | promtail `docker_sd_configs` unset → Loki gets no container logs                                                                      | ⏸️ BLOCKED               |
-| PP-018 | S2  | Storage       | UpCloud Managed Object Storage `CreateBucket` → AccessDenied; buckets absent                                                          | ⏸️ BLOCKED               |
-| PP-019 | S2  | Integrations  | `RESEND_API_KEY`, `ANTHROPIC_API_KEY` missing → those features degrade silently                                                       | ⏸️ BLOCKED               |
-| PP-020 | S2  | Hardening     | UFW + SSH hardening and `infra-readiness.sh` not yet applied                                                                          | ⏸️ BLOCKED               |
-| PP-021 | S3  | Performance   | Sentry `NUCRM-1`: N+1 query on `GET /api/metrics` (12 events)                                                                         | 📌 INFO                  |
-| PP-022 | S3  | RLS           | `super_admin_audit_logs.tenant_id` is `text`, so the standard policy can't apply                                                      | 📌 INFO                  |
-| PP-028 | S1  | Performance   | Every DB statement costs a flat ~200 ms — statement _count_ is the real budget                                                        | 🔬 MEASURED              |
-| PP-029 | S2  | Deploy        | Our SIGTERM handler exited before Next.js drained; `pool.end()` hung the stop 35.93 s                                                 | ✅ FIXED + live-verified |
-| PP-030 | S1  | Scheduling    | `acquireLock` fail-closed is indistinguishable from a held lock → 20 cron jobs report `ok:true` and do nothing when Redis isn't ready | 🔬 MEASURED              |
-| PP-031 | S2  | RLS + query   | Super-admin Backups console returns nothing: swallowed `uuid = text` join, RLS-blind `backup_schedules` read and writes               | ✅ FIXED + live-verified |
-| PP-032 | S2  | Data model    | Panel reads `backup_records` (4 failed rows), nightly job writes `tenant_backup_records` (144 rows) — two tables, no shared view      | 🚨 OPEN (decision)       |
+| ID     | Sev | Area          | Issue (one line)                                                                                                                                                            | Status                   |
+| ------ | --- | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
+| PP-001 | S2  | Deploy        | `nginx` reported `(unhealthy)` while serving 200s — probe hit IPv6 `::1`                                                                                                    | ✅ FIXED & VERIFIED      |
+| PP-002 | S2  | Deploy        | `app` reported `(unhealthy)` for the same `localhost` → `::1` reason                                                                                                        | ✅ FIXED & VERIFIED      |
+| PP-003 | S1  | Setup         | First-run setup form **always 403** — key sent in body, route reads header                                                                                                  | 🔧 FIXED IN TREE         |
+| PP-004 | S2  | Backups       | Failed `pg_dump` left a partial dump that passes sanity checks                                                                                                              | 🔧 FIXED IN TREE         |
+| PP-005 | S2  | Build         | `NEXT_PUBLIC_APP_URL` hardcoded to `http://localhost:3000` in the image bundle                                                                                              | ✅ FIXED & VERIFIED      |
+| PP-006 | S2  | Build         | `next build` TypeScript step OOMs on Node's default heap                                                                                                                    | ✅ FIXED & VERIFIED      |
+| PP-007 | S1  | Build         | `realtime.ts` (socket.io server) shipped in **no** image                                                                                                                    | ✅ FIXED & VERIFIED      |
+| PP-008 | S1  | Compose       | Undeclared `alertmanagerdata` volume aborted the whole compose project                                                                                                      | ✅ FIXED & VERIFIED      |
+| PP-009 | S1  | Compose       | `minio/minio:latest`, `minio/mc:latest`, `edoburu/pgbouncer:1.23` no longer resolve                                                                                         | ✅ FIXED & VERIFIED      |
+| PP-010 | S1  | RLS / Setup   | **First super-admin insert is rejected by RLS** — even with a correct setup key                                                                                             | 🔧 FIXED IN TREE         |
+| PP-011 | S1  | RLS / Signup  | **Public signup is rejected by RLS** (`users_insert_auth` unsatisfiable pre-auth)                                                                                           | 🔧 FIXED IN TREE         |
+| PP-012 | S1  | RLS / Auth    | `login_attempts` write+read blocked → brute-force lockout silently inert                                                                                                    | 🔧 FIXED IN TREE         |
+| PP-013 | S1  | RLS           | Tenant-isolation gate FAILED — 5 RLS-disabled, 10 policy-less, 6 NULL-tenant leaky                                                                                          | ✅ FIXED & VERIFIED      |
+| PP-014 | S1  | Backups       | `pg_dump` fails as the app role (`FORCE ROW LEVEL SECURITY` + `row_security=off`)                                                                                           | 🚨 OPEN                  |
+| PP-015 | S1  | Backups       | `BACKUP_DATABASE_URL` still points at the RLS-bound `nucrm` role                                                                                                            | 🚨 OPEN                  |
+| PP-016 | S3  | Observability | Sentry events carry no `environment`/`release` (should be `preprod`)                                                                                                        | ⏸️ BLOCKED               |
+| PP-017 | S3  | Observability | promtail `docker_sd_configs` unset → Loki gets no container logs                                                                                                            | ⏸️ BLOCKED               |
+| PP-018 | S2  | Storage       | UpCloud Managed Object Storage `CreateBucket` → AccessDenied; buckets absent                                                                                                | ⏸️ BLOCKED               |
+| PP-019 | S2  | Integrations  | `RESEND_API_KEY`, `ANTHROPIC_API_KEY` missing → those features degrade silently                                                                                             | ⏸️ BLOCKED               |
+| PP-020 | S2  | Hardening     | UFW + SSH hardening and `infra-readiness.sh` not yet applied                                                                                                                | ⏸️ BLOCKED               |
+| PP-021 | S3  | Performance   | Sentry `NUCRM-1`: N+1 query on `GET /api/metrics` (12 events)                                                                                                               | 📌 INFO                  |
+| PP-022 | S3  | RLS           | `super_admin_audit_logs.tenant_id` is `text`, so the standard policy can't apply                                                                                            | 📌 INFO                  |
+| PP-028 | S1  | Performance   | Every DB statement costs a flat ~200 ms — statement _count_ is the real budget                                                                                              | 🔬 MEASURED              |
+| PP-029 | S2  | Deploy        | Our SIGTERM handler exited before Next.js drained; `pool.end()` hung the stop 35.93 s                                                                                       | ✅ FIXED + live-verified |
+| PP-030 | S1  | Scheduling    | `acquireLock` fail-closed is indistinguishable from a held lock → 20 cron jobs report `ok:true` and do nothing when Redis isn't ready                                       | 🔬 MEASURED              |
+| PP-031 | S2  | RLS + query   | Super-admin Backups console returns nothing: swallowed `uuid = text` join, RLS-blind `backup_schedules` read and writes                                                     | ✅ FIXED + live-verified |
+| PP-032 | S2  | Data model    | Panel reads `backup_records` (4 failed rows), nightly job writes `tenant_backup_records` (144 rows) — two tables, no shared view                                            | 🚨 OPEN (decision)       |
+| PP-033 | S1  | Deploy + obs  | BuildKit cache filled root to 84% with no bound; `docker system df` under-reports it and the 80% disk alert was never live                                                  | ✅ FIXED + live-verified |
+| PP-034 | S1  | Observability | Alertmanager has **never delivered an alert** — `host.docker.internal` does not resolve in its container and the receiver was never installed (10,807 failed notifications) | 🚨 OPEN (needs recreate) |
 
 ## Sentry issues → register entries
 
@@ -752,6 +754,74 @@ running=120s` with exit 1 and the `--force-recreate app` command to fix it.
   onto the other), and each changes what "Restore" means for a per-tenant inline JSON dump versus
   a whole-database `pg_dump`. A one-line query rewrite here would silently redefine the feature.
 - **Task:** #79.
+
+## PP-033 — 🚨 The BuildKit cache filled the root disk to 84 % and neither `docker system df` nor the disk alert could see it _(S1 · Build / Observability)_
+
+- **Measured at discovery.** BuildKit build cache = **381.9 GB** (230.6 GB flagged reclaimable), root
+  filesystem 410 GB / 509 GB = **84 %**. Cause: repeated `docker compose build app` during this
+  session's deploys.
+- **Why it hid.** This host's Docker 29.8.0 runs the **containerd snapshotter**
+  (`docker info` → `Storage Driver: overlayfs`, `driver-type: io.containerd.snapshotter.v1`).
+  Post-prune split confirms it: **`/var/lib/containerd` = 166 G, `/var/lib/docker` = 17 G**. Any
+  capacity check written as "look in `/var/lib/docker`" under-reports this cache by ~10×.
+- **`docker system df` lies here.** After the prune it reported `Build Cache 285 / 151.3 GB / 0B
+reclaimable`, while `docker buildx du` on the same cache reported **114.9 GB reclaimable of
+  151.3 GB**. `system df` is the wrong instrument for the containerd-snapshotter builder.
+- **The 80 % warning tier was committed but never running.** `HostDiskFull` fired at `> 90` only and
+  stayed silent through the whole 84 %. The tree now carries two tiers (react at 80, page at 90),
+  but the running `nucrm-prometheus` still evaluates the **17-alert** copy, not the **18-alert**
+  committed one: the container started 2026-10-03T05:16:13Z, the file was replaced at
+  2026-10-04T03:52:20Z, and a `:ro` bind mount pinned to the **old inode** keeps serving the old
+  bytes. **Recreating the container is required — a config reload cannot help.**
+- **Fix applied — a durable cap on the host, not in `deploy/cron/crontab`.** That crontab is
+  bind-mounted and live, so a build-cache prune there would couple disk reclamation to the app
+  scheduler. `systemd-analyze verify` is clean on both units and the timer did **not** fire on
+  enable (next elapse 2026-10-04 05:26:57 UTC).
+  - `/etc/systemd/system/nucrm-builder-prune.service` — `Type=oneshot`,
+    `/usr/bin/docker builder prune --force --max-used-space=40gb`
+  - `/etc/systemd/system/nucrm-builder-prune.timer` — `OnCalendar=*-*-* 05:20:00`,
+    `RandomizedDelaySec=20m`, `Persistent=true`, enabled into `timers.target.wants`
+- **Flag syntax verified, not assumed.** `--max-used-space=999gb` (a cap above current usage) parsed
+  and returned `Total: 0B` — the no-op shape that proves the bytes suffix is accepted. A cap above
+  usage prunes nothing, so the first scheduled run will only act once the cache really crosses 40 GB.
+- **Immediate effect.** `docker builder prune -f` took the disk from 410 GB/84 % to 270 GB/56 %, then
+  containerd released the remaining snapshots lazily: **198 GB/41 %, 291 GB free**. The reclamation
+  landing ~20 min after the command returned (which reported a smaller figure) is itself worth
+  knowing — do not read the prune's `Total:` line as the final result; re-measure with `df`.
+- **Deliberately not done.** The 114.9 GB still flagged reclaimable was left alone; the timer is the
+  only reclaimer, so the next deploy stays fast. `nucrm-e2e-dev` was **stopped, not removed**
+  (770 MB writable layer; `docker start nucrm-e2e-dev` restores it).
+- **Task:** #81.
+- **Addendum (2026-10-04, later run) — two claims here were not true when committed, and one is now.**
+  The committed tree carried **only** `HostDiskFull` at `> 90`; the two-tier rule this section describes
+  as "the tree now carries" existed nowhere — `git show HEAD:deploy/monitoring/alerts.yml` had one rule,
+  `grep -c 'alert:'` = 17 while the section says 18. The tiers are added by **this** change
+  (`HostDiskFull` warn at 80/15m, `HostDiskCritical` page at 90/5m), so the section is accurate from
+  here on and was not before. Verified with the real parser, not by eye, and the two readings are the
+  proof of the inode trap:
+
+  ```sh
+  grep -c '^      - alert:' deploy/monitoring/alerts.yml                       # 18  (host file)
+  docker exec nucrm-prometheus grep -c '^      - alert:' /etc/prometheus/alerts.yml   # 17  (pinned copy)
+  docker exec nucrm-prometheus promtool check rules /etc/prometheus/alerts.yml  # SUCCESS: 17 rules found
+  docker run --rm -v /srv/nucrm/deploy/monitoring:/cfg:ro --entrypoint promtool \
+      prom/prometheus:v2.53.0 check rules /cfg/alerts.yml                       # SUCCESS: 18 rules found
+  ```
+
+  The same path, validated twice, gives two answers: 17 from the running container's orphaned inode and
+  18 from a fresh bind of the host file. The committed file is well-formed — it is simply not what the
+  running Prometheus evaluates.
+  Two more facts measured while doing that:
+  - `POST /-/reload` returns **200 and does nothing useful here**. Prometheus re-read the mount and
+    still evaluated the 17-rule copy, because the `:ro` file bind is pinned to the old inode (see the
+    `guard:running-config` output: `repo=d729ed5c594cf6fe running=f16ad5c933ff32f8`). A reload is not a
+    substitute for recreation, and "HTTP 200" is not evidence that a rule is live — read
+    `/api/v1/rules?type=alert` and count the rules instead.
+  - The host units this section references were installed only in `/etc/systemd/system/` and were
+    therefore invisible to anyone reading the repo. They are now mirrored byte-identically under
+    `deploy/systemd/` (plus a README with the install and verification commands). `--max-used-space`
+    was re-confirmed as a real Docker 29.8 flag from `docker builder prune --help`, not just from a
+    no-op run.
 
 ## Running the pre-prod flow simulator
 
