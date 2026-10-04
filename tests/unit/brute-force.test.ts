@@ -14,6 +14,7 @@ vi.mock('@/lib/dev-logger', () => ({ devLogger: { error: vi.fn() } }));
 
 import {
   isBlocked,
+  findLoginBlocks,
   recordFailedAttempt,
   recordSuccessfulLogin,
   getBruteForceStatus,
@@ -55,6 +56,60 @@ describe('brute-force', () => {
       const r = await isBlocked('x@x.com', 'email');
       expect(r.blocked).toBe(true);
       expect(r.reason).toBe('Too many failed attempts');
+    });
+  });
+
+  describe('findLoginBlocks', () => {
+    const future = () => new Date(Date.now() + 60000).toISOString();
+
+    it('answers both identifiers from ONE statement', async () => {
+      mockExecute.mockResolvedValue({ rows: [] });
+      const r = await findLoginBlocks('10.0.0.1', 'a@b.com');
+      expect(r).toEqual({ ip: { blocked: false }, email: { blocked: false } });
+      // Two security contexts cost eight statements (~1.6 s at PP-028's 200 ms).
+      expect(mockExecute).toHaveBeenCalledTimes(1);
+
+      const chunks = (mockExecute.mock.calls[0][0] as { getSQL(): { queryChunks: unknown[] } })
+        .getSQL().queryChunks;
+      // Text chunks are the SQL; bare strings are the bound parameters.
+      const text = chunks.map((c) => typeof c === 'string' ? c : (c as { value?: string[] }).value?.join('') ?? '').join('');
+      const params = chunks.filter((c) => typeof c === 'string') as string[];
+      expect(text).toContain('(identifier, identifier_type) IN ((');
+      expect(text).toContain("'ip'");
+      expect(text).toContain("'email'");
+      expect(params).toEqual(['10.0.0.1', 'a@b.com']);
+    });
+
+    it('maps each row to its own identifier type', async () => {
+      mockExecute.mockResolvedValue({
+        rows: [{ identifier_type: 'email', blocked_until: future(), block_reason: 'account' }],
+      });
+      const r = await findLoginBlocks('10.0.0.1', 'a@b.com');
+      expect(r.ip).toEqual({ blocked: false });
+      expect(r.email.blocked).toBe(true);
+      expect(r.email.reason).toBe('account');
+    });
+
+    it('returns both blocks together so the caller can still rank IP first', async () => {
+      mockExecute.mockResolvedValue({
+        rows: [
+          { identifier_type: 'ip', blocked_until: future(), block_reason: 'ip too many' },
+          { identifier_type: 'email', blocked_until: future(), block_reason: null },
+        ],
+      });
+      const r = await findLoginBlocks('10.0.0.1', 'a@b.com');
+      expect(r.ip.blocked).toBe(true);
+      expect(r.ip.reason).toBe('ip too many');
+      expect(r.email.blocked).toBe(true);
+      // Same default reason the single-identifier read gives an empty block_reason.
+      expect(r.email.reason).toBe('Too many failed attempts');
+    });
+
+    it('degrades to the in-memory fail-safe for both identifiers, and does not throw', async () => {
+      mockExecute.mockRejectedValue(new Error('DB down'));
+      const r = await findLoginBlocks('203.0.113.80', 'burst@b.com');
+      expect(r.ip.blocked).toBe(false);
+      expect(r.email.blocked).toBe(false);
     });
   });
 
