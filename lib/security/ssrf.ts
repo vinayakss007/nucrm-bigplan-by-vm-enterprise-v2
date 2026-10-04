@@ -298,6 +298,40 @@ export function assertSafeUrl(rawUrl: string, opts?: { allowedHosts?: string[] }
 }
 
 /**
+ * Save-time (write-time) validation for a target URL that will be *persisted*
+ * to the database (Issue #2276 — tenant webhook targets).
+ *
+ * `safeFetch` already refuses private/loopback/metadata hosts at delivery
+ * time, but endpoints that store a tenant-supplied URL should fail closed at
+ * write time too, mirroring how `safeRedirectTarget` gates stored redirect
+ * destinations (#2218). This is NOT a parallel validator: it reuses the exact
+ * same `assertSafeUrl` host checks and honours the same `SSRF_ALLOWED_HOSTS`
+ * escape hatch as `safeFetch`.
+ *
+ * Delivery-time protection is unchanged — `safeFetch` still re-runs
+ * `assertSafeUrl` plus the DNS-rebinding IP check before every request, so a
+ * hostname that passes this save-time check but later re-binds to a private
+ * IP is still blocked.
+ *
+ * @returns `null` when the URL may be stored, or a human-readable rejection
+ * reason suitable for a field-level 400 validation error.
+ */
+export function checkSaveTimeUrlSafety(rawUrl: unknown): string | null {
+  if (typeof rawUrl !== 'string' || rawUrl.trim() === '') {
+    return 'url must be a non-empty absolute http(s) URL';
+  }
+  try {
+    assertSafeUrl(rawUrl.trim(), { allowedHosts: getEnvAllowedHosts() });
+    return null;
+  } catch (err) {
+    if (err instanceof SsrfBlockedError) {
+      return err.reason;
+    }
+    throw err;
+  }
+}
+
+/**
  * Resolve a hostname to IP addresses using DNS, then validate that every
  * resolved IP is not private/reserved.  This closes the DNS rebinding window:
  * the hostname is resolved once and the IPs are checked *before* any TCP

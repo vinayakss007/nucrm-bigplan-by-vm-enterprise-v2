@@ -16,6 +16,7 @@ import { randomBytes } from 'crypto';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { parseLimitOffset } from '@/lib/api/query-params';
+import { checkSaveTimeUrlSafety } from '@/lib/security/ssrf';
 
 export const GET = withApiRoute(async (req: NextRequest) => {
   try {
@@ -81,6 +82,18 @@ export const POST = withApiRoute(async (req: NextRequest) => {
     const validated = validateBody(createWebhookSchema, body);
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;
+
+    // #2276: tenant webhook target URLs are validated at SAVE time with the
+    // shared SSRF host checks (absolute http(s) only, no credentials, no
+    // loopback/private/link-local/metadata hosts). Delivery-time `safeFetch`
+    // still re-validates (incl. DNS rebinding) before every request.
+    const urlRejection = checkSaveTimeUrlSafety(v.url);
+    if (urlRejection) {
+      return NextResponse.json(
+        { error: 'Validation failed', details: [{ field: 'url', message: urlRejection }] },
+        { status: 400 }
+      );
+    }
     
     const signingSecret = randomBytes(24).toString('hex');
     const [row] = await db.insert(integrations).values({
