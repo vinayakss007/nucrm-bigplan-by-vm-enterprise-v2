@@ -265,7 +265,7 @@ interface AuditLogParams {
   performed_by_email?: string;
  
  
-  details?: unknown;
+  details?: Record<string, unknown>;
   ip_address?: string | null;
   user_agent?: string | null;
 }
@@ -275,10 +275,19 @@ async function createAuditLog(params: AuditLogParams) {
     await db.insert(selectiveRestoreAuditLog).values({
       tenantId: params.tenant_id,
       action: params.action,
-      oldData: params.details, // Using oldData for details in this context
+      // The table has no columns for the restore link or the request context — it is
+      // (tenantId, action, tableName, recordId, oldData, newData, performedBy, performedAt) and
+      // nothing else — so they ride in the details envelope instead of being dropped. Promoting
+      // them to real columns needs a migration. PP-044.
+      oldData: {
+        ...params.details,
+        restore_log_id: params.restore_log_id,
+        performed_by_email: params.performed_by_email,
+        ip_address: params.ip_address,
+        user_agent: params.user_agent,
+      },
       performedBy: params.performed_by,
       performedAt: new Date(),
-      // In schema, selectiveRestoreAuditLog has: tenantId, action, tableName, recordId, oldData, newData, performedBy, performedAt.
     });
   } catch (err) {
     await logError({

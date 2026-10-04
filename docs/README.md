@@ -35,23 +35,23 @@ security, backups/DR, and incident response. Treat this as internal/confidential
 
 ➡️ **[Open the Super-Admin Docs →](./admin/README.md)**
 
-| Section                                                                      | What's inside                                                  |
-| ---------------------------------------------------------------------------- | -------------------------------------------------------------- |
-| [Platform Architecture](./admin/architecture.md)                             | System design, multi-tenancy, data model, request lifecycle    |
-| [Installation & Deployment](./admin/deployment.md)                           | Docker, PM2, nginx, environment configuration                  |
-| [Configuration Reference](./admin/configuration.md)                          | Every environment variable, grouped and explained              |
-| [Super-Admin Console](./admin/superadmin-console.md)                         | Tenants, billing, usage, impersonation, data explorer          |
-| [Security & Compliance](./admin/security.md)                                 | Auth, RBAC, RLS, encryption, GDPR/SOC2                         |
-| [Backups & Disaster Recovery](./admin/backups-dr.md)                         | Backup strategy, restore, selective restore, DR drills         |
-| [Monitoring & Observability](./admin/monitoring.md)                          | Sentry, Grafana/Prometheus, PagerDuty, health checks           |
-| [Operations Runbooks](./admin/runbooks.md)                                   | Go-live, incident response, migration recovery                 |
-| [Background Jobs & Realtime](./admin/jobs-and-realtime.md)                   | Worker, queues, cron, socket.io                                |
-| [Contributing & Operations Handbook](./admin/contributing-and-operations.md) | PR policy, engineering standards, toolchain, live deploy facts |
-| [⚠️ Pre-Prod Issue Register](./infra/PREPROD-ISSUE-REGISTER.md)               | Every issue found during pre-prod bring-up: evidence, root cause, status |
-| [Pre-Prod Fix Log & Lessons](./infra/PREPROD-FIXES-LESSONS.md)               | What was changed and the transferable lessons behind each bug  |
-| [GitHub Push Access](./infra/github-push-access.md)                          | Deploy-key state and how to grant write access for CI/agent pushes |
-| [Pre-Prod Issue Payloads](./infra/issues/README.md)                          | The 13 open findings, pre-written as GitHub issues + filing script |
-| [S3 Backup Lifecycle](./infra/s3-backup-lifecycle.md)                        | Backup bucket setup, versioning and lifecycle policy           |
+| Section                                                                      | What's inside                                                            |
+| ---------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| [Platform Architecture](./admin/architecture.md)                             | System design, multi-tenancy, data model, request lifecycle              |
+| [Installation & Deployment](./admin/deployment.md)                           | Docker, PM2, nginx, environment configuration                            |
+| [Configuration Reference](./admin/configuration.md)                          | Every environment variable, grouped and explained                        |
+| [Super-Admin Console](./admin/superadmin-console.md)                         | Tenants, billing, usage, impersonation, data explorer                    |
+| [Security & Compliance](./admin/security.md)                                 | Auth, RBAC, RLS, encryption, GDPR/SOC2                                   |
+| [Backups & Disaster Recovery](./admin/backups-dr.md)                         | Backup strategy, restore, selective restore, DR drills                   |
+| [Monitoring & Observability](./admin/monitoring.md)                          | Sentry, Grafana/Prometheus, PagerDuty, health checks                     |
+| [Operations Runbooks](./admin/runbooks.md)                                   | Go-live, incident response, migration recovery                           |
+| [Background Jobs & Realtime](./admin/jobs-and-realtime.md)                   | Worker, queues, cron, socket.io                                          |
+| [Contributing & Operations Handbook](./admin/contributing-and-operations.md) | PR policy, engineering standards, toolchain, live deploy facts           |
+| [⚠️ Pre-Prod Issue Register](./infra/PREPROD-ISSUE-REGISTER.md)              | Every issue found during pre-prod bring-up: evidence, root cause, status |
+| [Pre-Prod Fix Log & Lessons](./infra/PREPROD-FIXES-LESSONS.md)               | What was changed and the transferable lessons behind each bug            |
+| [GitHub Push Access](./infra/github-push-access.md)                          | Deploy-key state and how to grant write access for CI/agent pushes       |
+| [Pre-Prod Issue Payloads](./infra/issues/README.md)                          | The 13 open findings, pre-written as GitHub issues + filing script       |
+| [S3 Backup Lifecycle](./infra/s3-backup-lifecycle.md)                        | Backup bucket setup, versioning and lifecycle policy                     |
 
 ---
 
@@ -113,4 +113,4 @@ docs/
 
 ---
 
-_Product version: **0.8.1** · Stack: Next.js 16 · React 19 · TypeScript 5.9 · PostgreSQL 15+ · Drizzle ORM · Redis._
+_Product version: **0.9.0** · Stack: Next.js 16 · React 19 · TypeScript 5.9 · PostgreSQL 15+ · Drizzle ORM · Redis._

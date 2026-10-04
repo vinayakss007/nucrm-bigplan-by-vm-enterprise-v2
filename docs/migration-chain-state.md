@@ -6,8 +6,9 @@
 > absent from `_journal.json` is invisible to both and can never be applied —
 > not to a live database, not to a DR rebuild. As of today the journal is
 > missing `0059_custom_entities` and `0091_usage_snapshots_superadmin_bypass`
-> and carries a duplicated `idx`/`when` pair, so "PASS — applies all 81
-> migrations" means _all 81 that the journal lists_. `npm run guard:chain`
+> and carries a duplicated `idx`/`when` pair, so "PASS — applies all 105
+> migrations" means _all 105 that the journal lists_ (107 up-migration files exist on disk; the
+> difference is exactly the two unjournaled files above). `npm run guard:chain`
 > (`scripts/check-migration-chain.mjs`) now fails CI on any new omission;
 > the current defects are baselined until #74 repairs them.
 
@@ -16,11 +17,11 @@ build a full schema from an empty database. Drizzle's native `migrate()` path
 (`npm run db:verify-chain`) still cannot — the two lineages collide there.**
 
 There are two runners with different failure behaviour on a fresh database.
-Both were re-verified empirically against PostgreSQL 15 on 2026-08-29:
+Both were re-verified empirically against PostgreSQL 15 on 2026-08-29 (preprod now runs 18.6; that verification predates the upgrade):
 
 | Command                   | Runner                                                                    | Fresh-DB result                                                                     |
 | ------------------------- | ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| `npm run db:migrate`      | `scripts/migrate.ts` (statement-by-statement, tolerates `already exists`) | **PASS** — applies all 81 migrations, 2668 statements, 0 errors, 224 tables         |
+| `npm run db:migrate`      | `scripts/migrate.ts` (statement-by-statement, tolerates `already exists`) | **PASS** — applies all 105 migrations, 2668 statements, 0 errors, 224 tables        |
 | `npm run db:verify-chain` | drizzle `migrate()` (one tx per file, no tolerance)                       | **FAIL** — stops at `0003_billing_migration`: `relation "contracts" already exists` |
 
 `db:migrate` is the path `.env.example`, `setup`, and disaster recovery use, so

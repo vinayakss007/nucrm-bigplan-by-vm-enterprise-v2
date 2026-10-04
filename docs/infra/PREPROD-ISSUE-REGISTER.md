@@ -4,7 +4,7 @@
 > here, with the evidence that proves it and the verification that closed it.
 > Update the status the moment it changes; IDs are never reused.
 >
-> - **Last updated:** 2026-09-15 (UTC)
+> - **Last updated:** 2026-10-04 (UTC)
 > - **Stack under test:** `deploy/docker-compose.preprod.yml` — 17 containers, local MinIO as S3
 > - **Entry point:** `https://95.111.194.98/api/health` → `{"status":"ok","db":"connected","schema_ready":true,"sentry":"configured"}`
 > - **Companion doc:** [`PREPROD-FIXES-LESSONS.md`](./PREPROD-FIXES-LESSONS.md) — chronological fix log and the transferable lessons behind each bug.
@@ -23,37 +23,47 @@ Severity: **S1** blocks go-live · **S2** broken feature or security weakness ·
 
 ## Summary
 
-| ID     | Sev | Area          | Issue (one line)                                                                                                                                                                            | Status                                                |
-| ------ | --- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
-| PP-001 | S2  | Deploy        | `nginx` reported `(unhealthy)` while serving 200s — probe hit IPv6 `::1`                                                                                                                    | ✅ FIXED & VERIFIED                                   |
-| PP-002 | S2  | Deploy        | `app` reported `(unhealthy)` for the same `localhost` → `::1` reason                                                                                                                        | ✅ FIXED & VERIFIED                                   |
-| PP-003 | S1  | Setup         | First-run setup form **always 403** — key sent in body, route reads header                                                                                                                  | 🔧 FIXED IN TREE                                      |
-| PP-004 | S2  | Backups       | Failed `pg_dump` left a partial dump that passes sanity checks                                                                                                                              | 🔧 FIXED IN TREE                                      |
-| PP-005 | S2  | Build         | `NEXT_PUBLIC_APP_URL` hardcoded to `http://localhost:3000` in the image bundle                                                                                                              | ✅ FIXED & VERIFIED                                   |
-| PP-006 | S2  | Build         | `next build` TypeScript step OOMs on Node's default heap                                                                                                                                    | ✅ FIXED & VERIFIED                                   |
-| PP-007 | S1  | Build         | `realtime.ts` (socket.io server) shipped in **no** image                                                                                                                                    | ✅ FIXED & VERIFIED                                   |
-| PP-008 | S1  | Compose       | Undeclared `alertmanagerdata` volume aborted the whole compose project                                                                                                                      | ✅ FIXED & VERIFIED                                   |
-| PP-009 | S1  | Compose       | `minio/minio:latest`, `minio/mc:latest`, `edoburu/pgbouncer:1.23` no longer resolve                                                                                                         | ✅ FIXED & VERIFIED                                   |
-| PP-010 | S1  | RLS / Setup   | **First super-admin insert is rejected by RLS** — even with a correct setup key                                                                                                             | 🔧 FIXED IN TREE                                      |
-| PP-011 | S1  | RLS / Signup  | **Public signup is rejected by RLS** (`users_insert_auth` unsatisfiable pre-auth)                                                                                                           | 🔧 FIXED IN TREE                                      |
-| PP-012 | S1  | RLS / Auth    | `login_attempts` write+read blocked → brute-force lockout silently inert                                                                                                                    | 🔧 FIXED IN TREE                                      |
-| PP-013 | S1  | RLS           | Tenant-isolation gate FAILED — 5 RLS-disabled, 10 policy-less, 6 NULL-tenant leaky                                                                                                          | ✅ FIXED & VERIFIED                                   |
-| PP-014 | S1  | Backups       | `pg_dump` fails as the app role (`FORCE ROW LEVEL SECURITY` + `row_security=off`)                                                                                                           | 🚨 OPEN                                               |
-| PP-015 | S1  | Backups       | `BACKUP_DATABASE_URL` still points at the RLS-bound `nucrm` role                                                                                                                            | 🚨 OPEN                                               |
-| PP-016 | S3  | Observability | Sentry events carry no `release`; `environment` **is** set and ingest is verified working — see the 2026-10-04 addendum                                                                     | 🔎 RE-MEASURED (release + API read scope open)        |
-| PP-017 | S3  | Observability | promtail `docker_sd_configs` unset → Loki gets no container logs                                                                                                                            | ⏸️ BLOCKED                                            |
-| PP-018 | S2  | Storage       | UpCloud Managed Object Storage `CreateBucket` → AccessDenied; buckets absent                                                                                                                | ⏸️ BLOCKED                                            |
-| PP-019 | S2  | Integrations  | `RESEND_API_KEY`, `ANTHROPIC_API_KEY` missing → those features degrade silently                                                                                                             | ⏸️ BLOCKED                                            |
-| PP-020 | S2  | Hardening     | UFW + SSH hardening and `infra-readiness.sh` not yet applied                                                                                                                                | ⏸️ BLOCKED                                            |
-| PP-021 | S3  | Performance   | Sentry `NUCRM-1`: N+1 query on `GET /api/metrics` (12 events)                                                                                                                               | 📌 INFO                                               |
-| PP-022 | S3  | RLS           | `super_admin_audit_logs.tenant_id` is `text`, so the standard policy can't apply                                                                                                            | 📌 INFO                                               |
-| PP-028 | S1  | Performance   | Every DB statement costs a flat ~200 ms — statement _count_ is the real budget                                                                                                              | 🔬 MEASURED                                           |
-| PP-029 | S2  | Deploy        | Our SIGTERM handler exited before Next.js drained; `pool.end()` hung the stop 35.93 s                                                                                                       | ✅ FIXED + live-verified                              |
-| PP-030 | S1  | Scheduling    | `acquireLock` fail-closed is indistinguishable from a held lock → 20 cron jobs report `ok:true` and do nothing when Redis isn't ready                                                       | 🔬 MEASURED                                           |
-| PP-031 | S2  | RLS + query   | Super-admin Backups console returns nothing: swallowed `uuid = text` join, RLS-blind `backup_schedules` read and writes                                                                     | ✅ FIXED + live-verified                              |
-| PP-032 | S2  | Data model    | Panel reads `backup_records` (4 failed rows), nightly job writes `tenant_backup_records` (144 rows) — two tables, no shared view                                                            | 🚨 OPEN (decision)                                    |
-| PP-033 | S1  | Deploy + obs  | BuildKit cache filled root to 84% with no bound; `docker system df` under-reports it and the 80% disk alert was never live                                                                  | ✅ FIXED + live-verified                              |
-| PP-034 | S1  | Observability | Alertmanager has **never delivered an alert** — `host.docker.internal` does not resolve in its container and the receiver was never installed (~10.8k failed notifications, still counting) | 🔧 PARTIAL IN TREE (needs recreate + a real receiver) |
+| ID     | Sev | Area                | Issue (one line)                                                                                                                                                                                                                   | Status                                                    |
+| ------ | --- | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| PP-001 | S2  | Deploy              | `nginx` reported `(unhealthy)` while serving 200s — probe hit IPv6 `::1`                                                                                                                                                           | ✅ FIXED & VERIFIED                                       |
+| PP-002 | S2  | Deploy              | `app` reported `(unhealthy)` for the same `localhost` → `::1` reason                                                                                                                                                               | ✅ FIXED & VERIFIED                                       |
+| PP-003 | S1  | Setup               | First-run setup form **always 403** — key sent in body, route reads header                                                                                                                                                         | 🔧 FIXED IN TREE                                          |
+| PP-004 | S2  | Backups             | Failed `pg_dump` left a partial dump that passes sanity checks                                                                                                                                                                     | 🔧 FIXED IN TREE                                          |
+| PP-005 | S2  | Build               | `NEXT_PUBLIC_APP_URL` hardcoded to `http://localhost:3000` in the image bundle                                                                                                                                                     | ✅ FIXED & VERIFIED                                       |
+| PP-006 | S2  | Build               | `next build` TypeScript step OOMs on Node's default heap                                                                                                                                                                           | ✅ FIXED & VERIFIED                                       |
+| PP-007 | S1  | Build               | `realtime.ts` (socket.io server) shipped in **no** image                                                                                                                                                                           | ✅ FIXED & VERIFIED                                       |
+| PP-008 | S1  | Compose             | Undeclared `alertmanagerdata` volume aborted the whole compose project                                                                                                                                                             | ✅ FIXED & VERIFIED                                       |
+| PP-009 | S1  | Compose             | `minio/minio:latest`, `minio/mc:latest`, `edoburu/pgbouncer:1.23` no longer resolve                                                                                                                                                | ✅ FIXED & VERIFIED                                       |
+| PP-010 | S1  | RLS / Setup         | **First super-admin insert is rejected by RLS** — even with a correct setup key                                                                                                                                                    | 🔧 FIXED IN TREE                                          |
+| PP-011 | S1  | RLS / Signup        | **Public signup is rejected by RLS** (`users_insert_auth` unsatisfiable pre-auth)                                                                                                                                                  | 🔧 FIXED IN TREE                                          |
+| PP-012 | S1  | RLS / Auth          | `login_attempts` write+read blocked → brute-force lockout silently inert                                                                                                                                                           | 🔧 FIXED IN TREE                                          |
+| PP-013 | S1  | RLS                 | Tenant-isolation gate FAILED — 5 RLS-disabled, 10 policy-less, 6 NULL-tenant leaky                                                                                                                                                 | ✅ FIXED & VERIFIED                                       |
+| PP-014 | S1  | Backups             | `pg_dump` fails as the app role (`FORCE ROW LEVEL SECURITY` + `row_security=off`)                                                                                                                                                  | 🚨 OPEN                                                   |
+| PP-015 | S1  | Backups             | `BACKUP_DATABASE_URL` still points at the RLS-bound `nucrm` role                                                                                                                                                                   | 🚨 OPEN                                                   |
+| PP-016 | S3  | Observability       | Sentry events carry no `release`; `environment` **is** set and ingest is verified working — see the 2026-10-04 addendum                                                                                                            | 🔎 RE-MEASURED (release + API read scope open)            |
+| PP-017 | S3  | Observability       | promtail `docker_sd_configs` unset → Loki gets no container logs                                                                                                                                                                   | ⏸️ BLOCKED                                                |
+| PP-018 | S2  | Storage             | UpCloud Managed Object Storage `CreateBucket` → AccessDenied; buckets absent                                                                                                                                                       | ⏸️ BLOCKED                                                |
+| PP-019 | S2  | Integrations        | `RESEND_API_KEY`, `ANTHROPIC_API_KEY` missing → those features degrade silently                                                                                                                                                    | ⏸️ BLOCKED                                                |
+| PP-020 | S2  | Hardening           | UFW + SSH hardening and `infra-readiness.sh` not yet applied                                                                                                                                                                       | ⏸️ BLOCKED                                                |
+| PP-021 | S3  | Performance         | Sentry `NUCRM-1`: N+1 query on `GET /api/metrics` (12 events)                                                                                                                                                                      | 📌 INFO                                                   |
+| PP-022 | S3  | RLS                 | `super_admin_audit_logs.tenant_id` is `text`, so the standard policy can't apply                                                                                                                                                   | 📌 INFO                                                   |
+| PP-028 | S1  | Performance         | Every DB statement costs a flat ~200 ms — statement _count_ is the real budget                                                                                                                                                     | 🔬 MEASURED                                               |
+| PP-029 | S2  | Deploy              | Our SIGTERM handler exited before Next.js drained; `pool.end()` hung the stop 35.93 s                                                                                                                                              | ✅ FIXED + live-verified                                  |
+| PP-030 | S1  | Scheduling          | `acquireLock` fail-closed is indistinguishable from a held lock → 20 cron jobs report `ok:true` and do nothing when Redis isn't ready                                                                                              | 🔬 MEASURED                                               |
+| PP-031 | S2  | RLS + query         | Super-admin Backups console returns nothing: swallowed `uuid = text` join, RLS-blind `backup_schedules` read and writes                                                                                                            | ✅ FIXED + live-verified                                  |
+| PP-032 | S2  | Data model          | Panel reads `backup_records` (4 failed rows), nightly job writes `tenant_backup_records` (144 rows) — two tables, no shared view                                                                                                   | 🚨 OPEN (decision)                                        |
+| PP-033 | S1  | Deploy + obs        | BuildKit cache filled root to 84% with no bound; `docker system df` under-reports it and the 80% disk alert was never live                                                                                                         | ✅ FIXED + live-verified                                  |
+| PP-034 | S1  | Observability       | Alertmanager has **never delivered an alert** — `host.docker.internal` does not resolve in its container and the receiver was never installed (~10.8k failed notifications, still counting)                                        | 🔧 PARTIAL IN TREE (needs recreate + a real receiver)     |
+| PP-035 | S1  | Privacy             | Sentry v11 `dataCollection` defaults to **collecting everything**, and `sentry.client.config.ts` (the only file with `scrubPii`) is not in the Turbopack browser bundle — so the browser has sent PII unscrubbed                   | 🔧 FIXED IN TREE (not live until #84)                     |
+| PP-036 | S2  | Performance         | Every sign-in paid ~830 ms to read one settings row — the IP allow-list gate is 4 statements at PP-028's flat 200 ms, and it runs for tenants that have no list                                                                    | 🔧 FIXED IN TREE (not live until #84)                     |
+| PP-037 | S2  | Performance         | Sign-in asked "are you blocked?" **twice**, in two security contexts — 8 statements, live-measured at 1 608 ms, against a table that holds no row for almost every caller                                                          | 🔧 FIXED IN TREE (live-measured, not deployed until #84)  |
+| PP-038 | S2  | Auth + brute force  | The form-encoded sign-in path took the email raw while the JSON path lowercases it: one lockout comes off that account, and a correct password typed with a capital letter fails                                                   | 🔧 FIXED IN TREE (not live until #84)                     |
+| PP-039 | S2  | Performance         | Resolving _one_ session token cost **two** `set_config` round-trips, because the acting-user and pre-auth-read GUCs were applied one statement at a time — paid by every authenticated request                                     | 🔧 FIXED IN TREE (live-measured, not deployed until #84)  |
+| PP-040 | S2  | Schema drift        | Two live tables (`ai_providers`, `tenant_ai_credentials`) come from migrations 0013/0018 and are declared by **no** schema file — `npm run db:sync` would drop them, and `drift-check` printed them as `[info]` under "No drift ✓" | 🔧 GUARD SHIPPED · tables need a decision                 |
+| PP-041 | S2  | Migrations          | Two applied migrations (`0059`, `0091`) are absent from `_journal.json`, so a fresh database never creates `custom_entities` or the `usage_snapshots` bypass — and `verify-migration-chain` only checks the other direction        | 🚨 OPEN                                                   |
+| PP-042 | S3  | RLS + gates         | `ai_providers` is the only one of 226 tables with neither RLS nor a policy, and `db:verify-isolation` is structurally blind to it — every check filters to tables that have a `tenant_id` column                                   | 🔧 GATE SHIPPED · table decision open (PP-040)            |
+| PP-043 | S3  | Performance         | Task #26's "tracking list scans `email_opens` because `email_id` has no index" — the missing index is real, the sequential scan is not: the live plan is an `Index Scan` at 0.021 ms                                               | 📌 INFO · measured non-issue, no index added              |
+| PP-044 | S2  | Panel + data safety | Selective restore's first write is rejected by RLS (measured 42501), its rollback endpoint read a column that never existed and rewrote a completed restore as `failed`, and all three tables hold 0 rows                          | 🔧 2 FIXES IN TREE · 3 decisions open (#7, snapshot link) |
 
 ## Sentry issues → register entries
 
@@ -428,16 +438,33 @@ Everything above was written from a single event's metadata. I checked the runni
   `SENTRY_RELEASE` (or `NEXT_PUBLIC_SENTRY_RELEASE`) from the deploy pipeline with the git SHA, which
   also enables source maps and deploy records.
 - **Two more facts found while measuring, both worth knowing before the next incident.**
-  - The image ships skewed Sentry majors: `@sentry/node 10.75.0` next to `@sentry/core`,
-    `@sentry/nextjs`, `@sentry/browser` all at **11.1.0**, while `package.json` declares only
-    `@sentry/nextjs: ^11.1.0`. This is why `afterSendEvent` never fires — see the note below about
-    not trusting it as a delivery probe.
+  - ~~The image ships skewed Sentry majors: `@sentry/node 10.75.0` next to `@sentry/core`,
+    `@sentry/nextjs`, `@sentry/browser` all at **11.1.0**~~ — **retracted 2026-10-04, measurement
+    error.** `require('@sentry/node/package.json')` from the app root does print 10.75.0, but that
+    hoisted copy belongs to `lighthouse` (a devDependency). `npm ls @sentry/node` shows
+    `@sentry/nextjs@11.1.0 └── @sentry/node@11.1.0` nested under
+    `node_modules/@sentry/nextjs/node_modules/`, and no source file in this repo imports
+    `@sentry/*` except `@sentry/nextjs` (12 occurrences). The app therefore runs one coherent 11.1.0
+    chain. Whatever makes `afterSendEvent` silent, **it is not version skew, and it is still
+    unexplained.**
   - `SENTRY_AUTH_TOKEN` (187 chars, value never printed) **authenticates but has no read scope**:
     `GET /api/0/projects/asd-pz/nucrm/` and `GET /api/0/organizations` both return **403**, not 401 —
     the token is valid, the capability is absent. Consequence: nothing in this repo or CI can confirm
     an event landed, no regression can be tracked, and **the "Sentry issues" table earlier in this
     register was pulled 2026-09-15 and cannot be refreshed**. `lib/capture-error.ts` also discards the
     event id returned by `captureException()`, so app logs alone can never prove ingest either.
+- **What "one shared image" actually means right now — and it is worse than merely untagged.**
+  `deploy/docker-compose.preprod.yml` documents app + worker as a single shared image, but the three
+  running containers are three different builds, each carrying its own fallback id:
+  `nucrm-app build-1791041783` (started 2026-10-03T16:03:42Z), `nucrm-worker build-1791013739`
+  (08:01:16Z), `nucrm-realtime build-1791002123` (04:44:29Z) — the queue worker is 8 hours and the
+  realtime server 11 hours behind the API they share a codebase with. The two older digests no longer
+  exist locally (`docker image inspect sha256:a431a9c2…` → `Error response from daemon: No such
+image`), so **restarting worker or realtime silently deploys whatever `nucrm-app:preprod` points at
+  at that moment**. This is the "nobody can say what was serving traffic" case in the flesh, and the
+  reason `guard:running-config` now reports release identity per container and fails an untagged
+  build. The fix is one deploy, not a config edit: build once with `SENTRY_RELEASE=$(git rev-parse
+--short HEAD)` and recreate app + worker + realtime together from that tag.
 - **Method note (this is the reusable part).** `Client._isEnabled()` is
   `options.enabled !== false && this._transport !== undefined`, and `close()` sets `enabled = false`.
   A "Transport disabled" debug line printed _after_ `Sentry.close()` therefore looks like a cause and
@@ -561,7 +588,9 @@ Everything above was written from a single event's metadata. I checked the runni
   (provider proxy, delayed-ACK interaction, or per-statement server logging — not yet attributed).
 - **Consequence.** Everything that issues statements in series is defined by this constant, not by
   query efficiency: a gate-shaped transaction (BEGIN + 2 `set_config` + SELECT + COMMIT) measures
-  **828 ms**; login is 4–5 s; `auto-backup` takes ~19 s _per tenant_, so a full sweep is minutes
+  **828 ms** — that constant is what makes login 4–5 s, and PP-036 is the first place we stopped
+  paying it (PP-037 is the second, and measured the saving directly: two of those transactions folded
+  into one came back as **804 ms**); `auto-backup` takes ~19 s _per tenant_, so a full sweep is minutes
   and the cron leak detector (`#65`) mostly catches sweeps that are simply latency-bound. Fixing
   statement _count_ (batching, `unnest`, folding lookups into an existing transaction) is worth
   ~200 ms each; fixing individual query plans is worth almost nothing.
@@ -942,6 +971,563 @@ log nobody reads since it started.
   seen an actual notification land. The register previously listed alert rules as present and treated
   that as monitoring coverage; rules without delivery are telemetry nobody reads.
 - **Task:** #82 (measured), #83 (the remaining decision).
+
+## PP-035 — 🚨 Sentry's v11 `dataCollection` defaults to collecting **everything**, and the browser entry that actually ships had no scrubbing at all _(S1/S2 · Privacy)_
+
+Found while writing the `scrubPii` regression test for the `/g`-regex leak: the comment in our Sentry
+configs claimed the opposite of what the installed SDK does. Both halves were then measured, not
+inferred.
+
+- **Half 1 — defaults are ON.** `node_modules/@sentry/core/build/cjs/utils/data-collection/resolveDataCollectionOptions.js`
+  is 30 lines of `dc.x ?? DEFAULTS.x` with every `DEFAULTS` entry true. Proven by running it inside the
+  live `nucrm-app` container:
+  ```
+  node -e "console.log(JSON.stringify(require('<path>/resolveDataCollectionOptions.js').resolveDataCollectionOptions({})))"
+  {"userInfo":true,"cookies":true,"httpHeaders":{"request":true,"response":true},
+   "httpBodies":["incomingRequest","outgoingRequest","incomingResponse","outgoingResponse"],
+   "urlQueryParams":true,"graphQL":{"document":true,"variables":true},"genAI":{"inputs":true,"outputs":true},
+   "databaseQueryData":true,"queues":true,"stackFrameVariables":true,"frameContextLines":5}
+  ```
+  `sendDefaultPii` no longer exists in `@sentry/core` at all (grep → 0 hits). So the comment in all four
+  of our Sentry files — "the SDK now treats anything other than an explicit `dataCollection` opt-in as
+  off, so PII is still never sent" — described v10 and is **false for the v11.1.0 we run**. Omitting the
+  option was the maximum-PII setting; `beforeSend` was the only defence.
+- **Half 2 — and in the browser there was no defence.** Two files initialise Sentry on the client:
+  `sentry.client.config.ts` (has `beforeSend: scrubPii`) and `instrumentation-client.ts` (has none).
+  Only the second is in the shipped bundle. Measured against the deployed image (`/app/.next`, built
+  2026-10-03T15:36Z), using string literals because minification renames identifiers but never touches
+  strings:
+
+  | marker                         | file it comes from                            | `/app/.next/static` (browser) | `/app/.next/server` |
+  | ------------------------------ | --------------------------------------------- | ----------------------------- | ------------------- |
+  | `redacted-email`               | `sentry-pii-scrub.ts`                         | **0 files**                   | 4 files             |
+  | `nucrm-app`                    | `sentry.client.config.ts` `initialScope.tags` | **0 files**                   | —                   |
+  | `captureRouterTransitionStart` | `instrumentation-client.ts`                   | 3 files                       | —                   |
+  | `replaysSessionSampleRate`     | `instrumentation-client.ts`                   | 2 files                       | —                   |
+
+  Corroborating mechanism: `@sentry/nextjs` injects `sentry.client.config.ts` from a **webpack** plugin
+  (`build/cjs/config/webpack.js:342` `getClientSentryConfigFile`), and `next build` on Next 16.3.6 is a
+  Turbopack build — `/app/.next/turbopack` exists. The SDK's own double-init warning
+  (`build/cjs/client/index.js:37`) names exactly this pair of files. So `sentry.client.config.ts` is
+  dead code in this build: the browser has been sending cookies, headers, bodies, query strings,
+  stack-frame variables and 5 lines of source around every frame, **unscrubbed**, and has been doing so
+  for the whole life of the v11 upgrade. Session replay rates (10 % / 100 % on error) are configured
+  there too; replay masking behaviour was **not** measured and is a follow-up.
+
+- **Changed in the tree by this PR.**
+  - `sentry-data-collection.ts` (new) — one explicitly-all-off object, shared by all four init sites,
+    with the measured default list in its comment.
+  - `sentry.server.config.ts`, `sentry.edge.config.ts`, `sentry.client.config.ts`,
+    `instrumentation-client.ts` — each now passes `dataCollection: DATA_COLLECTION`, the false comment
+    is replaced by the true one, and `instrumentation-client.ts` additionally gained
+    `beforeSend: scrubPii` so the browser finally has the same second layer as the server.
+  - `sentry.client.config.ts` header now says out loud that it is **not** the live browser entry, so a
+    future reader cannot mistake an edit there for a shipped fix.
+  - `tests/unit/sentry-data-collection.test.ts` (new) — asserts through the SDK's own resolver that
+    `{}` collects everything, that our object resolves to **nothing** collected, and that
+    `Object.keys(DATA_COLLECTION)` equals the resolver's full field list. That last one is the upgrade
+    tripwire: a Sentry that adds a fifth collector fails CI instead of quietly collecting. Two further
+    tests read the four init-site files to catch `dataCollection`/`scrubPii` being dropped again.
+  - `tests/unit/sentry-pii-scrub.test.ts` (new) + the `sentry-pii-scrub.ts` fix it covers: a `/g` regex
+    used as an `.test()` guard carries `lastIndex` between calls, so the breadcrumb redaction fired
+    only intermittently and an address could go out unredacted. Also covers string-shaped cookies
+    (`sid=1; theme=dark`) passing through untouched and `query_string` being blanked instead of redacted.
+  - Verified: `tsc --noEmit` exit 0, `eslint --max-warnings=0` clean on the six touched files,
+    full `tests/unit` + `tests/dashboard` green (one pre-existing unrelated
+    `EnvironmentTeardownError` in `ai-auto-followup.test.ts`).
+- **Follow-up in the same push — the bags our own code writes.** `dataCollection` only governs what the
+  **SDK** collects; `event.extra`, `event.tags` and `event.contexts` are written by us, so `beforeSend`
+  is the only place they can be stopped. A full-repo sweep of every sink found three live leaks, all
+  server-side, all through `lib/errors-server.ts::forwardToSentry` (line 56 `tags`, 62 `user.id`,
+  63-67 `extra` including `...opts.metadata`):
+  - `app/api/emergency/recover/route.ts:122,149,157,201` → `metadata: { ip, email }` — a raw
+    super-admin address and client IP.
+  - `app/api/auth/sso/start/route.ts:81,119` → `extra.requestUrl` is the **raw** `GET ?email=…`; the
+    scrubber already defanged `event.request.url`, but this is a second copy of the same URL that no
+    existing rule touched. Ten more auth routes copy `request.url` the same way.
+  - `lib/email/service.ts:316-320` → `metadata: { subject, recipients }`, i.e. the outbound subject
+    (customer free text) and a partially-masked recipient list (`j***@domain`, which `EMAIL_RE` does
+    not match). Plus `lib/automation/engine.ts:100` / `workflow-executor.ts:159` → `tags.context` =
+    `` `automation:${name}` `` where `name` is typed by the customer.
+    `scrubPii` now walks all three bags (depth-capped at 3 against a caller-supplied cycle), replaces
+    values under identity keys (`email`, `ip`, `subject`, `recipients`, `to`, `from`, plus the existing
+    secret keys), strips query **and** fragment from any `*url`/`*uri`/`*href` value, and masks emails
+    in every other string including array members — arrays are masked rather than blanked so "how many
+    recipients failed" survives.
+  - **Two things that turned out inert, recorded so nobody re-audits them:** no code in the repo calls
+    `Sentry.setContext`/`setExtra`/`setTag`/`withScope`/`configureScope` at all (the `setUserContext`
+    and `setContext` hits are this project's own RLS/ALS helpers), and `event.request.data` has zero
+    writers on top of `httpBodies: []`. `event.user.id` is kept: every writer resolves to a `users.id`
+    uuid (or the static `'demo-user'`), never an address — `lib/errors-server.ts:62` is the only door.
+- **Session Replay: the option is set, the integration is not — measured, not assumed.** Both client
+  files set `replaysSessionSampleRate: 0.1` / `replaysOnErrorSampleRate: 1.0` with a comment claiming
+  "10 % of all sessions". In v11 those numbers are only read by `@sentry/replay` itself
+  (`grep -rl replaysSessionSampleRate` across the installed `@sentry/{core,browser,replay,nextjs}`
+  builds matches **only** `@sentry/replay/build/npm/cjs/index.js`); nothing in `@sentry/browser`'s `init`
+  or `@sentry/nextjs`'s client entry registers the integration, and this repo passes no `integrations:`
+  at all. So **no replay has ever been recorded** — the DOM-bypasses-`beforeSend` worry does not apply
+  today. It becomes a live S1 the moment someone adds `Sentry.replayIntegration()`, which is also why
+  the `maskAllText` strings sitting in the client chunk are misleading: they are the barrel re-export,
+  not a running recorder. Either register it with explicit masking or delete the two dead options.
+- **What cannot be verified from here.** The claim "events contained cookies/headers/bodies" is a
+  statement about SDK behaviour plus config, proved by the resolver — **not** a statement about what is
+  in the Sentry project, because `SENTRY_AUTH_TOKEN` has no read scope (403, see PP-016). Nobody has
+  looked at a real browser event. Once the token gets `project:read`, the first check should be whether
+  historical events carry `request.cookies`/`request.data`.
+- **Not live.** This is tree-only. The deployed bundle is the one measured above; it changes on the
+  rebuild in **#84**.
+- **Lesson for this repo's docs.** A comment that says "the SDK is safe by default" is an assertion
+  about a dependency, and dependencies get upgraded. Where the claim is load-bearing for GDPR, the test
+  should read the dependency's own behaviour (the resolver here) rather than our copy of it.
+- **And the wrong belief was not only in comments.** `tests/unit/sentry-config.test.ts` asserted
+  `expect(options).not.toHaveProperty('dataCollection')` — so CI was actively guarding the absence of
+  the one option that turns collection off, and it went red the moment the fix landed. It now asserts
+  the option **is** passed and equals `DATA_COLLECTION`.
+- **Task:** #82 (found during the Sentry check), #84 (deploy).
+
+## PP-036 — ✅ Every sign-in paid ~830 ms for a settings row almost no tenant has _(S2 · Performance)_
+
+- **Symptom.** Enforcing the tenant IP allow-list at sign-in (#15, deployed and live-verified in
+  e2e phase **J**) measurably widened the login path: **~830 ms** of it is the single
+  `platform_settings` read inside `lib/ip-whitelist.ts::checkLoginIpAllowed`.
+- **Root cause — nothing to do with the query.** That read is its own RLS transaction, because
+  `platform_settings` is guarded by `tenant_isolation` and a pre-auth connection would see zero
+  rows and conclude "no restriction" for every tenant. So it is four statements
+  (`BEGIN`, `SELECT set_config(…), set_config(…)`, the `SELECT`, `COMMIT`), and PP-028 prices each
+  one at a flat ~200 ms. The list itself is compared in memory and costs nothing.
+- **Why it is worth fixing.** It is paid **unconditionally**, including by the tenants that never
+  opened the security page and have no row at all — i.e. almost all of them — and by every failed
+  password attempt too, since the gate runs after credentials verify but before the session exists.
+- **Fix.** One read per tenant per 30 s, cached in-process (`whitelistCache`), plus
+  `invalidateIpWhitelistCache(tenantId)` called from both write paths of
+  `app/api/tenant/security/ip-whitelist/route.ts` (PUT and DELETE). A save through the settings
+  page is served by the same process that will serve the next sign-in, so a restriction — or its
+  removal — takes effect immediately; the TTL only bounds a row changed out-of-band (`psql`, a
+  restore), in **both** directions, which is why it is short rather than generous.
+- **Not `lib/cache`.** That is Redis, and Redis is not ready here (PP-030). A security gate whose
+  cache is unreachable must neither fall open nor queue behind a circuit breaker; a `Map` cannot
+  fail, invalidates synchronously, and has no dependency to time out.
+- **Two deliberate non-caches.** A lookup that threw (`lookup-failed`, which fails open) and a row
+  that exists but will not decode (also fails open, loudly) are **not** stored: an empty list means
+  "no restriction", so a value we gave up on must be re-tried at the next sign-in rather than
+  pinned open for 30 s. `readWhitelistRow` returns `{ ips, cacheable }` for exactly this reason.
+- **Bounded.** Signup is public, so "tenants that ever sign in" has no natural ceiling. Entries are
+  pruned by age at 5 000 tenants and the map is cleared if it is still full, so the cache cannot
+  grow with the tenant count.
+- **Verification.** `tsc --noEmit` and `eslint --max-warnings=0` exit 0; `tests/unit/ip-whitelist.test.ts`
+  15/15, six of them new: one read answers later sign-ins, a just-saved list applies before the TTL,
+  a failed lookup is not cached, an undecodable row is not cached, tenants do not share an entry, and
+  the entry is re-read once it is older than 30 s (only `Date.now` is faked — there is no timer).
+- **Not measured live.** 830 → ~200 ms for the first sign-in in a window and ~0 after that is
+  computed from the statement count, not timed: this is tree-only until the rebuild in **#84**, and
+  the deployed bundle still runs the uncached gate.
+- **Residual.** Two app replicas would not share an invalidation (one today). The real answer to
+  the 200 ms constant is PP-028, not this — every remaining serial statement in a request is still
+  priced the same.
+- **Files:** `lib/ip-whitelist.ts`, `app/api/tenant/security/ip-whitelist/route.ts`,
+  `tests/unit/ip-whitelist.test.ts`
+- **Task:** #15 (the gate), #72 (deployed + verified), #76 (this), #84 (deploy).
+
+## PP-037 — ✅ Sign-in asked "are you blocked?" twice: live-measured 1 608 ms for one answer _(S2 · Performance)_
+
+- **Symptom.** `POST_login` called `isBlocked(ip, 'ip')` and then `isBlocked(email, 'email')`, i.e.
+  **two** gate-shaped RLS transactions, on every single authentication attempt — including the
+  overwhelming majority where the answer to both is "no row".
+- **Measured, not projected.** Run inside the deployed app container against the preprod database
+  (read-only; a TEST-NET-3 address and an address that cannot exist), the two consecutive
+  `isBlocked()` calls cost **1 608 ms median** (1 607 / 1 608 / 1 855) and the folded single read
+  **805 ms** (803 / 805 / 805) — **804 ms back per attempt**, exactly the two statements PP-028
+  prices at ~200 ms each. The script was copied into the container, run, and deleted; it is not in
+  the repo, so nothing here is a benchmark that can silently rot.
+- **Fix.** `findLoginBlocks(ip, email)` — one security context, one row-value `IN` list, answers
+  returned per type so the caller still decides **IP before email**. `isBlocked()` stays: it is the
+  single-identifier question `getBruteForceStatus()` asks.
+- **Deliberate behaviour change.** The email block is now read _before_ `checkRateLimit`, whereas
+  the second read used to sit after it. A request the limiter was about to refuse therefore pays
+  for a block lookup it previously skipped. Accepted: the limiter is not a DB path, and every
+  attempt — refused or not — now costs four fewer statements.
+- **Fail-safe preserved, with one difference.** The #1174 in-memory fallback still answers both
+  identifiers when the store is unreachable, so an outage throttles a burst without locking everyone
+  out. It now consumes the _email_ fallback counter even on an attempt that returns early on the IP
+  block, which previously left it untouched: during an outage an account reaches the fallback
+  threshold marginally sooner. That direction is the safe one.
+- **Why not cached like PP-036.** A block is a _deny_ whose expiry moves, and the event that changes
+  it — `recordFailedAttempt` — happens inside the very request path that reads it. An in-process
+  cache would have to be invalidated on every failed attempt, and failed attempts are precisely the
+  burst the gate exists to throttle. PP-036 could cache because "no list" is near-permanent; "not
+  blocked" is not.
+- **Verification.** `tsc --noEmit` and `eslint --max-warnings=0` exit 0; full suite **6 474 passed**.
+  Four new tests in `tests/unit/brute-force.test.ts`: the fold is proven to be **one** statement by
+  reading `getSQL().queryChunks` (the two text fragments and both bound identifiers, never a
+  second `execute`), each type maps to its own slot, both rows at once keep the default reason, and
+  the store-unreachable path returns rather than throws.
+- **Residual.** 805 ms is still the price of asking this question at all, and login still makes
+  several other serial statements. The answer to the constant is PP-028, not more micro-folding.
+- **Files:** `lib/security/brute-force.ts`, `lib/auth/api-handlers.ts`,
+  `tests/unit/brute-force.test.ts`, `tests/unit/auth-login-form-email.test.ts`
+- **Task:** #85 (this), #84 (deploy), and it is the second half of #76 / PP-036's "every remaining
+  serial statement is priced the same".
+
+## PP-038 — 🚨 The form-encoded sign-in path never normalized the email, so one lockout came off _(S2 · Auth + brute force)_
+
+- **Symptom.** `POST_login` accepts two encodings. The JSON branch runs the value through
+  `loginSchema`, which is `z.string().email().max(255).transform(v => v.trim().toLowerCase())`. The
+  urlencoded branch assigned `formData.get('email')` **raw**. Two silently different identities for
+  the same account, depending on a content-type header.
+- **How it was found.** Writing the test for PP-037's handler change: the fake form request asserted
+  `findLoginBlocks(ip, 'admin@example.com')` and got `Admin@Example.com` back.
+- **Consequence 1 — the account lockout can be stepped around.** `recordFailedAttempt()` inserts the
+  email **as typed** but counts the window with `WHERE email = ${email.toLowerCase()}`. Attempts
+  recorded against `Admin@x.com` therefore never reach that account's threshold, so the
+  `login_blocks` email entry is never written — while the block it would have created is keyed
+  `email.toLowerCase()`. The per-IP block still fires, so this is one of the two locks coming off,
+  not the door.
+- **Consequence 2 — a correct password can fail.** `users.email` is stored lowercase (signup
+  normalizes it the same way) and the lookup is `eq(users.email, email)`, which is case-sensitive.
+  A sign-in posted as `Admin@Corp.io` finds no row and answers `Invalid email or password` — for the
+  right password — and then records that failure under an address no block or lockout will ever read.
+- **Not reachable from our own UI today.** `app/auth/login/login-form.tsx`,
+  `app/auth/login-simple/page.tsx` and `app/auth/login/actions.ts` all post
+  `application/json`. The exposed surface is any direct client of `POST /api/auth/login` (curl, a
+  server-to-server integration, a legacy HTML form) — which is why this is a real defect and not a
+  hypothetical one: nothing in the API contract says "JSON only".
+- **Fix.** The form branch now does `.trim().toLowerCase()` with a comment naming both failure modes,
+  so the two encodings agree before anything is looked up, counted, or written.
+- **Verification.** `tests/unit/auth-login-form-email.test.ts` (new, 4 tests): the block table is
+  asked about the **normalized** address; `recordFailedAttempt` receives the normalized address; a
+  blank email still short-circuits to the `error=missing_fields` redirect **without** touching the
+  block table; and an IP block answers the form client with the 307 redirect (Next returns **307**
+  from `NextResponse.redirect`, not 302) after exactly one combined block read.
+- **Not measured live.** Preprod still runs the un-normalized bundle until **#84**. The claim here is
+  read off the code paths and pinned by tests, not off a request against the deployed app.
+- **Residual.** Nothing forces the two branches to stay in agreement — a third encoding, or a future
+  schema change, could reintroduce the split. The durable fix is to normalize once, before the
+  branch, or to make the form branch validate through the same schema.
+- **Files:** `lib/auth/api-handlers.ts`, `tests/unit/auth-login-form-email.test.ts`
+- **Task:** #86 (this), #84 (deploy).
+
+## PP-039 — ✅ Redeeming one session token cost two `set_config` round-trips _(S2 · Performance)_
+
+- **Symptom.** `withAuthResolutionContext(userId, fn)` — the context every session
+  **redemption** runs in, i.e. the first DB work of any authenticated request that the AuthContext
+  cache did not already answer — awaited `setUserContext(userId, tx)` and then
+  `setAuthLookupContext(tx)`. Two statements to say one thing: "this token has been verified, read
+  its owner's own rows".
+- **Measured.** In the deployed container against preprod, the old shape (BEGIN + two `set_config` +
+  the read + COMMIT) is **1 006 ms** median (1 064 / 1 006 / 1 003) and the folded shape is
+  **804 ms** (804 / 803 / 809): **202 ms back**, which is precisely PP-028's flat per-statement
+  constant. That is the whole saving and the whole claim — one statement, once, per redemption.
+- **Why this one is worth more than its size.** Unlike the sign-in folds (PP-036/PP-037, once per
+  login), this is paid on **every authenticated request**. It is also the cheapest class of fix in
+  this register: nothing is cached, batched or denormalised, no policy changes, no extra privilege is
+  granted — the same two GUCs with the same values simply go over the wire together.
+- **Fix.** `setAuthResolutionContext(userId, tx?)` emits
+  `SELECT set_config('app.current_user', …), set_config('app.auth_lookup', 'true', …)` in one
+  statement; `withAuthResolutionContext` calls it. Postgres evaluates both in the one round-trip, and
+  the transaction-local scoping is unchanged.
+- **Same shape, second site.** `setImpersonationContext(tenantId, userId, tx)` folds
+  `setSuperAdminContext(tx)` + `setTenantContext(…, tx)` into one statement. Those call sites
+  (`lib/auth/impersonation-reconcile.ts`, `app/api/superadmin/impersonate/stop/route.ts`) are a loop
+  over every super admin still pointing at a tenant, so the old version charged 200 ms per admin
+  scanned rather than per impersonation reconciled.
+- **`tx` is required, on purpose.** `setImpersonationContext` is the widest context in `lib/db/rls`
+  (platform privilege aimed at a workspace). A session-scoped variant would outlive the statement it
+  was meant to cover, so the signature refuses it — and the test asserts no `false)` ever appears in
+  the generated SQL. `setTenantCarrier` still runs, so PP-027's bare-`db.transaction()` recovery keeps
+  the proven identity.
+- **What was NOT folded.** `withSecurityContext` + a later `setTenantContext(tx)` inside the callback
+  (signup, `join-tenant`, `create-admin`, `workspace`) is the same two-statement pattern, but the
+  second context is applied _conditionally, mid-transaction_, by code that does not know it is inside
+  a security context. Folding those would mean hoisting privilege decisions into the caller — a
+  security change, not a latency one. Left alone deliberately.
+- **Verification.** `tsc --noEmit`, `eslint --max-warnings=0` and `guard:filesize` exit 0; four new
+  tests in `tests/unit/rls.test.ts` pin the count itself (one `execute`, exactly two `set_config`
+  calls inside it, both GUC names present), the empty-`userId` refusal, the three-in-one impersonation
+  statement, its `SET LOCAL` scoping, and the empty-`tenantId`/empty-`userId` refusals. Existing
+  `impersonation-reconcile` / `auth-session` tests still pass untouched.
+- **Not deployed.** Like PP-035 to PP-038, this is tree-only until **#84**. The measured numbers come
+  from the deployed runtime's own connection to preprod, so the _cost_ is real today; the _fix_ is not
+  yet running.
+- **Files:** `lib/db/rls.ts`, `lib/auth/impersonation-reconcile.ts`,
+  `app/api/superadmin/impersonate/stop/route.ts`, `tests/unit/rls.test.ts`
+- **Task:** #87 (this), #84 (deploy), #75 (the constant this is priced against).
+
+## PP-040 — ✅ `drift-check` said "No drift" about tables `db:sync` would drop _(S2 · Schema drift)_
+
+**Found:** 2026-10-04, while re-deriving the README's table counts (224 declared, 226 live).
+**Status:** guard shipped (this commit). The two tables themselves need a decision.
+
+- **The claim, measured.** `drizzle/schema/` declares 224 tables (42 files, all names unique). The
+  preprod database has 226 in `public`. The diff is `ai_providers` and `tenant_ai_credentials`, both
+  created by `0013_workflow_foundation.sql` / `0018_workflow_foundation_legacy.sql` and never added to
+  a schema file. Neither is declared-but-missing: nothing in the schema is absent from the database.
+- **Why that is not cosmetic.** `npm run db:sync` is `drizzle-kit push`, whose only source of truth is
+  `drizzle/schema/`. A table it cannot see is a table it drops — rows and hand-written policy
+  included. `ai_providers` carries 6 enabled provider rows; `tenant_ai_credentials` has the
+  `encrypted_api_key` / `base_url_override` / approval-chain columns but is empty today, so the
+  realistic loss is the 6 rows plus `tenant_ai_credentials`' policy. `db:sync` is gated behind
+  `CI != true` and README warns against it, but "the destructive command is guarded by a warning" is
+  not a control.
+- **The guard was actively misleading.** `scripts/drift-check.ts` listed both as
+  `[info] extra tables (not in schema)`, then printed `No drift — schema matches migrations. ✓` and
+  exited **0**. The one tool that could have caught the drop recommended proceeding.
+- **RLS, since these tables bypass the schema:** `tenant_ai_credentials` has `rowsecurity = t` with a
+  single hand-written `tenant_isolation` policy — `tenant_id IS NULL OR tenant_id = current_setting(
+'app.current_tenant')`, `FOR ALL TO public`, no super-admin clause. `ai_providers` has
+  `rowsecurity = f` and 0 policies, which is consistent with a platform catalogue but means every
+  tenant context can read it. Both facts are invisible to `drizzle/schema`, so no future migration
+  will notice them changing.
+- **Shipped change:** `drift-check` now counts the rows of every undeclared table and turns a
+  populated one into an error (`UNDECLARED TABLES WITH DATA — \`npm run db:sync\` would drop them:
+  ai_providers (6 rows)`, exit 1); empty ones stay `[info]`. Table names are validated against
+`^[a-z_][a-z0-9_]*$` before the count query interpolates them, and a name that fails that check
+  becomes its own error rather than a silent skip.
+- **Verified against preprod, live:** old script → `No drift ✓`, exit 0. New script (run from a temp
+  copy inside `nucrm-app`, then deleted) → `226/224 expected present`,
+  `[info] extra tables (not in schema, empty): tenant_ai_credentials`,
+  `✗ UNDECLARED TABLES WITH DATA … ai_providers (6 rows)`, exit **1**.
+- **Cost note:** the row counts are a single `UNION ALL` statement over all undeclared tables, not one
+  query per table — at PP-028's ~200 ms that is ~200 ms added to an ops command, never to a request
+  path.
+- **Nothing reads them, which is the actual finding.** No TypeScript references either table (the
+  `ai_providers` hits in `lib/ai/gateway.ts`,
+  `app/api/tenant/admin/ai-providers/route.ts` and `app/api/tenant/ai/status/route.ts` are the
+  `tenants.settings -> 'ai_providers'` **jsonb key**, not the table), no later migration touches them,
+  and `pg_depend` shows no view or function depending on either. The gateway's real storage is the
+  declared `ai_provider_secrets` / `ai_activity`. So these are orphans of the design 0013 shipped and
+  0020-era code replaced — evidence favours dropping them in a numbered migration over declaring them,
+  but that is a destructive decision and not mine to take. Until then the control is
+  `scripts/drift-check.ts` exiting 1 — and CI does not run it.
+- **Files:** `scripts/drift-check.ts`, `README.md`
+- **Task:** #88 (this), #75 (statement cost), #84 (deploy — unrelated, this is an ops script).
+
+## PP-041 — 🚨 Two applied migrations are not in the journal, so no fresh database can ever get them _(S2 · Migrations)_
+
+**Found:** 2026-10-04, while reconciling the table counts behind PP-040.
+
+- **First, the arithmetic that fooled an earlier pass of this file.** `drizzle/migrations/` holds **213**
+  `.sql` files, but that is **107 up-migrations + 106 `.down.sql`** twins — `0036_backup_records_checksum`
+  is the one migration with no down file. `meta/_journal.json` has **105** entries, and its `idx` values
+  are not contiguous. Comparing files to journal entries:
+  ```bash
+  python3 - <<'EOF'
+  import json, os
+  j = json.load(open('drizzle/migrations/meta/_journal.json'))
+  tags = {e['tag'] for e in j['entries']}
+  files = sorted(f[:-4] for f in os.listdir('drizzle/migrations')
+                 if f.endswith('.sql') and not f.endswith('.down.sql'))
+  print(len(files), 'up files |', len(j['entries']), 'journal entries')
+  print('files not in journal:', [t for t in files if t not in tags])
+  EOF
+  # 107 up files | 105 journal entries
+  # files not in journal: ['0059_custom_entities', '0091_usage_snapshots_superadmin_bypass']
+  ```
+- **They are applied in preprod.** `custom_entities` and `custom_entity_data` exist; `usage_snapshots`
+  carries exactly one policy named `tenant_isolation`, which is what 0091's `DROP POLICY IF EXISTS` +
+  `CREATE POLICY` produces. So preprod is _ahead_ of the journal, not behind it.
+- **Why that is dangerous and not a curiosity.** `scripts/migrate.ts:210` iterates `journal.entries`.
+  A migration with no journal entry is invisible to `npm run db:migrate` forever. Rebuild a database —
+  new region, DR restore, a CI e2e schema — and `custom_entities`/`custom_entity_data` are never created
+  and the `usage_snapshots` super-admin bypass is never installed. The second one is the exact failure
+  0091 was written to fix: its header says the weekly snapshot cron "died with an RLS violation every
+  run (NUCRM-D)". That fix is unreproducible. Nothing fails loudly, because preprod — where we test —
+  already has the objects.
+- **A second, non-CI script checks only one direction.** `scripts/verify-migration-chain.ts:79` reports
+  "A journal entry has no corresponding .sql file" but not the reverse, and it applies migrations _in
+  journal order_, so a scratch database it builds is silently missing the same two objects. That is a
+  limitation of that script, not of the repo's coverage — see the next bullet, which is the gate CI
+  actually runs.
+- **But #46's guard does see it — and has it baselined.** `scripts/check-migration-chain.mjs` checks
+  `missing` (up-file with no journal entry) as well as `orphans`/`dupIdx`/`dupWhen`/`order`, and
+  `scripts/migration-chain-baseline.json` already lists `missing:0059_custom_entities` and
+  `missing:0091_usage_snapshots_superadmin_bypass`. Measured: `node scripts/check-migration-chain.mjs`
+  → `107 up-file(s) · 105 journal entries · 5 defect(s), 5 baselined`, exit 0. So this is not an
+  unguarded defect but a **known, accepted, grandfathered** one — the entry stays open because
+  baselining is not repairing, and the repair is #74. Shrink the baseline in the same commit that
+  journalises the two files.
+- **Ledger, and a real collision in it.** The ledger is `drizzle.__drizzle_migrations` — not in `public`,
+  which is why filtering `pg_tables` for it returns nothing:
+  ```sql
+  select count(*), count(distinct created_at) from drizzle.__drizzle_migrations;  -- 99 | 98
+  ```
+  Two journal entries share one `when`: `1788782400008` → `0092_metrics_tables_superadmin_bypass` **and**
+  `0096_analytics_events_ingest_insert`. `migrate.ts` advances by comparing folderMillis against the
+  newest `created_at` — its own comment at line 341 says "not by hash" — so a duplicate timestamp cannot
+  distinguish them. This too is already known: it is `dupWhen:1788782400008` in the baseline, alongside
+  `dupIdx:91` and `order:0092_metrics_tables_superadmin_bypass`. Any repair that inserts journal entries
+  has to respect that ordering scheme or it re-creates this ambiguity.
+- **The unbooked tail is not an outage.** Six journal migrations (0101–0106) are live but have no ledger
+  row. All six were verified present: `chk_notifications_type`, `chk_ai_activity_action`,
+  `chk_scheduled_reports_type`, `chk_integrations_type`, the `email_tracking_pixel_lookup` policy, and
+  `chk_sequence_step_logs_status` including `'sending'`. Every one is `DROP … IF EXISTS` + `ADD`/`CREATE`,
+  so a replay is idempotent and harmless. Recorded so nobody mistakes the 99-vs-105 gap for unapplied work.
+- **Fix, when someone takes it.** (1) Add the two entries to `_journal.json` with non-colliding `when`
+  values, or fold both into one new numbered migration; (2) regenerate the baseline in the same commit
+  (`node scripts/check-migration-chain.mjs --update`) — the guard only _prints_ a hint when a baselined
+  defect disappears (`healed.length > 0` logs `..` lines and still exits 0; only a `fresh` defect exits
+  1), so forgetting step (2) leaves five stale names in the baseline and CI green; (3) optionally add
+  the reverse check to `verify-migration-chain.ts` so the two chain tools agree. _Correction to the
+  first draft of this entry:_ it claimed no gate runs on push. That was wrong — `npm run guard:chain`
+  is wired into `.github/workflows/ci.yml:63` and is the script that already knows about all five
+  defects. My grep looked for `verify-isolation`/`verify-migration-chain`, found neither, and I
+  generalised from a missing name to a missing control. `db:verify-isolation` genuinely is not in CI;
+  `guard:chain` genuinely is.
+- **Not done.** This is a tree-and-ledger read; no migration, journal, baseline or script was modified.
+  The repair is #74.
+
+## PP-042 — 🚨 `ai_providers` has no RLS and no policy, and the isolation gate is structurally blind to it _(S3 · RLS + gates)_
+
+**Found:** 2026-10-04. Companion to PP-040, and it corrects one of that entry's premises.
+
+- **The single exception in the database.**
+  ```sql
+  select c.relname, c.relrowsecurity, c.relforcerowsecurity,
+         (select count(*) from pg_policies p where p.tablename = c.relname) as policies
+  from pg_class c join pg_namespace n on n.oid = c.relnamespace
+  where n.nspname = 'public' and c.relkind = 'r'
+    and not exists (select 1 from pg_policies p where p.tablename = c.relname);
+  -- ai_providers | f | f | 0
+  ```
+  One row out of 226. The README's "277 policies on **225** tables" is 226 minus this table; that number
+  was this entry's tell.
+- **The gate cannot see it, by construction.** `scripts/verify-tenant-isolation.ts:86`:
+  `const tenantScoped = rows.filter((r) => r.tenant_id_type !== null)`. Every subsequent check —
+  RLS enabled, forced, policy present, NULL-tenant leak — derives from `tenantScoped`. A table with no
+  `tenant_id` column is never examined. PP-013's sweep was "RLS disabled on a table **with** `tenant_id`"
+  (5 tables) and "no `tenant_isolation` policy" (10 tables); `ai_providers` matches neither class, so it
+  survived both. Note the column is `relrowsecurity`, not `relrowselection` — a wrong name here errors
+  out rather than returning a misleading empty set, but only if you run it.
+- **Owner-exemption is the mechanism, and it cuts both ways.** `nucrm` is neither `rolsuper` nor
+  `rolbypassrls`, and `relacl` is empty on all three AI tables (owner-only grants). That sounds safe, but
+  the app connects **as the owner** — and a table owner is exempt from RLS unless
+  `FORCE ROW LEVEL SECURITY` is set. `tenant_ai_credentials` is `rowsecurity=t, relforcerowsecurity=t`
+  precisely so the owner stays bound; `ai_providers` has neither flag, so every statement the app issues
+  against it runs with no policy and no owner restriction. Read _and_ write — including
+  `default_base_url`, which is where outbound provider calls are pointed.
+- **Reachability, line by line.** PP-040 was revised the same morning and now agrees that neither table is
+  read by application code; the evidence is recorded here anyway because the two passes worked
+  independently and the grep is exact. Every `ai_providers` reference is to a **JSONB key inside
+  `tenants.settings`**, never the table:
+  ```
+  lib/ai/gateway.ts:143                           (t?.settings)['ai_providers']
+  app/api/tenant/ai/status/route.ts:43            (t?.settings)['ai_providers']
+  app/api/tenant/admin/ai-providers/route.ts:188   '{ai_providers}'   -- jsonb_set path
+  ```
+  `tenant_ai_credentials` appears nowhere in `.ts`/`.tsx` at all. So the live provider config lives in
+  `tenants.settings->'ai_providers'` plus `ai_provider_secrets` (which is what `drizzle/schema/ai.ts:12`
+  means by "Replaces the previous `tenants.settings.ai_providers.<id>.api_key_set`"), and the two 0013
+  tables are **unreachable dead weight** — `ai_providers`' 6 rows are seed data, `tenant_ai_credentials`
+  is empty. Two things follow that PP-040 does not cover: declaring them in `drizzle/schema/ai.ts` would
+  enshrine two dead tables and load them onto every future `drizzle-kit generate` diff, and PP-040's new
+  `drift-check` guard errors on `ai_providers (6 rows)` for a table nothing reads — a correct alarm about
+  a destructive command, but pointed at a table that should be dropped rather than protected.
+- **What that changes.** PP-040 offered "declare both in `drizzle/schema/ai.ts`" as an option. Declaring
+  them would enshrine two dead tables and make every future `drizzle-kit generate` diff carry them.
+  The defensible choices are now: drop both in a numbered migration (safe — nothing reads them, and the
+  drop is reversible by re-running 0013), or keep `ai_providers` as a genuine platform catalogue and
+  give it `ENABLE` + `FORCE ROW LEVEL SECURITY` with an explicit read-all / platform-write policy.
+- **The gate fix is independent of the decision.** ✅ Shipped with this entry:
+  `scripts/verify-tenant-isolation.ts` no longer filters its survey to tables that have a `tenant_id`
+  (`WHERE … AND a.attname IS NOT NULL` is gone, replaced by `policy_count` from `pg_policy`), and a
+  table with zero policies of any name is now its own failure. Measured against preprod from a temp
+  copy inside `nucrm-app`: old script surveyed **194** tables and printed `RESULT: clean`; new script
+  surveys **226**, reports `zero policies of any name : 1/226`, names
+  `ai_providers (tenant_id: none, RLS: off)`, and exits **1**. Both `--json` and the text report were
+  checked. `tsc --noEmit` and `eslint --max-warnings=0` exit 0; no test references the script.
+- **Not done.** No table dropped and no policy added — the gate now reports the gap instead of passing
+  over it, and the reachability audit above is the deliverable for the decision, which is PP-040's to
+  take.
+- **Files:** `scripts/verify-tenant-isolation.ts`, `drizzle/migrations/0013_workflow_foundation.sql:96`
+  (the `INSERT INTO ai_providers` that put all 6 rows there — `scripts/seed-dev.ts` never names the
+  table, so "seed data" means the migration's own seed block, not the dev seeder)
+
+## PP-043 — 📌 `email_opens.email_id` has no index, and the tracking list does **not** scan the table _(S3 · Performance — measured non-issue)_
+
+**Found:** 2026-10-04, auditing report-only task #26 against live preprod.
+**Status:** 📌 INFO — the claim is not reproducible; no index added.
+
+- **The claim.** `/api/tenant/email/tracking` filters on `email_id`, nothing indexes that column, so
+  the new tracking list sequentially scans `email_opens`.
+- **The index half is true.** `pg_indexes` has 4 rows for the table — `email_opens_pkey`,
+  `idx_email_opens_tenant`, `idx_email_opens_contact`, `idx_email_opens_campaign` — and none is
+  `email_id`-leading. `drizzle/schema/email-tracking.ts:11-27` declares only
+  `tenantIdx: utils.tenantIdx(table)`.
+- **The scan half is false, measured.** `select count(*) from email_opens` → **0**. Ran the real query
+  shape (tenant_id equality + `email_id = ANY (…)`, group by) through `EXPLAIN (analyze, buffers,
+costs off)` with RLS engaged: `Index Scan using idx_email_opens_tenant on email_opens`,
+  `Execution Time: 0.021 ms`, `Buffers: shared hit=5`. No sequential scan appears in the plan at any
+  row count the table has ever held.
+- **Why the verdict is "no action", not "revisit later".** At PP-028's flat ~200 ms per statement, a
+  tracking page is dominated by round-trips; the scan term is invisible until `email_opens` holds
+  enough rows per tenant that the tenant index returns far more `email_id` matches than the page
+  needs. That threshold is unmeasured here, and an index is not free — it is a write-path statement
+  per open event. Adding one now would be guessing at both sides of that trade.
+- **Files:** `drizzle/schema/email-tracking.ts`, `app/api/tenant/email/tracking/route.ts:57-60`
+
+## PP-044 — 🚨 Selective restore cannot record itself: the first write fails RLS, and the rollback endpoint reads a column that has never existed _(S2 · Super-admin panel + data safety)_
+
+**Found:** 2026-10-04, auditing report-only task #28 against live preprod.
+**Status:** 🚨 OPEN — two in-tree fixes shipped, three decisions left to the owner.
+
+- **What #28 claimed.** The `selective_restore_audit_log` writer drops fields. **True, and worse than
+  reported.** `execute/route.ts`'s `createAuditLog` was handed `restore_log_id`,
+  `performed_by_email`, `ip_address` and `user_agent` and inserted **none** of them — its own comment
+  explained that the table has no such columns. The values were not lost to a bug, they were lost to a
+  schema that was never drawn out.
+- **Why that was the least of it.** `selective_restore_logs`, `selective_restore_audit_log` and
+  `restore_snapshots` each hold **0 rows**, and all three are `relrowsecurity = t`,
+  `relforcerowsecurity = t` with a single `tenant_isolation` `FOR ALL` policy:
+  `tenant_id IS NULL OR tenant_id = current_setting('app.current_tenant')` — **no super-admin clause**,
+  which is #7's shape and #78's shape, in the panel's data-recovery path.
+- **Measured.** One rolled-back transaction as the app role (nothing committed):
+  `set_config('app.current_tenant','',false)` + `set_config('app.is_super_admin','true',false)` reads
+  183 tenants fine, then
+  `insert into selective_restore_logs (tenant_id, action, status) select id, 'probe', 'pending' from tenants limit 1`
+  → `ERROR: new row violates row-level security policy for table "selective_restore_logs"`. That insert
+  is `POST /api/superadmin/selective-restore/execute`'s **first write**, before the SSE stream opens. The
+  probe used the strongest context a super admin can have — bypass GUC on, no tenant pinned — and it
+  still lost, so no request shape fixes it: `requireAuth` pins one pooled client for the whole request
+  (`lib/api/with-api-route.ts:88`) whose tenant is the **caller's**, never the restore target's, and the
+  policy compares `tenant_id` to exactly that setting. `createAuditLog` swallows its own failure, so the
+  attempt leaves no row anywhere. The HTTP endpoint itself was not exercised against preprod: a
+  successful `execute` restores data into a real tenant, so the policy was tested at the database.
+- **The rollback endpoint is dead code that lied.** `rollback/route.ts:64` ran
+  `SELECT pre_restore_snapshot_id FROM public.selective_restore_logs …`. That column is in **no** schema
+  file, **no** migration and **not** in preprod — measured:
+  `ERROR: column "pre_restore_snapshot_id" does not exist`. The ordering made it worse than a 500: the
+  route first set `status = 'rolling_back'`, then the SELECT raised 42703, then its handler set
+  `status = 'failed'` with that Postgres text as `errorMessage`. **Attempting a rollback rewrote a
+  completed restore's history as a failure**, which is the only record an operator has of whether the
+  restore worked.
+- **There is nothing to roll back to, by design omission.** `execute` _does_ create the snapshot
+  (`createPreRestoreSnapshot` → a `restore_snapshots` row) and streams its id to the browser as
+  `snapshot_id`, then stores it nowhere: no column on the log, no back-reference on the snapshot, and the
+  audit envelope never carried it. The data needed for a rollback is in the database and unreachable from
+  the record that would need it.
+- **Nothing calls it.** `grep` of `app/` and `components/` for `selective-restore/rollback` finds only the
+  route's own two log-context strings, so all of the above is currently invisible in the UI.
+- **Shipped with this entry (tree only, both inert until the policy decision below):**
+  1. `createAuditLog` now persists all four fields it already received, folded into the details envelope
+     alongside `backup_id`/`tables`/`restore_mode` — capture, not a schema change.
+  2. `rollback` refuses before it writes anything: it resolves the log row, and answers **501** with the
+     actual reason. The phantom SELECT, the `rolling_back` write and the status-corrupting handler are
+     gone; `rollbackToSnapshot()` itself stays in `lib/restore/restore-executor.ts`, still unit-tested.
+     Deleting its caller is not removing a feature — the caller could not execute.
+- **Deliberately NOT done — three decisions, none of them mine.**
+  (1) A super-admin policy escape for these three tables (#7's decision, extended), because until one
+  exists the panel has **no working way to restore a tenant's data** and no record that it tried.
+  (2) A snapshot-link column (a `0107` migration + journal entry, per PP-041's lesson) if rollback is
+  ever to be real. (3) Whether rollback should be reachable at all: `rollbackToSnapshot` deletes every
+  tenant row in each snapshotted table before re-inserting, and it has never run outside a unit test.
+  Wiring (1) and (2) together is what turns the 501 into a working restore reversal — and that is the
+  point where this stops being a bug fix.
+- **Verified:** `eslint --max-warnings=0` and `tsc --noEmit` exit 0 on the tree;
+  `tests/unit/superadmin-rate-limit-handlers.test.ts` + `tests/unit/restore/restore-executor.test.ts`
+  = **45 passed** (the rate-limit test asserts only the 429 boundary, which is unchanged: the limit is
+  checked before the body and before any DB write).
+- **Files:** `app/api/superadmin/selective-restore/execute/route.ts`,
+  `app/api/superadmin/selective-restore/rollback/route.ts`, `drizzle/schema/infra.ts:250-296`,
+  `lib/restore/restore-executor.ts:161-196`
 
 ## Running the pre-prod flow simulator
 

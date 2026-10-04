@@ -3,6 +3,7 @@
  * Verify DB objects match Drizzle schema & migration expectations.
  * Catches "stamped but never applied" drift (0032/0037 incidents):
  *  - missing tables vs pgTable() declarations
+ *  - undeclared tables that hold rows (a `db:sync` push would drop them)
  *  - missing functions vs migration CREATE FUNCTION statements
  *  - tables with tenant_id but no RLS policy
  *
@@ -44,7 +45,35 @@ async function main() {
     const missingTables = [...expectedTables].filter(t => !actualTables.has(t));
     const extraTables = [...actualTables].filter(t => !expectedTables.has(t));
     if (missingTables.length) errors.push(`MISSING TABLES: ${missingTables.join(', ')}`);
-    if (extraTables.length) console.log(`[info] extra tables (not in schema): ${extraTables.join(', ')}`);
+    // `db:sync` is `drizzle-kit push`, whose only source of truth is
+    // drizzle/schema — a table it cannot see is a table it DROPs, hand-written
+    // policies and rows included. So an undeclared table is only harmless while
+    // it is empty; count the rows instead of printing the names as noise.
+    if (extraTables.length) {
+      const counted = extraTables.filter(t => /^[a-z_][a-z0-9_]*$/.test(t));
+      const skipped = extraTables.filter(t => !counted.includes(t));
+      if (skipped.length) {
+        errors.push(`UNDECLARED TABLES WITH UNPARSEABLE NAMES (row counts skipped): ${skipped.join(', ')}`);
+      }
+      if (counted.length) {
+        const countsRes = await pool.query(
+          counted.map(t => `select '${t}'::text as tablename, count(*) as rows from public."${t}"`).join(' union all ')
+        );
+        const populated: string[] = [];
+        const empty: string[] = [];
+        for (const row of countsRes.rows) {
+          const rows = BigInt(row.rows);
+          if (rows > 0n) populated.push(`${row.tablename} (${rows} rows)`);
+          else empty.push(row.tablename);
+        }
+        if (populated.length) {
+          errors.push(`UNDECLARED TABLES WITH DATA — \`npm run db:sync\` would drop them: ${populated.join(', ')}`);
+        }
+        if (empty.length) {
+          console.log(`[info] extra tables (not in schema, empty): ${empty.join(', ')}`);
+        }
+      }
+    }
 
     // 2. Functions expected from migration files
     const migrationsDir = path.resolve(process.cwd(), 'drizzle/migrations');
@@ -101,7 +130,9 @@ async function main() {
     if (errors.length) {
       console.log('\nDRIFT FOUND:\n');
       for (const e of errors) console.log(`  ✗ ${e}`);
-      console.log('\nApply the missing DDL (re-run the idempotent migration or matching CREATE statements), then re-run this check.');
+      console.log('\nFor a missing table: apply the DDL (re-run the idempotent migration or matching CREATE statements).');
+      console.log('For an undeclared one: either declare it in drizzle/schema/, or drop it deliberately in a migration —');
+      console.log('never let `npm run db:sync` discover it, because that drops it silently.');
       process.exitCode = 1;
     } else {
       console.log('\nNo drift — schema matches migrations. ✓');

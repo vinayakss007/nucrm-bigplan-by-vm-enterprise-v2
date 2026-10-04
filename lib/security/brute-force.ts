@@ -52,6 +52,63 @@ function fallbackCheck(key: string): boolean {
   return entry.count > FALLBACK_MAX_ATTEMPTS;
 }
 
+export interface BlockInfo {
+  blocked: boolean;
+  blockedUntil?: Date;
+  reason?: string;
+}
+
+/** The per-identifier half of the #1174 fail-safe, shared by both read paths. */
+function fallbackBlock(type: 'ip' | 'email', identifier: string): BlockInfo {
+  if (!fallbackCheck(`${type}:${identifier}`)) return { blocked: false };
+  return {
+    blocked: true,
+    blockedUntil: new Date(Date.now() + FALLBACK_WINDOW_MS),
+    reason: 'Security check temporarily unavailable — rate limited',
+  };
+}
+
+/**
+ * Both sign-in block checks in one statement, inside one security context.
+ *
+ * #85: `isBlocked(ip)` and `isBlocked(email)` were two separate transactions,
+ * and a context is four statements (BEGIN + SET LOCAL + SELECT + COMMIT) at
+ * PP-028's flat ~200 ms each — ~800 ms of every sign-in was spent reading a
+ * table that holds no row for almost every caller. The two answers are still
+ * returned separately so the caller keeps deciding IP before email.
+ */
+export async function findLoginBlocks(ip: string, email: string): Promise<{ ip: BlockInfo; email: BlockInfo }> {
+  try {
+    const rows = await withSecurityContext(async (tx) => {
+      const result = await tx.execute(sql`
+        SELECT identifier_type, blocked_until, block_reason
+        FROM login_blocks
+        WHERE (identifier, identifier_type) IN ((${ip}, 'ip'), (${email}, 'email'))
+          AND blocked_until > NOW()
+      `);
+      return (result.rows ?? []) as {
+        identifier_type: string; blocked_until: string; block_reason: string | null;
+      }[];
+    });
+
+    const out: { ip: BlockInfo; email: BlockInfo } = { ip: { blocked: false }, email: { blocked: false } };
+    for (const row of rows) {
+      const info: BlockInfo = {
+        blocked: true,
+        blockedUntil: new Date(row.blocked_until),
+        reason: row.block_reason || 'Too many failed attempts',
+      };
+      if (row.identifier_type === 'ip') out.ip = info;
+      else if (row.identifier_type === 'email') out.email = info;
+    }
+    return out;
+  } catch (err) {
+    devLogger.error(err as Error, '[brute-force] block lookup failed');
+    logger.error('[brute-force] store unavailable — using in-memory fail-safe', { ip });
+    return { ip: fallbackBlock('ip', ip), email: fallbackBlock('email', email) };
+  }
+}
+
 /**
  * Check if an IP or email is blocked
  *
@@ -65,7 +122,7 @@ export async function isBlocked(
   identifier: string,
   type: 'ip' | 'email',
   _config: BruteForceConfig = DEFAULT_CONFIG
-): Promise<{ blocked: boolean; blockedUntil?: Date; reason?: string }> {
+): Promise<BlockInfo> {
   try {
     const now = new Date();
 
@@ -99,15 +156,7 @@ export async function isBlocked(
       identifier,
       type,
     });
-    const blocked = fallbackCheck(`${type}:${identifier}`);
-    if (blocked) {
-      return {
-        blocked: true,
-        blockedUntil: new Date(Date.now() + FALLBACK_WINDOW_MS),
-        reason: 'Security check temporarily unavailable — rate limited',
-      };
-    }
-    return { blocked: false };
+    return fallbackBlock(type, identifier);
   }
 }
 

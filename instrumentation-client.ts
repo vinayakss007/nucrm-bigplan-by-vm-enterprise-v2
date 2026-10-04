@@ -4,19 +4,39 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import * as Sentry from "@sentry/nextjs";
+import { DATA_COLLECTION } from './sentry-data-collection';
+import { scrubPii } from './sentry-pii-scrub';
 
 Sentry.init({
   dsn: process.env['NEXT_PUBLIC_SENTRY_DSN'] ?? undefined,
   environment: process.env['NEXT_PUBLIC_SENTRY_ENVIRONMENT'] || process.env['NODE_ENV'] || 'development',
   ...(process.env['NEXT_PUBLIC_SENTRY_RELEASE'] ? { release: process.env['NEXT_PUBLIC_SENTRY_RELEASE'] } : {}),
 
-  // v11 removed `sendDefaultPii`; the SDK now treats anything other than an
-  // explicit `dataCollection` opt-in as off, so PII is still never sent.
+  // This file, not `sentry.client.config.ts`, is what runs in the browser: a
+  // Turbopack `next build` does not apply the webpack plugin that injects the
+  // latter, and the deployed image proved it — `nucrm-app` (that file's
+  // initialScope tag) and the scrubber's `[redacted-email]` marker appear in no
+  // client chunk, while this file's `replaysSessionSampleRate` does. Anything
+  // added to the other file only reaches customers if it also appears here.
+  //
+  // v11 replaced `sendDefaultPii` with `dataCollection`, whose defaults are all
+  // ON — omitting it collects cookies, headers, bodies and query params.
+  dataCollection: DATA_COLLECTION,
+
+  // GDPR: scrub PII from every event. `sentry-pii-scrub.ts` is platform-neutral,
+  // so the browser now shares the server's one defence instead of sending raw.
+  beforeSend(event) {
+    return scrubPii(event);
+  },
 
   // 100% in dev, 10% in production
   tracesSampleRate: process.env['NODE_ENV'] === "development" ? 1.0 : 0.1,
 
-  // Session Replay: 10% of all sessions, 100% of sessions with errors
+  // Inert today: v11 reads these numbers inside `@sentry/replay`, and no replay
+  // integration is registered here or in `sentry.client.config.ts`, so nothing
+  // has ever been recorded. Adding `Sentry.replayIntegration()` turns DOM capture
+  // on — and captured DOM bypasses `beforeSend` entirely, so it needs explicit
+  // masking rather than this scrubber.
   replaysSessionSampleRate: 0.1,
   replaysOnErrorSampleRate: 1.0,
 

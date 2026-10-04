@@ -3,10 +3,18 @@
  * Copyright (c) 2026 abetworks.in. All Rights Reserved.
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
-// Sentry configuration for Next.js 16
-// This file configures Sentry for both client and server-side error tracking
+// Sentry configuration for the browser client.
+//
+// NOT the live browser entry under our build. `next build` runs Turbopack, which
+// does not apply the webpack plugin that injects this file, and the deployed
+// image showed the result: neither this file's `nucrm-app` initialScope tag nor
+// the scrubber's `[redacted-email]` marker is present in any client chunk. The
+// browser initialises from `instrumentation-client.ts` — keep both in sync, and
+// never treat a change here as shipped until it also appears there.
+// @sentry/nextjs warns if both call `Sentry.init()` on the client.
 
 import * as Sentry from '@sentry/nextjs';
+import { DATA_COLLECTION } from './sentry-data-collection';
 import { scrubPii } from './sentry-pii-scrub';
 
 const SENTRY_DSN = process.env['SENTRY_DSN'];
@@ -19,8 +27,10 @@ export const sentryConfig = {
   environment: SENTRY_ENVIRONMENT,
   ...(SENTRY_RELEASE ? { release: SENTRY_RELEASE } : {}),
 
-  // v11 removed `sendDefaultPii`; the SDK now treats anything other than an
-  // explicit `dataCollection` opt-in as off, so PII is still never sent.
+  // v11 replaced `sendDefaultPii` with `dataCollection`, whose defaults are all
+  // ON — omitting it collects cookies, headers, bodies and query params. Stated
+  // in full; see sentry-data-collection.ts.
+  dataCollection: DATA_COLLECTION,
 
   // Initialize whenever a DSN is configured; explicit opt-out is SENTRY_DISABLE=true
   enabled: process.env['SENTRY_DISABLE'] !== 'true',

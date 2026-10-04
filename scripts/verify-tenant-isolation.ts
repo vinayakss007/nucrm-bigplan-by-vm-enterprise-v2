@@ -14,6 +14,10 @@
  * enforcement. This script checks both and exits non-zero on any gap, so it can
  * be wired into CI or a scheduled audit.
  *
+ * A third class is checked across EVERY public table, not only those carrying a
+ * tenant_id: a table with no policy of any name has no row filter whatsoever.
+ * Filtering the survey to tenant_id tables hides exactly those (PP-042).
+ *
  * Usage:
  *   npm run db:verify-isolation
  *   npm run db:verify-isolation -- --json
@@ -28,6 +32,7 @@ interface TableRow {
   rls_enabled: boolean;
   rls_forced: boolean;
   has_policy: boolean;
+  policy_count: number;
   policy_allows_null_tenant: boolean;
 }
 
@@ -61,6 +66,9 @@ async function main() {
     const role = who.rows[0]!;
 
     // ── Per-table isolation state ─────────────────────────────────────────
+    // Every public table, not only those with a tenant_id: a global table with
+    // no policy at all is readable and writable without restriction, and
+    // excluding it here is how `ai_providers` stayed invisible (PP-042).
     const { rows } = await pool.query<TableRow>(`
       SELECT c.relname                          AS table_name,
              t.typname                          AS tenant_id_type,
@@ -68,6 +76,8 @@ async function main() {
              c.relrowsecurity                   AS rls_enabled,
              c.relforcerowsecurity              AS rls_forced,
              (p.polname IS NOT NULL)            AS has_policy,
+             (SELECT count(*) FROM pg_policy pp WHERE pp.polrelid = c.oid)::int
+                                                AS policy_count,
              COALESCE(pg_get_expr(p.polqual, p.polrelid) ILIKE '%tenant_id IS NULL%', false)
                                                 AS policy_allows_null_tenant
         FROM pg_class c
@@ -79,7 +89,6 @@ async function main() {
                ON p.polrelid = c.oid AND p.polname = 'tenant_isolation'
        WHERE n.nspname = 'public'
          AND c.relkind = 'r'
-         AND a.attname IS NOT NULL
        ORDER BY c.relname
     `);
 
@@ -93,6 +102,9 @@ async function main() {
     const leakyNull = uuidScoped.filter(
       (r) => r.policy_allows_null_tenant && r.tenant_id_not_null === false
     );
+    // Zero policies of ANY name: no row filter exists, so access is governed
+    // only by table privileges — which the app role holds, because it owns them.
+    const unpoliced = rows.filter((r) => r.policy_count === 0);
 
     // A policy is only enforced against us if we are neither superuser nor
     // BYPASSRLS, and either we are not the owner or the table forces RLS.
@@ -105,15 +117,22 @@ async function main() {
             role,
             roleExempt,
             counts: {
+              publicTables: rows.length,
               tenantScoped: tenantScoped.length,
               uuidScoped: uuidScoped.length,
               nonUuidScoped: nonUuidScoped.length,
               missingPolicy: noPolicy.length,
+              unpoliced: unpoliced.length,
               rlsDisabled: noRls.length,
               notForced: notForced.length,
               leakyNullTenant: leakyNull.length,
             },
             missingPolicy: noPolicy.map((r) => r.table_name),
+            unpoliced: unpoliced.map((r) => ({
+              table: r.table_name,
+              hasTenantId: r.tenant_id_type !== null,
+              rlsEnabled: r.rls_enabled,
+            })),
             rlsDisabled: noRls.map((r) => r.table_name),
             leakyNullTenant: leakyNull.map((r) => r.table_name),
             nonUuidTenantId: nonUuidScoped.map((r) => ({
@@ -132,12 +151,14 @@ async function main() {
       log(`superuser           : ${role.is_superuser}`);
       log(`BYPASSRLS           : ${role.bypass_rls}`);
       log('');
+      log(`public tables              : ${rows.length}`);
       log(`tables with tenant_id        : ${tenantScoped.length}`);
       log(`  ...of type uuid            : ${uuidScoped.length}`);
       log(`  ...of another type         : ${nonUuidScoped.length}`);
       log(`RLS enabled                  : ${uuidScoped.length - noRls.length}/${uuidScoped.length}`);
       log(`tenant_isolation policy      : ${uuidScoped.length - noPolicy.length}/${uuidScoped.length}`);
       log(`FORCE ROW LEVEL SECURITY     : ${uuidScoped.length - notForced.length}/${uuidScoped.length}`);
+      log(`zero policies of any name    : ${unpoliced.length}/${rows.length}`);
       log('');
 
       if (nonUuidScoped.length) {
@@ -157,6 +178,14 @@ async function main() {
         if (noPolicy.length > 25) log(`  ... and ${noPolicy.length - 25} more`);
         log('');
       }
+      if (unpoliced.length) {
+        log(`NO POLICY OF ANY NAME on ${unpoliced.length} table(s) — no row filter exists, so`);
+        log('access is governed only by table privileges, which this role holds:');
+        for (const r of unpoliced) {
+          log(`  - ${r.table_name} (tenant_id: ${r.tenant_id_type ?? 'none'}, RLS: ${r.rls_enabled ? 'on' : 'off'})`);
+        }
+        log('');
+      }
       if (leakyNull.length) {
         log(`Policy admits NULL tenant_id on ${leakyNull.length} table(s) with a`);
         log('nullable tenant_id — those rows are readable by EVERY tenant:');
@@ -170,6 +199,13 @@ async function main() {
     if (uuidScoped.length === 0) failures.push('No tenant-scoped tables found at all');
     if (noRls.length) failures.push(`${noRls.length} tenant-scoped table(s) have RLS disabled`);
     if (noPolicy.length) failures.push(`${noPolicy.length} tenant-scoped table(s) have no tenant_isolation policy`);
+    if (unpoliced.length) {
+      failures.push(
+        `${unpoliced.length} public table(s) have no policy at all (` +
+          unpoliced.map((r) => r.table_name).join(', ') +
+          ')'
+      );
+    }
     if (leakyNull.length) failures.push(`${leakyNull.length} table(s) expose NULL-tenant rows to every tenant`);
     if (roleExempt) {
       failures.push(

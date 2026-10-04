@@ -1,4 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest';
+import { DATA_COLLECTION } from '../../sentry-data-collection';
 
 const { init, readFileSync } = vi.hoisted(() => ({
   init: vi.fn(),
@@ -33,11 +34,13 @@ it('passes the configured preprod environment and release to Sentry init', async
     release: 'test-release',
   }));
 
-  // v11 removed `sendDefaultPii`; privacy now rests on not opting in via
-  // `dataCollection`, so assert the absence of both rather than `: false`.
+  // v11 removed `sendDefaultPii` and replaced it with `dataCollection`, whose
+  // defaults are all ON (PP-035). So privacy rests on passing every field off,
+  // not on leaving the option out — asserting absence here would have asserted
+  // the leak. The field-by-field shape is pinned in sentry-data-collection.test.
   const options = init.mock.calls[0]?.[0] ?? {};
   expect(options).not.toHaveProperty('sendDefaultPii');
-  expect(options).not.toHaveProperty('dataCollection');
+  expect(options.dataCollection).toEqual(DATA_COLLECTION);
 });
 
 it('labels events with the Next build id when no release is configured', async () => {

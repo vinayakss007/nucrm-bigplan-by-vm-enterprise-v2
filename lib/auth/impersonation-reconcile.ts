@@ -17,7 +17,7 @@
 import { db } from '@/drizzle/db';
 import { users, tenantMembers, sessions, impersonationSessions } from '@/drizzle/schema';
 import { eq, and, isNull, isNotNull, lt } from 'drizzle-orm';
-import { setSuperAdminContext, setTenantContext } from '@/lib/db/rls';
+import { setSuperAdminContext, setImpersonationContext } from '@/lib/db/rls';
 import { logError } from '@/lib/errors-server';
 
 // Impersonation tokens are minted with a 1-day expiry; a session with no
@@ -114,8 +114,7 @@ export async function reconcileStaleImpersonations(): Promise<ReconcileResult> {
     if (!tenantId) continue;
     if (stale.length >= RECONCILE_BATCH) break;
     const found = await db.transaction(async (tx) => {
-      await setSuperAdminContext(tx);
-      await setTenantContext(tenantId, impersonatorId, tx);
+      await setImpersonationContext(tenantId, impersonatorId, tx);
       return await tx
         .select({
           id: impersonationSessions.id,
@@ -143,8 +142,7 @@ export async function reconcileStaleImpersonations(): Promise<ReconcileResult> {
     const targetHash = parseImpersonationNotes(raw.notes).tokenHash;
     try {
       await db.transaction(async (tx) => {
-        await setSuperAdminContext(tx);
-        await setTenantContext(tenantId, impersonatorId, tx);
+        await setImpersonationContext(tenantId, impersonatorId, tx);
         if (state.existed) {
           await tx
             .update(tenantMembers)

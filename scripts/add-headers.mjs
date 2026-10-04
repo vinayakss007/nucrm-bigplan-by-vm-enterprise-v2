@@ -25,6 +25,7 @@ const ROOT_FILES = [
   'worker.ts', 'realtime.ts', 'proxy.ts',
   'instrumentation.ts', 'instrumentation-client.ts',
   'sentry.client.config.ts', 'sentry.server.config.ts', 'sentry.edge.config.ts',
+  'sentry-data-collection.ts', 'sentry-pii-scrub.ts',
 ];
 const EXTS = new Set(['.ts', '.tsx']);
 const SKIP_DIRS = new Set(['node_modules', '.next', '.git', 'coverage', '__tests__']);

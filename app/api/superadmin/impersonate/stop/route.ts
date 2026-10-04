@@ -11,7 +11,7 @@ import { eq, and, desc, isNull } from 'drizzle-orm';
 import { logSuperAdminAction } from '@/lib/audit/super-admin';
 import { requireCsrf } from '@/lib/auth/middleware';
 import { withApiRoute } from '@/lib/api/with-api-route';
-import { setSuperAdminContext, setTenantContext, type RlsTransaction as Tx } from '@/lib/db/rls';
+import { setImpersonationContext, type RlsTransaction as Tx } from '@/lib/db/rls';
 import {
   IMPERSONATION_COOKIE_NAME,
   clearImpersonationTokenCookie,
@@ -190,8 +190,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
  */
 async function withImpersonationContext<T>(tenantId: string, adminId: string, fn: (tx: Tx) => Promise<T>): Promise<T> {
   return db.transaction(async (tx) => {
-    await setSuperAdminContext(tx);
-    await setTenantContext(tenantId, adminId, tx);
+    await setImpersonationContext(tenantId, adminId, tx);
     return fn(tx);
   });
 }
