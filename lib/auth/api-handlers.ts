@@ -67,9 +67,7 @@ export async function POST_login(request: NextRequest) {
     if (isForm) {
       const formData = await request.formData();
       // The JSON path lowercases through `loginSchema`; this path took the value
-      // raw. `login_blocks` rows are written with `email.toLowerCase()` and
-      // accounts are stored lowercased, so a form sign-in as "Admin@x.com" both
-      // skipped its own account lockout and could not find the user.
+      // raw, so "Admin@x.com" skipped its own lockout and found no user.
       email = ((formData.get('email') as string) || '').trim().toLowerCase();
       password = (formData.get('password') as string) || '';
       remember_me = formData.get('remember_me') === 'on';
