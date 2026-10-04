@@ -7,6 +7,7 @@
 import * as Sentry from '@sentry/nextjs';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { DATA_COLLECTION } from './sentry-data-collection';
 import { scrubPii } from './sentry-pii-scrub';
 
 const SENTRY_DSN = process.env['SENTRY_DSN'];
@@ -39,8 +40,10 @@ if (SENTRY_DSN) {
     environment: SENTRY_ENVIRONMENT,
     ...(SENTRY_RELEASE ? { release: SENTRY_RELEASE } : {}),
 
-    // v11 removed `sendDefaultPii`; the SDK now treats anything other than an
-    // explicit `dataCollection` opt-in as off, so PII is still never sent.
+    // v11 replaced `sendDefaultPii` with `dataCollection`, whose defaults are
+    // all ON — omitting it collects cookies, headers, bodies and query params.
+    // Stated in full; see sentry-data-collection.ts.
+    dataCollection: DATA_COLLECTION,
 
     // Initialize whenever a DSN is configured. Both documented opt-outs count:
     // SENTRY_DISABLE=true and SENTRY_ENABLE=false (the runbook and OPERATIONS.md

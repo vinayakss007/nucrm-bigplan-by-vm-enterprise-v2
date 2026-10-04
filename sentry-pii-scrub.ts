@@ -1,5 +1,8 @@
 // GDPR PII scrubbing for Sentry events.
-// Shared by sentry.client.config.ts, sentry.server.config.ts, sentry.edge.config.ts.
+// Shared by instrumentation-client.ts (the browser entry the bundle actually
+// loads), sentry.client.config.ts, sentry.server.config.ts and
+// sentry.edge.config.ts. Second layer only: what the SDK may collect at all is
+// decided by `dataCollection` in sentry-data-collection.ts.
 
 const EMAIL_RE = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
 const SENSITIVE_HEADERS = ['authorization', 'cookie', 'set-cookie', 'x-api-key', 'x-auth-token', 'proxy-authorization'];
