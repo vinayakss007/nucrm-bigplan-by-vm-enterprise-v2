@@ -18,6 +18,13 @@ function getRandomValues(length: number): Uint8Array {
   return globalThis.crypto.getRandomValues(new Uint8Array(length));
 }
 
+import { resolveCookieSecure } from './cookie-security';
+
+// #2275: requestIsHttps moved to lib/auth/cookie-security (single Secure-flag
+// resolution for every Set-Cookie writer); re-exported here for existing
+// callers and tests.
+export { requestIsHttps } from './cookie-security';
+
 const CSRF_COOKIE_NAME = 'nucrm_csrf_token';
 const CSRF_HEADER_NAME = 'x-csrf-token';
 
@@ -30,43 +37,25 @@ export function generateCsrfToken(): string {
 }
 
 /**
- * Determine whether a request arrived over HTTPS.
- *
- * Behind a proxy/load balancer the TLS terminates upstream, so the app sees
- * plain HTTP on the wire; the original scheme is carried in x-forwarded-proto.
- * We trust that header first, then fall back to the parsed request URL protocol.
- */
-export function requestIsHttps(request: {
-  headers: Headers;
-  nextUrl?: { protocol?: string };
-}): boolean {
-  const forwardedProto = request.headers.get('x-forwarded-proto');
-  if (forwardedProto) {
-    // May be a comma-separated list (proto chain); the first entry is the client-facing one.
-    return forwardedProto.split(',')[0]?.trim().toLowerCase() === 'https';
-  }
-  return request.nextUrl?.protocol === 'https:';
-}
-
-/**
  * Set CSRF token in cookie.
  *
- * The `secure` flag controls the cookie's `Secure` attribute. Callers should
- * set it when the request is served over HTTPS (see {@link requestIsHttps}) or
- * when running in production. It is intentionally keyed on the actual request
- * protocol rather than NODE_ENV alone so the cookie is marked Secure whenever
- * the connection is encrypted.
+ * `secure` controls the cookie's `Secure` attribute. When omitted it is
+ * resolved centrally via {@link resolveCookieSecure} (#2275): explicit
+ * COOKIE_SECURE wins, production is fail-closed Secure, otherwise Secure only
+ * when the request arrived over HTTPS. Callers with a request object should
+ * pass cookieSecureForRequest(request).
  *
  * HttpOnly is deliberately omitted: the double-submit-cookie pattern requires
  * client-side JS to read the token. SameSite=Strict is preserved.
  */
-export function setCsrfCookie(token: string, secure: boolean = false): string {
+export function setCsrfCookie(token: string, secure?: boolean): string {
+  const isSecure = secure ?? resolveCookieSecure();
   const cookieOptions = [
     `${CSRF_COOKIE_NAME}=${token}`,
     'Path=/',
     'SameSite=Strict',
     'Max-Age=2592000',
-    secure ? 'Secure' : null,
+    isSecure ? 'Secure' : null,
   ].filter(Boolean).join('; ');
   
   return cookieOptions;

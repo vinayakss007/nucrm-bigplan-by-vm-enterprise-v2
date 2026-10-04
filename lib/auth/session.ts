@@ -9,6 +9,7 @@ import bcrypt from 'bcryptjs';
 import { users, sessions } from '@/drizzle/schema';
 import { eq, and, gt } from 'drizzle-orm';
 import { withAuthResolutionContext } from '@/lib/db/rls';
+import { resolveCookieSecure, resolveCookieSecureFromHeaders } from '@/lib/auth/cookie-security';
 
 // Lazy-initialise so that importing this module at build time (Next.js static
 // analysis) does not throw. The check is deferred to the first call that
@@ -96,17 +97,18 @@ export async function setSessionCookie(token: string, maxAgeDays?: number) {
   const maxAge = (maxAgeDays ?? SESSION_EXPIRES_DAYS) * 24 * 60 * 60;
   cookieStore.set(SESSION_COOKIE, token, {
     httpOnly: true,
-    // Secure is mandatory in production — COOKIE_SECURE=false cannot downgrade it (#1037)
-    secure: process.env['NODE_ENV'] === 'production' ? true : process.env['COOKIE_SECURE'] !== 'false',
+    // #2275: single resolution — COOKIE_SECURE always wins; production is
+    // fail-closed Secure; elsewhere Secure when the request is https.
+    secure: await resolveCookieSecureFromHeaders(),
     sameSite: 'strict',
     maxAge,
     path: '/',
   });
 }
 
-export function makeSessionCookieString(token: string, maxAgeDays?: number): string {
+export function makeSessionCookieString(token: string, maxAgeDays?: number, requestHttps = false): string {
   const maxAge = (maxAgeDays ?? SESSION_EXPIRES_DAYS) * 24 * 60 * 60;
-  const secure = process.env['COOKIE_SECURE'] === 'false' ? false : process.env['NODE_ENV'] === 'production';
+  const secure = resolveCookieSecure(requestHttps);
   return `${SESSION_COOKIE}=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${maxAge}${secure ? '; Secure' : ''}`;
 }
 
@@ -139,7 +141,8 @@ export async function setImpersonationTokenCookie(token: string, maxAgeDays = 1)
   const cookieStore = await cookies();
   cookieStore.set(IMPERSONATION_COOKIE, token, {
     httpOnly: true,
-    secure: process.env['NODE_ENV'] === 'production' ? true : process.env['COOKIE_SECURE'] !== 'false',
+    // #2275: same central Secure resolution as the session cookie.
+    secure: await resolveCookieSecureFromHeaders(),
     sameSite: 'strict',
     maxAge: maxAgeDays * 24 * 60 * 60,
     path: '/',

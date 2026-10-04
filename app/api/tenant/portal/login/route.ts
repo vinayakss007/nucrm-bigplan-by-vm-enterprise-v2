@@ -11,6 +11,7 @@ import { eq, and } from 'drizzle-orm';
 import { readJsonBody } from '@/lib/api/validate';
 import { rateLimiter } from '@/lib/rate-limit';
 import { PORTAL_SESSION_COOKIE, encodePortalSessionCookie, portalSessionCookieOptions } from '@/lib/portal-session';
+import { requestIsHttps } from '@/lib/auth/cookie-security';
 import { logError } from '@/lib/errors-server';
 
 const PORTAL_CONFIG_KEY = 'portal_config';
@@ -128,7 +129,7 @@ export async function POST(request: NextRequest) {
     response.cookies.set(
       PORTAL_SESSION_COOKIE,
       encodePortalSessionCookie(client.email, tenant_id, client.accessToken),
-      portalSessionCookieOptions(sessionExpiry)
+      portalSessionCookieOptions(sessionExpiry, requestIsHttps(request))
     );
 
     return response;

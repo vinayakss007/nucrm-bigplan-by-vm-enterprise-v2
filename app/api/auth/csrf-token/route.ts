@@ -4,15 +4,17 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { generateCsrfToken, setCsrfCookie, requestIsHttps } from '@/lib/auth/csrf';
+import { generateCsrfToken, setCsrfCookie } from '@/lib/auth/csrf';
+import { cookieSecureForRequest } from '@/lib/auth/cookie-security';
 import { checkRateLimit } from '@/lib/rate-limit';
 
 export async function GET(request: NextRequest) {
   const limited = await checkRateLimit(request, { action: 'csrf_token', max: 10, windowMinutes: 1 });
   if (limited) return limited;
 
-  // Mark the cookie Secure when the request is over HTTPS or in production.
-  const secure = requestIsHttps(request) || process.env.NODE_ENV === 'production' || process.env.COOKIE_SECURE === 'true';
+  // #2275: central resolution — COOKIE_SECURE wins, production fail-closed,
+  // otherwise Secure whenever the request arrived over HTTPS.
+  const secure = cookieSecureForRequest(request);
 
   const token = generateCsrfToken();
   const response = NextResponse.json({ ok: true, token });

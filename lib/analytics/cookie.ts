@@ -18,6 +18,7 @@
  *   - 13-month TTL   (EU-recommended analytics cap)
  */
 import { cookies } from 'next/headers';
+import { resolveCookieSecure, resolveCookieSecureFromHeaders } from '@/lib/auth/cookie-security';
 
 export const ANON_COOKIE = 'nucrm_anon_id';
 
@@ -30,14 +31,6 @@ export function isValidAnonId(value: string | undefined | null): value is string
     typeof value === 'string' &&
     /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)
   );
-}
-
-function anonCookieSecure(): boolean {
-  // Mirror the session-cookie policy: forced Secure in production, overridable
-  // via COOKIE_SECURE only outside production (for local http dev).
-  return process.env['NODE_ENV'] === 'production'
-    ? true
-    : process.env['COOKIE_SECURE'] !== 'false';
 }
 
 /**
@@ -63,7 +56,7 @@ export async function ensureAnonId(): Promise<string> {
   const id = crypto.randomUUID();
   jar.set(ANON_COOKIE, id, {
     httpOnly: false,
-    secure: anonCookieSecure(),
+    secure: await resolveCookieSecureFromHeaders(),
     sameSite: 'lax',
     maxAge: ANON_MAX_AGE,
     path: '/',
@@ -83,6 +76,8 @@ export function makeAnonCookieString(id: string): string {
     'SameSite=Lax',
     `Max-Age=${ANON_MAX_AGE}`,
   ];
-  if (anonCookieSecure()) parts.push('Secure');
+  // Sync header builder: no request context here, so rely on the env/production
+  // defaults (COOKIE_SECURE override + production fail-closed) via resolveCookieSecure.
+  if (resolveCookieSecure()) parts.push('Secure');
   return parts.join('; ');
 }

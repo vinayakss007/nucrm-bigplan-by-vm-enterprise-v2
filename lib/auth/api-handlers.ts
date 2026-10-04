@@ -9,7 +9,8 @@ import { onboardingProgress } from '@/drizzle/schema';
 import { isNull } from 'drizzle-orm';
 import { eq, and } from 'drizzle-orm';
 import { hashPassword, verifyPassword, createToken, hashToken, makeSessionCookieString, validatePassword } from '@/lib/auth/session';
-import { generateCsrfToken, setCsrfCookie, requestIsHttps } from '@/lib/auth/csrf';
+import { generateCsrfToken, setCsrfCookie } from '@/lib/auth/csrf';
+import { cookieSecureForRequest, requestIsHttps } from '@/lib/auth/cookie-security';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { sendEmail, sendWebhookNotification, sendTelegram } from '@/lib/email/service';
 import { sendAdminTelegram } from '@/lib/telegram-admin';
@@ -25,20 +26,6 @@ import { checkLoginIpAllowed } from '@/lib/ip-whitelist';
 import { validateBody, readJsonBody, InvalidJsonBodyError } from '@/lib/api/validate';
 import { loginSchema, signupSchema } from '@/lib/api/schemas';
 import { redactEmail } from '@/lib/logger/pii';
-
-/**
- * Whether the CSRF cookie's Secure flag should be set for this request.
- *
- * Set Secure when the request is served over HTTPS (real protocol, via
- * x-forwarded-proto / request URL) or in production. Outside those cases the
- * COOKIE_SECURE env var can still force it on/off for local HTTPS testing.
- */
-function csrfCookieSecure(request: NextRequest): boolean {
-  if (requestIsHttps(request)) return true;
-  if (process.env.NODE_ENV === 'production') return true;
-  // Allow local HTTPS setups to opt in explicitly.
-  return process.env.COOKIE_SECURE === 'true';
-}
 
 // ── Login ─────────────────────────────────────────────────────
 function loginRespond(request: NextRequest, isForm: boolean, data: Record<string, unknown>, status = 200) {
@@ -209,13 +196,13 @@ export async function POST_login(request: NextRequest) {
       });
     });
 
-    const sessionCookieStr = makeSessionCookieString(token, sessionDays);
+    const sessionCookieStr = makeSessionCookieString(token, sessionDays, requestIsHttps(request));
     const csrfToken = generateCsrfToken();
     if (isForm) {
       const dest = new URL('/tenant/dashboard', request.url);
       const redirectRes = NextResponse.redirect(dest);
       redirectRes.headers.set('Set-Cookie', sessionCookieStr);
-      redirectRes.headers.append('Set-Cookie', setCsrfCookie(csrfToken, csrfCookieSecure(request)));
+      redirectRes.headers.append('Set-Cookie', setCsrfCookie(csrfToken, cookieSecureForRequest(request)));
       return redirectRes;
     }
     const response = NextResponse.json({ 
@@ -223,7 +210,7 @@ export async function POST_login(request: NextRequest) {
       user:{ id:user.id, email:user.email, full_name:user.fullName, is_super_admin:user.isSuperAdmin } 
     });
     response.headers.append('Set-Cookie', sessionCookieStr);
-    response.headers.append('Set-Cookie', setCsrfCookie(csrfToken, csrfCookieSecure(request)));
+    response.headers.append('Set-Cookie', setCsrfCookie(csrfToken, cookieSecureForRequest(request)));
     return response;
   
   
@@ -456,8 +443,8 @@ export async function POST_signup(request: NextRequest) {
 
     const signupCsrfToken = generateCsrfToken();
     const signupResponse = NextResponse.json({ ok:true, user:{ id:user.id, email:user.email, full_name:user.fullName }, tenant:{ id:tenant.id, name:tenant.name, slug:tenant.slug } }, { status:201 });
-    signupResponse.headers.append('Set-Cookie', makeSessionCookieString(token));
-    signupResponse.headers.append('Set-Cookie', setCsrfCookie(signupCsrfToken, csrfCookieSecure(request)));
+    signupResponse.headers.append('Set-Cookie', makeSessionCookieString(token, undefined, requestIsHttps(request)));
+    signupResponse.headers.append('Set-Cookie', setCsrfCookie(signupCsrfToken, cookieSecureForRequest(request)));
 
     // Send Discord/Slack webhook notification (fire-and-forget)
     sendWebhookNotification({
