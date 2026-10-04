@@ -61,7 +61,7 @@ Severity: **S1** blocks go-live · **S2** broken feature or security weakness ·
 | PP-039 | S2  | Performance        | Resolving _one_ session token cost **two** `set_config` round-trips, because the acting-user and pre-auth-read GUCs were applied one statement at a time — paid by every authenticated request                                     | 🔧 FIXED IN TREE (live-measured, not deployed until #84) |
 | PP-040 | S2  | Schema drift       | Two live tables (`ai_providers`, `tenant_ai_credentials`) come from migrations 0013/0018 and are declared by **no** schema file — `npm run db:sync` would drop them, and `drift-check` printed them as `[info]` under "No drift ✓" | 🔧 GUARD SHIPPED · tables need a decision                |
 | PP-041 | S2  | Migrations         | Two applied migrations (`0059`, `0091`) are absent from `_journal.json`, so a fresh database never creates `custom_entities` or the `usage_snapshots` bypass — and `verify-migration-chain` only checks the other direction        | 🚨 OPEN                                                  |
-| PP-042 | S3  | RLS + gates        | `ai_providers` is the only one of 226 tables with neither RLS nor a policy, and `db:verify-isolation` is structurally blind to it — every check filters to tables that have a `tenant_id` column                                   | 🚨 OPEN                                                  |
+| PP-042 | S3  | RLS + gates        | `ai_providers` is the only one of 226 tables with neither RLS nor a policy, and `db:verify-isolation` is structurally blind to it — every check filters to tables that have a `tenant_id` column                                   | 🔧 GATE SHIPPED · table decision open (PP-040)           |
 
 ## Sentry issues → register entries
 
@@ -1415,12 +1415,20 @@ inferred.
   The defensible choices are now: drop both in a numbered migration (safe — nothing reads them, and the
   drop is reversible by re-running 0013), or keep `ai_providers` as a genuine platform catalogue and
   give it `ENABLE` + `FORCE ROW LEVEL SECURITY` with an explicit read-all / platform-write policy.
-- **The gate fix is independent of the decision.** `verify-tenant-isolation` should report any
-  `public` table with `relrowsecurity = false` regardless of whether it has a `tenant_id`, and treat a
-  table with zero policies as a finding in its own right. Otherwise the next unpoliced global table is
-  invisible for the same reason this one was.
-- **Not done.** No table dropped, no policy added, no script changed — the reachability audit and the
-  evidence above are the deliverable, and the decision is PP-040's to take.
+- **The gate fix is independent of the decision.** ✅ Shipped with this entry:
+  `scripts/verify-tenant-isolation.ts` no longer filters its survey to tables that have a `tenant_id`
+  (`WHERE … AND a.attname IS NOT NULL` is gone, replaced by `policy_count` from `pg_policy`), and a
+  table with zero policies of any name is now its own failure. Measured against preprod from a temp
+  copy inside `nucrm-app`: old script surveyed **194** tables and printed `RESULT: clean`; new script
+  surveys **226**, reports `zero policies of any name : 1/226`, names
+  `ai_providers (tenant_id: none, RLS: off)`, and exits **1**. Both `--json` and the text report were
+  checked. `tsc --noEmit` and `eslint --max-warnings=0` exit 0; no test references the script.
+- **Not done.** No table dropped and no policy added — the gate now reports the gap instead of passing
+  over it, and the reachability audit above is the deliverable for the decision, which is PP-040's to
+  take.
+- **Files:** `scripts/verify-tenant-isolation.ts`, `drizzle/migrations/0013_workflow_foundation.sql:96`
+  (the `INSERT INTO ai_providers` that put all 6 rows there — `scripts/seed-dev.ts` never names the
+  table, so "seed data" means the migration's own seed block, not the dev seeder)
 
 ## Running the pre-prod flow simulator
 

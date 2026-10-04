@@ -182,9 +182,10 @@ npm run guard:schemas
 > `tenant_ai_credentials` exist in preprod but no schema file describes them (reverse drift — nothing
 > is declared-but-missing). Neither is read by application code — the `ai_providers` hits in the AI
 > gateway and routes are the `tenants.settings -> 'ai_providers'` **jsonb key**, not the table — and
-> `ai_providers` is the only one of the 226 with RLS off and zero policies, which
-> `npm run db:verify-isolation` cannot report because every check it runs filters to tables that have a
-> `tenant_id` column. Tracked as PP-040 / PP-042. Measured 2026-10-04 against preprod. The per-file
+> `ai_providers` is the only one of the 226 with RLS off and zero policies. `npm run
+db:verify-isolation` reports it: the gate surveys every `public` table and fails on any with no
+> policy at all (it used to filter to tables carrying a `tenant_id`, which hid this one). Tracked as
+> PP-040 / PP-042. Measured 2026-10-04 against preprod. The per-file
 > breakdown below describes the core domains and is a representative reference, not the full list.
 
 > **Migration counts:** `drizzle/migrations/` holds 213 `.sql` files = **107 up-migrations + 106
