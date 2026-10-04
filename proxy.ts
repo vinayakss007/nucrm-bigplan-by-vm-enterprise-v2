@@ -218,6 +218,14 @@ const PUBLIC_PATHS = [
 const PUBLIC_PREFIXES = ['/_next', '/favicon', '/images', '/static', '/icons', '/api/v2', '/fonts', '/sounds', '/videos', '/api/tenant/forms/public'];
 
 /**
+ * #2313: single source of truth for the post-login landing path. Matches what
+ * the login form navigates to (app/auth/login/login-form.tsx) and what the
+ * removed-onboarding shortcut below already used. Used by the authenticated
+ * `/login` alias redirect so the two sites cannot drift.
+ */
+const AUTHENTICATED_HOME_PATH = '/tenant/dashboard';
+
+/**
  * #2215: surfaces that legitimately consume `ak_` API keys. The gateway
  * catch-alls (/api/v1/*, /api/v2/*) and the internal tenant API they proxy to
  * (/api/tenant/*) are the only code paths that call tryApiKeyAuth()/
@@ -349,7 +357,7 @@ export async function proxy(request: NextRequest) {
   // just in the page component) so it holds even while streaming.
   if (pathname === '/tenant/onboarding' || pathname.startsWith('/tenant/onboarding/')) {
     const url = request.nextUrl.clone();
-    url.pathname = '/tenant/dashboard';
+    url.pathname = AUTHENTICATED_HOME_PATH;
     const redirect = NextResponse.redirect(url);
     redirect.headers.set('x-request-id', requestId);
     return redirect;
@@ -520,6 +528,18 @@ export async function proxy(request: NextRequest) {
         applyRateLimitHeaders(response, result);
         return response;
       }
+    }
+
+    // #2313: `/login` is a commonly bookmarked legacy alias with NO route
+    // behind it (the real page is /auth/login). Anonymous visitors already
+    // get the preserved 307 → /auth/login?callbackUrl=%2Flogin from the
+    // no-token branch above; a valid session used to fall through to the
+    // router and hard-404. Resolve the alias for BOTH states: signed-in
+    // visitors go to the post-login landing instead of a dead route.
+    if (pathname === '/login') {
+      const redirect = NextResponse.redirect(new URL(AUTHENTICATED_HOME_PATH, request.url));
+      redirect.headers.set('x-request-id', requestId);
+      return redirect;
     }
 
     // Authenticated pass-through. For HTML page navigations, layer the
