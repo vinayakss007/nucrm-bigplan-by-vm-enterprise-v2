@@ -90,15 +90,26 @@ export const PUT = withApiRoute(async (req: NextRequest, { params }: { params: P
     const invoiceId = (await params).id;
     const body = await readJsonBody(req);
 
-    const numericFields = ['subtotal', 'discountAmount', 'taxAmount', 'totalAmount'] as const;
+    // #2256: every money field on an invoice must be >= 0 (mirrors the new
+    // chk_*_nonneg DB checks). discountValue/taxRate are added to this list —
+    // they previously reached the UPDATE un-parsed, so a negative string like
+    // "-50" sailed through. taxRate additionally mirrors the create-schema
+    // bound (.max(100)) and chk_invoices_tax_rate_max100.
+    const numericFields = ['subtotal', 'discountAmount', 'taxAmount', 'totalAmount', 'discountValue', 'taxRate'] as const;
     for (const field of numericFields) {
       if (body[field] !== undefined) {
         const v = parseFloat(body[field]);
         if (isNaN(v)) {
           return NextResponse.json({ error: `${field} must be a valid number` }, { status: 400 });
         }
+        if (v < 0) {
+          return NextResponse.json({ error: `${field} must be non-negative` }, { status: 400 });
+        }
         body[field] = v;
       }
+    }
+    if (body.taxRate !== undefined && body.taxRate > 100) {
+      return NextResponse.json({ error: 'taxRate must be at most 100' }, { status: 400 });
     }
 
     // M-2: when the caller supplies subtotal + totalAmount, the total must equal

@@ -176,7 +176,16 @@ export const POST = withApiRoute(async (request: NextRequest) => {
         const tags = mapped.tags ? mapped.tags.split(/[;|]/).map((t: string) => t.trim()).filter(Boolean) : [];
         const scoreVal = mapped.score ? Math.min(100, Math.max(0, parseInt(mapped.score) || 0)) : 0;
         const budgetVal = mapped.budget ? mapped.budget.toString() : null;
-        const valueVal = mapped.value ? mapped.value.toString() : null;
+        // #2256: leads.value is money and is now CHECKed >= 0 at the DB level.
+        // A negative CSV value (e.g. annual-revenue exported as -1000) is
+        // dropped to NULL instead of aborting the whole import on a CHECK
+        // violation; unparseable strings keep the pre-existing behaviour.
+        const valueVal = (() => {
+          if (!mapped.value) return null;
+          const s = mapped.value.toString();
+          const n = Number(s);
+          return Number.isFinite(n) && n < 0 ? null : s;
+        })();
 
         // ── Existing-lead handling: dedupe / update / skip ────────────────
         if (email) {
