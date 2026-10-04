@@ -72,9 +72,9 @@ Severity: **S1** blocks go-live · **S2** broken feature or security weakness ·
 | PP-050 | S2  | Performance + observability | A cron sweep pins 1 of 10 pool connections for ~75 s to do literally zero work, and the leak detector's 30 s threshold now fires 13×/hour — 311 of 311 holds in 24 h are cron, so a real leak would be invisible                                  | 🚨 OPEN · four exits (upstream / threshold / code / server-side batching), none chosen          |
 | PP-051 | S2  | Scheduling + DR             | Three schedule sources disagree about cron and the live one runs 17 of 22 routes, so 5 never fire — including `/api/cron/backup`, the only pg_dump+offsite path, whose last 4 attempts all failed                                                 | 🚨 OPEN · owner decision (#53, #54, #50, #79)                                                   |
 | PP-052 | S2  | Disk / observability        | PP-033's build-cache cap has fired once, exited 0 and reclaimed 0 B at 151.3 GB used against a 40 GB cap — `docker builder du` says 114.9 GB is reclaimable, `docker system df` says 0 B, and the bytes live in containerd, not `/var/lib/docker` | 🚨 OPEN · three exits (command / daemon GC / accept), none chosen; disk at 41 % so no emergency |
-| PP-053 | S2  | Backup + restore            | Six tables the DB isolates through a **parent** row were scoped by their own (missing or ignored) `tenant_id` in three registries — a wipe 42703 aborts the atomic restore, and three more filters compare a foreign key to a tenant uuid, so backups succeed while holding nothing                                                            | 🔧 FIXED, PR **#2352** (guard test) · policy escape open (#7, #90)                          |
+| PP-053 | S2  | Backup + restore            | Six tables the DB isolates through a **parent** row were scoped by their own (missing or ignored) `tenant_id` in three registries — a wipe 42703 aborts the atomic restore, and three more filters compare a foreign key to a tenant uuid, so backups succeed while holding nothing                                                            | 🔧 MERGED as **#2352** (2026-10-05) · policy escape still open (#7, #90)                          |
 | PP-054 | S3  | Sentry + observability      | NUCRM-3J (`analytics_events` 42501) has been fixed and live since PR #2162, yet the watchdog filed it "NEW" on 2026-10-04 — because `NEW` means "rotated into the top-25-by-date list", not "new failure", and `events=` is a cumulative count                                                                | 🚨 OPEN · watchdog semantics + two side findings (`error_logs` empty all-time, INSERT…RETURNING refused) |
-| PP-055 | S2  | Backup + restore            | The pre-restore wipe deletes **six tables the import allowlist refuses to re-insert**, so `POST /api/admin/tenant-restore` deletes a tenant's rows, hits `Table 'pipelines' is not allowed for import`, and rolls the whole restore back — permanently, for 177 of 183 tenants | 🔧 FIXED (wipe-side), PR **#2352** · the two divergent allowlists stay an owner decision (#79, #90) |
+| PP-055 | S2  | Backup + restore            | The pre-restore wipe deletes **six tables the import allowlist refuses to re-insert**, so `POST /api/admin/tenant-restore` deletes a tenant's rows, hits `Table 'pipelines' is not allowed for import`, and rolls the whole restore back — permanently, for 177 of 183 tenants | 🔧 FIXED (wipe-side), PR **#2354** · the two divergent allowlists stay an owner decision (#79, #90) |
 
 ## Sentry issues → register entries
 
@@ -2417,7 +2417,7 @@ analytics question kept running into.
   24 h of nginx access logs aggregated to status counts, six 12 h Loki chunks aggregated to counts.
   Related: **#82**, **#44**, **#63**, **PP-044**.
 
-## PP-055 — 🚨 The pre-restore wipe deletes six tables that the import allowlist refuses to re-insert: `POST /api/admin/tenant-restore` wipes a tenant, throws `Table 'pipelines' is not allowed for import`, and rolls the whole restore back — for 177 of 183 tenants, every time _(S2 · Backup + restore · PR #2352)_
+## PP-055 — 🚨 The pre-restore wipe deletes six tables that the import allowlist refuses to re-insert: `POST /api/admin/tenant-restore` wipes a tenant, throws `Table 'pipelines' is not allowed for import`, and rolls the whole restore back — for 177 of 183 tenants, every time _(S2 · Backup + restore · PR #2354)_
 
 - **Found by:** diffing the four table registries that a restore passes through, while closing **PP-053**.
   `lib/tenant-restore-wipe.ts` (what gets deleted), `lib/tenant-data-export.ts` (what gets written into the
@@ -2464,7 +2464,7 @@ analytics question kept running into.
   `follow_ups`, `activity_logs`). I did **not** collapse the parser's list onto `sql-allowlist.ts`, because
   that is the moment the panel's SQL-text restore path (`app/api/superadmin/selective-restore/execute/route.ts:153`)
   starts writing `users`, `sessions`, `plans` and `refresh_tokens` from a paste-able dump — an auth-state
-  widening, not a bug fix. It stays out of scope for #2352; the reason it is safe to leave is
+  widening, not a bug fix. It stays out of scope for both #2352 (PP-053) and this PR; the reason it is safe to leave is
   `TENANT_TABLES ⊆ TENANT_SCOPED_TABLES` (measured: `exportedNotInParser == []`), which the 15th assertion now
   keeps true. Related: **#79** (panel reads `backup_records`, the nightly job writes
   `tenant_backup_records`), **#90** (the selective-restore policy escape), **#7** (the six tables' super-admin
