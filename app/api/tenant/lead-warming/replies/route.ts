@@ -18,6 +18,7 @@ import { eq, and, desc, sql } from 'drizzle-orm';
 import { processIncomingReply } from '@/lib/lead-warming/reply-analyzer';
 import { readJsonBody } from '@/lib/api/validate';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { parseLimitOffset } from '@/lib/api/query-params';
 
 export const GET = withApiRoute(async (req: NextRequest) => {
   try {
@@ -34,7 +35,7 @@ export const GET = withApiRoute(async (req: NextRequest) => {
     const { searchParams } = new URL(req.url);
     const intent = searchParams.get('intent');
     const campaignId = searchParams.get('campaign_id');
-    const limit = Math.min(parseInt(searchParams.get('limit') || '50'), 100);
+    const { limit } = parseLimitOffset(searchParams, { defaultLimit: 50, maxLimit: 100 });
 
     const conditions = [eq(leadWarmingReplies.tenantId, ctx.tenantId)];
     if (intent) conditions.push(eq(leadWarmingReplies.intent, intent));

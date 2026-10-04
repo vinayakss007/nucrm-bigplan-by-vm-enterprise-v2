@@ -20,6 +20,7 @@ import { handleError, ValidationError } from '@/lib/errors';
 import { devLogger } from '@/lib/dev-logger';
 import { syncCalculatedFields } from '@/lib/formula/sync';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { parseLimitOffset } from '@/lib/api/query-params';
 
 export const GET = withApiRoute(async (request: NextRequest) => {
   try {
@@ -39,8 +40,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     }
 
     const { searchParams } = new URL(request.url);
-    const limit = Math.min(parseInt(searchParams.get('limit') || '50'), 100);
-    const offset = Math.max(parseInt(searchParams.get('offset') || '0'), 0);
+    const { limit, offset } = parseLimitOffset(searchParams, { defaultLimit: 50, maxLimit: 100 });
     const stageId = searchParams.get('stage_id') || searchParams.get('stage');
 
     let whereClause = and(

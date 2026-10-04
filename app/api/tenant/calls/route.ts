@@ -14,6 +14,7 @@ import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { parseLimitOffset } from '@/lib/api/query-params';
 
 const createCallSchema = z.object({
   contact_id: z.string().uuid('contact_id must be a valid UUID'),
@@ -96,8 +97,7 @@ export const GET = withApiRoute(async (req: NextRequest) => {
     const { searchParams } = new URL(req.url);
     const contactId = searchParams.get('contact_id');
     const dealId = searchParams.get('deal_id');
-    const limit = Math.min(100, parseInt(searchParams.get('limit') || '50'));
-    const offset = parseInt(searchParams.get('offset') || '0');
+    const { limit, offset } = parseLimitOffset(searchParams, { defaultLimit: 50, maxLimit: 100 });
 
     const filters = [
       eq(callLogs.tenantId, ctx.tenantId)

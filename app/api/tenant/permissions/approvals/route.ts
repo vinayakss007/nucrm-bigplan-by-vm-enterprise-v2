@@ -13,6 +13,7 @@ import { eq, and, desc } from 'drizzle-orm';
 import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { parseLimitOffset } from '@/lib/api/query-params';
 
 const approvalActionSchema = z.object({
   request_id: z.string().uuid(),
@@ -28,8 +29,7 @@ export const GET = withApiRoute(async (req: NextRequest) => {
 
     const { searchParams } = new URL(req.url);
     const status = searchParams.get('status') || 'pending';
-    const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') ?? '50')));
-    const offset = Math.max(0, parseInt(searchParams.get('offset') ?? '0'));
+    const { limit, offset } = parseLimitOffset(searchParams, { defaultLimit: 50, maxLimit: 100 });
 
     const results = await db.select()
       .from(approvalRequests)

@@ -15,6 +15,7 @@ import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { parseLimitOffset } from '@/lib/api/query-params';
 
 const createActivitySchema = z.object({
   type: z.string().min(1, 'type is required'),
@@ -37,8 +38,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     const taskId = searchParams.get('task_id');
     const ticketId = searchParams.get('ticket_id');
     const eventType = searchParams.get('event_type');
-    const limit = Math.min(200, Math.max(1, parseInt(searchParams.get('limit') ?? '50')));
-    const offset = Math.max(0, parseInt(searchParams.get('offset') ?? '0'));
+    const { limit, offset } = parseLimitOffset(searchParams, { defaultLimit: 50, maxLimit: 200 });
 
     const conditions = [eq(activities.tenantId, ctx.tenantId)];
 

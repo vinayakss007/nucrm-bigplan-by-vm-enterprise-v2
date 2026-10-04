@@ -14,6 +14,7 @@ import { sql } from 'drizzle-orm';
 import { logSuperAdminAction } from '@/lib/audit/super-admin';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { logError } from '@/lib/errors-server';
+import { parsePageLimit } from '@/lib/api/query-params';
 
 /**
  * Superadmin Cross-Tenant Data Search & Explorer
@@ -173,9 +174,7 @@ async function handleSearch(searchParams: URLSearchParams) {
     const q = searchParams.get('q')?.trim() || '';
     const type = searchParams.get('type') || 'all';
     const tenantId = searchParams.get('tenantId');
-    const page = Math.max(1, parseInt(searchParams.get('page') || '1'));
-    const limit = Math.min(200, Math.max(1, parseInt(searchParams.get('limit') || '50')));
-    const offset = (page - 1) * limit;
+    const { page, limit, offset } = parsePageLimit(searchParams, { defaultLimit: 50, maxLimit: 200 });
     // `value` is the label the panel puts on a deal's money; the column is
     // amount. Normalising it here keeps the per-table allowlist below a list of
     // columns and nothing else.

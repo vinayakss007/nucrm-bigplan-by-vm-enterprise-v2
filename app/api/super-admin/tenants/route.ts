@@ -16,6 +16,7 @@ import { eq, desc, count, and, like, or, type SQL } from 'drizzle-orm';
 import { requireAuth } from '@/lib/auth/middleware';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { logError } from '@/lib/errors-server';
+import { parseLimitOffset } from '@/lib/api/query-params';
 
 export const GET = withApiRoute(async (request: NextRequest) => {
   try {
@@ -30,8 +31,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     const { searchParams } = new URL(request.url);
     const q = searchParams.get('q')?.trim();
     const status = searchParams.get('status');
-    const limit = Math.min(100, parseInt(searchParams.get('limit') ?? '50'));
-    const offset = parseInt(searchParams.get('offset') ?? '0');
+    const { limit, offset } = parseLimitOffset(searchParams, { defaultLimit: 50, maxLimit: 100 });
 
     // Build filters
  
