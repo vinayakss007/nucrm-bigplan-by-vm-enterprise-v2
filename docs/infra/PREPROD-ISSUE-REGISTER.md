@@ -58,6 +58,7 @@ Severity: **S1** blocks go-live · **S2** broken feature or security weakness ·
 | PP-036 | S2  | Performance        | Every sign-in paid ~830 ms to read one settings row — the IP allow-list gate is 4 statements at PP-028's flat 200 ms, and it runs for tenants that have no list                                                  | 🔧 FIXED IN TREE (not live until #84)                    |
 | PP-037 | S2  | Performance        | Sign-in asked "are you blocked?" **twice**, in two security contexts — 8 statements, live-measured at 1 608 ms, against a table that holds no row for almost every caller                                        | 🔧 FIXED IN TREE (live-measured, not deployed until #84) |
 | PP-038 | S2  | Auth + brute force | The form-encoded sign-in path took the email raw while the JSON path lowercases it: one lockout comes off that account, and a correct password typed with a capital letter fails                                 | 🔧 FIXED IN TREE (not live until #84)                    |
+| PP-039 | S2  | Performance        | Resolving _one_ session token cost **two** `set_config` round-trips, because the acting-user and pre-auth-read GUCs were applied one statement at a time — paid by every authenticated request                   | 🔧 FIXED IN TREE (live-measured, not deployed until #84) |
 
 ## Sentry issues → register entries
 
@@ -1199,6 +1200,52 @@ inferred.
   branch, or to make the form branch validate through the same schema.
 - **Files:** `lib/auth/api-handlers.ts`, `tests/unit/auth-login-form-email.test.ts`
 - **Task:** #86 (this), #84 (deploy).
+
+## PP-039 — ✅ Redeeming one session token cost two `set_config` round-trips _(S2 · Performance)_
+
+- **Symptom.** `withAuthResolutionContext(userId, fn)` — the context every session
+  **redemption** runs in, i.e. the first DB work of any authenticated request that the AuthContext
+  cache did not already answer — awaited `setUserContext(userId, tx)` and then
+  `setAuthLookupContext(tx)`. Two statements to say one thing: "this token has been verified, read
+  its owner's own rows".
+- **Measured.** In the deployed container against preprod, the old shape (BEGIN + two `set_config` +
+  the read + COMMIT) is **1 006 ms** median (1 064 / 1 006 / 1 003) and the folded shape is
+  **804 ms** (804 / 803 / 809): **202 ms back**, which is precisely PP-028's flat per-statement
+  constant. That is the whole saving and the whole claim — one statement, once, per redemption.
+- **Why this one is worth more than its size.** Unlike the sign-in folds (PP-036/PP-037, once per
+  login), this is paid on **every authenticated request**. It is also the cheapest class of fix in
+  this register: nothing is cached, batched or denormalised, no policy changes, no extra privilege is
+  granted — the same two GUCs with the same values simply go over the wire together.
+- **Fix.** `setAuthResolutionContext(userId, tx?)` emits
+  `SELECT set_config('app.current_user', …), set_config('app.auth_lookup', 'true', …)` in one
+  statement; `withAuthResolutionContext` calls it. Postgres evaluates both in the one round-trip, and
+  the transaction-local scoping is unchanged.
+- **Same shape, second site.** `setImpersonationContext(tenantId, userId, tx)` folds
+  `setSuperAdminContext(tx)` + `setTenantContext(…, tx)` into one statement. Those call sites
+  (`lib/auth/impersonation-reconcile.ts`, `app/api/superadmin/impersonate/stop/route.ts`) are a loop
+  over every super admin still pointing at a tenant, so the old version charged 200 ms per admin
+  scanned rather than per impersonation reconciled.
+- **`tx` is required, on purpose.** `setImpersonationContext` is the widest context in `lib/db/rls`
+  (platform privilege aimed at a workspace). A session-scoped variant would outlive the statement it
+  was meant to cover, so the signature refuses it — and the test asserts no `false)` ever appears in
+  the generated SQL. `setTenantCarrier` still runs, so PP-027's bare-`db.transaction()` recovery keeps
+  the proven identity.
+- **What was NOT folded.** `withSecurityContext` + a later `setTenantContext(tx)` inside the callback
+  (signup, `join-tenant`, `create-admin`, `workspace`) is the same two-statement pattern, but the
+  second context is applied _conditionally, mid-transaction_, by code that does not know it is inside
+  a security context. Folding those would mean hoisting privilege decisions into the caller — a
+  security change, not a latency one. Left alone deliberately.
+- **Verification.** `tsc --noEmit`, `eslint --max-warnings=0` and `guard:filesize` exit 0; four new
+  tests in `tests/unit/rls.test.ts` pin the count itself (one `execute`, exactly two `set_config`
+  calls inside it, both GUC names present), the empty-`userId` refusal, the three-in-one impersonation
+  statement, its `SET LOCAL` scoping, and the empty-`tenantId`/empty-`userId` refusals. Existing
+  `impersonation-reconcile` / `auth-session` tests still pass untouched.
+- **Not deployed.** Like PP-035 to PP-038, this is tree-only until **#84**. The measured numbers come
+  from the deployed runtime's own connection to preprod, so the _cost_ is real today; the _fix_ is not
+  yet running.
+- **Files:** `lib/db/rls.ts`, `lib/auth/impersonation-reconcile.ts`,
+  `app/api/superadmin/impersonate/stop/route.ts`, `tests/unit/rls.test.ts`
+- **Task:** #87 (this), #84 (deploy), #75 (the constant this is priced against).
 
 ## Running the pre-prod flow simulator
 

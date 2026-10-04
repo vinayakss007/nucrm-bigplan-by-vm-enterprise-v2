@@ -189,6 +189,38 @@ export async function withSecurityContext<T>(
 }
 
 /**
+ * Platform privilege aimed at one specific workspace, in a single statement.
+ *
+ * #87: callers used to await `setSuperAdminContext(tx)` and then
+ * `setTenantContext(tenantId, userId, tx)`. That is one extra statement per
+ * transaction (PP-028: a flat ~200 ms), and the impersonation sweep does it
+ * once per super admin found, so the overhead scaled with the number of admins
+ * rather than the work done. The privilege is unchanged — same three GUCs, same
+ * values, all `SET LOCAL` inside the caller's transaction — and it is still
+ * exactly as narrow: a tenant is named, so no cross-workspace read opens up.
+ *
+ * `tx` is required, deliberately. This is the widest context in this module and
+ * the only safe lifetime for it is the transaction the caller already owns;
+ * a session-scoped version would outlive the statement it was meant to cover.
+ */
+export async function setImpersonationContext(
+  tenantId: string,
+  userId: string,
+  tx: RlsTransaction
+): Promise<void> {
+  if (!tenantId || !userId) {
+    throw new Error('[RLS] setImpersonationContext called with empty tenantId or userId — refusing to set empty context');
+  }
+  if (isMockClient(tx)) return;
+  setTenantCarrier(tenantId, userId);
+  await tx.execute(
+    sql`SELECT set_config('app.is_super_admin', 'true', true),
+             set_config('app.current_tenant', ${tenantId}, true),
+             set_config('app.current_user', ${userId}, true)`
+  );
+}
+
+/**
  * Set ONLY the acting-user half of the tenant context.
  *
  * For paths where an identity has been *proven* but no workspace has been
@@ -225,6 +257,29 @@ export async function setAuthLookupContext(tx?: RlsTransaction): Promise<void> {
   if (isMockClient(client)) return;
   const isLocal = tx ? sql`true` : sql`false`;
   await client.execute(sql`SELECT set_config('app.auth_lookup', 'true', ${isLocal})`);
+}
+
+/**
+ * Resolve an identity *from* a verified token: acting user + the pre-auth read
+ * privilege, applied in a single statement.
+ *
+ * #87: the two halves used to be two `SELECT set_config(…)` round-trips. That
+ * is the price of *one extra statement* (PP-028: a flat ~200 ms each), paid on
+ * every session redemption, i.e. every authenticated request that the
+ * AuthContext cache did not already answer. Nothing about the privilege changes
+ * here — same two GUCs, same values, same transaction-local scope — only the
+ * number of times we ask for them.
+ */
+export async function setAuthResolutionContext(userId: string, tx?: RlsTransaction): Promise<void> {
+  if (!userId) {
+    throw new Error('[RLS] setAuthResolutionContext called with empty userId — refusing to set empty context');
+  }
+  const client = tx || db;
+  if (isMockClient(client)) return;
+  const isLocal = tx ? sql`true` : sql`false`;
+  await client.execute(
+    sql`SELECT set_config('app.current_user', ${userId}, ${isLocal}), set_config('app.auth_lookup', 'true', ${isLocal})`
+  );
 }
 
 /**
@@ -323,8 +378,7 @@ export async function withAuthResolutionContext<T>(
   }
   if (!hasTransaction(db)) return fn(db as unknown as Parameters<typeof fn>[0]);
   return await db.transaction(async (tx) => {
-    await setUserContext(userId, tx);
-    await setAuthLookupContext(tx);
+    await setAuthResolutionContext(userId, tx);
     return fn(tx);
   });
 }

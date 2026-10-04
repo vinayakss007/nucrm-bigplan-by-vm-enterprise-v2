@@ -126,6 +126,62 @@ describe('db/rls', () => {
     });
   });
 
+  describe('combined contexts (#87)', () => {
+    it('resolves an identity from a token with ONE statement, carrying both privileges', async () => {
+      const { db } = await import('@/drizzle/db');
+      const { PgDialect } = await import('drizzle-orm/pg-core');
+      const execute = vi.fn().mockResolvedValue({ rows: [] });
+      vi.mocked(db.transaction).mockImplementationOnce(async (fn) =>
+        fn({ execute } as unknown as Parameters<typeof fn>[0]));
+
+      const { withAuthResolutionContext } = await import('@/lib/db/rls');
+      await withAuthResolutionContext('user-123', async () => 'done');
+
+      // Two set_config statements used to mean two ~200 ms round-trips on every
+      // session redemption, so the count itself is the thing under test.
+      expect(execute).toHaveBeenCalledTimes(1);
+      const sql = new PgDialect().sqlToQuery(execute.mock.calls[0]![0]).sql;
+      expect(sql).toContain("set_config('app.current_user'");
+      expect(sql).toContain("set_config('app.auth_lookup', 'true'");
+      expect(sql.match(/set_config/g)).toHaveLength(2);
+    });
+
+    it('refuses to resolve an identity for an empty userId', async () => {
+      const { setAuthResolutionContext } = await import('@/lib/db/rls');
+      await expect(setAuthResolutionContext('')).rejects.toThrow('empty userId');
+      expect(mockExecute).not.toHaveBeenCalled();
+    });
+
+    it('applies the impersonation context as ONE transaction-local statement', async () => {
+      const { db } = await import('@/drizzle/db');
+      const { PgDialect } = await import('drizzle-orm/pg-core');
+      const execute = vi.fn().mockResolvedValue({ rows: [] });
+      vi.mocked(db.transaction).mockImplementationOnce(async (fn) =>
+        fn({ execute } as unknown as Parameters<typeof fn>[0]));
+
+      const { setImpersonationContext } = await import('@/lib/db/rls');
+      await db.transaction(async (tx) => await setImpersonationContext('tenant-1', 'user-1', tx));
+
+      expect(execute).toHaveBeenCalledTimes(1);
+      const sql = new PgDialect().sqlToQuery(execute.mock.calls[0]![0]).sql;
+      expect(sql).toContain("set_config('app.is_super_admin', 'true'");
+      expect(sql).toContain("set_config('app.current_tenant'");
+      expect(sql).toContain("set_config('app.current_user'");
+      // `tx` is required precisely so this can never be session-scoped.
+      expect(sql).not.toContain('false)');
+    });
+
+    it('refuses an impersonation context with no workspace or no actor', async () => {
+      const { setImpersonationContext } = await import('@/lib/db/rls');
+      const tx = { execute: vi.fn() };
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await expect(setImpersonationContext('', 'user-1', tx as any)).rejects.toThrow('empty tenantId or userId');
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await expect(setImpersonationContext('tenant-1', '', tx as any)).rejects.toThrow('empty tenantId or userId');
+      expect(tx.execute).not.toHaveBeenCalled();
+    });
+  });
+
   describe('verifyRLSEnabled', () => {
     it('returns true when RLS is enabled', async () => {
       mockExecute.mockResolvedValueOnce({ rows: [{ rowsecurity: true }] });
