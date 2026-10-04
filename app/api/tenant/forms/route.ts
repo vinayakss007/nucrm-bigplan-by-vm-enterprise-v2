@@ -13,6 +13,7 @@ import { eq, and, desc, sql } from 'drizzle-orm';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { createFormSchema } from '@/lib/api/schemas';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { parseLimitOffset } from '@/lib/api/query-params';
 
 export const GET = withApiRoute(async (req: NextRequest) => {
   try {
@@ -23,8 +24,7 @@ export const GET = withApiRoute(async (req: NextRequest) => {
     if (modErr) return modErr;
 
     const { searchParams } = new URL(req.url);
-    const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') ?? '20')));
-    const offset = Math.max(0, parseInt(searchParams.get('offset') ?? '0'));
+    const { limit, offset } = parseLimitOffset(searchParams, { defaultLimit: 20, maxLimit: 100 });
 
     const [countResult] = await db.select({ count: sql<number>`count(*)::int` })
       .from(forms)

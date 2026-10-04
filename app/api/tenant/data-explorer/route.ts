@@ -13,6 +13,7 @@ import { sql } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { logError } from '@/lib/errors-server';
+import { parsePageLimit } from '@/lib/api/query-params';
 
 const ENTITY_CONFIG: Record<string, { label: string; searchFields: string[]; sortFields: string[]; defaultSort: string }> = {
   contacts: {
@@ -55,9 +56,7 @@ export const GET = withApiRoute(async (req: NextRequest) => {
     const { searchParams } = new URL(req.url);
     const type = searchParams.get('type') || 'contacts';
     const q = searchParams.get('q')?.trim() || '';
-    const page = Math.max(1, parseInt(searchParams.get('page') || '1'));
-    const limit = Math.min(200, Math.max(1, parseInt(searchParams.get('limit') || '50')));
-    const offset = (page - 1) * limit;
+    const { page, limit, offset } = parsePageLimit(searchParams, { defaultLimit: 50, maxLimit: 200 });
     const sort = searchParams.get('sort') || ENTITY_CONFIG[type]?.defaultSort || 'created_at';
     const order = (searchParams.get('order') || 'desc').toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
     const field = searchParams.get('field');

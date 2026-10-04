@@ -10,6 +10,7 @@ import { db } from '@/drizzle/db';
 import { customPlugins, pluginExecutionLogs } from '@/drizzle/schema';
 import { eq, and, isNull, desc } from 'drizzle-orm';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { parseLimitOffset } from '@/lib/api/query-params';
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -22,8 +23,7 @@ export const GET = withApiRoute(async (request: NextRequest, context: RouteConte
 
     const { id } = await context.params;
     const { searchParams } = new URL(request.url);
-    const limit = Math.min(parseInt(searchParams.get('limit') ?? '50', 10), 100);
-    const offset = parseInt(searchParams.get('offset') ?? '0', 10);
+    const { limit, offset } = parseLimitOffset(searchParams, { defaultLimit: 50, maxLimit: 100 });
 
     // Verify plugin belongs to tenant
     const [plugin] = await db.select({ id: customPlugins.id })

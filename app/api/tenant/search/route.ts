@@ -14,6 +14,7 @@ import { tasks } from '@/drizzle/schema';
 import { eq, and, or, ilike, desc, sql, asc } from 'drizzle-orm';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { parseLimitOffset } from '@/lib/api/query-params';
 
 export const GET = withApiRoute(async (request: NextRequest) => {
   try {
@@ -27,7 +28,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     const { searchParams } = new URL(request.url);
     const q = searchParams.get('q')?.trim();
     const type = searchParams.get('type') ?? 'all'; // all | contacts | deals | companies | tasks
-    const limit = Math.min(50, parseInt(searchParams.get('limit') ?? '20'));
+    const { limit } = parseLimitOffset(searchParams, { defaultLimit: 20, maxLimit: 50 });
 
     if (!q || q.length < 1) {
       return NextResponse.json({ contacts: [], leads: [], deals: [], companies: [], tasks: [], total: 0 });

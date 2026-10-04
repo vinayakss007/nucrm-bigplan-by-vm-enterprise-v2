@@ -15,6 +15,7 @@ import { eq, and, desc, sql } from 'drizzle-orm';
 import { randomBytes } from 'crypto';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { parseLimitOffset } from '@/lib/api/query-params';
 
 export const GET = withApiRoute(async (req: NextRequest) => {
   try {
@@ -22,8 +23,7 @@ export const GET = withApiRoute(async (req: NextRequest) => {
     if (ctx instanceof NextResponse) return ctx;
 
     const { searchParams } = new URL(req.url);
-    const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') ?? '50')));
-    const offset = Math.max(0, parseInt(searchParams.get('offset') ?? '0'));
+    const { limit, offset } = parseLimitOffset(searchParams, { defaultLimit: 50, maxLimit: 100 });
     const isActive = searchParams.get('is_active');
 
     const filters = [

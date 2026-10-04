@@ -9,6 +9,7 @@ import { requireAuth } from '@/lib/auth/middleware';
 import * as dlq from '@/lib/webhooks/dlq';
 import { readJsonBody } from '@/lib/api/validate';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { parseLimitOffset } from '@/lib/api/query-params';
 
 /**
  * GET /api/tenant/webhooks/dlq — List dead letter queue entries
@@ -20,8 +21,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     if (ctx instanceof NextResponse) return ctx;
 
     const { searchParams } = new URL(request.url);
-    const limit = Math.min(200, Math.max(1, parseInt(searchParams.get('limit') ?? '50')));
-    const offset = Math.max(0, parseInt(searchParams.get('offset') ?? '0'));
+    const { limit, offset } = parseLimitOffset(searchParams, { defaultLimit: 50, maxLimit: 200 });
     const status = searchParams.get('status') || undefined;
 
     const { entries, total } = await dlq.listDLQEntries(ctx.tenantId, { limit, offset: offset, status });

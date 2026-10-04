@@ -11,6 +11,7 @@ import { integrations } from '@/drizzle/schema';
 import { webhookQueue } from '@/drizzle/schema/support';
 import { eq, and, desc, sql, inArray } from 'drizzle-orm';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { parsePageLimit } from '@/lib/api/query-params';
 
 export const GET = withApiRoute(async (req: NextRequest) => {
   try {
@@ -18,11 +19,9 @@ export const GET = withApiRoute(async (req: NextRequest) => {
     if (ctx instanceof NextResponse) return ctx;
 
     const { searchParams } = new URL(req.url);
-    const page = Math.max(1, parseInt(searchParams.get('page') ?? '1'));
-    const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') ?? '50')));
+    const { page, limit, offset } = parsePageLimit(searchParams, { defaultLimit: 50, maxLimit: 100 });
     const statusFilter = searchParams.get('status');
     const eventFilter = searchParams.get('event');
-    const offset = (page - 1) * limit;
 
     // Get the tenant's webhook integration IDs
     const tenantWebhooks = await db.select({ id: integrations.id })

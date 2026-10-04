@@ -16,6 +16,7 @@ import { requireAiFeature } from '@/lib/ai/plan-gate';
 import { readJsonBody } from '@/lib/api/validate';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { parseLimitOffset } from '@/lib/api/query-params';
 
 /**
  * POST /api/tenant/ai/score
@@ -110,7 +111,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     }
 
     // Top scored contacts
-    const limit = Math.min(100, parseInt(searchParams.get('limit') || '10'));
+    const { limit } = parseLimitOffset(searchParams, { defaultLimit: 10, maxLimit: 100 });
     const min_score = parseInt(searchParams.get('min_score') || '0');
 
     const topScoredResults = await db.select({

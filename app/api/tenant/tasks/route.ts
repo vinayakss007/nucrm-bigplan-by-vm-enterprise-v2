@@ -17,6 +17,7 @@ import { logError } from '@/lib/errors-server';
 import { createNotification } from '@/lib/notifications';
 import { cache } from '@/lib/cache';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { parseLimitOffset } from '@/lib/api/query-params';
 
 export const GET = withApiRoute(async (request: NextRequest) => {
   try {
@@ -24,8 +25,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     if (ctx instanceof NextResponse) return ctx;
 
     const { searchParams } = new URL(request.url);
-    const limit = Math.min(500, parseInt(searchParams.get('limit') ?? '100'));
-    const offset = parseInt(searchParams.get('offset') ?? '0');
+    const { limit, offset } = parseLimitOffset(searchParams, { defaultLimit: 100, maxLimit: 500 });
     const dueStart = searchParams.get('due_start');
     const dueEnd = searchParams.get('due_end');
 

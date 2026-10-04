@@ -13,6 +13,7 @@ import { db } from '@/drizzle/db';
 import { kbArticles, kbCategories } from '@/drizzle/schema';
 import { eq, and, desc, isNull, sql } from 'drizzle-orm';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { parseLimitOffset } from '@/lib/api/query-params';
 
 export const GET = withApiRoute(async (request: NextRequest) => {
   try {
@@ -22,8 +23,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     const categoryId = searchParams.get('category_id');
     const status = searchParams.get('status') || 'published';
     const search = searchParams.get('q')?.trim();
-    const limit = Math.min(parseInt(searchParams.get('limit') || '50'), 100);
-    const offset = parseInt(searchParams.get('offset') || '0');
+    const { limit, offset } = parseLimitOffset(searchParams, { defaultLimit: 50, maxLimit: 100 });
 
     const filters = [eq(kbArticles.tenantId, ctx.tenantId), isNull(kbArticles.deletedAt)];
     if (categoryId) filters.push(eq(kbArticles.categoryId, categoryId));
