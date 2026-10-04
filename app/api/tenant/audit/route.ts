@@ -17,6 +17,18 @@ export const GET = withApiRoute(async (req: NextRequest) => {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
 
+    // #2274: this GET called only requireAuth, so every tenant member (sales
+    // reps included) could read the FULL audit trail — other users' emails and
+    // old_data/new_data PII diffs of every admin/manager CRUD. Audit viewing
+    // is an admin capability: the UI already treats it that way
+    // (app/tenant/settings/audit/page.tsx redirects non-admins, sidebar-nav
+    // marks it adminOnly) and sibling #2221 fixed backup/config the same way.
+    // Gate the whole route — the UI has no self-view ("my own entries only")
+    // consumer of user_id, so there is nothing to preserve for other roles.
+    if (!ctx.isAdmin) {
+      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+    }
+
     const { searchParams } = new URL(req.url);
     const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') ?? '50')));
     const offset = Math.max(0, parseInt(searchParams.get('offset') ?? '0'));
