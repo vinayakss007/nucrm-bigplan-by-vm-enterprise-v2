@@ -47,8 +47,9 @@ describe(`migration ${TAG} (#2258)`, () => {
     const prev = journal.entries[pos - 1];
     expect(entry!.idx).toBeGreaterThan(prev.idx);
     expect(entry!.when).toBeGreaterThan(prev.when);
-    // Reserved slot: 0110/idx107 and 0111/idx108 belong to concurrent PRs.
-    expect(entry!.idx).toBe(109);
+    // #2262: idx === journal position, so the slot number shifts whenever an
+    // entry is backfilled ahead of this one; pin the invariant, not the number.
+    expect(entry!.idx).toBe(pos);
     expect(entry!.when).toBe(1788782400026);
     expect(entry!.breakpoints).toBe(true);
     // Unique when — drizzle tiebreaks equal folderMillis on it.

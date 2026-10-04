@@ -60,12 +60,29 @@ describe('migration journal integrity (#2262)', () => {
     expect(dupes).toEqual([]);
   });
 
+  it('keeps when increasing with journal order, apart from the one known neighbour', () => {
+    // `tests/unit/notification-type-vocabulary.test.ts` compares one entry's
+    // `when` against EVERY other entry's, so an out-of-order stamp anywhere in
+    // the journal turns that test red. 0067/0068 is the single inversion that
+    // predates #2262 and is tolerated there because both sit before 0101.
+    const inversions = entries
+      .slice(1)
+      .map((e, i) => (e.when <= entries[i]!.when ? `${entries[i]!.tag}->${e.tag}` : null))
+      .filter((v): v is string => v !== null);
+    expect(inversions).toEqual(['0067_ticket_portal_token->0068_force_rls_owner']);
+  });
+
   it('keeps the backfilled entries in dependency order', () => {
     const pos = (tag: string) => entries.findIndex((e) => e.tag === tag);
     // 0071 and 0088 both reference custom_entities/custom_entity_data.
     expect(pos('0059_custom_entities')).toBeLessThan(pos('0071_schema_drift_backfill'));
     expect(pos('0059_custom_entities')).toBeLessThan(pos('0088_rls_bootstrap_and_isolation'));
+    // 0091 and 0092 only rewrite tenant_isolation policies (DROP IF EXISTS +
+    // CREATE), and nothing after them touches those tables, so they were
+    // appended rather than spliced mid-journal — that is what lets their
+    // `when` stamps stay in the increasing run.
     expect(pos('0090_backup_tables_superadmin_bypass')).toBeLessThan(pos('0091_usage_snapshots_superadmin_bypass'));
+    expect(pos('0096_analytics_events_ingest_insert')).toBeLessThan(pos('0092_metrics_tables_superadmin_bypass'));
   });
 
   it('plans 0059 and 0091 as replayable on an empty ledger', () => {
