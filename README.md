@@ -42,26 +42,26 @@ curl -X POST http://localhost:3000/api/setup/create-admin \
 
 ## Tech Stack
 
-| Layer            | Choice                        | Why                                          |
-| ---------------- | ----------------------------- | -------------------------------------------- |
-| Framework        | Next.js 16.3 (App Router)     | SSR, streaming, Turbopack                    |
-| UI runtime       | React 19                      | Server Components, transitions               |
-| Language         | TypeScript 5.9                | Strict mode, full type safety                |
-| Database         | PostgreSQL 15+                | Drizzle ORM, JSONB, full-text search         |
-| ORM              | Drizzle                       | Type-safe SQL, no hidden queries             |
-| Auth             | JWT + httpOnly cookies        | Stateless, XSS-safe                          |
-| Queue            | BullMQ (Redis) / PG-Boss      | Background job processing                    |
-| UI               | Radix UI + Tailwind CSS       | Accessible, customizable                     |
-| Charts           | Recharts                      | React-native charting                        |
-| Tests            | Vitest + Playwright           | Fast, modern, E2E                            |
-| Caching          | Redis with in-memory fallback | Multi-tier cache                             |
-| Email            | Resend / SendGrid / Mailgun   | Pluggable email providers                    |
-| Storage          | AWS S3 (presigned URLs)       | Scalable file storage                        |
-| Payments         | Stripe                        | Subscriptions, billing, invoices             |
-| AI               | OpenAI GPT / Claude           | Drafts, summaries, scoring, sentiment        |
-| Monitoring       | Sentry, Grafana, Prometheus   | Error tracking, metrics, dashboards          |
-| Containerization | Docker + Docker Compose       | Production-ready deployments                 |
-| CI/CD            | GitHub Actions                | Lint, typecheck, tests, security scan, build |
+| Layer            | Choice                         | Why                                          |
+| ---------------- | ------------------------------ | -------------------------------------------- |
+| Framework        | Next.js 16.3 (App Router)      | SSR, streaming, Turbopack                    |
+| UI runtime       | React 19                       | Server Components, transitions               |
+| Language         | TypeScript 5.9                 | Strict mode, full type safety                |
+| Database         | PostgreSQL 16 dev / 18 managed | Drizzle ORM, JSONB, full-text search         |
+| ORM              | Drizzle                        | Type-safe SQL, no hidden queries             |
+| Auth             | JWT + httpOnly cookies         | Stateless, XSS-safe                          |
+| Queue            | BullMQ (Redis) / PG-Boss       | Background job processing                    |
+| UI               | Radix UI + Tailwind CSS        | Accessible, customizable                     |
+| Charts           | Recharts                       | React-native charting                        |
+| Tests            | Vitest + Playwright            | Fast, modern, E2E                            |
+| Caching          | Redis with in-memory fallback  | Multi-tier cache                             |
+| Email            | Resend / SendGrid / Mailgun    | Pluggable email providers                    |
+| Storage          | AWS S3 (presigned URLs)        | Scalable file storage                        |
+| Payments         | Stripe                         | Subscriptions, billing, invoices             |
+| AI               | OpenAI GPT / Claude            | Drafts, summaries, scoring, sentiment        |
+| Monitoring       | Sentry, Grafana, Prometheus    | Error tracking, metrics, dashboards          |
+| Containerization | Docker + Docker Compose        | Production-ready deployments                 |
+| CI/CD            | GitHub Actions                 | Lint, typecheck, tests, security scan, build |
 
 ---
 
@@ -659,14 +659,17 @@ go through `confirmThen()` (79 files do), not a hand-rolled `<Dialog>`.
 
 ---
 
-## Tests (~389 test files)
+## Tests (462 test files)
 
 | Type                  | Files | Description                                                                     |
 | --------------------- | ----- | ------------------------------------------------------------------------------- |
-| **Unit Tests**        | ~350  | Component, utility, service, and model tests                                    |
-| **Integration Tests** | ~21   | API validation, backup integrity, tenant isolation, security, calculated fields |
-| **E2E Tests**         | 6     | Auth, contacts, deals, multi-tenant, notifications, smoke                       |
-| **Dashboard Tests**   | —     | Widget rendering, data fetching, caching                                        |
+| **Unit Tests**        | 425   | Component, utility, service, and model tests (`tests/unit/`)                    |
+| **Integration Tests** | 25    | API validation, backup integrity, tenant isolation, security, calculated fields |
+| **E2E Tests**         | 6     | Auth, contacts, deals, multi-tenant, notifications, smoke (`tests/e2e/`)        |
+| **Dashboard Tests**   | 11    | Widget rendering, data fetching, caching (`tests/dashboard/`)                   |
+
+Counts re-derive with `find tests -name '*.test.*' | wc -l` (462) plus `find tests/e2e -name
+'*.spec.ts' | wc -l` (6). The 425/25/11 split is by directory; one more lives in `tests/api/`.
 
 **Test commands:**
 
@@ -685,7 +688,11 @@ route/DB exercise → full suite: 5610 passed / 0 failed) is documented in
 
 ---
 
-## Scripts (79 npm scripts)
+## Scripts (96 npm scripts)
+
+> Every command named in this README was checked against `package.json`. The one exception is
+> `npm run storybook`, which is configured (`.storybook/`, two scripts) but has **no dependency
+> installed** — see [docs/COMPONENTS.md](docs/COMPONENTS.md).
 
 ### Database
 
