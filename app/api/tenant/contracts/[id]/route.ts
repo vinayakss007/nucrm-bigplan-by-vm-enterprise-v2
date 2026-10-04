@@ -62,11 +62,15 @@ export const PUT = withApiRoute(async (req: NextRequest, { params }: { params: P
     const contractId = (await params).id;
     const body = await readJsonBody(req);
 
-    // Validate numeric fields
+    // Validate numeric fields.
+    // #2256: contract value must be >= 0, mirroring chk_contracts_total_value_nonneg.
     if (body.totalValue !== undefined) {
       const v = parseFloat(body.totalValue);
       if (isNaN(v)) {
         return NextResponse.json({ error: 'totalValue must be a valid number' }, { status: 400 });
+      }
+      if (v < 0) {
+        return NextResponse.json({ error: 'totalValue must be non-negative' }, { status: 400 });
       }
       body.totalValue = v;
     }

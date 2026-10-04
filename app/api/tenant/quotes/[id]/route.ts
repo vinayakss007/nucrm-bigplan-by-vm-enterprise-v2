@@ -64,13 +64,19 @@ export const PUT = withApiRoute(async (req: NextRequest, { params }: { params: P
     const quoteId = (await params).id;
     const body = await readJsonBody(req);
 
-    // Validate numeric fields
+    // Validate numeric fields.
+    // #2256: reject negative money values (subtotal/tax/discount/totalAmount)
+    // here, mirroring the new chk_quotes_*_nonneg DB checks, so the client
+    // gets a clean 400 instead of a 500 from a CHECK violation.
     const numericFields = ['subtotal', 'discount', 'tax', 'totalAmount'] as const;
     for (const field of numericFields) {
       if (body[field] !== undefined) {
         const v = parseFloat(body[field]);
         if (isNaN(v)) {
           return NextResponse.json({ error: `${field} must be a valid number` }, { status: 400 });
+        }
+        if (v < 0) {
+          return NextResponse.json({ error: `${field} must be non-negative` }, { status: 400 });
         }
         body[field] = v;
       }
