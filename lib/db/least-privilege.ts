@@ -69,6 +69,138 @@ export const ROLE_PRIVILEGE_SQL = `
 `;
 
 /**
+ * Companion probe (#2306): how many uuid `tenant_id` tables does the connecting
+ * role OWN, and are any of them not FORCE ROW LEVEL SECURITY? An owner of an
+ * un-FORCE'd table is exempt from its policies just like a superuser is, so the
+ * role attributes alone are not a sufficient verdict.
+ */
+export const TENANT_TABLE_OWNERSHIP_SQL = `
+  SELECT count(*) FILTER (WHERE NOT c.relforcerowsecurity)::int AS unforced_owned,
+         count(*)::int                                          AS owned
+    FROM pg_class c
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    JOIN pg_attribute a ON a.attrelid = c.oid AND a.attname = 'tenant_id' AND a.attisdropped = false
+    JOIN pg_type t ON t.oid = a.atttypid AND t.typname = 'uuid'
+   WHERE n.nspname = 'public' AND c.relkind = 'r'
+     AND c.relowner = (SELECT oid FROM pg_roles WHERE rolname = current_user)
+`;
+
+/**
+ * The minimal query surface the probes need. Both the `pg` Pool used by the
+ * operational scripts and the app's `query()` from `lib/db/client` satisfy it,
+ * and a unit test can supply a plain stub — which is why this module still does
+ * not import `pg`.
+ */
+export type RolePrivilegeQuerier = <T extends Record<string, unknown>>(
+  sql: string,
+) => Promise<{ rows: T[] }>;
+
+/** Raised when the connection role can bypass RLS, or cannot be verified. */
+export class RlsRoleBypassError extends Error {
+  readonly verdict: RolePrivilegeVerdict | null;
+
+  constructor(message: string, verdict: RolePrivilegeVerdict | null = null) {
+    super(message);
+    this.name = 'RlsRoleBypassError';
+    this.verdict = verdict;
+  }
+}
+
+/**
+ * Strip any `postgres://user:pass@host/db` shape out of a message before it is
+ * logged, emitted in an alert, or written to a CI log. The guard runs against
+ * production URLs; it must never leak one (#2306).
+ */
+export function redactConnectionString(text: string): string {
+  return text
+    .replace(/\bpostgres(?:ql)?:\/\/[^\s'"]*/gi, '[redacted-connection-string]')
+    .replace(/\/\/[^@/\s]*@/g, '//***:***@');
+}
+
+/**
+ * Read the role facts this evaluator needs from a live connection.
+ *
+ * Throws `RlsRoleBypassError` when the connecting role cannot even be
+ * determined — "unknown" is not "safe" for a guard whose whole purpose is to
+ * turn a silent failure into a loud one.
+ */
+export async function collectRolePrivilegeFacts(
+  run: RolePrivilegeQuerier,
+  options: { probeOwnership?: boolean } = {},
+): Promise<RolePrivilegeFacts> {
+  const who = await run<{ rolname: string; rolsuper: boolean | null; rolbypassrls: boolean | null }>(
+    ROLE_PRIVILEGE_SQL,
+  );
+  const role = who.rows[0];
+  if (!role || typeof role.rolname !== 'string') {
+    throw new RlsRoleBypassError('could not determine the connecting role — refusing to assume RLS is enforced');
+  }
+
+  const facts: {
+    rolname: string;
+    rolsuper: boolean;
+    rolbypassrls: boolean;
+    ownsTenantTables?: number | null;
+    hasUnforcedTables?: boolean | null;
+  } = {
+    rolname: role.rolname,
+    rolsuper: Boolean(role.rolsuper),
+    rolbypassrls: Boolean(role.rolbypassrls),
+  };
+
+  if (options.probeOwnership !== false) {
+    try {
+      const own = await run<{ owned: number | null; unforced_owned: number | null }>(
+        TENANT_TABLE_OWNERSHIP_SQL,
+      );
+      const row = own.rows[0];
+      if (row) {
+        facts.ownsTenantTables = Number(row.owned ?? 0);
+        facts.hasUnforcedTables = Number(row.unforced_owned ?? 0) > 0;
+      }
+    } catch {
+      // Ownership is a refinement of the verdict, not a precondition: when the
+      // probe is unavailable (restricted metadata access) fall back to the
+      // role-attribute-only verdict rather than masking the connection error.
+      facts.ownsTenantTables = null;
+      facts.hasUnforcedTables = null;
+    }
+  }
+
+  return facts;
+}
+
+/**
+ * The single source of truth for "may this connection serve tenant data?".
+ *
+ * Returns the verdict when RLS binds against the role, and throws
+ * `RlsRoleBypassError` — with every blocking finding, connection-string free —
+ * when it does not. Callers that must not die (the app process) catch it and
+ * alert; callers that are gates (the deploy step, CI, `check-db-role-privileges`)
+ * let the non-zero exit do the aborting.
+ */
+export async function assertRoleIsRlsConstrained(
+  run: RolePrivilegeQuerier,
+  options: { probeOwnership?: boolean } = {},
+): Promise<RolePrivilegeVerdict> {
+  const facts = await collectRolePrivilegeFacts(run, options);
+  const verdict = evaluateRolePrivileges(facts);
+
+  if (!verdict.ok) {
+    throw new RlsRoleBypassError(
+      redactConnectionString(
+        `RLS IS NOT ENFORCED against the connecting role. ${verdict.failures
+          .map((f) => f.message)
+          .join(' ')}`,
+      ),
+      verdict,
+    );
+  }
+
+  return verdict;
+}
+
+/**
  * Decide whether a connection role is subject to the tenant RLS policies.
  *
  * Rules, in order of severity:

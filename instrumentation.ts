@@ -63,6 +63,21 @@ export async function register() {
       void warmPool().catch((err) => {
         console.warn('[instrumentation] pool warm-up failed:', err instanceof Error ? err.message : err);
       });
+
+      // #2306: the RLS/superuser guard existed in three scripts and nothing ever
+      // scheduled it, so a `DATABASE_URL` pointing at a superuser (which makes
+      // every tenant_isolation policy a no-op) booted silently. Check the
+      // invariant from the first boot moment: loud in the log, pushed through the
+      // critical-alert fan-out, exported as a metric — and deliberately NOT
+      // process-killing, since this is a live app. Off only with RLS_ROLE_GUARD=false.
+      const { guardConnectionRole } = await import("./lib/db/role-privilege-guard");
+      void guardConnectionRole()
+        .then((status) => {
+          metrics.gauge('db_role_rls_enforced', status.state === 'ok' ? 1 : 0);
+        })
+        .catch((err) => {
+          console.error('[instrumentation] RLS role guard failed to run:', err instanceof Error ? err.message : err);
+        });
     }
 
     // Auto-register Telegram bot webhook
