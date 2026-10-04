@@ -39,11 +39,19 @@ async function gate(ip: string, tenantId = 'tenant-1') {
   return await checkLoginIpAllowed(tenantId, 'user-1', ip);
 }
 
+// The gate caches per tenant for a few seconds (#76), so every case starts from
+// a cold cache — otherwise a test inherits the previous test's whitelist.
+async function resetCache() {
+  const { invalidateIpWhitelistCache } = await import('@/lib/ip-whitelist');
+  invalidateIpWhitelistCache();
+}
+
 describe('checkLoginIpAllowed', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
     currentRows = [];
     lookupThrows = false;
+    await resetCache();
   });
 
   it('reads the whitelist inside the tenant context, not on a bare connection', async () => {
@@ -55,6 +63,7 @@ describe('checkLoginIpAllowed', () => {
   it('allows when no whitelist is configured', async () => {
     currentRows = [];
     expect(await gate('10.0.0.1')).toEqual({ allowed: true, reason: 'no-whitelist' });
+    await resetCache();
     currentRows = [{ value: '[]' }];
     expect(await gate('10.0.0.1').then((r) => r.reason)).toBe('no-whitelist');
   });
@@ -96,5 +105,79 @@ describe('checkLoginIpAllowed', () => {
   it('skips the whole check when the account has no workspace yet', async () => {
     expect(await gate('10.0.0.1', '')).toEqual({ allowed: true, reason: 'no-tenant' });
     expect(withTenantContext).not.toHaveBeenCalled();
+  });
+});
+
+// #76: the read is a 4-statement RLS transaction and every statement in
+// pre-prod costs a flat ~200 ms (PP-028), so un-cached it added ~830 ms to
+// every sign-in — including for tenants that never configured a list.
+describe('checkLoginIpAllowed — whitelist cache', () => {
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    vi.restoreAllMocks();
+    currentRows = [];
+    lookupThrows = false;
+    await resetCache();
+  });
+
+  it('reads the row once per tenant and answers later sign-ins from the cache', async () => {
+    currentRows = [{ value: JSON.stringify(['10.0.0.1']) }];
+    expect(await gate('10.0.0.1').then((r) => r.reason)).toBe('matched');
+    expect(await gate('10.0.0.99').then((r) => r.reason)).toBe('not-matched');
+    expect(await gate('10.0.0.1').then((r) => r.reason)).toBe('matched');
+    expect(withTenantContext).toHaveBeenCalledTimes(1);
+  });
+
+  it('applies a list the tenant just saved, without waiting for the TTL', async () => {
+    currentRows = [];
+    expect(await gate('10.0.0.99').then((r) => r.reason)).toBe('no-whitelist');
+
+    // Stale by design until the write invalidates: this is what a cache costs,
+    // and the settings route pays it down immediately.
+    currentRows = [{ value: JSON.stringify(['10.0.0.1']) }];
+    expect(await gate('10.0.0.99').then((r) => r.reason)).toBe('no-whitelist');
+
+    const { invalidateIpWhitelistCache } = await import('@/lib/ip-whitelist');
+    invalidateIpWhitelistCache('tenant-1');
+    expect(await gate('10.0.0.99')).toEqual({ allowed: false, reason: 'not-matched' });
+    expect(withTenantContext).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not cache a lookup that failed', async () => {
+    lookupThrows = true;
+    expect(await gate('10.0.0.1').then((r) => r.reason)).toBe('lookup-failed');
+
+    lookupThrows = false;
+    currentRows = [{ value: JSON.stringify(['10.0.0.1']) }];
+    expect(await gate('10.0.0.1').then((r) => r.reason)).toBe('matched');
+    expect(withTenantContext).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not cache a row it could not decode', async () => {
+    currentRows = [{ value: 'not-json' }];
+    expect(await gate('10.0.0.1').then((r) => r.reason)).toBe('no-whitelist');
+
+    currentRows = [{ value: JSON.stringify(['10.0.0.1']) }];
+    expect(await gate('10.0.0.99').then((r) => r.reason)).toBe('not-matched');
+    expect(withTenantContext).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps one tenant list from deciding another tenant sign-in', async () => {
+    currentRows = [{ value: JSON.stringify(['10.0.0.1']) }];
+    expect(await gate('10.0.0.99', 'tenant-a').then((r) => r.reason)).toBe('not-matched');
+    expect(await gate('10.0.0.99', 'tenant-b').then((r) => r.reason)).toBe('not-matched');
+    expect(withTenantContext).toHaveBeenCalledTimes(2);
+  });
+
+  it('re-reads once the entry is older than the TTL', async () => {
+    currentRows = [{ value: JSON.stringify(['10.0.0.1']) }];
+    const started = Date.now();
+    expect(await gate('10.0.0.1').then((r) => r.reason)).toBe('matched');
+
+    // Only `Date.now` is faked, so the age check is exercised without a timer.
+    const now = vi.spyOn(Date, 'now').mockReturnValue(started + 31_000);
+    expect(await gate('10.0.0.99').then((r) => r.reason)).toBe('not-matched');
+    expect(withTenantContext).toHaveBeenCalledTimes(2);
+    now.mockRestore();
   });
 });

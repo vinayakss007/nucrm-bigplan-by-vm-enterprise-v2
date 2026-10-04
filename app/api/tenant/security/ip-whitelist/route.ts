@@ -16,6 +16,7 @@ import { concurrencyGuard } from '@/lib/api/concurrency';
 import { logError } from '@/lib/errors-server';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { decodeSettingValue } from '@/lib/api/setting-value';
+import { invalidateIpWhitelistCache } from '@/lib/ip-whitelist';
 
 const IP_WHITELIST_KEY = 'ip_whitelist';
 
@@ -93,6 +94,10 @@ export const PUT = withApiRoute(async (request: NextRequest) => {
         set: { value, updatedAt: new Date() },
       });
 
+    // #76: checkLoginIpAllowed caches this row briefly; a save must be visible
+    // to the very next sign-in, not after the TTL.
+    invalidateIpWhitelistCache(ctx.tenantId);
+
     return NextResponse.json({ ok: true, ips: ipArray, enabled: enabled && ipArray.length > 0 });
  
  
@@ -118,6 +123,8 @@ export const DELETE = withApiRoute(async (request: NextRequest) => {
         eq(platformSettings.tenantId, ctx.tenantId),
         eq(platformSettings.key, IP_WHITELIST_KEY)
       ));
+
+    invalidateIpWhitelistCache(ctx.tenantId);
 
     return NextResponse.json({ ok: true });
  

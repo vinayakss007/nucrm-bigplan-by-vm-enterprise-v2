@@ -55,6 +55,7 @@ Severity: **S1** blocks go-live · **S2** broken feature or security weakness ·
 | PP-033 | S1  | Deploy + obs  | BuildKit cache filled root to 84% with no bound; `docker system df` under-reports it and the 80% disk alert was never live                                                                                       | ✅ FIXED + live-verified                              |
 | PP-034 | S1  | Observability | Alertmanager has **never delivered an alert** — `host.docker.internal` does not resolve in its container and the receiver was never installed (~10.8k failed notifications, still counting)                      | 🔧 PARTIAL IN TREE (needs recreate + a real receiver) |
 | PP-035 | S1  | Privacy       | Sentry v11 `dataCollection` defaults to **collecting everything**, and `sentry.client.config.ts` (the only file with `scrubPii`) is not in the Turbopack browser bundle — so the browser has sent PII unscrubbed | 🔧 FIXED IN TREE (not live until #84)                 |
+| PP-036 | S2  | Performance   | Every sign-in paid ~830 ms to read one settings row — the IP allow-list gate is 4 statements at PP-028's flat 200 ms, and it runs for tenants that have no list                                                  | 🔧 FIXED IN TREE (not live until #84)                 |
 
 ## Sentry issues → register entries
 
@@ -579,7 +580,8 @@ image`), so **restarting worker or realtime silently deploys whatever `nucrm-app
   (provider proxy, delayed-ACK interaction, or per-statement server logging — not yet attributed).
 - **Consequence.** Everything that issues statements in series is defined by this constant, not by
   query efficiency: a gate-shaped transaction (BEGIN + 2 `set_config` + SELECT + COMMIT) measures
-  **828 ms**; login is 4–5 s; `auto-backup` takes ~19 s _per tenant_, so a full sweep is minutes
+  **828 ms** — that constant is what makes login 4–5 s, and PP-036 is the first place we stopped
+  paying it; `auto-backup` takes ~19 s _per tenant_, so a full sweep is minutes
   and the cron leak detector (`#65`) mostly catches sweeps that are simply latency-bound. Fixing
   statement _count_ (batching, `unnest`, folding lookups into an existing transaction) is worth
   ~200 ms each; fixing individual query plans is worth almost nothing.
@@ -1068,7 +1070,54 @@ inferred.
 - **Lesson for this repo's docs.** A comment that says "the SDK is safe by default" is an assertion
   about a dependency, and dependencies get upgraded. Where the claim is load-bearing for GDPR, the test
   should read the dependency's own behaviour (the resolver here) rather than our copy of it.
+- **And the wrong belief was not only in comments.** `tests/unit/sentry-config.test.ts` asserted
+  `expect(options).not.toHaveProperty('dataCollection')` — so CI was actively guarding the absence of
+  the one option that turns collection off, and it went red the moment the fix landed. It now asserts
+  the option **is** passed and equals `DATA_COLLECTION`.
 - **Task:** #82 (found during the Sentry check), #84 (deploy).
+
+## PP-036 — ✅ Every sign-in paid ~830 ms for a settings row almost no tenant has _(S2 · Performance)_
+
+- **Symptom.** Enforcing the tenant IP allow-list at sign-in (#15, deployed and live-verified in
+  e2e phase **J**) measurably widened the login path: **~830 ms** of it is the single
+  `platform_settings` read inside `lib/ip-whitelist.ts::checkLoginIpAllowed`.
+- **Root cause — nothing to do with the query.** That read is its own RLS transaction, because
+  `platform_settings` is guarded by `tenant_isolation` and a pre-auth connection would see zero
+  rows and conclude "no restriction" for every tenant. So it is four statements
+  (`BEGIN`, `SELECT set_config(…), set_config(…)`, the `SELECT`, `COMMIT`), and PP-028 prices each
+  one at a flat ~200 ms. The list itself is compared in memory and costs nothing.
+- **Why it is worth fixing.** It is paid **unconditionally**, including by the tenants that never
+  opened the security page and have no row at all — i.e. almost all of them — and by every failed
+  password attempt too, since the gate runs after credentials verify but before the session exists.
+- **Fix.** One read per tenant per 30 s, cached in-process (`whitelistCache`), plus
+  `invalidateIpWhitelistCache(tenantId)` called from both write paths of
+  `app/api/tenant/security/ip-whitelist/route.ts` (PUT and DELETE). A save through the settings
+  page is served by the same process that will serve the next sign-in, so a restriction — or its
+  removal — takes effect immediately; the TTL only bounds a row changed out-of-band (`psql`, a
+  restore), in **both** directions, which is why it is short rather than generous.
+- **Not `lib/cache`.** That is Redis, and Redis is not ready here (PP-030). A security gate whose
+  cache is unreachable must neither fall open nor queue behind a circuit breaker; a `Map` cannot
+  fail, invalidates synchronously, and has no dependency to time out.
+- **Two deliberate non-caches.** A lookup that threw (`lookup-failed`, which fails open) and a row
+  that exists but will not decode (also fails open, loudly) are **not** stored: an empty list means
+  "no restriction", so a value we gave up on must be re-tried at the next sign-in rather than
+  pinned open for 30 s. `readWhitelistRow` returns `{ ips, cacheable }` for exactly this reason.
+- **Bounded.** Signup is public, so "tenants that ever sign in" has no natural ceiling. Entries are
+  pruned by age at 5 000 tenants and the map is cleared if it is still full, so the cache cannot
+  grow with the tenant count.
+- **Verification.** `tsc --noEmit` and `eslint --max-warnings=0` exit 0; `tests/unit/ip-whitelist.test.ts`
+  15/15, six of them new: one read answers later sign-ins, a just-saved list applies before the TTL,
+  a failed lookup is not cached, an undecodable row is not cached, tenants do not share an entry, and
+  the entry is re-read once it is older than 30 s (only `Date.now` is faked — there is no timer).
+- **Not measured live.** 830 → ~200 ms for the first sign-in in a window and ~0 after that is
+  computed from the statement count, not timed: this is tree-only until the rebuild in **#84**, and
+  the deployed bundle still runs the uncached gate.
+- **Residual.** Two app replicas would not share an invalidation (one today). The real answer to
+  the 200 ms constant is PP-028, not this — every remaining serial statement in a request is still
+  priced the same.
+- **Files:** `lib/ip-whitelist.ts`, `app/api/tenant/security/ip-whitelist/route.ts`,
+  `tests/unit/ip-whitelist.test.ts`
+- **Task:** #15 (the gate), #72 (deployed + verified), #76 (this), #84 (deploy).
 
 ## Running the pre-prod flow simulator
 
