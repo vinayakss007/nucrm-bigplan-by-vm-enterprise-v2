@@ -8,7 +8,7 @@ import { apiError } from '@/lib/api-error';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { cannedResponses } from '@/drizzle/schema';
-import { eq, and, desc, sql } from 'drizzle-orm';
+import { eq, and, desc, sql, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 import { readJsonBody } from '@/lib/api/validate';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
@@ -33,7 +33,8 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     const category = searchParams.get('category');
     const search = searchParams.get('search');
 
-    const conditions = [eq(cannedResponses.tenantId, ctx.tenantId)];
+    // #2291: DELETE soft-deletes (sets deletedAt); the list must hide tombstones.
+    const conditions = [eq(cannedResponses.tenantId, ctx.tenantId), isNull(cannedResponses.deletedAt)];
     if (category) conditions.push(eq(cannedResponses.category, category));
     if (search) conditions.push(sql`${cannedResponses.title} ilike ${'%' + search + '%'}`);
 

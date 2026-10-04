@@ -16,7 +16,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, requirePerm, type AuthContext } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { tasks, tenantMembers, segments, segmentMembers } from '@/drizzle/schema';
-import { eq, and, inArray, sql, or, ilike } from 'drizzle-orm';
+import { eq, and, inArray, sql, or, ilike, isNull } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { logError } from '@/lib/errors-server';
 import { readJsonBody } from '@/lib/api/validate';
@@ -309,7 +309,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
         const segId = payload['segment_id'] as string | undefined;
         if (!segId) return NextResponse.json({ error: 'segment_id required' }, { status: 400 });
         const [seg] = await db.select({ id: segments.id }).from(segments)
-          .where(and(eq(segments.id, segId), eq(segments.tenantId, ctx.tenantId)))
+          .where(and(eq(segments.id, segId), eq(segments.tenantId, ctx.tenantId), isNull(segments.deletedAt)))
           .limit(1);
         if (!seg) return NextResponse.json({ error: 'Segment not found' }, { status: 404 });
         const memberValues = validIds.map(entityId => ({ segmentId: segId, entityId, tenantId: ctx.tenantId }));
