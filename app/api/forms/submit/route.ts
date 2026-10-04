@@ -15,6 +15,8 @@ import { fireWebhooks } from '@/lib/webhooks';
 import { syncCalculatedFields } from '@/lib/formula/sync';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { findMissingRequiredFields } from '@/lib/forms/field-shape';
+import { isEntityId } from '@/lib/id';
+import { clientDbErrorResponse } from '@/lib/api/db-client-error';
 
 const formSubmitSchema = z.object({
   form_id: z.string().min(1, 'Form ID is required'),
@@ -84,6 +86,17 @@ export async function POST(req: NextRequest) {
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;
     const { form_id, data: d1, values: d2 } = v;
+
+    // #2288: form_id is cast to a Postgres uuid by the query below, and a
+    // shape that cannot name one (e.g. "abc", quoted or path-ish strings)
+    // raised `invalid input syntax for type uuid` and surfaced as a 500 on
+    // this public endpoint. isEntityId accepts classic uuids AND the app's
+    // legacy 5/6-prefixed seeded ids (same permissive shape Postgres
+    // itself accepts — no RFC-9562 version/variant check, see #2286).
+    if (!isEntityId(form_id)) {
+      return NextResponse.json({ error: 'Invalid form id' }, { status: 400 });
+    }
+
     const rawFormData = Object.keys(d1).length > 0 ? d1 : d2;
     const formData = sanitizeFormData(rawFormData as Record<string, unknown>);
 
@@ -281,6 +294,11 @@ export async function POST(req: NextRequest) {
  
  
   } catch (err) {
+    // #2288: residual DB client errors (22P02 uuid cast, FK, unique, check)
+    // map to 4xx via the shared classifier before this route's literal 500;
+    // only the message is exposed, never the driver/SQL detail.
+    const clientErr = clientDbErrorResponse(err, 'POST');
+    if (clientErr) return clientErr;
     void logError({ error: err, context: 'forms/submit' });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
