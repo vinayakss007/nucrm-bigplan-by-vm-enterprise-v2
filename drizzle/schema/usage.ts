@@ -44,7 +44,10 @@ export const planLimits = pgTable('plan_limits', {
   maxFileUploadBytes: integer('max_file_upload_bytes'),
   isActive: boolean('is_active').default(true),
   ...utils.lifecycle(),
-});
+}, (table) => ({
+  // #2255 live-DB mirror
+  drz2255_plan_limits_plan_id_unique: uniqueIndex('plan_limits_plan_id_unique').on(table.planId),
+}));
 
 // ── 3. USAGE SNAPSHOTS ────────────────────────────────
 export const usageSnapshots = pgTable('usage_snapshots', {

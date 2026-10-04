@@ -63,8 +63,13 @@ export const companies = pgTable('companies', {
     assignedIdx: index('idx_companies_assigned').on(table.assignedTo),
     metadataGinIdx: utils.metadataIdx(table),
     activeIdx: utils.activeIdx(table),
-    searchIdx: index('idx_companies_search').using('gin', sql`to_tsvector('english', ${table.name} || ' ' || COALESCE(${table.domain}, ''))`),
-  };
+    // #2255: idx_companies_search (tsvector GIN) was never created live; the DB
+    // uses idx_companies_name_trgm (gin_trgm_ops) for search instead.
+  
+  drz2255_idx_companies_tenant_created: index('idx_companies_tenant_created').on(table.tenantId, table.createdAt.desc()).where(sql`(deleted_at IS NULL)`),
+  drz2255_idx_companies_industry: index('idx_companies_industry').on(table.tenantId, table.industry).where(sql`(deleted_at IS NULL)`),
+  drz2255_idx_companies_created_by: index('idx_companies_created_by').on(table.createdBy),
+  drz2255_idx_companies_name_trgm: index('idx_companies_name_trgm').using('gin', sql`name gin_trgm_ops`),};
 });
 
 export const contacts = pgTable('contacts', {
@@ -138,12 +143,23 @@ export const contacts = pgTable('contacts', {
     tenantStatusIdx: index('idx_contacts_tenant_status').on(table.tenantId, table.leadStatus),
     assignedIdx: index('idx_contacts_assigned').on(table.assignedTo),
     tenantCreatedIdx: index('idx_contacts_tenant_created').on(table.tenantId, table.createdAt),
-    tenantArchivedCreatedIdx: index('idx_contacts_tenant_archived_created').on(table.tenantId, table.isArchived, table.createdAt).where(sql`deleted_at IS NULL`),
+    // #2255: idx_contacts_tenant_archived_created was never created live;
+    // idx_contacts_tenant_created covers the hot archive list path.
     createdByIdx: index('idx_contacts_created_by').on(table.createdBy),
     activeIdx: utils.activeIdx(table),
     metadataGinIdx: utils.metadataIdx(table),
-    searchIdx: index('idx_contacts_search').using('gin', sql`to_tsvector('english', ${table.firstName} || ' ' || COALESCE(${table.lastName}, '') || ' ' || COALESCE(${table.email}, ''))`),
-  };
+    // #2255: idx_contacts_search (tsvector GIN) was never created live; the DB
+    // uses *_trgm gin indexes for search instead.
+  
+  drz2255_idx_contacts_email_lower: index('idx_contacts_email_lower').on(sql`lower(email)`).where(sql`((deleted_at IS NULL) AND (email IS NOT NULL))`),
+  drz2255_idx_contacts_status: index('idx_contacts_status').on(table.tenantId, table.leadStatus).where(sql`(deleted_at IS NULL)`),
+  drz2255_idx_contacts_lifecycle: index('idx_contacts_lifecycle').on(table.tenantId, table.lifecycleStage).where(sql`(deleted_at IS NULL)`),
+  drz2255_idx_contacts_team: index('idx_contacts_team').on(table.tenantId, table.teamId).where(sql`(team_id IS NOT NULL)`),
+  drz2255_idx_contacts_original_owner_id: index('idx_contacts_original_owner_id').on(table.originalOwnerId),
+  drz2255_idx_contacts_first_name_trgm: index('idx_contacts_first_name_trgm').using('gin', sql`first_name gin_trgm_ops`),
+  drz2255_idx_contacts_last_name_trgm: index('idx_contacts_last_name_trgm').using('gin', sql`last_name gin_trgm_ops`),
+  drz2255_idx_contacts_email_trgm: index('idx_contacts_email_trgm').using('gin', sql`email gin_trgm_ops`),
+  drz2255_idx_contacts_phone_trgm: index('idx_contacts_phone_trgm').using('gin', sql`phone gin_trgm_ops`),};
 });
 
 // ── 2. LEADS MODULE (Raw/Unqualified) ─────────────────
@@ -246,7 +262,20 @@ export const leads = pgTable('leads', {
     productIdx: index('idx_leads_tenant_product').on(table.tenantId, table.productId),
     metadataGinIdx: utils.metadataIdx(table),
     activeIdx: utils.activeIdx(table),
-  };
+  
+  drz2255_idx_leads_email_lower: index('idx_leads_email_lower').on(sql`lower(email)`).where(sql`((deleted_at IS NULL) AND (email IS NOT NULL))`),
+  drz2255_idx_leads_source: index('idx_leads_source').on(table.tenantId, table.source).where(sql`(deleted_at IS NULL)`),
+  drz2255_idx_leads_requested_product: index('idx_leads_requested_product').on(table.tenantId, table.requestedProductId).where(sql`(requested_product_id IS NOT NULL)`),
+  drz2255_idx_leads_requested_service: index('idx_leads_requested_service').on(table.tenantId, table.requestedServiceId).where(sql`(requested_service_id IS NOT NULL)`),
+  drz2255_idx_leads_team: index('idx_leads_team').on(table.tenantId, table.teamId).where(sql`(team_id IS NOT NULL)`),
+  drz2255_idx_leads_company_id: index('idx_leads_company_id').on(table.companyId),
+  drz2255_idx_leads_converted_contact_id: index('idx_leads_converted_contact_id').on(table.convertedContactId),
+  drz2255_idx_leads_created_by: index('idx_leads_created_by').on(table.createdBy),
+  drz2255_idx_leads_owner_id: index('idx_leads_owner_id').on(table.ownerId),
+  drz2255_idx_leads_first_name_trgm: index('idx_leads_first_name_trgm').using('gin', sql`first_name gin_trgm_ops`),
+  drz2255_idx_leads_last_name_trgm: index('idx_leads_last_name_trgm').using('gin', sql`last_name gin_trgm_ops`),
+  drz2255_idx_leads_email_trgm: index('idx_leads_email_trgm').using('gin', sql`email gin_trgm_ops`),
+  drz2255_idx_leads_phone_trgm: index('idx_leads_phone_trgm').using('gin', sql`phone gin_trgm_ops`),};
 });
 
 // ── 3. SALES MODULE ───────────────────────────────────
@@ -314,7 +343,14 @@ export const deals = pgTable('deals', {
     wonAtIdx: index('idx_deals_won_at').on(table.tenantId, table.wonAt),
     activeIdx: utils.activeIdx(table),
     metadataGinIdx: utils.metadataIdx(table),
-  };
+  
+  drz2255_idx_deals_pipeline: index('idx_deals_pipeline').on(table.tenantId, table.pipelineId).where(sql`(deleted_at IS NULL)`),
+  drz2255_idx_deals_amount: index('idx_deals_amount').on(table.tenantId, sql`((amount)::numeric)`).where(sql`((deleted_at IS NULL) AND (amount IS NOT NULL))`),
+  drz2255_idx_deals_custom_fields_g: index('idx_deals_custom_fields_g').using('gin', table.customFields),
+  drz2255_idx_deals_company_id: index('idx_deals_company_id').on(table.companyId),
+  drz2255_idx_deals_created_by: index('idx_deals_created_by').on(table.createdBy),
+  drz2255_idx_deals_pipeline_id: index('idx_deals_pipeline_id').on(table.pipelineId),
+  drz2255_idx_deals_title_trgm: index('idx_deals_title_trgm').using('gin', sql`title gin_trgm_ops`),};
 });
 
 // ── 4. EXTENSIBILITY (CUSTOM FIELDS & FORMS) ──────────
@@ -363,7 +399,8 @@ export const forms = pgTable('forms', {
     tenantIdx: utils.tenantIdx(table),
     activeIdx: utils.activeIdx(table),
     slugIdx: uniqueIndex('idx_forms_slug').on(table.slug),
-  };
+  
+  drz2255_idx_forms_created_by: index('idx_forms_created_by').on(table.createdBy),};
 });
 
 // ── 5. PRODUCTS & QUOTES ─────────────────────────────
@@ -382,7 +419,8 @@ export const products = pgTable('products', {
     tenantIdx: utils.tenantIdx(table),
     metadataGinIdx: utils.metadataIdx(table),
     activeIdx: utils.activeIdx(table),
-  };
+  
+  drz2255_idx_products_created_by: index('idx_products_created_by').on(table.createdBy),};
 });
 
 export const quotes = pgTable('quotes', {
@@ -419,7 +457,11 @@ export const quotes = pgTable('quotes', {
     dealIdx: index('idx_quotes_deal').on(table.dealId),
     metadataGinIdx: utils.metadataIdx(table),
     activeIdx: utils.activeIdx(table),
-  };
+  
+  drz2255_idx_quotes_company: index('idx_quotes_company').on(table.tenantId, table.companyId),
+  drz2255_idx_quotes_company_id: index('idx_quotes_company_id').on(table.companyId),
+  drz2255_idx_quotes_contact_id: index('idx_quotes_contact_id').on(table.contactId),
+  drz2255_idx_quotes_created_by: index('idx_quotes_created_by').on(table.createdBy),};
 });
 
 export const quoteLineItems = pgTable('quote_line_items', {
@@ -447,7 +489,9 @@ export const quoteLineItems = pgTable('quote_line_items', {
   return {
     quoteIdx: index('idx_quote_line_items_quote').on(table.quoteId),
     tenantIdx: utils.tenantIdx(table),
-  };
+  
+  drz2255_idx_quote_line_items_product_id: index('idx_quote_line_items_product_id').on(table.productId),
+  drz2255_idx_quote_line_items_service_id: index('idx_quote_line_items_service_id').on(table.serviceId),};
 });
 
 // ── 24. PRICE BOOKS ──────────────────────────────────
@@ -464,7 +508,8 @@ export const priceBooks = pgTable('price_books', {
 }, (table) => {
   return {
     tenantIdx: utils.tenantIdx(table).where(sql`is_active = true`),
-  };
+  
+  drz2255_idx_price_books_created_by: index('idx_price_books_created_by').on(table.createdBy),};
 });
 
 export const priceBookEntries = pgTable('price_book_entries', {
@@ -563,7 +608,8 @@ export const notes = pgTable('notes', {
     entityIdx: index('idx_notes_entity').on(table.entityType, table.entityId, table.createdAt),
     tenantIdx: utils.tenantIdx(table),
     activeIdx: utils.activeIdx(table),
-  };
+  
+  drz2255_idx_notes_created_by: index('idx_notes_created_by').on(table.createdBy),};
 });
 
 // ── 8. DEAL PRODUCTS (Products attached to deals) ──────
@@ -637,7 +683,8 @@ export const contactLifecycleHistory = pgTable('contact_lifecycle_history', {
     contactIdx: index('idx_contact_lifecycle_history_contact').on(table.contactId, table.changedAt),
     tenantIdx: utils.tenantIdx(table),
     metadataGinIdx: utils.metadataIdx(table),
-  };
+  
+  drz2255_idx_contact_lifecycle_history_changed_by: index('idx_contact_lifecycle_history_changed_by').on(table.changedBy),};
 });
 
 // ── 12. CONTACT MERGE HISTORY ─────────────────────────
@@ -658,7 +705,8 @@ export const contactMergeHistory = pgTable('contact_merge_history', {
     primaryIdx: index('idx_contact_merge_history_primary').on(table.primaryContactId, table.mergedAt),
     mergedIdx: index('idx_contact_merge_history_merged').on(table.mergedContactId, table.mergedAt),
     metadataGinIdx: utils.metadataIdx(table),
-  };
+  
+  drz2255_idx_contact_merge_history_merged_by: index('idx_contact_merge_history_merged_by').on(table.mergedBy),};
 });
 
 // ── 13. CONTACT SCORES ─────────────────────────────────
@@ -677,7 +725,8 @@ export const contactScores = pgTable('contact_scores', {
   return {
     tenantIdx: utils.tenantIdx(table),
     contactIdx: index('idx_contact_scores_contact').on(table.contactId),
-  };
+  
+  drz2255_contact_scores_contact_id_unique: uniqueIndex('contact_scores_contact_id_unique').on(table.contactId),};
 });
 
 // ── 14. DEAL FORECASTS ────────────────────────────────
@@ -719,7 +768,8 @@ export const fileAttachments = pgTable('file_attachments', {
   return {
     entityIdx: index('idx_file_attachments_entity').on(table.entityType, table.entityId),
     tenantIdx: utils.tenantIdx(table),
-  };
+  
+  drz2255_idx_file_attachments_uploaded_by: index('idx_file_attachments_uploaded_by').on(table.uploadedBy),};
 });
 
 // ── 16. LEAD ACTIVITIES ──────────────────────────────
@@ -745,7 +795,12 @@ export const leadActivities = pgTable('lead_activities', {
     tenantIdx: utils.tenantIdx(table),
     leadIdx: index('idx_lead_activities_lead').on(table.leadId),
     metadataGinIdx: utils.metadataIdx(table),
-  };
+  
+  drz2255_idx_lead_activities_tenant_created: index('idx_lead_activities_tenant_created').on(table.tenantId, table.createdAt.desc()),
+  drz2255_idx_lead_activities_type: index('idx_lead_activities_type').on(table.tenantId, table.activityType, table.createdAt.desc()),
+  drz2255_idx_lead_activities_lead_id: index('idx_lead_activities_lead_id').on(table.leadId),
+  drz2255_idx_lead_activities_performed_by: index('idx_lead_activities_performed_by').on(table.performedBy),
+  drz2255_idx_lead_activities_user_id: index('idx_lead_activities_user_id').on(table.userId),};
 });
 
 // ── 10. CONTACT EMAILS ────────────────────────────────
@@ -793,7 +848,8 @@ export const leadOffers = pgTable('lead_offers', {
     statusIdx: index('idx_lead_offers_tenant_status').on(table.tenantId, table.status),
     metadataGinIdx: utils.metadataIdx(table),
     activeIdx: utils.activeIdx(table),
-  };
+  
+  drz2255_idx_lead_offers_created_by: index('idx_lead_offers_created_by').on(table.createdBy),};
 });
 
 // ── 18. PIPELINE STAGES ──────────────────────────────
@@ -876,7 +932,8 @@ export const callNotes = pgTable('call_notes', {
   return {
     contactIdx: index('idx_call_notes_contact').on(table.tenantId, table.contactId, table.createdAt),
     tenantIdx: utils.tenantIdx(table),
-  };
+  
+  drz2255_idx_call_notes_user_id: index('idx_call_notes_user_id').on(table.userId),};
 });
 
 export const callRecordings = pgTable('call_recordings', {
@@ -893,7 +950,8 @@ export const callRecordings = pgTable('call_recordings', {
 }, (table) => {
   return {
     tenantIdx: utils.tenantIdx(table),
-  };
+  
+  drz2255_idx_call_recordings_contact_id: index('idx_call_recordings_contact_id').on(table.contactId),};
 });
 
 export const conversationMetrics = pgTable('conversation_metrics', {
@@ -964,7 +1022,8 @@ export const savedViews = pgTable('saved_views', {
   return {
     tenantIdx: utils.tenantIdx(table),
     entityTypeTenantIdx: index('idx_saved_views_entity_tenant').on(table.entityType, table.tenantId),
-  };
+  
+  drz2255_idx_saved_views_user_id: index('idx_saved_views_user_id').on(table.userId),};
 });
 
 // ── 24b. REVENUE FORECAST SUMMARY ─────────────────────
@@ -1015,5 +1074,6 @@ export const followUps = pgTable('follow_ups', {
     contactIdx: index('idx_follow_ups_contact').on(table.contactId),
     dealIdx: index('idx_follow_ups_deal').on(table.dealId),
     activeIdx: utils.activeIdx(table),
-  };
+  
+  drz2255_idx_follow_ups_created_by: index('idx_follow_ups_created_by').on(table.createdBy),};
 });

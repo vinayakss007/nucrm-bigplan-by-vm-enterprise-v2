@@ -27,7 +27,9 @@ export const productTemplates = pgTable('product_templates', {
   return {
     slugIdx: index('idx_product_templates_slug').on(table.slug),
     statusIdx: index('idx_product_templates_status').on(table.status),
-  };
+  
+  drz2255_product_templates_slug_unique: uniqueIndex('product_templates_slug_unique').on(table.slug),
+  drz2255_idx_product_templates_created_by: index('idx_product_templates_created_by').on(table.createdBy),};
 });
 
 // ── 2. TENANT TEMPLATE ASSIGNMENTS ────────────────────
@@ -42,5 +44,6 @@ export const tenantTemplates = pgTable('tenant_templates', {
   return {
     uniqueAssignment: uniqueIndex('idx_tenant_templates_unique').on(table.tenantId, table.templateId),
     tenantIdx: utils.tenantIdx(table),
-  };
+  
+  drz2255_idx_tenant_templates_applied_by: index('idx_tenant_templates_applied_by').on(table.appliedBy),};
 });

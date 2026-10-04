@@ -23,6 +23,11 @@ export const visitors = pgTable('visitors', {
   totalPageViews: integer('total_page_views').default(0).notNull(),
   score: integer('score').default(0).notNull(),
   ...utils.lifecycle(),
+}, (table) => {
+  return {
+    // #2255 live-DB mirror
+    drz2255_idx_visitors_tenant_id: index('idx_visitors_tenant_id').on(table.tenantId),
+  };
 });
 
 export const pageViews = pgTable('page_views', {
@@ -37,7 +42,9 @@ export const pageViews = pgTable('page_views', {
   ...utils.lifecycle(),
 }, (table) => {
   return {
-    tenantIdx: utils.tenantIdx(table),
+    // #2255: live DB created idx_page_views_tenant_id (hand-written migration),
+    // not the utils.tenantIdx() name — mirror the live name.
+    tenantIdx: index('idx_page_views_tenant_id').on(table.tenantId),
     visitorIdx: index('idx_page_views_visitor').on(table.visitorId),
   };
 });

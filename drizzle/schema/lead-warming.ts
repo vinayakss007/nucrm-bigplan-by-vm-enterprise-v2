@@ -122,7 +122,8 @@ export const leadWarmingCampaigns = pgTable('lead_warming_campaigns', {
   tenantIdx: utils.tenantIdx(table),
   statusIdx: index('idx_lead_warming_campaigns_status').on(table.tenantId, table.status),
   activeIdx: index('idx_lead_warming_campaigns_active').on(table.status).where(sql`status = 'active'`),
-}));
+
+  drz2255_idx_lead_warming_campaigns_created_by: index('idx_lead_warming_campaigns_created_by').on(table.createdBy),}));
 
 // ── 3. SENT MESSAGES LOG ──────────────────────────────────────────────────
 // Every message sent by the warming system
@@ -167,7 +168,8 @@ export const leadWarmingMessages = pgTable('lead_warming_messages', {
   contactIdx: index('idx_lead_warming_msg_contact').on(table.contactId, table.createdAt),
   statusIdx: index('idx_lead_warming_msg_status').on(table.status, table.sentAt),
   channelIdx: index('idx_lead_warming_msg_channel').on(table.tenantId, table.channel, table.sentAt),
-}));
+
+  drz2255_idx_lead_warming_messages_event_id: index('idx_lead_warming_messages_event_id').on(table.eventId),}));
 
 // ── 4. REPLY ANALYSIS (AI-POWERED) ───────────────────────────────────────
 // When a lead replies, AI classifies intent + sentiment
@@ -222,7 +224,8 @@ export const leadWarmingReplies = pgTable('lead_warming_replies', {
   intentIdx: index('idx_lead_warming_replies_intent').on(table.tenantId, table.intent),
   unanalyzedIdx: index('idx_lead_warming_replies_unanalyzed').on(table.aiAnalyzed).where(sql`ai_analyzed = false`),
   positiveIdx: index('idx_lead_warming_replies_positive').on(table.tenantId, table.intent).where(sql`intent = 'interested'`),
-}));
+
+  drz2255_idx_lead_warming_replies_campaign_id: index('idx_lead_warming_replies_campaign_id').on(table.campaignId),}));
 
 // ── 5. CONTACT WARMING SCHEDULE ───────────────────────────────────────────
 // Per-contact schedule tracking (prevent over-messaging)

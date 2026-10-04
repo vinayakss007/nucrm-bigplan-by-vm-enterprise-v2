@@ -15,7 +15,7 @@
  * Soft delete via `deletedAt`. The S3 object is removed eagerly on
  * delete; the metadata row is kept so audit trails stay intact.
  */
-import { pgTable, text, index, uuid, bigint } from 'drizzle-orm/pg-core';
+import {pgTable, text, index, uuid, bigint, uniqueIndex} from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { users } from './core';
 import * as utils from './utils';
@@ -67,9 +67,10 @@ export const documents = pgTable(
     tenantIdx: utils.tenantIdx(table),
     activeIdx: utils.activeIdx(table),
     metadataGinIdx: utils.metadataIdx(table),
-    linkIdx: index('idx_files_link').on(table.linkedEntityType, table.linkedEntityId),
-    uploaderIdx: index('idx_files_uploader').on(table.uploadedBy),
-  }),
+    linkIdx: index('idx_storage_documents_link').on(table.linkedEntityType, table.linkedEntityId),
+    uploaderIdx: index('idx_storage_documents_uploader').on(table.uploadedBy),
+  
+  drz2255_storage_documents_storage_key_unique: uniqueIndex('storage_documents_storage_key_unique').on(table.storageKey),}),
 );
 
 // ── FILE UPLOADS ──────────────────────────────────────
@@ -89,7 +90,8 @@ export const fileUploads = pgTable('file_uploads', {
     entityIdx: index('idx_file_uploads_entity').on(table.entityType, table.entityId),
     tenantIdx: utils.tenantIdx(table),
     activeIdx: utils.activeIdx(table),
-  };
+  
+  drz2255_idx_file_uploads_uploaded_by: index('idx_file_uploads_uploaded_by').on(table.uploadedBy),};
 });
 
 export type Document = typeof documents.$inferSelect;

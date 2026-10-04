@@ -3,7 +3,7 @@
  * Copyright (c) 2026 abetworks.in. All Rights Reserved.
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
-import { pgTable, uuid, text, jsonb, timestamp, boolean, integer, index, bigint } from 'drizzle-orm/pg-core';
+import {pgTable, uuid, text, jsonb, timestamp, boolean, integer, index, bigint, uniqueIndex} from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { tenants, users, apiKeys } from './core';
 import * as utils from './utils';
@@ -19,7 +19,10 @@ export const systemSettings = pgTable('system_settings', {
   value: jsonb('value').notNull(),
   description: text('description'),
   ...utils.lifecycle(),
-});
+}, (table) => ({
+  // #2255 live-DB mirror
+  drz2255_system_settings_key_unique: uniqueIndex('system_settings_key_unique').on(table.key),
+}));
 
 // ── 2. BACKUP & RESTORE ───────────────────────────────
 // #1337/#1378: `tenantBackups` (tenant_backups) and `tenantRestores`
@@ -44,7 +47,8 @@ export const dashboards = pgTable('dashboards', {
   return {
     tenantIdx: utils.tenantIdx(table),
     activeIdx: utils.activeIdx(table),
-  };
+  
+  drz2255_idx_dashboards_created_by: index('idx_dashboards_created_by').on(table.createdBy),};
 });
 
 export const savedReports = pgTable('saved_reports', {
@@ -60,7 +64,8 @@ export const savedReports = pgTable('saved_reports', {
 }, (table) => {
   return {
     tenantIdx: utils.tenantIdx(table),
-  };
+  
+  drz2255_idx_saved_reports_created_by: index('idx_saved_reports_created_by').on(table.createdBy),};
 });
 
 // ── 4. ANNOUNCEMENTS ─────────────────────────────────
@@ -79,7 +84,8 @@ export const announcements = pgTable('announcements', {
   return {
     activeTimeIdx: index('idx_announcements_active_time').on(table.isActive, table.startsAt, table.endsAt),
     activeIdx: utils.activeIdx(table),
-  };
+  
+  drz2255_idx_announcements_created_by: index('idx_announcements_created_by').on(table.createdBy),};
 });
 
 // ── 5. TENANT BACKUP RECORDS ────────────────────────
@@ -107,7 +113,8 @@ export const tenantBackupRecords = pgTable('tenant_backup_records', {
     tenantIdx: index('idx_tenant_backup_tenant').on(table.tenantId, table.status),
     statusIdx: index('idx_tenant_backup_status').on(table.status, table.createdAt),
     expiresIdx: index('idx_tenant_backup_expires').on(table.expiresAt).where(sql`status = 'completed'`),
-  };
+  
+  drz2255_idx_tenant_backup_records_initiated_by: index('idx_tenant_backup_records_initiated_by').on(table.initiatedBy),};
 });
 
 // ── 6. TENANT RESTORE RECORDS ────────────────────────
@@ -128,7 +135,8 @@ export const tenantRestoreRecords = pgTable('tenant_restore_records', {
   return {
     tenantIdx: index('idx_tenant_restore_tenant').on(table.tenantId, table.status),
     backupIdx: index('idx_tenant_restore_backup').on(table.backupId),
-  };
+  
+  drz2255_idx_tenant_restore_records_initiated_by: index('idx_tenant_restore_records_initiated_by').on(table.initiatedBy),};
 });
 
 // ── 7. BACKUP ALERTS ────────────────────────────────
@@ -171,7 +179,8 @@ export const backupRecords = pgTable('backup_records', {
 }, (table) => {
   return {
     statusIdx: index('idx_backup_records_status').on(table.status, table.completedAt),
-  };
+  
+  drz2255_idx_backup_records_created_by: index('idx_backup_records_created_by').on(table.createdBy),};
 });
 
 // ── 8. BACKUP SCHEDULES ─────────────────────────────
@@ -210,7 +219,8 @@ export const criticalDataBackups = pgTable('critical_data_backups', {
     retainIdx: index('idx_critical_backups_retain').on(table.retainedUntil),
     recordIdx: index('idx_critical_backups_record').on(table.tableName, table.recordId),
     canRestoreIdx: index('idx_critical_backups_can_restore').on(table.canRestore, table.backedUpAt),
-  };
+  
+  drz2255_idx_critical_data_backups_created_by: index('idx_critical_data_backups_created_by').on(table.createdBy),};
 });
 
 // ── 10. HEALTH CHECKS ─────────────────────────────────
@@ -243,7 +253,8 @@ export const reportExecutions = pgTable('report_executions', {
   return {
     tenantIdx: utils.tenantIdx(table),
     metadataGinIdx: utils.metadataIdx(table),
-  };
+  
+  drz2255_idx_report_executions_user_id: index('idx_report_executions_user_id').on(table.userId),};
 });
 
 // ── 12. RESTORE SNAPSHOTS ────────────────────────────
@@ -275,7 +286,8 @@ export const selectiveRestoreAuditLog = pgTable('selective_restore_audit_log', {
 }, (table) => {
   return {
     tenantIdx: utils.tenantIdx(table),
-  };
+  
+  drz2255_idx_selective_restore_audit_log_performed_by: index('idx_selective_restore_audit_log_performed_by').on(table.performedBy),};
 });
 
 // ── 14. SELECTIVE RESTORE LOGS ────────────────────────
@@ -346,7 +358,8 @@ export const dashboardTemplates = pgTable('dashboard_templates', {
 }, (table) => {
   return {
     activeIdx: utils.activeIdx(table),
-  };
+  
+  drz2255_dashboard_templates_slug_unique: uniqueIndex('dashboard_templates_slug_unique').on(table.slug),};
 });
 
 export const reportTemplates = pgTable('report_templates', {
@@ -362,7 +375,8 @@ export const reportTemplates = pgTable('report_templates', {
 }, (table) => {
   return {
     activeIdx: utils.activeIdx(table),
-  };
+  
+  drz2255_report_templates_slug_unique: uniqueIndex('report_templates_slug_unique').on(table.slug),};
 });
 
 

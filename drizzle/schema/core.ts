@@ -58,7 +58,11 @@ export const tenants = pgTable('tenants', {
     subdomainIdx: index('idx_tenants_subdomain').on(table.subdomain),
     statusIdx: index('idx_tenants_status').on(table.status),
     metadataGinIdx: utils.metadataIdx(table),
-  };
+  
+  drz2255_tenants_slug_unique: uniqueIndex('tenants_slug_unique').on(table.slug),
+  drz2255_tenants_custom_domain_unique: uniqueIndex('tenants_custom_domain_unique').on(table.customDomain),
+  drz2255_idx_tenants_short_code: uniqueIndex('idx_tenants_short_code').on(table.shortCode).where(sql`(short_code IS NOT NULL)`),
+  drz2255_idx_tenants_owner_id: index('idx_tenants_owner_id').on(table.ownerId),};
 });
 
 // ── 2. IDENTITY (USERS & AUTH) ────────────────────────
@@ -112,7 +116,8 @@ export const users = pgTable('users', {
     emailIdx: index('idx_users_email').on(table.email),
     metadataGinIdx: utils.metadataIdx(table),
     activeIdx: utils.activeIdx(table),
-  };
+  
+  drz2255_users_email_unique: uniqueIndex('users_email_unique').on(table.email),};
 });
 
 export const refreshTokens = pgTable('refresh_tokens', {
@@ -121,7 +126,11 @@ export const refreshTokens = pgTable('refresh_tokens', {
   token: text('token').notNull().unique(),
   expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
   ...utils.lifecycle(),
-});
+}, (table) => ({
+  // #2255 live-DB mirror
+  drz2255_refresh_tokens_token_unique: uniqueIndex('refresh_tokens_token_unique').on(table.token),
+  drz2255_idx_refresh_tokens_user_id: index('idx_refresh_tokens_user_id').on(table.userId),
+}));
 
 export const passwordResets = pgTable('password_resets', {
   id: utils.pk(),
@@ -129,7 +138,11 @@ export const passwordResets = pgTable('password_resets', {
   token: text('token').notNull().unique(),
   expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
   ...utils.lifecycle(),
-});
+}, (table) => ({
+  // #2255 live-DB mirror
+  drz2255_password_resets_token_unique: uniqueIndex('password_resets_token_unique').on(table.token),
+  drz2255_idx_password_resets_user_id: index('idx_password_resets_user_id').on(table.userId),
+}));
 
 // ── 3. ISOLATION & ACCESS ─────────────────────────────
 export const tenantMembers = pgTable('tenant_members', {
@@ -151,7 +164,9 @@ export const tenantMembers = pgTable('tenant_members', {
     tenantIdx: utils.tenantIdx(table),
     userIdx: index('idx_tenant_members_user').on(table.userId),
     tenantUserIdx: uniqueIndex('idx_tenant_members_tenant_user').on(table.tenantId, table.userId),
-  };
+  
+  drz2255_idx_tenant_members_invited_by: index('idx_tenant_members_invited_by').on(table.invitedBy),
+  drz2255_idx_tenant_members_role_id: index('idx_tenant_members_role_id').on(table.roleId),};
 });
 
 export const roles = pgTable('roles', {
@@ -183,7 +198,9 @@ export const sessions = pgTable('sessions', {
 }, (table) => {
   return {
     tokenIdx: index('idx_sessions_token').on(table.tokenHash),
-  };
+  
+  drz2255_sessions_token_hash_unique: uniqueIndex('sessions_token_hash_unique').on(table.tokenHash),
+  drz2255_idx_sessions_user_id: index('idx_sessions_user_id').on(table.userId),};
 });
 
 export const impersonationSessions = pgTable('impersonation_sessions', {
@@ -199,7 +216,9 @@ export const impersonationSessions = pgTable('impersonation_sessions', {
 }, (table) => {
   return {
     activeIdx: index('idx_impersonation_sessions_active').on(table.impersonatorId, table.startedAt).where(sql`ended_at IS NULL`),
-  };
+  
+  drz2255_idx_impersonation_sessions_target_user_id: index('idx_impersonation_sessions_target_user_id').on(table.targetUserId),
+  drz2255_idx_impersonation_sessions_tenant_id: index('idx_impersonation_sessions_tenant_id').on(table.tenantId),};
 });
 
 export const fieldPermissions = pgTable('field_permissions', {
@@ -230,7 +249,8 @@ export const recordPermissions = pgTable('record_permissions', {
   return {
     entityIdx: index('idx_record_permissions_entity').on(table.tenantId, table.entityType, table.entityId),
     roleIdx: index('idx_record_permissions_role').on(table.tenantId, table.roleId),
-  };
+  
+  drz2255_idx_record_permissions_granted_by: index('idx_record_permissions_granted_by').on(table.grantedBy),};
 });
 
 // ── 4B. APPROVAL WORKFLOWS ────────────────────────────
@@ -258,7 +278,10 @@ export const approvalRequests = pgTable('approval_requests', {
     tenantIdx: utils.tenantIdx(table),
     entityIdx: index('idx_approval_requests_entity').on(table.tenantId, table.entityType, table.entityId),
     statusIdx: index('idx_approval_requests_status').on(table.tenantId, table.status),
-  };
+  
+  drz2255_idx_approval_requests_approved_by: index('idx_approval_requests_approved_by').on(table.approvedBy),
+  drz2255_idx_approval_requests_rejected_by: index('idx_approval_requests_rejected_by').on(table.rejectedBy),
+  drz2255_idx_approval_requests_requested_by: index('idx_approval_requests_requested_by').on(table.requestedBy),};
 });
 
 // ── 5. API & INFRASTRUCTURE ───────────────────────────
@@ -281,7 +304,9 @@ export const apiKeys = pgTable('api_keys', {
   return {
     tenantIdx: utils.tenantIdx(table),
     metadataGinIdx: utils.metadataIdx(table),
-  };
+  
+  drz2255_api_keys_key_hash_unique: uniqueIndex('api_keys_key_hash_unique').on(table.keyHash),
+  drz2255_idx_api_keys_user_id: index('idx_api_keys_user_id').on(table.userId),};
 });
 
 export const apiKeyUsage = pgTable('api_key_usage', {
@@ -297,8 +322,10 @@ export const apiKeyUsage = pgTable('api_key_usage', {
 }, (table) => {
   return {
     tenantIdx: index('idx_api_key_usage_tenant').on(table.tenantId),
-    createdAtIdx: index('idx_api_key_usage_created_at').on(table.createdAt),
-  };
+    createdAtIdx: index('idx_api_key_usage_created').on(table.createdAt),
+  
+  drz2255_idx_api_key_usage_api_key_id: index('idx_api_key_usage_api_key_id').on(table.apiKeyId),
+  drz2255_idx_api_key_usage_tenant_id: index('idx_api_key_usage_tenant_id').on(table.tenantId),};
 });
 
 // ── 6. LOGS & NOTIFICATIONS ───────────────────────────
@@ -327,7 +354,11 @@ export const auditLogs = pgTable('audit_logs', {
     tenantIdx: utils.tenantIdx(table),
     entityIdx: index('idx_audit_logs_entity').on(table.entityType, table.entityId),
     metadataGinIdx: utils.metadataIdx(table),
-  };
+  
+  drz2255_idx_audit_logs_tenant_created: index('idx_audit_logs_tenant_created').on(table.tenantId, table.createdAt.desc()),
+  drz2255_idx_audit_logs_user: index('idx_audit_logs_user').on(table.tenantId, table.userId, table.createdAt.desc()),
+  drz2255_idx_audit_logs_resource: index('idx_audit_logs_resource').on(table.tenantId, table.entityType, table.entityId, table.createdAt.desc()),
+  drz2255_idx_audit_logs_action: index('idx_audit_logs_action').on(table.tenantId, table.action, table.createdAt.desc()),};
 });
 
 export const notifications = pgTable('notifications', {
@@ -348,7 +379,9 @@ export const notifications = pgTable('notifications', {
     // Hot path: widget filters (tenant, user, unread) + sorts createdAt DESC.
     tenantUserCreatedIdx: index('idx_notifications_tenant_user_created').on(table.tenantId, table.userId, table.createdAt),
     metadataGinIdx: utils.metadataIdx(table),
-  };
+  
+  drz2255_idx_notifications_unread: index('idx_notifications_unread').on(table.userId, table.tenantId).where(sql`(read_at IS NULL)`),
+  drz2255_idx_notifications_recent: index('idx_notifications_recent').on(table.userId, table.createdAt.desc()).where(sql`(read_at IS NULL)`),};
 });
 
 export const invitations = pgTable('invitations', {
@@ -365,7 +398,8 @@ export const invitations = pgTable('invitations', {
   return {
     tenantIdx: utils.tenantIdx(table),
     tenantEmailIdx: uniqueIndex('idx_invitations_tenant_email').on(table.tenantId, table.email),
-  };
+  
+  drz2255_invitations_token_unique: uniqueIndex('invitations_token_unique').on(table.token),};
 });
 
 // ── 7. FEATURE REGISTRY ───────────────────────────────
@@ -383,7 +417,8 @@ export const featureRegistry = pgTable('feature_registry', {
   }, (table) => {
     return {
       enabledIdx: index('idx_feature_registry_enabled').on(table.enabled),
-    };
+    
+    drz2255_feature_registry_feature_name_unique: uniqueIndex('feature_registry_feature_name_unique').on(table.featureName),};
   });
 
 // ── 8. PERMISSION OVERRIDES ───────────────────────────
@@ -443,7 +478,10 @@ export const userDepartures = pgTable('user_departures', {
     tenantIdx: utils.tenantIdx(table),
     userIdx: index('idx_user_departures_user').on(table.userId),
     dateIdx: index('idx_user_departures_date').on(table.departureDate),
-  };
+  
+  drz2255_idx_user_departures_contacts_reassigned_to: index('idx_user_departures_contacts_reassigned_to').on(table.contactsReassignedTo),
+  drz2255_idx_user_departures_created_by: index('idx_user_departures_created_by').on(table.createdBy),
+  drz2255_idx_user_departures_departed_by: index('idx_user_departures_departed_by').on(table.departedBy),};
 });
 
 // Register FK table references (lazy, broken after circular dep init)

@@ -32,7 +32,7 @@ export * from './territories';
 export * from './hierarchy';
 export * from './visitors';
 export * from './templates';
-export { documents as storageDocuments } from './files';
+export { documents as storageDocuments, fileUploads } from './files';
 export * from './lead-warming';
 export * from './plugins';
 export * from './tasks';

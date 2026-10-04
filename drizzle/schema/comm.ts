@@ -86,7 +86,9 @@ export const voiceCalls = pgTable('voice_calls', {
   return {
     tenantIdx: utils.tenantIdx(table),
     metadataGinIdx: utils.metadataIdx(table),
-  };
+  
+  drz2255_idx_voice_calls_contact_id: index('idx_voice_calls_contact_id').on(table.contactId),
+  drz2255_idx_voice_calls_deal_id: index('idx_voice_calls_deal_id').on(table.dealId),};
 });
 
 export const callLogs = pgTable('call_logs', {
@@ -108,7 +110,12 @@ export const callLogs = pgTable('call_logs', {
   return {
     tenantIdx: utils.tenantIdx(table),
     metadataGinIdx: utils.metadataIdx(table),
-  };
+  
+  drz2255_idx_call_logs_assigned_to: index('idx_call_logs_assigned_to').on(table.assignedTo),
+  drz2255_idx_call_logs_company_id: index('idx_call_logs_company_id').on(table.companyId),
+  drz2255_idx_call_logs_contact_id: index('idx_call_logs_contact_id').on(table.contactId),
+  drz2255_idx_call_logs_deal_id: index('idx_call_logs_deal_id').on(table.dealId),
+  drz2255_idx_call_logs_user_id: index('idx_call_logs_user_id').on(table.userId),};
 });
 
 // ── 3. EMAIL MARKETING & AI DRAFTS ────────────────────
@@ -148,7 +155,10 @@ export const emailDrafts = pgTable('comm_email_drafts', {
   return {
     tenantIdx: utils.tenantIdx(table),
     metadataGinIdx: utils.metadataIdx(table),
-  };
+  
+  drz2255_idx_comm_email_drafts_contact_id: index('idx_comm_email_drafts_contact_id').on(table.contactId),
+  drz2255_idx_comm_email_drafts_created_by: index('idx_comm_email_drafts_created_by').on(table.createdBy),
+  drz2255_idx_comm_email_drafts_deal_id: index('idx_comm_email_drafts_deal_id').on(table.dealId),};
 });
 
 export const emailTracking = pgTable('email_tracking', {
@@ -170,7 +180,9 @@ export const emailTracking = pgTable('email_tracking', {
   return {
     tenantIdx: utils.tenantIdx(table),
     metadataGinIdx: utils.metadataIdx(table),
-  };
+  
+  drz2255_idx_email_tracking_contact_id: index('idx_email_tracking_contact_id').on(table.contactId),
+  drz2255_idx_email_tracking_sequence_enrollment_id: index('idx_email_tracking_sequence_enrollment_id').on(table.sequenceEnrollmentId),};
 });
 
 // ── 4. INTEGRATIONS ───────────────────────────────────
@@ -189,7 +201,8 @@ export const integrations = pgTable('integrations', {
     tenantTypeIdx: index('idx_integrations_tenant_type').on(table.tenantId, table.type),
     configGinIdx: index('idx_integrations_metadata_g').on(table.config), // Using config for integrations as it is JSONB
     tenantIdx: utils.tenantIdx(table),
-  };
+  
+  drz2255_idx_integrations_user_id: index('idx_integrations_user_id').on(table.userId),};
 });
 
 // ── 5. EMAIL LOG ──────────────────────────────────────
@@ -228,7 +241,11 @@ export const emailVerifications = pgTable('email_verifications', {
   expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
   usedAt: timestamp('used_at', { withTimezone: true }),
   ...utils.lifecycle(),
-});
+}, (table) => ({
+  // #2255 live-DB mirror
+  drz2255_email_verifications_token_hash_unique: uniqueIndex('email_verifications_token_hash_unique').on(table.tokenHash),
+  drz2255_idx_email_verifications_user_id: index('idx_email_verifications_user_id').on(table.userId),
+}));
 
 // ── 7. EMAIL WARMUP CONFIGS ───────────────────────────
 export const emailWarmupConfigs = pgTable('email_warmup_configs', {
@@ -287,7 +304,8 @@ export const emailWarmupLogs = pgTable('email_warmup_logs', {
 }, (table) => {
   return {
     configIdx: index('idx_email_warmup_logs_config').on(table.configId, table.createdAt),
-  };
+  
+  drz2255_idx_email_warmup_logs_participant_id: index('idx_email_warmup_logs_participant_id').on(table.participantId),};
 });
 
 // ── 9. WEBHOOK INBOUND LOGS ────────────────────────--

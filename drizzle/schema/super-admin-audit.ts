@@ -28,7 +28,13 @@ export const superAdminAuditLogs = pgTable('super_admin_audit_logs', {
   actionIdx: index('idx_super_admin_audit_action').on(table.action, table.createdAt),
   tenantIdx: index('idx_super_admin_audit_tenant').on(table.tenantId, table.createdAt),
   timeIdx: index('idx_super_admin_audit_time').on(table.createdAt),
-}));
+
+  drz2255_idx_sa_audit_action: index('idx_sa_audit_action').on(table.action),
+  drz2255_idx_sa_audit_time: index('idx_sa_audit_time').on(table.createdAt.desc()),
+  drz2255_idx_sa_audit_admin: index('idx_sa_audit_admin').on(table.adminId),
+  drz2255_idx_sa_audit_admin_time: index('idx_sa_audit_admin_time').on(table.adminId, table.createdAt.desc()),
+  drz2255_idx_sa_audit_target: index('idx_sa_audit_target').on(table.targetType, table.targetId),
+  drz2255_idx_sa_audit_tenant: index('idx_sa_audit_tenant').on(table.tenantId),}));
 
 export type SuperAdminAuditLog = typeof superAdminAuditLogs.$inferSelect;
 export type NewSuperAdminAuditLog = typeof superAdminAuditLogs.$inferInsert;

@@ -121,7 +121,9 @@ export const recordLinks = pgTable('record_links', {
     'record_links_not_self',
     sql`NOT (from_type = to_type AND from_id = to_id)`
   ),
-}));
+
+                                                                              
+  drz2255_idx_record_links_created_by: index('idx_record_links_created_by').on(table.createdBy),}));
 
 export type RecordLink = typeof recordLinks.$inferSelect;
 export type NewRecordLink = typeof recordLinks.$inferInsert;

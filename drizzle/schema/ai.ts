@@ -21,7 +21,7 @@
  *       - acceptance-rate tracking (was the suggestion kept?)
  */
 import {
-  pgTable, uuid, text, timestamp, boolean, integer, bigint, index, uniqueIndex,
+  pgTable, uuid, text, timestamp, boolean, integer, bigint, jsonb, index, uniqueIndex,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import * as utils from './utils';
@@ -67,7 +67,8 @@ export const aiProviderSecrets = pgTable('ai_provider_secrets', {
     .where(sql`deleted_at IS NULL AND key_type = 'personal'`),
   activeIdx: utils.activeIdx(table),
   userIdx: index('idx_ai_provider_secrets_user').on(table.userId),
-}));
+
+  drz2255_idx_ai_provider_secrets_created_by: index('idx_ai_provider_secrets_created_by').on(table.createdBy),}));
 
 // ── 2. AI ACTIVITY LOG ───────────────────────────────
 // One row per gateway invocation. Read by /api/tenant/ai/status,
@@ -145,7 +146,9 @@ export const aiDraftTemplates = pgTable('ai_draft_templates', {
     .on(table.tenantId, table.slug)
     .where(sql`deleted_at IS NULL`),
   kindIdx: index('idx_ai_draft_templates_kind').on(table.tenantId, table.kind, table.active),
-}));
+
+  drz2255_idx_ai_draft_templates_created_by: index('idx_ai_draft_templates_created_by').on(table.createdBy),
+  drz2255_idx_ai_draft_templates_updated_by: index('idx_ai_draft_templates_updated_by').on(table.updatedBy),}));
 
 // ── 4. LEAD SCORING RULES ───────────────────────────
 // Per-tenant rules that drive the AI lead scoring engine.
@@ -154,6 +157,19 @@ export const aiDraftTemplates = pgTable('ai_draft_templates', {
 export const leadScoringRules = pgTable('lead_scoring_rules', {
   id: utils.pk(),
   tenantId: utils.tenantId(),
+  // ── Rule-engine columns created by hand-written migrations (#2255 audit) ──
+  /** Human-readable rule name */
+  name: text('name').notNull(),
+  /** Field the rule inspects (lead attribute) */
+  field: text('field').notNull(),
+  /** Comparison operator (eq, gt, contains, ...) */
+  operator: text('operator').notNull(),
+  /** Comparison value (stringified) */
+  value: text('value'),
+  /** Points awarded when the rule matches */
+  score: integer('score').notNull().default(0),
+  /** Per-rule enable flag (distinct from the `active` UI flag) */
+  isActive: boolean('is_active').notNull().default(true),
   /** Human-readable factor name, e.g. 'Role matches persona' */
   factor: text('factor').notNull(),
   /** Importance: positive = bonus, negative = penalty. Typically -100 to 100. */
@@ -166,10 +182,13 @@ export const leadScoringRules = pgTable('lead_scoring_rules', {
   ...utils.lifecycle(),
   createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
   updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
+  deletedBy: uuid('deleted_by').references(() => users.id, { onDelete: 'set null' }),
 }, (table) => ({
   tenantIdx: utils.tenantIdx(table),
   activeIdx: utils.activeIdx(table),
-}));
+
+  drz2255_idx_lead_scoring_rules_created_by: index('idx_lead_scoring_rules_created_by').on(table.createdBy),
+  drz2255_idx_lead_scoring_rules_updated_by: index('idx_lead_scoring_rules_updated_by').on(table.updatedBy),}));
 
 // ── 5. AT-RISK RULES ────────────────────────────────
 // Per-tenant rules for flagging deals as 'at risk'.
@@ -208,7 +227,9 @@ export const atRiskRules = pgTable('at_risk_rules', {
   tenantIdx: utils.tenantIdx(table),
   stageIdx: index('idx_at_risk_rules_stage').on(table.tenantId, table.stageId),
   activeIdx: utils.activeIdx(table),
-}));
+
+  drz2255_idx_at_risk_rules_created_by: index('idx_at_risk_rules_created_by').on(table.createdBy),
+  drz2255_idx_at_risk_rules_updated_by: index('idx_at_risk_rules_updated_by').on(table.updatedBy),}));
 
 // ── 6. TENANT AI CREDITS ─────────────────────────────
 // Per-tenant credit balance for centralized AI usage.
@@ -243,7 +264,10 @@ export const tenantAiCredits = pgTable('tenant_ai_credits', {
   tenantIdx: utils.tenantIdx(table),
   periodIdx: index('idx_tenant_ai_credits_period').on(table.tenantId, table.billingPeriod),
   statusIdx: index('idx_tenant_ai_credits_status').on(table.status),
-}));
+
+  drz2255_tenant_ai_credits_tenant_id_billing_period_key: uniqueIndex('tenant_ai_credits_tenant_id_billing_period_key').on(table.tenantId, table.billingPeriod),
+  drz2255_idx_tenant_ai_credits_allocated_by: index('idx_tenant_ai_credits_allocated_by').on(table.allocatedBy),
+  drz2255_idx_tenant_ai_credits_set_by: index('idx_tenant_ai_credits_set_by').on(table.setBy),}));
 
 // ── 7. AI CREDITS LEDGER ─────────────────────────────
 // Per-call credit deduction log. Written after every successful AI call
@@ -289,3 +313,58 @@ export const aiCreditsLedger = pgTable('ai_credits_ledger', {
 // of a personal API key. The key still needs to exist (system key),
 // but usage is deducted from the tenant's credit balance.
 // This is added as a column to ai_provider_secrets (see migration).
+
+// ── 9. AI PROVIDERS CATALOG + TENANT AI CREDENTIALS ──
+// Declared retroactively for the #2255 schema↔DB drift audit: both tables
+// have been live since migration 0013_workflow_foundation.sql but were
+// never mirrored into drizzle/schema. Column types/nullability/defaults
+// below were introspected from the live DB, not guessed.
+
+/** Platform-wide catalog of AI providers (no tenant_id — super-admin owned). */
+export const aiProviders = pgTable('ai_providers', {
+  id: utils.pk(),
+  providerKey: text('provider_key').notNull(),
+  displayName: text('display_name').notNull(),
+  defaultBaseUrl: text('default_base_url'),
+  enabled: boolean('enabled').notNull().default(true),
+  supportsStreaming: boolean('supports_streaming').notNull().default(true),
+  /** If FALSE, every tenant must BYO key and go through approval. */
+  allowPlatformKey: boolean('allow_platform_key').notNull().default(false),
+  rateLimits: jsonb('rate_limits').$type<Record<string, unknown>>().notNull().default({}),
+  metadata: jsonb('metadata').$type<Record<string, unknown>>().notNull().default({}),
+  ...utils.audit(),
+}, (table) => ({
+  activeIdx: utils.activeIdx(table),
+  metadataGinIdx: utils.metadataIdx(table),
+  enabledIdx: index('idx_ai_providers_enabled').on(table.enabled),
+  providerKeyUq: uniqueIndex('uniq_ai_providers_provider_key').on(table.providerKey),
+}));
+
+/** Per-tenant, per-provider BYO credentials pending super-admin approval. */
+export const tenantAiCredentials = pgTable('tenant_ai_credentials', {
+  id: utils.pk(),
+  tenantId: utils.tenantId(),
+  providerId: uuid('provider_id').notNull().references(() => aiProviders.id, { onDelete: 'cascade' }),
+  model: text('model').notNull(),
+  /** AES-GCM encrypted key. Decrypted only inside the gateway (lib/crypto/secrets.ts). */
+  encryptedApiKey: text('encrypted_api_key').notNull(),
+  baseUrlOverride: text('base_url_override'),
+  status: text('status').notNull().default('pending'),
+  decisionReason: text('decision_reason'),
+  approvedBy: uuid('approved_by').references(() => users.id, { onDelete: 'set null' }),
+  approvedAt: timestamp('approved_at', { withTimezone: true }),
+  /** JSON array of provider_keys in priority order (gateway failover chain). */
+  fallbackChain: jsonb('fallback_chain').$type<unknown[]>().notNull().default([]),
+  lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
+  callCount: integer('call_count').notNull().default(0),
+  errorCount: integer('error_count').notNull().default(0),
+  metadata: jsonb('metadata').$type<Record<string, unknown>>().notNull().default({}),
+  ...utils.audit(),
+}, (table) => ({
+  tenantIdx: utils.tenantIdx(table),
+  activeIdx: utils.activeIdx(table),
+  metadataGinIdx: utils.metadataIdx(table),
+  providerIdx: index('idx_tenant_ai_credentials_provider').on(table.providerId),
+  tenantStatusIdx: index('idx_tenant_ai_credentials_tenant_status').on(table.tenantId, table.status),
+  activeCredUq: uniqueIndex('uniq_tenant_ai_credential_active').on(table.tenantId, table.providerId, table.status),
+}));

@@ -44,7 +44,11 @@ export const tenantTokenLimits = pgTable('tenant_token_limits', {
   overrideReason: text('override_reason'),
   setBy: uuid('set_by').references(() => users.id),
   ...utils.lifecycle(),
-});
+}, (table) => ({
+  // #2255 live-DB mirror
+  drz2255_tenant_token_limits_tenant_id_unique: uniqueIndex('tenant_token_limits_tenant_id_unique').on(table.tenantId),
+  drz2255_idx_tenant_token_limits_set_by: index('idx_tenant_token_limits_set_by').on(table.setBy),
+}));
 
 // ── 3. PER-USER TOKEN LIMITS ──────────────────────────
 export const userTokenLimits = pgTable('user_token_limits', {
@@ -84,7 +88,8 @@ export const apiKeysRegistry = pgTable('api_keys_registry', {
 }, (table) => {
   return {
     serviceIdx: index('idx_api_keys_reg_service').on(table.service, table.isActive),
-  };
+  
+  drz2255_idx_api_keys_registry_created_by: index('idx_api_keys_registry_created_by').on(table.createdBy),};
 });
 
 // ── 5. USAGE ALERTS ───────────────────────────────────
@@ -108,7 +113,8 @@ export const usageAlerts = pgTable('usage_alerts', {
     tenantIdx: utils.tenantIdx(table),
     targetIdx: index('idx_usage_alerts_target').on(table.targetType, table.targetId),
     unackedIdx: index('idx_usage_alerts_unacked').on(table.acknowledged),
-  };
+  
+  drz2255_idx_usage_alerts_acknowledged_by: index('idx_usage_alerts_acknowledged_by').on(table.acknowledgedBy),};
 });
 
 // ── 6. COST ANOMALIES ─────────────────────────────────
@@ -128,7 +134,8 @@ export const costAnomalies = pgTable('cost_anomalies', {
   return {
     tenantIdx: utils.tenantIdx(table),
     unreviewedIdx: index('idx_cost_anomalies_unreviewed').on(table.reviewed),
-  };
+  
+  drz2255_idx_cost_anomalies_reviewed_by: index('idx_cost_anomalies_reviewed_by').on(table.reviewedBy),};
 });
 
 // ── 7. OAUTH 2.0 CLIENTS ───────────────────────────────
@@ -146,7 +153,8 @@ export const oauthClients = pgTable('oauth_clients', {
   return {
     clientIdIdx: uniqueIndex('idx_oauth_clients_client_id').on(table.clientId),
     tenantIdx: index('idx_oauth_clients_tenant').on(table.tenantId),
-  };
+  
+  drz2255_idx_oauth_clients_created_by: index('idx_oauth_clients_created_by').on(table.createdBy),};
 });
 
 // ── 8. OAUTH 2.0 AUTHORIZATION CODES ───────────────────
@@ -164,7 +172,8 @@ export const oauthCodes = pgTable('oauth_codes', {
   return {
     codeIdx: uniqueIndex('idx_oauth_codes_code').on(table.code),
     clientIdx: index('idx_oauth_codes_client').on(table.clientId),
-  };
+  
+  drz2255_idx_oauth_codes_user_id: index('idx_oauth_codes_user_id').on(table.userId),};
 });
 
 // ── 9. OAUTH 2.0 ACCESS TOKENS ─────────────────────────
@@ -184,7 +193,8 @@ export const oauthTokens = pgTable('oauth_tokens', {
     refreshTokenIdx: index('idx_oauth_tokens_refresh').on(table.refreshToken),
     clientIdx: index('idx_oauth_tokens_client').on(table.clientId),
     userIdx: index('idx_oauth_tokens_user').on(table.userId),
-  };
+  
+  drz2255_oauth_tokens_refresh_token_unique: uniqueIndex('oauth_tokens_refresh_token_unique').on(table.refreshToken),};
 });
 
 // ── 10. PORTAL CLIENTS (Client Portal) ──────────────────
@@ -206,5 +216,6 @@ export const portalClients = pgTable('portal_clients', {
     tenantIdx: utils.tenantIdx(table),
     emailIdx: index('idx_portal_clients_email').on(table.email),
     tokenIdx: uniqueIndex('idx_portal_clients_token').on(table.accessToken),
-  };
+  
+  drz2255_idx_portal_clients_created_by: index('idx_portal_clients_created_by').on(table.createdBy),};
 });

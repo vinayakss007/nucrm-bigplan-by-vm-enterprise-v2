@@ -42,5 +42,10 @@ export const activities = pgTable('activities', {
     contactIdx: index('idx_activities_contact').on(table.contactId),
     dealIdx: index('idx_activities_deal').on(table.dealId),
     metadataGinIdx: utils.metadataIdx(table),
-  };
+  
+  drz2255_idx_activities_user: index('idx_activities_user').on(table.tenantId, table.userId, table.createdAt.desc()),
+  drz2255_idx_activities_lead: index('idx_activities_lead').on(table.tenantId, table.leadId),
+  drz2255_idx_activities_company_id: index('idx_activities_company_id').on(table.companyId),
+  drz2255_idx_activities_lead_id: index('idx_activities_lead_id').on(table.leadId),
+  drz2255_idx_activities_user_id: index('idx_activities_user_id').on(table.userId),};
 });
