@@ -1334,6 +1334,14 @@ inferred.
   "A journal entry has no corresponding .sql file". There is no check for the reverse, and the script
   applies migrations _in journal order_, so a scratch database it builds is silently missing the same
   two objects. The gate that exists to prove the chain is whole passes on a broken chain.
+- **But #46's guard does see it — and has it baselined.** `scripts/check-migration-chain.mjs` checks
+  `missing` (up-file with no journal entry) as well as `orphans`/`dupIdx`/`dupWhen`/`order`, and
+  `scripts/migration-chain-baseline.json` already lists `missing:0059_custom_entities` and
+  `missing:0091_usage_snapshots_superadmin_bypass`. Measured: `node scripts/check-migration-chain.mjs`
+  → `107 up-file(s) · 105 journal entries · 5 defect(s), 5 baselined`, exit 0. So this is not an
+  unguarded defect but a **known, accepted, grandfathered** one — the entry stays open because
+  baselining is not repairing, and the repair is #74. Shrink the baseline in the same commit that
+  journalises the two files.
 - **Ledger, and a real collision in it.** The ledger is `drizzle.__drizzle_migrations` — not in `public`,
   which is why filtering `pg_tables` for it returns nothing:
   ```sql
