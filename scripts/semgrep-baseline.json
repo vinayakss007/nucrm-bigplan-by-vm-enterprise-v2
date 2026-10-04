@@ -1,0 +1,59 @@
+{
+  "_comment": "#2301 grandfathered Semgrep findings, keyed ruleId::file with occurrence count. A finding in a NEW file, a new rule, or MORE occurrences than `count` FAILS CI. Each entry needs a written `reason`. Prune entries as files get fixed. Regenerate preserving reasons: node scripts/check-semgrep-baseline.mjs semgrep.sarif --update",
+  "entries": [
+    {
+      "rule": "generic.nginx.security.header-redefinition.header-redefinition",
+      "path": "deploy/nginx/nginx-production.conf",
+      "count": 1,
+      "reason": "add_header calls inside location blocks intentionally re-assert security headers that nginx semantics drop when a nested block sets its own. Review of nginx-production.conf shows the overrides are deliberate; not a vulnerability."
+    },
+    {
+      "rule": "generic.nginx.security.header-redefinition.header-redefinition",
+      "path": "infra/nginx/nginx.conf",
+      "count": 6,
+      "reason": "Same as deploy/nginx/nginx-production.conf: location-block add_header duplicates are the documented way to keep security headers on responses that define per-location headers. Deliberate, reviewed."
+    },
+    {
+      "rule": "javascript.lang.security.detect-child-process.detect-child-process",
+      "path": "app/api/cron/backup-verify/route.ts",
+      "count": 1,
+      "reason": "Backup-verification cron spawns a fixed pg_restore/gpg command line built only from operator-controlled env vars (no request/user input reaches the command string). Pre-existing at ratchet introduction (#2301)."
+    },
+    {
+      "rule": "javascript.lang.security.detect-child-process.detect-child-process",
+      "path": "scripts/quality-report.ts",
+      "count": 1,
+      "reason": "Local operator-only script (git invocations with constant arguments). Not reachable from any request path. Pre-existing at ratchet introduction (#2301)."
+    },
+    {
+      "rule": "javascript.lang.security.detect-child-process.detect-child-process",
+      "path": "scripts/restore-db.ts",
+      "count": 1,
+      "reason": "Local operator-only disaster-recovery script; command strings are constants plus env-supplied paths, never user input. Pre-existing at ratchet introduction (#2301)."
+    },
+    {
+      "rule": "javascript.lang.security.detect-child-process.detect-child-process",
+      "path": "scripts/verify-backup.ts",
+      "count": 1,
+      "reason": "Local operator-only backup verification script; constant commands, no user-controlled input. Pre-existing at ratchet introduction (#2301)."
+    },
+    {
+      "rule": "javascript.node-crypto.security.gcm-no-tag-length.gcm-no-tag-length",
+      "path": "lib/backups/encrypt.ts",
+      "count": 2,
+      "reason": "AES-256-GCM with the auth tag explicitly verified via decipher.setAuthTag() before final() (Node rejects tampered ciphertext). authTagLength option is omitted but fixed at 16 for all stored ciphertexts; declaring it in options would change nothing behaviorally. Pre-existing format constraint (#2301)."
+    },
+    {
+      "rule": "javascript.node-crypto.security.gcm-no-tag-length.gcm-no-tag-length",
+      "path": "lib/crypto.ts",
+      "count": 1,
+      "reason": "Same pattern as lib/backups/encrypt.ts: createDecipheriv + explicit setAuthTag(); GCM tag is enforced at final(). Rule flags the missing options arg, but authentication is applied. Pre-existing at ratchet introduction (#2301)."
+    },
+    {
+      "rule": "typescript.react.security.audit.react-dangerouslysetinnerhtml.react-dangerouslysetinnerhtml",
+      "path": "app/tenant/email-templates/page.tsx",
+      "count": 1,
+      "reason": "Email-template preview renders through sanitizeHTML() (DOMPurify, lib/sanitize.ts) before dangerouslySetInnerHTML. Sanitizer call is the project-standard defense; flagged because the value is a function result. Pre-existing at ratchet introduction (#2301)."
+    }
+  ]
+}

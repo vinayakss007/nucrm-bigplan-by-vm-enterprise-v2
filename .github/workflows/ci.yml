@@ -188,9 +188,13 @@ jobs:
 
       - run: npm ci
 
-      - name: Run npm audit
-        run: npm audit --audit-level=high
-        continue-on-error: true
+      # #2301: previously `npm audit` ran with continue-on-error: true, so HIGH
+      # CVEs shipped on a green build. The audit is now BLOCKING, with the same
+      # baseline-ratchet pattern as guard:rls / guard:chain: pre-existing
+      # advisories are grandfathered in scripts/audit-baseline.json (each with a
+      # written reason); any NEW HIGH/CRITICAL advisory fails the job.
+      - name: npm audit baseline guard (#2301)
+        run: npm audit --audit-level=high --json | node scripts/check-audit-baseline.mjs
 
       - name: Run gitleaks (path scan)
         uses: addnab/docker-run-action@v3
@@ -199,23 +203,37 @@ jobs:
           options: -v ${{ github.workspace }}:/repo
           run: gitleaks detect --source=/repo --no-git --verbose
 
-      - name: Run Semgrep SAST
-        uses: semgrep/semgrep-action@v1
-        with:
-          config: >-
-            p/javascript
-            p/typescript
-            p/nodejs
-            p/nextjs
-            p/security-audit
-          generateSarif: true
-        continue-on-error: true
-        env:
-          SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
+      # #2301: the analysis step is BLOCKING (no continue-on-error). It runs the
+      # pinned Semgrep CLI in Docker (same image family as semgrep/semgrep-action,
+      # but with a controlled, version-pinned invocation — the action skipped the
+      # scan entirely without SEMGREP_APP_TOKEN, which is exactly how findings
+      # went invisible). New ruleId::file findings fail the job unless explicitly
+      # baselined with a reason in scripts/semgrep-baseline.json.
+      - name: Run Semgrep SAST (#2301 — blocking)
+        run: |
+          docker run --rm \
+            -v "$PWD:/src" \
+            -w /src \
+            returntocorp/semgrep:1.178.0 \
+            semgrep scan \
+              --config p/javascript \
+              --config p/typescript \
+              --config p/nodejs \
+              --config p/nextjs \
+              --config p/security-audit \
+              --sarif --output /src/semgrep.sarif \
+              --metrics=off \
+              --max-target-bytes=2000000 \
+              /src
+
+      - name: Semgrep baseline guard (#2301)
+        run: node scripts/check-semgrep-baseline.mjs semgrep.sarif
 
       # Only attempt the SARIF upload when Semgrep actually produced the file.
-      # Previously the upload ran with `if: always()` and errored when
-      # semgrep.sarif was absent (e.g. no SEMGREP_APP_TOKEN / skipped scan). (#1419)
+      # The upload stays best-effort (GitHub code-scanning ingestion of
+      # third-party SARIF is non-essential to the gate — the ANALYSIS steps
+      # above are what fail the job). Previously the upload ran with
+      # `if: always()` and errored when semgrep.sarif was absent. (#1419, #2301)
       - name: Check for SARIF output
         id: sarif
         if: always()

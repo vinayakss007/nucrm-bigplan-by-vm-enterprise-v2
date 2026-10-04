@@ -91,3 +91,7 @@ secrets/
 # output dirs) and any operator tooling. Deliberately not shared; the
 # committable equivalent is .qoder/settings.json, which does not exist here.
 .qoder/settings.local.json
+
+# #2301 — local run artifacts of the security gates (CI regenerates them)
+semgrep.sarif
+*.sarif.local
