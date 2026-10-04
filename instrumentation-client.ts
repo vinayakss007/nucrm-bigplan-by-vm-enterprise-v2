@@ -32,7 +32,11 @@ Sentry.init({
   // 100% in dev, 10% in production
   tracesSampleRate: process.env['NODE_ENV'] === "development" ? 1.0 : 0.1,
 
-  // Session Replay: 10% of all sessions, 100% of sessions with errors
+  // Inert today: v11 reads these numbers inside `@sentry/replay`, and no replay
+  // integration is registered here or in `sentry.client.config.ts`, so nothing
+  // has ever been recorded. Adding `Sentry.replayIntegration()` turns DOM capture
+  // on — and captured DOM bypasses `beforeSend` entirely, so it needs explicit
+  // masking rather than this scrubber.
   replaysSessionSampleRate: 0.1,
   replaysOnErrorSampleRate: 1.0,
 

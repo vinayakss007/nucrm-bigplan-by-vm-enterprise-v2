@@ -1024,11 +1024,40 @@ inferred.
   - Verified: `tsc --noEmit` exit 0, `eslint --max-warnings=0` clean on the six touched files,
     full `tests/unit` + `tests/dashboard` green (one pre-existing unrelated
     `EnvironmentTeardownError` in `ai-auto-followup.test.ts`).
-- **Not covered by this fix — the residual list.** `scrubPii` still ignores `event.extra`, `event.tags`,
-  `event.request.data` (body text) and `event.user.id`. With `dataCollection` off, the SDK should not
-  populate the body/header/variable fields any more, but `lib/capture-error.ts` and every
-  `clientLogError(ctx, err, {…})` caller put **their own** data into `extra`/`tags`, and that path is
-  untouched. Anything a developer already writes into `extra` is still sent verbatim.
+- **Follow-up in the same push — the bags our own code writes.** `dataCollection` only governs what the
+  **SDK** collects; `event.extra`, `event.tags` and `event.contexts` are written by us, so `beforeSend`
+  is the only place they can be stopped. A full-repo sweep of every sink found three live leaks, all
+  server-side, all through `lib/errors-server.ts::forwardToSentry` (line 56 `tags`, 62 `user.id`,
+  63-67 `extra` including `...opts.metadata`):
+  - `app/api/emergency/recover/route.ts:122,149,157,201` → `metadata: { ip, email }` — a raw
+    super-admin address and client IP.
+  - `app/api/auth/sso/start/route.ts:81,119` → `extra.requestUrl` is the **raw** `GET ?email=…`; the
+    scrubber already defanged `event.request.url`, but this is a second copy of the same URL that no
+    existing rule touched. Ten more auth routes copy `request.url` the same way.
+  - `lib/email/service.ts:316-320` → `metadata: { subject, recipients }`, i.e. the outbound subject
+    (customer free text) and a partially-masked recipient list (`j***@domain`, which `EMAIL_RE` does
+    not match). Plus `lib/automation/engine.ts:100` / `workflow-executor.ts:159` → `tags.context` =
+    `` `automation:${name}` `` where `name` is typed by the customer.
+    `scrubPii` now walks all three bags (depth-capped at 3 against a caller-supplied cycle), replaces
+    values under identity keys (`email`, `ip`, `subject`, `recipients`, `to`, `from`, plus the existing
+    secret keys), strips query **and** fragment from any `*url`/`*uri`/`*href` value, and masks emails
+    in every other string including array members — arrays are masked rather than blanked so "how many
+    recipients failed" survives.
+  - **Two things that turned out inert, recorded so nobody re-audits them:** no code in the repo calls
+    `Sentry.setContext`/`setExtra`/`setTag`/`withScope`/`configureScope` at all (the `setUserContext`
+    and `setContext` hits are this project's own RLS/ALS helpers), and `event.request.data` has zero
+    writers on top of `httpBodies: []`. `event.user.id` is kept: every writer resolves to a `users.id`
+    uuid (or the static `'demo-user'`), never an address — `lib/errors-server.ts:62` is the only door.
+- **Session Replay: the option is set, the integration is not — measured, not assumed.** Both client
+  files set `replaysSessionSampleRate: 0.1` / `replaysOnErrorSampleRate: 1.0` with a comment claiming
+  "10 % of all sessions". In v11 those numbers are only read by `@sentry/replay` itself
+  (`grep -rl replaysSessionSampleRate` across the installed `@sentry/{core,browser,replay,nextjs}`
+  builds matches **only** `@sentry/replay/build/npm/cjs/index.js`); nothing in `@sentry/browser`'s `init`
+  or `@sentry/nextjs`'s client entry registers the integration, and this repo passes no `integrations:`
+  at all. So **no replay has ever been recorded** — the DOM-bypasses-`beforeSend` worry does not apply
+  today. It becomes a live S1 the moment someone adds `Sentry.replayIntegration()`, which is also why
+  the `maskAllText` strings sitting in the client chunk are misleading: they are the barrel re-export,
+  not a running recorder. Either register it with explicit masking or delete the two dead options.
 - **What cannot be verified from here.** The claim "events contained cookies/headers/bodies" is a
   statement about SDK behaviour plus config, proved by the resolver — **not** a statement about what is
   in the Sentry project, because `SENTRY_AUTH_TOKEN` has no read scope (403, see PP-016). Nobody has

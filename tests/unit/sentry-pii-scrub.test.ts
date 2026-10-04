@@ -80,6 +80,63 @@ describe('scrubPii — exception payload', () => {
   });
 });
 
+describe('scrubPii — scope bags written by our own code', () => {
+  it('redacts email and ip keys anywhere in `extra`', () => {
+    // `lib/errors-server.ts` copies `logError({ metadata })` into `extra` verbatim,
+    // and `app/api/emergency/recover/route.ts` puts a raw super-admin email there.
+    const out = scrubPii({
+      extra: { requestMethod: 'POST', email: 'root@tenant.co', metadata: { ip: '203.0.113.9', tenant: 'acme' } },
+    });
+    expect(out.extra).toEqual({
+      requestMethod: 'POST',
+      email: '[redacted]',
+      metadata: { ip: '[redacted]', tenant: 'acme' },
+    });
+  });
+
+  it('masks emails inside array members, which have no key to judge by', () => {
+    // An array keeps its shape (how many recipients failed to send is the clue),
+    // so members are masked rather than replaced wholesale.
+    const out = scrubPii({ extra: { recipients: ['alice@corp.co', 'bob@corp.co'], cc: 'carol@corp.co' } });
+    expect(out.extra.recipients).toEqual(['[redacted-email]', '[redacted-email]']);
+    expect(out.extra.cc).toBe('[redacted-email]');
+  });
+
+  it('strips the query string from any `*url` value in `extra`', () => {
+    // `app/api/auth/sso/start/route.ts` logs `extra.requestUrl` with `?email=`
+    // intact; scrubbing `event.request.url` does not touch that second copy.
+    const out = scrubPii({ extra: { requestUrl: 'https://app.example/api/auth/sso/start?email=a@b.co&token=x' } });
+    expect(out.extra.requestUrl).toBe('https://app.example/api/auth/sso/start');
+  });
+
+  it('keeps a clean url clean, and drops a fragment as well as a query', () => {
+    // `search()` returns -1 when there is neither, and `substring(0, -1)` is `''`
+    // — a naive strip would blank every parameterless URL in `extra`.
+    const out = scrubPii({
+      extra: { webhookUrl: 'https://hooks.tenant.co/inbound', shareUrl: 'https://app/#/deals?owner=a@b.co' },
+    });
+    expect(out.extra.webhookUrl).toBe('https://hooks.tenant.co/inbound');
+    expect(out.extra.shareUrl).toBe('https://app/');
+  });
+
+  it('redacts emails in `tags`, which carry customer-created automation names', () => {
+    const out = scrubPii({ tags: { context: 'automation: notify alice@corp.co', tenantId: '9f2c…' } });
+    expect(out.tags.context).toBe('automation: notify [redacted-email]');
+    expect(out.tags.tenantId).toBe('9f2c…');
+  });
+
+  it('does not loop forever on a self-referencing bag', () => {
+    const bag: Record<string, unknown> = { name: 'x' };
+    bag.self = bag;
+    expect(() => scrubPii({ extra: bag })).not.toThrow();
+  });
+
+  it('leaves a bag that holds only opaque ids alone', () => {
+    const extra = { requestId: '0d9f-1a2b', attempt: 3, at: '2026-10-04T05:00:00Z' };
+    expect(scrubPii({ extra }).extra).toEqual(extra);
+  });
+});
+
 describe('scrubPii — boundaries', () => {
   it('passes non-objects through unchanged', () => {
     expect(scrubPii(null)).toBeNull();
