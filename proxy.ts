@@ -122,6 +122,16 @@ function buildCsp(nonce: string): string {
   const scriptSrc = isProd
     ? `script-src 'self' 'nonce-${nonce}'`
     : `script-src 'self' 'nonce-${nonce}' 'unsafe-eval'`;
+  // #2331: the client Sentry bundle posts envelopes to the DSN's ingest host.
+  // Without it in connect-src every report is silently blocked — we pay for
+  // Sentry and receive nothing. Derive the exact origin from the DSN so no
+  // wildcard is needed.
+  let sentryOrigin = '';
+  try {
+    const dsn = process.env['NEXT_PUBLIC_SENTRY_DSN'];
+    const at = dsn ? dsn.indexOf('@') : -1;
+    if (dsn && at !== -1) sentryOrigin = ' ' + new URL(`https://${dsn.slice(at + 1)}`).origin;
+  } catch { /* malformed DSN: omit, same as no Sentry */ }
   return [
     "default-src 'self'",
     scriptSrc,
@@ -130,7 +140,7 @@ function buildCsp(nonce: string): string {
     "style-src-attr 'unsafe-inline'",
     "img-src 'self' data: blob:",
     "font-src 'self' data:",
-    "connect-src 'self' ws: wss:",
+    `connect-src 'self' ws: wss:${sentryOrigin}`,
     "frame-ancestors 'none'",
     "frame-src 'self'",
     "form-action 'self'",

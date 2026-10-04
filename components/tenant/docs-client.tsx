@@ -5,7 +5,7 @@
  */
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Search, Book, FileText, Code, Shield, Rocket, Users, Settings, Zap, HelpCircle, ChevronRight, Menu, X, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -4978,6 +4978,13 @@ export default function DocsClient() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [viewMode, setViewMode] = useState<'home' | 'index' | 'category' | 'document'>('home');
 
+  // #2330: on phones the sidebar is an overlay drawer — start it closed.
+  // (SSR renders it open; the effect collapses it on mount, matching the
+  // lg: CSS breakpoint the drawer classes use.)
+  useEffect(() => {
+    if (window.innerWidth < 1024) setSidebarOpen(false);
+  }, []);
+
   // Flatten all docs for search
   const allDocs = useMemo(() => {
     const docs: Array<{
@@ -5030,30 +5037,44 @@ export default function DocsClient() {
     return generateDocContent(selectedDoc);
   }, [selectedDoc]);
 
+  // #2330: the drawer is an overlay below lg (1024px) — every navigation
+  // choice must dismiss it, or it stays parked on top of the content.
+  const closeSidebarOnMobile = () => {
+    if (window.innerWidth < 1024) setSidebarOpen(false);
+  };
+
+  // Search results render inside the sidebar; on mobile that's the drawer,
+  // so typing must open it (#2330).
+  const handleSearchChange = (value: string) => {
+    setSearchQuery(value);
+    if (value.trim() && window.innerWidth < 1024) setSidebarOpen(true);
+  };
+
   const handleDocClick = (slug: string) => {
     setSelectedDoc(slug);
     setViewMode('document');
-    if (window.innerWidth < 768) {
-      setSidebarOpen(false);
-    }
+    closeSidebarOnMobile();
   };
 
   const handleCategoryClick = (category: string) => {
     setSelectedCategory(category);
     setSelectedDoc(null);
     setViewMode('category');
+    closeSidebarOnMobile();
   };
 
   const handleIndexClick = () => {
     setSelectedCategory(null);
     setSelectedDoc(null);
     setViewMode('index');
+    closeSidebarOnMobile();
   };
 
   const handleHomeClick = () => {
     setSelectedCategory(null);
     setSelectedDoc(null);
     setViewMode('home');
+    closeSidebarOnMobile();
   };
 
   const _handleBack = () => {
@@ -5073,9 +5094,9 @@ export default function DocsClient() {
     Book;
 
   return (
-    <div className="max-w-7xl mx-auto">
+    <div className="max-w-7xl mx-auto px-4 lg:px-0">
       {/* Mobile header with sidebar toggle - only show on small screens */}
-      <div className="lg:hidden sticky top-14 z-40 bg-background/80 backdrop-blur-lg border-b border-border -mx-4 px-4">
+      <div className="lg:hidden sticky top-0 z-40 bg-background/80 backdrop-blur-lg border-b border-border px-4">
         <div className="flex items-center justify-between py-2">
           <div className="flex items-center gap-2">
             <Button
@@ -5092,7 +5113,7 @@ export default function DocsClient() {
             <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
             <Input
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => handleSearchChange(e.target.value)}
               placeholder="Search docs..."
               className="pl-7 h-8 text-xs"
             />
@@ -5101,7 +5122,7 @@ export default function DocsClient() {
       </div>
 
       {/* Desktop search bar */}
-      <div className="hidden lg:block sticky top-14 z-40 bg-background/80 backdrop-blur-lg border-b border-border -mx-4 px-4">
+      <div className="hidden lg:block sticky top-0 z-40 bg-background/80 backdrop-blur-lg border-b border-border px-4">
         <div className="flex items-center justify-between py-2">
           <div className="flex items-center gap-2">
             <Book className="w-5 h-5 text-violet-600" />
@@ -5111,7 +5132,7 @@ export default function DocsClient() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => handleSearchChange(e.target.value)}
               placeholder="Search documentation..."
               className="pl-9 h-9 text-sm"
             />
@@ -5120,12 +5141,18 @@ export default function DocsClient() {
       </div>
 
       <div className="flex gap-4 lg:gap-6 py-4">
-        {/* Sidebar */}
+        {/* Sidebar — overlay drawer below lg, inline column at lg+ (#2330) */}
         {sidebarOpen && (
-          <div className={cn(
-            'fixed lg:sticky top-20 left-0 z-30 w-64 lg:w-72 h-[calc(100vh-5rem)] overflow-y-auto bg-background lg:bg-transparent border-r lg:border-0 border-border p-4 lg:p-0 transition-transform',
-            !sidebarOpen && 'hidden lg:block'
-          )}>
+          <>
+            <div
+              className="fixed inset-0 z-40 bg-black/50 lg:hidden"
+              onClick={() => setSidebarOpen(false)}
+              aria-hidden="true"
+            />
+            <div className={cn(
+              'fixed inset-y-0 left-0 z-50 w-72 max-w-[85vw] overflow-y-auto bg-background border-r border-border p-4 shadow-xl',
+              'lg:sticky lg:top-16 lg:z-30 lg:w-72 lg:h-[calc(100vh-4rem)] lg:bg-transparent lg:border-r-0 lg:p-0 lg:shadow-none'
+            )}>
             {/* Categories */}
             {!searchQuery && !selectedDoc && (
               <div className="space-y-2">
@@ -5220,6 +5247,7 @@ export default function DocsClient() {
               </div>
             )}
           </div>
+          </>
         )}
 
         {/* Main Content */}

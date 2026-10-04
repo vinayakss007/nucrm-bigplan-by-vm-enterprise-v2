@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import type { Metadata, Viewport } from 'next';
+import { headers } from 'next/headers';
 import { Inter, JetBrains_Mono } from 'next/font/google';
 import { ThemeProvider } from '@/components/shared/theme-provider';
 import { ErrorWrapper } from '@/components/shared/error-wrapper';
@@ -63,7 +64,12 @@ export const viewport: Viewport = {
   themeColor: '#7c3aed',
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // #2331: next-themes writes its blocking bootstrap <script> itself, so Next
+  // does not auto-stamp the per-request CSP nonce (#1070) onto it — without
+  // the nonce the browser blocks it and theme init silently fails. proxy.ts
+  // exposes the nonce on the x-nonce request header; pass it through.
+  const cspNonce = (await headers()).get('x-nonce') ?? undefined;
   return (
     // suppressHydrationWarning is scoped to <html> ONLY and is unavoidable:
     // next-themes writes the `class`/`style` (theme) attributes onto the <html>
@@ -79,12 +85,22 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     // stripped BEFORE React reconciles, keeping <body> server/client identical.
     <html lang="en" suppressHydrationWarning className={`${inter.variable} ${jetbrainsMono.variable}`}>
       <head>
+        {/* #2331: goober (react-hot-toast's CSS engine) stamps its injected
+            <style> elements from window.__nonce__ — without this the 8 toast
+            keyframe blocks violate style-src-elem and toasts render
+            unanimated. Values are JSON-serialized, never interpolated raw. */}
+        {cspNonce && (
+          <script
+            nonce={cspNonce}
+            dangerouslySetInnerHTML={{ __html: `window.__nonce__=${JSON.stringify(cspNonce)};` }}
+          />
+        )}
         <Script src="/dark-reader-cleanup.js" strategy="beforeInteractive" />
       </head>
       <body className="font-sans">
         <I18nProvider>
           <SkipLink />
-          <ThemeProvider>
+          <ThemeProvider nonce={cspNonce}>
             <ErrorWrapper>
               <CsrfProvider />
               <AnalyticsProvider />
