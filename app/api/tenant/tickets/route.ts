@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { apiError } from '@/lib/api-error';
 import { validateBody, validateQuery, readJsonBody } from '@/lib/api/validate';
-import { createTicketSchema, ticketQuerySchema } from '@/lib/api/schemas';
+import { createTicketSchema, ticketBodyText, ticketQuerySchema } from '@/lib/api/schemas';
 import { requireAuth, requirePerm, requireModule } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { supportTickets, contacts, users } from '@/drizzle/schema';
@@ -115,7 +115,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
         createdBy: ctx.userId,
         contactId: v.contact_id || null,
         subject: v.subject,
-        body: v.description,
+        body: ticketBodyText(v),
         category: v.category || 'general',
         priority: v.priority,
         status: v.status,
@@ -149,6 +149,10 @@ export const POST = withApiRoute(async (request: NextRequest) => {
  
   } catch (err) {
     await logError({ error: err, context: 'tenant tickets POST', requestMethod: 'POST' });
-    return apiError(err);
+    // #2285: the insert used to fail on a NOT NULL column and this returned 500.
+    // The client message is now this route's fixed text in EVERY environment —
+    // `apiError()` scrubs the SQL statement, bound values and even the
+    // SQLSTATE/constraint a drizzle query failure carries, in and out of dev.
+    return apiError(err, 'Failed to create ticket', 500);
   }
 });

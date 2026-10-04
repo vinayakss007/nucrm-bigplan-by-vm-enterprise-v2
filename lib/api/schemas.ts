@@ -216,27 +216,25 @@ export const taskQuerySchema = z.object({
 });
 
 // ── Ticket schemas ──
-export const createTicketSchema = z.object({
-  subject: requiredString.max(300, 'Subject too long'),
-  description: z.string().trim().max(10000).nullable().optional(),
-  status: z.enum(['open', 'in_progress', 'pending', 'resolved', 'closed', 'awaiting_customer', 'on_hold', 'escalated']).optional().default('open'),
-  priority: z.enum(['low', 'medium', 'high', 'urgent', 'critical']).optional().default('medium'),
-  category: z.string().trim().max(100).nullable().optional(),
-  contact_id: uuid,
-  assigned_to: uuid,
-  tags: z.array(z.string()).optional().default([]),
-});
-
-export const updateTicketSchema = createTicketSchema.partial();
-
-export const ticketQuerySchema = z.object({
-  offset: z.coerce.number().int().min(0).default(0),
-  limit: z.coerce.number().int().min(1).max(200).default(50),
-  q: z.string().optional(),
-  status: z.string().optional(),
-  priority: z.string().optional(),
-  category: z.string().optional(),
-});
+/**
+ * The canonical definitions live in `./schemas/support.ts`. They are re-exported
+ * here instead of duplicated because #2285 needed a real change to the create
+ * contract — `support_tickets.body` is NOT NULL while `description` was optional,
+ * so a schema-valid POST 500'd and the error body echoed the whole SQL statement
+ * with its bound values. `description` and `body` are now both accepted and one of
+ * them must carry text.
+ *
+ * `ticketBodyText()` is the single place that decides which name wins, so the
+ * route cannot re introduce the null-into-NOT-NULL insert.
+ */
+export {
+  createTicketSchema,
+  updateTicketSchema,
+  ticketQuerySchema,
+  ticketBodyText,
+  type CreateTicketInput,
+  type UpdateTicketInput,
+} from './schemas/support';
 
 export const ticketReplySchema = z.object({
   content: requiredString.max(10000),
@@ -1018,8 +1016,7 @@ export type CreateLeadInput = z.infer<typeof createLeadSchema>;
 export type UpdateLeadInput = z.infer<typeof updateLeadSchema>;
 export type CreateTaskInput = z.infer<typeof createTaskSchema>;
 export type UpdateTaskInput = z.infer<typeof updateTaskSchema>;
-export type CreateTicketInput = z.infer<typeof createTicketSchema>;
-export type UpdateTicketInput = z.infer<typeof updateTicketSchema>;
+// CreateTicketInput / UpdateTicketInput are re-exported with the schemas above.
 export type CreateInvoiceInput = z.infer<typeof createInvoiceSchema>;
 export type UpdateInvoiceInput = z.infer<typeof updateInvoiceSchema>;
 export type CreateQuoteInput = z.infer<typeof createQuoteSchema>;
