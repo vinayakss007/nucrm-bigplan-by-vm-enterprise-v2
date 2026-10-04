@@ -8,6 +8,8 @@ import { apiError } from '@/lib/api-error';
 import { requireAuth, requirePerm, can } from '@/lib/auth/middleware';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { updateTaskSchema } from '@/lib/api/schemas';
+import { isEntityId } from '@/lib/id';
+import { envelope } from '@/lib/api/response-envelope';
 import { db } from '@/drizzle/db';
 import { tasks } from '@/drizzle/schema';
 import { eq, and, isNull } from 'drizzle-orm';
@@ -19,6 +21,49 @@ import { withConcurrencyGuard } from '@/lib/concurrency';
 import { updatedAtMs } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
+
+/**
+ * #2289: GET /api/tenant/tasks/[id] answered 405 — the detail read was missing
+ * while PATCH/DELETE on the same path worked, so clients had to fetch the
+ * whole list to resolve one task. Mirrors the sibling [id] GETs (contacts,
+ * deals, quotes): tenant-scoped single row in the canonical `{ data }`
+ * envelope (lib/api/response-envelope), and the same ownership rule the
+ * PATCH/DELETE handlers below apply — without `tasks.view_all` a user only
+ * sees tasks assigned to or created by them, answered 404 (not 403) so the
+ * endpoint does not confirm the row exists in their tenant.
+ */
+export const GET = withApiRoute(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
+  try {
+    const ctx = await requireAuth(req);
+    if (ctx instanceof NextResponse) return ctx;
+
+    const deny = requirePerm(ctx, 'tasks.view');
+    if (deny) return deny;
+
+    const id = (await params).id;
+    if (!isEntityId(id)) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+    const [row] = await db
+      .select()
+      .from(tasks)
+      .where(and(eq(tasks.id, id), eq(tasks.tenantId, ctx.tenantId), isNull(tasks.deletedAt)))
+      .limit(1);
+
+    if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+    if (!can(ctx, 'tasks.view_all')) {
+      if (row.assignedTo !== ctx.userId && row.createdBy !== ctx.userId) {
+        return NextResponse.json({ error: 'Not found' }, { status: 404 });
+      }
+    }
+
+    return NextResponse.json(envelope(row));
+
+  } catch (err) {
+    void logError({ error: err, context: 'tenant/tasks/[id] GET' });
+    return apiError(err);
+  }
+});
 
  
  

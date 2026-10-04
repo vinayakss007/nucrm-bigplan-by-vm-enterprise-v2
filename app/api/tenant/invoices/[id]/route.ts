@@ -247,6 +247,16 @@ export const PUT = withApiRoute(async (req: NextRequest, { params }: { params: P
   }
 });
 
+/**
+ * #2289: PATCH answered 405 while PUT worked, even though the PUT above is
+ * already PATCH-semantics — it allowlist-filters the body, applies only the
+ * fields present, and 400s when nothing mutable was supplied. Export the same
+ * handler under the verb the REST matrix expects (including its CSRF check,
+ * concurrency guard and #2226 ledger rules — PATCH gets identical guarantees).
+ * No behaviour change for existing PUT callers.
+ */
+export const PATCH = PUT;
+
 export const DELETE = withApiRoute(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
   const limited = await rateLimitMutating(req, 'invoices', 'delete');
