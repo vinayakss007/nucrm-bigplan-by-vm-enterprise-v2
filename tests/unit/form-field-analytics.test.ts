@@ -119,4 +119,42 @@ describe('computeFieldAnalytics', () => {
     const result = computeFieldAnalytics(numFields, [{ score: 'abc' }, { score: null }]);
     expect(result[0].numericStats).toBeUndefined();
   });
+
+  // #2287: API-created forms persist fields with `id` (no `key`). Analytics
+  // must resolve the same identity as the submit validator, otherwise every
+  // field reports 0% completion.
+  describe('id-shaped (API-created) fields (#2287)', () => {
+    const apiFields = [
+      { id: 'full_name', label: 'Full Name', type: 'text', required: true },
+      { id: 'product', label: 'Product Interest', type: 'select', options: ['A', 'B'] },
+    ];
+    const data = [
+      { full_name: 'Alice', product: 'A' },
+      { full_name: 'Bob', product: 'B' },
+      { full_name: '', product: 'A' },
+    ];
+
+    it('matches submissions by field id for filled counts', () => {
+      const result = computeFieldAnalytics(apiFields as never, data);
+      expect(result.map((f) => f.key)).toEqual(['full_name', 'product']);
+      expect(result[0].filled).toBe(2);
+      expect(result[0].completionRate).toBe(67);
+      expect(result[1].valueDistribution).toEqual(
+        expect.arrayContaining([{ value: 'A', count: 2 }, { value: 'B', count: 1 }]),
+      );
+    });
+
+    it('key still wins when both id and key are present', () => {
+      const both = [{ id: '1', key: 'email', label: 'Email', type: 'email' }];
+      const result = computeFieldAnalytics(both as never, [{ email: 'a@b.co' }]);
+      expect(result[0].key).toBe('email');
+      expect(result[0].filled).toBe(1);
+    });
+
+    it('reports zero-filled analytics for fields without any identity', () => {
+      const result = computeFieldAnalytics([{ label: 'Ghost', type: 'text' } as never], [{ x: 1 }]);
+      expect(result[0].key).toBe('');
+      expect(result[0].filled).toBe(0);
+    });
+  });
 });
