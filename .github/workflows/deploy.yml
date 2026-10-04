@@ -144,6 +144,26 @@ jobs:
             echo "Installing dependencies..."
             npm ci --no-audit --no-fund
 
+            # #2306 — RLS invariant gate, BEFORE anything is restarted. A role
+            # that is a superuser or has BYPASSRLS makes every tenant_isolation
+            # policy a no-op, and that is decided entirely by DATABASE_URL: one
+            # edited value (a restore pointed at the local `postgres` superuser,
+            # say) silently disables isolation for every paying customer while
+            # every test stays green. scripts/check-db-role-privileges.mjs is the
+            # same assertion the startup guard and the nightly use (single source
+            # of truth: lib/db/least-privilege.ts), it reads metadata only, and it
+            # never prints the connection string.
+            echo "Checking DB role privileges: the connecting role must be subject to RLS (#2306)..."
+            if ! npx tsx scripts/check-db-role-privileges.mjs; then
+              echo "ABORT: the role behind this host's DATABASE_URL can bypass RLS"
+              echo "(superuser / BYPASSRLS / owner of un-FORCE'd tenant tables)."
+              echo "Tenant isolation would be a no-op for the app about to be restarted."
+              echo "Provision a least-privilege role (npm run db:provision-app-role) and point"
+              echo "DATABASE_URL at it, then re-run the deploy. Nothing was restarted."
+              exit 1
+            fi
+            echo "DB role is RLS-constrained — safe to build and restart."
+
             echo "Building..."
             NODE_OPTIONS="--max-old-space-size=8192" npm run build
 

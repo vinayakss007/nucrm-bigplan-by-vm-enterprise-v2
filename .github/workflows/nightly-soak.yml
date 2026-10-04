@@ -1,8 +1,26 @@
-name: Nightly load soak (#2120)
+name: Nightly load soak + RLS role guards (#2120, #2306)
 
-# Disabled by default: only runs when the repo variable LOAD_SOAK_ENABLED is
-# set to "true" and LOAD_SESSIONS_B64 (base64 of a sessions.json built by
-# tests/load/make-sessions.sh) plus LOAD_BASE_URL secrets exist.
+# Two independent scheduled jobs.
+#
+#   soak       — k6 load soak. Disabled unless the repo variable LOAD_SOAK_ENABLED
+#                is "true" and LOAD_SESSIONS_B64 (base64 of a sessions.json built
+#                by tests/load/make-sessions.sh) plus LOAD_BASE_URL secrets exist.
+#
+#   rls-guards — #2306. The superuser/BYPASSRLS assertions in scripts/preflight.ts,
+#                scripts/verify-tenant-isolation.ts and
+#                scripts/check-db-role-privileges.mjs were code-complete but
+#                scheduled by NOTHING (`grep preflight` across .github/workflows,
+#                deploy/cron and scripts/cron-scheduler.ts returned no matches),
+#                so "the live role happens to be non-superuser" stayed an
+#                unenforced runtime fact — the exact reasoning behind retracting
+#                #2253. One edited DATABASE_URL (a restore pointed at the dev
+#                `postgres` superuser, say) silently turns every
+#                tenant_isolation policy into a no-op for every paying customer,
+#                and every test stays green because CI provisions its own DB.
+#                This job runs the guards nightly, proves they actually fire
+#                (negative control against a real superuser), records the results
+#                as an artifact, and alerts on failure. Opt out deliberately with
+#                the RLS_GUARD_ENABLED repo variable set to "false".
 on:
   schedule:
     - cron: "17 3 * * *"
@@ -11,7 +29,152 @@ on:
 permissions: {}
 
 jobs:
+  # ── #2306 — put the RLS role invariant on a schedule ────────────────────────
+  rls-guards:
+    name: RLS role guards
+    if: vars.RLS_GUARD_ENABLED != 'false'
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: nucrm
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - run: npm ci
+
+      # Positive control: the guard passes a genuinely constrained role, so the
+      # job is not red for a reason unrelated to the invariant.
+      - name: Positive control — a least-privilege role passes the guard
+        env:
+          # A CI-only role in a CI-only database, and that database speaks
+          # plaintext, so TLS is off here — see lib/db/ssl-config.ts.
+          DATABASE_SSL: "false"
+          DATABASE_URL: postgresql://nucrm_guard:ci-guard-only@localhost:5432/nucrm
+        run: |
+          set -euo pipefail
+          RESULTS_DIR="$RUNNER_TEMP/rls-guard-results"
+          mkdir -p "$RESULTS_DIR"
+          psql "postgresql://postgres:postgres@localhost:5432/nucrm" -v ON_ERROR_STOP=1 -c \
+            "DROP ROLE IF EXISTS nucrm_guard; CREATE ROLE nucrm_guard LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE PASSWORD 'ci-guard-only'" \
+            | tee "$RESULTS_DIR/positive-control.log"
+          npx tsx scripts/check-db-role-privileges.mjs 2>&1 \
+            | tee -a "$RESULTS_DIR/positive-control.log"
+
+      # Negative control: the acceptance criterion "a deliberate wrong-role
+      # DATABASE_URL turns the run red" is asserted here, against a real
+      # superuser, every single night — not assumed from the script's tests.
+      - name: Negative control — the guard MUST fire against a superuser
+        env:
+          DATABASE_SSL: "false"
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/nucrm
+        run: |
+          set -uo pipefail
+          RESULTS_DIR="$RUNNER_TEMP/rls-guard-results"
+          mkdir -p "$RESULTS_DIR"
+          if npx tsx scripts/check-db-role-privileges.mjs 2>&1 | tee "$RESULTS_DIR/negative-control.log"; then
+            echo "::error::#2306 the role guard PASSED a superuser connection — the invariant is not actually enforced."
+            exit 1
+          fi
+          grep -q "SUPERUSER" "$RESULTS_DIR/negative-control.log" || {
+            echo "::error::#2306 the guard failed, but not for the superuser reason — inspect negative-control.log."
+            exit 1
+          }
+          echo "OK: a superuser DATABASE_URL turns this guard red, exactly as #2306 requires."
+
+      # The real measurement: the pre-prod database, with the same three guards
+      # the issue asked for. TLS stays at the shared default (on) here.
+      - name: Live guards against the pre-prod database
+        env:
+          DATABASE_URL: ${{ secrets.PREPROD_DATABASE_URL }}
+          NODE_ENV: production
+          JWT_SECRET: ${{ secrets.JWT_SECRET || 'ci-jwt-secret-not-weak-at-all-32chars-long-enough' }}
+          SESSION_SECRET: ${{ secrets.SESSION_SECRET || 'ci-session-secret-safe-value-32chars-long-enough' }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET || 'ci-cron-secret-safe-value-that-is-32chars-long' }}
+          NEXT_PUBLIC_APP_URL: ${{ vars.PREPROD_APP_URL || 'http://localhost:3000' }}
+        run: |
+          # `-e` is deliberately OFF here: this step collects each guard's exit
+          # code so one gap cannot hide the others, then reports them together.
+          set -uo pipefail
+          RESULTS_DIR="$RUNNER_TEMP/rls-guard-results"
+          mkdir -p "$RESULTS_DIR"
+          if [ -z "${DATABASE_URL:-}" ]; then
+            echo "::error::#2306 the nightly RLS guard has no live database to measure: add the PREPROD_DATABASE_URL repository secret (a least-privilege app role, see npm run db:provision-app-role), or set the RLS_GUARD_ENABLED variable to 'false' to opt out deliberately. A guard that silently never runs is the bug this job exists to prevent."
+            exit 1
+          fi
+
+          # Full isolation survey: policies, FORCE RLS, unpoliced tables AND the
+          # role invariant. Exits non-zero on any gap -> red nightly.
+          npx tsx scripts/verify-tenant-isolation.ts 2>&1 | tee "$RESULTS_DIR/verify-tenant-isolation.log"
+          iso=${PIPESTATUS[0]}
+          npx tsx scripts/verify-tenant-isolation.ts --json > "$RESULTS_DIR/verify-tenant-isolation.json" || true
+
+          # The same assertion the deploy gate and app startup make (#2306).
+          npx tsx scripts/check-db-role-privileges.mjs 2>&1 | tee "$RESULTS_DIR/check-db-role-privileges.log"
+          role=${PIPESTATUS[0]}
+
+          # preflight.ts measures the whole boot profile (redis, email, off-site
+          # backups), which is wider than this invariant, so its report is
+          # recorded and only its db:rls verdict is promoted to a blocker here.
+          # NODE_ENV=production makes that verdict a FAIL rather than a WARN.
+          npx tsx scripts/preflight.ts 2>&1 | tee "$RESULTS_DIR/preflight.log" || true
+          rls_fail=0
+          if grep -q '\[FAIL\] db:rls' "$RESULTS_DIR/preflight.log"; then
+            rls_fail=1
+            echo "::error::#2306 preflight reports RLS is NOT enforced against the connecting role."
+          fi
+
+          echo "verify-tenant-isolation exit=$iso | check-db-role-privileges exit=$role | preflight db:rls fail=$rls_fail" \
+            | tee "$RESULTS_DIR/summary.txt"
+          if [ "$iso" -ne 0 ] || [ "$role" -ne 0 ] || [ "$rls_fail" -ne 0 ]; then
+            exit 1
+          fi
+
+      - name: Upload guard results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: rls-guard-results-${{ github.run_number }}
+          path: ${{ runner.temp }}/rls-guard-results
+          if-no-files-found: warn
+          retention-days: 30
+
+      # Reuses the fan-out endpoint lib/critical-error-alert.ts posts to
+      # (CRITICAL_ERROR_WEBHOOK_URL -> Slack/Discord/Telegram/PagerDuty). The
+      # payload carries the run link only — never a connection string.
+      - name: Alert operations on failure
+        if: failure()
+        env:
+          CRITICAL_ALERT_URL: ${{ secrets.CRITICAL_ERROR_WEBHOOK_URL }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ -z "${CRITICAL_ALERT_URL:-}" ]; then
+            echo "No CRITICAL_ERROR_WEBHOOK_URL configured — the red nightly is the only alert."
+            exit 0
+          fi
+          curl -sS -X POST "$CRITICAL_ALERT_URL" \
+            -H 'Content-Type: application/json' \
+            --max-time 10 \
+            -d "{\"event\":\"rls_guard_nightly\",\"level\":\"fatal\",\"message\":\"#2306 nightly RLS role guard failed\",\"run_url\":\"$RUN_URL\",\"service\":\"nucrm-enterprise\"}" \
+            || echo "alert delivery failed (non-blocking)"
+
   soak:
+    name: Load soak
     if: vars.LOAD_SOAK_ENABLED == 'true'
     runs-on: ubuntu-latest
     steps:
