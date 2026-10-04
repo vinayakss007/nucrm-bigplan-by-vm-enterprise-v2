@@ -10,12 +10,13 @@ import { db } from '@/drizzle/db';
 import { subscriptions, dunningAttempts, dunningSettings, billingEvents } from '@/drizzle/schema';
 import { eq, and, sql, ne } from 'drizzle-orm';
 import { z } from 'zod';
+import { uuidIdSchemaWith } from '@/lib/validation/uuid';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { isStripeConfigured } from '@/lib/stripe';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 const retrySchema = z.object({
-  subscriptionId: z.string().uuid('Invalid subscription ID'),
+  subscriptionId: uuidIdSchemaWith('Invalid subscription ID'),
 });
 
 /** Thrown inside the retry transaction when the dunning retry cap is hit. */

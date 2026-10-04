@@ -11,12 +11,13 @@ import { db } from '@/drizzle/db';
 import { approvalRequests } from '@/drizzle/schema/core';
 import { eq, and, desc } from 'drizzle-orm';
 import { z } from 'zod';
+import { uuidIdSchema } from '@/lib/validation/uuid';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { parseLimitOffset } from '@/lib/api/query-params';
 
 const approvalActionSchema = z.object({
-  request_id: z.string().uuid(),
+  request_id: uuidIdSchema,
   action: z.enum(['approve', 'reject']),
   reason: z.string().max(1000).optional(),
 });

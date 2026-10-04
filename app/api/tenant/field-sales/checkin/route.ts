@@ -9,6 +9,7 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { logError } from '@/lib/errors-server';
 import { z } from 'zod';
+import { uuidIdSchema } from '@/lib/validation/uuid';
 import {
   createCheckIn,
   getUserCheckIns,
@@ -18,8 +19,8 @@ import { withApiRoute } from '@/lib/api/with-api-route';
 const createCheckInSchema = z.object({
   lat: z.number().min(-90).max(90),
   lng: z.number().min(-180).max(180),
-  contactId: z.string().uuid().optional(),
-  companyId: z.string().uuid().optional(),
+  contactId: uuidIdSchema.optional(),
+  companyId: uuidIdSchema.optional(),
   photoUrl: z.string().url().optional(),
   voiceNoteUrl: z.string().url().optional(),
   address: z.string().optional(),

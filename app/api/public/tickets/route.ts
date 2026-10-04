@@ -9,6 +9,7 @@ import { db } from '@/drizzle/db';
 import { supportTickets, contacts } from '@/drizzle/schema';
 import { eq, and, desc } from 'drizzle-orm';
 import { z } from 'zod';
+import { uuidIdSchemaWith } from '@/lib/validation/uuid';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { generatePortalToken } from '@/lib/ticket-portal';
@@ -25,7 +26,7 @@ const publicTicketSchema = z.object({
   // token) under the wrong workspace. A logged-in portal caller (session
   // cookie / x-portal-token) never needs this — the tenant is derived from
   // their server-validated identity and any body value is ignored.
-  tenant_id: z.string().uuid('tenant_id is required').optional(),
+  tenant_id: uuidIdSchemaWith('tenant_id is required').optional(),
 });
 
 /**

@@ -4,10 +4,11 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { z } from 'zod';
+import { uuidIdSchema } from '@/lib/validation/uuid';
 import { CONTRACT_TYPES } from './schemas/billing';
 
 // ── Common helpers ──
-const uuid = z.string().uuid().optional().nullable().or(z.literal(''));
+const uuid = uuidIdSchema.optional().nullable().or(z.literal(''));
 const _optionalString = z.string().trim();
 const requiredString = z.string().trim().min(1);
 const _optionalDate = z.string().datetime().optional().nullable();
@@ -50,7 +51,7 @@ export const contactQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(200).default(50),
   q: z.string().optional(),
   lead_status: z.string().optional(),
-  company_id: z.string().uuid().optional().or(z.literal('')),
+  company_id: uuidIdSchema.optional().or(z.literal('')),
 });
 
 // ── Deal schemas ──
@@ -77,7 +78,7 @@ export const dealQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(500).default(200),
   stage_id: z.string().optional(),
   stage: z.string().optional(),
-  pipeline_id: z.string().uuid().optional(),
+  pipeline_id: uuidIdSchema.optional(),
   q: z.string().optional(),
   /**
    * Archive visibility. Deals are archived by setting metadata.archived = true
@@ -177,7 +178,7 @@ export const leadQuerySchema = z.object({
   source: z.string().optional(),
   // #1083 — surface the leads data model as filters
   lead_status: z.string().trim().max(50).optional(),
-  assigned_to: z.string().uuid().optional().or(z.literal('')),
+  assigned_to: uuidIdSchema.optional().or(z.literal('')),
   lifecycle_stage: z.string().trim().max(50).optional(),
   // Comma-separated tag list; every provided tag must be present on the lead.
   tags: z.string().trim().max(500).optional(),
@@ -210,8 +211,8 @@ export const taskQuerySchema = z.object({
   q: z.string().optional(),
   status: z.string().optional(),
   priority: z.string().optional(),
-  contact_id: z.string().uuid().optional(),
-  deal_id: z.string().uuid().optional(),
+  contact_id: uuidIdSchema.optional(),
+  deal_id: uuidIdSchema.optional(),
 });
 
 // ── Ticket schemas ──
@@ -268,7 +269,7 @@ export const invoiceQuerySchema = z.object({
   offset: z.coerce.number().int().min(0).default(0),
   limit: z.coerce.number().int().min(1).max(200).default(50),
   status: z.string().optional(),
-  contact_id: z.string().uuid().optional(),
+  contact_id: uuidIdSchema.optional(),
 });
 
 // ── Quote schemas ──
@@ -420,7 +421,7 @@ export const updatePipelineSchema = createPipelineSchema.partial();
 
 // ── Deal Stage schemas ──
 export const createDealStageSchema = z.object({
-  pipeline_id: z.string().uuid(),
+  pipeline_id: uuidIdSchema,
   name: requiredString.max(100),
   order: z.coerce.number().int().min(0).optional().default(0),
   probability: z.coerce.number().min(0).max(100).optional().default(0),
@@ -552,14 +553,14 @@ export const inviteMemberSchema = z.object({
   password: z.string().min(8, 'Password must be at least 8 characters').max(128).optional(),
   full_name: z.string().trim().min(1).max(200).optional(),
   role_slug: z.string().trim().toLowerCase().regex(/^[a-z0-9_-]{1,64}$/, 'Invalid role').optional().default('sales_rep'),
-  role_id: z.string().uuid().optional(),
+  role_id: uuidIdSchema.optional(),
   permissions: z.record(z.string(), z.boolean()).optional().default({}),
 });
 
 // ── Superadmin user update schema (PATCH /api/superadmin/users) ──
 // role/status enums MUST match the route's allowed values.
 export const updateSuperadminUserSchema = z.object({
-  id: z.string().uuid(),
+  id: uuidIdSchema,
   full_name: z.string().trim().max(200).optional().nullable(),
   role: z.enum(['admin', 'user', 'viewer']).optional(),
   status: z.enum(['active', 'suspended']).optional(),
@@ -567,11 +568,11 @@ export const updateSuperadminUserSchema = z.object({
 
 // ── Bulk operation schemas ──
 export const bulkDeleteSchema = z.object({
-  ids: z.array(z.string().uuid()).min(1, 'At least one ID required').max(1000),
+  ids: z.array(uuidIdSchema).min(1, 'At least one ID required').max(1000),
 });
 
 export const bulkUpdateSchema = z.object({
-  ids: z.array(z.string().uuid()).min(1, 'At least one ID required').max(1000),
+  ids: z.array(uuidIdSchema).min(1, 'At least one ID required').max(1000),
   updates: z.record(z.string(), z.unknown()),
 });
 
@@ -603,7 +604,7 @@ export const searchSchema = z.object({
 export const createKbArticleSchema = z.object({
   title: requiredString.max(300),
   content: requiredString.max(50000),
-  category_id: z.string().uuid().optional(),
+  category_id: uuidIdSchema.optional(),
   status: z.enum(['draft', 'published', 'archived', 'review', 'needs_review']).optional().default('draft'),
   tags: z.array(z.string()).optional().default([]),
   order: z.coerce.number().int().min(0).optional().default(0),
@@ -739,8 +740,8 @@ export const updateScheduledReportSchema = createScheduledReportSchema.partial()
 export const createBackupSchema = z.object({
   backup_type: z.enum(['full', 'schema', 'selective']).optional().default('full'),
   action: z.literal('restore').optional(),
-  backupId: z.string().uuid().optional(),
-  tenant_id: z.string().uuid().optional(),
+  backupId: uuidIdSchema.optional(),
+  tenant_id: uuidIdSchema.optional(),
 });
 
 export const backupConfigSchema = z.object({
@@ -774,7 +775,7 @@ export const createCustomFieldSchema = z.object({
 });
 
 export const updateCustomFieldSchema = z.object({
-  fieldId: z.string().uuid(),
+  fieldId: uuidIdSchema,
   fieldLabel: z.string().trim().max(200).optional(),
   fieldType: z.enum(customFieldTypes).optional(),
   fieldOptions: z.array(z.string()).optional().nullable(),
@@ -787,8 +788,8 @@ export const updateCustomFieldSchema = z.object({
 
 // ── Contact Merge schema ──
 export const mergeContactSchema = z.object({
-  primary_contact_id: z.string().uuid(),
-  duplicate_contact_id: z.string().uuid(),
+  primary_contact_id: uuidIdSchema,
+  duplicate_contact_id: uuidIdSchema,
   merge_strategy: z.record(z.string(), z.unknown()).optional().default({}),
   reason: z.string().trim().max(500).optional().nullable(),
 });
@@ -798,15 +799,15 @@ export const convertLeadSchema = z.object({
   create_deal: z.boolean().optional().default(false),
   deal_title: z.string().trim().max(200).optional().nullable(),
   deal_value: z.coerce.number().min(0).optional().default(0),
-  deal_stage: z.string().uuid().optional().nullable(),
-  pipeline_id: z.string().uuid().optional().nullable(),
-  assigned_to: z.string().uuid().optional().nullable(),
+  deal_stage: uuidIdSchema.optional().nullable(),
+  pipeline_id: uuidIdSchema.optional().nullable(),
+  assigned_to: uuidIdSchema.optional().nullable(),
 });
 
 // ── Trigger Workflow schema ──
 export const triggerWorkflowSchema = z.object({
   trigger_entity_type: requiredString.max(100),
-  trigger_entity_id: z.string().uuid(),
+  trigger_entity_id: uuidIdSchema,
 });
 
 // ── WhatsApp Send schema ──
@@ -816,7 +817,7 @@ export const sendWhatsAppSchema = z.object({
   content: z.record(z.string(), z.unknown()).optional().default({}),
   template_name: z.string().trim().max(100).optional().nullable(),
   language: z.string().max(10).optional().default('en'),
-  contact_id: z.string().uuid().optional().nullable(),
+  contact_id: uuidIdSchema.optional().nullable(),
 });
 
 // ── Email Test schema ──
@@ -835,14 +836,14 @@ export const publicLeadCaptureSchema = z.object({
   company: z.string().trim().max(200).optional().nullable(),
   message: z.string().trim().max(5000).optional().nullable(),
   source: z.string().trim().max(100).optional().default('Website Form'),
-  tenant_id: z.string().uuid(),
-  form_id: z.string().uuid().optional().nullable(),
+  tenant_id: uuidIdSchema,
+  form_id: uuidIdSchema.optional().nullable(),
   tags: z.array(z.string()).optional().default([]),
 });
 
 // ── Public Form Submit schema ──
 export const publicFormSubmitSchema = z.object({
-  form_id: z.string().uuid(),
+  form_id: uuidIdSchema,
   data: z.record(z.string(), z.unknown()).optional().default({}),
   values: z.record(z.string(), z.unknown()).optional().default({}),
 });
@@ -898,8 +899,8 @@ export const aiAssistantSchema = z.object({
 
 // ── Assign Contact schema (bulk assign) ──
 export const assignContactSchema = z.object({
-  contact_ids: z.array(z.string().uuid()).min(1, 'At least one contact ID required').max(500),
-  assign_to: z.string().uuid(),
+  contact_ids: z.array(uuidIdSchema).min(1, 'At least one contact ID required').max(500),
+  assign_to: uuidIdSchema,
   reason: z.string().trim().max(500).optional().nullable(),
 });
 
@@ -927,7 +928,7 @@ export const updateTelegramSchema = z.object({
 
 // ── Checkout Session schema ──
 export const checkoutSessionSchema = z.object({
-  plan_id: z.string().uuid(),
+  plan_id: uuidIdSchema,
 });
 
 // ── Superadmin schemas ──
@@ -999,13 +1000,12 @@ export const updateProjectSchema = createProjectSchema.partial();
 export const createMilestoneSchema = z.object({
   title: requiredString.max(200, 'Title too long'),
   due_date: z.string().date().optional().nullable(),
-  project_id: z.string().uuid(),
+  project_id: uuidIdSchema,
 });
 
 export const linkTaskSchema = z.object({
-  task_id: z.string().uuid(),
+  task_id: uuidIdSchema,
 });
-
 
 // ── Type exports ──
 export type CreateContactInput = z.infer<typeof createContactSchema>;
@@ -1104,10 +1104,10 @@ export const followUpQuerySchema = z.object({
   offset: z.coerce.number().int().min(0).default(0),
   limit: z.coerce.number().int().min(1).max(200).default(50),
   status: z.string().optional(),
-  lead_id: z.string().uuid().optional(),
-  contact_id: z.string().uuid().optional(),
-  deal_id: z.string().uuid().optional(),
-  assigned_to: z.string().uuid().optional(),
+  lead_id: uuidIdSchema.optional(),
+  contact_id: uuidIdSchema.optional(),
+  deal_id: uuidIdSchema.optional(),
+  assigned_to: uuidIdSchema.optional(),
   due_before: z.string().datetime().optional(),
   due_after: z.string().datetime().optional(),
   missed_only: z.coerce.boolean().optional().default(false),
@@ -1211,7 +1211,7 @@ export const createWebhookFieldMappingSchema = z.object({
 });
 
 export const updateWebhookFieldMappingSchema = z.object({
-  id: z.string().uuid(),
+  id: uuidIdSchema,
   sourceKey: requiredString.max(200).optional(),
   targetType: z.enum(['custom_field', 'native']).optional(),
   targetKey: requiredString.max(200).optional(),

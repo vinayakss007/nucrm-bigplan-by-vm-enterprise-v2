@@ -22,11 +22,12 @@
  * monolith with a different body, so this drift cannot silently reappear.
  */
 import { z } from 'zod';
+import { uuidIdSchema } from '@/lib/validation/uuid';
 
 // ── Tenant hierarchy schemas (re-exported by lib/api/schemas.ts) ──
 export const createHierarchySchema = z.object({
-  childTenantId: z.string().uuid(),
-  parent_id: z.string().uuid().optional(),
+  childTenantId: uuidIdSchema,
+  parent_id: uuidIdSchema.optional(),
   relationship: z.enum(['parent', 'division', 'franchise', 'branch']),
   relationship_type: z.string().trim().max(100).optional(),
   description: z.string().trim().max(500).optional(),
@@ -34,5 +35,5 @@ export const createHierarchySchema = z.object({
 });
 
 export const updateHierarchySchema = createHierarchySchema.partial().extend({
-  id: z.string().uuid(),
+  id: uuidIdSchema,
 });

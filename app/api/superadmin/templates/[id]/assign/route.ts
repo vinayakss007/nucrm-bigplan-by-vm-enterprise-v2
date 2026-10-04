@@ -5,6 +5,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { uuidIdSchema } from '@/lib/validation/uuid';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
@@ -15,7 +16,7 @@ import { withApiRoute } from '@/lib/api/with-api-route';
 import { logError } from '@/lib/errors-server';
 
 const assignSchema = z.object({
-  tenant_id: z.string().uuid(),
+  tenant_id: uuidIdSchema,
 });
 
 export const POST = withApiRoute(async (req: NextRequest,

@@ -11,21 +11,22 @@ import { callLogs } from '@/drizzle/schema';
 import { contacts, companies, users } from '@/drizzle/schema';
 import { eq, and, desc, isNull } from 'drizzle-orm';
 import { z } from 'zod';
+import { uuidIdSchema, uuidIdSchemaWith } from '@/lib/validation/uuid';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { parseLimitOffset } from '@/lib/api/query-params';
 
 const createCallSchema = z.object({
-  contact_id: z.string().uuid('contact_id must be a valid UUID'),
-  company_id: z.string().uuid().optional().nullable(),
-  deal_id: z.string().uuid().optional().nullable(),
+  contact_id: uuidIdSchemaWith('contact_id must be a valid UUID'),
+  company_id: uuidIdSchema.optional().nullable(),
+  deal_id: uuidIdSchema.optional().nullable(),
   direction: z.enum(['inbound', 'outbound']).optional().default('outbound'),
   duration: z.number().int().min(0).optional().default(0),
   notes: z.string().max(5000).optional().nullable(),
   phone_number: z.string().max(30).optional().nullable(),
   recorded_url: z.string().max(500).optional().nullable(),
-  assigned_to: z.string().uuid().optional().nullable(),
+  assigned_to: uuidIdSchema.optional().nullable(),
 });
 
 /**

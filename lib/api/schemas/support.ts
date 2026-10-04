@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { z } from 'zod';
+import { uuidIdSchema } from '@/lib/validation/uuid';
 import { uuid, requiredString } from './common';
 
 // ── Ticket schemas ──
@@ -45,14 +46,14 @@ export const createTicketReplySchema = z.object({
 export const ticketReplyQuerySchema = z.object({
   offset: z.coerce.number().int().min(0).default(0),
   limit: z.coerce.number().int().min(1).max(200).default(50),
-  contact_id: z.string().uuid().optional(),
+  contact_id: uuidIdSchema.optional(),
 });
 
 // ── KB Article schemas ──
 export const createKbArticleSchema = z.object({
   title: requiredString.max(300),
   content: requiredString.max(50000),
-  category_id: z.string().uuid().optional(),
+  category_id: uuidIdSchema.optional(),
   status: z.enum(['draft', 'published', 'archived', 'review', 'needs_review']).optional().default('draft'),
   tags: z.array(z.string()).optional().default([]),
   order: z.coerce.number().int().min(0).optional().default(0),
@@ -65,7 +66,7 @@ export const kbArticleQuerySchema = z.object({
   offset: z.coerce.number().int().min(0).default(0),
   limit: z.coerce.number().int().min(1).max(200).default(50),
   q: z.string().optional(),
-  category_id: z.string().uuid().optional(),
+  category_id: uuidIdSchema.optional(),
   status: z.string().optional(),
   tags: z.array(z.string()).optional(),
 });
