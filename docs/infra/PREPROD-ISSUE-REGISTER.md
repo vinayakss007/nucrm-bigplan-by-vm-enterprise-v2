@@ -438,6 +438,18 @@ Everything above was written from a single event's metadata. I checked the runni
     an event landed, no regression can be tracked, and **the "Sentry issues" table earlier in this
     register was pulled 2026-09-15 and cannot be refreshed**. `lib/capture-error.ts` also discards the
     event id returned by `captureException()`, so app logs alone can never prove ingest either.
+- **What "one shared image" actually means right now — and it is worse than merely untagged.**
+  `deploy/docker-compose.preprod.yml` documents app + worker as a single shared image, but the three
+  running containers are three different builds, each carrying its own fallback id:
+  `nucrm-app build-1791041783` (started 2026-10-03T16:03:42Z), `nucrm-worker build-1791013739`
+  (08:01:16Z), `nucrm-realtime build-1791002123` (04:44:29Z) — the queue worker is 8 hours and the
+  realtime server 11 hours behind the API they share a codebase with. The two older digests no longer
+  exist locally (`docker image inspect sha256:a431a9c2…` → `Error response from daemon: No such
+image`), so **restarting worker or realtime silently deploys whatever `nucrm-app:preprod` points at
+  at that moment**. This is the "nobody can say what was serving traffic" case in the flesh, and the
+  reason `guard:running-config` now reports release identity per container and fails an untagged
+  build. The fix is one deploy, not a config edit: build once with `SENTRY_RELEASE=$(git rev-parse
+--short HEAD)` and recreate app + worker + realtime together from that tag.
 - **Method note (this is the reusable part).** `Client._isEnabled()` is
   `options.enabled !== false && this._transport !== undefined`, and `close()` sets `enabled = false`.
   A "Transport disabled" debug line printed _after_ `Sentry.close()` therefore looks like a cause and

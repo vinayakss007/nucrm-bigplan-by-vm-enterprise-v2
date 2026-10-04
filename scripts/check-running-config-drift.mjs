@@ -26,6 +26,12 @@
  * create time rather than mounting, so `stop_grace_period` is compared against
  * the running `HostConfig.StopTimeout` too — since PP-029 that number is the
  * bound on how long a redeploy waits for live work.
+ *
+ * A third thing nothing checked (PP-016): what the running container *is*. The only artifact
+ * identifier the image carries is `.next/BUILD_ID`, and when `--build-arg SENTRY_RELEASE` was not
+ * passed the Dockerfile writes `build-$(date -u +%s)` into it. That string is simultaneously the
+ * Sentry release, so an untagged deploy means events bucket per build and no post-mortem can say
+ * which commit was serving traffic. Reported per container as `release identity` below.
  */
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -154,8 +160,41 @@ function stopGraceCheck(name) {
   return { name, service, want, got: runningStopTimeout(name), declared: raw === undefined ? `(default ${DEFAULT_STOP_TIMEOUT_S}s)` : String(raw) };
 }
 
+/**
+ * PP-016 — whether a running container can be tied to a commit at all.
+ * `resolveRelease()` in sentry.server.config.ts falls back to `.next/BUILD_ID`, and the
+ * Dockerfile writes `build-$(date -u +%s)` into that file when `--build-arg SENTRY_RELEASE`
+ * was not passed. A release that is a build timestamp means Sentry (and any later post-mortem)
+ * buckets events per build rather than per deploy — and it is the only artifact identifier we
+ * have, because no commit sha is recorded in the image. So this prints the shape, loudly.
+ */
+const BUILD_ID_PATH = '/app/.next/BUILD_ID';
+const EPOCH_FALLBACK = /^build-\d+$/;
+
+function envValue(name, key) {
+  const raw = execFileSync('docker', ['inspect', '-f', '{{range .Config.Env}}{{println .}}{{end}}', name],
+    { encoding: 'utf8' });
+  const line = raw.split('\n').find((l) => l.startsWith(`${key}=`));
+  return line ? line.slice(key.length + 1) : '';
+}
+
+function releaseIdentity(name) {
+  let buildId = '';
+  try {
+    buildId = execFileSync('docker', ['exec', name, 'cat', BUILD_ID_PATH], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+  } catch {
+    return null; // not a Next.js app container — nothing to say
+  }
+  const runtime = envValue(name, 'SENTRY_RELEASE');
+  const baked = envValue(name, 'NEXT_PUBLIC_SENTRY_RELEASE');
+  const effective = runtime || baked || buildId;
+  return { name, buildId, runtime, effective, untagged: EPOCH_FALLBACK.test(effective) };
+}
+
 const drift = [];
 const graceDrift = [];
+const untaggedRelease = [];
+const taggedRelease = [];
 const ok = [];
 const unchecked = [];
 let graceOk = 0;
@@ -181,10 +220,23 @@ for (const name of containers()) {
   } catch (err) {
     unchecked.push(`${name} — stop_grace_period check failed: ${err instanceof Error ? err.message : err}`);
   }
+  try {
+    const rel = releaseIdentity(name);
+    if (rel) (rel.untagged ? untaggedRelease : taggedRelease).push(rel);
+  } catch (err) {
+    unchecked.push(`${name} — release identity check failed: ${err instanceof Error ? err.message : err}`);
+  }
 }
 
 console.log(`running-config drift: ${ok.length} identical · ${drift.length} drifted · ${unchecked.length} unchecked`);
 console.log(`stop_grace_period: ${graceOk} match the running container · ${graceDrift.length} drifted`);
+// One line per container, not one aggregate: several services can run the same image and
+// each is a separate deploy, so "3 untagged" tells nobody which one to look at.
+console.log(`release identity: ${taggedRelease.length} tied to a commit · ${untaggedRelease.length} untagged (build-timestamp fallback)`);
+for (const r of taggedRelease) console.log(`  ok        ${r.name}  release=${r.effective}`);
+for (const r of untaggedRelease) {
+  console.log(`  UNTAGGED  ${r.name}  BUILD_ID=${r.buildId} · SENTRY_RELEASE=${r.runtime || '(empty)'} — this artifact cannot be tied to a commit`);
+}
 for (const d of drift) {
   console.log(`  DRIFT  ${d.name}  ${d.src}\n         repo=${d.host} running=${d.ctr} — the container is NOT serving the committed file`);
 }
@@ -192,6 +244,8 @@ for (const g of graceDrift) {
   console.log(`  DRIFT  ${g.name} ${g.service}  stop_grace_period: compose=${g.declared} (${g.want}s) running=${g.got}s`);
 }
 for (const u of unchecked) console.log(`  ?      ${u}`);
+
+let failed = false;
 
 if (drift.length > 0 || graceDrift.length > 0) {
   // Compose takes SERVICE names, not container names, so the command printed
@@ -203,5 +257,20 @@ if (drift.length > 0 || graceDrift.length > 0) {
   console.log('\n  A reload cannot fix this — a file bind mount pins an inode and HostConfig is fixed at create time,');
   console.log('  so only recreation re-attaches the mount or re-applies the declared stop grace:');
   console.log(`    cd deploy && docker compose -f docker-compose.production.yml -f docker-compose.preprod.yml up -d --force-recreate ${services.join(' ')}`);
-  process.exit(1);
+  failed = true;
 }
+
+if (untaggedRelease.length > 0) {
+  console.log('\n  Nothing in the running image records a commit, so Sentry groups events by build id and a');
+  console.log('  post-mortem cannot say what is deployed. Both compose paths interpolate the same variable');
+  console.log('  (`build.args.SENTRY_RELEASE` and `environment`), so set it once for the build AND the run:');
+  console.log('    cd deploy && SENTRY_RELEASE=$(git -C .. rev-parse --short HEAD) \\');
+  console.log('      docker compose -f docker-compose.production.yml -f docker-compose.preprod.yml build app');
+  console.log('    cd deploy && SENTRY_RELEASE=$(git -C .. rev-parse --short HEAD) \\');
+  console.log('      docker compose -f docker-compose.production.yml -f docker-compose.preprod.yml up -d app');
+  console.log('  Do NOT put a fixed SENTRY_RELEASE in deploy/.env: it interpolates forever, so a stale value');
+  console.log('  becomes a confidently-wrong release — worse than the empty one this check is complaining about.');
+  failed = true;
+}
+
+if (failed) process.exit(1);
