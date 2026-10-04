@@ -66,6 +66,8 @@ Severity: **S1** blocks go-live · **S2** broken feature or security weakness ·
 | PP-044 | S2  | Panel + data safety   | Selective restore's first write is rejected by RLS (measured 42501), its rollback endpoint read a column that never existed and rewrote a completed restore as `failed`, and all three tables hold 0 rows                          | 🔧 2 FIXES IN TREE · 3 decisions open (#7, snapshot link) |
 | PP-045 | S3  | Retention + reporting | The manual "purge now" path deleted four of the six trash types the UI shows and reported `purge_trash()`'s statement counter (≤4) as an item count, with no audit record                                                          | 🔧 FIXED IN TREE · window and super-admin scope open      |
 
+| PP-046 | S3 | CHECK vs code | The compliance dropdown offered `notes` and `tasks` as retention entity types; the table's CHECK accepts five values and neither of those, so two options could never be saved | 🔧 FIXED IN TREE · enforcement is the open half (#60) |
+
 ## Sentry issues → register entries
 
 Latest 5 issues in org `asd-pz` (project `nucrm`), pulled 2026-09-15T01:47Z:
@@ -1575,6 +1577,74 @@ NOW() - interval '30 days'`, each followed by `v_count := v_count + 1`, and `RET
 - **Files:** `app/api/tenant/trash/route.ts`, `tests/unit/tenant-trash-purge-all.test.ts`,
   `app/api/cron/cleanup/route.ts` (read only),
   `drizzle/migrations/0032_missing_db_functions.sql:169` (where the function is defined)
+
+## PP-046 — 🔧 Retention `entity_type` vocabulary drift: the compliance dropdown offers two entity types the table can never store _(S3 · CHECK vs code + inert setting)_
+
+**Found:** 2026-10-04 (UTC), verifying task #60 against the live constraint rather than against the report that opened it.
+**Status:** 🔧 FIXED IN TREE — the two impossible dropdown options, in code and in UI.
+
+- **The defect.** `data_retention_policies` accepts five `entity_type` values. `retentionPolicySchema` in
+  `app/api/tenant/compliance/retention/route.ts` accepted seven, and
+  `app/tenant/settings/compliance/page.tsx` rendered `<option value="notes">` and `<option value="tasks">` in the
+  entity-type select. So Settings → Compliance → Data Retention offered two choices that could never be saved:
+  zod waved them through, `db.insert()` hit the table's CHECK, and the customer got a refusal with no reason in
+  it. The vocabulary list existed in exactly two places — grepping a retention `entityType` carrying
+  `notes`/`tasks` over `app/`, `lib/`, `components/`, `types/`, `tests/`, `scripts/` and `postman/` returns only
+  these two files (the other `entityType` hits — `notes.entityType`, `custom-fields?entityType=task`, the export
+  column map — are a different concept, and the postman suite only GETs this route), so there was no shared
+  constant to correct and no third surface still offering the bad values.
+- **LIVE evidence — the constraint, measured not assumed.**
+  `SQL="select conname, pg_get_constraintdef(oid) from pg_constraint where conname='chk_data_retention_policies_entity_type'" && docker exec -e SQL="$SQL" nucrm-app sh -c 'psql "$DATABASE_URL" -tAc "$SQL"'`
+  → `chk_data_retention_policies_entity_type|CHECK ((entity_type = ANY (ARRAY['contacts'::text, 'deals'::text,
+'activities'::text, 'emails'::text, 'audit_logs'::text])))`. Five values; `notes` and `tasks` are not among
+  them. The DB side matches `drizzle/migrations/0050_data_validation_checks.sql:176` and the schema comment at
+  `drizzle/schema/compliance.ts:39`, which already lists five — the drift is purely in the route and the page.
+- **LIVE evidence — nobody has ever succeeded with this form.**
+  `SQL="select count(*) from data_retention_policies;" && docker exec -e SQL="$SQL" nucrm-app sh -c 'psql "$DATABASE_URL" -tAc "$SQL"'`
+  → `0`. Consistent with two of seven options being dead, though not proof: the feature is also just little used.
+- **Correction to the diagnosis that opened this.** The report said the CHECK refusal becomes "a bare HTTP 500".
+  That was true when it was written and is **not** true now: `lib/api/db-client-error.ts:71` maps SQLSTATE 23514
+  to `400 Invalid value for a constrained field`, and `apiError()` honours it at `lib/api-error.ts:94` — task
+  #38's central fix. So this route does **not** violate the no-500-for-client-errors rule. What remains is the
+  drift itself: a settings control whose value is unsaveable, and a 400 that names neither field nor constraint
+  for the person who clicked Create Policy.
+- **Shipped change.** `retentionPolicySchema.entityType` narrowed to the five values the constraint lists, with a
+  comment naming the constraint it must track and why; the two `<option>`s removed from the entity-type select.
+  No rename, no new constant, no abstraction, no reformatting. The form's default (`entityType: 'contacts'`) was
+  already inside the accepted set.
+- **Left alone on purpose — the far bigger half: nothing enforces a retention policy.** A retention row is
+  metadata today. Grepping for readers of the table across `app/api/cron/`, `lib/`, `scripts/`, `worker.ts` and
+  `deploy/cron/crontab` returns exactly one hit, and it is not enforcement: `lib/compliance/soc2.ts:303` runs
+  `SELECT COUNT(*) … WHERE tenant_id = … AND is_active = true` purely to score SOC 2 control P1.1, which then
+  reports `pass` on the words "Data retention policies are configured **and enforced**" (`:312-313`).
+  `last_executed_at` (`drizzle/schema/compliance.ts:45`) has no writer anywhere — only the migration that created
+  the column and the schema declaration. `deploy/cron/crontab` (read only) schedules 17 jobs and none of them is
+  a retention sweep; the only deletion-shaped one is `cleanup`, which works on the 30-day trash window and the
+  separate backup-retention code (`lib/backups/*`, `app/api/cron/backup/route.ts`), not on this table. Closest
+  relative: `lib/db/audit-archival.ts` does archive `audit_logs`, but it takes `retentionDays` as a caller
+  argument (default 90) and its only caller in the repo is its own test file, so it never reads a policy either.
+  Building enforcement means deleting customer data on a schedule — that is the owner's product decision, not a
+  bug fix, and it is out of scope here.
+- **Left alone on purpose — do not widen the constraint.** Adding `notes`/`tasks` to
+  `chk_data_retention_policies_entity_type` would bless two values no job can act on, exactly the mistake 0103
+  argues against for `scheduled_reports`, where `'leads'` and `'summary'` were deliberately not added because the
+  delivery code would have "enshrine[d] that lie". Same shape here: an enforced-looking policy that enforces
+  nothing. No migration was created or applied; `data_retention_policies` was read with SELECT only.
+- **Verified:** `npx eslint --max-warnings=0` on both changed files and the new test → exit 0;
+  `NODE_OPTIONS="--max-old-space-size=4096" npx tsc --noEmit` → exit 0. New
+  `tests/unit/retention-policy-entity-type.test.ts` (8 tests) pins, through the real route handler: `notes` and
+  `tasks` answered **400 with `details[].field === 'entityType'`** and `db.insert` **never called**, each of the
+  five accepted values reaching the insert with its `entityType`, and — by reading the page source — that the
+  dropdown's `<option>` list equals the accepted set, so the two vocabularies cannot silently diverge again.
+  Mutation-checked: restoring the old seven-value enum fails exactly the two rejection tests, so the assertions
+  bite.
+- **Files:** `app/api/tenant/compliance/retention/route.ts`, `app/tenant/settings/compliance/page.tsx`,
+  `tests/unit/retention-policy-entity-type.test.ts` (new),
+  `drizzle/migrations/0050_data_validation_checks.sql:176` and `lib/api/db-client-error.ts` (read only — the
+  constraint's origin and the reason this is no longer a 500).
+- **Follow-up for the owner, not for this diff.** (a) Whether retention enforcement is a feature at all; if it is,
+  `soc2.ts` P1.1 is reporting a pass it has no right to claim. (b) The same CHECK-vs-form drift class is still
+  open elsewhere — task #36 lists five surfaces awaiting a decision.
 
 ## Running the pre-prod flow simulator
 

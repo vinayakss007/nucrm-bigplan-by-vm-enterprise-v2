@@ -17,7 +17,10 @@ import { concurrencyGuard, checkStaleUpdate } from '@/lib/api/concurrency';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 const retentionPolicySchema = z.object({
-  entityType: z.enum(['contacts', 'deals', 'activities', 'emails', 'audit_logs', 'notes', 'tasks']),
+  // Must match chk_data_retention_policies_entity_type exactly — the table's
+  // CHECK refuses anything else, so a wider list here is a UI option that can
+  // never be saved.
+  entityType: z.enum(['contacts', 'deals', 'activities', 'emails', 'audit_logs']),
   retentionDays: z.number().int().min(1).max(3650),
   action: z.enum(['archive', 'delete', 'anonymize']),
   isActive: z.boolean().optional().default(true),
