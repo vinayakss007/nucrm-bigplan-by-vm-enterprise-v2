@@ -5,7 +5,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
-import { requireAuth, requirePerm } from '@/lib/auth/middleware';
+import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { auditLogs, users } from '@/drizzle/schema';
 import { eq, and, gte, lte, desc, isNull, type SQL } from 'drizzle-orm';
@@ -33,8 +33,15 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
 
-    const deny = requirePerm(ctx, 'settings.manage');
-    if (deny) return deny;
+    // #2274 (same route family as /api/tenant/audit): the old gate was
+    // requirePerm('settings.manage') — a non-admin role holding that permission
+    // could bulk-export the entire tenant audit trail (up to 50k rows with user
+    // emails + IPs). Audit export is an admin capability, same as the list
+    // endpoint; the UI never calls this route (audit-client.tsx exports
+    // client-side from the admin-gated list), so no allowed consumer narrows.
+    if (!ctx.isAdmin) {
+      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+    }
 
     const { searchParams } = new URL(request.url);
     const from = searchParams.get('from');
