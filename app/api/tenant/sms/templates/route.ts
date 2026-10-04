@@ -11,6 +11,7 @@ import { db } from '@/drizzle/db';
 import { smsTemplates } from '@/drizzle/schema/sms';
 import { eq, and, desc, isNull } from 'drizzle-orm';
 import { z } from 'zod';
+import { uuidIdSchema } from '@/lib/validation/uuid';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { extractTemplateVariables } from '@/lib/sms';
 import { concurrencyGuard } from '@/lib/api/concurrency';
@@ -23,7 +24,7 @@ const createTemplateSchema = z.object({
 });
 
 const updateTemplateSchema = z.object({
-  id: z.string().uuid(),
+  id: uuidIdSchema,
   name: z.string().min(1).max(255).optional(),
   body: z.string().min(1).max(1600).optional(),
 });

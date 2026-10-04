@@ -11,12 +11,13 @@ import { db } from '@/drizzle/db';
 import { users, contacts, deals, tasks, activities, tenantMembers } from '@/drizzle/schema';
 import { eq, and, or, ilike, sql, desc, inArray } from 'drizzle-orm';
 import { z } from 'zod';
+import { uuidIdSchemaWith } from '@/lib/validation/uuid';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 const restoreUserDataSchema = z.object({
-  user_id: z.string().uuid('user_id is required'),
-  tenant_id: z.string().uuid('tenant_id is required'),
+  user_id: uuidIdSchemaWith('user_id is required'),
+  tenant_id: uuidIdSchemaWith('tenant_id is required'),
   records: z.object({
     contacts: z.array(z.record(z.string(), z.unknown())).optional(),
     deals: z.array(z.record(z.string(), z.unknown())).optional(),

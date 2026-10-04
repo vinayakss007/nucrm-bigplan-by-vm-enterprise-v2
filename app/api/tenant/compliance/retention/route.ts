@@ -11,6 +11,7 @@ import { db } from '@/drizzle/db';
 import { dataRetentionPolicies } from '@/drizzle/schema/compliance';
 import { eq, and } from 'drizzle-orm';
 import { z } from 'zod';
+import { uuidIdSchema } from '@/lib/validation/uuid';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { concurrencyGuard, checkStaleUpdate } from '@/lib/api/concurrency';
@@ -24,7 +25,7 @@ const retentionPolicySchema = z.object({
 });
 
 const updateRetentionPolicySchema = z.object({
-  id: z.string().uuid(),
+  id: uuidIdSchema,
   retentionDays: z.number().int().min(1).max(3650).optional(),
   action: z.enum(['archive', 'delete', 'anonymize']).optional(),
   isActive: z.boolean().optional(),

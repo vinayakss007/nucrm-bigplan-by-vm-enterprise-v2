@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { z } from 'zod';
+import { uuidIdSchema } from '@/lib/validation/uuid';
 import { requiredString } from './common';
 
 // ── Plan schemas ──
@@ -49,7 +50,7 @@ export const createAnnouncementSchema = z.object({
 });
 
 export const updateAnnouncementSchema = z.object({
-  id: z.string().uuid(),
+  id: uuidIdSchema,
   title: z.string().trim().max(200).optional(),
   body: z.string().max(10000).optional(),
   content: z.string().max(10000).optional(),
@@ -62,12 +63,12 @@ export const updateAnnouncementSchema = z.object({
 });
 
 export const deleteAnnouncementSchema = z.object({
-  id: z.string().uuid(),
+  id: uuidIdSchema,
 });
 
 // ── System Key schema ──
 export const setSystemKeySchema = z.object({
-  tenantId: z.string().uuid(),
+  tenantId: uuidIdSchema,
   provider: requiredString.max(50),
   api_key: z.string().min(1, 'API key is required'),
   base_url: z.string().url().optional().nullable(),
@@ -78,9 +79,9 @@ export const setSystemKeySchema = z.object({
 export const updateRateLimitsSchema = z.object({
   action: z.enum(['update_global', 'update_plan_limits', 'toggle_super_admin_unlimited', 'reset_to_defaults']),
   rateLimits: z.record(z.string(), z.unknown()).optional(),
-  planId: z.string().uuid().optional(),
+  planId: uuidIdSchema.optional(),
   unlimited: z.boolean().optional(),
-  userId: z.string().uuid().optional(),
+  userId: uuidIdSchema.optional(),
 });
 
 // ── Superadmin Invite Member schema ──
@@ -132,8 +133,8 @@ export const platformSettingsSchema = z.record(
 export const createBackupSchema = z.object({
   backup_type: z.enum(['full', 'schema', 'selective']).optional().default('full'),
   action: z.literal('restore').optional(),
-  backupId: z.string().uuid().optional(),
-  tenant_id: z.string().uuid().optional(),
+  backupId: uuidIdSchema.optional(),
+  tenant_id: uuidIdSchema.optional(),
 });
 
 export const backupConfigSchema = z.object({

@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { z } from 'zod';
+import { uuidIdSchema } from '@/lib/validation/uuid';
 import { uuid, requiredString } from './common';
 
 // ── Project schemas ──
@@ -22,12 +23,12 @@ export const updateProjectSchema = createProjectSchema.partial();
 export const createMilestoneSchema = z.object({
   title: requiredString.max(200, 'Title too long'),
   due_date: z.string().date().optional().nullable(),
-  project_id: z.string().uuid(),
+  project_id: uuidIdSchema,
 });
 
 // ── Link Task schema ──
 export const linkTaskSchema = z.object({
-  task_id: z.string().uuid(),
+  task_id: uuidIdSchema,
 });
 
 // ── Type exports ──

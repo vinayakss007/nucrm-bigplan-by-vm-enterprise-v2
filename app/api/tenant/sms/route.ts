@@ -12,15 +12,16 @@ import { smsMessages } from '@/drizzle/schema/sms';
 import { eq, and, desc, sql , type SQL} from 'drizzle-orm';
 import { sendSMS, sendTemplateSMS } from '@/lib/sms';
 import { z } from 'zod';
+import { uuidIdSchema } from '@/lib/validation/uuid';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 const sendSMSSchema = z.object({
   to: z.string().min(1),
   body: z.string().min(1).optional(),
-  templateId: z.string().uuid().optional(),
+  templateId: uuidIdSchema.optional(),
   variables: z.record(z.string(), z.string()).optional(),
-  contactId: z.string().uuid().optional(),
+  contactId: uuidIdSchema.optional(),
 });
 
 export const GET = withApiRoute(async (req: NextRequest) => {

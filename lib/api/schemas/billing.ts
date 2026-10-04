@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { z } from 'zod';
+import { uuidIdSchema } from '@/lib/validation/uuid';
 import { uuid, requiredString } from './common';
 
 // ── Invoice schemas ──
@@ -31,7 +32,7 @@ export const invoiceQuerySchema = z.object({
   offset: z.coerce.number().int().min(0).default(0),
   limit: z.coerce.number().int().min(1).max(200).default(50),
   status: z.string().optional(),
-  contact_id: z.string().uuid().optional(),
+  contact_id: uuidIdSchema.optional(),
 });
 
 // ── Quote schemas ──
@@ -59,8 +60,8 @@ export const quoteQuerySchema = z.object({
   offset: z.coerce.number().int().min(0).default(0),
   limit: z.coerce.number().int().min(1).max(200).default(50),
   status: z.string().optional(),
-  contact_id: z.string().uuid().optional(),
-  deal_id: z.string().uuid().optional(),
+  contact_id: uuidIdSchema.optional(),
+  deal_id: uuidIdSchema.optional(),
   q: z.string().optional(),
 });
 
@@ -85,8 +86,8 @@ export const orderQuerySchema = z.object({
   offset: z.coerce.number().int().min(0).default(0),
   limit: z.coerce.number().int().min(1).max(200).default(50),
   status: z.string().optional(),
-  contact_id: z.string().uuid().optional(),
-  deal_id: z.string().uuid().optional(),
+  contact_id: uuidIdSchema.optional(),
+  deal_id: uuidIdSchema.optional(),
   q: z.string().optional(),
 });
 
@@ -110,7 +111,7 @@ export const subscriptionQuerySchema = z.object({
   offset: z.coerce.number().int().min(0).default(0),
   limit: z.coerce.number().int().min(1).max(200).default(50),
   status: z.string().optional(),
-  contact_id: z.string().uuid().optional(),
+  contact_id: uuidIdSchema.optional(),
   q: z.string().optional(),
 });
 
@@ -158,8 +159,8 @@ export const contractQuerySchema = z.object({
   offset: z.coerce.number().int().min(0).default(0),
   limit: z.coerce.number().int().min(1).max(200).default(50),
   status: z.string().optional(),
-  contact_id: z.string().uuid().optional(),
-  deal_id: z.string().uuid().optional(),
+  contact_id: uuidIdSchema.optional(),
+  deal_id: uuidIdSchema.optional(),
   q: z.string().optional(),
 });
 

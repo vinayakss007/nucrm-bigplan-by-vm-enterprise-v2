@@ -9,12 +9,13 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { getFieldPermissions, setFieldPermission } from '@/lib/rbac/field-permissions';
 import type { FieldAccessLevel } from '@/lib/rbac/field-permissions';
 import { z } from 'zod';
+import { uuidIdSchema } from '@/lib/validation/uuid';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { isUuid } from '@/lib/id';
 
 const setPermissionSchema = z.object({
-  role_id: z.string().uuid(),
+  role_id: uuidIdSchema,
   entity_type: z.string().min(1).max(100),
   field_name: z.string().min(1).max(100),
   access_level: z.enum(['none', 'read', 'write', 'admin']),

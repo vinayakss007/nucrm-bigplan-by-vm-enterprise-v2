@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { z } from 'zod';
+import { uuidIdSchema } from '@/lib/validation/uuid';
 import { requiredString, uuid, urlField } from './common';
 
 // ── Automation schemas ──
@@ -107,7 +108,7 @@ export const updateWebhookSchema = createWebhookSchema.partial();
 // ── Trigger Workflow schema ──
 export const triggerWorkflowSchema = z.object({
   trigger_entity_type: requiredString.max(100),
-  trigger_entity_id: z.string().uuid(),
+  trigger_entity_id: uuidIdSchema,
 });
 
 // ── WhatsApp Send schema ──
@@ -117,7 +118,7 @@ export const sendWhatsAppSchema = z.object({
   content: z.record(z.string(), z.unknown()).optional().default({}),
   template_name: z.string().trim().max(100).optional().nullable(),
   language: z.string().max(10).optional().default('en'),
-  contact_id: z.string().uuid().optional().nullable(),
+  contact_id: uuidIdSchema.optional().nullable(),
 });
 
 // ── Type exports ──

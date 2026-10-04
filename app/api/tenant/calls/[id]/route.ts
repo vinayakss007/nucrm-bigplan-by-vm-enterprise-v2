@@ -10,6 +10,7 @@ import { db } from '@/drizzle/db';
 import { callLogs } from '@/drizzle/schema';
 import { eq, and, isNull } from 'drizzle-orm';
 import { z } from 'zod';
+import { uuidIdSchema } from '@/lib/validation/uuid';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { concurrencyGuard } from '@/lib/api/concurrency';
@@ -21,7 +22,7 @@ const updateCallSchema = z.object({
   notes: z.string().max(5000).optional().nullable(),
   phone_number: z.string().max(30).optional().nullable(),
   recorded_url: z.string().max(500).optional().nullable(),
-  assigned_to: z.string().uuid().optional().nullable(),
+  assigned_to: uuidIdSchema.optional().nullable(),
 });
 
 export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {

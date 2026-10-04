@@ -12,6 +12,7 @@ import { activities } from '@/drizzle/schema';
 import { users } from '@/drizzle/schema';
 import { eq, and, desc, sql } from 'drizzle-orm';
 import { z } from 'zod';
+import { uuidIdSchema } from '@/lib/validation/uuid';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
@@ -19,8 +20,8 @@ import { withApiRoute } from '@/lib/api/with-api-route';
 const createActivitySchema = z.object({
   type: z.string().min(1, 'type is required'),
   description: z.string().min(1, 'description is required'),
-  deal_id: z.string().uuid().optional().nullable(),
-  contact_id: z.string().uuid().optional().nullable(),
+  deal_id: uuidIdSchema.optional().nullable(),
+  contact_id: uuidIdSchema.optional().nullable(),
   metadata: z.record(z.string(), z.unknown()).optional().default({}),
   eventType: z.string().optional(),
 });
