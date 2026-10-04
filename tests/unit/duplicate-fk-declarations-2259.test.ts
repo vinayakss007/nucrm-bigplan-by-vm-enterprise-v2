@@ -148,11 +148,12 @@ describe('0113_dedupe_foreign_keys migration + journal (#2259)', () => {
     readFileSync(join(MIGRATIONS_DIR, 'meta/_journal.json'), 'utf8'),
   ) as { entries: Array<{ idx: number; version: string; when: number; tag: string; breakpoints: boolean }> };
 
-  it('is journalled as the last entry with idx = array position', () => {
-    const i = journal.entries.findIndex((e) => e.tag === TAG);
-    expect(i).toBe(journal.entries.length - 1);
-    expect(journal.entries[i]!.idx).toBe(i);
-    expect(journal.entries[i]!.when).toBe(1788782400029);
+  it('is journalled exactly once with idx = array position', () => {
+    const hits = journal.entries.filter((e) => e.tag === TAG);
+    expect(hits, 'a migration the journal does not list is invisible to both runners (#46)').toHaveLength(1);
+    const i = journal.entries.indexOf(hits[0]!);
+    expect(hits[0]!.idx).toBe(i);
+    expect(hits[0]!.when).toBe(1788782400029);
   });
 
   it('keeps when strictly increasing over its predecessor', () => {
