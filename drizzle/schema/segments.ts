@@ -27,7 +27,8 @@ export const segments = pgTable('segments', {
   return {
     tenantIdx: utils.tenantIdx(table),
     metadataGinIdx: utils.metadataIdx(table),
-  };
+  
+  drz2255_idx_segments_created_by: index('idx_segments_created_by').on(table.createdBy),};
 });
 
 // Cache for segment members (to avoid re-running complex queries every time)
@@ -39,7 +40,7 @@ export const segmentMembers = pgTable('segment_members', {
   addedAt: timestamp('added_at', { withTimezone: true }).defaultNow(),
 }, (table) => {
   return {
-    segmentEntityIdx: index('idx_segment_members_segment_entity').on(table.segmentId, table.entityId),
+    segmentEntityIdx: index('idx_segment_members_pk').on(table.segmentId, table.entityId),
     tenantIdx: utils.tenantIdx(table),
     entityIdx: index('idx_segment_members_entity').on(table.entityId),
   };

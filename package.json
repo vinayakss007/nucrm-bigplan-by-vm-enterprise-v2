@@ -74,7 +74,7 @@
     "db:rollback:coverage": "npx tsx scripts/rollback-migration.ts --coverage",
     "db:status": "npx tsx scripts/migration-status.ts",
     "db:auto": "npx tsx scripts/migrate.ts",
-    "db:sync": "if [ \"$CI\" != \"true\" ]; then echo '⚠️  db:sync is dangerous — use db:migrate instead'; exit 1; fi && npx drizzle-kit push --config=./drizzle.config.ts",
+    "db:sync": "if [ \"$CI\" != \"true\" ]; then echo '⚠️  db:sync is dangerous — use db:migrate instead'; exit 1; fi && node scripts/db-extensions-ci.mjs && npx drizzle-kit push --config=./drizzle.config.ts",
     "seed:dev": "tsx scripts/seed-dev.ts",
     "seed:e2e": "tsx scripts/seed-e2e-user.ts",
     "db:seed": "npx tsx scripts/seed-dev.ts",

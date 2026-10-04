@@ -41,5 +41,6 @@ export const territoryAssignments = pgTable('territory_assignments', {
     // #1054: index the FK columns used for joins/lookups.
     territoryIdx: index('idx_territory_assignments_territory').on(table.territoryId),
     userIdx: index('idx_territory_assignments_user').on(table.userId),
-  };
+  
+  drz2255_idx_territory_assignments_tenant_id: index('idx_territory_assignments_tenant_id').on(table.tenantId),};
 });

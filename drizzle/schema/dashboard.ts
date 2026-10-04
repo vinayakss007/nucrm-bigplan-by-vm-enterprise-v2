@@ -19,4 +19,5 @@ export const dashboardLayouts = pgTable('dashboard_layouts', {
 }, (table) => ({
   tenantIdx: utils.tenantIdx(table),
   userDefaultIdx: index('idx_dashboard_layouts_user_default').on(table.userId, table.isDefault),
-}));
+
+  drz2255_idx_dashboard_layouts_created_by: index('idx_dashboard_layouts_created_by').on(table.createdBy),}));

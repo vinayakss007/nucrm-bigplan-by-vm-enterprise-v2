@@ -1,10 +1,10 @@
+import { sql } from 'drizzle-orm';
 /*!
  * NuCRM Enterprise — Property of abetworks.in
  * Copyright (c) 2026 abetworks.in. All Rights Reserved.
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { pgTable, uuid, text, timestamp, boolean, index, jsonb } from 'drizzle-orm/pg-core';
-import { sql } from 'drizzle-orm';
 import { users } from './core';
 import { contacts, deals, companies, leads } from './crm';
 import { supportTickets } from './support';
@@ -47,8 +47,19 @@ export const tasks = pgTable('tasks', {
     dueIdx: index('idx_tasks_due').on(table.dueDate),
     contactIdx: index('idx_tasks_contact').on(table.contactId),
     dealIdx: index('idx_tasks_deal').on(table.dealId),
-    tenantDueActiveIdx: index('idx_tasks_tenant_due_active').on(table.tenantId, table.dueDate, table.createdAt).where(sql`deleted_at IS NULL`),
+    // #2255: idx_tasks_tenant_due_active was never created live; idx_tasks_due_date
+    // (tenant_id, due_date) WHERE deleted_at IS NULL AND due_date IS NOT NULL covers it.
     metadataGinIdx: utils.metadataIdx(table),
     activeIdx: utils.activeIdx(table),
-  };
+  
+  drz2255_idx_tasks_tenant_created: index('idx_tasks_tenant_created').on(table.tenantId, table.createdAt.desc()).where(sql`(deleted_at IS NULL)`),
+  drz2255_idx_tasks_due_date: index('idx_tasks_due_date').on(table.tenantId, table.dueDate).where(sql`((deleted_at IS NULL) AND (due_date IS NOT NULL))`),
+  drz2255_idx_tasks_open: index('idx_tasks_open').on(table.tenantId, table.completed).where(sql`((deleted_at IS NULL) AND (completed = false))`),
+  drz2255_idx_tasks_company: index('idx_tasks_company').on(table.tenantId, table.companyId),
+  drz2255_idx_tasks_lead: index('idx_tasks_lead').on(table.tenantId, table.leadId),
+  drz2255_idx_tasks_ticket: index('idx_tasks_ticket').on(table.tenantId, table.ticketId),
+  drz2255_idx_tasks_custom_fields_g: index('idx_tasks_custom_fields_g').using('gin', table.customFields),
+  drz2255_idx_tasks_company_id: index('idx_tasks_company_id').on(table.companyId),
+  drz2255_idx_tasks_lead_id: index('idx_tasks_lead_id').on(table.leadId),
+  drz2255_idx_tasks_ticket_id: index('idx_tasks_ticket_id').on(table.ticketId),};
 });

@@ -24,7 +24,8 @@ export const kbCategories = pgTable('kb_categories', {
     slugIdx: index('idx_kb_categories_slug').on(table.tenantId, table.slug),
     // #1054: index the self-referential parentId used to build the category tree.
     parentIdx: index('idx_kb_categories_parent').on(table.parentId),
-  };
+  
+  drz2255_idx_kb_categories_created_by: index('idx_kb_categories_created_by').on(table.createdBy),};
 });
 
 export const kbArticles = pgTable('kb_articles', {
@@ -54,5 +55,6 @@ export const kbArticles = pgTable('kb_articles', {
     ),
     metadataGinIdx: utils.metadataIdx(table),
     activeIdx: utils.activeIdx(table),
-  };
+  
+  drz2255_idx_kb_articles_created_by: index('idx_kb_articles_created_by').on(table.createdBy),};
 });

@@ -25,7 +25,8 @@ export const sequences = pgTable('sequences', {
     tenantIdx: utils.tenantIdx(table),
     metadataGinIdx: utils.metadataIdx(table),
     activeIdx: utils.activeIdx(table),
-  };
+  
+  drz2255_idx_sequences_created_by: index('idx_sequences_created_by').on(table.createdBy),};
 });
 
 export const sequenceSteps = pgTable('sequence_steps', {
@@ -69,7 +70,8 @@ export const sequenceStepLogs = pgTable('sequence_step_logs', {
     enrollmentIdx: index('idx_sequence_step_logs_enrollment').on(table.enrollmentId),
     scheduledIdx: index('idx_sequence_step_logs_scheduled').on(table.scheduledAt).where(sql`status = 'pending'`),
     tenantIdx: utils.tenantIdx(table),
-  };
+  
+  drz2255_idx_sequence_step_logs_step_id: index('idx_sequence_step_logs_step_id').on(table.stepId),};
 });
 
 export const sequenceEnrollments = pgTable('sequence_enrollments', {
@@ -94,7 +96,11 @@ export const sequenceEnrollments = pgTable('sequence_enrollments', {
     sequenceIdx: index('idx_seq_enroll_seq').on(table.sequenceId),
     statusIdx: index('idx_seq_enroll_status').on(table.status),
     metadataGinIdx: utils.metadataIdx(table),
-  };
+  
+  drz2255_idx_sequence_enrollments_active: index('idx_sequence_enrollments_active').on(table.tenantId, table.status).where(sql`(status = 'active'::text)`),
+  drz2255_idx_sequence_enrollments_contact: index('idx_sequence_enrollments_contact').on(table.tenantId, table.contactId).where(sql`(status = 'active'::text)`),
+  drz2255_idx_sequence_enrollments_next: index('idx_sequence_enrollments_next').on(table.tenantId, table.nextStepAt).where(sql`((status = 'active'::text) AND (next_step_at IS NOT NULL))`),
+  drz2255_idx_sequence_enrollments_enrolled_by: index('idx_sequence_enrollments_enrolled_by').on(table.enrolledBy),};
 });
 
 // ── RELATIONS ───────────────────────────────────────
