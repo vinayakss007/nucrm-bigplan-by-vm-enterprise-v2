@@ -8,7 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { announcements } from '@/drizzle/schema';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, isNull } from 'drizzle-orm';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { createAnnouncementSchema, updateAnnouncementSchema, deleteAnnouncementSchema } from '@/lib/api/schemas';
 import { logSuperAdminAction } from '@/lib/audit/super-admin';
@@ -36,6 +36,8 @@ export const GET = withApiRoute(async (request: NextRequest) => {
         updated_at: announcements.updatedAt,
       })
       .from(announcements)
+      // #2291: hide soft-deleted announcements from the superadmin list.
+      .where(isNull(announcements.deletedAt))
       .orderBy(desc(announcements.createdAt))
       .limit(50)
       .catch((err) => { void logError({ error: err, context: 'superadmin/announcements list query' }); return []; });

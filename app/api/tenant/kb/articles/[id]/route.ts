@@ -8,7 +8,7 @@ import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { kbArticles, kbCategories } from '@/drizzle/schema';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, and, sql, isNull } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
 import { concurrencyGuard } from '@/lib/api/concurrency';
@@ -31,7 +31,7 @@ export const GET = withApiRoute(async (request: NextRequest, { params }: { param
     })
     .from(kbArticles)
     .leftJoin(kbCategories, eq(kbCategories.id, kbArticles.categoryId))
-    .where(and(eq(kbArticles.tenantId, ctx.tenantId), eq(kbArticles.id, id)))
+    .where(and(eq(kbArticles.tenantId, ctx.tenantId), eq(kbArticles.id, id), isNull(kbArticles.deletedAt)))
     .limit(1);
 
     if (!article) return NextResponse.json({ error: 'Not found' }, { status: 404 });

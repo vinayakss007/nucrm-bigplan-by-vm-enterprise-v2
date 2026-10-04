@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { segments } from '@/drizzle/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, isNull } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { readJsonBody } from '@/lib/api/validate';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
@@ -34,7 +34,8 @@ export const GET = withApiRoute(async (req: NextRequest) => {
     const { searchParams } = new URL(req.url);
     const entityType = searchParams.get('entity_type');
 
-    const where = [eq(segments.tenantId, ctx.tenantId)];
+    // #2291: hide soft-deleted segments from the list (issue #2291 audit).
+    const where = [eq(segments.tenantId, ctx.tenantId), isNull(segments.deletedAt)];
     if (entityType) {
       where.push(eq(segments.entityType, ENTITY_TYPES[entityType] ?? entityType));
     }

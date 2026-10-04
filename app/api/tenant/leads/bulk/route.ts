@@ -319,7 +319,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
         const segId = payload['segment_id'] as string | undefined;
         if (!segId) return NextResponse.json({ error: 'segment_id required' }, { status: 400 });
         const [seg] = await db.select({ id: segments.id }).from(segments)
-          .where(and(eq(segments.id, segId), eq(segments.tenantId, ctx.tenantId)))
+          .where(and(eq(segments.id, segId), eq(segments.tenantId, ctx.tenantId), isNull(segments.deletedAt)))
           .limit(1);
         if (!seg) return NextResponse.json({ error: 'Segment not found' }, { status: 404 });
         const memberValues = validIds.map(entityId => ({ segmentId: segId, entityId, tenantId: ctx.tenantId }));

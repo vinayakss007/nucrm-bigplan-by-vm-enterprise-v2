@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { services } from '@/drizzle/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, isNull } from 'drizzle-orm';
 import { requireAuth } from '@/lib/auth/middleware';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
@@ -23,9 +23,11 @@ export const GET = withApiRoute(async (request: NextRequest,
     const { tenantId } = ctx;
     const { id } = await params;
 
+    // #2291: a soft-deleted service 404s here, matching orders/contracts [id]
+    // and the filtered list route from #2290. Restore goes through /trash.
     const [service] = await db.select()
       .from(services)
-      .where(and(eq(services.id, id), eq(services.tenantId, tenantId)))
+      .where(and(eq(services.id, id), eq(services.tenantId, tenantId), isNull(services.deletedAt)))
       .limit(1);
 
     if (!service) {

@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { deals, dealStages, pipelines, contacts, companies } from '@/drizzle/schema';
-import { eq, asc } from 'drizzle-orm';
+import { eq, asc, and, isNull } from 'drizzle-orm';
 import { escapeCSV } from '@/lib/export';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { logError } from '@/lib/errors-server';
@@ -37,7 +37,9 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       .leftJoin(dealStages, eq(deals.stageId, dealStages.id))
       .leftJoin(contacts, eq(deals.contactId, contacts.id))
       .leftJoin(companies, eq(deals.companyId, companies.id))
-      .where(eq(deals.tenantId, ctx.tenantId))
+      // #2291: tombstoned deals must not leak into the CSV export — the
+      // generic /api/tenant/export handler already filters deletedAt for deals.
+      .where(and(eq(deals.tenantId, ctx.tenantId), isNull(deals.deletedAt)))
       .orderBy(asc(deals.createdAt));
 
     const headers = ['title', 'amount', 'close_date', 'pipeline', 'stage', 'contact_email', 'company', 'assigned_to', 'created_at'];

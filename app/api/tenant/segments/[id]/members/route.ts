@@ -14,7 +14,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { segments, segmentMembers } from '@/drizzle/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, isNull } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
@@ -22,10 +22,11 @@ import { logError } from '@/lib/errors-server';
 import { evaluateSegment, isSegmentEntityType, SegmentFilterError } from '@/lib/segments/evaluate';
 
 async function loadSegment(id: string, tenantId: string) {
+  // #2291: a soft-deleted segment 404s its member list/count and refresh.
   const [seg] = await db
     .select()
     .from(segments)
-    .where(and(eq(segments.id, id), eq(segments.tenantId, tenantId)))
+    .where(and(eq(segments.id, id), eq(segments.tenantId, tenantId), isNull(segments.deletedAt)))
     .limit(1);
   return seg;
 }
