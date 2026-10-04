@@ -5,7 +5,7 @@
  */
 import { z } from 'zod';
 import { uuidIdSchema } from '@/lib/validation/uuid';
-import { CONTRACT_TYPES } from './schemas/billing';
+import { CONTRACT_TYPES, INVOICE_STATUSES } from './schemas/billing';
 
 // ── Common helpers ──
 const uuid = uuidIdSchema.optional().nullable().or(z.literal(''));
@@ -248,7 +248,7 @@ export const createInvoiceSchema = z.object({
   company_id: uuid,
   issue_date: z.string().date().default(() => new Date().toISOString().split('T')[0]!),
   due_date: z.string().date().optional().nullable(),
-  status: z.enum(['draft', 'sent', 'paid', 'overdue', 'cancelled', 'refunded', 'partially_paid', 'void']).optional().default('draft'),
+  status: z.enum(INVOICE_STATUSES).optional().default('draft'), // #2258 — one list with chk_invoices_status; see ./schemas/billing.ts
   line_items: z.array(z.object({
     description: z.string().max(500),
     quantity: z.coerce.number().min(0),

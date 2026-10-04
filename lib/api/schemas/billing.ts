@@ -7,13 +7,57 @@ import { z } from 'zod';
 import { uuidIdSchema } from '@/lib/validation/uuid';
 import { uuid, requiredString } from './common';
 
+/**
+ * #2258 — the ONE invoice-status vocabulary the app accepts, kept byte-for-byte
+ * in sync with the DB CHECK `chk_invoices_status` (widened by migration
+ * 0112_invoice_status_vocab and registered in scripts/constraint-vocab.json).
+ *
+ * Before this, Zod allowed `void`/`refunded` that the DB rejected (schema-valid
+ * payload → 23514), while DB-legal `written_off`/`pending` were unaddressable
+ * through the API. Per-value decisions:
+ *   void         — REAL product state: lib/billing/payments.ts and the PayU
+ *                  webhook both refuse payments against a `void` invoice, a
+ *                  guard that could never fire while the CHECK rejected it.
+ *                  The DB was widened to accept it; Zod keeps it.
+ *   refunded     — NOT a product state for invoices: refunds live in the
+ *                  invoice_payments ledger and recalculateInvoicePayments()
+ *                  deliberately preserves the invoice status across a refund
+ *                  (lib/billing/payments.ts:58-59). It had no writer and no
+ *                  reader anywhere and reads like a copy-paste from
+ *                  createOrderSchema. REMOVED from Zod so the API answers a
+ *                  clear 400 instead of writing a status nothing understands.
+ *   written_off  — DB-legal (bad-debt write-offs, legacy rows may carry it);
+ *                  added to Zod so those rows stay PATCH-able.
+ *   pending      — DB-legal; same reasoning as `written_off`.
+ *
+ * `paid`/`partially_paid` remain in the vocabulary (the ledger writes them) but
+ * the PUT route still rejects hand-setting them — that is ownership, not
+ * vocabulary (#2226).
+ *
+ * Any change here MUST be mirrored in
+ * drizzle/migrations/0112_invoice_status_vocab.sql (or its successor) and
+ * scripts/constraint-vocab.json, or tests/unit/schema/
+ * invoice-status-vocab-migration.test.ts fails.
+ */
+export const INVOICE_STATUSES = [
+  'draft',
+  'sent',
+  'paid',
+  'overdue',
+  'cancelled',
+  'partially_paid',
+  'written_off',
+  'pending',
+  'void',
+] as const;
+
 // ── Invoice schemas ──
 export const createInvoiceSchema = z.object({
   contact_id: uuid,
   company_id: uuid,
   issue_date: z.string().date().default(() => new Date().toISOString().split('T')[0]!),
   due_date: z.string().date().optional().nullable(),
-  status: z.enum(['draft', 'sent', 'paid', 'overdue', 'cancelled', 'refunded', 'partially_paid', 'void']).optional().default('draft'),
+  status: z.enum(INVOICE_STATUSES).optional().default('draft'),
   line_items: z.array(z.object({
     description: z.string().max(500),
     quantity: z.coerce.number().min(0),

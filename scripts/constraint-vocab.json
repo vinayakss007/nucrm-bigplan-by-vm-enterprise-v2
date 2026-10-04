@@ -204,6 +204,53 @@
         "reverts to 'pending'. A log left 'sending' after a crash is finalised",
         "without resending, so a sequence email can never double-send."
       ]
+    },
+    {
+      "id": "invoices.status",
+      "constraint": "chk_invoices_status",
+      "table": "invoices",
+      "column": "status",
+      "migration": "0112_invoice_status_vocab",
+      "declaredIn": ["lib/api/schemas/billing.ts"],
+      "required": [
+        "draft",
+        "sent",
+        "paid",
+        "overdue",
+        "cancelled",
+        "partially_paid",
+        "written_off",
+        "pending",
+        "void"
+      ],
+      "legacy": [],
+      "writers": {
+        "draft": [
+          "app/api/tenant/invoices/route.ts",
+          "lib/billing/payments.ts"
+        ],
+        "sent": ["lib/billing/payments.ts"],
+        "paid": ["lib/billing/payments.ts"],
+        "overdue": ["app/api/tenant/dashboard/widgets/invoices/route.ts"],
+        "cancelled": ["app/api/tenant/invoices/[id]/route.ts"],
+        "partially_paid": ["lib/billing/payments.ts"],
+        "void": ["lib/billing/payments.ts", "app/api/webhooks/payu/route.ts"]
+      },
+      "note": [
+        "#2258: required is exactly INVOICE_STATUSES (declaredIn) — the DB must",
+        "accept every value the API accepts, and the API must accept every value",
+        "the DB stores. 'void' was a real product state blocked by the CHECK",
+        "(payments + PayU webhook both refuse to pay a void invoice); migration",
+        "0112 widened the constraint. 'written_off'/'pending' were DB-legal but",
+        "absent from zod, so existing rows were unaddressable via the API; they",
+        "were added to INVOICE_STATUSES instead of removed from the DB. ",
+        "'refunded' — the other zod-only value — was NOT blessed: no code ever",
+        "wrote or read invoice status 'refunded' (refunds are ledger entries that",
+        "preserve the invoice status, lib/billing/payments.ts:58-59), it read as",
+        "a copy-paste from the orders vocabulary, and no row could already carry",
+        "it because the CHECK never allowed it. It was removed from zod so the",
+        "API answers 400 with the allowed list instead of 23514."
+      ]
     }
   ]
 }

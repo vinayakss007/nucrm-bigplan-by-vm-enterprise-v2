@@ -15,6 +15,7 @@ import { eq, and, sql } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
+import { INVOICE_STATUSES } from '@/lib/api/schemas/billing';
 import { recalculateInvoicePayments } from '@/lib/billing/payments';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
@@ -153,6 +154,23 @@ export const PUT = withApiRoute(async (req: NextRequest, { params }: { params: P
           { status: 422 }
         );
       }
+    }
+
+    // #2258: PUT never ran createInvoiceSchema/updateInvoiceSchema, so the
+    // status string went straight into the UPDATE and chk_invoices_status
+    // decided the outcome — an out-of-vocabulary value surfaced as an opaque
+    // 400 from the DB classifier (or a 500 before that existed). Reject here,
+    // against the same INVOICE_STATUSES constant the Zod schema uses, so the
+    // 400 names the allowed values and the CHECK stays a backstop, not the
+    // primary gate.
+    if (typeof body.status === 'string' && !(INVOICE_STATUSES as readonly string[]).includes(body.status)) {
+      return NextResponse.json(
+        {
+          error:
+            `Invalid status '${body.status}'. Allowed: ${INVOICE_STATUSES.join(', ')}.`,
+        },
+        { status: 400 }
+      );
     }
 
     // #2226: same reasoning as amountPaid/balanceDue above — 'paid' and
