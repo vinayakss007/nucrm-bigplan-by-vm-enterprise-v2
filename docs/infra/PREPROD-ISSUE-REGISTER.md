@@ -2478,12 +2478,28 @@ analytics question kept running into.
   `node scripts/check-file-size.mjs` → OK (1599 files); `npx vitest run tests/unit/sql-allowlist.test.ts
   tests/unit/tenant-data-import.test.ts tests/unit/tenant-import.test.ts
   tests/unit/tenant-restore-atomic-2225.test.ts tests/unit/restore` → **8 files / 213 passed**; the guard
-  → 14/14. **Not tested:** no restore was executed against preprod — the JSON path still ends at the same
-  throw site it always did, and the six tables now pass the check instead, so the only way to observe the fix
-  live is a real restore, which needs **#90** and explicit sign-off.
-- **Files:** `lib/sql-allowlist.ts`, `tests/unit/tenant-junction-scoping.test.ts`, this register.
+  → **15/15**; full `tests/unit` → 7069 passed with only the two pre-existing `setCsrfCookie` failures.
+- **The insert side was measured too, so the fix cannot just move the failure.** All twelve tables this PR and
+  PP-053 touch have a `tenant_isolation` policy for `cmd = '*'`. Eleven of them — the five here plus the six
+  from PP-053 — record `polwithcheck IS NULL`, i.e. RLS never refuses their INSERT; `pipelines` is the only one
+  with a check, and its check is
+  `tenant_id = NULLIF(current_setting('app.current_tenant'), '')::uuid OR NULLIF(current_setting('app.is_super_admin'), '')::bool = true`.
+  So no table that this change makes importable is one the tenant/super-admin context then refuses to write:
+  the `not allowed for import` throw is not traded for a 42501.
+- **Still not verified, and this is where the next blocker lives:** no restore has been executed against
+  preprod. Removing the throw does **not** make the panel restore work, because `USING` on those eleven tables is
+  `tenant_id IS NULL OR tenant_id = current_setting('app.current_tenant')::uuid` with **no super-admin branch** —
+  a detached super-admin restore cannot see the target tenant's rows, so its wipe deletes 0 rows and only the
+  primary-key conflict on re-insert makes that loud. That asymmetry (`pipelines` has the escape, the other
+  eleven do not) is **#7**/**#90** and remains an owner decision; **#7**'s "six tables" should now be read as
+  **eleven**, counting the six parent-isolated ones.
+- **Files:** `lib/sql-allowlist.ts`, `lib/restore/backup-parser.ts` (one word: `TENANT_SCOPED_TABLES` becomes
+  `export const`, no behaviour change), `tests/unit/tenant-junction-scoping.test.ts`, this register.
   Evidence read: `lib/tenant-data-import.ts:86,138,142,164-169,195,283`,
-  `app/api/admin/tenant-restore/route.ts:413-420`, `lib/restore/restore-executor.ts:171,214,437,493`,
+  `app/api/admin/tenant-restore/route.ts:413-420`, `app/api/admin/tenant-restore/route.ts:261-265,362-390`
+  (super-admin-only guard, and the restore detached with `runTenantRestore(...).catch(…)`),
+  `drizzle/db.ts:55-90` (a bare `db.transaction()` re-applies only tenant and user, per PP-027),
+  `lib/restore/restore-executor.ts:171,214,437,493`,
   `app/api/superadmin/selective-restore/execute/route.ts:128,153`.
 
 ## Running the pre-prod flow simulator
