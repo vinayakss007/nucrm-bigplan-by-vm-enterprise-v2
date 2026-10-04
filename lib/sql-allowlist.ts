@@ -14,11 +14,19 @@
  */
 
 // Union of all known tenant-scoped tables used by restore, import, and backup
+//
+// Invariant, asserted by tests/unit/tenant-junction-scoping.test.ts: every table
+// the pre-restore wipe deletes and every table the exporter emits must be listed
+// here. The wipe does not consult this set, so a table missing from it gets
+// deleted and then refused at insert — and because the atomic restore is
+// failFast, that refusal rolls the whole thing back: the restore cannot complete
+// for any tenant holding rows in that table (`pipelines` did, 202 rows across
+// 177 of 183 tenants).
 const VALID_TABLES = new Set([
   // Core CRM
   'contacts', 'leads', 'deals', 'companies', 'tasks', 'notes', 'activities',
   'activity_logs', 'tags', 'contact_tags', 'contact_emails', 'lead_tags', 'deal_stages',
-  'pipeline_stages', 'custom_fields', 'attachments', 'file_uploads',
+  'pipeline_stages', 'pipelines', 'custom_fields', 'attachments', 'file_uploads',
 
   // Users & Auth
   'users', 'roles', 'tenant_members', 'tenants', 'sessions', 'refresh_tokens',
@@ -39,7 +47,7 @@ const VALID_TABLES = new Set([
 
   // Webhooks & Integrations
   'webhooks', 'webhook_deliveries', 'webhook_inbound_logs', 'failed_webhooks',
-  'integrations',
+  'integrations', 'sso_providers',
 
   // Support
   'support_tickets', 'ticket_replies', 'error_logs',
@@ -67,6 +75,9 @@ const VALID_TABLES = new Set([
   // Modules & Forms
   'tenant_modules', 'modules', 'forms', 'form_submissions',
 
+  // Schema & permissions configuration
+  'custom_field_defs', 'field_permissions', 'record_permissions',
+
   // Meetings & Calls
   'meetings', 'call_recordings', 'call_notes',
 
@@ -81,7 +92,7 @@ const VALID_TABLES = new Set([
 
   // Products & Quotes
   'products', 'price_books', 'price_book_entries', 'quotes', 'quote_line_items',
-  'contracts', 'invoices',
+  'deal_products', 'contracts', 'invoices',
 
   // Follow-ups & Tickets
   'follow_ups', 'tickets', 'kb_articles',
