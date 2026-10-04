@@ -31,6 +31,40 @@ function pgErrorOf(err: unknown): { code: string; message: string; constraint?: 
   return null;
 }
 
+/** Every SQLSTATE is exactly five characters of [0-9A-Z]; anything else is not a Postgres code. */
+const SQLSTATE = /^[0-9A-Z]{5}$/;
+/** drizzle's QueryFailedError prefixes the whole SQL statement with this marker. */
+const QUERY_FAILURE_MARKER = 'Failed query:';
+
+/**
+ * Diagnostics for a query that the database refused, or `null` when `err` is not
+ * one — Issue #2285.
+ *
+ * A drizzle query failure's `message` IS the statement:
+ * `Failed query: insert into "support_tickets" (…) values (…) returning …` followed
+ * by `params: <every bound value>`. So it carries table and column names, the
+ * tenant/user UUIDs and — on ticket create — the freshly generated one-time
+ * portal token. `apiError()` used to forward exactly that whenever
+ * NODE_ENV=development, which is how the live server answered. Raw pg errors
+ * without the drizzle wrapper leak the same class of detail through their
+ * `message`, so a five-character SQLSTATE on the error (or anywhere in its
+ * cause chain) marks it too.
+ *
+ * The returned code + constraint are for the SERVER LOG only — they identify
+ * the refusal for an operator without restating the statement. No driver text
+ * (message, code, constraint, detail, hint, DDL) may ever reach a client
+ * response from any route; the caller answers with its own generic message,
+ * or `clientErrorFromDbCode()` maps the class to a precise 400/409 where the
+ * refusal is provably the caller's fault.
+ */
+export function dbQueryFailureDiagnostics(err: unknown, errMsg: string): { code?: string; constraint?: string } | null {
+  const pg = pgErrorOf(err);
+  const hasSqlState = pg !== null && SQLSTATE.test(pg.code);
+  if (!errMsg.includes(QUERY_FAILURE_MARKER) && !hasSqlState) return null;
+  if (!pg || !hasSqlState) return {};
+  return { code: pg.code, ...(pg.constraint ? { constraint: pg.constraint } : {}) };
+}
+
 /**
  * Map the Postgres constraint/cast errors that prove out as client problems
  * when a handler let them escape, at the single route chokepoint, instead of

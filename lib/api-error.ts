@@ -10,7 +10,7 @@ import { logger } from '@/lib/logger';
 import { sendCriticalErrorAlert } from '@/lib/critical-error-alert';
 import { InvalidJsonBodyError } from '@/lib/api/validate';
 import { ConcurrencyError, InvalidExpectedUpdatedAtError } from '@/lib/concurrency';
-import { clientErrorFromDbCode, currentHttpMethod } from '@/lib/api/db-client-error';
+import { clientErrorFromDbCode, currentHttpMethod, dbQueryFailureDiagnostics } from '@/lib/api/db-client-error';
 
 /**
  * @deprecated Use `handleError()` from `@/lib/errors` for new code.
@@ -47,6 +47,14 @@ export function apiError(err: unknown, message = 'Internal server error', status
   // that reports the status actually returned, not the caller's hardcoded 500.
   const dbClientError = clientErrorFromDbCode(err, currentHttpMethod() ?? 'POST');
 
+  // A query the database refused (drizzle `Failed query: …` or a raw pg error
+  // with a SQLSTATE). Its diagnostics — SQLSTATE + constraint — belong in the
+  // log below and NOWHERE else: the same values also ride inside `errMsg`, and
+  // `errMsg` must never reach a response body (#2285). Computed before the log
+  // line so the class stays visible to operators even when
+  // `clientErrorFromDbCode()` deliberately declines to map it (23502 etc.).
+  const dbQueryFailure = dbQueryFailureDiagnostics(err, errMsg);
+
   // Structured log line for every apiError call. PII-safe by design: only the
   // message and the first stack frame are recorded — never full stacks, bodies
   // or request payloads. lib/logger does not import this module, so there is no
@@ -56,11 +64,15 @@ export function apiError(err: unknown, message = 'Internal server error', status
     : undefined;
   logger.error('[api]', {
     status: dbClientError?.status ?? status,
+    // The bound values of a failed query are tenant data; lib/logger redacts
+    // them here (#62) so this line, nucrm.log and Loki never carry them.
     message: errMsg,
     // Which constraint refused the row is the difference between "the caller
     // mistyped" and "our enum and the table's CHECK disagree" — the latter is
     // invisible in the SQL text, which drizzle has already flattened to $n.
-    ...(dbClientError?.constraint ? { constraint: dbClientError.constraint } : {}),
+    ...(dbClientError?.constraint ? { constraint: dbClientError.constraint }
+      : dbQueryFailure?.constraint ? { constraint: dbQueryFailure.constraint } : {}),
+    ...(!dbClientError && dbQueryFailure?.code ? { dbCode: dbQueryFailure.code } : {}),
     ...(stackTopLine ? { stack: stackTopLine } : {}),
   });
 
@@ -104,8 +116,16 @@ export function apiError(err: unknown, message = 'Internal server error', status
     sendCriticalErrorAlert({ error: err, level: 'fatal', context: `apiError:${status}` }).catch((e) => console.error('[api-error] Failed to send critical alert:', e));
   }
 
-  // NEVER expose internal error messages in production
-  const publicMessage = isDev ? errMsg : message;
+  // NEVER expose internal error messages in production. In development the real
+  // message is kept for debugging, with one exception (#2285): a query the
+  // database refused arrives either as drizzle's `Failed query: <full SQL> params:
+  // <every bound value>` or as the raw pg message, and this app's dev-mode
+  // server forwarded exactly that — disclosing table and column names,
+  // tenant/user UUIDs, one-time portal tokens, and even the SQLSTATE/constraint
+  // classes no client should enumerate. Driver text is therefore scrubbed in
+  // EVERY environment: a detected query failure always answers with the
+  // caller's generic `message`, while the diagnostics stay in the log above.
+  const publicMessage = isDev && !dbQueryFailure ? errMsg : message;
 
   return NextResponse.json(
     { error: publicMessage },
