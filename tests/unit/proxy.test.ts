@@ -345,4 +345,49 @@ describe('proxy middleware', () => {
       expect(fwd).toBe(res.headers.get('x-request-id'));
     });
   });
+
+  // #2313: `/login` is a bookmarked legacy alias with no route behind it.
+  // Anonymous visitors must keep the exact 307 → /auth/login?callbackUrl=%2Flogin;
+  // authenticated sessions used to fall through the proxy and hard-404 on the
+  // missing page — they must now be redirected to the post-login landing.
+  describe('/login alias by auth state (#2313)', () => {
+    it('keeps the anonymous 307 to /auth/login?callbackUrl=%2Flogin byte-identical', async () => {
+      const { proxy } = await import('@/proxy');
+      const res = await proxy(makeReq('/login'));
+      expect(res._isRedirect).toBe(true);
+      expect(res._isNext).toBeUndefined();
+      expect(String(res.url)).toBe('http://localhost:3000/auth/login?callbackUrl=%2Flogin');
+      expect(res.headers.get('x-request-id')).toBeTruthy();
+    });
+
+    it('redirects an authenticated session to /tenant/dashboard instead of 404ing', async () => {
+      mockJwtVerify.mockResolvedValue({ payload: { sub: 'user-123' } });
+      const { proxy } = await import('@/proxy');
+      // Unique token: the module-level 10s JWT cache (#1992) persists across
+      // tests, so reusing 'valid-token' could skip jwtVerify and fail the spy.
+      const res = await proxy(makeReq('/login', { cookies: { nucrm_session: 'login-alias-2313-token' } }));
+      expect(res._isRedirect).toBe(true);
+      // Must NOT fall through to the router (that fall-through was the 404).
+      expect(res._isNext).toBeUndefined();
+      expect(String(res.url)).toBe('http://localhost:3000/tenant/dashboard');
+      expect(res.headers.get('x-request-id')).toBeTruthy();
+      expect(mockJwtVerify).toHaveBeenCalled();
+    });
+
+    it('does not change behavior for other authenticated page navigations', async () => {
+      mockJwtVerify.mockResolvedValue({ payload: { sub: 'user-123' } });
+      const { proxy } = await import('@/proxy');
+      const res = await proxy(makeReq('/tenant/contacts', { cookies: { nucrm_session: 'valid-token' } }));
+      expect(res._isNext).toBe(true);
+      expect(res._isRedirect).toBeUndefined();
+      expect(res.headers.get('content-security-policy')).toContain('nonce-');
+    });
+
+    it('does not change behavior for other anonymous protected paths (callbackUrl intact)', async () => {
+      const { proxy } = await import('@/proxy');
+      const res = await proxy(makeReq('/tenant/contacts'));
+      expect(res._isRedirect).toBe(true);
+      expect(String(res.url)).toBe('http://localhost:3000/auth/login?callbackUrl=%2Ftenant%2Fcontacts');
+    });
+  });
 });
