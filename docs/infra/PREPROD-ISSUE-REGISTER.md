@@ -47,7 +47,7 @@ Severity: **S1** blocks go-live · **S2** broken feature or security weakness ·
 | PP-020 | S2  | Hardening                   | UFW + SSH hardening and `infra-readiness.sh` not yet applied                                                                                                                                                                         | ⏸️ BLOCKED                                                                           |
 | PP-021 | S3  | Performance                 | Sentry `NUCRM-1`: N+1 query on `GET /api/metrics` (12 events)                                                                                                                                                                        | 📌 INFO                                                                              |
 | PP-022 | S3  | RLS                         | `super_admin_audit_logs.tenant_id` is `text`, so the standard policy can't apply                                                                                                                                                     | 📌 INFO                                                                              |
-| PP-028 | S1  | Performance                 | Every DB statement costs a flat ~200 ms — statement _count_ is the real budget                                                                                                                                                       | 🔬 MEASURED                                                                          |
+| PP-028 | S1  | Performance                 | Every DB statement costs a flat ~200 ms — attributed: one round trip to the public DB endpoint, server time is 0.012 ms                                                                                                              | 🔬 MEASURED                                                                          |
 | PP-029 | S2  | Deploy                      | Our SIGTERM handler exited before Next.js drained; `pool.end()` hung the stop 35.93 s                                                                                                                                                | ✅ FIXED + live-verified                                                             |
 | PP-030 | S1  | Scheduling                  | `acquireLock` fail-closed is indistinguishable from a held lock → 20 cron jobs report `ok:true` and do nothing when Redis isn't ready                                                                                                | 🔬 MEASURED                                                                          |
 | PP-031 | S2  | RLS + query                 | Super-admin Backups console returns nothing: swallowed `uuid = text` join, RLS-blind `backup_schedules` read and writes                                                                                                              | ✅ FIXED + live-verified                                                             |
@@ -590,19 +590,38 @@ image`), so **restarting worker or realtime silently deploys whatever `nucrm-app
   single open `BEGIN … COMMIT` gives the same 201 ms, and `pg.Client.connect()` (TCP + TLS +
   SCRAM) completes in **35 ms**. PgBouncer is `pool_mode = session`, so it is not assigning a
   server connection per query either.
-- **Why the shape matters.** Flat, jitter-free 200 ms with a 35 ms connection is not RTT and not
-  CPU: it is a per-statement fixed cost on the path to `public-…db.upclouddatabases.com:11569`
-  (provider proxy, delayed-ACK interaction, or per-statement server logging — not yet attributed).
+- **Attributed (2026-10-04) — it IS round-trip latency, and the earlier "not RTT" reading here was wrong.**
+  Three independent measurements, all on the running stack:
+  (1) `explain (analyze) select 1;` → Postgres reports **Planning 0.016 ms / Execution 0.012 ms** while the
+  client saw **202 ms** — so ~99.98 % of the cost is on the wire, not in the server;
+  (2) latency is **additive to server work**: `select pg_sleep(1);` → **1203 ms** wall, i.e. 1000 ms of
+  server time plus exactly one round trip, so this is not a per-statement fixed surcharge a proxy or
+  per-statement logging would impose;
+  (3) the round trip is measurable directly — `ping` to the hostname PgBouncer dials
+  (`public-…db.upclouddatabases.com` → `80.47.226.252`) = **199.120 / 200.673 / 205.032 ms**
+  min/avg/max, within **0.4 ms** of the `\timing` figure (PP-050 has the full sample set), and PgBouncer's
+  own `LOG stats` agrees at `query 216060 us`.
+  Neither candidate that "not RTT" implied survives: delayed-ACK/Nagle artifacts sit near 40 ms on Linux, not
+  a jitter-free 200 ms, and a provider proxy would not make `pg_sleep` additive to the same constant.
+- **Where the hop lives.** `nucrm-app`'s `DATABASE_URL` resolves to `pgbouncer:6432/nucrm` (local, sub-millisecond),
+  so the 35 ms `pg.Client.connect()` in PP-028's original measurement and the 200 ms statements are both true and
+  are not in tension: the client↔PgBouncer hop is cheap, the **PgBouncer↔Postgres hop is the public internet**.
+  The remote endpoint is only in PgBouncer's generated config (`deploy/docker-compose.preprod.yml:36` + `:47`
+  `POOL_MODE=session`), which is why the fix is a PgBouncer-upstream change and not an app env change
+  (**PP-050 exit (a)**). `select inet_server_addr(), inet_server_port()` → `80.47.226.252|11569` confirms which
+  server those statements actually reach.
 - **Consequence.** Everything that issues statements in series is defined by this constant, not by
   query efficiency: a gate-shaped transaction (BEGIN + 2 `set_config` + SELECT + COMMIT) measures
-  **828 ms** — that constant is what makes login 4–5 s, and PP-036 is the first place we stopped
-  paying it (PP-037 is the second, and measured the saving directly: two of those transactions folded
-  into one came back as **804 ms**); `auto-backup` takes ~19 s _per tenant_, so a full sweep is minutes
-  and the cron leak detector (`#65`) mostly catches sweeps that are simply latency-bound. Fixing
-  statement _count_ (batching, `unnest`, folding lookups into an existing transaction) is worth
-  ~200 ms each; fixing individual query plans is worth almost nothing.
-- **Open.** Attribution needs provider-side visibility (UpCloud query logging / a co-located
-  scratch DB to compare). Until then treat statement count as the budget.
+  **828 ms** — four round trips at 200 ms plus the same server time, which is now the model rather than a guess
+  (PP-036 is the first place we stopped paying it, PP-037 the second, and measured the saving directly: two of
+  those transactions folded into one came back as **804 ms**); `auto-backup` takes ~19 s _per tenant_, so a full
+  sweep is minutes and the cron leak detector (`#65` → **PP-050**) mostly catches sweeps that are simply
+  latency-bound. Fixing statement _count_ (batching, `unnest`, folding lookups into an existing transaction) is
+  worth ~200 ms each; fixing individual query plans is worth almost nothing.
+- **Open — the attribution is closed, the latency is not.** Two exits remain and both are owner decisions:
+  move the PgBouncer upstream onto a private/same-region path (**PP-050 exit (a)**, assumed 1–3 ms RTT, which
+  would cut every number in this entry by ~65× and needs no code), or keep paying 200 ms and keep driving
+  statement counts down. A co-located scratch DB is no longer needed to answer this.
 
 ## PP-029 — ✅ Our own SIGTERM handler exited before Next.js could drain _(S2 · Deploy) — FIXED + live-verified_
 
