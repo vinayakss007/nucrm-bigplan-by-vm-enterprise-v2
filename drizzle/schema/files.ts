@@ -15,7 +15,7 @@
  * Soft delete via `deletedAt`. The S3 object is removed eagerly on
  * delete; the metadata row is kept so audit trails stay intact.
  */
-import {pgTable, text, index, uuid, bigint, uniqueIndex} from 'drizzle-orm/pg-core';
+import {pgTable, text, index, uuid, bigint} from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { users } from './core';
 import * as utils from './utils';
@@ -69,8 +69,7 @@ export const documents = pgTable(
     metadataGinIdx: utils.metadataIdx(table),
     linkIdx: index('idx_storage_documents_link').on(table.linkedEntityType, table.linkedEntityId),
     uploaderIdx: index('idx_storage_documents_uploader').on(table.uploadedBy),
-  
-  drz2255_storage_documents_storage_key_unique: uniqueIndex('storage_documents_storage_key_unique').on(table.storageKey),}),
+  }),
 );
 
 // ── FILE UPLOADS ──────────────────────────────────────

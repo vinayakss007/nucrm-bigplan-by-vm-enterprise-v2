@@ -380,7 +380,6 @@ export const plans = pgTable('plans', {
     slugIdx: index('idx_plans_slug').on(table.slug),
     activeIdx: index('idx_plans_active').on(table.isActive, table.sortOrder),
   
-  drz2255_plans_slug_unique: uniqueIndex('plans_slug_unique').on(table.slug),
   drz2255_idx_plans_rate_limit: index('idx_plans_rate_limit').on(table.isActive).where(sql`(is_active = true)`),};
 });
 
@@ -429,7 +428,7 @@ export const billingEvents = pgTable('billing_events', {
     stripeEventIdx: index('idx_billing_events_stripe_event').on(table.stripeEventId).where(sql`stripe_event_id IS NOT NULL`),
     metadataGinIdx: utils.metadataIdx(table),
   
-  drz2255_billing_events_stripe_event_id_unique: uniqueIndex('billing_events_stripe_event_id_unique').on(table.stripeEventId),};
+};
 });
 
 // ── WEBHOOK EVENTS (provider delivery ledger) ──

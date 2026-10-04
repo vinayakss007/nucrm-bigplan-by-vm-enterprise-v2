@@ -726,7 +726,7 @@ export const contactScores = pgTable('contact_scores', {
     tenantIdx: utils.tenantIdx(table),
     contactIdx: index('idx_contact_scores_contact').on(table.contactId),
   
-  drz2255_contact_scores_contact_id_unique: uniqueIndex('contact_scores_contact_id_unique').on(table.contactId),};
+};
 });
 
 // ── 14. DEAL FORECASTS ────────────────────────────────

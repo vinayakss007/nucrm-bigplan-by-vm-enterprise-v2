@@ -56,6 +56,13 @@ function loadDeclaredSchema(): Map<string, DeclaredTable> {
     const cfg = getTableConfig(exp as never);
     const t: DeclaredTable = out.get(cfg.name) ?? { columns: new Set(), indexes: new Set() };
     for (const c of cfg.columns) t.columns.add(c.name);
+    for (const c of cfg.columns) {
+      // Column-level .unique() lives on the column (isUnique/uniqueName),
+      // not in cfg.uniqueConstraints — count it so the auto <table>_<col>_unique
+      // constraint isn't re-declared as a (colliding) uniqueIndex.
+      const col = c as never as { isUnique?: boolean; uniqueName?: string };
+      if (col.isUnique && col.uniqueName) t.indexes.add(col.uniqueName);
+    }
     for (const i of cfg.indexes) {
       t.indexes.add((i as never as { config: { name?: string } }).config.name as string);
     }

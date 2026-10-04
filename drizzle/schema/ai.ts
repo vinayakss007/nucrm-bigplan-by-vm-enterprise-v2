@@ -239,7 +239,7 @@ export const atRiskRules = pgTable('at_risk_rules', {
 //   - Personal: Users add their own API keys, tracked separately
 export const tenantAiCredits = pgTable('tenant_ai_credits', {
   id: utils.pk(),
-  tenantId: utils.tenantId().unique(),
+  tenantId: utils.tenantId(),
   /** Total tokens allocated this billing period */
   allocatedTokens: bigint('allocated_tokens', { mode: 'number' }).notNull().default(0),
   /** Tokens consumed this billing period */

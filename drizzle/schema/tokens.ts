@@ -46,7 +46,6 @@ export const tenantTokenLimits = pgTable('tenant_token_limits', {
   ...utils.lifecycle(),
 }, (table) => ({
   // #2255 live-DB mirror
-  drz2255_tenant_token_limits_tenant_id_unique: uniqueIndex('tenant_token_limits_tenant_id_unique').on(table.tenantId),
   drz2255_idx_tenant_token_limits_set_by: index('idx_tenant_token_limits_set_by').on(table.setBy),
 }));
 
@@ -194,7 +193,7 @@ export const oauthTokens = pgTable('oauth_tokens', {
     clientIdx: index('idx_oauth_tokens_client').on(table.clientId),
     userIdx: index('idx_oauth_tokens_user').on(table.userId),
   
-  drz2255_oauth_tokens_refresh_token_unique: uniqueIndex('oauth_tokens_refresh_token_unique').on(table.refreshToken),};
+};
 });
 
 // ── 10. PORTAL CLIENTS (Client Portal) ──────────────────

@@ -12,7 +12,7 @@ export const tenants = pgTable('tenants', {
   id: utils.pk(),
   name: text('name').notNull(),
   slug: text('slug').notNull().unique(),
-  shortCode: text('short_code').unique(),
+  shortCode: text('short_code'),
   subdomain: text('subdomain'),
   
   status: text('status').notNull().default('trialing'),
@@ -59,8 +59,6 @@ export const tenants = pgTable('tenants', {
     statusIdx: index('idx_tenants_status').on(table.status),
     metadataGinIdx: utils.metadataIdx(table),
   
-  drz2255_tenants_slug_unique: uniqueIndex('tenants_slug_unique').on(table.slug),
-  drz2255_tenants_custom_domain_unique: uniqueIndex('tenants_custom_domain_unique').on(table.customDomain),
   drz2255_idx_tenants_short_code: uniqueIndex('idx_tenants_short_code').on(table.shortCode).where(sql`(short_code IS NOT NULL)`),
   drz2255_idx_tenants_owner_id: index('idx_tenants_owner_id').on(table.ownerId),};
 });
@@ -117,7 +115,7 @@ export const users = pgTable('users', {
     metadataGinIdx: utils.metadataIdx(table),
     activeIdx: utils.activeIdx(table),
   
-  drz2255_users_email_unique: uniqueIndex('users_email_unique').on(table.email),};
+};
 });
 
 export const refreshTokens = pgTable('refresh_tokens', {
@@ -128,7 +126,6 @@ export const refreshTokens = pgTable('refresh_tokens', {
   ...utils.lifecycle(),
 }, (table) => ({
   // #2255 live-DB mirror
-  drz2255_refresh_tokens_token_unique: uniqueIndex('refresh_tokens_token_unique').on(table.token),
   drz2255_idx_refresh_tokens_user_id: index('idx_refresh_tokens_user_id').on(table.userId),
 }));
 
@@ -140,7 +137,6 @@ export const passwordResets = pgTable('password_resets', {
   ...utils.lifecycle(),
 }, (table) => ({
   // #2255 live-DB mirror
-  drz2255_password_resets_token_unique: uniqueIndex('password_resets_token_unique').on(table.token),
   drz2255_idx_password_resets_user_id: index('idx_password_resets_user_id').on(table.userId),
 }));
 
@@ -199,7 +195,6 @@ export const sessions = pgTable('sessions', {
   return {
     tokenIdx: index('idx_sessions_token').on(table.tokenHash),
   
-  drz2255_sessions_token_hash_unique: uniqueIndex('sessions_token_hash_unique').on(table.tokenHash),
   drz2255_idx_sessions_user_id: index('idx_sessions_user_id').on(table.userId),};
 });
 
@@ -305,7 +300,6 @@ export const apiKeys = pgTable('api_keys', {
     tenantIdx: utils.tenantIdx(table),
     metadataGinIdx: utils.metadataIdx(table),
   
-  drz2255_api_keys_key_hash_unique: uniqueIndex('api_keys_key_hash_unique').on(table.keyHash),
   drz2255_idx_api_keys_user_id: index('idx_api_keys_user_id').on(table.userId),};
 });
 
@@ -399,7 +393,7 @@ export const invitations = pgTable('invitations', {
     tenantIdx: utils.tenantIdx(table),
     tenantEmailIdx: uniqueIndex('idx_invitations_tenant_email').on(table.tenantId, table.email),
   
-  drz2255_invitations_token_unique: uniqueIndex('invitations_token_unique').on(table.token),};
+};
 });
 
 // ── 7. FEATURE REGISTRY ───────────────────────────────
@@ -418,7 +412,7 @@ export const featureRegistry = pgTable('feature_registry', {
     return {
       enabledIdx: index('idx_feature_registry_enabled').on(table.enabled),
     
-    drz2255_feature_registry_feature_name_unique: uniqueIndex('feature_registry_feature_name_unique').on(table.featureName),};
+};
   });
 
 // ── 8. PERMISSION OVERRIDES ───────────────────────────

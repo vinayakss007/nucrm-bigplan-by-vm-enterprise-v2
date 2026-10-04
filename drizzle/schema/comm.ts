@@ -243,7 +243,6 @@ export const emailVerifications = pgTable('email_verifications', {
   ...utils.lifecycle(),
 }, (table) => ({
   // #2255 live-DB mirror
-  drz2255_email_verifications_token_hash_unique: uniqueIndex('email_verifications_token_hash_unique').on(table.tokenHash),
   drz2255_idx_email_verifications_user_id: index('idx_email_verifications_user_id').on(table.userId),
 }));
 

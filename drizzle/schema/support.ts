@@ -143,7 +143,7 @@ export const supportTickets = pgTable('support_tickets', {
   drz2255_idx_support_tickets_created_by: index('idx_support_tickets_created_by').on(table.createdBy),
   drz2255_idx_support_tickets_deal_id: index('idx_support_tickets_deal_id').on(table.dealId),
   drz2255_idx_support_tickets_lead_id: index('idx_support_tickets_lead_id').on(table.leadId),
-  drz2255_support_tickets_portal_token_unique: uniqueIndex('support_tickets_portal_token_unique').on(table.portalToken),};
+};
 });
 
 // ── 2. TICKET CONVERSATIONS (REPLIES) ─────────────────
@@ -181,7 +181,7 @@ export const csatSurveys = pgTable('csat_surveys', {
 
   sentAt: timestamp('sent_at', { withTimezone: true }).defaultNow().notNull(),
   respondedAt: timestamp('responded_at', { withTimezone: true }),
-  token: text('token').notNull().unique(), // unique token for public response URL
+  token: text('token').notNull(), // unique via csat_surveys_token_key (#2255 mirror)
 
   metadata: utils.metadata(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),

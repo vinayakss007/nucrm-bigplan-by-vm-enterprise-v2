@@ -57,6 +57,14 @@ export const POST = withApiRoute(async (req: NextRequest) => {
 
     const [row] = await db.insert(leadScoringRules).values({
       tenantId: ctx.tenantId,
+      // Rule-engine columns (#2255 audit): this UI only manages factor/weight,
+      // so mirror them to keep both read paths in agreement.
+      name: parsed.data.factor,
+      field: 'lead.factor',
+      operator: 'set',
+      value: parsed.data.condition ?? null,
+      score: parsed.data.weight,
+      isActive: parsed.data.active,
       factor: parsed.data.factor,
       weight: parsed.data.weight,
       condition: parsed.data.condition ?? null,

@@ -3,7 +3,7 @@
  * Copyright (c) 2026 abetworks.in. All Rights Reserved.
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
-import {pgTable, uuid, text, jsonb, timestamp, boolean, integer, index, bigint, uniqueIndex} from 'drizzle-orm/pg-core';
+import {pgTable, uuid, text, jsonb, timestamp, boolean, integer, index, bigint} from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { tenants, users, apiKeys } from './core';
 import * as utils from './utils';
@@ -19,10 +19,7 @@ export const systemSettings = pgTable('system_settings', {
   value: jsonb('value').notNull(),
   description: text('description'),
   ...utils.lifecycle(),
-}, (table) => ({
-  // #2255 live-DB mirror
-  drz2255_system_settings_key_unique: uniqueIndex('system_settings_key_unique').on(table.key),
-}));
+});
 
 // ── 2. BACKUP & RESTORE ───────────────────────────────
 // #1337/#1378: `tenantBackups` (tenant_backups) and `tenantRestores`
@@ -359,7 +356,7 @@ export const dashboardTemplates = pgTable('dashboard_templates', {
   return {
     activeIdx: utils.activeIdx(table),
   
-  drz2255_dashboard_templates_slug_unique: uniqueIndex('dashboard_templates_slug_unique').on(table.slug),};
+};
 });
 
 export const reportTemplates = pgTable('report_templates', {
@@ -376,7 +373,7 @@ export const reportTemplates = pgTable('report_templates', {
   return {
     activeIdx: utils.activeIdx(table),
   
-  drz2255_report_templates_slug_unique: uniqueIndex('report_templates_slug_unique').on(table.slug),};
+};
 });
 
 
