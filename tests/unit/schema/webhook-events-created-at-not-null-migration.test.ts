@@ -50,8 +50,9 @@ describe(`migration ${TAG} (#2237)`, () => {
     const prev = journal.entries[pos - 1];
     expect(entry!.idx).toBeGreaterThan(prev.idx);
     expect(entry!.when).toBeGreaterThan(prev.when);
-    // The slot reserved for this fix (issue #2237 / rebased tip had 0108@105).
-    expect(entry!.idx).toBe(106);
+    // #2262: idx === journal position (rollback sorts by it), so pin the
+    // invariant rather than the number a concurrent PR may shift.
+    expect(entry!.idx).toBe(pos);
     expect(entry!.tag).toBe('0109_webhook_events_created_at_not_null');
     expect(entry!.breakpoints).toBe(true);
   });

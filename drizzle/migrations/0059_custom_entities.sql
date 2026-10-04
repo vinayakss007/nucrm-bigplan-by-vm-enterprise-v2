@@ -42,13 +42,17 @@ CREATE INDEX IF NOT EXISTS idx_custom_entity_data_gin ON custom_entity_data USIN
 COMMENT ON TABLE custom_entity_data IS 'Schema-on-write data rows for custom entities. Each row holds a JSON payload matching its parent entity field definitions.';
 
 -- RLS: deny-by-default with tenant isolation (mirrors 0037/0054 pattern).
+-- DROP IF EXISTS so re-applying this file is a no-op: it was written before the
+-- journal existed, so databases that already have it replay it again (#2262).
 ALTER TABLE custom_entities ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS custom_entities_tenant_isolation ON custom_entities;
 CREATE POLICY custom_entities_tenant_isolation ON custom_entities FOR ALL USING (
   current_setting('app.current_tenant', true) != '' AND
   tenant_id = current_setting('app.current_tenant', true)::uuid
 );
 
 ALTER TABLE custom_entity_data ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS custom_entity_data_tenant_isolation ON custom_entity_data;
 CREATE POLICY custom_entity_data_tenant_isolation ON custom_entity_data FOR ALL USING (
   current_setting('app.current_tenant', true) != '' AND
   tenant_id = current_setting('app.current_tenant', true)::uuid

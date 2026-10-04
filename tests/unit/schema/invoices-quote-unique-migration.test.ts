@@ -48,7 +48,10 @@ describe(`migration ${TAG} (#2228 / #2257)`, () => {
     const prev = journal.entries[pos - 1];
     expect(entry!.idx).toBeGreaterThan(prev.idx);
     expect(entry!.when).toBeGreaterThan(prev.when);
-    expect(entry!.idx).toBe(105);
+    // #2262 made idx equal the journal position (that is what
+    // lib/db/rollback.ts sorts by), so a literal number is not stable as the
+    // journal grows — the invariant is idx === position.
+    expect(entry!.idx).toBe(pos);
     expect(entry!.breakpoints).toBe(true);
   });
 
