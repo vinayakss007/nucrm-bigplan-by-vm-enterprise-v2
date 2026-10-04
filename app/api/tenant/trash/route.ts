@@ -249,8 +249,58 @@ export const DELETE = withApiRoute(async (req: NextRequest) => {
     const { id, resource_type, purge_all } = await readJsonBody(req);
 
     if (purge_all) {
-      const result = await db.execute(sql`SELECT public.purge_trash() as count`);
-      return NextResponse.json({ ok: true, purged: (result.rows[0] as Record<string, unknown>)?.count as number ?? 0 });
+      // Two things were wrong with calling purge_trash() alone here. It covers
+      // contacts/deals/companies/tasks, while this endpoint's own list (TRASH_TABLES) also shows
+      // leads and projects — so 'purge all trash' left two of the six types behind, and the nightly
+      // cron had to grow its own leads delete (#57) to make up for it. And the number it returned
+      // was the function's `v_count`, which increments once per DELETE statement it runs, not once
+      // per row: the panel's "Purged N items" toast showed 4 whether 4 or 4,000 rows went.
+      // Count what the 30-day window actually covers (RLS bounds it to this tenant, exactly as it
+      // bounds the function's own deletes), then let the function do the four tables it owns and
+      // delete the two it does not. PP-045.
+      const qualified = await db.execute(sql`
+        SELECT
+          (SELECT count(*) FROM ${contacts}
+             WHERE ${contacts.deletedAt} IS NOT NULL
+               AND ${contacts.deletedAt} < NOW() - interval '30 days')
+        + (SELECT count(*) FROM ${deals}
+             WHERE ${deals.deletedAt} IS NOT NULL
+               AND ${deals.deletedAt} < NOW() - interval '30 days')
+        + (SELECT count(*) FROM ${companies}
+             WHERE ${companies.deletedAt} IS NOT NULL
+               AND ${companies.deletedAt} < NOW() - interval '30 days')
+        + (SELECT count(*) FROM ${tasks}
+             WHERE ${tasks.deletedAt} IS NOT NULL
+               AND ${tasks.deletedAt} < NOW() - interval '30 days')
+        + (SELECT count(*) FROM ${leads}
+             WHERE ${leads.deletedAt} IS NOT NULL
+               AND ${leads.deletedAt} < NOW() - interval '30 days')
+        + (SELECT count(*) FROM ${projects}
+             WHERE ${projects.deletedAt} IS NOT NULL
+               AND ${projects.deletedAt} < NOW() - interval '30 days') AS n
+      `);
+      const n = Number((qualified.rows[0] as { n?: number | string } | undefined)?.n ?? 0);
+
+      await db.execute(sql`SELECT public.purge_trash() as count`);
+
+      for (const table of [leads, projects]) {
+        await db
+          .delete(table)
+          .where(and(
+            eq(table.tenantId, ctx.tenantId),
+            isNotNull(table.deletedAt),
+            sql`${table.deletedAt} < NOW() - interval '30 days'`,
+          ));
+      }
+
+      await logAudit({
+        tenantId: ctx.tenantId,
+        userId: ctx.userId,
+        action: 'purge_trash',
+        entityType: 'trash',
+        metadata: { purged: Number.isFinite(n) ? n : 0 },
+      });
+      return NextResponse.json({ ok: true, purged: Number.isFinite(n) ? n : 0 });
     }
 
     if (!id || !resource_type) return NextResponse.json({ error: 'id and resource_type required' }, { status: 400 });
