@@ -10,16 +10,15 @@ import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { requireAuth } from '@/lib/auth/middleware';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { db } from '@/drizzle/db';
-import { selectiveRestoreLogs, selectiveRestoreAuditLog } from '@/drizzle/schema';
-import { eq, sql } from 'drizzle-orm';
-import { rollbackToSnapshot } from '@/lib/restore/restore-executor';
+import { selectiveRestoreLogs } from '@/drizzle/schema';
+import { eq } from 'drizzle-orm';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { logError } from '@/lib/errors-server';
 
 const schema = z.object({ restore_log_id: z.string().min(1) });
 
 /**
- * POST: Rollback a failed or unwanted restore to pre-restore snapshot
+ * POST: Rollback a restore to its pre-restore snapshot — currently refused: the 501 below says why.
  */
 export const POST = withApiRoute(async (request: NextRequest) => {
   try {
@@ -38,12 +37,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     const { restore_log_id } = validated.data;
 
     const [restoreLog] = await db
-      .select({
-        id: selectiveRestoreLogs.id,
-        tenantId: selectiveRestoreLogs.tenantId,
-        backupId: selectiveRestoreLogs.backupId,
-        // In original: pre_restore_snapshot_id
-      })
+      .select({ id: selectiveRestoreLogs.id })
       .from(selectiveRestoreLogs)
       .where(eq(selectiveRestoreLogs.id, restore_log_id))
       .limit(1);
@@ -52,72 +46,23 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       return NextResponse.json({ error: 'Restore log not found' }, { status: 404 });
     }
 
-    // Update status to rolling back
-    await db
-      .update(selectiveRestoreLogs)
-      .set({ status: 'rolling_back' })
-      .where(eq(selectiveRestoreLogs.id, restore_log_id));
-
-    const startTime = Date.now();
-    try {
-      // For now, use db.execute to get pre_restore_snapshot_id if not in schema
-      const res = await db.execute(sql`SELECT pre_restore_snapshot_id FROM public.selective_restore_logs WHERE id = ${restore_log_id}`);
-      const snapshotId = (res.rows[0] as Record<string, unknown>)?.pre_restore_snapshot_id as string;
-
-      if (!snapshotId) {
-        throw new Error('No pre-restore snapshot available for rollback');
-      }
-
-      await rollbackToSnapshot(snapshotId, restoreLog.tenantId!);
-
-      const durationMs = Date.now() - startTime;
-
-      await db
-        .update(selectiveRestoreLogs)
-        .set({ 
-          status: 'rolled_back',
-          completedAt: new Date(),
-        })
-        .where(eq(selectiveRestoreLogs.id, restore_log_id));
-
-      await db.insert(selectiveRestoreAuditLog).values({
-        tenantId: restoreLog.tenantId!,
-        action: 'rollback',
-        performedBy: ctx.userId,
-        performedAt: new Date(),
-        oldData: { reason: 'Manual rollback requested' },
-      });
-
-      return NextResponse.json({
-        success: true,
-        message: 'Rollback completed successfully',
-        duration_ms: durationMs,
-      });
-
-    } catch (err) {
-      await logError({
-        error: err,
-        context: 'selective-restore/rollback',
-        userId: ctx.userId,
-        metadata: { restoreLogId: restore_log_id, tenantId: restoreLog.tenantId },
-      });
-
-      await db
-        .update(selectiveRestoreLogs)
-        .set({ 
-          status: 'failed',
-          errorMessage: err instanceof Error ? err.message : String(err),
-        })
-        .where(eq(selectiveRestoreLogs.id, restore_log_id));
-
-      return NextResponse.json({
-        error: 'Rollback failed',
-        details: "Internal server error",
-      }, { status: 500 });
-    }
-
- 
- 
+    // No rollback target exists. `execute` creates a pre-restore snapshot and streams its id to the
+    // client, but nothing stores that id: `selective_restore_logs` has no snapshot column,
+    // `restore_snapshots` has no restore column, and the audit row's envelope never carried one. The
+    // previous code read `pre_restore_snapshot_id`, a column that exists in no schema file and not in
+    // preprod — Postgres raised 42703, and this route's handler then set the *succeeded* restore's
+    // status to 'failed' before answering a generic 500. Refusing here writes nothing.
+    // Enabling this path is a decision, not a fix: rollbackToSnapshot() deletes every tenant row in
+    // each snapshotted table. PP-044.
+    return NextResponse.json(
+      {
+        error: 'Rollback unavailable',
+        details:
+          'A restore log is not linked to its pre-restore snapshot, so there is no rollback target. See docs/infra/PREPROD-ISSUE-REGISTER.md PP-044.',
+        restore_log_id,
+      },
+      { status: 501 }
+    );
   } catch (err) {
     await logError({ error: err, context: 'selective-restore/rollback POST', requestMethod: 'POST' });
     return apiError(err);
