@@ -151,7 +151,11 @@ ls -d node_modules/storybook node_modules/@storybook 2>/dev/null                
 
 ## What this stack is, and what it will not adopt
 
-Tailwind 3.4.19 + `class-variance-authority` + `clsx` + 17 `@radix-ui/*` primitives + `lucide-react`,
+Tailwind 3.4.19 + `class-variance-authority` + `clsx` + 13 `@radix-ui/*` primitives — 13 direct
+dependencies, all in `dependencies` and none in `devDependencies`, verifiable with
+`Object.keys(require('./package.json').dependencies).filter(k => k.startsWith('@radix-ui')).length`.
+(An earlier revision of this file said 17; that number is not reproducible from `package.json` and is
+wrong here.) `lucide-react`,
 with `@tanstack/react-{table,query,virtual}`, `@dnd-kit`, `recharts`, `date-fns`, `zod`,
 `next-themes`, `react-hot-toast`.
 

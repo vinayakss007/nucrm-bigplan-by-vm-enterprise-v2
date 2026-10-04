@@ -4,7 +4,7 @@
 > here, with the evidence that proves it and the verification that closed it.
 > Update the status the moment it changes; IDs are never reused.
 >
-> - **Last updated:** 2026-09-15 (UTC)
+> - **Last updated:** 2026-10-04 (UTC)
 > - **Stack under test:** `deploy/docker-compose.preprod.yml` — 17 containers, local MinIO as S3
 > - **Entry point:** `https://95.111.194.98/api/health` → `{"status":"ok","db":"connected","schema_ready":true,"sentry":"configured"}`
 > - **Companion doc:** [`PREPROD-FIXES-LESSONS.md`](./PREPROD-FIXES-LESSONS.md) — chronological fix log and the transferable lessons behind each bug.
@@ -62,6 +62,7 @@ Severity: **S1** blocks go-live · **S2** broken feature or security weakness ·
 | PP-040 | S2  | Schema drift       | Two live tables (`ai_providers`, `tenant_ai_credentials`) come from migrations 0013/0018 and are declared by **no** schema file — `npm run db:sync` would drop them, and `drift-check` printed them as `[info]` under "No drift ✓" | 🔧 GUARD SHIPPED · tables need a decision                |
 | PP-041 | S2  | Migrations         | Two applied migrations (`0059`, `0091`) are absent from `_journal.json`, so a fresh database never creates `custom_entities` or the `usage_snapshots` bypass — and `verify-migration-chain` only checks the other direction        | 🚨 OPEN                                                  |
 | PP-042 | S3  | RLS + gates        | `ai_providers` is the only one of 226 tables with neither RLS nor a policy, and `db:verify-isolation` is structurally blind to it — every check filters to tables that have a `tenant_id` column                                   | 🔧 GATE SHIPPED · table decision open (PP-040)           |
+| PP-043 | S3  | Performance        | Task #26's "tracking list scans `email_opens` because `email_id` has no index" — the missing index is real, the sequential scan is not: the live plan is an `Index Scan` at 0.021 ms                                               | 📌 INFO · measured non-issue, no index added             |
 
 ## Sentry issues → register entries
 
@@ -1330,10 +1331,11 @@ inferred.
   0091 was written to fix: its header says the weekly snapshot cron "died with an RLS violation every
   run (NUCRM-D)". That fix is unreproducible. Nothing fails loudly, because preprod — where we test —
   already has the objects.
-- **The chain verifier only looks the other way.** `scripts/verify-migration-chain.ts:79` reports
-  "A journal entry has no corresponding .sql file". There is no check for the reverse, and the script
-  applies migrations _in journal order_, so a scratch database it builds is silently missing the same
-  two objects. The gate that exists to prove the chain is whole passes on a broken chain.
+- **A second, non-CI script checks only one direction.** `scripts/verify-migration-chain.ts:79` reports
+  "A journal entry has no corresponding .sql file" but not the reverse, and it applies migrations _in
+  journal order_, so a scratch database it builds is silently missing the same two objects. That is a
+  limitation of that script, not of the repo's coverage — see the next bullet, which is the gate CI
+  actually runs.
 - **But #46's guard does see it — and has it baselined.** `scripts/check-migration-chain.mjs` checks
   `missing` (up-file with no journal entry) as well as `orphans`/`dupIdx`/`dupWhen`/`order`, and
   `scripts/migration-chain-baseline.json` already lists `missing:0059_custom_entities` and
@@ -1350,19 +1352,27 @@ inferred.
   Two journal entries share one `when`: `1788782400008` → `0092_metrics_tables_superadmin_bypass` **and**
   `0096_analytics_events_ingest_insert`. `migrate.ts` advances by comparing folderMillis against the
   newest `created_at` — its own comment at line 341 says "not by hash" — so a duplicate timestamp cannot
-  distinguish them. Any repair that inserts journal entries has to respect that ordering scheme or it
-  re-creates this ambiguity.
+  distinguish them. This too is already known: it is `dupWhen:1788782400008` in the baseline, alongside
+  `dupIdx:91` and `order:0092_metrics_tables_superadmin_bypass`. Any repair that inserts journal entries
+  has to respect that ordering scheme or it re-creates this ambiguity.
 - **The unbooked tail is not an outage.** Six journal migrations (0101–0106) are live but have no ledger
   row. All six were verified present: `chk_notifications_type`, `chk_ai_activity_action`,
   `chk_scheduled_reports_type`, `chk_integrations_type`, the `email_tracking_pixel_lookup` policy, and
   `chk_sequence_step_logs_status` including `'sending'`. Every one is `DROP … IF EXISTS` + `ADD`/`CREATE`,
   so a replay is idempotent and harmless. Recorded so nobody mistakes the 99-vs-105 gap for unapplied work.
 - **Fix, when someone takes it.** (1) Add the two entries to `_journal.json` with non-colliding `when`
-  values, or fold both into one new numbered migration; (2) add the reverse check — up-file without a
-  journal entry → exit 1 — to `verify-migration-chain.ts`; (3) neither `db:verify-isolation` nor
-  `verify-migration-chain` is wired into CI (`grep` of `.github/workflows/*.yml` for either name returns
-  nothing), so the guard that would catch this does not run on any push.
-- **Not done.** This is a tree-and-ledger read; no migration, journal or script was modified.
+  values, or fold both into one new numbered migration; (2) regenerate the baseline in the same commit
+  (`node scripts/check-migration-chain.mjs --update`) — the guard only _prints_ a hint when a baselined
+  defect disappears (`healed.length > 0` logs `..` lines and still exits 0; only a `fresh` defect exits
+  1), so forgetting step (2) leaves five stale names in the baseline and CI green; (3) optionally add
+  the reverse check to `verify-migration-chain.ts` so the two chain tools agree. _Correction to the
+  first draft of this entry:_ it claimed no gate runs on push. That was wrong — `npm run guard:chain`
+  is wired into `.github/workflows/ci.yml:63` and is the script that already knows about all five
+  defects. My grep looked for `verify-isolation`/`verify-migration-chain`, found neither, and I
+  generalised from a missing name to a missing control. `db:verify-isolation` genuinely is not in CI;
+  `guard:chain` genuinely is.
+- **Not done.** This is a tree-and-ledger read; no migration, journal, baseline or script was modified.
+  The repair is #74.
 
 ## PP-042 — 🚨 `ai_providers` has no RLS and no policy, and the isolation gate is structurally blind to it _(S3 · RLS + gates)_
 
@@ -1429,6 +1439,29 @@ inferred.
 - **Files:** `scripts/verify-tenant-isolation.ts`, `drizzle/migrations/0013_workflow_foundation.sql:96`
   (the `INSERT INTO ai_providers` that put all 6 rows there — `scripts/seed-dev.ts` never names the
   table, so "seed data" means the migration's own seed block, not the dev seeder)
+
+## PP-043 — 📌 `email_opens.email_id` has no index, and the tracking list does **not** scan the table _(S3 · Performance — measured non-issue)_
+
+**Found:** 2026-10-04, auditing report-only task #26 against live preprod.
+**Status:** 📌 INFO — the claim is not reproducible; no index added.
+
+- **The claim.** `/api/tenant/email/tracking` filters on `email_id`, nothing indexes that column, so
+  the new tracking list sequentially scans `email_opens`.
+- **The index half is true.** `pg_indexes` has 4 rows for the table — `email_opens_pkey`,
+  `idx_email_opens_tenant`, `idx_email_opens_contact`, `idx_email_opens_campaign` — and none is
+  `email_id`-leading. `drizzle/schema/email-tracking.ts:11-27` declares only
+  `tenantIdx: utils.tenantIdx(table)`.
+- **The scan half is false, measured.** `select count(*) from email_opens` → **0**. Ran the real query
+  shape (tenant_id equality + `email_id = ANY (…)`, group by) through `EXPLAIN (analyze, buffers,
+costs off)` with RLS engaged: `Index Scan using idx_email_opens_tenant on email_opens`,
+  `Execution Time: 0.021 ms`, `Buffers: shared hit=5`. No sequential scan appears in the plan at any
+  row count the table has ever held.
+- **Why the verdict is "no action", not "revisit later".** At PP-028's flat ~200 ms per statement, a
+  tracking page is dominated by round-trips; the scan term is invisible until `email_opens` holds
+  enough rows per tenant that the tenant index returns far more `email_id` matches than the page
+  needs. That threshold is unmeasured here, and an index is not free — it is a write-path statement
+  per open event. Adding one now would be guessing at both sides of that trade.
+- **Files:** `drizzle/schema/email-tracking.ts`, `app/api/tenant/email/tracking/route.ts:57-60`
 
 ## Running the pre-prod flow simulator
 
