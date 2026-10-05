@@ -305,10 +305,24 @@ describe('checkRateLimit (backwards compatibility)', () => {
     expect(json.error).toContain('Rate limit exceeded');
   });
 
+  // #1249: getClientIp() returns 'unknown' WITHOUT dereferencing the request unless
+  // TRUST_PROXY=true. So passing a literal null here only ever worked on a machine
+  // whose environment has no TRUST_PROXY — CI has none, but vitest.setup.ts folds
+  // .env.local (which sets TRUST_PROXY=true) into process.env, and the case throws.
+  // A headerless Request is what this case's name actually describes; pin both
+  // branches so the result no longer depends on which checkout runs the suite.
   it('handles requests without headers', async () => {
-    const { checkRateLimit } = await import('@/lib/rate-limit');
-    const result = await checkRateLimit(null, { action: 'test' });
-    expect(result).toBeNull();
+    const { checkRateLimit, rateLimiter } = await import('@/lib/rate-limit');
+    await rateLimiter.reset('v1_rate:default:unknown');
+    const request = new Request('http://localhost/api/test');
+
+    vi.stubEnv('TRUST_PROXY', 'true');
+    expect(await checkRateLimit(request, { action: 'test' })).toBeNull();
+
+    vi.stubEnv('TRUST_PROXY', 'false');
+    expect(await checkRateLimit(request, { action: 'test' })).toBeNull();
+
+    vi.unstubAllEnvs();
   });
 });
 
