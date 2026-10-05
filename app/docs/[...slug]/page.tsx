@@ -1,0 +1,41 @@
+/*!
+ * NuCRM Enterprise — Property of abetworks.in
+ * Copyright (c) 2026 abetworks.in. All Rights Reserved.
+ * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
+ */
+import { Metadata } from 'next';
+import { Suspense } from 'react';
+import DocsClient from '@/components/tenant/docs-client';
+import { Skeleton } from '@/components/ui/skeleton';
+
+export const metadata: Metadata = {
+  title: 'Documentation - NuCRM SaaS',
+  description: 'Search and browse comprehensive NuCRM documentation',
+};
+
+function LoadingSkeleton() {
+  return (
+    <div className="space-y-6 animate-pulse">
+      <div className="flex items-center justify-between">
+        <Skeleton className="h-12 w-64" />
+        <Skeleton className="h-10 w-96" />
+      </div>
+      <div className="grid grid-cols-4 gap-6">
+        <Skeleton className="h-96 col-span-1" />
+        <Skeleton className="h-96 col-span-3" />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * #2349: /docs/<category>/<slug> must resolve server-side, not just the SPA
+ * home. The viewer hydrates its selected article from the pathname.
+ */
+export default async function DocsSlugPage() {
+  return (
+    <Suspense fallback={<LoadingSkeleton />}>
+      <DocsClient />
+    </Suspense>
+  );
+}
