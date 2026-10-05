@@ -67,7 +67,10 @@ describe('CSV Export - Formula Injection Prevention', () => {
   it('prefixes cells starting with carriage return to neutralize formula injection', async () => {
     const { escapeCSV } = await import('@/lib/export');
     const result = escapeCSV('\r=CMD()');
-    expect(result).toMatch(/^'/);
+    // #2340: the neutralising apostrophe comes first, and the cell is then
+    // QUOTED because a bare CR splits records — `"'…"` is the safe shape.
+    expect(result).toMatch(/^"'/);
+    expect(result).toContain('=CMD()');
   });
 
   it('does not prefix safe values', async () => {

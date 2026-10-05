@@ -65,6 +65,9 @@ jobs:
       - name: Counter increment ratchet (#2344)
         run: npm run guard:counters
 
+      - name: CSV formula-escape guard (#2340)
+        run: npm run guard:csv
+
   test-unit:
     name: Unit Tests
     runs-on: ubuntu-latest

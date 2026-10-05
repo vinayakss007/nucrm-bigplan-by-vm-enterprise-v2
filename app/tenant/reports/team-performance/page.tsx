@@ -10,6 +10,7 @@ import Link from 'next/link';
 import { useApiQuery } from '@/lib/query/client';
 import { ArrowLeft, RefreshCw, Users, User, Loader2, Download } from 'lucide-react';
 import { formatCurrency, cn } from '@/lib/utils';
+import { csvRow } from '@/lib/csv';
 import toast from 'react-hot-toast';
 
 interface Row {
@@ -25,15 +26,10 @@ interface Row {
 
 function toCsv(rows: Row[], label: string): string {
   const headers = [label, 'Total', 'Converted', 'Open', 'Conversion %', 'Pipeline value'];
-  const lines = rows.map((r) =>
-    [r.name, r.total, r.converted, r.open, r.conversionRate, r.pipelineValue]
-      .map((v) => {
-        const s = String(v ?? '');
-        return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-      })
-      .join(','),
-  );
-  return [headers.join(','), ...lines].join('\n');
+  // #2340: names are user data — csvRow neutralises formula prefixes and
+  // quotes every separator/line-break, which the old local escaper skipped.
+  const lines = rows.map((r) => csvRow([r.name, r.total, r.converted, r.open, r.conversionRate, r.pipelineValue]));
+  return [csvRow(headers), ...lines].join('\n');
 }
 
 function download(csv: string, filename: string) {
