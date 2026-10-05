@@ -75,10 +75,10 @@ describe('#2263 migration shape — the view gains security_invoker', () => {
     const journal = JSON.parse(read('drizzle/migrations/meta/_journal.json')) as {
       entries: { idx: number; tag: string }[];
     };
-    const last = journal.entries[journal.entries.length - 1];
-    expect(last.tag).toBe('0115_rls_view_hardening');
-    expect(last.idx).toBe(115);
-    expect(last.idx).toBe(journal.entries.length - 1);
+    const entry = journal.entries.find((e) => e.tag === '0115_rls_view_hardening');
+    expect(entry, '0115 missing from journal').toBeDefined();
+    expect(entry!.idx).toBe(115);
+    // (position-independent: later migrations may legitimately follow 0115)
     // The chain guard is the repo-wide invariant (missing/orphan/dup checks) —
     // run it so a malformed journal edit fails HERE, not at migrate() time.
     const out = execFileSync('node', ['scripts/check-migration-chain.mjs'], { cwd: ROOT, encoding: 'utf8' });

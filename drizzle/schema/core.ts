@@ -54,7 +54,6 @@ export const tenants = pgTable('tenants', {
   metadata: utils.metadata(),
 }, (table) => {
   return {
-    slugIdx: index('idx_tenants_slug').on(table.slug),
     subdomainIdx: index('idx_tenants_subdomain').on(table.subdomain),
     statusIdx: index('idx_tenants_status').on(table.status),
     metadataGinIdx: utils.metadataIdx(table),
@@ -111,7 +110,6 @@ export const users = pgTable('users', {
   metadata: utils.metadata(),
 }, (table) => {
   return {
-    emailIdx: index('idx_users_email').on(table.email),
     metadataGinIdx: utils.metadataIdx(table),
     activeIdx: utils.activeIdx(table),
   
@@ -193,7 +191,6 @@ export const sessions = pgTable('sessions', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 }, (table) => {
   return {
-    tokenIdx: index('idx_sessions_token').on(table.tokenHash),
   
   drz2255_idx_sessions_user_id: index('idx_sessions_user_id').on(table.userId),};
 });

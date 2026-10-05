@@ -426,7 +426,7 @@ export const CRM_TABLES = {
       dependencies: ['contacts', 'tenants'],
       description: 'Contact engagement scores',
       isCore: false,
-      indexes: ['idx_contact_scores_tenant', 'idx_contact_scores_contact'],
+      indexes: ['idx_contact_scores_tenant'],
     },
   },
   dealForecasts: {

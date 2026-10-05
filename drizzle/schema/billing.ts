@@ -377,7 +377,6 @@ export const plans = pgTable('plans', {
 }, (table) => {
   return {
     nameIdx: index('idx_plans_name').on(table.name),
-    slugIdx: index('idx_plans_slug').on(table.slug),
     activeIdx: index('idx_plans_active').on(table.isActive, table.sortOrder),
   
   drz2255_idx_plans_rate_limit: index('idx_plans_rate_limit').on(table.isActive).where(sql`(is_active = true)`),};

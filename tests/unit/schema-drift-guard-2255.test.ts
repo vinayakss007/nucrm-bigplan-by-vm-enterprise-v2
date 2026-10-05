@@ -26,23 +26,14 @@ const SNAPSHOT: {
 } = JSON.parse(readFileSync(join(import.meta.dirname!, 'schema-drift-snapshot-2255.json'), 'utf8'));
 
 /**
- * Live indexes deliberately NOT declared in schema code: each one is an exact
+ * Live indexes deliberately NOT declared in schema code: each one was an exact
  * duplicate (same table, same key columns, same predicate) of another live
- * index that IS declared. Declaring both would double-count #2264's duplicate
- * pairs. Removing an entry here requires dropping the duplicate in a migration
- * first (that cleanup belongs to #2264, not #2255).
+ * index that IS declared. #2264 dropped every member of every pair in
+ * migration 0116_drop_duplicate_indexes.sql, so the allowlist is empty.
+ * Re-add an entry ONLY for a new live undeclared duplicate (the cleanup
+ * itself still belongs to a #2264-style migration, never to this file).
  */
-const KNOWN_REDUNDANT_DUPLICATE_INDEXES: Record<string, string> = {
-  forms_slug_unique: 'idx_forms_slug',
-  idx_territories_tenant_id: 'idx_territories_tenant',
-  idx_webhook_queue_next_retry: 'idx_webhook_deliveries_next_retry',
-  idx_webhook_queue_status: 'idx_webhook_deliveries_status',
-  idx_webhook_queue_webhook_id: 'idx_webhook_deliveries_webhook_id',
-  oauth_clients_client_id_unique: 'idx_oauth_clients_client_id',
-  oauth_codes_code_unique: 'idx_oauth_codes_code',
-  oauth_tokens_access_token_unique: 'idx_oauth_tokens_access',
-  portal_clients_access_token_unique: 'idx_portal_clients_token',
-};
+const KNOWN_REDUNDANT_DUPLICATE_INDEXES: Record<string, string> = {};
 
 interface DeclaredTable {
   columns: Set<string>;
@@ -115,7 +106,7 @@ describe('Schema ↔ DB drift guard (Issue #2255)', () => {
 
   it('snapshot fixture is populated (guard is not vacuous)', () => {
     expect(Object.keys(SNAPSHOT.tables).length).toBeGreaterThanOrEqual(226);
-    expect(SNAPSHOT.indexes.length).toBeGreaterThanOrEqual(900);
+    expect(SNAPSHOT.indexes.length).toBeGreaterThanOrEqual(880); // 886 after #2264 dropped 20 duplicates
   });
 
   it('every live base table is declared in drizzle/schema (no droppable tables)', () => {
