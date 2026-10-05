@@ -74,6 +74,7 @@ Severity: **S1** blocks go-live · **S2** broken feature or security weakness ·
 | PP-052 | S2  | Disk / observability        | PP-033's build-cache cap has fired once, exited 0 and reclaimed 0 B at 151.3 GB used against a 40 GB cap — `docker builder du` says 114.9 GB is reclaimable, `docker system df` says 0 B, and the bytes live in containerd, not `/var/lib/docker` | 🚨 OPEN · three exits (command / daemon GC / accept), none chosen; disk at 41 % so no emergency |
 | PP-053 | S2  | Backup + restore            | Six tables the DB isolates through a **parent** row were scoped by their own (missing or ignored) `tenant_id` in three registries — a wipe 42703 aborts the atomic restore, and three more filters compare a foreign key to a tenant uuid, so backups succeed while holding nothing                                                            | 🔧 FIXED, PR **#2352** (guard test) · policy escape open (#7, #90)                          |
 | PP-054 | S3  | Sentry + observability      | NUCRM-3J (`analytics_events` 42501) has been fixed and live since PR #2162, yet the watchdog filed it "NEW" on 2026-10-04 — because `NEW` means "rotated into the top-25-by-date list", not "new failure", and `events=` is a cumulative count                                                                | 🚨 OPEN · watchdog semantics + two side findings (`error_logs` empty all-time, INSERT…RETURNING refused) |
+| PP-057 | S2  | Migrations + tooling        | The repo has exactly one "what is applied?" command and it cannot see the ledger: `db:status` queries `__drizzle_migrations(name, applied_at)` — no such table, no such columns — and maps **any** failure to "history table does not exist", so against preprod it printed **`Applied: 0 / Pending: <every journal entry>`** on a database with **99 applied and 18 outstanding**. `db:migrate --dry-run` compounds it: its first line counts journal entries (**`116 pending migration(s)`**) before reading anything, and that number is what the y/N apply prompt offers. Nothing in CI or the runbooks would ever have revealed the 18-behind state, which includes `0091` (the usage-snapshot bypass **#56** shipped), `0059` (**#74**'s still-unstamped entry) and now `0116` (**#2367**, merged while this PR was open) | 🔧 SCRIPTS FIXED in this PR (verified 99/18 against two instruments) · applying the 18 is an **owner decision** · also measured: `0115`'s absence is **not** a live cross-tenant read |
 
 ## Sentry issues → register entries
 
@@ -2416,8 +2417,151 @@ analytics question kept running into.
   24 h of nginx access logs aggregated to status counts, six 12 h Loki chunks aggregated to counts.
   Related: **#82**, **#44**, **#63**, **PP-044**.
 
-## Running the pre-prod flow simulator
+## PP-057 — 🔧 The repo's only "what is applied?" command cannot see the ledger: `db:status` printed `Applied: 0 / Pending: <journal size>` against a database with **99 applied and 18 outstanding**, and `db:migrate --dry-run` prints `116 pending migration(s)` from the journal *before* it reads anything _(S2 · Migrations + tooling)_
 
+_(Numbering: **PP-055** is open PR #2354 and **PP-056** is open PR #2365, so this takes **PP-057** and leaves
+both gaps rather than renumbering anything. Whoever merges second will collide in the Summary table only —
+keep all three rows. Both gap-PRs are still open; **#2367** and **#2369** merged meanwhile and #2367 is what
+moved the journal from 116 to 117, recorded below rather than back-patched into the first measurement.)_
+
+- **The state nobody had measured.** `drizzle.__drizzle_migrations` holds **99** rows, newest
+  `created_at = 1788782400014`. On `main` at `673eecf2` the journal had **116** entries and **116** matching
+  `.sql` files (file set == journal set, no invisible migration), so preprod was **17 behind**: `0059`,
+  `0101`–`0112`, `0091`, `0113`, `0114`, `0115`. Re-measured on current `main` (`310129bf`, after **#2367**
+  merged `0116_drop_duplicate_indexes`): journal **117** entries, **117** `.sql` files, **0** files with no
+  journal entry, ledger still **99** rows → **18 outstanding**, the 17 above plus `0116`. The gap grows
+  monotonically because nothing ever applies them: #43 recorded the same drift 11 deep in September.
+  Two of those are decisions this register already carries — **0091** (`usage_snapshots` super-admin bypass)
+  is **#56**'s fix, merged but not applied, and **0059** is **#74**'s still-unstamped entry. Note the
+  asymmetry that proves the point: **0092 IS stamped and 0091 is not**, because `0092` was applied by hand
+  once and `0091` was invisible to `db:migrate` at the time.
+- **Defect 1 — `db:status` reads a ledger that does not exist.** `scripts/migration-status.ts` queried
+  `SELECT name, applied_at FROM __drizzle_migrations` (unqualified → `public`, and the columns are
+  `id/hash/created_at`). Measured against preprod: `public.__drizzle_migrations` → **`42P01 relation does
+  not exist`**, while `drizzle.__drizzle_migrations` → **99 rows**. The read sits in a `try { … } catch`
+  whose handler prints `[status] Migration history table does not exist — no migrations applied yet` and
+  then **continues with an empty applied set**, so every `.sql` file is listed as pending:
+  `Applied: 0`, `Pending: <one line per journal entry>` (116 when the journal had 116; **117** on current
+  `main`), exit **0**. It also built a `const _appliedNames` set it never uses — the
+  comparison this script was written for was half-finished.
+- **Defect 2 — the catch cannot tell "no ledger" from "no connection".** Same `try`, two independent real
+  causes, one misleading message. Measured on the host: keeping the URL's `sslmode=require` →
+  **`self-signed certificate in certificate chain`**; stripping it → **`no pg_hba.conf entry for host
+  "95.111.194.98" … no encryption`**. Both land in "history table does not exist". The topology is the
+  reason: the host's `DATABASE_URL` is the provider's **public TLS endpoint**, while the paths that work are
+  `PROBE_DATABASE_URL` (`127.0.0.1:6432`, pgbouncer, plaintext) and the app container's own
+  `DATABASE_URL` (`…@pgbouncer:6432`). Every probe in this register goes through the first, which is why
+  `probe:sql` reported 99 rows while `db:status` reported 0 — **two tools, one database, opposite answers**.
+- **Defect 3 — `db:migrate --dry-run`'s headline is a file count, and the prompt reuses it.**
+  `scripts/migrate.ts` did `const pendingCount = journal.entries.length` and printed
+  `[migrate] ${pendingCount} pending migration(s):` **before** the pool exists; the same variable then
+  rendered `Apply ${pendingCount} migration(s) to the "…" database? (y/N)` and the non-interactive
+  `auto-applying ${pendingCount} migration(s)` line. Measured over the working connection: headline
+  **`116 pending migration(s)`**, real plan **`Summary: 99 already stamped, 17 to replay, 0 missing file(s)`**
+  — and on current `main` the same two instruments disagree the same way: headline **`117`** vs plan
+  **`99 already stamped, 18 to replay, 0 missing file(s)`**. So an
+  operator confirming a DDL run against a live database agrees to a number the script has not earned, in the
+  one place (#2254's fail-loud work) where the whole point was to consult the ledger first.
+- **Defect 4 (found while measuring 3, not fixed here).** `detectEnv(DATABASE_URL)` returns **`unknown`**
+  for preprod's public endpoint (`local` for loopback), and the non-interactive branch only fails closed on
+  `env === 'production'`. So `npm run db:migrate` with no `--yes`, from a TTY-less deploy script, **proceeds
+  unattended against preprod** and logged that it was "auto-applying 116 migrations". The apply itself is
+  plan-driven (it would touch only the outstanding ones), so this is a confirmation-gate gap, not a silent
+  DDL storm — and changing what counts as production-guarded is an **owner decision**, so this entry only
+  records it. The misleading *wording* is fixed here (that line now says "proceeding with the migrations the
+  ledger reports as outstanding"); the gate itself is untouched.
+- **Fixed in this PR (scripts and their output only — no execution path changed).**
+  - `scripts/migration-status.ts`: reads `SELECT hash, created_at FROM drizzle.__drizzle_migrations`,
+    resolves `PROBE_DATABASE_URL ?? DATABASE_URL` and strips the URL's `sslmode` exactly like
+    `scripts/lib/readonly-db.mts` does, and classifies each journal entry with the **same**
+    `planMigrations()` the migrator uses (hash **or** `created_at` stamped ⇒ applied). Prints ledger row
+    count, per-entry status, and a new **`Invisible: N file(s) with no journal entry`** section for `.sql`
+    files no journal entry names — the #46/#74 class, now visible from the status command. `42P01` alone
+    means "fresh database"; any other read error propagates and exits 1.
+  - `scripts/migrate.ts`: `--dry-run` now catches **only `42P01`** as "no ledger yet"; a ledger read that
+    fails for any other reason prints `[migrate] --dry-run could not read drizzle.__drizzle_migrations: …`
+    and exits 1 instead of inventing an all-pending plan. The journal count is renamed
+    `journalEntryCount` and every string that called it "pending" now says what it is
+    (`117 journal entr(ies); the ledger decides which are outstanding`), including both confirm prompts.
+    Scope stated honestly: on the unusable host URL the run dies **earlier** than this catch — at
+    `[migrate] Connecting to database…` / the advisory-lock `pool.connect()` (`migrate.ts:201`), which
+    exited 1 with the real `pg_hba` message before this change too. What the narrowing closes is the
+    quieter case: connection succeeds, the `SELECT` on the ledger fails (permission, timeout, wrong
+    search_path), and the old handler answered "everything is pending". There is no read-only way to
+    reproduce that case on preprod, so it is verified by the code path (`42P01` is the *only* condition
+    that sets `ledgerAvailable = false`) and by the two live cases above — not claimed as a measured repro.
+  - **Deliberately not done:** no migration applied, no `--yes` added, no reordering of the confirm step
+    relative to the ledger read (that would restructure a write path), no change to which URL the **write**
+    path uses, no CI gate, no `--fail-on-pending` flag.
+- **Verification — two independent instruments now agree on the same database, re-measured on both commits.**
+  Before, on a tree built from `main`@`673eecf2`: `db:status` → `Applied: 0 / Pending: 116` (exit **0**, no
+  error); `db:migrate --dry-run` → `116 pending migration(s)`, then `[migrate] Fatal: … no pg_hba.conf entry`
+  when it was pointed at the host URL. After, same tree: `db:status` → **`ledger rows: 99 · Applied: 99 ·
+  Pending: 17 · Total: 116`**, listing exactly `0059, 0101…0112, 0091, 0113, 0114, 0115`; `--dry-run` over the
+  working connection → **`Summary: 99 already stamped, 17 to replay, 0 missing file(s)`**. Then **`main` moved
+  to `310129bf`** (#2367 + #2369 merged) and everything was re-run on a second tree built from that sha:
+  `db:status` → **`ledger rows: 99 · Applied: 99 · Pending: 18 · Total: 117`** with the pending list gaining
+  `0116_drop_duplicate_indexes`; `--dry-run` → **`117 journal entr(ies); the ledger decides which are
+  outstanding`** then **`Summary: 99 already stamped, 18 to replay, 0 missing file(s)`**; the same command
+  against the host URL still exits **1** at `[migrate] Connecting to database…` with the real pg_hba message
+  and no plan. The `Invisible:` section prints nothing because `310129bf` has 117 `.sql` files for 117
+  journal entries — **0** unjournalised — which is the #46 guard doing its job, not the absence of a feature.
+  `db:status` against the host URL now exits **1** with `[status] Failed: no pg_hba.conf entry…` instead of
+  printing a confident `Applied: 0`. `eslint scripts/migrate.ts scripts/migration-status.ts` rc=0;
+  `npm run typecheck` rc=0 on both trees (`tsc --noEmit`, 0 errors).
+- **Harness caveat for anyone re-measuring this: the tree you run in decides part of the verdict.**
+  `310129bf` via `git archive | tar -x` produced `1 failed | 486 passed (487 files) · 1 failed | 7179 passed
+  (7180) · 156.87 s`; `673eecf2` the same way produced `3 failed | 482 passed (485) · 3 failed | 7160 passed
+  (7163) · 195.77 s`. The 485→487 is real (#2367/#2369 added two test files). The rest is environment, and
+  it is exactly PP-056's subject: the older tree carries a `.env.local → /srv/nucrm/.env.local` symlink (made
+  for the DB probes), the newer one has none — and `.env.local` is gitignored, so `git archive` cannot
+  produce it. Measured A/B on `310129bf` with the three known files only: `TRUST_PROXY` unset → **3 files
+  passed, 93/93**; `TRUST_PROXY=true` → **1 failed | 92 passed**, `rate-limit.test.ts > handles requests
+  without headers`. Both PRs that fix those assertions (#2359, #2365) are still open, so a tree without the
+  env file looks greener than the repo actually is. The one *new* failure,
+  `tests/unit/webhooks-delivery.test.ts:147`, asserts `status: 'success'` and got `'pending'` with
+  `Outbound request blocked: DNS resolution for "x.com" returned no addresses`; it **passes in isolation in
+  1.09 s** on the same tree and `getent hosts x.com` resolves, so it is load/timing-sensitive under the
+  8-worker sweep, not broken by anything here. Neither number is a claim about this PR: the diff is two files
+  under `scripts/`, which no test in `tests/unit` imports (grepped for assertions on `migrate.ts`'s changed
+  strings — the only hit is `scripts/migration-runner.ts:217`, a different script this PR does not touch).
+- **And a retraction this measurement bought: `0115` being unapplied is *not* a live cross-tenant read.**
+  #2366's message describes the risk as arriving "once the app stops connecting as superuser" — preprod
+  already doesn't: the connecting role is `nucrm`, `rolbypassrls = false`, `is_superuser = off`, and
+  `relrowsecurity` **and** `relforcerowsecurity` are both true on `deals`, `leads`, `tenants`, `users`
+  (owner `nucrm`, so `FORCE` is what makes the policies bind its own owner). Measured through the
+  un-hardened view: scoped to a tenant that owns **10** of the **21** deals in the table,
+  `deals_by_win_probability` returns **5** — a leak would return 21, and the 5 is the view body
+  (`deleted_at IS NULL` + inner join to `deal_stages`; the same tenant has 5 non-deleted deals, all with a
+  stage). With no tenant GUC it returns 0. So `0115` is defence-in-depth for a topology where the view's
+  owner and the caller differ (and for the day a reader role is added), not an emergency — which changes how
+  the pending-18 decision should be prioritised, so it is stated here rather than left to the merge.
+- **Exits, none taken by this PR:**
+  (a) **Apply the 18** — `db:migrate` from inside the app container (or with `PROBE_DATABASE_URL` as the
+  write target, which is the owner's call), `--dry-run` first; `0113`/`0114` take DDL locks and `0114` is a
+  unique index on a live `leads` table. `0116` (#2367, dropped 20 exact-duplicate indexes) joined the list
+  the moment it merged, which is the point of this entry: the backlog is a ratchet, not a fixed number.
+  (b) **#74's repair is incomplete** — `0059` still has no stamp and `0091` is unsent; both are now visible
+  in `db:status`, so the next step is deciding whether to stamp or replay them.
+  (c) **Confirmation gate** — decide whether `unknown` should be treated as production-fail-closed (defect
+  4), and whether the deploy pipeline should run `db:status` and refuse to start when `Pending > 0`.
+  (d) **The write path's URL** — preprod's host `DATABASE_URL` cannot be used by any script at all; either
+  document `PROBE_DATABASE_URL`/container-side execution or give the scripts a TLS-capable route.
+- **Files:** `scripts/migration-status.ts`, `scripts/migrate.ts`, this register. Evidence read:
+  `drizzle.__drizzle_migrations` counts + newest `created_at`, `42P01` on `public.__drizzle_migrations`,
+  `_journal.json` (116 entries on `673eecf2`, 117 on `310129bf`) vs `git ls-tree origin/main:drizzle/migrations`
+  (matching `.sql` file counts, 0 unjournalised on both),
+  `scripts/migration-status.ts` (old query + catch), `scripts/migrate.ts:118-128` (journal-count headline),
+  `:163-172` (prompts), `:219-226` (the `catch` that meant "fresh DB"), `:201` (where the host URL actually
+  dies), `lib/db/ssl-config.ts:33-41`,
+  `scripts/lib/readonly-db.mts:120-133`, `lib/db/pool.ts:174-182`, `pg_class`
+  `relrowsecurity/relforcerowsecurity/relowner` for 4 tables, `pg_get_viewdef('deals_by_win_probability')`,
+  `pg_roles.rolbypassrls`. Related: **#43** (the same drift, 11 deep in September), **#46**, **#56**,
+  **#74**, **#7**, **#54**, **PP-054** (a signal that is not its name), **PP-056** (a run that cannot write
+  its report still exits 1 — and the env-file caveat above is the same lesson from the other side),
+  **#2254**, **#2306**, **#2366**, **#2367**.
+
+## Running the pre-prod flow simulator
 It is the verification step for every RLS or auth change in this repo, and it is safe against a
 live database because **nothing commits** — each scenario is one explicit transaction ending in
 `ROLLBACK`, and it refuses to run at all unless the database is empty (or `--allow-nonempty`).
