@@ -24,8 +24,7 @@ import { apiError } from '@/lib/api-error';
 import { checkRateLimit } from '@/lib/rate-limit';
 import {
   findOfferByToken,
-  patchOfferMetadata,
-  readOfferMetadata,
+  incrementOfferViewCount,
   canTransition,
 } from '@/lib/offers';
 
@@ -55,23 +54,18 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ publ
 
     // Mark as viewed if first open — status + viewed metadata written atomically
     // in one db.transaction so the offer is never marked 'viewed' without its
-    // viewed_at/viewed_count metadata (H7). patchOfferMetadata takes the tx.
+    // viewed_at/viewed_count metadata (H7). incrementOfferViewCount takes the tx.
     if (offer.status === 'sent') {
-      const meta = readOfferMetadata(offer);
       if (canTransition(offer.status, 'viewed')) {
         await db.transaction(async (tx) => {
           await tx.update(quotes).set({ status: 'viewed', updatedAt: new Date() }).where(eq(quotes.id, offer.id));
-          await patchOfferMetadata(offer.id, offer.tenantId, {
+          await incrementOfferViewCount(offer.id, offer.tenantId, {
             viewed_at: new Date().toISOString(),
-            viewed_count: (meta.viewed_count ?? 0) + 1,
           }, tx);
         });
       }
     } else if (offer.status === 'viewed') {
-      const meta = readOfferMetadata(offer);
-      await patchOfferMetadata(offer.id, offer.tenantId, {
-        viewed_count: (meta.viewed_count ?? 0) + 1,
-      });
+      await incrementOfferViewCount(offer.id, offer.tenantId);
     }
 
     // Pull line items

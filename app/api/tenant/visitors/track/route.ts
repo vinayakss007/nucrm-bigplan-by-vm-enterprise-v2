@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { visitors, pageViews } from '@/drizzle/schema/visitors';
 import { apiKeys } from '@/drizzle/schema/core';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 import { scorePageUrl } from '@/lib/visitor-tracking';
 import { createHash } from 'crypto';
 import { checkPublicRateLimit } from '@/lib/rate-limit-simple';
@@ -79,32 +79,32 @@ export async function POST(req: NextRequest) {
         durationSeconds: safeDuration,
       });
 
-      const existing = await tx
-        .select()
-        .from(visitors)
-        .where(and(eq(visitors.id, visitorId), eq(visitors.tenantId, tenantId)));
-
-      if (existing.length === 0) {
-        await tx.insert(visitors).values({
+      // #2344: one statement instead of select-then-update, so two concurrent
+      // views of the same visitor both land. The conflict WHERE is the tenant
+      // predicate the old `.select().where(and(id, tenantId))` provided:
+      // `visitorId` is visitor-supplied, so without it an upsert keyed on the
+      // primary key would let one tenant bump another tenant's counters.
+      const points = scorePageUrl(safeUrl);
+      await tx
+        .insert(visitors)
+        .values({
           id: visitorId,
           tenantId,
           fingerprintId: fingerprintId || visitorId,
           firstSeenAt: new Date(),
           lastSeenAt: new Date(),
           totalPageViews: 1,
-          score: scorePageUrl(safeUrl),
-        });
-      } else {
-        const points = scorePageUrl(safeUrl);
-        await tx
-          .update(visitors)
-          .set({
+          score: points,
+        })
+        .onConflictDoUpdate({
+          target: visitors.id,
+          set: {
             lastSeenAt: new Date(),
-            totalPageViews: (existing[0]!.totalPageViews ?? 0) + 1,
-            score: (existing[0]!.score ?? 0) + points,
-          })
-          .where(eq(visitors.id, visitorId));
-      }
+            totalPageViews: sql`${visitors.totalPageViews} + 1`,
+            score: sql`${visitors.score} + ${points}`,
+          },
+          where: sql`${visitors.tenantId} = ${tenantId}`,
+        });
     });
 
     // Return immediately for speed

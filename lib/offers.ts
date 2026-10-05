@@ -89,6 +89,42 @@ export async function patchOfferMetadata(quoteId: string, tenantId: string, patc
     .where(and(eq(quotes.id, quoteId), eq(quotes.tenantId, tenantId)));
 }
 
+/**
+ * #2344: `viewed_count` incremented with `(read ?? 0) + 1` lost every concurrent
+ * view, because the value Postgres wrote was computed from a read taken before it.
+ * The arithmetic has to live inside the UPDATE, and `viewed_count` sits in jsonb,
+ * so `column + 1` is not available here.
+ *
+ * The regex guard is not decoration: a hand-edited or legacy non-numeric
+ * `viewed_count` would make the `::int` cast abort the whole public offer GET.
+ */
+export async function incrementOfferViewCount(
+  quoteId: string,
+  tenantId: string,
+  extraPatch?: Partial<OfferMetadata>,
+  dbOrTx?: DbClient,
+): Promise<void> {
+  const client = dbOrTx ?? db;
+  const nextCount = sql`(CASE WHEN ${quotes.metadata}->'offer'->>'viewed_count' ~ '^[0-9]+$'
+    THEN (${quotes.metadata}->'offer'->>'viewed_count')::int ELSE 0 END) + 1`;
+  const merged = extraPatch
+    ? sql`jsonb_build_object('viewed_count', ${nextCount}) || ${JSON.stringify(extraPatch)}::jsonb`
+    : sql`jsonb_build_object('viewed_count', ${nextCount})`;
+  await client
+    .update(quotes)
+    .set({
+      metadata: sql`
+        jsonb_set(
+          COALESCE(${quotes.metadata}, '{}'::jsonb),
+          '{offer}',
+          COALESCE(${quotes.metadata}->'offer', '{}'::jsonb) || ${merged}
+        )
+      `,
+      updatedAt: new Date(),
+    })
+    .where(and(eq(quotes.id, quoteId), eq(quotes.tenantId, tenantId)));
+}
+
 /** Given a quote row, narrow its offer metadata to a typed object. */
 export function readOfferMetadata(quote: { metadata: unknown }): OfferMetadata {
   const m = quote.metadata as Record<string, unknown> | null | undefined;

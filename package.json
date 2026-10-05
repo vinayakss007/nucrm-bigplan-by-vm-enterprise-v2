@@ -52,6 +52,7 @@
     "guard:any-suppressions": "node scripts/check-any-suppressions.mjs",
     "guard:running-config": "node scripts/check-running-config-drift.mjs",
     "guard:chain": "node scripts/check-migration-chain.mjs",
+    "guard:counters": "node scripts/check-atomic-counters.mjs",
     "guard:audit": "node scripts/check-audit-baseline.mjs",
     "guard:semgrep": "node scripts/check-semgrep-baseline.mjs semgrep.sarif",
     "guard:vocab": "npx tsx --import ./scripts/load-env.mjs scripts/check-constraint-vocab.mts",

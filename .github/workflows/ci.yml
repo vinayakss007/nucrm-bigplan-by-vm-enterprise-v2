@@ -62,6 +62,9 @@ jobs:
       - name: Migration chain guard (#46)
         run: npm run guard:chain
 
+      - name: Atomic-counter ratchet (#2344)
+        run: npm run guard:counters
+
   test-unit:
     name: Unit Tests
     runs-on: ubuntu-latest
