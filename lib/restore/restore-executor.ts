@@ -28,6 +28,7 @@ import {
 } from './backup-parser';
 import { validateTableName } from '@/lib/sql-allowlist';
 import { logError } from '@/lib/errors-server';
+import { tenantScope } from '@/lib/tenant-restore-wipe';
 
 /**
  * Foreign key dependency ordering for restore.
@@ -169,9 +170,9 @@ export async function createPreRestoreSnapshot(
   for (const table of tables) {
     validateTableName(table);
     try {
-      const result = await db.execute(sql`
-        SELECT * FROM ${sql.identifier(table)} WHERE tenant_id = ${tenantId}
-      `);
+      // A platform-wide table has no tenant predicate — scope it as empty.
+      const where = tenantScope(table, tenantId) ?? sql`false`;
+      const result = await db.execute(sql`SELECT * FROM ${sql.identifier(table)} WHERE ${where}`);
       snapshotData[table] = result.rows;
       totalRecords += result.rows.length;
     } catch {
@@ -211,8 +212,10 @@ export async function rollbackToSnapshot(snapshotId: string, tenantId: string): 
     for (const [table, rows] of Object.entries(snapshotData)) {
       // Reject any table name not on the allowlist before it reaches SQL
       const safeTable = validateTableName(table);
-      // Delete current data
-      await tx.execute(sql`DELETE FROM ${sql.identifier(safeTable)} WHERE tenant_id = ${tenantId}`);
+      // Delete current data; a platform-wide table has no tenant predicate, so skip it.
+      const delWhere = tenantScope(safeTable, tenantId);
+      if (!delWhere) continue;
+      await tx.execute(sql`DELETE FROM ${sql.identifier(safeTable)} WHERE ${delWhere}`);
       
       // Restore from snapshot
       if (Array.isArray(rows) && rows.length > 0) {
@@ -432,9 +435,8 @@ export async function countExistingRecords(
   for (const table of tables) {
     try {
       const safeTable = validateTableName(table);
-      const result = await db.execute(sql`
-        SELECT count(*)::int as cnt FROM ${sql.identifier(safeTable)} WHERE tenant_id = ${tenantId}
-      `);
+      const where = tenantScope(safeTable, tenantId) ?? sql`false`;
+      const result = await db.execute(sql`SELECT count(*)::int as cnt FROM ${sql.identifier(safeTable)} WHERE ${where}`);
       const row = result.rows[0] as { cnt?: number } | undefined;
       counts[table] = row?.cnt ?? 0;
     } catch (err) {
