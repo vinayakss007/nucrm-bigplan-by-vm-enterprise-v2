@@ -28,6 +28,7 @@ import {
 } from './backup-parser';
 import { validateTableName } from '@/lib/sql-allowlist';
 import { logError } from '@/lib/errors-server';
+import { isJunctionTable, junctionScope, PLATFORM_TABLES } from '@/lib/tenant-restore-wipe';
 
 /**
  * Foreign key dependency ordering for restore.
@@ -168,9 +169,15 @@ export async function createPreRestoreSnapshot(
   
   for (const table of tables) {
     validateTableName(table);
+    if (PLATFORM_TABLES.includes(table)) {
+      // Global catalog rows: never scoped to, or owned by, one tenant.
+      snapshotData[table] = [];
+      continue;
+    }
     try {
+      const where = isJunctionTable(table) ? junctionScope(table, tenantId) : sql`tenant_id = ${tenantId}`;
       const result = await db.execute(sql`
-        SELECT * FROM ${sql.identifier(table)} WHERE tenant_id = ${tenantId}
+        SELECT * FROM ${sql.identifier(table)} WHERE ${where}
       `);
       snapshotData[table] = result.rows;
       totalRecords += result.rows.length;
@@ -211,8 +218,12 @@ export async function rollbackToSnapshot(snapshotId: string, tenantId: string): 
     for (const [table, rows] of Object.entries(snapshotData)) {
       // Reject any table name not on the allowlist before it reaches SQL
       const safeTable = validateTableName(table);
+      if (PLATFORM_TABLES.includes(safeTable)) continue;
       // Delete current data
-      await tx.execute(sql`DELETE FROM ${sql.identifier(safeTable)} WHERE tenant_id = ${tenantId}`);
+      const delWhere = isJunctionTable(safeTable)
+        ? junctionScope(safeTable, tenantId)
+        : sql`tenant_id = ${tenantId}`;
+      await tx.execute(sql`DELETE FROM ${sql.identifier(safeTable)} WHERE ${delWhere}`);
       
       // Restore from snapshot
       if (Array.isArray(rows) && rows.length > 0) {
@@ -432,8 +443,13 @@ export async function countExistingRecords(
   for (const table of tables) {
     try {
       const safeTable = validateTableName(table);
+      if (PLATFORM_TABLES.includes(safeTable)) {
+        counts[table] = 0;
+        continue;
+      }
+      const where = isJunctionTable(safeTable) ? junctionScope(safeTable, tenantId) : sql`tenant_id = ${tenantId}`;
       const result = await db.execute(sql`
-        SELECT count(*)::int as cnt FROM ${sql.identifier(safeTable)} WHERE tenant_id = ${tenantId}
+        SELECT count(*)::int as cnt FROM ${sql.identifier(safeTable)} WHERE ${where}
       `);
       const row = result.rows[0] as { cnt?: number } | undefined;
       counts[table] = row?.cnt ?? 0;
