@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { kbArticles, kbCategories } from '@/drizzle/schema';
-import { eq, and, isNull } from 'drizzle-orm';
+import { eq, and, isNull, sql } from 'drizzle-orm';
 import { resolvePortalIdentity } from '@/lib/portal-auth';
 
 /**
@@ -50,7 +50,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     if (!article) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
     // id already proven to be a published, live, same-tenant row above.
-    await db.update(kbArticles).set({ views: (article.views || 0) + 1 }).where(eq(kbArticles.id, id));
+    await db.update(kbArticles).set({ views: sql`${kbArticles.views} + 1` }).where(eq(kbArticles.id, id));
 
     return NextResponse.json({ data: article });
   } catch { return NextResponse.json({ error: 'Not found' }, { status: 404 }); }

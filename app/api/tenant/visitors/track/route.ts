@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { visitors, pageViews } from '@/drizzle/schema/visitors';
 import { apiKeys } from '@/drizzle/schema/core';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 import { scorePageUrl } from '@/lib/visitor-tracking';
 import { createHash } from 'crypto';
 import { checkPublicRateLimit } from '@/lib/rate-limit-simple';
@@ -79,32 +79,32 @@ export async function POST(req: NextRequest) {
         durationSeconds: safeDuration,
       });
 
-      const existing = await tx
-        .select()
-        .from(visitors)
-        .where(and(eq(visitors.id, visitorId), eq(visitors.tenantId, tenantId)));
-
-      if (existing.length === 0) {
-        await tx.insert(visitors).values({
+      // #2344: one atomic upsert replaces the unlocked SELECT + JS
+      // read-modify-write. Concurrent first-views collide on the visitors.id
+      // PK and increment in Postgres; the DO UPDATE is tenant-guarded so a
+      // foreign visitorId can never touch another tenant's counter (the old
+      // code surfaced that case as a swallowed PK violation instead).
+      const points = scorePageUrl(safeUrl);
+      await tx
+        .insert(visitors)
+        .values({
           id: visitorId,
           tenantId,
           fingerprintId: fingerprintId || visitorId,
           firstSeenAt: new Date(),
           lastSeenAt: new Date(),
           totalPageViews: 1,
-          score: scorePageUrl(safeUrl),
-        });
-      } else {
-        const points = scorePageUrl(safeUrl);
-        await tx
-          .update(visitors)
-          .set({
+          score: points,
+        })
+        .onConflictDoUpdate({
+          target: visitors.id,
+          set: {
             lastSeenAt: new Date(),
-            totalPageViews: (existing[0]!.totalPageViews ?? 0) + 1,
-            score: (existing[0]!.score ?? 0) + points,
-          })
-          .where(eq(visitors.id, visitorId));
-      }
+            totalPageViews: sql`${visitors.totalPageViews} + 1`,
+            score: sql`${visitors.score} + ${points}`,
+          },
+          where: eq(visitors.tenantId, tenantId),
+        });
     });
 
     // Return immediately for speed
