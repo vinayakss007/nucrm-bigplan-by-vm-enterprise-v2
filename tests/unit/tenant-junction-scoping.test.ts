@@ -226,3 +226,34 @@ describe('tenant export table list', () => {
     for (const table of PLATFORM_TABLES) expect(exported.has(table), table).toBe(true);
   });
 });
+
+describe('import allowlist', () => {
+  // The wipe consults TENANT_DELETE_ORDER, not this set, so the two lists have to
+  // agree or a restore deletes rows it then refuses to write back.
+  it('accepts every table the wipe deletes and the exporter emits', async () => {
+    const { isValidTableName } = await import('@/lib/sql-allowlist');
+    const platform = new Set(PLATFORM_TABLES);
+    const exported = (await import('@/lib/tenant-data-export')).TENANT_TABLES.map((d) => d.table);
+
+    const wipedButUnimportable = TENANT_DELETE_ORDER.filter((t) => !isValidTableName(t));
+    expect(
+      wipedButUnimportable,
+      'wiped but not importable: the atomic restore deletes the rows, the insert throws, and failFast rolls the whole restore off',
+    ).toEqual([]);
+
+    const exportedButUnimportable = exported.filter((t) => !platform.has(t) && !isValidTableName(t));
+    expect(exportedButUnimportable, 'exported but not importable').toEqual([]);
+  });
+
+  // `backup-parser.ts` keeps a fourth list, uncentralised on purpose: merging it
+  // into the allowlist would let the panel's SQL-text restore write users,
+  // sessions, plans and refresh_tokens from a paste-able dump (owner decision).
+  // Leaving it separate is only safe while it still accepts what we export,
+  // because an unmatched INSERT is skipped with no error and no count.
+  it('never has the panel silently drop a table the exporter emits', async () => {
+    const { TENANT_SCOPED_TABLES } = await import('@/lib/restore/backup-parser');
+    const exported = (await import('@/lib/tenant-data-export')).TENANT_TABLES.map((d) => d.table);
+    const silentlyDropped = exported.filter((t) => !TENANT_SCOPED_TABLES.has(t));
+    expect(silentlyDropped, 'in a backup but skipped by the SQL-text parser — a "successful" restore missing this table').toEqual([]);
+  });
+});
