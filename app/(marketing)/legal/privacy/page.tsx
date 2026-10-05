@@ -34,7 +34,7 @@ export default function PrivacyPage() {
       eyebrow="Privacy policy"
       title="Privacy policy"
       sub="What we collect, why, how long we keep it, and how to make us delete it. Written to be read, not to be survived."
-      updated="2026-07-29"
+      updated="2026-10-05"
       sections={SECTIONS}
     >
       <p>
@@ -85,6 +85,11 @@ export default function PrivacyPage() {
       <h3>When you visit the website</h3>
       <ul>
         <li>Page views and referrer, in aggregate, to understand which pages are useful</li>
+        <li>
+          Technical storage in your browser: a session cookie that keeps you signed in, short-lived sign-in state, and your
+          interface preferences — the full list and how to control them is in our{' '}
+          <a href="/legal/cookies">cookie policy</a>
+        </li>
         <li>Anything you type into a contact or enquiry form</li>
       </ul>
 
