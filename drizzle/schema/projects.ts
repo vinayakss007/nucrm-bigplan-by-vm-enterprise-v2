@@ -25,6 +25,8 @@ export const projects = pgTable('projects', {
   ...utils.audit(),
 }, (table) => {
   return {
+    deletedByFk2261Idx: index("projects_deleted_by_fk_idx").on(table.deletedBy),
+    updatedByFk2261Idx: index("projects_updated_by_fk_idx").on(table.updatedBy),
     tenantIdx: utils.tenantIdx(table),
     statusIdx: index('idx_projects_status').on(table.tenantId, table.status),
     ownerIdx: index('idx_projects_owner').on(table.ownerId),

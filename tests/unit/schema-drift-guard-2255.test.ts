@@ -106,7 +106,7 @@ describe('Schema ↔ DB drift guard (Issue #2255)', () => {
 
   it('snapshot fixture is populated (guard is not vacuous)', () => {
     expect(Object.keys(SNAPSHOT.tables).length).toBeGreaterThanOrEqual(226);
-    expect(SNAPSHOT.indexes.length).toBeGreaterThanOrEqual(880); // 886 after #2264 dropped 20 duplicates
+    expect(SNAPSHOT.indexes.length).toBeGreaterThanOrEqual(980); // 988 after #2261 added 100 FK indexes
   });
 
   it('every live base table is declared in drizzle/schema (no droppable tables)', () => {

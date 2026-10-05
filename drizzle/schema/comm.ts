@@ -153,6 +153,8 @@ export const emailDrafts = pgTable('comm_email_drafts', {
   ...utils.audit(),
 }, (table) => {
   return {
+    deletedByFk2261Idx: index("comm_email_drafts_deleted_by_fk_idx").on(table.deletedBy),
+    updatedByFk2261Idx: index("comm_email_drafts_updated_by_fk_idx").on(table.updatedBy),
     tenantIdx: utils.tenantIdx(table),
     metadataGinIdx: utils.metadataIdx(table),
   

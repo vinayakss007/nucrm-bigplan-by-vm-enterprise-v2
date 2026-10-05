@@ -27,6 +27,8 @@ export const automations = pgTable('automations', {
   ...utils.audit(),
 }, (table) => {
   return {
+    deletedByFk2261Idx: index("automations_deleted_by_fk_idx").on(table.deletedBy),
+    updatedByFk2261Idx: index("automations_updated_by_fk_idx").on(table.updatedBy),
     tenantIdx: utils.tenantIdx(table),
     activeIdx: utils.activeIdx(table),
   
@@ -76,6 +78,8 @@ export const workflows = pgTable('workflows', {
   ...utils.audit(),
 }, (table) => {
   return {
+    deletedByFk2261Idx: index("workflows_deleted_by_fk_idx").on(table.deletedBy),
+    updatedByFk2261Idx: index("workflows_updated_by_fk_idx").on(table.updatedBy),
     tenantIdx: utils.tenantIdx(table).where(sql`deleted_at IS NULL AND is_active = true`),
     metadataGinIdx: utils.metadataIdx(table),
     activeIdx: utils.activeIdx(table),
@@ -248,6 +252,8 @@ export const aiEmailDrafts = pgTable('ai_email_drafts', {
   ...utils.audit(),
 }, (table) => {
   return {
+    deletedByFk2261Idx: index("ai_email_drafts_deleted_by_fk_idx").on(table.deletedBy),
+    updatedByFk2261Idx: index("ai_email_drafts_updated_by_fk_idx").on(table.updatedBy),
     userCreatedAtIdx: index('idx_ai_email_drafts_user').on(table.tenantId, table.createdBy, table.createdAt),
     tenantIdx: utils.tenantIdx(table),
     metadataGinIdx: utils.metadataIdx(table),
@@ -355,6 +361,8 @@ export const automationWorkflows = pgTable('automation_workflows', {
   ...utils.audit(),
 }, (table) => {
   return {
+    deletedByFk2261Idx: index("automation_workflows_deleted_by_fk_idx").on(table.deletedBy),
+    updatedByFk2261Idx: index("automation_workflows_updated_by_fk_idx").on(table.updatedBy),
     tenantWorkflowIdx: uniqueIndex('idx_automation_workflows_tenant_workflow').on(table.tenantId, table.workflowId),
     tenantIdx: utils.tenantIdx(table),
     activeIdx: utils.activeIdx(table),
@@ -437,6 +445,8 @@ export const scheduledReports = pgTable('scheduled_reports', {
   ...utils.audit(),
 }, (table) => {
   return {
+    deletedByFk2261Idx: index("scheduled_reports_deleted_by_fk_idx").on(table.deletedBy),
+    updatedByFk2261Idx: index("scheduled_reports_updated_by_fk_idx").on(table.updatedBy),
     tenantIdx: utils.tenantIdx(table),
     statusIdx: index('idx_scheduled_reports_status').on(table.status, table.tenantId),
     nextRunIdx: index('idx_scheduled_reports_next_run').on(table.nextRunAt),

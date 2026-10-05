@@ -127,6 +127,9 @@ export const supportTickets = pgTable('support_tickets', {
   resolvedAt: timestamp('resolved_at', { withTimezone: true }),
 }, (table) => {
   return {
+    deletedByFk2261Idx: index("support_tickets_deleted_by_fk_idx").on(table.deletedBy),
+    slaPolicyIdFk2261Idx: index("support_tickets_sla_policy_id_fk_idx").on(table.slaPolicyId),
+    updatedByFk2261Idx: index("support_tickets_updated_by_fk_idx").on(table.updatedBy),
     tenantIdx: utils.tenantIdx(table),
     contactIdx: index('idx_tickets_contact').on(table.contactId),
     assignedIdx: index('idx_tickets_assigned').on(table.assignedTo),
@@ -207,6 +210,8 @@ export const cannedResponses = pgTable('canned_responses', {
   ...utils.audit(),
 }, (table) => {
   return {
+    deletedByFk2261Idx: index("canned_responses_deleted_by_fk_idx").on(table.deletedBy),
+    updatedByFk2261Idx: index("canned_responses_updated_by_fk_idx").on(table.updatedBy),
     tenantIdx: utils.tenantIdx(table),
     shortcutIdx: index('idx_canned_shortcut').on(table.tenantId, table.shortcut),
   
