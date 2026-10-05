@@ -14,7 +14,7 @@ import { leads, leadActivities, activities, tenants, plans } from '@/drizzle/sch
 import { eq, and, sql } from 'drizzle-orm';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { resolveOrCreateContactForLead } from '@/lib/contacts/resolve';
-import { generateLeadOid } from '@/lib/leads/oid';
+import { generateLeadOid, isLeadOidCollision } from '@/lib/leads/oid';
 import { logAudit } from '@/lib/audit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
@@ -246,7 +246,10 @@ export const POST = withApiRoute(async (request: NextRequest) => {
         }
 
         // ── New-lead path: resolve-or-create contact + insert lead, atomic per row ─
-        await db.transaction(async (tx) => {
+        // #2343: extracted into a factory so a lead_oid collision against the
+        // unique idx_leads_tenant_oid can re-run allocation instead of
+        // surfacing as a failed row.
+        const createLeadRowTx = () => db.transaction(async (tx) => {
           const resolve = await resolveOrCreateContactForLead(tx, ctx.tenantId, ctx.userId, {
             firstName,
             lastName: mapped.lastName || '',
@@ -336,6 +339,17 @@ export const POST = withApiRoute(async (request: NextRequest) => {
           if (resolve.isNewContact) results.newContacts++;
           else results.mergedContacts++;
         });
+
+        const MAX_IMPORT_ROW_RETRIES = 3;
+        for (let attempt = 0; attempt < MAX_IMPORT_ROW_RETRIES; attempt++) {
+          try {
+            await createLeadRowTx();
+            break;
+          } catch (rowTxErr) {
+            if (isLeadOidCollision(rowTxErr) && attempt < MAX_IMPORT_ROW_RETRIES - 1) continue;
+            throw rowTxErr;
+          }
+        }
 
         results.imported++;
  

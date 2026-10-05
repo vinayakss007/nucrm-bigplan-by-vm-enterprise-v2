@@ -258,7 +258,11 @@ export const leads = pgTable('leads', {
     assignedIdx: index('idx_leads_assigned').on(table.assignedTo),
     tenantCreatedIdx: index('idx_leads_tenant_created').on(table.tenantId, table.createdAt),
     contactIdx: index('idx_leads_contact').on(table.contactId),
-    leadOidIdx: index('idx_leads_tenant_oid').on(table.tenantId, table.leadOid),
+    // #2343: was a plain index — lead_oid duplicates were silently accepted.
+    // Unique over the FULL table (soft-deleted rows keep their labels and are
+    // reserved); lead_oid is NULL for pre-OID legacy leads, which Postgres
+    // treats as distinct. Allocation: lib/leads/oid.ts + migration 0114.
+    leadOidIdx: uniqueIndex('idx_leads_tenant_oid').on(table.tenantId, table.leadOid),
     productIdx: index('idx_leads_tenant_product').on(table.tenantId, table.productId),
     metadataGinIdx: utils.metadataIdx(table),
     activeIdx: utils.activeIdx(table),

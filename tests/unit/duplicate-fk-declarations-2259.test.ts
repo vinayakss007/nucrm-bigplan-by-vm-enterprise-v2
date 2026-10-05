@@ -148,9 +148,12 @@ describe('0113_dedupe_foreign_keys migration + journal (#2259)', () => {
     readFileSync(join(MIGRATIONS_DIR, 'meta/_journal.json'), 'utf8'),
   ) as { entries: Array<{ idx: number; version: string; when: number; tag: string; breakpoints: boolean }> };
 
-  it('is journalled as the last entry with idx = array position', () => {
+  it('is journalled with idx = array position and stable timestamp', () => {
     const i = journal.entries.findIndex((e) => e.tag === TAG);
-    expect(i).toBe(journal.entries.length - 1);
+    expect(i).toBeGreaterThan(-1);
+    // Later migrations may be appended after 0113 — assert its integrity,
+    // not that it stays last in the journal.
+    expect(journal.entries.length).toBeGreaterThan(i);
     expect(journal.entries[i]!.idx).toBe(i);
     expect(journal.entries[i]!.when).toBe(1788782400029);
   });
