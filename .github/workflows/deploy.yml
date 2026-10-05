@@ -136,6 +136,67 @@ jobs:
               return 1
             }
 
+            # #2300 — ecosystem.config.cjs declares three apps (web, worker,
+            # cron); this step used to restart only web. Every merge touching
+            # worker.ts, lib/automation/**, job handlers or scripts/
+            # cron-scheduler.ts shipped web-only: the OLD worker kept consuming
+            # NEW queue payloads with old logic (mixed-version processing —
+            # wrong plan emails, stale follow-ups, jobs that silently fail or
+            # duplicate), and it was invisible because the web health endpoint
+            # stayed green. Same for a cron stuck in "errored" (the documented
+            # FATAL: CRON_SECRET class of silent death — no gate noticed).
+            BG_APPS="worker cron"
+            restart_background_apps() {
+              for APP in $BG_APPS; do
+                if pm2 describe "$APP" >/dev/null 2>&1; then
+                  echo "Restarting pm2 app $APP onto $SHA"
+                  pm2 restart "$APP" --update-env
+                else
+                  echo "pm2 app $APP missing — starting it from ecosystem.config.cjs onto $SHA"
+                  pm2 start ecosystem.config.cjs --only "$APP"
+                fi
+              done
+              pm2 save
+            }
+
+            # worker/cron serve no HTTP endpoint, so their gate is the pm2
+            # status: "online" within the retry budget passes; "errored" fails
+            # immediately instead of burning the whole window.
+            bg_gate() {
+              for APP in $BG_APPS; do
+                OK=0
+                for i in $(seq 1 ${{ env.HEALTH_CHECK_RETRIES }}); do
+                  BG_STATUS=$(pm2 jlist 2>/dev/null | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{try{const l=JSON.parse(d);const a=l.find(x=>x.name===process.argv[1]);process.stdout.write(a?a.pm2_env.status:"missing")}catch{process.stdout.write("parse-error")}})' "$APP")
+                  if [ "$BG_STATUS" = "online" ]; then
+                    echo "$APP online (attempt $i)"
+                    OK=1
+                    break
+                  fi
+                  if [ "$BG_STATUS" = "errored" ]; then
+                    echo "$APP is ERRORED — process died on start (check its env: ecosystem.config.cjs notes)"
+                    break
+                  fi
+                  echo "Attempt $i: $APP status=$BG_STATUS"
+                  sleep ${{ env.HEALTH_CHECK_INTERVAL }}
+                done
+                if [ "$OK" != "1" ]; then
+                  echo "FAIL: background consumer $APP did not reach online (last status: $BG_STATUS)"
+                  pm2 describe "$APP" 2>&1 | tail -25 || true
+                  return 1
+                fi
+              done
+              return 0
+            }
+
+            # One unit of work for BOTH the forward deploy and the rollback:
+            # web must be healthy first (a broken web must not have its
+            # consumers churned), then worker+cron are restarted and gated.
+            deploy_all_and_wait() {
+              restart_and_wait || return 1
+              restart_background_apps
+              bg_gate
+            }
+
             echo "Fetching latest code..."
             git fetch origin main
             git checkout --force "$SHA"
@@ -167,20 +228,22 @@ jobs:
             echo "Building..."
             NODE_OPTIONS="--max-old-space-size=8192" npm run build
 
-            echo "Restarting app (pm2: $PM2_APP)..."
-            if restart_and_wait; then
+            echo "Restarting app (pm2: $PM2_APP) + background consumers ($BG_APPS)..."
+            if deploy_all_and_wait; then
               # The deploy host is also the dev host; leave the repo on main
               # instead of a detached HEAD. The running app keeps serving the
               # built artifacts from the deployed commit.
               git checkout main
-              echo "Deploy complete: $SHA (pm2 app: $PM2_APP)"
+              echo "Deploy complete: $SHA (pm2 apps restarted: $PM2_APP, worker, cron)"
               exit 0
             fi
 
             echo "ERROR: app did not become healthy. Rolling back to previous commit."
             git checkout --force "$SHA"^
             NODE_OPTIONS="--max-old-space-size=8192" npm run build
-            if restart_and_wait; then
+            # #2300: rollback reverses ALL three apps, not just web — otherwise
+            # the old web returns while worker/cron keep running new code.
+            if deploy_all_and_wait; then
               echo "Rollback healthy."
             else
               echo "WARNING: rollback did not pass the health gate either."
