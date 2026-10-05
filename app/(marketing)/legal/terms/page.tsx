@@ -109,8 +109,9 @@ export default function TermsPage() {
         <li>Unpaid invoices may lead to suspension after written notice. Your data is not deleted during suspension</li>
         <li>We may change list prices with at least 30 days&apos; notice, effective from your next renewal</li>
         <li>
-          Fees already paid are non-refundable except where required by law, or where we materially fail to provide the
-          service
+          Refunds follow our <a href="/legal/refunds">refund &amp; cancellation policy</a>, which forms part of these terms —
+          otherwise fees already paid are non-refundable except where required by law, or where we materially fail to provide
+          the service
         </li>
       </ul>
 
