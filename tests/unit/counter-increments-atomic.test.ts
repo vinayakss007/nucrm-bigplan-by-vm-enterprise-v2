@@ -241,7 +241,9 @@ describe('POST /api/tenant/visitors/track — atomic visitor upsert (#2344)', ()
       jsonRequest('http://localhost:3000/api/tenant/visitors/track', {
         method: 'POST',
         headers: { 'x-api-key': 'tracking-key' },
-        body: { visitorId: 'visitor-1', url: 'https://example.com/pricing' },
+        // #2356: the route now 400s non-UUID visitorIds, so the beacon id
+        // here must be a real UUID like the embed script sends
+        body: { visitorId: 'b2222222-2222-4222-8222-222222222222', url: 'https://example.com/pricing' },
       }),
     );
   }
