@@ -262,7 +262,6 @@ export const tenantAiCredits = pgTable('tenant_ai_credits', {
   allocatedBy: uuid('allocated_by').references(() => users.id, { onDelete: 'set null' }),
 }, (table) => ({
   tenantIdx: utils.tenantIdx(table),
-  periodIdx: index('idx_tenant_ai_credits_period').on(table.tenantId, table.billingPeriod),
   statusIdx: index('idx_tenant_ai_credits_status').on(table.status),
 
   drz2255_tenant_ai_credits_tenant_id_billing_period_key: uniqueIndex('tenant_ai_credits_tenant_id_billing_period_key').on(table.tenantId, table.billingPeriod),

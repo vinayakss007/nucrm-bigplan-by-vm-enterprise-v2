@@ -39,7 +39,7 @@ export const TOKENS_TABLES = {
       dependencies: [],
       description: 'Service token budget tracking',
       isCore: true,
-      indexes: ['idx_token_budgets_service_period', 'idx_token_budgets_service'],
+      indexes: ['idx_token_budgets_service_period'],
     },
   },
   tenantTokenLimits: {
@@ -130,7 +130,7 @@ export const TOKENS_TABLES = {
       dependencies: ['tenants', 'users'],
       description: 'OAuth 2.0 client registrations',
       isCore: false,
-      indexes: ['idx_oauth_clients_client_id', 'idx_oauth_clients_tenant'],
+      indexes: ['idx_oauth_clients_tenant'],
     },
   },
   oauthCodes: {
@@ -145,7 +145,7 @@ export const TOKENS_TABLES = {
       dependencies: ['oauthClients', 'users'],
       description: 'OAuth 2.0 authorization codes',
       isCore: false,
-      indexes: ['idx_oauth_codes_code', 'idx_oauth_codes_client'],
+      indexes: ['idx_oauth_codes_client'],
     },
   },
   oauthTokens: {
@@ -160,7 +160,7 @@ export const TOKENS_TABLES = {
       dependencies: ['oauthClients', 'users'],
       description: 'OAuth 2.0 access and refresh tokens',
       isCore: false,
-      indexes: ['idx_oauth_tokens_access', 'idx_oauth_tokens_refresh', 'idx_oauth_tokens_client', 'idx_oauth_tokens_user'],
+      indexes: ['idx_oauth_tokens_client', 'idx_oauth_tokens_user'],
     },
   },
   portalClients: {
@@ -175,7 +175,7 @@ export const TOKENS_TABLES = {
       dependencies: ['tenants', 'users'],
       description: 'Client portal access tokens',
       isCore: false,
-      indexes: ['idx_portal_clients_tenant', 'idx_portal_clients_email', 'idx_portal_clients_token'],
+      indexes: ['idx_portal_clients_tenant', 'idx_portal_clients_email'],
     },
   },
 };

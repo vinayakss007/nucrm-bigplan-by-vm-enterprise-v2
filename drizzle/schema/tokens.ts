@@ -24,7 +24,6 @@ export const tokenBudgets = pgTable('token_budgets', {
 }, (table) => {
   return {
     servicePeriodIdx: uniqueIndex('idx_token_budgets_service_period').on(table.service, table.billingPeriod),
-    serviceIdx: index('idx_token_budgets_service').on(table.service, table.billingPeriod),
   };
 });
 
@@ -150,7 +149,6 @@ export const oauthClients = pgTable('oauth_clients', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
 }, (table) => {
   return {
-    clientIdIdx: uniqueIndex('idx_oauth_clients_client_id').on(table.clientId),
     tenantIdx: index('idx_oauth_clients_tenant').on(table.tenantId),
   
   drz2255_idx_oauth_clients_created_by: index('idx_oauth_clients_created_by').on(table.createdBy),};
@@ -169,7 +167,6 @@ export const oauthCodes = pgTable('oauth_codes', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
 }, (table) => {
   return {
-    codeIdx: uniqueIndex('idx_oauth_codes_code').on(table.code),
     clientIdx: index('idx_oauth_codes_client').on(table.clientId),
   
   drz2255_idx_oauth_codes_user_id: index('idx_oauth_codes_user_id').on(table.userId),};
@@ -188,8 +185,6 @@ export const oauthTokens = pgTable('oauth_tokens', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
 }, (table) => {
   return {
-    accessTokenIdx: uniqueIndex('idx_oauth_tokens_access').on(table.accessToken),
-    refreshTokenIdx: index('idx_oauth_tokens_refresh').on(table.refreshToken),
     clientIdx: index('idx_oauth_tokens_client').on(table.clientId),
     userIdx: index('idx_oauth_tokens_user').on(table.userId),
   
@@ -214,7 +209,6 @@ export const portalClients = pgTable('portal_clients', {
   return {
     tenantIdx: utils.tenantIdx(table),
     emailIdx: index('idx_portal_clients_email').on(table.email),
-    tokenIdx: uniqueIndex('idx_portal_clients_token').on(table.accessToken),
   
   drz2255_idx_portal_clients_created_by: index('idx_portal_clients_created_by').on(table.createdBy),};
 });

@@ -402,7 +402,6 @@ export const forms = pgTable('forms', {
   return {
     tenantIdx: utils.tenantIdx(table),
     activeIdx: utils.activeIdx(table),
-    slugIdx: uniqueIndex('idx_forms_slug').on(table.slug),
   
   drz2255_idx_forms_created_by: index('idx_forms_created_by').on(table.createdBy),};
 });
@@ -728,7 +727,6 @@ export const contactScores = pgTable('contact_scores', {
 }, (table) => {
   return {
     tenantIdx: utils.tenantIdx(table),
-    contactIdx: index('idx_contact_scores_contact').on(table.contactId),
   
 };
 });

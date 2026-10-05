@@ -813,6 +813,13 @@
       "when": 1788782400031,
       "tag": "0115_rls_view_hardening",
       "breakpoints": true
+    },
+    {
+      "version": "7",
+      "idx": 116,
+      "when": 1788782400032,
+      "tag": "0116_drop_duplicate_indexes",
+      "breakpoints": true
     }
   ]
 }
