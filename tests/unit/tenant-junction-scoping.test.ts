@@ -160,6 +160,17 @@ describe('tenant wipe order', () => {
     expect(offenders, 'these tables would 42703 on `WHERE tenant_id = …`').toEqual([]);
   });
 
+  it('wipes every parent-isolated child before the parent its scope reads', () => {
+    const offenders: string[] = [];
+    for (const table of JUNCTION_TABLES) {
+      const parent = /IN \( SELECT id FROM (\w+)/.exec(flatten(junctionScope(table, 't')).sql)![1]!;
+      const child = TENANT_DELETE_ORDER.indexOf(table);
+      const above = TENANT_DELETE_ORDER.indexOf(parent);
+      if (above === -1 || child > above) offenders.push(`${table} #${child} after ${parent} #${above}`);
+    }
+    expect(offenders, 'a parent deleted first leaves an FK standing, which aborts the whole atomic restore').toEqual([]);
+  });
+
   it('has no duplicate table names and names no table outside the schema', () => {
     expect(new Set(TENANT_DELETE_ORDER).size).toBe(TENANT_DELETE_ORDER.length);
     const unknown = TENANT_DELETE_ORDER.filter((t) => !COLUMNS.has(t));

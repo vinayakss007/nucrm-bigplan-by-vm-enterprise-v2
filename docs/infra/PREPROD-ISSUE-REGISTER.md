@@ -2311,7 +2311,7 @@ analytics question kept running into.
   grandfathered at **562 lines** by `scripts/check-file-size.mjs` (#1843/#422), and the first version of
   this fix inlined the branch logic at each site and grew it to 574 — the guard failed CI. The helper plus
   one-line predicates bring it to 560.
-- **Guard:** `tests/unit/tenant-junction-scoping.test.ts` (12 assertions) reads the **Drizzle schema
+- **Guard:** `tests/unit/tenant-junction-scoping.test.ts` (13 assertions) reads the **Drizzle schema
   itself** (`getTableColumns` + `getTableName` over `@/drizzle/schema`) rather than a hand-maintained
   list, and fails on each of the three shapes: a wipe/export table with no `tenant_id` that is neither
   platform- nor parent-scoped, a `filterColumn` that does not exist, a `*_id` filter other than
@@ -2324,6 +2324,12 @@ analytics question kept running into.
   (`getTableName` + `getTableColumns`) rather than any hand-maintained list, and
   `TableMetadata.hasTenantId` is documentation-only — its single consumer,
   `scripts/verify-tenant-isolation.ts:133`, derives the answer from a live query instead.
+- **Ordering checked, and it is not a second bug.** Writing the predicate correctly is only half of a
+  wipe: if a parent were deleted before the child that references it, the FK error would abort the atomic
+  restore exactly the way the 42703 did. Both hard-coded lists were measured against the six scopes —
+  `TENANT_DELETE_ORDER` (86 entries) puts every parent-isolated child *before* its parent, and
+  `TABLE_DEPENDENCY_ORDER` (88) puts it *after* on the insert side, with all six present in both. The wipe
+  half is now asserted by the guard; the insert list is not exported, so it was verified by reading it.
 - **The half that is not fixed, deliberately.** None of the six `tenant_isolation` policies has an
   `app.is_super_admin` branch (measured `super=false` on all six, while `contacts`/`leads` are
   `super=true`), so a reader in the platform context sees **zero rows from these tables no matter how the
@@ -2354,7 +2360,7 @@ analytics question kept running into.
   `tests/unit` sweep → **7066 passed / 2 failed**, and both failures are the same
   `setCsrfCookie`-Secure-flag assertion (`tests/unit/csrf.test.ts`, `tests/unit/csrf-unit.test.ts`),
   NODE_ENV-sensitive and in files that import nothing touched here; `npx eslint --max-warnings=0` clean
-  on all five changed/added files; `tests/unit/tenant-junction-scoping.test.ts` → **12 assertions**.
+  on all five changed/added files; `tests/unit/tenant-junction-scoping.test.ts` → **13 assertions**.
 - **Files:** `lib/tenant-restore-wipe.ts`, `lib/tenant-data-export.ts`,
   `lib/restore/restore-executor.ts`, `lib/sql-allowlist.ts`, `tests/unit/tenant-junction-scoping.test.ts`
   (new). Evidence read: `lib/tenant-data-import.ts:86,138` (the two `failFast` modes),
