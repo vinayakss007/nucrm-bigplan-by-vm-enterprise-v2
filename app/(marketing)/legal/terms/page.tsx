@@ -36,7 +36,7 @@ export default function TermsPage() {
       eyebrow="Terms of service"
       title="Terms of service"
       sub="The deal between us, in language you can actually check. Where a clause protects us, we say so rather than hiding it in a definition."
-      updated="2026-07-29"
+      updated="2026-10-05"
       sections={SECTIONS}
     >
       <p>
