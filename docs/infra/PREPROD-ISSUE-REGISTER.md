@@ -2500,6 +2500,14 @@ _(Numbering: **PP-055** is already spoken for by open PR #2354, which is not on 
   because upstream's copy mocks `lib/api/read-rate-limit` — the very call that reaches
   `getClientIp` — and the stale copy did not. So: no fourth assertion was broken, the one-line
   "fix" would have **reverted upstream's mock**, and it is not in this PR.
+  - **Class count closed by re-running the same sweep against the real upstream tree.** Built from
+    the remote commit itself (no fix from #2359 or #2365 in it), the six booleans set, the whole of
+    `tests/unit`: **3 failed files | 516 passed | 1 skipped (520) · 3 failed tests | 7441 passed
+    | 11 skipped (7455) · 212.94 s**, and the three failing files are exactly
+    `tests/unit/csrf.test.ts`, `tests/unit/csrf-unit.test.ts` and `tests/unit/rate-limit.test.ts` —
+    the pair #2359 pins plus the case #2365 pins. Every other assertion in the suite is
+    environment-independent on `main`. **So the class is three, not four**, which is the number the
+    summary row and the two PRs now claim, and the widest sweep available here is what closed it.
 - **Harness rule learned, recorded because it is the mirror image of the worktree caveat above:**
   a clone or archive used for verification must be pinned to an explicit **commit sha fetched from
   the remote**, never to a local branch ref of the shared repo. Two independent ways the same suite
