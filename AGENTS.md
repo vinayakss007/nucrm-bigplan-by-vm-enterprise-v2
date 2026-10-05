@@ -115,8 +115,8 @@ Handles high/medium priority feature work, frontend, and UX issues:
 ## Other Context
 
 - **DB**: read the connection string from `DATABASE_URL` (see `.env.example`) — never hardcode credentials here
-- **App**: `http://34.70.191.180:3000` — currently running in dev mode
-- **Sign in**: `t@t.com` / `password123`
+- **App**: this repo is **public** — live URLs and logins do not belong in it. The current host comes from the `DEPLOY_HOST` secret (or `curl -s ifconfig.me` on the box). Test users for local dev are created by `npm run seed:dev` (see `docs/API-TESTING-GUIDE.md`); anything that was documented here before has been removed under #2302 and those old values must be treated as public and rotated
+- **Sign in**: no production or preproduction credentials live in this file, by policy
 - **Build**: `npm run build` succeeds (needs ~5min, large project)
 - **Tests**: 462 files matched by `find tests -name '*.test.*' | wc -l` — 425 under `tests/unit`, 25
   under `tests/integration`, 11 under `tests/dashboard`, 1 elsewhere. Playwright e2e specs are `.spec.ts`
@@ -137,14 +137,14 @@ Handles high/medium priority feature work, frontend, and UX issues:
   went looking for a pm2 process that does not exist on this machine and concluded the app was down.
   Assume Docker unless you have positively confirmed you are on the production VM.
 - **The deploy host is not this machine.** This repo lives at `/srv/nucrm`; the path this line used to
-  name, `/home/vinayak_shruti_biz`, does not exist here (`ls` it). The Deploy workflow
+  name, the VM deploy user&apos;s home directory, does not exist here (`ls` it). The Deploy workflow
   (`.github/workflows/deploy.yml`) SSHes to the production VM, checks out the CI-tested commit,
   `npm ci` + `npm run build`, `pm2 restart web`, gates on `127.0.0.1:3099/api/health`, rolls back on
   failure, then returns that repo to `main` — all of which happens over there, not here.
-- **VM external IP is EPHEMERAL** — changes on every reboot. Current: `34.57.42.29` (ssh: user `vinayak_shruti_biz`, key `~/.ssh/deploy_key`, matches `~/.ssh/authorized_keys`). When the deploy fails with `dial tcp ...:22: connection refused/timeout`, run `curl -s ifconfig.me`, then `gh secret set DEPLOY_HOST --body "<new-ip>"`.
+- **VM external IP is EPHEMERAL** — changes on every reboot. Host, SSH user and key live in the `DEPLOY_HOST`, `DEPLOY_USER` and `DEPLOY_SSH_KEY` secrets consumed by `.github/workflows/deploy.yml` — never record them here. When the deploy fails with `dial tcp ...:22: connection refused/timeout`, run `curl -s ifconfig.me`, then `gh secret set DEPLOY_HOST --body "<new-ip>"`.
 - Deploy history: 200+ runs, 0 successes before 2026-08-01. Fixed: compose file invalid (duplicate `loki` service from bad merge 64085d44 + missing `pgdata` volume), deploy script targeted a nonexistent `app` Docker service (it's pm2, service name `web` in compose), stale `DEPLOY_HOST`, wrong SSH action input (`command_timeout`, not `timeout`).
 - **The deploy's `git checkout --force <sha>` can leave this repo in detached HEAD** — run `git checkout main && git pull` after a deploy finishes if you see `## HEAD (no branch)`. The fixed script now returns to main automatically.
-- A reboot killed the app before pm2 auto-start was configured (2026-08-01); after any reboot, verify `curl -s 127.0.0.1:3099/api/health` and restart `pm2 start /usr/bin/bash --name nucrm-prod --cwd /home/vinayak_shruti_biz --node-args "--max-old-space-size=2048" -- -c "npx next start -p 3099"` if down.
+- A reboot killed the app before pm2 auto-start was configured (2026-08-01); after any reboot, verify `curl -s 127.0.0.1:3099/api/health` and restart `pm2 start /usr/bin/bash --name nucrm-prod --cwd ~ --node-args "--max-old-space-size=2048" -- -c "npx next start -p 3099"` if down (run on the VM as the deploy user).
 - Never run two `npm run build`s concurrently — they corrupt `.next` (module-not-found `.external` errors); always `rm -rf .next` before a clean rebuild.
 
 ## Workflow Per Fix
