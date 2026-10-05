@@ -74,7 +74,7 @@ Severity: **S1** blocks go-live · **S2** broken feature or security weakness ·
 | PP-052 | S2  | Disk / observability        | PP-033's build-cache cap has fired once, exited 0 and reclaimed 0 B at 151.3 GB used against a 40 GB cap — `docker builder du` says 114.9 GB is reclaimable, `docker system df` says 0 B, and the bytes live in containerd, not `/var/lib/docker` | 🚨 OPEN · three exits (command / daemon GC / accept), none chosen; disk at 41 % so no emergency |
 | PP-053 | S2  | Backup + restore            | Six tables the DB isolates through a **parent** row were scoped by their own (missing or ignored) `tenant_id` in three registries — a wipe 42703 aborts the atomic restore, and three more filters compare a foreign key to a tenant uuid, so backups succeed while holding nothing                                                            | 🔧 FIXED, PR **#2352** (guard test) · policy escape open (#7, #90)                          |
 | PP-054 | S3  | Sentry + observability      | NUCRM-3J (`analytics_events` 42501) has been fixed and live since PR #2162, yet the watchdog filed it "NEW" on 2026-10-04 — because `NEW` means "rotated into the top-25-by-date list", not "new failure", and `events=` is a cumulative count                                                                | 🚨 OPEN · watchdog semantics + two side findings (`error_logs` empty all-time, INSERT…RETURNING refused) |
-| PP-056 | S3  | Host / tooling              | `/tmp` is a **3.9 GB tmpfs** and vitest leaks a ~22 MB temp dir per aborted run: 88 of them held **1.9 GB**, which filled it. `npx vitest run` then exited **1 with no `Test Files`/`Tests` summary at all** — a scratch-space outage is indistinguishable from a red suite                                                                                     | 🔧 MITIGATED (moved 1.5 GB of stale clones off tmpfs, pinned `TMPDIR`) · three exits, all owner's call |
+| PP-056 | S3  | Host / tooling              | `/tmp` is a **3.9 GB tmpfs** and vitest leaves a ~22 MB temp dir on **every** run: 88 of them held **1.9 GB**, which filled it. `npx vitest run` then exited **1 with no `Test Files`/`Tests` summary at all** — a scratch-space outage is indistinguishable from a red suite. Sweeping the suite after fixing it found **three assertions that only pass when `.env.local` is absent** (2 × CSRF + rate-limit) — and a fourth that turned out to be a **stale-clone-base artifact**, which is its own harness lesson | 🔧 MITIGATED (1.5 GB of stale clones moved off tmpfs, `TMPDIR` pinned to the root fs) · CSRF pair in PR **#2359**, rate-limit + this entry in **#2365** · four exits, all owner's call |
 
 ## Sentry issues → register entries
 
@@ -2480,6 +2480,33 @@ _(Numbering: **PP-055** is already spoken for by open PR #2354, which is not on 
   `getClientIp` itself tolerate a missing request would fold every absent-request caller into one
   `unknown` rate-limit bucket — failing open on the anti-rotation control #1249 exists to provide —
   so that variant is an **owner decision**, not mine.
+- **A fourth instance — and the retraction that made it a better finding.** Re-running the whole
+  suite with only the six **non-secret boolean** flags `.env.local` carries (`COOKIE_SECURE`,
+  `TRUST_PROXY`, `DATABASE_SSL=false`, `SENTRY_ENABLE`, `PROMETHEUS_ENABLED`,
+  `PGBOUNCER_ENABLED`) produced exactly **one** failure:
+  `tests/unit/route-pinning-real-route.test.ts > … pins a client for its whole body`,
+  `AssertionError: expected 'sentinel' not to be 'sentinel'`. Bisected to a single variable, 2 runs
+  each way with that file alone: `TRUST_PROXY=true` → fails, unset → passes; the other five have no
+  effect alone, and the remaining five set *together* pass. Mechanism looked textbook — line 66
+  hands the real route a fake request literal (`{ url: '…' } as never`) with **no `headers`
+  property**, and `getClientIp` dereferences `request.headers.get(…)` the moment
+  `TRUST_PROXY === 'true'` (`lib/client-ip.ts:19`); the throw is swallowed inside the pinned scope,
+  so the only symptom is a stale sentinel. Patching line 66 to a real `new Request(…)` made it
+  green both ways, which seemed to confirm it.
+  **It was wrong, and the reason matters more than the finding.** The verification tree was a
+  `git clone file:///srv/nucrm --branch main` — i.e. built from the shared repo's **local `main`
+  ref**, which sat **2 commits behind GitHub's `main`**. Rebuilt from the actual upstream commit
+  (`git archive 2cd6ccb9 | tar -x`), the same file **passes with `TRUST_PROXY=true` already**,
+  because upstream's copy mocks `lib/api/read-rate-limit` — the very call that reaches
+  `getClientIp` — and the stale copy did not. So: no fourth assertion was broken, the one-line
+  "fix" would have **reverted upstream's mock**, and it is not in this PR.
+- **Harness rule learned, recorded because it is the mirror image of the worktree caveat above:**
+  a clone or archive used for verification must be pinned to an explicit **commit sha fetched from
+  the remote**, never to a local branch ref of the shared repo. Two independent ways the same suite
+  lied in one hour: HEAD moving underneath a run in the shared worktree, and a clone silently
+  based on a stale local branch. Both produce a plausible, wrong result with no error anywhere.
+  `git rev-list --count main..origin/main` on the shared repo is the one-line check that catches
+  the second; it is now routine before any verification tree is built.
 - **Deliberately not done:** nothing deleted; no `rm -rf` of tmpfs contents (owner's call, and the
   files are not mine); no cron, systemd unit or tmpfiles.d entry added; `vitest.config.ts`,
   `.npmrc` and `package.json` scripts untouched; no `TMPDIR` exported into anything committed;
@@ -2505,7 +2532,6 @@ _(Numbering: **PP-055** is already spoken for by open PR #2354, which is not on 
   *other* disk, 290 GB free), **#77**, **#1249**, **#67** (harness false alarms).
 
 ## Running the pre-prod flow simulator
-
 It is the verification step for every RLS or auth change in this repo, and it is safe against a
 live database because **nothing commits** — each scenario is one explicit transaction ending in
 `ROLLBACK`, and it refuses to run at all unless the database is empty (or `--allow-nonempty`).
