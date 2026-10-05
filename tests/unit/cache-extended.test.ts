@@ -172,6 +172,90 @@ describe('Cache Module - Extended', () => {
     });
   });
 
+  describe('distributed lock Redis failures', () => {
+    const redis = {
+      status: 'ready',
+      on: vi.fn(),
+      call: vi.fn<(...args: unknown[]) => Promise<string | null>>(),
+      eval: vi.fn(),
+    };
+
+    beforeEach(() => {
+      process.env['REDIS_URL'] = 'redis://localhost:6379';
+      delete process.env['LOCK_FAIL_OPEN'];
+      redis.status = 'ready';
+      redis.call.mockReset();
+      redis.eval.mockReset();
+      vi.doMock('ioredis', () => ({
+        Redis: class {
+          status = redis.status;
+          on = redis.on;
+          call = redis.call;
+          eval = redis.eval;
+        },
+      }));
+    });
+
+    afterEach(() => {
+      vi.doUnmock('ioredis');
+      vi.restoreAllMocks();
+    });
+
+    it.each([undefined, 'false', 'true', 'TRUE'])(
+      'honors only explicit fail-open on command errors (LOCK_FAIL_OPEN=%s)',
+      async (setting) => {
+        if (setting !== undefined) process.env['LOCK_FAIL_OPEN'] = setting;
+        const error = new Error('Redis connection lost');
+        redis.call.mockRejectedValue(error);
+        const { acquireLock, releaseLock, refreshLock, _getCircuitState } = await import('@/lib/cache');
+
+        const lock = await acquireLock('test:lock', 10);
+
+        expect(lock).toEqual({ acquired: setting === 'true', value: '' });
+        expect(console.error).toHaveBeenCalledWith('[Cache] acquireLock failed', error);
+        expect(_getCircuitState().failures).toBe(1);
+        await releaseLock('test:lock', lock.value);
+        await refreshLock('test:lock', lock.value, 10);
+        expect(redis.eval).not.toHaveBeenCalled();
+      },
+    );
+
+    it.each(['OK', null])('preserves the Redis lock result %s even with fail-open enabled', async (result) => {
+      process.env['LOCK_FAIL_OPEN'] = 'true';
+      redis.call.mockResolvedValue(result);
+      const { acquireLock, _getCircuitState } = await import('@/lib/cache');
+
+      const lock = await acquireLock('test:lock', 10);
+
+      expect(lock.acquired).toBe(result === 'OK');
+      expect(lock.value).not.toBe('');
+      expect(redis.call).toHaveBeenCalledWith('SET', 'nucrm:lock:test:lock', lock.value, 'EX', 10, 'NX');
+      expect(_getCircuitState().failures).toBe(0);
+    });
+
+    it.each([undefined, 'true'])('keeps the same policy as the circuit opens (LOCK_FAIL_OPEN=%s)', async (setting) => {
+      if (setting !== undefined) process.env['LOCK_FAIL_OPEN'] = setting;
+      redis.call.mockRejectedValue(new Error('Redis unavailable'));
+      const { acquireLock, _getCircuitState } = await import('@/lib/cache');
+
+      for (let attempt = 0; attempt < 4; attempt++) {
+        expect(await acquireLock('test:lock')).toEqual({ acquired: setting === 'true', value: '' });
+      }
+
+      expect(redis.call).toHaveBeenCalledTimes(3);
+      expect(_getCircuitState()).toMatchObject({ open: true, failures: 3 });
+    });
+
+    it.each([undefined, 'true'])('preserves the not-ready policy (LOCK_FAIL_OPEN=%s)', async (setting) => {
+      if (setting !== undefined) process.env['LOCK_FAIL_OPEN'] = setting;
+      redis.status = 'connecting';
+      const { acquireLock } = await import('@/lib/cache');
+
+      expect(await acquireLock('test:lock')).toEqual({ acquired: setting === 'true', value: '' });
+      expect(redis.call).not.toHaveBeenCalled();
+    });
+  });
+
   describe('cache/queries', () => {
     it('caches and retrieves query results', async () => {
       const { cacheQuery, getCachedQuery } = await import('@/lib/cache/queries');
