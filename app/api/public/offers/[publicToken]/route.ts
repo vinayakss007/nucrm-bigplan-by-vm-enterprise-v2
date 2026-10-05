@@ -22,12 +22,7 @@ import { quotes, quoteLineItems, contacts, tenants } from '@/drizzle/schema';
 import { eq, asc } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { checkRateLimit } from '@/lib/rate-limit';
-import {
-  findOfferByToken,
-  patchOfferMetadata,
-  readOfferMetadata,
-  canTransition,
-} from '@/lib/offers';
+import { canTransition, findOfferByToken, incrementOfferViewedCount, patchOfferMetadata } from '@/lib/offers';
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ publicToken: string }> }) {
   try {
@@ -57,21 +52,22 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ publ
     // in one db.transaction so the offer is never marked 'viewed' without its
     // viewed_at/viewed_count metadata (H7). patchOfferMetadata takes the tx.
     if (offer.status === 'sent') {
-      const meta = readOfferMetadata(offer);
       if (canTransition(offer.status, 'viewed')) {
+        // status + viewed_at + viewed_count all commit in one tx (H7 holds);
+        // #2344: viewed_count is incremented by Postgres inside jsonb_set,
+        // not computed from the pre-read `offer` row.
         await db.transaction(async (tx) => {
           await tx.update(quotes).set({ status: 'viewed', updatedAt: new Date() }).where(eq(quotes.id, offer.id));
           await patchOfferMetadata(offer.id, offer.tenantId, {
             viewed_at: new Date().toISOString(),
-            viewed_count: (meta.viewed_count ?? 0) + 1,
           }, tx);
+          await incrementOfferViewedCount(offer.id, offer.tenantId, tx);
         });
       }
     } else if (offer.status === 'viewed') {
-      const meta = readOfferMetadata(offer);
-      await patchOfferMetadata(offer.id, offer.tenantId, {
-        viewed_count: (meta.viewed_count ?? 0) + 1,
-      });
+      // #2344: no sibling status write here — a single-statement atomic
+      // increment needs no surrounding transaction.
+      await incrementOfferViewedCount(offer.id, offer.tenantId);
     }
 
     // Pull line items

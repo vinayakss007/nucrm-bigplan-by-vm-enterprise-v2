@@ -37,7 +37,7 @@ export const GET = withApiRoute(async (request: NextRequest, { params }: { param
     if (!article) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
     // Increment view count
-    await db.update(kbArticles).set({ views: (article.views || 0) + 1 }).where(eq(kbArticles.id, id));
+    await db.update(kbArticles).set({ views: sql`${kbArticles.views} + 1` }).where(eq(kbArticles.id, id));
 
     return NextResponse.json({ data: article });
  

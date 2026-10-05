@@ -89,6 +89,45 @@ export async function patchOfferMetadata(quoteId: string, tenantId: string, patc
     .where(and(eq(quotes.id, quoteId), eq(quotes.tenantId, tenantId)));
 }
 
+/**
+ * Atomically increment `metadata.offer.viewed_count` in ONE statement (#2344).
+ *
+ * patchOfferMetadata merges server-side but the CALLER computed the new value
+ * from a stale read — concurrent offer views lost increments. Here Postgres
+ * reads and writes the same value inside jsonb_set, so nothing is lost. Only
+ * the viewed_count key changes; sibling keys keep the same merge semantics
+ * patchOfferMetadata gives them. A non-numeric legacy value counts as 0
+ * (guarded by the regex CASE, never a cast error).
+ *
+ * Takes an optional dbOrTx like patchOfferMetadata so callers can fold it
+ * into the same transaction as the status write.
+ */
+export async function incrementOfferViewedCount(quoteId: string, tenantId: string, dbOrTx?: DbClient): Promise<void> {
+  const client = dbOrTx ?? db;
+  await client
+    .update(quotes)
+    .set({
+      metadata: sql`
+        jsonb_set(
+          COALESCE(${quotes.metadata}, '{}'::jsonb),
+          '{offer}',
+          jsonb_set(
+            COALESCE(${quotes.metadata}->'offer', '{}'::jsonb),
+            '{viewed_count}',
+            to_jsonb(
+              CASE WHEN (${quotes.metadata}->'offer'->>'viewed_count') ~ '^[0-9]+$'
+                   THEN CAST(${quotes.metadata}->'offer'->>'viewed_count' AS integer)
+                   ELSE 0 END
+              + 1
+            )
+          )
+        )
+      `,
+      updatedAt: new Date(),
+    })
+    .where(and(eq(quotes.id, quoteId), eq(quotes.tenantId, tenantId)));
+}
+
 /** Given a quote row, narrow its offer metadata to a typed object. */
 export function readOfferMetadata(quote: { metadata: unknown }): OfferMetadata {
   const m = quote.metadata as Record<string, unknown> | null | undefined;

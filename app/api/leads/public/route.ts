@@ -214,7 +214,7 @@ export async function POST(request: NextRequest) {
             companyId: company_id || undefined,
             leadStatus: ['lost', 'unqualified'].includes(existingLead.leadStatus || '') ? 'new' : undefined,
             tags: combinedTags,
-            formSubmissionsCount: (existingLead.formSubmissionsCount || 0) + 1,
+            formSubmissionsCount: sql`${leads.formSubmissionsCount} + 1`,
             lastActivityAt: new Date(),
             updatedAt: new Date(),
           })
