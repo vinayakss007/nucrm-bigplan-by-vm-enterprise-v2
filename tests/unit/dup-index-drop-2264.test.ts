@@ -101,10 +101,12 @@ describe('0116_drop_duplicate_indexes migration shape (#2264)', () => {
     expect(down).toMatch(/idx_webhook_queue_next_retry[^\n]*WHERE status = 'pending'/);
   });
 
-  it('journal lists 0116 as the last entry and the chain stays intact', () => {
+  it('journal lists 0116 and the chain stays intact', () => {
     const journal = JSON.parse(readFileSync(join(ROOT, 'drizzle/migrations/meta/_journal.json'), 'utf8'));
-    const last = journal.entries[journal.entries.length - 1];
-    expect(last).toMatchObject({ idx: 116, tag: '0116_drop_duplicate_indexes' });
+    const entry = journal.entries.find((e: { tag: string }) => e.tag === '0116_drop_duplicate_indexes');
+    expect(entry, '0116 missing from journal').toBeDefined();
+    expect(entry.idx).toBe(116);
+    // position-independent: later migrations may legitimately follow 0116
     const out = execFileSync('node', ['scripts/check-migration-chain.mjs'], { cwd: ROOT, encoding: 'utf8' });
     expect(out).toContain('OK');
   });
