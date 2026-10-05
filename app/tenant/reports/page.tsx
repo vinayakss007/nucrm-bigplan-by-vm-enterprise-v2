@@ -11,6 +11,7 @@ import {
   Mail, Building2, Target, Zap, FilePlus, Clock
 } from 'lucide-react';
 import { formatCurrency, formatDate, cn } from '@/lib/utils';
+import { csvRow } from '@/lib/csv';
 import { useApiQuery } from '@/lib/query/client';
 import toast from 'react-hot-toast';
 
@@ -37,16 +38,10 @@ const DATE_RANGES = [
 function downloadCSV(data: Record<string, unknown>[], filename: string) {
   if (!data.length) { toast.error('No data to export'); return; }
   const headers = Object.keys(data[0] ?? {});
-  const rows = data.map(row =>
-    headers.map(h => {
-      const v = row[h];
-      if (v === null || v === undefined) return '';
-      const s = typeof v === 'object' ? JSON.stringify(v) : String(v);
-      return s.includes(',') || s.includes('"') || s.includes('\n')
-        ? `"${s.replace(/"/g, '""')}"` : s;
-    }).join(',')
-  );
-  const csv = [headers.join(','), ...rows].join('\n');
+  // #2340: route through the shared escaper — report cells can contain
+  // unauthenticated lead text, so formula prefixes must be neutralised.
+  const rows = data.map((row) => csvRow(headers.map((h) => row[h])));
+  const csv = [csvRow(headers), ...rows].join('\n');
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');

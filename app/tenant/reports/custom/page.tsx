@@ -9,6 +9,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
 import { FilePlus, Play, Save, Trash2, Download, Plus, X, Filter, Columns } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
+import { csvRow } from '@/lib/csv';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import toast from 'react-hot-toast';
 
@@ -196,13 +197,10 @@ export default function CustomReportBuilder() {
   const downloadCSV = () => {
     if (!results.length) { toast.error('No data'); return; }
     const headers = selectedColumns;
-    const rows = results.map(row => headers.map(h => {
-      const v = row[h];
-      if (v === null || v === undefined) return '';
-      const s = typeof v === 'object' ? JSON.stringify(v) : String(v);
-      return s.includes(',') || s.includes('"') ? `"${s.replace(/"/g, '""')}"` : s;
-    }).join(','));
-    const csv = [headers.join(','), ...rows].join('\n');
+    // #2340: the old inline quoter ignored '\r'/'\n' entirely, so a multi-line
+    // lead message split one record into two rows; csvRow quotes all breaks.
+    const rows = results.map((row) => csvRow(headers.map((h) => row[h])));
+    const csv = [csvRow(headers), ...rows].join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
