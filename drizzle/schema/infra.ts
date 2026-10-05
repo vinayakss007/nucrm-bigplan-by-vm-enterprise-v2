@@ -42,6 +42,8 @@ export const dashboards = pgTable('dashboards', {
   ...utils.audit(),
 }, (table) => {
   return {
+    deletedByFk2261Idx: index("dashboards_deleted_by_fk_idx").on(table.deletedBy),
+    updatedByFk2261Idx: index("dashboards_updated_by_fk_idx").on(table.updatedBy),
     tenantIdx: utils.tenantIdx(table),
     activeIdx: utils.activeIdx(table),
   
@@ -60,6 +62,8 @@ export const savedReports = pgTable('saved_reports', {
   ...utils.audit(),
 }, (table) => {
   return {
+    deletedByFk2261Idx: index("saved_reports_deleted_by_fk_idx").on(table.deletedBy),
+    updatedByFk2261Idx: index("saved_reports_updated_by_fk_idx").on(table.updatedBy),
     tenantIdx: utils.tenantIdx(table),
   
   drz2255_idx_saved_reports_created_by: index('idx_saved_reports_created_by').on(table.createdBy),};
@@ -79,6 +83,8 @@ export const announcements = pgTable('announcements', {
   ...utils.audit(),
 }, (table) => {
   return {
+    deletedByFk2261Idx: index("announcements_deleted_by_fk_idx").on(table.deletedBy),
+    updatedByFk2261Idx: index("announcements_updated_by_fk_idx").on(table.updatedBy),
     activeTimeIdx: index('idx_announcements_active_time').on(table.isActive, table.startsAt, table.endsAt),
     activeIdx: utils.activeIdx(table),
   
@@ -175,6 +181,8 @@ export const backupRecords = pgTable('backup_records', {
   ...utils.audit(),
 }, (table) => {
   return {
+    deletedByFk2261Idx: index("backup_records_deleted_by_fk_idx").on(table.deletedBy),
+    updatedByFk2261Idx: index("backup_records_updated_by_fk_idx").on(table.updatedBy),
     statusIdx: index('idx_backup_records_status').on(table.status, table.completedAt),
   
   drz2255_idx_backup_records_created_by: index('idx_backup_records_created_by').on(table.createdBy),};
@@ -212,6 +220,8 @@ export const criticalDataBackups = pgTable('critical_data_backups', {
   ...utils.audit(),
 }, (table) => {
   return {
+    deletedByFk2261Idx: index("critical_data_backups_deleted_by_fk_idx").on(table.deletedBy),
+    updatedByFk2261Idx: index("critical_data_backups_updated_by_fk_idx").on(table.updatedBy),
     tenantIdx: index('idx_critical_backups_tenant').on(table.tenantId, table.tableName),
     retainIdx: index('idx_critical_backups_retain').on(table.retainedUntil),
     recordIdx: index('idx_critical_backups_record').on(table.tableName, table.recordId),
@@ -300,6 +310,7 @@ export const selectiveRestoreLogs = pgTable('selective_restore_logs', {
   ...utils.lifecycle(),
 }, (table) => {
   return {
+    backupIdFk2261Idx: index("selective_restore_logs_backup_id_fk_idx").on(table.backupId),
     tenantIdx: utils.tenantIdx(table),
   };
 });

@@ -40,6 +40,8 @@ export const tasks = pgTable('tasks', {
   ...utils.audit(),
 }, (table) => {
   return {
+    deletedByFk2261Idx: index("tasks_deleted_by_fk_idx").on(table.deletedBy),
+    updatedByFk2261Idx: index("tasks_updated_by_fk_idx").on(table.updatedBy),
     tenantIdx: utils.tenantIdx(table),
     tenantStatusIdx: index('idx_tasks_tenant_status').on(table.tenantId, table.status),
     assignedIdx: index('idx_tasks_assigned').on(table.assignedTo),

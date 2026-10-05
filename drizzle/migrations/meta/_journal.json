@@ -827,6 +827,13 @@
       "when": 1788782400033,
       "tag": "0117_validate_fk_constraints",
       "breakpoints": true
+    },
+    {
+      "version": "7",
+      "idx": 118,
+      "when": 1788782400034,
+      "tag": "0118_fk_column_indexes",
+      "breakpoints": true
     }
   ]
 }
