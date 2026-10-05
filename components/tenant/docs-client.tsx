@@ -6,7 +6,7 @@
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { Search, Book, FileText, Code, Shield, Rocket, Users, Settings, Zap, HelpCircle, ChevronRight, Menu, X, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -4582,13 +4582,23 @@ Contact support or check the FAQ section for common questions.`,
   };
 };
 
+// #2349: /docs/<category>/<slug> are real URLs now; pull the article slug back out.
+const slugFromPath = (pathname: string | null): string | null => {
+  const raw = (pathname ?? '').match(/^\/docs\/(.+)$/)?.[1];
+  return raw ? decodeURIComponent(raw) : null;
+};
+
+const categoryOfSlug = (slug: string): string | null => slug.split('/')[0] ?? null;
+
 export default function DocsClient() {
   const router = useRouter();
+  const pathname = usePathname();
+  const initialDoc = slugFromPath(pathname);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const [selectedDoc, setSelectedDoc] = useState<string | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(initialDoc ? categoryOfSlug(initialDoc) : null);
+  const [selectedDoc, setSelectedDoc] = useState<string | null>(initialDoc);
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [viewMode, setViewMode] = useState<'home' | 'index' | 'category' | 'document'>('home');
+  const [viewMode, setViewMode] = useState<'home' | 'index' | 'category' | 'document'>(initialDoc ? 'document' : 'home');
 
   // #2330: on phones the sidebar is an overlay drawer — start it closed.
   // (SSR renders it open; the effect collapses it on mount, matching the
@@ -4665,13 +4675,33 @@ export default function DocsClient() {
   const handleDocClick = (slug: string) => {
     setSelectedDoc(slug);
     setViewMode('document');
+    syncUrl(slug);
     closeSidebarOnMobile();
   };
+
+  // #2349: navigation drives the address bar via pushState, and browser
+  // back/forward drives the viewer back through popstate.
+  function syncUrl(slug: string | null) {
+    const target = slug ? `/docs/${slug}` : '/docs';
+    if (window.location.pathname !== target) window.history.pushState(null, '', target);
+  }
+
+  useEffect(() => {
+    const onPop = () => {
+      const slug = slugFromPath(window.location.pathname);
+      setSelectedDoc(slug);
+      setSelectedCategory(slug ? categoryOfSlug(slug) : null);
+      setViewMode(slug ? 'document' : 'home');
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
 
   const handleCategoryClick = (category: string) => {
     setSelectedCategory(category);
     setSelectedDoc(null);
     setViewMode('category');
+    syncUrl(null);
     closeSidebarOnMobile();
   };
 
@@ -4679,6 +4709,7 @@ export default function DocsClient() {
     setSelectedCategory(null);
     setSelectedDoc(null);
     setViewMode('index');
+    syncUrl(null);
     closeSidebarOnMobile();
   };
 
@@ -4686,6 +4717,7 @@ export default function DocsClient() {
     setSelectedCategory(null);
     setSelectedDoc(null);
     setViewMode('home');
+    syncUrl(null);
     closeSidebarOnMobile();
   };
 
@@ -5122,7 +5154,7 @@ export default function DocsClient() {
           {selectedDoc && currentDocContent && (
             <div className="space-y-4">
               <div className="flex items-center gap-2 mb-4">
-                <Button variant="ghost" size="sm" onClick={() => setSelectedDoc(null)}>
+                <Button variant="ghost" size="sm" onClick={() => { setSelectedDoc(null); syncUrl(null); }}>
                   <ChevronRight className="w-4 h-4 mr-2 rotate-180" />
                   Back
                 </Button>
