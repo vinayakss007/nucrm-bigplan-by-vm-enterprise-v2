@@ -19,20 +19,71 @@ export type WipeTransaction = {
 };
 
 /**
+ * Tables whose tenant is decided by a parent row rather than by their own
+ * `tenant_id`: four have no `tenant_id` at all, two carry one the isolation
+ * policy ignores. Every consumer that reads, counts, snapshots or wipes one of
+ * these has to reach the tenant through that parent — a `WHERE tenant_id = …`
+ * against the four is a 42703 on a column that does not exist, and comparing a
+ * foreign key to a tenant id is an always-empty filter that quietly exports
+ * nothing. The predicates mirror the `tenant_isolation` policies the DB carries
+ * for exactly these six tables.
+ *
+ * Mirroring the policy also mirrors its blind spot: none of the six has an
+ * `app.is_super_admin` branch, so only a context that sets `app.current_tenant`
+ * to that tenant can read or delete them. The nightly backup does exactly that
+ * per tenant, so it works here; a caller left in the super-admin context reads
+ * zero rows from these six no matter how the query is scoped (PP-053).
+ */
+const JUNCTION_SCOPES: Record<string, { fk: string; parent: string }> = {
+  contact_emails: { fk: 'contact_id', parent: 'contacts' },
+  contact_tags: { fk: 'contact_id', parent: 'contacts' },
+  lead_tags: { fk: 'lead_id', parent: 'leads' },
+  email_warmup_pool: { fk: 'config_id', parent: 'email_warmup_configs' },
+  email_warmup_logs: { fk: 'config_id', parent: 'email_warmup_configs' },
+  price_book_entries: { fk: 'price_book_id', parent: 'price_books' },
+};
+
+/**
  * Parameterized junction table deletes.
  * Returns a Drizzle SQL fragment — no raw SQL, no string interpolation.
  */
 export function junctionDelete(table: string, tenantId: string): SQL {
-  switch (table) {
-    case 'contact_emails':
-      return sql`DELETE FROM contact_emails WHERE contact_id IN (SELECT id FROM contacts WHERE tenant_id = ${tenantId})`;
-    case 'contact_tags':
-      return sql`DELETE FROM contact_tags WHERE contact_id IN (SELECT id FROM contacts WHERE tenant_id = ${tenantId})`;
-    case 'lead_tags':
-      return sql`DELETE FROM lead_tags WHERE lead_id IN (SELECT id FROM leads WHERE tenant_id = ${tenantId})`;
-    default:
-      throw new Error(`Unknown junction table: ${table}`);
-  }
+  const scope = JUNCTION_SCOPES[table];
+  if (!scope) throw new Error(`Unknown junction table: ${table}`);
+  return sql`DELETE FROM ${sql.identifier(table)} WHERE ${junctionScope(table, tenantId)}`;
+}
+
+/** Tenant predicate for a table without its own `tenant_id` column. */
+export function junctionScope(table: string, tenantId: string): SQL {
+  const scope = JUNCTION_SCOPES[table];
+  if (!scope) throw new Error(`Unknown junction table: ${table}`);
+  return sql`${sql.identifier(scope.fk)} IN (
+    SELECT id FROM ${sql.identifier(scope.parent)} WHERE ${sql.identifier(scope.parent)}.tenant_id = ${tenantId}
+  )`;
+}
+
+/** True when `table` must be scoped through a parent instead of `tenant_id`. */
+export function isJunctionTable(table: string): boolean {
+  return table in JUNCTION_SCOPES;
+}
+
+/**
+ * Platform-level tables with no tenant column and no tenant-specific rows.
+ * They must never appear in a per-tenant wipe: the DELETE cannot be scoped,
+ * and unscoped it would destroy data belonging to every tenant. The same reason
+ * keeps them out of a tenant export: `tenant_modules` carries what a tenant
+ * actually owns, and announcements are authored platform-wide.
+ */
+export const PLATFORM_TABLES = ['modules', 'announcements'];
+
+/**
+ * The tenant predicate for any table a backup/restore path touches, or `null`
+ * for a platform-wide table that the caller must skip entirely. One call so no
+ * consumer has to know which of the three shapes a table has.
+ */
+export function tenantScope(table: string, tenantId: string): SQL | null {
+  if (PLATFORM_TABLES.includes(table)) return null;
+  return isJunctionTable(table) ? junctionScope(table, tenantId) : sql`tenant_id = ${tenantId}`;
 }
 
 /**
@@ -128,7 +179,7 @@ export const TENANT_DELETE_ORDER = [
   'companies',
 ];
 
-export const JUNCTION_TABLES = ['contact_emails', 'contact_tags', 'lead_tags'];
+export const JUNCTION_TABLES = Object.keys(JUNCTION_SCOPES);
 
 /**
  * Delete all data for one tenant inside an existing transaction.
@@ -146,7 +197,7 @@ export async function deleteTenantDataInTx(
 ): Promise<void> {
   const { skipTables = [], failFast = true } = options;
   for (const table of TENANT_DELETE_ORDER) {
-    if (skipTables.includes(table)) continue;
+    if (skipTables.includes(table) || PLATFORM_TABLES.includes(table)) continue;
     const statement: SQL = JUNCTION_TABLES.includes(table)
       ? junctionDelete(table, tenantId)
       : sql`DELETE FROM ${sql.identifier(table)} WHERE tenant_id = ${tenantId}`;

@@ -72,6 +72,8 @@ Severity: **S1** blocks go-live · **S2** broken feature or security weakness ·
 | PP-050 | S2  | Performance + observability | A cron sweep pins 1 of 10 pool connections for ~75 s to do literally zero work, and the leak detector's 30 s threshold now fires 13×/hour — 311 of 311 holds in 24 h are cron, so a real leak would be invisible                                  | 🚨 OPEN · four exits (upstream / threshold / code / server-side batching), none chosen          |
 | PP-051 | S2  | Scheduling + DR             | Three schedule sources disagree about cron and the live one runs 17 of 22 routes, so 5 never fire — including `/api/cron/backup`, the only pg_dump+offsite path, whose last 4 attempts all failed                                                 | 🚨 OPEN · owner decision (#53, #54, #50, #79)                                                   |
 | PP-052 | S2  | Disk / observability        | PP-033's build-cache cap has fired once, exited 0 and reclaimed 0 B at 151.3 GB used against a 40 GB cap — `docker builder du` says 114.9 GB is reclaimable, `docker system df` says 0 B, and the bytes live in containerd, not `/var/lib/docker` | 🚨 OPEN · three exits (command / daemon GC / accept), none chosen; disk at 41 % so no emergency |
+| PP-053 | S2  | Backup + restore            | Six tables the DB isolates through a **parent** row were scoped by their own (missing or ignored) `tenant_id` in three registries — a wipe 42703 aborts the atomic restore, and three more filters compare a foreign key to a tenant uuid, so backups succeed while holding nothing                                                            | 🔧 FIXED IN TREE (guard test) · policy escape open (#7, #90)                                    |
+| PP-054 | S3  | Sentry + observability      | NUCRM-3J (`analytics_events` 42501) has been fixed and live since PR #2162, yet the watchdog filed it "NEW" on 2026-10-04 — because `NEW` means "rotated into the top-25-by-date list", not "new failure", and `events=` is a cumulative count                                                                | 🚨 OPEN · watchdog semantics + two side findings (`error_logs` empty all-time, INSERT…RETURNING refused) |
 
 ## Sentry issues → register entries
 
@@ -1566,7 +1568,7 @@ costs off)` with RLS engaged: `Index Scan using idx_email_opens_tenant on email_
   checked before the body and before any DB write).
 - **Files:** `app/api/superadmin/selective-restore/execute/route.ts`,
   `app/api/superadmin/selective-restore/rollback/route.ts`, `drizzle/schema/infra.ts:250-296`,
-  `lib/restore/restore-executor.ts:161-196`
+  `lib/restore/restore-executor.ts:162-193`
 
 ## PP-045 — ✅ `purge_trash()` covers four of the six tables the trash UI shows, and its return value is a statement counter, not a row count _(S3 · Retention + reporting)_
 
@@ -2254,6 +2256,159 @@ dangling=true` → none; host `crontab -l` → only the Sentry watchdog, so no c
   `systemctl status` + `journalctl -u nucrm-builder-prune.service`, `du -xsh /var/lib/…`, `df -h /`,
   `crontab -l`. Cross-reference: **PP-033** (the entry this one corrects — its cap is deployed and inert), **#81** (marked
   completed on the strength of that deployment).
+
+## PP-053 — 🔧 Six tables the database isolates through a **parent** row were scoped by their own `tenant_id` in three separate registries — one 42703 aborts the atomic restore, and three filters compare a foreign key to a tenant uuid, so a backup reports success while holding nothing _(S2 · Backup + restore)_
+
+**Found:** 2026-10-05 while measuring NUCRM-3J — the `[Export] Table lead_tags … skipping` warnings that the
+analytics question kept running into.
+
+**Status:** 🔧 FIXED IN TREE (#92) — the scoping; the RLS half is an owner decision (#7, #90).
+
+- **What the database actually does.** `pg_policy` for exactly six tables reads
+  `NULLIF(current_setting('app.current_tenant' …))::uuid IS NOT NULL AND EXISTS (SELECT 1 FROM <parent> …)`
+  — measured, `uses_exists=true` for all six: `contact_emails`/`contact_tags` → `contacts`,
+  `lead_tags` → `leads`, `email_warmup_pool`/`email_warmup_logs` → `email_warmup_configs`,
+  `price_book_entries` → `price_books`. `quote_line_items` and `form_submissions` are **not** in that set:
+  their predicate is `(tenant_id IS NULL) OR (tenant_id = …)` on their own column (`uses_exists=false`).
+  Four of the six have **no `tenant_id` column at all** (`contact_tags` = `contact_id,tag_id`;
+  `lead_tags` = `lead_id,tag_id`; both warmup tables = `config_id` only) and two carry one the policy
+  ignores. `modules` and `announcements` have no `tenant_id` either and no tenant-scoped policy at all —
+  they are platform-wide (`modules_read_all`, `announcements_read_all`).
+- **Three registries disagreed with that, each in its own way.**
+  (a) `TENANT_DELETE_ORDER` (86 tables) sat `email_warmup_pool`/`email_warmup_logs` **outside**
+  `JUNCTION_TABLES`, so `deleteTenantDataInTx` emitted `DELETE FROM email_warmup_pool WHERE tenant_id = …`
+  → 42703. With the atomic restore's `failFast: true` that single error aborts the whole wipe+import
+  transaction: a restore of any tenant that ever had warmup rows cannot complete.
+  (b) `TENANT_TABLES` (88 entries) filtered `quote_line_items` by `quote_id`, `price_book_entries` by
+  `price_book_id` and `form_submissions` by `form_id` — a uuid FK compared to a tenant uuid. No error,
+  no warning, no log line: the table is simply exported empty. `contact_tags`/`lead_tags` did the loud
+  version (42703), and `exportAll` swallowed it per table — 82 `[Export] Table … not found or error,
+  skipping` warnings each in the retained log window, last one 2026-10-03 09:10Z.
+  (c) `lib/restore/restore-executor.ts` used `WHERE tenant_id = …` in all three of its per-table sites
+  (`createPreRestoreSnapshot`, its `rollbackToSnapshot` DELETE, `countExistingRecords`) while knowing the
+  junction names — its own `TABLE_DEPENDENCY_ORDER` lists six of them. The snapshot's
+  `catch { snapshotData[table] = [] }` turned every 42703 into a silently empty snapshot, so the
+  rollback it protects is rolling back to nothing.
+- **A fourth finding fell out of the fix.** `contact_emails` was **absent from `lib/sql-allowlist.ts`**
+  `VALID_TABLES`. Exporting it correctly is not enough: `importTable` throws
+  `Table 'contact_emails' is not allowed for import` before it inserts, so the fixed exporter would have
+  converted a silent skip into an aborted restore. Added to the allowlist in the same change.
+- **Blast radius today: 0 rows.** `SELECT count(*)` for all six under one tenant's GUC returned `0` for
+  every one (1285 ms, one round trip), and the same query without a GUC returns 0 by RLS. This is a
+  latent data-integrity fix, not an outage: nothing is being lost right now because there is nothing in
+  those tables (`contacts` = 162 for comparison). It becomes live the first time a tenant tags a contact,
+  warms up an inbox, or submits a form.
+- **Fix, in one place.** `lib/tenant-restore-wipe.ts` now owns `JUNCTION_SCOPES` (the six, each with its
+  `fk` + `parent`), `junctionScope()`, `junctionDelete()`, `isJunctionTable()` and `PLATFORM_TABLES`
+  (`modules`, `announcements`); `JUNCTION_TABLES` is derived from the map so it cannot drift again. On top
+  of those sits `tenantScope(table, tenantId)`, which answers the only question a consumer actually has —
+  parent predicate, `tenant_id = $1`, or `null` meaning "platform-wide, skip me" — so no caller has to
+  know which of the three shapes a table has. The wipe loop skips platform tables and reaches junction rows
+  through the parent. The exporter (`exportTable`) branches to the parent-EXISTS predicate before its
+  registry lookup and drops platform tables from the export list (`export const TENANT_TABLES` so the guard
+  can read it). The restore executor calls `tenantScope` in all three sites and refuses to
+  snapshot/rollback/count a platform table. That collapse was not cosmetic: `restore-executor.ts` is
+  grandfathered at **562 lines** by `scripts/check-file-size.mjs` (#1843/#422), and the first version of
+  this fix inlined the branch logic at each site and grew it to 574 — the guard failed CI. The helper plus
+  one-line predicates bring it to 560.
+- **Guard:** `tests/unit/tenant-junction-scoping.test.ts` (12 assertions) reads the **Drizzle schema
+  itself** (`getTableColumns` + `getTableName` over `@/drizzle/schema`) rather than a hand-maintained
+  list, and fails on each of the three shapes: a wipe/export table with no `tenant_id` that is neither
+  platform- nor parent-scoped, a `filterColumn` that does not exist, a `*_id` filter other than
+  `tenant_id`, a global table filtered by its own `id`, and a scope whose parent lacks `tenant_id`.
+  Writing it surfaced two more facts worth keeping: `TABLE_REGISTRY` is keyed by **camelCase**
+  (`analyticsEvents`, `contactTags`) while `TENANT_TABLES` uses physical snake names, so
+  `TABLE_REGISTRY[tableDef.table]` matches only for single-word tables — 24 of the 86 in the wipe list,
+  which means the Drizzle branch of `exportTable` is effectively dead for every multi-word table and all
+  of them take the raw-SQL fallback. The guard therefore reads `@/drizzle/schema` itself
+  (`getTableName` + `getTableColumns`) rather than any hand-maintained list, and
+  `TableMetadata.hasTenantId` is documentation-only — its single consumer,
+  `scripts/verify-tenant-isolation.ts:133`, derives the answer from a live query instead.
+- **The half that is not fixed, deliberately.** None of the six `tenant_isolation` policies has an
+  `app.is_super_admin` branch (measured `super=false` on all six, while `contacts`/`leads` are
+  `super=true`), so a reader in the platform context sees **zero rows from these tables no matter how the
+  SQL is scoped**. The nightly path is fine — `auto-backup` calls `setTenantContext(tenantId, userId)`
+  before each tenant's export — but `countExistingRecords` and `createPreRestoreSnapshot` are reached from
+  `app/api/superadmin/selective-restore/{scope,execute}/route.ts`, which set no tenant GUC at all. That is
+  the same escape-hatch question as **PP-044**/**#7**/**#90**, not a new one: either those policies grow a
+  super-admin branch (migration, owner approval) or the panel loops tenants the way the cron already does.
+  No migration was authored here.
+- **Deliberately not done:** no `POST /api/superadmin/selective-restore/execute`, no `purge_trash()`, no
+  cron trigger; every DB statement read-only and inside the probe helper's always-rolled-back
+  `READ ONLY` transaction; no policy or role change; no `git stash`/amend.
+- **Verified:** `probe:sql` reproduction of the old shape → `probe failed [42703]: column "tenant_id"
+  does not exist`; the eight new shapes → 8 rows, all counts 0, no error; re-probed after the collapse so
+  the shipped statement text itself was run live — `SELECT * FROM announcements WHERE false` → 0 rows,
+  `SELECT count(*)::int AS cnt FROM modules WHERE false` → `0`, `SELECT count(*)::int FROM contact_tags
+  WHERE contact_id IN (SELECT id FROM contacts WHERE contacts.tenant_id = …)` → `0` under that tenant's
+  GUC, each a single round trip at the usual ~1.3-1.5 s; `pg_policy` predicate text
+  (`uses_exists` per table) and `pg_attribute` column lists for the six plus `quote_line_items`,
+  `form_submissions`, `modules`, `announcements`, `tenant_modules` (2058), `tenants` (183);
+  `grep contact_emails lib/sql-allowlist.ts` before (absent) and after;
+  `node scripts/check-file-size.mjs` → OK (`restore-executor.ts` 560, baseline 562);
+  `npm run typecheck` → **exit 0** (run without a pipe, so the exit code is real — the first attempt
+  `| tail -15` and reported tail's status, not tsc's, and hid 3 errors in another agent's WIP
+  `components/tenant/docs-client.tsx`, which are since gone);
+  every unit file that imports these modules — `grep -rl "tenant-restore-wipe|restore-executor|
+  tenant-data-export|tenant-data-import|sql-allowlist" tests/`, 16 files → **476 passed**; the whole
+  `tests/unit` sweep → **7066 passed / 2 failed**, and both failures are the same
+  `setCsrfCookie`-Secure-flag assertion (`tests/unit/csrf.test.ts`, `tests/unit/csrf-unit.test.ts`),
+  NODE_ENV-sensitive and in files that import nothing touched here; `npx eslint --max-warnings=0` clean
+  on all five changed/added files; `tests/unit/tenant-junction-scoping.test.ts` → **12 assertions**.
+- **Files:** `lib/tenant-restore-wipe.ts`, `lib/tenant-data-export.ts`,
+  `lib/restore/restore-executor.ts`, `lib/sql-allowlist.ts`, `tests/unit/tenant-junction-scoping.test.ts`
+  (new). Evidence read: `lib/tenant-data-import.ts:86,138` (the two `failFast` modes),
+  `app/api/cron/auto-backup/route.ts:55,147,243,256-257,297`,
+  `app/api/superadmin/selective-restore/{scope:102,execute:128}`, `lib/restore/backup-parser.ts` (its own
+  allowlist already contained all six, which is why the SQL-text path never showed the bug).
+  Related: **#92**, **PP-044**, **#7**, **#78**, **#79**, **PP-042** (isolation checks that filter on the
+  presence of a `tenant_id` column are structurally blind to exactly these six).
+
+## PP-054 — 🚨 NUCRM-3J — "`analytics_events` INSERT refused (42501)" — has been fixed and live since PR #2162, yet the watchdog filed it as NEW on 2026-10-04: `NEW` in `digest.log` means "rotated into the top-25-by-date list", not "a failure happened" _(S3 · Sentry + observability)_
+
+**Found:** 2026-10-05, by measuring the ingest path instead of trusting the alert.
+
+**Status:** 🚨 OPEN — the issue itself is closed by evidence; the *watchdog's semantics* are the defect.
+
+- **The underlying bug is fixed, live, and measurably working.** Migration
+  `0096_analytics_events_ingest_insert.sql` restores `CREATE POLICY "analytics_events_insert" ON
+  "analytics_events" FOR INSERT WITH CHECK (true)` after 0088's GUC/super-admin predicate killed the whole
+  stream with 42501; it came from **PR #2162, merged 2026-09-26**. Measured now: `27/27`
+  `POST /api/track/event` returned **204** through nginx in the last 24 h and 27 rows landed on 10-04; a
+  synthetic event from this session returned 204 in 321 ms and wrote its row; zero `analytics`/`42501`
+  lines in ~2.5 days of retained Loki coverage (coverage itself starts 2026-10-02 12:00Z). So the event
+  NUCRM-3J describes is not happening.
+- **Why it still looked new.** `/root/sentry-watchdog/check.py` polls
+  `is:unresolved&sortBy=date&limit=25` and diffs the set of issue **ids** against `state.json.seen`
+  (114 entries). A `NEW` line is emitted the first time an id appears in *that window* — an old,
+  already-fixed issue re-enters the top 25 as newer noise ages out, and gets announced as brand new.
+  Two more readings in the same line are also easy to mis-take: the `[YYYY-MM-DD HH:MM:SSZ]` prefix is
+  the **poll time**, not the Sentry `firstSeen`/`lastSeen`, and `events=25` is the issue's **cumulative**
+  count, not a rate. `SPIKE` has the same shape (it compares cumulative counts, so it fires on the
+  backlog of a dead-but-unresolved issue).
+- **Cost of the ambiguity, measured:** this session spent a live investigation (nginx log aggregation,
+  Loki range queries in six 12 h chunks, a rolled-back insert probe, policy dumps) to establish that a
+  9-day-old already-fixed issue was not a current outage. The alert cost more than the bug.
+- **Exits, not chosen.** (a) Poll by `firstSeen`/`lastSeen` in the payload and treat an issue as new only
+  when `firstSeen` is genuinely recent, keeping `seen` as `{id: {firstSeen, count}}`; (b) raise `limit`
+  and/or query `is:unresolved is:ignored` boundaries so rotation cannot resurrect a resolved-in-code
+  issue; (c) resolve/archive NUCRM-3J in Sentry (a write — needs sign-off), after which the id stops
+  appearing at all. (a) is the durable one; (c) is the one-line one.
+- **Two side findings from the same measurement, both cheap to record and both currently open.**
+  `error_logs` holds **0 rows all-time**, which is why PP-044's "the log line never carries the DB reason"
+  has no fallback source to search. And `INSERT … RETURNING` on `analytics_events` is refused by RLS while
+  a plain `INSERT` commits — the SELECT policy hides the row that was just written, so `RETURNING` finds
+  nothing to return and fails. `lib/analytics/store.ts` deliberately has no `.returning()` today; the day
+  someone adds one to get an event id, ingest breaks exactly the way 0088 broke it. Same root as **#63**
+  (`/api/track/open` and `/click` can never read their own row).
+- **Deliberately not done:** no Sentry write (no resolve/archive), no cron for the watchdog ("cheack for
+  now frst" — polled by hand, not scheduled), no change to `check.py`, no deletion of the synthetic
+  `sim.nucrm3j.probe` row from `analytics_events` (31 rows now include it; owner's call).
+- **Files:** none changed. Evidence read: `digest.log`/`state.json` under `/root/sentry-watchdog/`,
+  `drizzle/migrations/0096_analytics_events_ingest_insert.sql` (+ its `.down.sql`),
+  `app/api/track/event/route.ts:75-133`, `lib/analytics/store.ts`, `pg_policy` for `analytics_events`,
+  24 h of nginx access logs aggregated to status counts, six 12 h Loki chunks aggregated to counts.
+  Related: **#82**, **#44**, **#63**, **PP-044**.
 
 ## Running the pre-prod flow simulator
 

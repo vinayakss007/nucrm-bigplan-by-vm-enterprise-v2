@@ -17,7 +17,7 @@
 const VALID_TABLES = new Set([
   // Core CRM
   'contacts', 'leads', 'deals', 'companies', 'tasks', 'notes', 'activities',
-  'activity_logs', 'tags', 'contact_tags', 'lead_tags', 'deal_stages',
+  'activity_logs', 'tags', 'contact_tags', 'contact_emails', 'lead_tags', 'deal_stages',
   'pipeline_stages', 'custom_fields', 'attachments', 'file_uploads',
 
   // Users & Auth
