@@ -5,13 +5,14 @@
  */
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Search, Book, FileText, Code, Shield, Rocket, Users, Settings, Zap, HelpCircle, ChevronRight, Menu, X, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { SUPPORT_DOCS } from './docs-content-support';
 
 // Documentation structure based on actual files
 const DOCS_STRUCTURE = {
@@ -4539,396 +4540,7 @@ Almost all admin configuration lives under **Settings**. Common sections include
 - [Developer & API Reference](../developer/README.md) — API keys and programmatic access
 `
     },
-    'support/faq': {
-      title: 'FAQ',
-      content: `# Frequently Asked Questions
-
-Quick answers to common questions. See the [Glossary](./glossary.md) for terminology.
-
----
-
-## Accounts & access
-
-**How do I get access to NuCRM?**
-Either sign up to create a new workspace, or accept an email invitation from a colleague. See
-[Getting Started](./getting-started.md).
-
-**I forgot my password.**
-Use *Forgot password* on the login page to receive a reset link by email.
-
-**Why am I asked for a code after my password?**
-Your workspace requires **two-factor authentication (2FA)**. Enter the code from your authenticator
-app. See [Security Settings](./admin-guide/security-settings.md).
-
-**Can we log in with our company's SSO?**
-Yes — NuCRM supports SAML, OpenID Connect, and OAuth 2.0. An admin configures it in
-[Security Settings](./admin-guide/security-settings.md).
-
----
-
-## Using NuCRM
-
-**How do I import my existing data?**
-Most modules (contacts, leads) support CSV **import** with column mapping and duplicate detection.
-See [Contacts & Companies](./user-guide/contacts-and-companies.md#import--export).
-
-**I deleted something by mistake — can I get it back?**
-Yes. Destructive actions show a 10-second **undo** toast, and deleted records go to **Trash** where
-you can restore them before auto-cleanup.
-
-**How do I move a deal through my pipeline?**
-Drag it between columns on the Kanban board. See
-[Deals & Pipelines](./user-guide/deals-and-pipelines.md).
-
-**How do I automate repetitive work?**
-Use the visual **workflow builder**, **automation rules**, or **sequences**. See
-[Automation & Workflows](./user-guide/automation.md).
-
----
-
-## Communication
-
-**Which email/SMS/WhatsApp providers are supported?**
-Email via Resend or SMTP; SMS/voice via Twilio; WhatsApp via the Meta WhatsApp Business API. An
-admin connects these in [Integrations](./admin-guide/integrations.md).
-
-**Why aren't my invites or emails sending?**
-Email must be configured. If no email provider is set up, invitations, password resets, and
-notifications won't send. Ask your admin to configure a provider.
-
----
-
-## Billing & plans
-
-**What happens when I hit a plan limit?**
-NuCRM warns you as you approach limits and may block the action until you upgrade or free capacity.
-See [Billing & Plans](./admin-guide/billing-and-plans.md).
-
-**Which payment methods are accepted?**
-Depending on your region, payments are processed via Stripe, Razorpay, or PayU.
-
----
-
-## AI
-
-**How is AI usage measured?**
-Each workspace has **AI credits**. Usage draws down the balance; admins can view usage and set
-limits. See [AI Features](./user-guide/ai-features.md).
-
-**Is my data used to train AI models?**
-AI features send the record context you provide to a configured provider to fulfill the request.
-Follow your organization's data-handling policies; your admin controls provider configuration.
-
----
-
-## Developers
-
-**Where's the API documentation?**
-See the [Developer & API Reference](./developer/README.md), the
-[OpenAPI spec](../../public/api/openapi.yaml), or the interactive Swagger UI at \`/api-docs\`.
-
-**Is there an SDK?**
-Yes — an official TypeScript SDK. See [SDK](./developer/sdk.md).
-
-**How do I get webhook events?**
-Configure outbound webhooks and verify them with the SDK. See [Webhooks](./developer/webhooks.md).
-
----
-
-## Still stuck?
-
-Contact your workspace administrator, or if you operate the platform, see the
-[Super-Admin Docs](../admin/README.md) and [Troubleshooting](../TROUBLESHOOTING.md).
-`
-    },
-    'support/troubleshooting': {
-      title: 'Troubleshooting',
-      content: `# Frequently Asked Questions
-
-Quick answers to common questions. See the [Glossary](./glossary.md) for terminology.
-
----
-
-## Accounts & access
-
-**How do I get access to NuCRM?**
-Either sign up to create a new workspace, or accept an email invitation from a colleague. See
-[Getting Started](./getting-started.md).
-
-**I forgot my password.**
-Use *Forgot password* on the login page to receive a reset link by email.
-
-**Why am I asked for a code after my password?**
-Your workspace requires **two-factor authentication (2FA)**. Enter the code from your authenticator
-app. See [Security Settings](./admin-guide/security-settings.md).
-
-**Can we log in with our company's SSO?**
-Yes — NuCRM supports SAML, OpenID Connect, and OAuth 2.0. An admin configures it in
-[Security Settings](./admin-guide/security-settings.md).
-
----
-
-## Using NuCRM
-
-**How do I import my existing data?**
-Most modules (contacts, leads) support CSV **import** with column mapping and duplicate detection.
-See [Contacts & Companies](./user-guide/contacts-and-companies.md#import--export).
-
-**I deleted something by mistake — can I get it back?**
-Yes. Destructive actions show a 10-second **undo** toast, and deleted records go to **Trash** where
-you can restore them before auto-cleanup.
-
-**How do I move a deal through my pipeline?**
-Drag it between columns on the Kanban board. See
-[Deals & Pipelines](./user-guide/deals-and-pipelines.md).
-
-**How do I automate repetitive work?**
-Use the visual **workflow builder**, **automation rules**, or **sequences**. See
-[Automation & Workflows](./user-guide/automation.md).
-
----
-
-## Communication
-
-**Which email/SMS/WhatsApp providers are supported?**
-Email via Resend or SMTP; SMS/voice via Twilio; WhatsApp via the Meta WhatsApp Business API. An
-admin connects these in [Integrations](./admin-guide/integrations.md).
-
-**Why aren't my invites or emails sending?**
-Email must be configured. If no email provider is set up, invitations, password resets, and
-notifications won't send. Ask your admin to configure a provider.
-
----
-
-## Billing & plans
-
-**What happens when I hit a plan limit?**
-NuCRM warns you as you approach limits and may block the action until you upgrade or free capacity.
-See [Billing & Plans](./admin-guide/billing-and-plans.md).
-
-**Which payment methods are accepted?**
-Depending on your region, payments are processed via Stripe, Razorpay, or PayU.
-
----
-
-## AI
-
-**How is AI usage measured?**
-Each workspace has **AI credits**. Usage draws down the balance; admins can view usage and set
-limits. See [AI Features](./user-guide/ai-features.md).
-
-**Is my data used to train AI models?**
-AI features send the record context you provide to a configured provider to fulfill the request.
-Follow your organization's data-handling policies; your admin controls provider configuration.
-
----
-
-## Developers
-
-**Where's the API documentation?**
-See the [Developer & API Reference](./developer/README.md), the
-[OpenAPI spec](../../public/api/openapi.yaml), or the interactive Swagger UI at \`/api-docs\`.
-
-**Is there an SDK?**
-Yes — an official TypeScript SDK. See [SDK](./developer/sdk.md).
-
-**How do I get webhook events?**
-Configure outbound webhooks and verify them with the SDK. See [Webhooks](./developer/webhooks.md).
-
----
-
-## Still stuck?
-
-Contact your workspace administrator, or if you operate the platform, see the
-[Super-Admin Docs](../admin/README.md) and [Troubleshooting](../TROUBLESHOOTING.md).
-`
-    },
-    'support/error-codes': {
-      title: 'Error Codes',
-      content: `# REST API Reference
-
-The NuCRM REST API gives programmatic access to CRM data — contacts, companies, deals, tasks,
-invoices, quotes, orders, contracts, and more.
-
-> **Spec:** the authoritative, machine-readable definition is
-> [\`public/api/openapi.yaml\`](../../../public/api/openapi.yaml) (OpenAPI 3.1). Explore it
-> interactively at **\`/api-docs\`**. This page summarizes conventions.
-
----
-
-## Base URL & version
-
-\`\`\`
-https://<your-domain>/api/v2
-\`\`\`
-
-The current API version is **v2**. See [Overview](./README.md#api-versions--base-urls) for v1.
-
-## Authentication
-
-All endpoints (except public/health) require authentication and are scoped to a tenant. See
-[Authentication](./authentication.md).
-
----
-
-## Resources
-
-The API exposes CRUD-style endpoints for the core CRM resources, including:
-
-| Resource | Example endpoints |
-| --- | --- |
-| **Contacts** | \`GET/POST /contacts\`, \`GET/PUT/DELETE /contacts/{id}\`, \`POST /contacts/merge\`, import/export |
-| **Companies** | \`GET/POST /companies\`, \`GET/PUT/DELETE /companies/{id}\` |
-| **Leads** | \`GET/POST /leads\`, \`POST /leads/{id}/convert\` |
-| **Deals** | \`GET/POST /deals\`, \`GET/PUT/DELETE /deals/{id}\` |
-| **Tasks** | \`GET/POST /tasks\`, \`GET/PUT/DELETE /tasks/{id}\` |
-| **Meetings / Activities** | \`GET/POST /meetings\`, \`GET/POST /activities\` |
-| **Tickets** | \`GET/POST /tickets\` |
-| **Invoices / Quotes / Orders** | \`GET/POST /invoices\`, \`/quotes\`, \`/orders\` |
-| **Contracts / Subscriptions / Services** | \`GET/POST /contracts\`, \`/subscriptions\`, \`/services\` |
-| **Products** | \`GET/POST /products\` |
-| **Forms / Sequences / Automations / Reports** | \`GET/POST /forms\`, \`/sequences\`, \`/automations\`, \`/reports\` |
-
-> The exact list of paths, parameters, and schemas is defined in the OpenAPI spec — always treat it
-> as the source of truth.
-
----
-
-## Conventions
-
-### Request & response format
-
-- Requests and responses use **JSON** (\`Content-Type: application/json\`).
-- Timestamps are ISO 8601. IDs are UUIDs.
-
-### Pagination
-
-List endpoints support offset pagination:
-
-| Parameter | Default | Max |
-| --- | --- | --- |
-| \`limit\` | \`50\` | \`500\` |
-| \`offset\` | \`0\` | — |
-
-\`\`\`bash
-curl "https://your-domain.com/api/v2/contacts?limit=100&offset=200" \
-  -H "Authorization: Bearer \$NUCRM_API_KEY"
-\`\`\`
-
-### Errors
-
-Errors return an appropriate HTTP status with a JSON body describing the problem. Common statuses:
-
-| Status | Meaning |
-| --- | --- |
-| \`400\` | Validation error — check the message/details. |
-| \`401\` | Not authenticated (or auth method not accepted). |
-| \`403\` | Authenticated but not permitted (RBAC / plan / module gating). |
-| \`404\` | Resource not found (or not in your tenant). |
-| \`409\` | Conflict (e.g. duplicate). |
-| \`422\` | Semantically invalid input. |
-| \`429\` | Rate limit exceeded. |
-| \`5xx\` | Server error. |
-
-### Rate limiting
-
-The public API is rate-limited (per the OpenAPI spec, on the order of **100 requests per minute per
-user**; specific endpoints such as login, signup, password reset, and AI have their own tighter
-limits). When you exceed a limit you receive \`429\`. Back off and retry.
-
-### Idempotency & safety
-
-- \`GET\` is safe and cacheable where indicated.
-- Prefer server-side validation of your payloads; the API validates input and rejects malformed
-  requests with \`400\`/\`422\`.
-
----
-
-## Trying it out
-
-- **Swagger UI** at \`/api-docs\` lets you authenticate and call endpoints from the browser.
-- Import [\`openapi.yaml\`](../../../public/api/openapi.yaml) into Postman/Insomnia.
-- See the repo's \`postman/\` collection for ready-made requests, and
-  [\`docs/API-TESTING-GUIDE.md\`](../../API-TESTING-GUIDE.md) for testing tips.
-
----
-
-## Related
-
-- [Authentication](./authentication.md)
-- [SDK](./sdk.md) — typed client that wraps these endpoints
-- [Webhooks](./webhooks.md) — event push instead of polling
-- [\`docs/API_MIGRATION_v1_to_v2.md\`](../../API_MIGRATION_v1_to_v2.md) — migrating from v1
-`
-    },
-    'support/contact': {
-      title: 'Contact Support',
-      content: `# Customer Portal Guide
-
-The **Customer Portal** is the self-service area your customers use — separate from the main CRM
-that your team uses. It's branded to your business.
-
-> **Audience:** the customers of a NuCRM workspace (and the admins who enable it).
-
----
-
-## What customers can do
-
-| Feature | Description |
-| --- | --- |
-| **Support tickets** | Create tickets, track status, and reply — without needing a CRM account. |
-| **Knowledge base** | Browse and search your published help articles for self-service answers. |
-| **Invoices** | View and download their invoices. |
-
----
-
-## Signing in
-
-Customers access the portal at your workspace's portal URL (optionally on your **custom domain**).
-Depending on configuration, they either log in as a **portal client** or use secure links sent to
-them (for example, to view a specific invoice or offer).
-
----
-
-## Tickets in the portal
-
-- Customers submit a new request; it becomes a **ticket** in your workspace.
-- They can follow the ticket's status and add replies.
-- Your team's internal notes are never visible to customers.
-
-See the agent-side view in [Support & Knowledge Base](./user-guide/support-and-kb.md).
-
----
-
-## Knowledge base in the portal
-
-Articles your team **publishes** appear in the portal, organized by category and fully searchable —
-helping customers solve problems on their own and reducing ticket volume.
-
----
-
-## Invoices & offers
-
-- **Invoices** — customers can view and download invoices addressed to them.
-- **Offers** — customers can open a shared **offer link** to review and **accept or decline** a
-  proposal without logging in. Their response is recorded in your CRM. See
-  [Sales Documents → Offers](./user-guide/sales-documents.md#offers).
-
----
-
-## Branding
-
-The portal reflects **your** branding — logo, colors, and domain — configured by your workspace
-admin in [Branding & Customization](./admin-guide/branding-and-customization.md).
-
----
-
-## Related
-
-- [Support & Knowledge Base](./user-guide/support-and-kb.md) — the team side of the portal
-- [Sales Documents](./user-guide/sales-documents.md) — invoices and offers customers see
-`
-    }
+    ...SUPPORT_DOCS,
   };
 
   // Return real content if available, otherwise generate helpful default
@@ -4977,6 +4589,13 @@ export default function DocsClient() {
   const [selectedDoc, setSelectedDoc] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [viewMode, setViewMode] = useState<'home' | 'index' | 'category' | 'document'>('home');
+
+  // #2330: on phones the sidebar is an overlay drawer — start it closed.
+  // (SSR renders it open; the effect collapses it on mount, matching the
+  // lg: CSS breakpoint the drawer classes use.)
+  useEffect(() => {
+    if (window.innerWidth < 1024) setSidebarOpen(false);
+  }, []);
 
   // Flatten all docs for search
   const allDocs = useMemo(() => {
@@ -5030,30 +4649,44 @@ export default function DocsClient() {
     return generateDocContent(selectedDoc);
   }, [selectedDoc]);
 
+  // #2330: the drawer is an overlay below lg (1024px) — every navigation
+  // choice must dismiss it, or it stays parked on top of the content.
+  const closeSidebarOnMobile = () => {
+    if (window.innerWidth < 1024) setSidebarOpen(false);
+  };
+
+  // Search results render inside the sidebar; on mobile that's the drawer,
+  // so typing must open it (#2330).
+  const handleSearchChange = (value: string) => {
+    setSearchQuery(value);
+    if (value.trim() && window.innerWidth < 1024) setSidebarOpen(true);
+  };
+
   const handleDocClick = (slug: string) => {
     setSelectedDoc(slug);
     setViewMode('document');
-    if (window.innerWidth < 768) {
-      setSidebarOpen(false);
-    }
+    closeSidebarOnMobile();
   };
 
   const handleCategoryClick = (category: string) => {
     setSelectedCategory(category);
     setSelectedDoc(null);
     setViewMode('category');
+    closeSidebarOnMobile();
   };
 
   const handleIndexClick = () => {
     setSelectedCategory(null);
     setSelectedDoc(null);
     setViewMode('index');
+    closeSidebarOnMobile();
   };
 
   const handleHomeClick = () => {
     setSelectedCategory(null);
     setSelectedDoc(null);
     setViewMode('home');
+    closeSidebarOnMobile();
   };
 
   const _handleBack = () => {
@@ -5073,9 +4706,9 @@ export default function DocsClient() {
     Book;
 
   return (
-    <div className="max-w-7xl mx-auto">
+    <div className="max-w-7xl mx-auto px-4 lg:px-0">
       {/* Mobile header with sidebar toggle - only show on small screens */}
-      <div className="lg:hidden sticky top-14 z-40 bg-background/80 backdrop-blur-lg border-b border-border -mx-4 px-4">
+      <div className="lg:hidden sticky top-0 z-40 bg-background/80 backdrop-blur-lg border-b border-border px-4">
         <div className="flex items-center justify-between py-2">
           <div className="flex items-center gap-2">
             <Button
@@ -5092,7 +4725,7 @@ export default function DocsClient() {
             <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
             <Input
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => handleSearchChange(e.target.value)}
               placeholder="Search docs..."
               className="pl-7 h-8 text-xs"
             />
@@ -5101,7 +4734,7 @@ export default function DocsClient() {
       </div>
 
       {/* Desktop search bar */}
-      <div className="hidden lg:block sticky top-14 z-40 bg-background/80 backdrop-blur-lg border-b border-border -mx-4 px-4">
+      <div className="hidden lg:block sticky top-0 z-40 bg-background/80 backdrop-blur-lg border-b border-border px-4">
         <div className="flex items-center justify-between py-2">
           <div className="flex items-center gap-2">
             <Book className="w-5 h-5 text-violet-600" />
@@ -5111,7 +4744,7 @@ export default function DocsClient() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => handleSearchChange(e.target.value)}
               placeholder="Search documentation..."
               className="pl-9 h-9 text-sm"
             />
@@ -5120,12 +4753,18 @@ export default function DocsClient() {
       </div>
 
       <div className="flex gap-4 lg:gap-6 py-4">
-        {/* Sidebar */}
+        {/* Sidebar — overlay drawer below lg, inline column at lg+ (#2330) */}
         {sidebarOpen && (
-          <div className={cn(
-            'fixed lg:sticky top-20 left-0 z-30 w-64 lg:w-72 h-[calc(100vh-5rem)] overflow-y-auto bg-background lg:bg-transparent border-r lg:border-0 border-border p-4 lg:p-0 transition-transform',
-            !sidebarOpen && 'hidden lg:block'
-          )}>
+          <>
+            <div
+              className="fixed inset-0 z-40 bg-black/50 lg:hidden"
+              onClick={() => setSidebarOpen(false)}
+              aria-hidden="true"
+            />
+            <div className={cn(
+              'fixed inset-y-0 left-0 z-50 w-72 max-w-[85vw] overflow-y-auto bg-background border-r border-border p-4 shadow-xl',
+              'lg:sticky lg:top-16 lg:z-30 lg:w-72 lg:h-[calc(100vh-4rem)] lg:bg-transparent lg:border-r-0 lg:p-0 lg:shadow-none'
+            )}>
             {/* Categories */}
             {!searchQuery && !selectedDoc && (
               <div className="space-y-2">
@@ -5220,6 +4859,7 @@ export default function DocsClient() {
               </div>
             )}
           </div>
+          </>
         )}
 
         {/* Main Content */}
