@@ -362,9 +362,11 @@ export default function SignupPage() {
                 </div>
                 <label className="text-sm text-slate-600 leading-relaxed cursor-pointer" onClick={() => setAgreedToTerms(!agreedToTerms)}>
                   I agree to the{' '}
-                  <span className="text-violet-600 font-medium hover:underline">Terms of Service</span>
+                  <Link href="/legal/terms" onClick={(e) => e.stopPropagation()} className="text-violet-600 font-medium hover:underline">Terms of Service</Link>
+                  {', '}
+                  <Link href="/legal/privacy" onClick={(e) => e.stopPropagation()} className="text-violet-600 font-medium hover:underline">Privacy Policy</Link>
                   {' '}and{' '}
-                  <span className="text-violet-600 font-medium hover:underline">Privacy Policy</span>
+                  <Link href="/legal/refunds" onClick={(e) => e.stopPropagation()} className="text-violet-600 font-medium hover:underline">Refund Policy</Link>
                 </label>
               </div>
 
