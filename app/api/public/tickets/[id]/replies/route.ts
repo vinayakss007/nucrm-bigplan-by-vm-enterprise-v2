@@ -7,7 +7,7 @@ import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { supportTickets, ticketReplies } from '@/drizzle/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
@@ -42,6 +42,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         .where(and(
           eq(supportTickets.id, id),
           eq(supportTickets.portalToken, portalToken),
+          isNull(supportTickets.deletedAt),
         ))
         .limit(1);
 
@@ -65,6 +66,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         eq(supportTickets.id, id),
         eq(supportTickets.tenantId, contact.tenantId),
         eq(supportTickets.contactId, contact.id),
+        isNull(supportTickets.deletedAt),
       ))
       .limit(1);
 

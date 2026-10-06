@@ -7,7 +7,7 @@ import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { supportTickets, contacts } from '@/drizzle/schema';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 import { uuidIdSchemaWith } from '@/lib/validation/uuid';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
@@ -45,6 +45,9 @@ export async function GET(request: NextRequest) {
     const token = request.headers.get('x-portal-token');
     if (token) {
       // Validate the token — find the ticket it belongs to, then list all tickets for that contact
+      // #2378: deliberately NOT filtered on deleted_at. A portal token is
+      // per-ticket; hiding a deleted ticket here would lock the customer out
+      // of their remaining tickets, while the list below still omits it.
       const ticket = await db.query.supportTickets.findFirst({
         where: eq(supportTickets.portalToken, token),
         columns: { contactId: true, tenantId: true },
@@ -75,7 +78,11 @@ export async function GET(request: NextRequest) {
       created_at: supportTickets.createdAt,
     })
     .from(supportTickets)
-    .where(and(eq(supportTickets.tenantId, tenantId), eq(supportTickets.contactId, contactId)))
+    .where(and(
+      eq(supportTickets.tenantId, tenantId),
+      eq(supportTickets.contactId, contactId),
+      isNull(supportTickets.deletedAt),
+    ))
     .orderBy(desc(supportTickets.createdAt))
     .limit(50);
 
