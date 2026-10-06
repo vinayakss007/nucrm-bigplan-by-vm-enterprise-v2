@@ -110,6 +110,7 @@ export const users = pgTable('users', {
   metadata: utils.metadata(),
 }, (table) => {
   return {
+    deletedByFk2261Idx: index("users_deleted_by_fk_idx").on(table.deletedBy),
     metadataGinIdx: utils.metadataIdx(table),
     activeIdx: utils.activeIdx(table),
   
@@ -387,6 +388,7 @@ export const invitations = pgTable('invitations', {
   ...utils.lifecycle(),
 }, (table) => {
   return {
+    invitedByFk2261Idx: index("invitations_invited_by_fk_idx").on(table.invitedBy),
     tenantIdx: utils.tenantIdx(table),
     tenantEmailIdx: uniqueIndex('idx_invitations_tenant_email').on(table.tenantId, table.email),
   
@@ -466,6 +468,8 @@ export const userDepartures = pgTable('user_departures', {
   ...utils.audit(),
 }, (table) => {
   return {
+    deletedByFk2261Idx: index("user_departures_deleted_by_fk_idx").on(table.deletedBy),
+    updatedByFk2261Idx: index("user_departures_updated_by_fk_idx").on(table.updatedBy),
     tenantIdx: utils.tenantIdx(table),
     userIdx: index('idx_user_departures_user').on(table.userId),
     dateIdx: index('idx_user_departures_date').on(table.departureDate),

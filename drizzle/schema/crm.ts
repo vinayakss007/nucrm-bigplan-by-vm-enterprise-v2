@@ -55,6 +55,8 @@ export const companies = pgTable('companies', {
   ...utils.audit(),
 }, (table) => {
   return {
+    deletedByFk2261Idx: index("companies_deleted_by_fk_idx").on(table.deletedBy),
+    updatedByFk2261Idx: index("companies_updated_by_fk_idx").on(table.updatedBy),
     tenantIdx: utils.tenantIdx(table),
     nameIdx: index('idx_companies_name').on(table.name),
     domainIdx: index('idx_companies_domain').on(table.domain),
@@ -137,6 +139,8 @@ export const contacts = pgTable('contacts', {
   ...utils.audit(),
 }, (table) => {
   return {
+    deletedByFk2261Idx: index("contacts_deleted_by_fk_idx").on(table.deletedBy),
+    updatedByFk2261Idx: index("contacts_updated_by_fk_idx").on(table.updatedBy),
     tenantIdx: utils.tenantIdx(table),
     companyIdx: index('idx_contacts_company').on(table.companyId),
     emailIdx: index('idx_contacts_email').on(table.tenantId, table.email),
@@ -252,6 +256,8 @@ export const leads = pgTable('leads', {
   ...utils.audit(),
 }, (table) => {
   return {
+    deletedByFk2261Idx: index("leads_deleted_by_fk_idx").on(table.deletedBy),
+    updatedByFk2261Idx: index("leads_updated_by_fk_idx").on(table.updatedBy),
     tenantIdx: utils.tenantIdx(table),
     emailIdx: index('idx_leads_email').on(table.email),
     tenantStatusIdx: index('idx_leads_tenant_status').on(table.tenantId, table.leadStatus),
@@ -337,6 +343,8 @@ export const deals = pgTable('deals', {
   ...utils.audit(),
 }, (table) => {
   return {
+    deletedByFk2261Idx: index("deals_deleted_by_fk_idx").on(table.deletedBy),
+    updatedByFk2261Idx: index("deals_updated_by_fk_idx").on(table.updatedBy),
     tenantIdx: utils.tenantIdx(table),
     contactIdx: index('idx_deals_contact').on(table.contactId),
     stageIdx: index('idx_deals_stage').on(table.stageId),
@@ -400,6 +408,8 @@ export const forms = pgTable('forms', {
   ...utils.audit(),
 }, (table) => {
   return {
+    deletedByFk2261Idx: index("forms_deleted_by_fk_idx").on(table.deletedBy),
+    updatedByFk2261Idx: index("forms_updated_by_fk_idx").on(table.updatedBy),
     tenantIdx: utils.tenantIdx(table),
     activeIdx: utils.activeIdx(table),
   
@@ -419,6 +429,8 @@ export const products = pgTable('products', {
   ...utils.audit(),
 }, (table) => {
   return {
+    deletedByFk2261Idx: index("products_deleted_by_fk_idx").on(table.deletedBy),
+    updatedByFk2261Idx: index("products_updated_by_fk_idx").on(table.updatedBy),
     tenantIdx: utils.tenantIdx(table),
     metadataGinIdx: utils.metadataIdx(table),
     activeIdx: utils.activeIdx(table),
@@ -456,6 +468,8 @@ export const quotes = pgTable('quotes', {
   ...utils.audit(),
 }, (table) => {
   return {
+    deletedByFk2261Idx: index("quotes_deleted_by_fk_idx").on(table.deletedBy),
+    updatedByFk2261Idx: index("quotes_updated_by_fk_idx").on(table.updatedBy),
     tenantIdx: utils.tenantIdx(table),
     dealIdx: index('idx_quotes_deal').on(table.dealId),
     metadataGinIdx: utils.metadataIdx(table),
@@ -510,6 +524,8 @@ export const priceBooks = pgTable('price_books', {
   ...utils.audit(),
 }, (table) => {
   return {
+    deletedByFk2261Idx: index("price_books_deleted_by_fk_idx").on(table.deletedBy),
+    updatedByFk2261Idx: index("price_books_updated_by_fk_idx").on(table.updatedBy),
     tenantIdx: utils.tenantIdx(table).where(sql`is_active = true`),
   
   drz2255_idx_price_books_created_by: index('idx_price_books_created_by').on(table.createdBy),};
@@ -608,6 +624,8 @@ export const notes = pgTable('notes', {
   ...utils.audit(),
 }, (table) => {
   return {
+    deletedByFk2261Idx: index("notes_deleted_by_fk_idx").on(table.deletedBy),
+    updatedByFk2261Idx: index("notes_updated_by_fk_idx").on(table.updatedBy),
     entityIdx: index('idx_notes_entity').on(table.entityType, table.entityId, table.createdAt),
     tenantIdx: utils.tenantIdx(table),
     activeIdx: utils.activeIdx(table),
@@ -845,6 +863,8 @@ export const leadOffers = pgTable('lead_offers', {
   ...utils.audit(),
 }, (table) => {
   return {
+    deletedByFk2261Idx: index("lead_offers_deleted_by_fk_idx").on(table.deletedBy),
+    updatedByFk2261Idx: index("lead_offers_updated_by_fk_idx").on(table.updatedBy),
     tenantIdx: utils.tenantIdx(table),
     leadIdx: index('idx_lead_offers_lead').on(table.leadId),
     statusIdx: index('idx_lead_offers_tenant_status').on(table.tenantId, table.status),
@@ -883,6 +903,8 @@ export const meetings = pgTable('meetings', {
   ...utils.audit(),
 }, (table) => {
   return {
+    deletedByFk2261Idx: index("meetings_deleted_by_fk_idx").on(table.deletedBy),
+    updatedByFk2261Idx: index("meetings_updated_by_fk_idx").on(table.updatedBy),
     tenantIdx: utils.tenantIdx(table),
     userIdx: index('idx_meetings_user').on(table.userId),
     contactIdx: index('idx_meetings_contact').on(table.contactId),
@@ -1066,6 +1088,8 @@ export const followUps = pgTable('follow_ups', {
   ...utils.audit(),
 }, (table) => {
   return {
+    deletedByFk2261Idx: index("follow_ups_deleted_by_fk_idx").on(table.deletedBy),
+    updatedByFk2261Idx: index("follow_ups_updated_by_fk_idx").on(table.updatedBy),
     tenantIdx: utils.tenantIdx(table),
     assignedIdx: index('idx_follow_ups_assigned').on(table.assignedTo),
     dueDateIdx: index('idx_follow_ups_due_date').on(table.dueDate),

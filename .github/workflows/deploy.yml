@@ -116,6 +116,23 @@ jobs:
             # Restart + wait for the health endpoint. Gate on the endpoint, not
             # on process existence: pm2 can report "online" while the app fails
             # to serve.
+            #
+            # #2273 — health 200 is necessary but not sufficient: if the pm2
+            # "web" process ever drifted to `next dev` (someone started it by
+            # hand, pm2 save persisted it, and restart reuses those args), the
+            # app serves readable per-module source chunks, 200s .js.map files
+            # and a live HMR endpoint — full source disclosure to anonymous
+            # visitors — while /api/health stays green. Discriminator:
+            # `next start` answers 404 on /_next/webpack-hmr; a dev server
+            # answers 200 or holds the connection open (curl -> 000). Anything
+            # but 404 means a dev server is exposed on the app port: fail the
+            # gate rather than certify the leak.
+            dev_server_exposed() {
+              DEV_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 4 \
+                "http://127.0.0.1:$1/_next/webpack-hmr" || echo "000")
+              [ "$DEV_CODE" != "404" ]
+            }
+
             restart_and_wait() {
               pm2 restart "$PM2_APP" --update-env
               pm2 save
@@ -125,7 +142,14 @@ jobs:
                   STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 \
                     "http://127.0.0.1:$PORT/api/health" || echo "000")
                   if [ "$STATUS" = "200" ]; then
-                    echo "App healthy on port $PORT after ${i}x${{ env.HEALTH_CHECK_INTERVAL }}s"
+                    if dev_server_exposed "$PORT"; then
+                      echo "ABORT: port $PORT answers /_next/webpack-hmr with $DEV_CODE — that is a DEV-mode"
+                      echo "Next.js server on the app port (#2273: source chunks, .js.map 200s, HMR live)."
+                      echo "pm2 app $PM2_APP is not running 'next start'; fix its start command (see"
+                      echo "ecosystem.config.cjs) and pm2 save, then re-run the deploy."
+                      return 1
+                    fi
+                    echo "App healthy on port $PORT after ${i}x${{ env.HEALTH_CHECK_INTERVAL }}s (prod-mode probe: 404 on HMR)"
                     return 0
                   fi
                   LAST_STATUS="port $PORT returned $STATUS"
@@ -225,6 +249,66 @@ jobs:
             fi
             echo "DB role is RLS-constrained — safe to build and restart."
 
+            # #2233 — the deploy MUST migrate the schema between checkout and
+            # build/restart. Until now migrations ran only by hand on the host,
+            # so merging a migration+code PR shipped code against an unmigrated
+            # schema while the health gate stayed green (schema_ready checks 10
+            # base tables — blind to new columns), and rollback was code-only:
+            # old code on new schema. Discipline assumed here (and the reason
+            # the FAIL path un-applies): every migration in a release chain
+            # must be additive-compatible with the still-running previous
+            # release, because the OLD app keeps serving until restart.
+            #
+            # Steps: snapshot the applied list, take a schema-only restore
+            # point (refuse to migrate without one), run db:migrate
+            # non-interactively, and on failure un-apply exactly the
+            # migrations THIS deploy added — before anything is restarted.
+            list_applied() {
+              npx tsx --import ./scripts/load-env.mjs scripts/rollback-migration.ts --list \
+                | awk '/^ +[0-9]+ /{print $2}'
+            }
+            PRE_APPLIED=$(list_applied)
+            echo "Schema head before migration: $(echo "$PRE_APPLIED" | head -1)"
+
+            BACKUP_DIR=/tmp/nucrm-backups
+            mkdir -p "$BACKUP_DIR"
+            STAMP=$(date +%Y%m%dT%H%M%S)
+            RESTORE_POINT="$BACKUP_DIR/schema-pre-${SHA:0:8}-${STAMP}.sql.gz"
+            DB_URL=$(node -e 'const fs=require("fs");const m=fs.readFileSync(".env.local","utf8").match(/^DATABASE_URL="?([^"\n]+)/m);process.stdout.write(m?m[1]:"")')
+            if [ -z "$DB_URL" ]; then
+              echo "ABORT: DATABASE_URL not found in .env.local — cannot migrate or back up (#2233)"
+              exit 1
+            fi
+            # pg_dump lives on the host only if postgres client tools are
+            # installed; the nucrm-db container always has a matching client.
+            if command -v pg_dump >/dev/null 2>&1; then
+              pg_dump --schema-only --no-privileges --no-owner "$DB_URL" | gzip > "$RESTORE_POINT"
+            else
+              docker exec nucrm-db pg_dump --schema-only --no-privileges --no-owner "$DB_URL" | gzip > "$RESTORE_POINT"
+            fi
+            if [ ! -s "$RESTORE_POINT" ]; then
+              echo "ABORT: pre-migrate schema backup failed — refusing to migrate without a restore point (#2233)"
+              rm -f "$RESTORE_POINT"
+              exit 1
+            fi
+            echo "Schema restore point: $RESTORE_POINT"
+            ls -t "$BACKUP_DIR"/schema-pre-*.sql.gz 2>/dev/null | tail -n +11 | xargs -r rm -f
+
+            echo "Running migrations (db:migrate, non-interactive)..."
+            if ! npx tsx --import ./scripts/load-env.mjs scripts/migrate.ts --yes; then
+              echo "ERROR: migration failed — un-applying what THIS deploy added, before restarting anything."
+              POST_APPLIED=$(list_applied)
+              for TAG in $(comm -13 <(echo "$PRE_APPLIED" | sort) <(echo "$POST_APPLIED" | sort) | sort -r); do
+                echo "Un-applying $TAG"
+                npx tsx --import ./scripts/load-env.mjs scripts/rollback-migration.ts "$TAG" --yes \
+                  || echo "WARNING: un-apply of $TAG failed — schema is MIXED; restore point: $RESTORE_POINT"
+              done
+              exit 1
+            fi
+            POST_APPLIED=$(list_applied)
+            APPLIED_NOW=$(comm -13 <(echo "$PRE_APPLIED" | sort) <(echo "$POST_APPLIED" | sort) | sort -r)
+            echo "Migrations applied by this deploy: $(echo "$APPLIED_NOW" | grep -c .)"
+
             echo "Building..."
             NODE_OPTIONS="--max-old-space-size=8192" npm run build
 
@@ -240,6 +324,18 @@ jobs:
 
             echo "ERROR: app did not become healthy. Rolling back to previous commit."
             git checkout --force "$SHA"^
+            # #2233 — a code-only rollback recreates the very drift this issue
+            # is about (old code on the NEW schema). Un-apply the migrations
+            # this deploy added, newest first, so the schema matches the code
+            # going back. Failures are loud, never silent: the restore point
+            # printed above is the manual path.
+            if [ -n "$APPLIED_NOW" ]; then
+              for TAG in $APPLIED_NOW; do
+                echo "Rolling back migration $TAG (deploy was unhealthy)"
+                npx tsx --import ./scripts/load-env.mjs scripts/rollback-migration.ts "$TAG" --yes \
+                  || echo "WARNING: rollback of $TAG failed — schema stays at NEW state; restore point for manual recovery."
+              done
+            fi
             NODE_OPTIONS="--max-old-space-size=8192" npm run build
             # #2300: rollback reverses ALL three apps, not just web — otherwise
             # the old web returns while worker/cron keep running new code.
