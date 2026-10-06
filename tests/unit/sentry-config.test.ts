@@ -83,6 +83,12 @@ it('honours SENTRY_ENABLE=false, the switch the runbook documents', async () => 
 
 it('stays enabled when a DSN is set and neither switch says otherwise', async () => {
   vi.stubEnv('SENTRY_DSN', 'https://public@example.test/1');
+  // vitest.setup.ts loads .env.local into process.env before tests run; a
+  // developer machine with SENTRY_DISABLE=true (or SENTRY_ENABLE=false) set
+  // there must not flip this assertion. Stub to '' makes the config's
+  // !== 'true' / !== 'false' checks pass regardless of local env.
+  vi.stubEnv('SENTRY_DISABLE', '');
+  vi.stubEnv('SENTRY_ENABLE', '');
 
   await import('../../sentry.server.config');
 
