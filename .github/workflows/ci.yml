@@ -62,6 +62,9 @@ jobs:
       - name: Migration chain guard (#46)
         run: npm run guard:chain
 
+      - name: Migration row-DML / RLS guard (PP-058)
+        run: npm run guard:migration-rls
+
       - name: Counter increment ratchet (#2344)
         run: npm run guard:counters
 

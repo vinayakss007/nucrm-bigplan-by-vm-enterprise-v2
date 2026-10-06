@@ -1,0 +1,34 @@
+{
+  "_comment": "Migrations that write rows into tenant-scoped tables without setting the app.is_super_admin GUC those RLS policies branch on (PP-058). scripts/migrate.ts runs on a bare pool with no app.current_tenant and FORCE RLS removes the owner bypass, so those writes match ZERO rows: the repair is a silent no-op while CREATE UNIQUE INDEX / SET NOT NULL still see the real data, and the deploy aborts. CI cannot catch this — apply-rls-ci.mjs runs the same files as the postgres superuser, which RLS does not filter. Shrink this baseline as files are fixed; the guard fails on any NEW offender. Regenerate: node scripts/check-migration-rls-dml.mjs --update",
+  "counts": {
+    "files": 120,
+    "tenantScoped": 202,
+    "byPolicy": 34,
+    "byColumn": 191
+  },
+  "violations": {
+    "atRisk": [
+      "atRisk:0013_workflow_foundation|update:leads",
+      "atRisk:0018_workflow_foundation_legacy|update:leads",
+      "atRisk:0025_ai_key_type_personal_system|update:ai_provider_secrets",
+      "atRisk:0030_add_fk_constraints_billing_documents|update:invoice_line_items update:invoice_payments update:order_line_items",
+      "atRisk:0037_tenant_isolation_hardening|update:deal_stages update:invoice_line_items update:invoice_payments update:order_line_items update:quote_line_items",
+      "atRisk:0038_cross_module_record_linking|update:activities update:invoices update:quotes update:support_tickets update:tasks",
+      "atRisk:0046_fix_webhook_queue|delete:webhook_queue update:webhook_queue",
+      "atRisk:0048_deals_tasks_custom_fields|update:deals update:tasks",
+      "atRisk:0067_ticket_portal_token|update:support_tickets",
+      "atRisk:0069_security_events_metadata_jsonb|delete:usage_alerts update:usage_alerts",
+      "atRisk:0072_whatsapp_msg_external_unique|delete:whatsapp_messages",
+      "atRisk:0073_add_missing_fk_references|delete:api_key_usage_infra update:selective_restore_logs",
+      "atRisk:0074_leads_service_team_fk|update:leads",
+      "atRisk:0076_ondelete_rules|delete:automation_workflows update:invoice_payments update:support_tickets",
+      "atRisk:0077_companies_status_assigned|update:companies",
+      "atRisk:0084_deals_won_at|update:deals",
+      "atRisk:0114_leads_tenant_oid_unique|update:leads"
+    ],
+    "dynamicTarget": [
+      "dynamicTarget:0042_audit_log_immutability",
+      "dynamicTarget:0107_rls_null_tenant_revenue_hardening"
+    ]
+  }
+}

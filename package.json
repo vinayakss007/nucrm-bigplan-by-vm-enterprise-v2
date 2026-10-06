@@ -52,6 +52,7 @@
     "guard:any-suppressions": "node scripts/check-any-suppressions.mjs",
     "guard:running-config": "node scripts/check-running-config-drift.mjs",
     "guard:chain": "node scripts/check-migration-chain.mjs",
+    "guard:migration-rls": "node scripts/check-migration-rls-dml.mjs",
     "guard:counters": "node scripts/check-counter-increments.mjs",
     "guard:csv": "node scripts/check-csv-blob.mjs",
     "guard:audit": "node scripts/check-audit-baseline.mjs",
