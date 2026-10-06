@@ -32,6 +32,20 @@ export function getRetryDelay(attempt: number): number {
 
 export const MAX_RETRIES = 5;
 
+/**
+ * The one `X-NuCRM-Signature` NuCRM sends, as the whole header value.
+ *
+ * `sha256=<HMAC-SHA256(secret, body)>` over the exact bytes that go on the
+ * wire. Every sender — `fireWebhooks`, the manual retry, the "Send test"
+ * button — calls this so a receiver has one scheme to verify (#2399: the test
+ * route signed `SHA-256(body ‖ secret)` instead, which is both the
+ * length-extension-vulnerable construction HMAC exists to defeat and simply a
+ * different value, so a correctly configured receiver failed every test).
+ */
+export function webhookSignature(secret: string, payload: string): string {
+  return 'sha256=' + createHmac('sha256', secret).update(payload).digest('hex');
+}
+
 export type WebhookEvent =
   | 'contact.created' | 'contact.updated' | 'contact.deleted' | 'contact.restored'
   | 'deal.created'    | 'deal.updated'    | 'deal.stage_changed' | 'deal.won' | 'deal.lost' | 'deal.deleted'
@@ -97,7 +111,7 @@ export async function fireWebhooks(
           'X-NuCRM-Delivery': randomUUID(),
         };
         if (secret) {
-          headers['X-NuCRM-Signature'] = 'sha256=' + createHmac('sha256', secret).update(payload).digest('hex');
+          headers['X-NuCRM-Signature'] = webhookSignature(secret, payload);
         }
 
         // Create delivery record. A failure here means the row never lands in

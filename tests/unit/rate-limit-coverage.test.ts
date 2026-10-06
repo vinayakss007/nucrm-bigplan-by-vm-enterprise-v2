@@ -223,12 +223,67 @@ describe('lib/api/mutating-rate-limit', () => {
     const { rateLimitMutating } = await import('@/lib/api/mutating-rate-limit');
 
     const request = new Request('http://localhost/api/unknown', {
-      method: 'PATCH',
-      headers: { 'x-forwarded-for': '10.0.0.7' },
+      method: 'POST',
+      headers: { 'x-forwarded-for': '10.99.99.99' },
     });
 
-    // Default patch limit is 30 - first should pass
-    const result = await rateLimitMutating(request, 'unknownEntity', 'patch');
+    const result = await rateLimitMutating(request, 'nonexistentEntity', 'post');
     expect(result).toBeNull();
+  });
+
+  // #2399: "Send test" performs an outbound POST to a tenant-controlled URL
+  // with a 30 s timeout, so it needs its own throttle — and its own bucket, so
+  // clicking the button cannot spend the create budget or starve under it.
+  it('throttles the test bucket at the strict default (5/min)', async () => {
+    const { rateLimitMutating } = await import('@/lib/api/mutating-rate-limit');
+
+    const request = new Request('http://localhost/api/tenant/webhooks/x/test', {
+      method: 'POST',
+      headers: { 'x-forwarded-for': '203.0.113.40' },
+    });
+
+    const results = [];
+    for (let i = 0; i < 6; i++) {
+      results.push(await rateLimitMutating(request, 'webhooks', 'test'));
+    }
+
+    expect(results[0]).toBeNull();
+    expect(results[4]).toBeNull();
+    expect(results[5]).not.toBeNull();
+    expect(results[5]!.status).toBe(429);
+  });
+
+  it('keeps the test bucket separate from post', async () => {
+    const { rateLimitMutating } = await import('@/lib/api/mutating-rate-limit');
+
+    const request = new Request('http://localhost/api/tenant/webhooks/x/test', {
+      method: 'POST',
+      headers: { 'x-forwarded-for': '203.0.113.41' },
+    });
+
+    // Exhaust the test bucket entirely.
+    for (let i = 0; i < 5; i++) await rateLimitMutating(request, 'webhooks', 'test');
+    expect(await rateLimitMutating(request, 'webhooks', 'test')).not.toBeNull();
+
+    // Creating a webhook is a different action; it must still be allowed.
+    expect(await rateLimitMutating(request, 'webhooks', 'post')).toBeNull();
+  });
+
+  it('never falls through to checkRateLimit\u2019s 100/min default for a missing test limit', async () => {
+    const { rateLimitMutating } = await import('@/lib/api/mutating-rate-limit');
+
+    const request = new Request('http://localhost/api/tenant/entities/x/test', {
+      method: 'POST',
+      headers: { 'x-forwarded-for': '203.0.113.42' },
+    });
+
+    // An entity with no `test` entry must land on the strict floor, not on 100.
+    const results = [];
+    for (let i = 0; i < 7; i++) {
+      results.push(await rateLimitMutating(request, 'contacts', 'test'));
+    }
+    expect(results[4]).toBeNull();
+    expect(results[6]).not.toBeNull();
+    expect(results[6]!.status).toBe(429);
   });
 });

@@ -4,7 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { randomUUID, createHmac } from 'crypto';
+import { randomUUID } from 'crypto';
 import { apiError } from '@/lib/api-error';
 import { logError } from '@/lib/errors-server';
 import { requireAuth } from '@/lib/auth/middleware';
@@ -15,7 +15,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
 import { safeFetch, SsrfBlockedError } from '@/lib/security/ssrf';
-import { getRetryDelay } from '@/lib/webhooks';
+import { getRetryDelay, webhookSignature } from '@/lib/webhooks';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 /**
@@ -118,7 +118,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       // on it would discard this retry as already seen.
       'X-NuCRM-Delivery': randomUUID(),
     };
-    if (secret) headers['X-NuCRM-Signature'] = 'sha256=' + createHmac('sha256', secret).update(payloadStr).digest('hex');
+    if (secret) headers['X-NuCRM-Signature'] = webhookSignature(secret, payloadStr);
     else delete headers['X-NuCRM-Signature'];
 
     const nextAttempt = row.attempt + 1;
