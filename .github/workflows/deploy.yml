@@ -116,6 +116,23 @@ jobs:
             # Restart + wait for the health endpoint. Gate on the endpoint, not
             # on process existence: pm2 can report "online" while the app fails
             # to serve.
+            #
+            # #2273 — health 200 is necessary but not sufficient: if the pm2
+            # "web" process ever drifted to `next dev` (someone started it by
+            # hand, pm2 save persisted it, and restart reuses those args), the
+            # app serves readable per-module source chunks, 200s .js.map files
+            # and a live HMR endpoint — full source disclosure to anonymous
+            # visitors — while /api/health stays green. Discriminator:
+            # `next start` answers 404 on /_next/webpack-hmr; a dev server
+            # answers 200 or holds the connection open (curl -> 000). Anything
+            # but 404 means a dev server is exposed on the app port: fail the
+            # gate rather than certify the leak.
+            dev_server_exposed() {
+              DEV_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 4 \
+                "http://127.0.0.1:$1/_next/webpack-hmr" || echo "000")
+              [ "$DEV_CODE" != "404" ]
+            }
+
             restart_and_wait() {
               pm2 restart "$PM2_APP" --update-env
               pm2 save
@@ -125,7 +142,14 @@ jobs:
                   STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 \
                     "http://127.0.0.1:$PORT/api/health" || echo "000")
                   if [ "$STATUS" = "200" ]; then
-                    echo "App healthy on port $PORT after ${i}x${{ env.HEALTH_CHECK_INTERVAL }}s"
+                    if dev_server_exposed "$PORT"; then
+                      echo "ABORT: port $PORT answers /_next/webpack-hmr with $DEV_CODE — that is a DEV-mode"
+                      echo "Next.js server on the app port (#2273: source chunks, .js.map 200s, HMR live)."
+                      echo "pm2 app $PM2_APP is not running 'next start'; fix its start command (see"
+                      echo "ecosystem.config.cjs) and pm2 save, then re-run the deploy."
+                      return 1
+                    fi
+                    echo "App healthy on port $PORT after ${i}x${{ env.HEALTH_CHECK_INTERVAL }}s (prod-mode probe: 404 on HMR)"
                     return 0
                   fi
                   LAST_STATUS="port $PORT returned $STATUS"
