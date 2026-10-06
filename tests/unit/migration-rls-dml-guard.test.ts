@@ -136,6 +136,17 @@ describe('collectTenantScoped (derived from the migration history, no DB)', () =
     expect(derived.byPolicy.has('leads')).toBe(false);
   });
 
+  it('needs both rules — neither derives the same set as the other', () => {
+    // The mirror image of the case above: deal_stages gets its tenant_id
+    // through `ALTER TABLE %I ADD COLUMN tenant_id` inside an EXECUTE format()
+    // loop, so the column rule (which reads literal SQL) cannot see it either,
+    // and only the literal policy on it puts it in the set. A guard that
+    // quietly degraded to one rule would lose one of these two tables.
+    expect(derived.byColumn.has('deal_stages')).toBe(false);
+    expect(derived.byPolicy.has('deal_stages')).toBe(true);
+    expect(derived.tenantScoped.has('deal_stages')).toBe(true);
+  });
+
   it('derives a set that covers the tables PP-058 measured as isolated', () => {
     for (const t of ['leads', 'invoices', 'webhook_events', 'deal_stages', 'invoice_line_items']) {
       expect(derived.tenantScoped.has(t), `${t} missing from the derived tenant-scoped set`).toBe(true);
