@@ -219,6 +219,14 @@ export async function runReportForTenant(
     let conditions;
     if (aggregate) {
       conditions = [eq(aggregate.table.tenantId, tenantId) as never];
+      // #2389: the row branch below filters tombstones and this one did not, so
+      // `pipeline` and `revenue` counted deleted deals while the exported rows
+      // behind them did not — the chart and its own detail disagreed with no way
+      // for the user to reconcile them. Derived from the table, the same way the
+      // row branch does it, rather than repeated in each REPORT_AGGREGATES entry.
+      if (aggregate.table.deletedAt) {
+        conditions.push(sql`${aggregate.table.deletedAt} IS NULL` as never);
+      }
       if (aggregate.where) conditions.push(aggregate.where as never);
       query = db
         .select(aggregate.select as never)
