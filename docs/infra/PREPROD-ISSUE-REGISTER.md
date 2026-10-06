@@ -2508,12 +2508,14 @@ analytics question kept running into.
 
 _(Numbering: **PP-055** was PR #2354 and **PP-056** is PR #2365, so this took **PP-057** and left both gaps
 rather than renumbering anything. That was **two** gaps and is now **one**: **#2354 merged** (`a2a53569`,
-2026-10-05) so PP-055 is on `main`, while **#2365 is still open** (`e4c7e3ba`). The note also under-predicted
-its own collision — it said "the Summary table only", but merging #2365 into `098198f2` conflicted in **two**
-hunks of this one file (`git merge-tree b64b3c6b 098198f2`, markers at its lines 77–83 and 2426–2809): the
-Summary table, where `main` carried **three** new rows (PP-055/057/058) against #2365's one, **and the section
-bodies**, where `main` carried 380 lines against #2365's single heading. Resolved additive-only — `e4c7e3ba`
-is **+123 / −0** against `main` (2827 → 2950 lines) and `main`'s 2827 lines all survive as an in-order
+2026-10-05) so PP-055 is on `main`, while **#2365 is still open** (`e4c7e3ba`) — both measured against `main`
+at `426e0595`; when #2365 lands that clause flips to *merged*, which is a status update per "How to maintain
+this file", not a renumbering. The note also under-predicted its own collision: it said "the Summary table
+only", but merging #2365 into `098198f2` conflicted in **two** hunks of this one file
+(`git merge-tree b64b3c6b 098198f2`, markers at its lines 77–83 and 2426–2809) — the Summary table, where
+`main` carried **three** new rows (PP-055/057/058) against #2365's one, **and the section bodies**, where
+`main` carried 380 lines against #2365's single heading. Resolved additive-only — `e4c7e3ba` is
+**+123 / −0** against `main` (2827 → 2950 lines) and `main`'s 2827 lines all survive as an in-order
 subsequence. Nothing was renumbered; PP-056 stays a gap until #2365 merges. **#2367** and **#2369** merged
 meanwhile and #2367 is what moved the journal from 116 to 117, recorded below rather than back-patched into
 the first measurement.)_
@@ -2612,9 +2614,10 @@ the first measurement.)_
   produce it. Measured A/B on `310129bf` with the three known files only: `TRUST_PROXY` unset → **3 files
   passed, 93/93**; `TRUST_PROXY=true` → **1 failed | 92 passed**, `rate-limit.test.ts > handles requests
   without headers`. Of the PRs that fix those assertions, **#2359 has merged** (`4ea1e4c5`, 2026-10-05 —
-  `tests/unit/csrf.test.ts` + `tests/unit/csrf-unit.test.ts`) and **#2365 is still open** (`e4c7e3ba`), so
-  `rate-limit.test.ts` is now the *only* one of the three that passes because `.env.local` is gitignored —
-  a tree without the env file still looks greener than the repo actually is. The one *new* failure,
+  `tests/unit/csrf.test.ts` + `tests/unit/csrf-unit.test.ts`) and **#2365 is still open** (`e4c7e3ba`, as of
+  `426e0595`), so `rate-limit.test.ts` is now the *only* one of the three that passes because `.env.local` is
+  gitignored — a tree without the env file still looks greener than the repo actually is.
+  The one *new* failure,
   `tests/unit/webhooks-delivery.test.ts:147`, asserts `status: 'success'` and got `'pending'` with
   `Outbound request blocked: DNS resolution for "x.com" returned no addresses`; it **passes in isolation in
   1.09 s** on the same tree and `getent hosts x.com` resolves, so it is load/timing-sensitive under the
