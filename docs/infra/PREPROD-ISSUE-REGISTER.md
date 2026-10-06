@@ -75,6 +75,7 @@ Severity: **S1** blocks go-live · **S2** broken feature or security weakness ·
 | PP-053 | S2  | Backup + restore            | Six tables the DB isolates through a **parent** row were scoped by their own (missing or ignored) `tenant_id` in three registries — a wipe 42703 aborts the atomic restore, and three more filters compare a foreign key to a tenant uuid, so backups succeed while holding nothing                                                            | 🔧 MERGED as **#2352** (2026-10-05) · policy escape still open (#7, #90)                          |
 | PP-054 | S3  | Sentry + observability      | NUCRM-3J (`analytics_events` 42501) has been fixed and live since PR #2162, yet the watchdog filed it "NEW" on 2026-10-04 — because `NEW` means "rotated into the top-25-by-date list", not "new failure", and `events=` is a cumulative count                                                                | 🚨 OPEN · watchdog semantics + two side findings (`error_logs` empty all-time, INSERT…RETURNING refused) |
 | PP-055 | S2  | Backup + restore            | The pre-restore wipe deletes **six tables the import allowlist refuses to re-insert**, so `POST /api/admin/tenant-restore` deletes a tenant's rows, hits `Table 'pipelines' is not allowed for import`, and rolls the whole restore back — permanently, for 177 of 183 tenants | 🔧 FIXED (wipe-side), PR **#2354** · the two divergent allowlists stay an owner decision (#79, #90) |
+| PP-056 | S3  | Host / tooling              | `/tmp` is a **3.9 GB tmpfs** and vitest leaves a ~22 MB temp dir on **every** run: 88 of them held **1.9 GB**, which filled it. `npx vitest run` then exited **1 with no `Test Files`/`Tests` summary at all** — a scratch-space outage is indistinguishable from a red suite. Sweeping the suite after fixing it found **three assertions that only pass when `.env.local` is absent** (2 × CSRF + rate-limit) — and a fourth that turned out to be a **stale-clone-base artifact**, which is its own harness lesson | 🔧 MITIGATED (1.5 GB of stale clones moved off tmpfs, `TMPDIR` pinned to the root fs) · CSRF pair in PR **#2359**, rate-limit + this entry in **#2365** · four exits, all owner's call |
 | PP-057 | S2  | Migrations + tooling        | The repo has exactly one "what is applied?" command and it cannot see the ledger: `db:status` queries `__drizzle_migrations(name, applied_at)` — no such table, no such columns — and maps **any** failure to "history table does not exist", so against preprod it printed **`Applied: 0 / Pending: <every journal entry>`** on a database with **99 applied and 18 outstanding**. `db:migrate --dry-run` compounds it: its first line counts journal entries (**`116 pending migration(s)`**) before reading anything, and that number is what the y/N apply prompt offers. Nothing in CI or the runbooks would ever have revealed the 18-behind state, which includes `0091` (the usage-snapshot bypass **#56** shipped), `0059` (**#74**'s still-unstamped entry) and now `0116` (**#2367**, merged while this PR was open) | 🔧 SCRIPTS FIXED in this PR (verified 99/18 against two instruments) · applying the 18 is an **owner decision** · also measured: `0115`'s absence is **not** a live cross-tenant read |
 | PP-058 | S2  | Migrations + tooling        | `db:migrate` connects as the tables' **owner** (`nucrm`) with `FORCE ROW LEVEL SECURITY` active on 48 of the 49 tables the pending set names, and `scripts/migrate.ts:184` sets **no tenant GUC** — so every data-correcting statement in a migration matches **0 rows** and silently corrects nothing, while the DDL built on top of it (`CREATE UNIQUE INDEX`, `SET NOT NULL`) reads the whole heap regardless. Measured on preprod: `0114_leads_tenant_oid_unique` (pending) dedupes `(tenant_id, lead_oid)` before creating the unique index, but its own CTE sees 0 of 25 leads while the truth is **1 duplicate group / 5 rows / 4 losers** (all five soft-deleted, all nine days older than the header's own "measured 0"), so the pending 21-entry run **aborts on 23505** — the exact failure its header says the dedupe exists to prevent | 🚨 OPEN · owner decision · no historical damage demonstrated · `0109` already proves the fix is one `set_config` line |
 
@@ -2503,6 +2504,128 @@ analytics question kept running into.
   `drizzle/db.ts:55-90` (a bare `db.transaction()` re-applies only tenant and user, per PP-027),
   `lib/restore/restore-executor.ts:171,214,437,493`,
   `app/api/superadmin/selective-restore/execute/route.ts:128,153`.
+
+## PP-056 — 🔧 `/tmp` is a 3.9 GB tmpfs and vitest leaves a ~22 MB temp dir behind on **every** run: 88 of them held **1.9 GB** and filled it, after which `npx vitest run` exited 1 with no `Test Files`/`Tests` line at all — a scratch-space outage is indistinguishable from a red suite _(S3 · Host + tooling)_
+
+_(Numbering: **PP-055** went to PR **#2354**, which has since merged, so this takes **PP-056** and is
+contiguous with it — nothing was renumbered; see "How to maintain this file".)_
+
+- **Found by:** the full `tests/unit` sweep that was supposed to verify #2359. The command reported  `exit=1`, the log held two lines of progress dots and **no `Test Files` / `Tests` / `Duration`
+  summary**. Reading that as "the suite is red" would have been wrong, and so would reading it as
+  "the suite ran" — it never got far enough to have an opinion about the code under test.
+- **Measured at the time of the outage.** `df /tmp` → `3.9G used, 4.0K avail, 100 %`. Nothing held
+  it open: `lsof +D /tmp` listed only the shell that was asking. The root filesystem underneath has
+  **290 GB free** and is 41 % used (PP-052's disk), so this is a tmpfs-sizing problem, not a
+  full-disk problem, and PP-052's cap would not have helped.
+- **Who ate 3.9 GB of RAM-backed scratch.**
+  - **88** top-level dirs with a 21-character random name, each holding `client/` + `ssr/` — a
+    vitest/`vite-node` temp dir. **1 910 MB**, average ~22 MB. **84 of them (1 828 MB) contain
+    nothing modified today; the oldest dates to 2026-09-26 11:22.** Accumulation is per *run*, not
+    per *crash*: the verification run after mitigation completed cleanly (511 files, 227 s) and
+    still left its temp dir in the `TMPDIR` it was given.
+  - Two stale checkouts: `/tmp/nucrm-trunk` **1.5 GB** (mtime Sep 26 16:51; 1.5 GB of it is
+    `node_modules`) and `/tmp/nucrm-main` 33 MB (mtime Sep 25 13:20). Neither had an open handle.
+  - `/tmp/node-compile-cache` 29 MB, three `qodercli-natives-v1.1.{41,64,65}-root` at ~25 MB each.
+  - 3 368 entries at the top level.
+- **Why it fails silently instead of loudly.** Everything here defaults to `os.tmpdir()` = `/tmp`:
+  the test runner, esbuild, `git cat-file`, and the shell harness's own cwd bookkeeping. Once the
+  tmpfs is gone the error is not a test assertion, it is I/O — every command additionally emitted
+  `/bin/bash: line 1: pwd: write error: No space left on device`. A suite that cannot *write its
+  report* exits non-zero exactly like a suite that cannot *pass a test*, and the only thing
+  distinguishing them is a summary line that is absent. This is the same failure class as PP-054
+  (a signal that is not what its name says) and as **#77** (a masked condition reported as success).
+- **Mitigated without deleting anything (reversible, no owner decision needed).** Moved both stale
+  clones to `/var/tmp/stale-tmp-2026-10-05/` on the root filesystem rather than `rm`-ing them — they
+  are nine days old and are not mine to delete — and re-ran with `TMPDIR=/var/tmp/qs`. `/tmp` went
+  **100 % → 58 % (1.7 GB free)** and the identical command then produced a real summary:
+  **4 failed files | 511 passed | 1 skipped (516) · 2 failed tests | 7375 passed | 11 skipped (7388) · 227 s.**
+- **What that summary said, and what it proved about the harness.**
+  - Both `setCsrfCookie` assertions **#2359** exists to fix are green (they were the two failures
+    before it), which is the actual verification that PR wanted.
+  - `duplicate-fk-declarations-2259` failed with `expected 113 to be 114` — this worktree's branch
+    has no 0114 journal entry; **#2345** rewrites exactly that assertion. Not a new finding.
+  - `rate-limit.test.ts:310` failed with `TypeError: Cannot read properties of null (reading
+    'headers')` — a **third instance of the same environment-dependency class** as #2359, filed
+    below.
+  - Two files could not be collected: `Error: Cannot find module
+    'tests/unit/lead-oid-allocation.test.ts'` and `leads-post-oid-retry-2343.test.ts`. They are not
+    broken tests: the **shared worktree's HEAD moved underneath the run** (`git rev-parse
+    --abbrev-ref HEAD` read `fix/2343-lead-oid-atomic-unique` when collection started and
+    `fix/2344-atomic-counters` after), so files collected at t0 had been checked out from under
+    vitest. Consequence for every future sweep: **a `tests/unit` run in the shared worktree is not
+    attributable**; it has to come from its own clone, the way the CI-equivalent worktrees do.
+- **The third env-dependent assertion (found inside this measurement).**
+  `tests/unit/rate-limit.test.ts:310` calls `checkRateLimit(null, { action: 'test' })` and expects
+  `null`. That reaches `getClientIp` (`lib/client-ip.ts:14`), which returns the string `'unknown'`
+  **before** touching the request unless `TRUST_PROXY === 'true'` — with the flag set it
+  dereferences `request.headers` and throws on `null`. `.env.local:48` sets `TRUST_PROXY=true`;
+  `.github/workflows/ci.yml` never sets it anywhere (grepped). So this case is structurally green
+  in CI and structurally red on any checkout that has the local env file, because
+  `vitest.setup.ts:4-17` folds `.env.local` into `process.env`. Blast radius measured: the only
+  `checkRateLimit(null` call in the repo is this test, and `getClientIp`'s parameter is
+  non-nullable, so TypeScript rules out a live caller — **no production path reaches it.** The fix
+  is therefore test-side (pass a headerless `Request`, pin both `TRUST_PROXY` branches). Making
+  `getClientIp` itself tolerate a missing request would fold every absent-request caller into one
+  `unknown` rate-limit bucket — failing open on the anti-rotation control #1249 exists to provide —
+  so that variant is an **owner decision**, not mine.
+- **A fourth instance — and the retraction that made it a better finding.** Re-running the whole
+  suite with only the six **non-secret boolean** flags `.env.local` carries (`COOKIE_SECURE`,
+  `TRUST_PROXY`, `DATABASE_SSL=false`, `SENTRY_ENABLE`, `PROMETHEUS_ENABLED`,
+  `PGBOUNCER_ENABLED`) produced exactly **one** failure:
+  `tests/unit/route-pinning-real-route.test.ts > … pins a client for its whole body`,
+  `AssertionError: expected 'sentinel' not to be 'sentinel'`. Bisected to a single variable, 2 runs
+  each way with that file alone: `TRUST_PROXY=true` → fails, unset → passes; the other five have no
+  effect alone, and the remaining five set *together* pass. Mechanism looked textbook — line 66
+  hands the real route a fake request literal (`{ url: '…' } as never`) with **no `headers`
+  property**, and `getClientIp` dereferences `request.headers.get(…)` the moment
+  `TRUST_PROXY === 'true'` (`lib/client-ip.ts:19`); the throw is swallowed inside the pinned scope,
+  so the only symptom is a stale sentinel. Patching line 66 to a real `new Request(…)` made it
+  green both ways, which seemed to confirm it.
+  **It was wrong, and the reason matters more than the finding.** The verification tree was a
+  `git clone file:///srv/nucrm --branch main` — i.e. built from the shared repo's **local `main`
+  ref**, which sat **2 commits behind GitHub's `main`**. Rebuilt from the actual upstream commit
+  (`git archive 2cd6ccb9 | tar -x`), the same file **passes with `TRUST_PROXY=true` already**,
+  because upstream's copy mocks `lib/api/read-rate-limit` — the very call that reaches
+  `getClientIp` — and the stale copy did not. So: no fourth assertion was broken, the one-line
+  "fix" would have **reverted upstream's mock**, and it is not in this PR.
+  - **Class count closed by re-running the same sweep against the real upstream tree.** Built from
+    the remote commit itself (no fix from #2359 or #2365 in it), the six booleans set, the whole of
+    `tests/unit`: **3 failed files | 516 passed | 1 skipped (520) · 3 failed tests | 7441 passed
+    | 11 skipped (7455) · 212.94 s**, and the three failing files are exactly
+    `tests/unit/csrf.test.ts`, `tests/unit/csrf-unit.test.ts` and `tests/unit/rate-limit.test.ts` —
+    the pair #2359 pins plus the case #2365 pins. Every other assertion in the suite is
+    environment-independent on `main`. **So the class is three, not four**, which is the number the
+    summary row and the two PRs now claim, and the widest sweep available here is what closed it.
+- **Harness rule learned, recorded because it is the mirror image of the worktree caveat above:**
+  a clone or archive used for verification must be pinned to an explicit **commit sha fetched from
+  the remote**, never to a local branch ref of the shared repo. Two independent ways the same suite
+  lied in one hour: HEAD moving underneath a run in the shared worktree, and a clone silently
+  based on a stale local branch. Both produce a plausible, wrong result with no error anywhere.
+  `git rev-list --count main..origin/main` on the shared repo is the one-line check that catches
+  the second; it is now routine before any verification tree is built.
+- **Deliberately not done:** nothing deleted; no `rm -rf` of tmpfs contents (owner's call, and the
+  files are not mine); no cron, systemd unit or tmpfiles.d entry added; `vitest.config.ts`,
+  `.npmrc` and `package.json` scripts untouched; no `TMPDIR` exported into anything committed;
+  `.env.local` untouched; no CI change to make a runner supply scratch space.
+- **Exits, none chosen:**
+  (a) **Preflight the suite** — fail loudly and immediately when `os.tmpdir()` has less than ~500 MB
+  free, before vitest starts. This is the only exit that fixes the *silence*; it does not stop the
+  leak. Repo-side, cheap.
+  (b) **Move harness scratch onto the root filesystem** — set `TMPDIR` (or vitest's temp dir) to
+  `/var/tmp` for test/lint scripts. Fixes the 3.9 GB ceiling, leaves ~22 MB/run accumulating on a
+  290 GB fs instead, and 4 KB-free tmpfs outages stop being a test-harness event.
+  (c) **Clean the leak** — a pre-run sweep for the `client/`+`ssr/` temp dirs older than the current
+  session. Needs to be conservative: shared host, other agents' live runs use the same directory.
+  (d) **Resize the tmpfs** — `mount -o remount,size=…` or set `TMPDIR` in the shell profile. Host
+  change, needs sign-off, does not belong to this repo.
+  (a) + (b) together are what makes "the suite is green" mean the suite is green again.
+- **Files:** `docs/infra/PREPROD-ISSUE-REGISTER.md` only. Evidence read: `df -h/-k /tmp`,
+  `du -xsh /tmp/*`, `stat -c %y` on the 88 dirs, `lsof +D /tmp`, the two aborted-and-retried
+  `vitest run` logs, `lib/client-ip.ts:1-22`, `lib/rate-limit.ts:411`, `tests/unit/rate-limit.test.ts:308-311`,
+  `origin/main:tests/unit/rate-limit.test.ts` (confirms it is on main, not on a feature branch),
+  `.env.local:48`, `.github/workflows/ci.yml` (no `TRUST_PROXY`), `vitest.setup.ts:4-17`.
+  Related: **#2359**, **#2345**, **#96**, **PP-054** (signal that is not its name), **PP-052** (the
+  *other* disk, 290 GB free), **#77**, **#1249**, **#67** (harness false alarms).
 
 ## PP-057 — 🔧 The repo's only "what is applied?" command cannot see the ledger: `db:status` printed `Applied: 0 / Pending: <journal size>` against a database with **99 applied and 18 outstanding**, and `db:migrate --dry-run` prints `116 pending migration(s)` from the journal *before* it reads anything _(S2 · Migrations + tooling)_
 
