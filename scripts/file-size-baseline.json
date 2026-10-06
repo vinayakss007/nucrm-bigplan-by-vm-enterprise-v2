@@ -43,7 +43,6 @@
   "lib/db/rollback.ts": 531,
   "lib/dev-logger.ts": 572,
   "lib/email/service.ts": 537,
-  "lib/esignature.ts": 574,
   "lib/stripe.ts": 569,
   "lib/lead-warming/engine.ts": 714,
   "lib/lead-warming/reply-analyzer.ts": 559,
