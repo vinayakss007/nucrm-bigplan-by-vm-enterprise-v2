@@ -9,6 +9,7 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { concurrencyGuard } from '@/lib/api/concurrency';
 import { integrations } from '@/drizzle/schema';
+import { webhookQueue } from '@/drizzle/schema/support';
 import { eq, and, isNull } from 'drizzle-orm';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { updateWebhookSchema } from '@/lib/api/schemas';
@@ -55,9 +56,18 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params:
       }
     }
     
-    // Get existing webhook to merge config
+    // Get existing webhook to merge config.
+    // #2390: `isNull(deletedAt)` was missing here, so a tombstoned row was still
+    // readable and PATCHable — a deleted webhook could be brought back by
+    // flipping `is_active`, which is exactly the state the delivery paths below
+    // are written to refuse.
     const existing = await db.query.integrations.findFirst({
-      where: and(eq(integrations.id, id), eq(integrations.tenantId, ctx.tenantId), eq(integrations.type, 'webhook'))
+      where: and(
+        eq(integrations.id, id),
+        eq(integrations.tenantId, ctx.tenantId),
+        eq(integrations.type, 'webhook'),
+        isNull(integrations.deletedAt)
+      )
     });
     
     if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
@@ -84,7 +94,14 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params:
     const [row] = await db
       .update(integrations)
       .set(updateData)
-      .where(and(eq(integrations.id, id), eq(integrations.tenantId, ctx.tenantId), eq(integrations.type, 'webhook')))
+      .where(and(
+        eq(integrations.id, id),
+        eq(integrations.tenantId, ctx.tenantId),
+        eq(integrations.type, 'webhook'),
+        // The read above already 404s a tombstone; this closes the window
+        // between them, so a DELETE that lands mid-PATCH cannot be written back.
+        isNull(integrations.deletedAt)
+      ))
       .returning();
     
     if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
@@ -120,11 +137,51 @@ export const DELETE = withApiRoute(async (req: NextRequest, { params }: { params
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
     const { id } = await params;
 
-    await db.update(integrations)
-      .set({ deletedAt: new Date() })
-      .where(and(eq(integrations.id, id), eq(integrations.tenantId, ctx.tenantId), eq(integrations.type, 'webhook'), isNull(integrations.deletedAt)));
+    // #2390: tombstone + queue cleanup in one transaction.
+    //
+    // `webhook_queue.webhook_id … ON DELETE cascade` (drizzle/schema/support.ts)
+    // would retire these rows if deleting a webhook were a DELETE. It is an
+    // UPDATE of `deleted_at`, so the cascade never fires and every queued
+    // delivery outlived the webhook it belonged to. Only `failed` rows are
+    // drained: a `pending` row is either in flight right now — in which case its
+    // own completion write is the truth — or will never be sent, and the sweep
+    // already refuses to retry a row whose parent is gone.
+    const drained = await db.transaction(async (tx) => {
+      const [tombstone] = await tx.update(integrations)
+        .set({ deletedAt: new Date(), updatedAt: new Date() })
+        .where(and(
+          eq(integrations.id, id),
+          eq(integrations.tenantId, ctx.tenantId),
+          eq(integrations.type, 'webhook'),
+          isNull(integrations.deletedAt)
+        ))
+        .returning({ id: integrations.id });
 
-    return NextResponse.json({ ok: true });
+      if (!tombstone) return null;
+
+      const retired = await tx.update(webhookQueue)
+        .set({
+          status: 'dead_letter',
+          errorMessage: 'Webhook integration was deleted; the queued delivery was retired without sending',
+          nextRetryAt: null,
+        })
+        .where(and(
+          // Tenant-scoped on the write, not just the read: RLS must not be the
+          // only thing standing between this UPDATE and another tenant's rows.
+          eq(webhookQueue.tenantId, ctx.tenantId),
+          eq(webhookQueue.webhookId, id),
+          eq(webhookQueue.status, 'failed')
+        ))
+        .returning({ id: webhookQueue.id });
+
+      return retired.length;
+    });
+
+    if (drained === null) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
+
+    return NextResponse.json({ ok: true, retired_deliveries: drained });
  
  
   } catch (err) { return apiError(err); }

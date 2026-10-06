@@ -11,7 +11,7 @@ import { createWebhookSchema } from '@/lib/api/schemas';
 import { db } from '@/drizzle/db';
 import { integrations } from '@/drizzle/schema';
 import { webhookQueue } from '@/drizzle/schema/support';
-import { eq, and, desc, sql } from 'drizzle-orm';
+import { eq, and, desc, sql, isNull } from 'drizzle-orm';
 import { randomBytes } from 'crypto';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
@@ -29,7 +29,11 @@ export const GET = withApiRoute(async (req: NextRequest) => {
 
     const filters = [
       eq(integrations.tenantId, ctx.tenantId),
-      eq(integrations.type, 'webhook')
+      eq(integrations.type, 'webhook'),
+      // #2390: DELETE tombstones the row, so without this the list kept showing
+      // webhooks the tenant had removed — still reporting their delivered/failed
+      // counts, and still PATCHable back to life.
+      isNull(integrations.deletedAt)
     ];
     if (isActive !== null) {
       filters.push(eq(integrations.isActive, isActive === 'true'));
