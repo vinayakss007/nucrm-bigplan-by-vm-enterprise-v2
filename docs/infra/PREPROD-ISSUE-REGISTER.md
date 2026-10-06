@@ -2623,6 +2623,30 @@ moved the journal from 116 to 117, recorded below rather than back-patched into 
   stage). With no tenant GUC it returns 0. So `0115` is defence-in-depth for a topology where the view's
   owner and the caller differ (and for the day a reader role is added), not an emergency — which changes how
   the pending-18 decision should be prioritised, so it is stated here rather than left to the merge.
+- **Re-measured on `main` at `32d252b9` (2026-10-06): `db:status` → `ledger rows: 99 · Applied: 99 ·
+  Pending: 22 · Total: 121 journal entr(ies)`, exit 0, and the `Invisible:` section still prints nothing.**
+  Four entries joined since the `310129bf` measurement above: `0117_validate_fk_constraints` (#2370,
+  `a4cc5a57`), `0118_fk_column_indexes` (#2372, `cd86a8d4`), `0119_dedupe_check_constraints` (#2377,
+  `0a3171d3`) and `0120_sequence_enrollments_cancelled_status` (#2405, which *is* `32d252b9`). All four are
+  DDL only — `grep -cE '^\s*(insert|update|delete)\b'` returns **0** on each file, `guard:migration-rls` on
+  that tree counts **121 migration(s) · 202 tenant-scoped table(s) · 17 row-write offenders + 2
+  dynamic-target baselined** and reports no new ones, and `guard:chain` counts **121 up-file(s) · 121
+  journal entries · 0 defect(s)** — so the pile grew in count but not in kind. Running the same anchored test
+  over all **22** pending files finds exactly **two** with a top-level row write — `0109` (the guarded
+  backfill `UPDATE`) and `0114:56` — which are precisely the two PP-058 already names, and `0109` is still
+  the only file that calls `set_config('app.is_super_admin', …)`: PP-058 wrote "across all **119** migration
+  files", and re-checked at **121** up-files that conclusion is unchanged.
+- **Which makes five places in this file that state the backlog as a number nobody has since re-checked:**
+  PP-057's Summary row ("**99 applied and 18 outstanding**" and "applying the 18 is an **owner decision**"),
+  this entry's own heading (the same "18 outstanding"), the sentence directly above ("the pending-18
+  decision"), Exits (a) below ("**Apply the 18**"), and PP-058's heading + Summary row ("the pending
+  **21-entry** run cannot complete"). The *dated* re-measurements in this section stay exactly as written —
+  each names the tree it ran on, which is why `Pending: 17` on `673eecf2` and `Pending: 18` on `310129bf` are
+  still true sentences about past trees — but an undated count reads as a live fact and is now wrong by four.
+  **Read 22 as of `32d252b9`.** Nothing here is renumbered or back-patched: the Summary-row edit belongs to
+  the deferred follow-up (**Task:** #110), which already has to touch that row and should carry whatever
+  `db:status` reports the day it lands rather than this number too. The durable exit is not another count in
+  prose — `db:status` is honest now, and what is missing is the owner decision that drains it.
 - **Exits, none taken by this PR:**
   (a) **Apply the 18** — `db:migrate` from inside the app container (or with `PROBE_DATABASE_URL` as the
   write target, which is the owner's call), `--dry-run` first; `0113`/`0114` take DDL locks and `0114` is a
