@@ -73,16 +73,22 @@
  *
  * Known offenders are baselined — the ratchet pattern used by `guard:filesize`
  * and `guard:chain` — so this can be wired into CI today. Fixing one prints a
- * hint to shrink the baseline.
+ * hint to shrink the baseline. The ratchet is *file*-granular: an entry
+ * already in the baseline may change its write set without failing, so this
+ * stops new offenders from appearing, it does not police the existing 19.
  *
  * Regenerate after a deliberate repair:
  *   node scripts/check-migration-rls-dml.mjs --update
+ *
+ * `--migrations-dir <path>` and `--baseline <path>` exist so the exit-code
+ * contract can be exercised against fixtures rather than only the real tree;
+ * `tests/unit/migration-rls-dml-guard.test.ts` uses them for exactly that.
  */
 import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-const MIGRATIONS_DIR = 'drizzle/migrations';
-const BASELINE_PATH = 'scripts/migration-rls-dml-baseline.json';
+const DEFAULT_MIGRATIONS_DIR = 'drizzle/migrations';
+const DEFAULT_BASELINE_PATH = 'scripts/migration-rls-dml-baseline.json';
 const MITIGATION = /set_config\(\s*'app\.is_super_admin'/i;
 
 /** Strip block and line comments so prose in a migration header cannot match a rule. */
@@ -162,6 +168,52 @@ export function policyStatements(sql) {
   return out;
 }
 
+/**
+ * The column list of the `(` at `open`, up to its matching `)`, with
+ * single-quoted literals skipped (`''` is an escaped quote). Depth counting
+ * rather than a lazy `\)...` regex, because a body legitimately contains
+ * parens — `numeric(19,2)`, `CHECK (x > 0)` — and a lazy match would end at the
+ * first one and silently drop whatever came after it.
+ */
+function readBalancedParens(sql, open) {
+  let depth = 0;
+  let inString = false;
+  for (let i = open; i < sql.length; i++) {
+    const c = sql[i];
+    if (inString) {
+      if (c === "'") {
+        if (sql[i + 1] === "'") i++;
+        else inString = false;
+      }
+      continue;
+    }
+    if (c === "'") inString = true;
+    else if (c === '(') depth++;
+    else if (c === ')') {
+      depth--;
+      if (depth === 0) return sql.slice(open + 1, i);
+    }
+  }
+  return null; // unbalanced — caller treats it as "nothing derived", never as a match
+}
+
+/**
+ * `CREATE TABLE` bodies that declare a `tenant_id` column. Input must already
+ * be comment-stripped (as `collectTenantScoped` does): an unmatched paren in a
+ * comment would throw the depth scan off, in both directions.
+ */
+export function createTableTenantNames(sql) {
+  const out = new Set();
+  const re = /CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:"?[\w]+"?\.)?"?([a-z_][a-z0-9_]*)"?\s*\(/gi;
+  for (const m of sql.matchAll(re)) {
+    // `matchAll` iterates a *clone* of the regex, so `re.lastIndex` never moves
+    // — the opening paren is at the end of the match itself.
+    const body = readBalancedParens(sql, m.index + m[0].length - 1);
+    if (body !== null && /\btenant_id\b/i.test(body)) out.add(m[1]);
+  }
+  return out;
+}
+
 /** Tables the migration history itself declares tenant-scoped. */
 export function collectTenantScoped(sqlOfAllFiles) {
   const byPolicy = new Set();
@@ -170,9 +222,7 @@ export function collectTenantScoped(sqlOfAllFiles) {
     for (const [table, stmt] of policyStatements(sql)) {
       if (/current_setting\(\s*'app\.current_tenant'/i.test(stmt)) byPolicy.add(table);
     }
-    for (const m of sql.matchAll(/CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:[\w.]+\.)?"?([a-z_][a-z0-9_]*)"?\s*\(([\s\S]*?)\n\)/gi)) {
-      if (/\btenant_id\b/i.test(m[2])) byColumn.add(m[1]);
-    }
+    for (const table of createTableTenantNames(sql)) byColumn.add(table);
     for (const m of sql.matchAll(/ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?:[\w.]+\.)?"?([a-z_][a-z0-9_]*)"?\s+ADD\s+COLUMN\s+"?tenant_id"?/gi)) {
       byColumn.add(m[1]);
     }
@@ -207,11 +257,11 @@ export function analyzeFile(rawSql, tenantScoped) {
   return { mitigated, writes, tenantWrites, dynamic, dynamicOverTenantTable };
 }
 
-function collect() {
-  const names = readdirSync(MIGRATIONS_DIR)
+function collect(migrationsDir) {
+  const names = readdirSync(migrationsDir)
     .filter((f) => f.endsWith('.sql') && !f.endsWith('.down.sql'))
     .sort();
-  const rawOf = names.map((f) => readFileSync(`${MIGRATIONS_DIR}/${f}`, 'utf8'));
+  const rawOf = names.map((f) => readFileSync(`${migrationsDir}/${f}`, 'utf8'));
   const { byPolicy, byColumn, tenantScoped } = collectTenantScoped(rawOf);
 
   const violations = { atRisk: [], dynamicTarget: [] };
@@ -241,8 +291,23 @@ function collect() {
 
 const KINDS = ['atRisk', 'dynamicTarget'];
 
+// `--migrations-dir` / `--baseline` exist so the CLI contract — exit 0 clean,
+// exit 1 on a new offender, exit 0 once mitigated — is testable against
+// fixtures instead of only against the 120 real files.
+function resolvePaths(argv) {
+  const flag = (name) => {
+    const i = argv.indexOf(name);
+    return i >= 0 && argv[i + 1] ? argv[i + 1] : undefined;
+  };
+  return {
+    migrationsDir: flag('--migrations-dir') ?? DEFAULT_MIGRATIONS_DIR,
+    baselinePath: flag('--baseline') ?? DEFAULT_BASELINE_PATH,
+  };
+}
+
 function main() {
-  const { counts, violations } = collect();
+  const { migrationsDir, baselinePath } = resolvePaths(process.argv);
+  const { counts, violations } = collect(migrationsDir);
   const flat = KINDS.flatMap((k) => violations[k]);
 
   if (process.argv.includes('--update')) {
@@ -251,16 +316,16 @@ function main() {
       counts,
       violations,
     };
-    writeFileSync(BASELINE_PATH, JSON.stringify(body, null, 2) + '\n');
+    writeFileSync(baselinePath, JSON.stringify(body, null, 2) + '\n');
     console.log(`[check-migration-rls-dml] baseline written with ${flat.length} known offender(s)`);
     return;
   }
 
   let baseline;
   try {
-    baseline = JSON.parse(readFileSync(BASELINE_PATH, 'utf8'));
+    baseline = JSON.parse(readFileSync(baselinePath, 'utf8'));
   } catch {
-    console.error(`[check-migration-rls-dml] no baseline at ${BASELINE_PATH} — run: node scripts/check-migration-rls-dml.mjs --update`);
+    console.error(`[check-migration-rls-dml] no baseline at ${baselinePath} — run: node scripts/check-migration-rls-dml.mjs --update`);
     process.exit(1);
   }
 

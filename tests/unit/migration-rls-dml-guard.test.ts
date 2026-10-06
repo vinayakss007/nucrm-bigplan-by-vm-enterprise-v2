@@ -20,16 +20,26 @@
  *     union ever degrades to policy-only, PP-058's own case goes blind;
  *   - `analyzeFile` flags an un-mitigated tenant write, honours the
  *     `app.is_super_admin` GUC that `0109` uses, and does not claim a dynamic
- *     `EXECUTE format('UPDATE %I …')` is clean.
+ *     `EXECUTE format('UPDATE %I …')` is clean;
+ *   - `createTableTenantNames` must not let *formatting* decide safety. The
+ *     first version required the closing paren on its own line, so a compact
+ *     `CREATE TABLE … tenant_id …);` was never derived as tenant-scoped — the
+ *     guard's blind spot was the rule itself;
+ *   - the CLI's exit codes, because that is the whole CI contract: 0 clean, 1
+ *     on a new offender (naming it), 0 once the GUC is set, 1 rather than a
+ *     silent pass when the baseline is missing.
  */
-import { describe, it, expect } from 'vitest';
-import { readFileSync, readdirSync } from 'node:fs';
+import { describe, it, expect, afterAll } from 'vitest';
+import { readFileSync, readdirSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { spawnSync } from 'node:child_process';
 
 import {
   stripComments,
   executableScope,
   collectTenantScoped,
+  createTableTenantNames,
   analyzeFile,
 } from '../../scripts/check-migration-rls-dml.mjs';
 
@@ -227,5 +237,131 @@ describe('analyzeFile', () => {
       'utf8',
     );
     expect(analyzeFile(raw, derived.tenantScoped).mitigated).toBe(true);
+  });
+});
+
+describe('createTableTenantNames — formatting must not decide safety', () => {
+  // The first version of this rule required the closing paren to sit on its own
+  // line (`…\n)`), which silently missed any CREATE TABLE written on one line.
+  // The blind spot was the rule itself: a new tenant table declared compactly
+  // would never enter the tenant-scoped set, so a write into it passed CI.
+  it('catches a single-line CREATE TABLE', () => {
+    expect([...createTableTenantNames('CREATE TABLE leads (id uuid, tenant_id uuid NOT NULL);')])
+      .toEqual(['leads']);
+  });
+
+  it('still sees tenant_id that follows a parenthesised type', () => {
+    const sql = 'CREATE TABLE invoices (id uuid, amount numeric(19,2), tenant_id uuid);';
+    expect([...createTableTenantNames(sql)]).toEqual(['invoices']);
+  });
+
+  it('does not end the body at a paren inside a string literal', () => {
+    const sql = "CREATE TABLE t1 (id uuid, note text DEFAULT 'a)b', tenant_id uuid);";
+    expect([...createTableTenantNames(sql)]).toEqual(['t1']);
+  });
+
+  it('derives nothing from an unbalanced body rather than guessing one', () => {
+    expect([...createTableTenantNames('CREATE TABLE broken (id uuid, tenant_id uuid')]).toEqual([]);
+  });
+
+  it('is not thrown off by a paren inside a comment', () => {
+    // The depth scan runs on comment-stripped SQL. If that ever stops being
+    // true, an unmatched `(` in prose would swallow the real column list.
+    const sql = 'CREATE TABLE leads ( -- note the (\n  id uuid,\n  tenant_id uuid\n);\n';
+    expect([...createTableTenantNames(stripComments(sql))]).toEqual(['leads']);
+    expect(collectTenantScoped([sql, 'CREATE POLICY p ON deal_stages USING (current_setting(\'app.current_tenant\', true)) = id;'])
+      .byColumn.has('leads')).toBe(true);
+  });
+
+  it('does not claim a table is tenant-scoped because its neighbours are', () => {
+    // Pins the offset bug: reading each body from the wrong index made `tenants`
+    // and `users` — neither of which has a tenant_id column or a
+    // `app.current_tenant` policy — look tenant-scoped, and a phantom
+    // `atRisk:0035|update:tenants` appeared.
+    expect(derived.byColumn.has('tenants')).toBe(false);
+    expect(derived.byColumn.has('users')).toBe(false);
+    expect(derived.tenantScoped.has('tenants')).toBe(derived.byPolicy.has('tenants'));
+  });
+
+  it('reads the tab-indented quoted tables of the real 0000_init', () => {
+    const raw = readFileSync(join(MIGRATIONS_DIR, '0000_init.sql'), 'utf8');
+    const names = createTableTenantNames(stripComments(raw));
+    expect(names.has('leads')).toBe(true);
+    expect(names.has('tenants')).toBe(false);
+  });
+});
+
+describe('CLI exit codes — the contract CI depends on', () => {
+  const GUARD = join(ROOT, 'scripts', 'check-migration-rls-dml.mjs');
+  const TABLE = 'CREATE TABLE leads (id uuid, tenant_id uuid NOT NULL);\n';
+  const OFFENDER = 'UPDATE leads SET lead_oid = lower(lead_oid) WHERE lead_oid IS NULL;\n';
+  const dirs: string[] = [];
+
+  function fixture(files: Record<string, string>) {
+    const dir = mkdtempSync(join(tmpdir(), 'migration-rls-guard-'));
+    dirs.push(dir);
+    const mig = join(dir, 'migrations');
+    mkdirSync(mig, { recursive: true });
+    for (const [name, body] of Object.entries(files)) writeFileSync(join(mig, name), body);
+    return { mig, baseline: join(dir, 'baseline.json') };
+  }
+
+  function run(mig: string, baseline: string, extra: string[] = []) {
+    return spawnSync(
+      process.execPath,
+      [GUARD, '--migrations-dir', mig, '--baseline', baseline, ...extra],
+      { encoding: 'utf8' },
+    );
+  }
+
+  afterAll(() => {
+    for (const dir of dirs) rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('passes a tree with no tenant write', () => {
+    const { mig, baseline } = fixture({ '0001_a.sql': TABLE, '0002_b.sql': 'CREATE INDEX i ON leads (id);' });
+    writeFileSync(baseline, JSON.stringify({ counts: {}, violations: { atRisk: [], dynamicTarget: [] } }));
+    const r = run(mig, baseline);
+    expect(r.status, r.stderr).toBe(0);
+    expect(r.stdout).toContain('no new RLS-blind writes');
+  });
+
+  it('fails on a new RLS-blind write, names it and says how to fix it', () => {
+    const { mig, baseline } = fixture({ '0001_a.sql': TABLE, '0002_bad.sql': OFFENDER });
+    writeFileSync(baseline, JSON.stringify({ counts: {}, violations: { atRisk: [], dynamicTarget: [] } }));
+    const r = run(mig, baseline);
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain('atRisk:0002_bad|update:leads');
+    expect(r.stderr).toContain('set_config');
+  });
+
+  it('passes the same write once it sets the transaction-local GUC', () => {
+    const mitigated = 'DO $$\nBEGIN\n'
+      + "  PERFORM set_config('app.is_super_admin', 'true', true);\n"
+      + `  ${OFFENDER}END $$;\n`;
+    const { mig, baseline } = fixture({ '0001_a.sql': TABLE, '0002_ok.sql': mitigated });
+    writeFileSync(baseline, JSON.stringify({ counts: {}, violations: { atRisk: [], dynamicTarget: [] } }));
+    const r = run(mig, baseline);
+    expect(r.status, r.stderr).toBe(0);
+  });
+
+  it('baselines an offender under --update, then reports it healed when it is fixed', () => {
+    const files = { '0001_a.sql': TABLE, '0002_bad.sql': OFFENDER };
+    const { mig, baseline } = fixture(files);
+    expect(run(mig, baseline, ['--update']).status).toBe(0);
+    expect(JSON.parse(readFileSync(baseline, 'utf8')).violations.atRisk).toEqual(['atRisk:0002_bad|update:leads']);
+    expect(run(mig, baseline).status).toBe(0);
+
+    writeFileSync(join(mig, '0002_bad.sql'), 'CREATE INDEX i2 ON leads (lead_oid);\n');
+    const healed = run(mig, baseline);
+    expect(healed.status).toBe(0);
+    expect(healed.stdout).toContain('baselined offender(s) are gone');
+  });
+
+  it('fails loudly rather than silently passing when the baseline is missing', () => {
+    const { mig, baseline } = fixture({ '0001_a.sql': TABLE });
+    const r = run(mig, baseline);
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain('no baseline at');
   });
 });
