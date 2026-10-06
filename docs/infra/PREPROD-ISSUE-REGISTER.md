@@ -2747,9 +2747,12 @@ moved the journal from 116 to 117, recorded below rather than back-patched into 
   `rls_forced=true`, `owner=nucrm`, `rolsuper=false`, `rolbypassrls=false`); the full force-isolation census by
   intersecting table names extracted from the 21 pending files against all 226 `pg_class` rows in `public`
   (`--max-rows 500` — **the first run silently returned 50 of 226 while `rowCount` said 226**, so `leads` and
-  `invoices` were simply absent and the intersection reported "12 tables, 11 forced". The tool that hides a
-  truncation behind a correct `rowCount` is the same failure shape as PP-057's `db:status`; the 48/49 figure is
-  from the corrected run); the `0114` CTE in both contexts
+  `invoices` were simply absent from the truncated set and the intersection reported "12 tables, 11 forced".
+  This is a defect in the probe itself, not operator error: `scripts/probe-sql.mts:113` slices to `maxRows`, the
+  JSON branch at `:118-120` emits that slice next to the *untruncated* `rowCount` and sets no `truncated` flag,
+  while only the text branch prints the honest `-- N row(s), M shown` line (`:135`). A `--json` consumer —
+  which is exactly what `jq` and every scripted check use — therefore cannot tell a census from a prefix. The
+  48/49 figure is from the corrected run); the `0114` CTE in both contexts
   (table above); `leads_dup_tenant_oid=1`/`invoices_dup_quote=0`/`webhook_events_null_created_at=0` and the five
   `0107` NULL-tenant counts, all under `--superadmin` so a 0 cannot be RLS masquerading as emptiness — the
   standing lesson of **#51**, **#78** and **PP-048**. `grep -c set_config` over `drizzle/migrations/*.sql` →
