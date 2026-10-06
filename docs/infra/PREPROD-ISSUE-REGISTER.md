@@ -76,7 +76,7 @@ Severity: **S1** blocks go-live · **S2** broken feature or security weakness ·
 | PP-054 | S3  | Sentry + observability      | NUCRM-3J (`analytics_events` 42501) has been fixed and live since PR #2162, yet the watchdog filed it "NEW" on 2026-10-04 — because `NEW` means "rotated into the top-25-by-date list", not "new failure", and `events=` is a cumulative count                                                                | 🚨 OPEN · watchdog semantics + two side findings (`error_logs` empty all-time, INSERT…RETURNING refused) |
 | PP-055 | S2  | Backup + restore            | The pre-restore wipe deletes **six tables the import allowlist refuses to re-insert**, so `POST /api/admin/tenant-restore` deletes a tenant's rows, hits `Table 'pipelines' is not allowed for import`, and rolls the whole restore back — permanently, for 177 of 183 tenants | 🔧 FIXED (wipe-side), PR **#2354** · the two divergent allowlists stay an owner decision (#79, #90) |
 | PP-057 | S2  | Migrations + tooling        | The repo has exactly one "what is applied?" command and it cannot see the ledger: `db:status` queries `__drizzle_migrations(name, applied_at)` — no such table, no such columns — and maps **any** failure to "history table does not exist", so against preprod it printed **`Applied: 0 / Pending: <every journal entry>`** on a database with **99 applied and 18 outstanding**. `db:migrate --dry-run` compounds it: its first line counts journal entries (**`116 pending migration(s)`**) before reading anything, and that number is what the y/N apply prompt offers. Nothing in CI or the runbooks would ever have revealed the 18-behind state, which includes `0091` (the usage-snapshot bypass **#56** shipped), `0059` (**#74**'s still-unstamped entry) and now `0116` (**#2367**, merged while this PR was open) | 🔧 SCRIPTS FIXED in this PR (verified 99/18 against two instruments) · applying the 18 is an **owner decision** · also measured: `0115`'s absence is **not** a live cross-tenant read |
-| PP-058 | S2  | Migrations + tooling        | `db:migrate` connects as the tables' **owner** (`nucrm`) with `FORCE ROW LEVEL SECURITY` active on 17 of the 18 tables the pending set touches, and `scripts/migrate.ts:184` sets **no tenant GUC** — so every data-correcting statement in a migration matches **0 rows** and silently corrects nothing, while the DDL built on top of it (`CREATE UNIQUE INDEX`, `SET NOT NULL`) reads the whole heap regardless. Measured on preprod: `0114_leads_tenant_oid_unique` (pending) dedupes `(tenant_id, lead_oid)` before creating the unique index, but its own CTE sees 0 of 25 leads while the truth is **1 duplicate group / 5 rows / 4 losers** (all five soft-deleted, all nine days older than the header's own "measured 0"), so the pending 21-entry run **aborts on 23505** — the exact failure its header says the dedupe exists to prevent | 🚨 OPEN · owner decision · no historical damage demonstrated · `0109` already proves the fix is one `set_config` line |
+| PP-058 | S2  | Migrations + tooling        | `db:migrate` connects as the tables' **owner** (`nucrm`) with `FORCE ROW LEVEL SECURITY` active on 48 of the 49 tables the pending set names, and `scripts/migrate.ts:184` sets **no tenant GUC** — so every data-correcting statement in a migration matches **0 rows** and silently corrects nothing, while the DDL built on top of it (`CREATE UNIQUE INDEX`, `SET NOT NULL`) reads the whole heap regardless. Measured on preprod: `0114_leads_tenant_oid_unique` (pending) dedupes `(tenant_id, lead_oid)` before creating the unique index, but its own CTE sees 0 of 25 leads while the truth is **1 duplicate group / 5 rows / 4 losers** (all five soft-deleted, all nine days older than the header's own "measured 0"), so the pending 21-entry run **aborts on 23505** — the exact failure its header says the dedupe exists to prevent | 🚨 OPEN · owner decision · no historical damage demonstrated · `0109` already proves the fix is one `set_config` line |
 
 ## Sentry issues → register entries
 
@@ -2662,8 +2662,10 @@ moved the journal from 116 to 117, recorded below rather than back-patched into 
   and `webhook_events` — table owners **bypass RLS unless `FORCE ROW LEVEL SECURITY` is set**, and on these
   tables `relforcerowsecurity=true`, each with a `tenant_isolation` policy keyed on
   `NULLIF(current_setting('app.current_tenant'),'')::uuid`. With the GUC unset it reads `''` (no error), so the
-  predicate is false for every row and the statement affects **0 rows without raising anything**. 17 of the 18
-  tables the pending set touches are force-isolated; `ai_providers` is the single exception (RLS off, 0 policies).
+  predicate is false for every row and the statement affects **0 rows without raising anything**. The scope is
+  near-total: intersecting the table names appearing in the 21 pending files against `pg_class` yields **49
+  distinct real tables**, of which **48 have `relforcerowsecurity=true`** — `ai_providers` is the sole exception
+  (RLS off, 0 policies).
 - **Why that split is the bug class, not just an inconvenience.** RLS filters **DML**, not **DDL**.
   `CREATE UNIQUE INDEX` reads the whole heap and is not policy-filtered, and neither is
   `ALTER TABLE … SET NOT NULL`. So a migration of the shape *"repair the rows, then constrain them"* runs its
@@ -2742,7 +2744,12 @@ moved the journal from 116 to 117, recorded below rather than back-patched into 
   same is true of `0111`, which contains no row DML at all. Naming a migration after the repair it performs is
   not evidence that it performs it.
 - **Verified:** `pg_class`/`pg_roles` posture for `leads`/`invoices`/`webhook_events` (all `rls_enabled=true`,
-  `rls_forced=true`, `owner=nucrm`, `rolsuper=false`, `rolbypassrls=false`); the `0114` CTE in both contexts
+  `rls_forced=true`, `owner=nucrm`, `rolsuper=false`, `rolbypassrls=false`); the full force-isolation census by
+  intersecting table names extracted from the 21 pending files against all 226 `pg_class` rows in `public`
+  (`--max-rows 500` — **the first run silently returned 50 of 226 while `rowCount` said 226**, so `leads` and
+  `invoices` were simply absent and the intersection reported "12 tables, 11 forced". The tool that hides a
+  truncation behind a correct `rowCount` is the same failure shape as PP-057's `db:status`; the 48/49 figure is
+  from the corrected run); the `0114` CTE in both contexts
   (table above); `leads_dup_tenant_oid=1`/`invoices_dup_quote=0`/`webhook_events_null_created_at=0` and the five
   `0107` NULL-tenant counts, all under `--superadmin` so a 0 cannot be RLS masquerading as emptiness — the
   standing lesson of **#51**, **#78** and **PP-048**. `grep -c set_config` over `drizzle/migrations/*.sql` →
