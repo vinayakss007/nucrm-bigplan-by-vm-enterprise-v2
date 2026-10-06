@@ -5,11 +5,24 @@ const mockTxValues = vi.fn(() => ({ returning: mockTxReturning }));
 const mockTxInsert = vi.fn(() => ({ values: mockTxValues }));
 const mockTxUpdate = vi.fn(() => ({ set: vi.fn(() => ({ where: vi.fn() })) }));
 
+// #2380: getInternalSigningByToken now requires the signer link's document to
+// be live (documents.deleted_at IS NULL). Default to live so the pre-existing
+// internal-flow tests keep testing the flow; the deleted case is covered in
+// tests/unit/esignature-deleted-document-2380.test.ts.
+const mockLiveDocuments = { current: [{ id: 'doc-live' }] as unknown[] };
+
 vi.mock('@/drizzle/db', () => ({
   db: {
     insert: vi.fn(),
     update: vi.fn(),
-    select: vi.fn(() => ({ from: vi.fn(() => ({ where: vi.fn(() => ({ orderBy: vi.fn(async () => []) })) })) })),
+    select: vi.fn(() => ({
+      from: vi.fn(() => ({
+        where: vi.fn(() => ({
+          orderBy: vi.fn(async () => []),
+          limit: vi.fn(async () => mockLiveDocuments.current),
+        })),
+      })),
+    })),
     query: {
       signingRequests: { findFirst: vi.fn(), findMany: vi.fn() },
       signingEvents: { findFirst: vi.fn() },
@@ -18,6 +31,10 @@ vi.mock('@/drizzle/db', () => ({
       return await cb({ insert: mockTxInsert, update: mockTxUpdate });
     }),
   },
+}));
+
+vi.mock('@/drizzle/schema/documents', () => ({
+  documents: { id: 'id', deletedAt: 'deleted_at' },
 }));
 
 vi.mock('@/drizzle/schema/esignature', () => ({
@@ -30,6 +47,10 @@ vi.mock('drizzle-orm', () => ({
   eq: vi.fn((...args: any[]) => ['eq', ...args]),
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
   and: vi.fn((...args: any[]) => ['and', ...args]),
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+  asc: vi.fn((...args: any[]) => ['asc', ...args]),
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+  isNull: vi.fn((...args: any[]) => ['isNull', ...args]),
   sql: vi.fn(),
 }));
 
