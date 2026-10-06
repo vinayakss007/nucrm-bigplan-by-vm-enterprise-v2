@@ -1,83 +1,154 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { join } from 'path';
+import YAML from 'yaml';
 
 /**
- * CI guard for Issue #2233 (HIGH): the deploy workflow never ran DB
- * migrations and rollback was code-only, so a migration+code PR shipped new
- * code against an unmigrated schema (health gate blind to new columns) and a
- * rollback left old code on the new schema.
+ * CI guard for Issue #2233 (HIGH) and its follow-up.
  *
- * deploy.yml must now: snapshot the applied migration list, take a
- * schema-only restore point (and REFUSE to migrate without one), run
- * db:migrate between checkout/RLS-gate and build, un-apply exactly what the
- * deploy added when migration fails (before any restart), and un-apply the
- * same set when the health gate fails the rollback.
+ * #2233: the deploy workflow never ran DB migrations, so a migration+code PR
+ * shipped new code against an unmigrated schema while the health gate stayed
+ * green. PR #2376 fixed that by writing ~70 lines of bash into the SSH heredoc:
+ * it scraped `rollback-migration.ts --list` stdout with awk, parsed
+ * .env.local with an inline node regex, dumped a schema restore point into
+ * /tmp and pruned it with `ls -t | tail -n +11 | xargs rm -f`, guessed the
+ * container topology with `docker exec nucrm-db`, and un-applied migrations on
+ * failure despite .kiro/steering/global-standards.md §6.3 ("forward-only,
+ * rollbacks are separate scripts").
+ *
+ * That logic now lives in scripts/deploy-migrate.ts + lib/db/deploy-migration-
+ * run.ts, where it is type-checked and behaviour-tested
+ * (tests/unit/deploy-migration-run.test.ts). What THIS file pins is the
+ * workflow's side of the deal: it delegates, it gates, and it contains none of
+ * the inline shell that made the old version untestable — in particular no
+ * command that deletes a backup or restore point.
  */
 
-const WF = readFileSync(join(import.meta.dirname!, '..', '..', '.github/workflows/deploy.yml'), 'utf8');
+const ROOT = join(import.meta.dirname!, '..', '..');
+const WF = readFileSync(join(ROOT, '.github/workflows/deploy.yml'), 'utf8');
+const BACKUP_SCRIPT = readFileSync(join(ROOT, 'scripts', 'backup-db.ts'), 'utf8');
 
-describe('deploy.yml runs migrations + schema-aware rollback (#2233)', () => {
-  it('snapshots applied migrations before migrating (rollback-migration --list)', () => {
-    expect(WF).toMatch(/list_applied\(\)/);
-    expect(WF).toContain('scripts/rollback-migration.ts --list');
-    expect(WF).toContain('PRE_APPLIED=$(list_applied)');
-    expect(WF).toContain('POST_APPLIED=$(list_applied)');
-    // diff of sorted lists, newest first for un-apply order
-    expect(WF).toContain('comm -13 <(echo "$PRE_APPLIED" | sort) <(echo "$POST_APPLIED" | sort) | sort -r');
+/**
+ * WF with comment lines removed. The prose in deploy.yml deliberately names the
+ * techniques this test forbids (`awk`, `ls -t`, un-apply) so the next reader
+ * knows why they are gone — so the negative pins run against the commands that
+ * actually execute, never against the explanation of them.
+ */
+const WF_CODE = WF
+  .split('\n')
+  .filter((line) => !/^\s*#/.test(line))
+  .join('\n');
+
+describe('deploy.yml delegates migration to the tested script (#2233)', () => {
+  it('calls scripts/deploy-migrate.ts --yes through the sanctioned env preload', () => {
+    expect(WF).toContain('npx tsx --import ./scripts/load-env.mjs scripts/deploy-migrate.ts --yes');
+    // DEPLOY_SHA is passed so the restore point names the commit it protects.
+    expect(WF).toMatch(/DEPLOY_SHA="\$SHA" npx tsx/);
   });
 
-  it('takes a schema-only restore point and refuses to migrate without it', () => {
-    expect(WF).toMatch(/pg_dump --schema-only --no-privileges --no-owner/);
-    expect(WF).toContain('schema-pre-');
-    expect(WF).toContain('refusing to migrate without a restore point (#2233)');
-    // host pg_dump OR the container's matching client, never neither
-    expect(WF).toContain('command -v pg_dump');
-    expect(WF).toContain('docker exec nucrm-db pg_dump');
-    // retention: keep the last 10 restore points
-    expect(WF).toContain('tail -n +11 | xargs -r rm -f');
-  });
-
-  it('runs db:migrate non-interactively between the RLS gate and the build', () => {
+  it('migrates after the RLS role gate and before the build or any restart', () => {
     const rls = WF.indexOf('DB role is RLS-constrained');
-    const migrate = WF.indexOf('scripts/migrate.ts --yes');
+    const migrate = WF.indexOf('scripts/deploy-migrate.ts --yes');
     const build = WF.indexOf('NODE_OPTIONS="--max-old-space-size=8192" npm run build');
+    const firstGate = WF.indexOf('if deploy_all_and_wait; then');
+
     expect(rls).toBeGreaterThan(-1);
     expect(migrate).toBeGreaterThan(rls);
     expect(migrate).toBeLessThan(build);
-    expect(WF).toContain('npx tsx --import ./scripts/load-env.mjs scripts/migrate.ts --yes');
+    expect(migrate).toBeLessThan(firstGate);
   });
 
-  it('migration failure un-applies only this deploy\'s tags and aborts before restart', () => {
-    const failBlock = WF.slice(
-      WF.indexOf('ERROR: migration failed'),
-      WF.indexOf('echo "Building..."'),
+  it('a non-zero migrate exit aborts before anything is built or restarted', () => {
+    const block = WF.slice(
+      WF.indexOf('scripts/deploy-migrate.ts --yes'),
+      WF.indexOf('echo "Schema is current'),
     );
-    expect(failBlock).toContain('for TAG in $(comm -13');
-    expect(failBlock).toMatch(/rollback-migration\.ts "\$TAG" --yes/);
-    expect(failBlock).toContain('exit 1');
-    expect(failBlock).not.toContain('deploy_all_and_wait');
-    expect(failBlock).not.toContain('pm2 restart');
-  });
-
-  it('health-gate rollback path un-applies APPLIED_NOW newest-first', () => {
-    const rb = WF.slice(WF.indexOf('ERROR: app did not become healthy'));
-    expect(rb).toContain('git checkout --force "$SHA"^');
-    expect(rb).toContain('for TAG in $APPLIED_NOW');
-    expect(rb).toMatch(/rollback-migration\.ts "\$TAG" --yes/);
-    expect(rb).toContain('(deploy was unhealthy)');
-  });
-
-  it('every DB-touching CLI call loads env via the sanctioned preload', () => {
-    const calls = WF.match(/npx tsx [^\n]*scripts\/(migrate|rollback-migration)\.ts[^\n]*/g) ?? [];
-    expect(calls.length).toBeGreaterThanOrEqual(3);
-    for (const c of calls) expect(c).toContain('--import ./scripts/load-env.mjs');
+    expect(block).toContain('exit 1');
+    expect(block).not.toContain('deploy_all_and_wait');
+    expect(block).not.toContain('pm2 restart');
   });
 
   it('keeps prior deploy wiring intact (RLS gate, #2300 all-apps, #2273 probe)', () => {
-    expect(WF).toContain('check-db-role-privileges.mjs');
-    expect(WF).toContain('BG_APPS="worker cron"');
-    expect(WF).toContain('dev_server_exposed()');
-    expect((WF.match(/if deploy_all_and_wait; then/g) || []).length).toBe(2);
+    expect(WF_CODE).toContain('check-db-role-privileges.mjs');
+    expect(WF_CODE).toContain('BG_APPS="worker cron"');
+    expect(WF_CODE).toContain('dev_server_exposed(');
+    expect((WF_CODE.match(/if deploy_all_and_wait; then/g) || []).length).toBe(2);
+  });
+
+  it('is still valid YAML and the deploy step still carries the script', () => {
+    const doc = YAML.parse(WF);
+    const step = doc.jobs.deploy.steps.find(
+      (s: { name?: string }) => s?.name === 'Deploy via SSH',
+    );
+    expect(step.with.script).toContain('scripts/deploy-migrate.ts --yes');
+    expect(typeof step.with.command_timeout).toBe('string');
+  });
+});
+
+describe('deploy.yml contains no inline DB plumbing (#2233 follow-up)', () => {
+  // Each of these was present in the #2376 heredoc and is now either a typed
+  // call in lib/db/deploy-migration-run.ts or gone entirely.
+  it('never scrapes human-readable CLI output for state', () => {
+    expect(WF_CODE).not.toMatch(/\bawk\b/);
+    expect(WF_CODE).not.toContain('comm -13');
+    expect(WF_CODE).not.toMatch(/rollback-migration\.ts --list/);
+  });
+
+  it('never re-parses .env.local for DATABASE_URL', () => {
+    expect(WF_CODE).not.toMatch(/node -e .*DATABASE_URL/);
+    expect(WF_CODE).not.toContain('readFileSync(".env.local"');
+  });
+
+  it('never runs pg_dump itself, on the host or via a guessed container', () => {
+    expect(WF_CODE).not.toContain('pg_dump');
+    expect(WF_CODE).not.toMatch(/docker exec \S+ pg_dump/);
+  });
+
+  it('never calls migrate.ts or rollback-migration.ts directly — the script owns both', () => {
+    expect(WF_CODE).not.toMatch(/npx tsx[^\n]*scripts\/migrate\.ts/);
+    expect(WF_CODE).not.toMatch(/scripts\/rollback-migration\.ts/);
+  });
+
+  it('is forward-only: no automatic un-apply anywhere in the workflow (§6.3)', () => {
+    const rollbackPath = WF_CODE.slice(WF_CODE.indexOf('ERROR: app did not become healthy'));
+    expect(rollbackPath).toContain('git checkout --force "$SHA"^');
+    expect(rollbackPath).not.toMatch(/for TAG in/);
+    expect(rollbackPath).not.toMatch(/rollback-migration/);
+    // The intent is documented, not merely implied by the absence.
+    expect(WF).toMatch(/Rollback is CODE-ONLY/);
+    expect(WF).toMatch(/forward-only/i);
+  });
+});
+
+describe('backup deletion policy (#2233 follow-up)', () => {
+  it('the deploy workflow deletes no backup or restore point', () => {
+    expect(WF_CODE).not.toMatch(/xargs -r rm/);
+    expect(WF_CODE).not.toMatch(/rm -f[^\n]*(schema-pre|backup|restore)/);
+    expect(WF_CODE).not.toMatch(/ls -t/);
+  });
+
+  it('the nightly backup script creates and uploads; it never unlinks', () => {
+    expect(BACKUP_SCRIPT).not.toContain('unlinkSync');
+    expect(BACKUP_SCRIPT).not.toContain('deleteOldBackups');
+    expect(BACKUP_SCRIPT).toMatch(/never deleted|never auto-deleted/i);
+  });
+
+  it('offsite expiry keeps critical data for at least two years', async () => {
+    const { MIN_RETENTION_DAYS, DEFAULT_RETENTION, applyRetentionPolicy } = await import(
+      '@/lib/backups/retention-policy'
+    );
+    expect(MIN_RETENTION_DAYS).toBeGreaterThanOrEqual(730);
+    expect(DEFAULT_RETENTION.minAgeDays).toBe(MIN_RETENTION_DAYS);
+
+    // A same-day burst of restore points — the case the old count-based prune
+    // destroyed — must survive the policy untouched.
+    const now = new Date('2026-10-06T04:00:00Z');
+    const burst = Array.from({ length: 12 }, (_, i) => ({
+      key: `backups/schema-pre-${i}.dump`,
+      createdAt: new Date(now.getTime() - i * 3_600_000),
+    }));
+    const decision = applyRetentionPolicy(burst, DEFAULT_RETENTION, now);
+    expect(decision.delete).toHaveLength(0);
+    expect(decision.keep).toHaveLength(12);
   });
 });
