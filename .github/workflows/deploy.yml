@@ -250,64 +250,38 @@ jobs:
             echo "DB role is RLS-constrained — safe to build and restart."
 
             # #2233 — the deploy MUST migrate the schema between checkout and
-            # build/restart. Until now migrations ran only by hand on the host,
-            # so merging a migration+code PR shipped code against an unmigrated
-            # schema while the health gate stayed green (schema_ready checks 10
-            # base tables — blind to new columns), and rollback was code-only:
-            # old code on new schema. Discipline assumed here (and the reason
-            # the FAIL path un-applies): every migration in a release chain
-            # must be additive-compatible with the still-running previous
-            # release, because the OLD app keeps serving until restart.
+            # build/restart; until #2376 migrations ran only by hand here, so a
+            # merged migration+code PR shipped code against an unmigrated schema
+            # while the health gate (schema_ready, 10 base tables) stayed green.
             #
-            # Steps: snapshot the applied list, take a schema-only restore
-            # point (refuse to migrate without one), run db:migrate
-            # non-interactively, and on failure un-apply exactly the
-            # migrations THIS deploy added — before anything is restarted.
-            list_applied() {
-              npx tsx --import ./scripts/load-env.mjs scripts/rollback-migration.ts --list \
-                | awk '/^ +[0-9]+ /{print $2}'
-            }
-            PRE_APPLIED=$(list_applied)
-            echo "Schema head before migration: $(echo "$PRE_APPLIED" | head -1)"
-
-            BACKUP_DIR=/tmp/nucrm-backups
-            mkdir -p "$BACKUP_DIR"
-            STAMP=$(date +%Y%m%dT%H%M%S)
-            RESTORE_POINT="$BACKUP_DIR/schema-pre-${SHA:0:8}-${STAMP}.sql.gz"
-            DB_URL=$(node -e 'const fs=require("fs");const m=fs.readFileSync(".env.local","utf8").match(/^DATABASE_URL="?([^"\n]+)/m);process.stdout.write(m?m[1]:"")')
-            if [ -z "$DB_URL" ]; then
-              echo "ABORT: DATABASE_URL not found in .env.local — cannot migrate or back up (#2233)"
+            # #2233 follow-up — that fix ran ~70 lines of bash inline: an awk
+            # scrape of `rollback-migration.ts --list` stdout, an inline node
+            # regex over .env.local, a schema dump in /tmp pruned by `ls -t`, and
+            # an automatic un-apply that contradicted §6.3. It is now one gated
+            # call into scripts/deploy-migrate.ts (decisions in
+            # lib/db/deploy-migration-run.ts, type-checked + unit-tested), which:
+            #   - snapshots the ledger through listAppliedMigrations() and FAILS
+            #     CLOSED if the read fails, instead of reading it as "nothing
+            #     applied" and computing the wrong set;
+            #   - takes a schema restore point in durable BACKUP_LOCAL_DIR (never
+            #     /tmp) and, when a pending migration drops data, refuses to apply
+            #     at all without a full dump (PP-014: BACKUP_DATABASE_URL);
+            #   - holds the migration advisory lock, so a deploy and a manual
+            #     db:migrate cannot interleave;
+            #   - is FORWARD-ONLY per .kiro/steering/global-standards.md §6.3: on
+            #     failure it reverses nothing and prints the exact db:rollback
+            #     commands for the tags that actually have rollback SQL.
+            # It never deletes a backup or restore point — see
+            # lib/backups/retention-policy.ts (2-year floor, local never pruned).
+            echo "Applying pending DB migrations (#2233, forward-only)..."
+            if ! DEPLOY_SHA="$SHA" npx tsx --import ./scripts/load-env.mjs scripts/deploy-migrate.ts --yes; then
+              echo "ABORT: migrations did not complete. Nothing was built or restarted;"
+              echo "the app is still serving the previous commit. The status line above"
+              echo "says which stage refused (snapshot, preflight, restore point, or the"
+              echo "migration itself) and names the restore point to use."
               exit 1
             fi
-            # pg_dump lives on the host only if postgres client tools are
-            # installed; the nucrm-db container always has a matching client.
-            if command -v pg_dump >/dev/null 2>&1; then
-              pg_dump --schema-only --no-privileges --no-owner "$DB_URL" | gzip > "$RESTORE_POINT"
-            else
-              docker exec nucrm-db pg_dump --schema-only --no-privileges --no-owner "$DB_URL" | gzip > "$RESTORE_POINT"
-            fi
-            if [ ! -s "$RESTORE_POINT" ]; then
-              echo "ABORT: pre-migrate schema backup failed — refusing to migrate without a restore point (#2233)"
-              rm -f "$RESTORE_POINT"
-              exit 1
-            fi
-            echo "Schema restore point: $RESTORE_POINT"
-            ls -t "$BACKUP_DIR"/schema-pre-*.sql.gz 2>/dev/null | tail -n +11 | xargs -r rm -f
-
-            echo "Running migrations (db:migrate, non-interactive)..."
-            if ! npx tsx --import ./scripts/load-env.mjs scripts/migrate.ts --yes; then
-              echo "ERROR: migration failed — un-applying what THIS deploy added, before restarting anything."
-              POST_APPLIED=$(list_applied)
-              for TAG in $(comm -13 <(echo "$PRE_APPLIED" | sort) <(echo "$POST_APPLIED" | sort) | sort -r); do
-                echo "Un-applying $TAG"
-                npx tsx --import ./scripts/load-env.mjs scripts/rollback-migration.ts "$TAG" --yes \
-                  || echo "WARNING: un-apply of $TAG failed — schema is MIXED; restore point: $RESTORE_POINT"
-              done
-              exit 1
-            fi
-            POST_APPLIED=$(list_applied)
-            APPLIED_NOW=$(comm -13 <(echo "$PRE_APPLIED" | sort) <(echo "$POST_APPLIED" | sort) | sort -r)
-            echo "Migrations applied by this deploy: $(echo "$APPLIED_NOW" | grep -c .)"
+            echo "Schema is current — safe to build and restart."
 
             echo "Building..."
             NODE_OPTIONS="--max-old-space-size=8192" npm run build
@@ -324,18 +298,24 @@ jobs:
 
             echo "ERROR: app did not become healthy. Rolling back to previous commit."
             git checkout --force "$SHA"^
-            # #2233 — a code-only rollback recreates the very drift this issue
-            # is about (old code on the NEW schema). Un-apply the migrations
-            # this deploy added, newest first, so the schema matches the code
-            # going back. Failures are loud, never silent: the restore point
-            # printed above is the manual path.
-            if [ -n "$APPLIED_NOW" ]; then
-              for TAG in $APPLIED_NOW; do
-                echo "Rolling back migration $TAG (deploy was unhealthy)"
-                npx tsx --import ./scripts/load-env.mjs scripts/rollback-migration.ts "$TAG" --yes \
-                  || echo "WARNING: rollback of $TAG failed — schema stays at NEW state; restore point for manual recovery."
-              done
-            fi
+            # Rollback is CODE-ONLY (#2233, forward-only per
+            # .kiro/steering/global-standards.md §6.3). Reversing DDL from the
+            # deploy path is what the previous version of this block did, and it
+            # could not do it reliably: `|| echo "WARNING: rollback of $TAG
+            # failed — schema stays at NEW state"` is an admission that a
+            # half-un-applied chain leaves the schema in a state nothing
+            # models. So: the schema stays forward, and the previous release is
+            # required to tolerate it — which is why migrations run BEFORE the
+            # restart and why every migration in a release chain must be
+            # additive-compatible with the still-running previous release
+            # (breaking changes ship in two phases).
+            #
+            # If this deploy applied migrations and you need them back out, the
+            # migration step above printed the exact commands (filtered to tags
+            # that actually have rollback SQL) — run them deliberately, not from
+            # a failed pipeline:  npm run db:rollback -- <tag> --yes
+            echo "NOTE: schema is NOT reverted here (forward-only). Restore point,"
+            echo "      if one was taken, is in the migration step output above."
             NODE_OPTIONS="--max-old-space-size=8192" npm run build
             # #2300: rollback reverses ALL three apps, not just web — otherwise
             # the old web returns while worker/cron keep running new code.

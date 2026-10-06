@@ -4,15 +4,22 @@
  * Run: npx tsx scripts/backup-db.ts
  *
  * Creates a full PostgreSQL dump with timestamped filename,
- * stores it locally, optionally uploads to S3/R2, and
- * enforces 30-day retention for old local backup files.
+ * stores it locally, optionally uploads to S3/R2.
  *
  * Cron: 0 2 * * * (Daily at 2 AM)
  *
+ * RETENTION (#2233 follow-up): this script NEVER deletes anything. Local copies
+ * are kept forever — pruning the local disk is a human decision, not a nightly
+ * side effect — and the offsite copy is expired only by the scheduled tiered
+ * purge, which refuses to touch anything younger than MIN_RETENTION_DAYS (2
+ * years). It used to unlink local files older than BACKUP_KEEP_DAYS (30) and
+ * trim the bucket to the newest KEEP_DAYS objects by COUNT, so a burst of
+ * same-day dumps could delete the only restore point minutes after writing it.
+ *
  * Env vars:
  *   DATABASE_URL         – required, PostgreSQL connection string
- *   BACKUP_LOCAL_DIR     – local backup directory (default: /tmp/nucrm-backups)
- *   BACKUP_KEEP_DAYS     – retention period in days (default: 30)
+ *   BACKUP_LOCAL_DIR     – local backup directory (default: /tmp/nucrm-backups;
+ *                          set this somewhere durable — /tmp is wiped on reboot)
  *   S3_ENDPOINT          – S3-compatible endpoint (optional)
  *   S3_BUCKET            – bucket name (default: nucrm-backups)
  *   S3_ACCESS_KEY_ID     – S3 access key
@@ -23,14 +30,12 @@ import { execFileSync } from 'child_process';
 import {
   existsSync,
   mkdirSync,
-  readFileSync,
   readdirSync,
-  unlinkSync,
+  readFileSync,
   statSync,
 } from 'fs';
 import { join } from 'path';
 
-const KEEP_DAYS = parseInt(process.env['BACKUP_KEEP_DAYS'] || '30', 10);
 const LOCAL_DIR = process.env['BACKUP_LOCAL_DIR'] || '/tmp/nucrm-backups';
 const S3_BUCKET = process.env['S3_BUCKET'] || 'nucrm-backups';
 
@@ -86,7 +91,7 @@ async function createBackup(): Promise<void> {
   if (process.env['S3_ENDPOINT']) {
     try {
       console.log('[Backup] Uploading to S3...');
-      const { uploadBackup, deleteOldBackups } = await import(
+      const { uploadBackup } = await import(
         '../lib/storage/s3'
       );
 
@@ -94,37 +99,22 @@ async function createBackup(): Promise<void> {
       await uploadBackup(backupData, filename);
       console.log(`[Backup] Uploaded: s3://${S3_BUCKET}/backups/${filename}`);
 
-      // Cleanup old S3 backups (keep last KEEP_DAYS objects by count)
-      await deleteOldBackups(KEEP_DAYS);
-      console.log(`[Backup] S3 cleanup done, keeping last ${KEEP_DAYS}`);
+      // No bucket pruning here (#2233 follow-up): expiry is the scheduled
+      // tiered purge's job, and it enforces the 2-year floor. Trimming by
+      // count on every dump is what could remove a still-needed restore point.
     } catch (err: unknown) {
       console.error('[Backup] S3 upload failed:', err instanceof Error ? err.message : String(err));
     }
   }
 
-  // ── Local retention: delete files older than KEEP_DAYS ──────────────
-  console.log(`[Backup] Enforcing ${KEEP_DAYS}-day local retention...`);
-  const cutoffMs = Date.now() - KEEP_DAYS * 86_400_000;
-  const entries = readdirSync(LOCAL_DIR);
-  let removed = 0;
-
-  for (const entry of entries) {
-    if (!entry.startsWith('nucrm-backup-')) continue;
-    const fullPath = join(LOCAL_DIR, entry);
-    try {
-      const stats = statSync(fullPath);
-      if (stats.mtimeMs < cutoffMs) {
-        unlinkSync(fullPath);
-        removed++;
-      }
-    } catch {
-      // skip files that vanish between readdir and stat
-    }
-  }
-
-  if (removed > 0) {
-    console.log(`[Backup] Removed ${removed} old backup(s) from ${LOCAL_DIR}`);
-  }
+  // ── Local retention: none. Nothing here is ever deleted (#2233 follow-up) ──
+  const kept = readdirSync(LOCAL_DIR).filter((f) => f.startsWith('nucrm-backup-')).length;
+  console.log(
+    `[Backup] Local copies are never auto-deleted; ${kept} file(s) in ${LOCAL_DIR}.` +
+      (LOCAL_DIR.startsWith('/tmp')
+        ? ' WARNING: BACKUP_LOCAL_DIR is under /tmp and will be wiped by a reboot.'
+        : ''),
+  );
 
   console.log('[Backup] Complete!');
 }

@@ -9,7 +9,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  *
  * What the replacement routes must not get wrong:
  *  - Delete is SOFT. It stamps deleted_at/deleted_by and leaves the archive in
- *    object storage; reclaiming bytes is deleteOldBackups()'s job.
+ *    object storage; reclaiming bytes is the scheduled tiered purge's job
+ *    (purgeWithTieredRetention), never a row-button delete.
  *  - A volume-local backup (storage_type 'local') has no URL to sign, so it is
  *    refused loudly instead of redirected to a key the storage layer 404s on.
  */

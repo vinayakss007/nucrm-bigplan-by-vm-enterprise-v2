@@ -189,47 +189,6 @@ describe('lib/storage/s3', () => {
     });
   });
 
-  describe('deleteOldBackups', () => {
-    const listing = (count: number): { Contents: CommandInput[] } => ({
-      Contents: Array.from({ length: count }, (_v, i) => ({
-        Key: `backups/b${i}.sql`,
-        Size: 1,
-        LastModified: new Date(2026, 0, count - i),
-      })),
-    });
-
-    it('does nothing when the retention count is not exceeded', async () => {
-      const s3 = await load({ S3_BUCKET: 'b' });
-      awsMocks.send.mockResolvedValue(listing(30));
-      await s3.deleteOldBackups(30);
-      expect(awsMocks.send).toHaveBeenCalledTimes(1); // list only
-    });
-
-    it('deletes only the backups beyond the retention count, oldest first', async () => {
-      const s3 = await load({ S3_BUCKET: 'b' });
-      awsMocks.send.mockResolvedValue(listing(5));
-
-      await s3.deleteOldBackups(2);
-
-      const { name, input } = lastCommand();
-      expect(name).toBe('DeleteObjectsCommand');
-      const del = input.Delete as { Objects: { Key: string }[] };
-      expect(del.Objects.map(o => o.Key)).toEqual([
-        'backups/b2.sql',
-        'backups/b3.sql',
-        'backups/b4.sql',
-      ]);
-    });
-
-    it('defaults to keeping 30 backups', async () => {
-      const s3 = await load({ S3_BUCKET: 'b' });
-      awsMocks.send.mockResolvedValue(listing(31));
-      await s3.deleteOldBackups();
-      const del = lastCommand().input.Delete as { Objects: { Key: string }[] };
-      expect(del.Objects).toHaveLength(1);
-    });
-  });
-
   describe('uploadFileToS3', () => {
     it('writes the key verbatim, without the backups/ prefix', async () => {
       const s3 = await load({ S3_BUCKET: 'b' });
