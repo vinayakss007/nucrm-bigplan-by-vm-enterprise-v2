@@ -24,8 +24,9 @@ import { setSuperAdminContext } from '@/lib/db/rls';
  *
  * DELETE is a SOFT delete: it stamps deleted_at/deleted_by and leaves the
  * archive object in place. Hard-deleting an S3 object from a table row button
- * is not reversible, and retention is already handled by deleteOldBackups(),
- * which is what actually reclaims space.
+ * is not reversible; reclaiming space is the scheduled tiered purge's job
+ * (lib/backups/offsite.ts), which never expires anything inside the
+ * MIN_RETENTION_DAYS floor.
  */
 export const GET = withApiRoute(async (req: NextRequest,
   { params }: { params: Promise<{ id: string }> }) => {

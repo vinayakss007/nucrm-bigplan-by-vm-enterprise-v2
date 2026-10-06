@@ -284,40 +284,58 @@ describe('off-site backup storage', () => {
       }
     });
 
-    it('defaults to 30 days', async () => {
+    // #2233 follow-up: nothing an automated job deletes may be younger than the
+    // 2-year floor, so an operator value below it clamps UP rather than winning.
+    it('defaults to the retention floor, not a shorter window', async () => {
       const { resolveRetentionDays, DEFAULT_RETENTION_DAYS } = await import('@/lib/backups/offsite');
+      const { MIN_RETENTION_DAYS } = await import('@/lib/backups/retention-policy');
       expect(resolveRetentionDays()).toBe(DEFAULT_RETENTION_DAYS);
-      expect(resolveRetentionDays()).toBe(30);
+      expect(resolveRetentionDays()).toBe(MIN_RETENTION_DAYS);
+      expect(MIN_RETENTION_DAYS).toBeGreaterThanOrEqual(730);
     });
 
-    it('reads the canonical BACKUP_RETENTION_DAYS', async () => {
+    it('reads a window longer than the floor from the canonical variable', async () => {
+      process.env.BACKUP_RETENTION_DAYS = '900';
+      const { resolveRetentionDays } = await import('@/lib/backups/offsite');
+      expect(resolveRetentionDays()).toBe(900);
+    });
+
+    it('clamps a canonical window shorter than the floor up to the floor', async () => {
       process.env.BACKUP_RETENTION_DAYS = '90';
       const { resolveRetentionDays } = await import('@/lib/backups/offsite');
-      expect(resolveRetentionDays()).toBe(90);
+      const { MIN_RETENTION_DAYS } = await import('@/lib/backups/retention-policy');
+      expect(resolveRetentionDays()).toBe(MIN_RETENTION_DAYS);
     });
 
     // .env.example documented this name while the cron route read the other, so
     // an operator following the docs silently had no effect on retention.
     it('accepts BACKUP_KEEP_DAYS as an alias', async () => {
+      process.env.BACKUP_KEEP_DAYS = '800';
+      const { resolveRetentionDays } = await import('@/lib/backups/offsite');
+      expect(resolveRetentionDays()).toBe(800);
+    });
+
+    it('clamps the alias up to the floor too', async () => {
       process.env.BACKUP_KEEP_DAYS = '7';
       const { resolveRetentionDays } = await import('@/lib/backups/offsite');
-      expect(resolveRetentionDays()).toBe(7);
+      const { MIN_RETENTION_DAYS } = await import('@/lib/backups/retention-policy');
+      expect(resolveRetentionDays()).toBe(MIN_RETENTION_DAYS);
     });
 
     it('prefers the canonical name when both are set', async () => {
-      process.env.BACKUP_RETENTION_DAYS = '90';
-      process.env.BACKUP_KEEP_DAYS = '7';
+      process.env.BACKUP_RETENTION_DAYS = '900';
+      process.env.BACKUP_KEEP_DAYS = '800';
       const { resolveRetentionDays } = await import('@/lib/backups/offsite');
-      expect(resolveRetentionDays()).toBe(90);
+      expect(resolveRetentionDays()).toBe(900);
     });
 
     // A typo must not silently widen or collapse the retention window.
     it.each(['abc', '0', '-5', '7.5', ''])(
-      'falls back to the default for invalid value %j',
+      'falls back to the floor for invalid value %j',
       async (value) => {
         process.env.BACKUP_RETENTION_DAYS = value;
-        const { resolveRetentionDays } = await import('@/lib/backups/offsite');
-        expect(resolveRetentionDays()).toBe(30);
+        const { resolveRetentionDays, DEFAULT_RETENTION_DAYS } = await import('@/lib/backups/offsite');
+        expect(resolveRetentionDays()).toBe(DEFAULT_RETENTION_DAYS);
       }
     );
   });
