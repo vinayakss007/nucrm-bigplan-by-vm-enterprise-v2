@@ -53,9 +53,13 @@ async function unsubscribeContact(contactId: string) {
     if (!c) return [];
 
     await tx.update(sequenceEnrollments)
-      .set({ status: 'cancelled' })
+      .set({ status: 'cancelled', updatedAt: new Date() })
       .where(and(
         eq(sequenceEnrollments.contactId, contactId),
+        // #2402: the contact row this transaction just updated carries its tenant,
+        // so the enrollment write is scoped by it instead of relying on the contact
+        // uuid being globally unique — the pattern #2383 established for writes.
+        eq(sequenceEnrollments.tenantId, c.tenantId),
         eq(sequenceEnrollments.status, 'active')
       ));
 

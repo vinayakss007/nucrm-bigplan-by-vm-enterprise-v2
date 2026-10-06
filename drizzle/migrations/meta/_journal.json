@@ -841,6 +841,13 @@
       "when": 1788782400035,
       "tag": "0119_dedupe_check_constraints",
       "breakpoints": true
+    },
+    {
+      "version": "7",
+      "idx": 120,
+      "when": 1788782400036,
+      "tag": "0120_sequence_enrollments_cancelled_status",
+      "breakpoints": true
     }
   ]
 }
