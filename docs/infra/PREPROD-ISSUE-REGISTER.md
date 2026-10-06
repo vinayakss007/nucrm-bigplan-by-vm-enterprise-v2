@@ -74,8 +74,8 @@ Severity: **S1** blocks go-live · **S2** broken feature or security weakness ·
 | PP-052 | S2  | Disk / observability        | PP-033's build-cache cap has fired once, exited 0 and reclaimed 0 B at 151.3 GB used against a 40 GB cap — `docker builder du` says 114.9 GB is reclaimable, `docker system df` says 0 B, and the bytes live in containerd, not `/var/lib/docker` | 🚨 OPEN · three exits (command / daemon GC / accept), none chosen; disk at 41 % so no emergency |
 | PP-053 | S2  | Backup + restore            | Six tables the DB isolates through a **parent** row were scoped by their own (missing or ignored) `tenant_id` in three registries — a wipe 42703 aborts the atomic restore, and three more filters compare a foreign key to a tenant uuid, so backups succeed while holding nothing                                                            | 🔧 MERGED as **#2352** (2026-10-05) · policy escape still open (#7, #90)                          |
 | PP-054 | S3  | Sentry + observability      | NUCRM-3J (`analytics_events` 42501) has been fixed and live since PR #2162, yet the watchdog filed it "NEW" on 2026-10-04 — because `NEW` means "rotated into the top-25-by-date list", not "new failure", and `events=` is a cumulative count                                                                | 🚨 OPEN · watchdog semantics + two side findings (`error_logs` empty all-time, INSERT…RETURNING refused) |
-| PP-055 | S2  | Backup + restore            | The pre-restore wipe deletes **six tables the import allowlist refuses to re-insert**, so `POST /api/admin/tenant-restore` deletes a tenant's rows, hits `Table 'pipelines' is not allowed for import`, and rolls the whole restore back — permanently, for 177 of 183 tenants | 🔧 FIXED (wipe-side), PR **#2354** · the two divergent allowlists stay an owner decision (#79, #90) |
-| PP-057 | S2  | Migrations + tooling        | The repo has exactly one "what is applied?" command and it cannot see the ledger: `db:status` queries `__drizzle_migrations(name, applied_at)` — no such table, no such columns — and maps **any** failure to "history table does not exist", so against preprod it printed **`Applied: 0 / Pending: <every journal entry>`** on a database with **99 applied and 18 outstanding**. `db:migrate --dry-run` compounds it: its first line counts journal entries (**`116 pending migration(s)`**) before reading anything, and that number is what the y/N apply prompt offers. Nothing in CI or the runbooks would ever have revealed the 18-behind state, which includes `0091` (the usage-snapshot bypass **#56** shipped), `0059` (**#74**'s still-unstamped entry) and now `0116` (**#2367**, merged while this PR was open) | 🔧 SCRIPTS FIXED in this PR (verified 99/18 against two instruments) · applying the 18 is an **owner decision** · also measured: `0115`'s absence is **not** a live cross-tenant read |
+| PP-055 | S2  | Backup + restore            | The pre-restore wipe deletes **six tables the import allowlist refuses to re-insert**, so `POST /api/admin/tenant-restore` deletes a tenant's rows, hits `Table 'pipelines' is not allowed for import`, and rolls the whole restore back — permanently, for 177 of 183 tenants | 🔧 MERGED as **#2354** (2026-10-05, `a2a53569`) — wipe-side only · the two divergent allowlists stay an owner decision (#79, #90) |
+| PP-057 | S2  | Migrations + tooling        | The repo has exactly one "what is applied?" command and it cannot see the ledger: `db:status` queries `__drizzle_migrations(name, applied_at)` — no such table, no such columns — and maps **any** failure to "history table does not exist", so against preprod it printed **`Applied: 0 / Pending: <every journal entry>`** on a database with **99 applied and 18 outstanding**. `db:migrate --dry-run` compounds it: its first line counts journal entries (**`116 pending migration(s)`**) before reading anything, and that number is what the y/N apply prompt offers. Nothing in CI or the runbooks would ever have revealed the 18-behind state, which includes `0091` (the usage-snapshot bypass **#56** shipped), `0059` (**#74**'s still-unstamped entry) and now `0116` (**#2367**, merged while this PR was open) | 🔧 SCRIPTS MERGED as **#2371** (2026-10-06, `e703bad0`; verified 99/18 against two instruments) · applying the 18 is still an **owner decision** · also measured: `0115`'s absence is **not** a live cross-tenant read |
 | PP-058 | S2  | Migrations + tooling        | `db:migrate` connects as the tables' **owner** (`nucrm`) with `FORCE ROW LEVEL SECURITY` active on 48 of the 49 tables the pending set names, and `scripts/migrate.ts:184` sets **no tenant GUC** — so every data-correcting statement in a migration matches **0 rows** and silently corrects nothing, while the DDL built on top of it (`CREATE UNIQUE INDEX`, `SET NOT NULL`) reads the whole heap regardless. Measured on preprod: `0114_leads_tenant_oid_unique` (pending) dedupes `(tenant_id, lead_oid)` before creating the unique index, but its own CTE sees 0 of 25 leads while the truth is **1 duplicate group / 5 rows / 4 losers** (all five soft-deleted, all nine days older than the header's own "measured 0"), so the pending 21-entry run **aborts on 23505** — the exact failure its header says the dedupe exists to prevent | 🚨 OPEN · owner decision · no historical damage demonstrated · `0109` already proves the fix is one `set_config` line |
 
 ## Sentry issues → register entries
@@ -2506,10 +2506,17 @@ analytics question kept running into.
 
 ## PP-057 — 🔧 The repo's only "what is applied?" command cannot see the ledger: `db:status` printed `Applied: 0 / Pending: <journal size>` against a database with **99 applied and 18 outstanding**, and `db:migrate --dry-run` prints `116 pending migration(s)` from the journal *before* it reads anything _(S2 · Migrations + tooling)_
 
-_(Numbering: **PP-055** is open PR #2354 and **PP-056** is open PR #2365, so this takes **PP-057** and leaves
-both gaps rather than renumbering anything. Whoever merges second will collide in the Summary table only —
-keep all three rows. Both gap-PRs are still open; **#2367** and **#2369** merged meanwhile and #2367 is what
-moved the journal from 116 to 117, recorded below rather than back-patched into the first measurement.)_
+_(Numbering: **PP-055** was PR #2354 and **PP-056** is PR #2365, so this took **PP-057** and left both gaps
+rather than renumbering anything. That was **two** gaps and is now **one**: **#2354 merged** (`a2a53569`,
+2026-10-05) so PP-055 is on `main`, while **#2365 is still open** (`e4c7e3ba`). The note also under-predicted
+its own collision — it said "the Summary table only", but merging #2365 into `098198f2` conflicted in **two**
+hunks of this one file (`git merge-tree b64b3c6b 098198f2`, markers at its lines 77–83 and 2426–2809): the
+Summary table, where `main` carried **three** new rows (PP-055/057/058) against #2365's one, **and the section
+bodies**, where `main` carried 380 lines against #2365's single heading. Resolved additive-only — `e4c7e3ba`
+is **+123 / −0** against `main` (2827 → 2950 lines) and `main`'s 2827 lines all survive as an in-order
+subsequence. Nothing was renumbered; PP-056 stays a gap until #2365 merges. **#2367** and **#2369** merged
+meanwhile and #2367 is what moved the journal from 116 to 117, recorded below rather than back-patched into
+the first measurement.)_
 
 - **The state nobody had measured.** `drizzle.__drizzle_migrations` holds **99** rows, newest
   `created_at = 1788782400014`. On `main` at `673eecf2` the journal had **116** entries and **116** matching
@@ -2604,8 +2611,10 @@ moved the journal from 116 to 117, recorded below rather than back-patched into 
   for the DB probes), the newer one has none — and `.env.local` is gitignored, so `git archive` cannot
   produce it. Measured A/B on `310129bf` with the three known files only: `TRUST_PROXY` unset → **3 files
   passed, 93/93**; `TRUST_PROXY=true` → **1 failed | 92 passed**, `rate-limit.test.ts > handles requests
-  without headers`. Both PRs that fix those assertions (#2359, #2365) are still open, so a tree without the
-  env file looks greener than the repo actually is. The one *new* failure,
+  without headers`. Of the PRs that fix those assertions, **#2359 has merged** (`4ea1e4c5`, 2026-10-05 —
+  `tests/unit/csrf.test.ts` + `tests/unit/csrf-unit.test.ts`) and **#2365 is still open** (`e4c7e3ba`), so
+  `rate-limit.test.ts` is now the *only* one of the three that passes because `.env.local` is gitignored —
+  a tree without the env file still looks greener than the repo actually is. The one *new* failure,
   `tests/unit/webhooks-delivery.test.ts:147`, asserts `status: 'success'` and got `'pending'` with
   `Outbound request blocked: DNS resolution for "x.com" returned no addresses`; it **passes in isolation in
   1.09 s** on the same tree and `getent hosts x.com` resolves, so it is load/timing-sensitive under the
