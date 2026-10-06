@@ -113,9 +113,19 @@ try {
   const shown = result.rows.slice(0, args.maxRows);
 
   if (args.json) {
+    // `rowCount` is the database's count; `rows` is capped by --max-rows. Emitting
+    // one without the other let a 50-row prefix read as a complete census, so a
+    // jq consumer could not tell the difference — the text branch already says
+    // "N row(s), M shown", and this is that statement in machine-readable form.
+    // rowCount is null for statements with no row count (e.g. SET), hence the guard.
+    const emitted = shown.length;
+    const total = result.rowCount ?? emitted;
     process.stdout.write(`${JSON.stringify({
       context: args.ctx,
       rowCount: result.rowCount,
+      returnedRows: emitted,
+      truncated: emitted < total,
+      maxRows: args.maxRows,
       elapsedMs,
       rows: shown,
     }, null, 2)}\n`);
