@@ -6,6 +6,10 @@
 import { pgView, uuid, text, decimal, timestamp, integer } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
+// #2263: the deployed view also carries WITH (security_invoker = on), which
+// drizzle-orm 0.45 cannot express — it lives only in migration 0115. Do not
+// "repair" it with drizzle-kit push; the nightly verify-tenant-isolation survey
+// (#2306) guards the property against exactly that.
 export const dealsByWinProbability = pgView('deals_by_win_probability', {
   id: uuid('id'),
   tenantId: uuid('tenant_id'),

@@ -806,6 +806,41 @@
       "when": 1788782400030,
       "tag": "0114_leads_tenant_oid_unique",
       "breakpoints": true
+    },
+    {
+      "version": "7",
+      "idx": 115,
+      "when": 1788782400031,
+      "tag": "0115_rls_view_hardening",
+      "breakpoints": true
+    },
+    {
+      "version": "7",
+      "idx": 116,
+      "when": 1788782400032,
+      "tag": "0116_drop_duplicate_indexes",
+      "breakpoints": true
+    },
+    {
+      "version": "7",
+      "idx": 117,
+      "when": 1788782400033,
+      "tag": "0117_validate_fk_constraints",
+      "breakpoints": true
+    },
+    {
+      "version": "7",
+      "idx": 118,
+      "when": 1788782400034,
+      "tag": "0118_fk_column_indexes",
+      "breakpoints": true
+    },
+    {
+      "version": "7",
+      "idx": 119,
+      "when": 1788782400035,
+      "tag": "0119_dedupe_check_constraints",
+      "breakpoints": true
     }
   ]
 }

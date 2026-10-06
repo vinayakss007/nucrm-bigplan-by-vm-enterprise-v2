@@ -7,7 +7,7 @@ import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { supportTickets, ticketReplies } from '@/drizzle/schema';
-import { eq, and, asc, sql } from 'drizzle-orm';
+import { eq, and, asc, sql, isNull } from 'drizzle-orm';
 import { resolvePortalIdentity, resolvePortalContact } from '@/lib/portal-auth';
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -22,6 +22,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         .where(and(
           eq(supportTickets.id, id),
           eq(supportTickets.portalToken, token),
+          isNull(supportTickets.deletedAt),
         ))
         .limit(1);
 
@@ -45,6 +46,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         eq(supportTickets.id, id),
         eq(supportTickets.tenantId, contact.tenantId),
         eq(supportTickets.contactId, contact.id),
+        isNull(supportTickets.deletedAt),
       ))
       .limit(1);
 

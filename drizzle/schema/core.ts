@@ -54,7 +54,6 @@ export const tenants = pgTable('tenants', {
   metadata: utils.metadata(),
 }, (table) => {
   return {
-    slugIdx: index('idx_tenants_slug').on(table.slug),
     subdomainIdx: index('idx_tenants_subdomain').on(table.subdomain),
     statusIdx: index('idx_tenants_status').on(table.status),
     metadataGinIdx: utils.metadataIdx(table),
@@ -111,7 +110,7 @@ export const users = pgTable('users', {
   metadata: utils.metadata(),
 }, (table) => {
   return {
-    emailIdx: index('idx_users_email').on(table.email),
+    deletedByFk2261Idx: index("users_deleted_by_fk_idx").on(table.deletedBy),
     metadataGinIdx: utils.metadataIdx(table),
     activeIdx: utils.activeIdx(table),
   
@@ -193,7 +192,6 @@ export const sessions = pgTable('sessions', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 }, (table) => {
   return {
-    tokenIdx: index('idx_sessions_token').on(table.tokenHash),
   
   drz2255_idx_sessions_user_id: index('idx_sessions_user_id').on(table.userId),};
 });
@@ -390,6 +388,7 @@ export const invitations = pgTable('invitations', {
   ...utils.lifecycle(),
 }, (table) => {
   return {
+    invitedByFk2261Idx: index("invitations_invited_by_fk_idx").on(table.invitedBy),
     tenantIdx: utils.tenantIdx(table),
     tenantEmailIdx: uniqueIndex('idx_invitations_tenant_email').on(table.tenantId, table.email),
   
@@ -469,6 +468,8 @@ export const userDepartures = pgTable('user_departures', {
   ...utils.audit(),
 }, (table) => {
   return {
+    deletedByFk2261Idx: index("user_departures_deleted_by_fk_idx").on(table.deletedBy),
+    updatedByFk2261Idx: index("user_departures_updated_by_fk_idx").on(table.updatedBy),
     tenantIdx: utils.tenantIdx(table),
     userIdx: index('idx_user_departures_user').on(table.userId),
     dateIdx: index('idx_user_departures_date').on(table.departureDate),

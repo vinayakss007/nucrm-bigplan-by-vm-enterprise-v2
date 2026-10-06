@@ -22,6 +22,8 @@ export const sequences = pgTable('sequences', {
   ...utils.audit(),
 }, (table) => {
   return {
+    deletedByFk2261Idx: index("sequences_deleted_by_fk_idx").on(table.deletedBy),
+    updatedByFk2261Idx: index("sequences_updated_by_fk_idx").on(table.updatedBy),
     tenantIdx: utils.tenantIdx(table),
     metadataGinIdx: utils.metadataIdx(table),
     activeIdx: utils.activeIdx(table),

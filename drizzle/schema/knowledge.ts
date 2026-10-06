@@ -19,6 +19,8 @@ export const kbCategories = pgTable('kb_categories', {
   ...utils.audit(),
 }, (table) => {
   return {
+    deletedByFk2261Idx: index("kb_categories_deleted_by_fk_idx").on(table.deletedBy),
+    updatedByFk2261Idx: index("kb_categories_updated_by_fk_idx").on(table.updatedBy),
     tenantIdx: utils.tenantIdx(table),
     activeIdx: utils.activeIdx(table),
     slugIdx: index('idx_kb_categories_slug').on(table.tenantId, table.slug),
@@ -46,6 +48,8 @@ export const kbArticles = pgTable('kb_articles', {
   publishedAt: timestamp('published_at', { withTimezone: true }),
 }, (table) => {
   return {
+    deletedByFk2261Idx: index("kb_articles_deleted_by_fk_idx").on(table.deletedBy),
+    updatedByFk2261Idx: index("kb_articles_updated_by_fk_idx").on(table.updatedBy),
     tenantIdx: utils.tenantIdx(table),
     categoryIdx: index('idx_kb_articles_category').on(table.categoryId),
     statusIdx: index('idx_kb_articles_status').on(table.tenantId, table.status),

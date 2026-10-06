@@ -1,10 +1,14 @@
 name: Nightly load soak + RLS role guards (#2120, #2306)
 
-# Two independent scheduled jobs.
+# Three independent scheduled jobs.
 #
 #   soak       — k6 load soak. Disabled unless the repo variable LOAD_SOAK_ENABLED
 #                is "true" and LOAD_SESSIONS_B64 (base64 of a sessions.json built
 #                by tests/load/make-sessions.sh) plus LOAD_BASE_URL secrets exist.
+#
+#   running-config-guard — #2332. The running-config drift guard scheduled with
+#                its result recorded as an artifact (see the job below). Opt out
+#                deliberately with RUNNING_CONFIG_GUARD_ENABLED="false".
 #
 #   rls-guards — #2306. The superuser/BYPASSRLS assertions in scripts/preflight.ts,
 #                scripts/verify-tenant-isolation.ts and
@@ -172,6 +176,42 @@ jobs:
             --max-time 10 \
             -d "{\"event\":\"rls_guard_nightly\",\"level\":\"fatal\",\"message\":\"#2306 nightly RLS role guard failed\",\"run_url\":\"$RUN_URL\",\"service\":\"nucrm-enterprise\"}" \
             || echo "alert delivery failed (non-blocking)"
+
+  # ── #2332 — the running-config drift guard on a schedule ────────────────────
+  # Same class of bug as #2306: a guard existed (scripts/check-running-config-
+  # drift.mjs) but nothing scheduled it, so a bind mount pinned to a deleted
+  # inode only gets noticed when a human remembers to run it. This job runs it
+  # nightly and records the output as an artifact. A GitHub-hosted runner has
+  # no compose-labelled containers, so the honest result there is the script's
+  # NOT APPLICABLE line with the documented `--allow-empty` opt-out — printed,
+  # never the old fake "0 · 0 · 0" green. The opt-out only downgrades exit 2;
+  # drift, a missing declared service, or an untagged release (exit 1) still
+  # turn this nightly red. On a host that serves the stack, drop the flag.
+  running-config-guard:
+    name: Running-config drift guard (#2332)
+    if: vars.RUNNING_CONFIG_GUARD_ENABLED != 'false'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Run the drift guard
+        run: |
+          set -uo pipefail
+          RESULTS_DIR="$RUNNER_TEMP/running-config-results"
+          mkdir -p "$RESULTS_DIR"
+          npm run guard:running-config -- --allow-empty 2>&1 | tee "$RESULTS_DIR/running-config.log"
+          code=${PIPESTATUS[0]}
+          echo "guard exit=$code" | tee -a "$RESULTS_DIR/running-config.log"
+          exit "$code"
+
+      - name: Upload guard results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: running-config-results-${{ github.run_number }}
+          path: ${{ runner.temp }}/running-config-results
+          if-no-files-found: warn
+          retention-days: 30
 
   soak:
     name: Load soak

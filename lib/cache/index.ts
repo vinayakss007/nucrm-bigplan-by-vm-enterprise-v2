@@ -323,7 +323,7 @@ export async function acquireLock(key: string, ttlSeconds: number = LOCK_TTL): P
   } catch (e) {
     console.error('[Cache] acquireLock failed', e);
     recordRedisFailure();
-    return { acquired: false, value: '' };
+    return { acquired: process.env['LOCK_FAIL_OPEN'] === 'true', value: '' };
   }
 }
 

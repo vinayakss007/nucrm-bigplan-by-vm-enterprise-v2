@@ -25,7 +25,6 @@ export const productTemplates = pgTable('product_templates', {
   ...utils.lifecycle(),
 }, (table) => {
   return {
-    slugIdx: index('idx_product_templates_slug').on(table.slug),
     statusIdx: index('idx_product_templates_status').on(table.status),
   
   drz2255_idx_product_templates_created_by: index('idx_product_templates_created_by').on(table.createdBy),};

@@ -22,7 +22,7 @@ import { Readable } from 'stream';
 // Tables that have tenant_id column
 // Updated: 2026-04-15 — Removed non-tenant tables (users, sessions, refresh_tokens, health_checks)
 // Added missing tables from migrations 045, 047, 048, 049
-const TENANT_SCOPED_TABLES = new Set([
+export const TENANT_SCOPED_TABLES = new Set([
   // Core CRM tables
   'tenants', 'contacts', 'leads', 'deals', 'tasks', 'companies',
   'activities', 'deal_stages', 'pipelines', 'tags',

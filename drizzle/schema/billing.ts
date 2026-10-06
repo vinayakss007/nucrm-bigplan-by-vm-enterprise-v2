@@ -61,6 +61,8 @@ export const services = pgTable('services', {
   
   ...utils.audit(),
 }, (table) => ({
+    deletedByFk2261Idx: index("services_deleted_by_fk_idx").on(table.deletedBy),
+    updatedByFk2261Idx: index("services_updated_by_fk_idx").on(table.updatedBy),
   tenantIdx: utils.tenantIdx(table),
   nameIdx: index('idx_services_name').on(table.name),
   categoryIdx: index('idx_services_category').on(table.category),
@@ -80,6 +82,8 @@ export const serviceCategories = pgTable('service_categories', {
   sortOrder: integer('sort_order').default(0),
   ...utils.audit(),
 }, (table) => ({
+    deletedByFk2261Idx: index("service_categories_deleted_by_fk_idx").on(table.deletedBy),
+    updatedByFk2261Idx: index("service_categories_updated_by_fk_idx").on(table.updatedBy),
   tenantIdx: utils.tenantIdx(table),
   nameIdx: index('idx_service_categories_name').on(table.name),
 
@@ -142,6 +146,8 @@ export const invoices = pgTable('invoices', {
   
   ...utils.audit(),
 }, (table) => ({
+    deletedByFk2261Idx: index("invoices_deleted_by_fk_idx").on(table.deletedBy),
+    updatedByFk2261Idx: index("invoices_updated_by_fk_idx").on(table.updatedBy),
   tenantIdx: utils.tenantIdx(table),
   invoiceNumberIdx: uniqueIndex('idx_invoices_number').on(table.tenantId, table.invoiceNumber),
   contactIdx: index('idx_invoices_contact').on(table.contactId),
@@ -208,6 +214,9 @@ export const invoicePayments = pgTable('invoice_payments', {
   recordedBy: uuid('recorded_by').references(() => users.id, { onDelete: 'set null' }),
   ...utils.audit(),
 }, (table) => ({
+    deletedByFk2261Idx: index("invoice_payments_deleted_by_fk_idx").on(table.deletedBy),
+    recordedByFk2261Idx: index("invoice_payments_recorded_by_fk_idx").on(table.recordedBy),
+    updatedByFk2261Idx: index("invoice_payments_updated_by_fk_idx").on(table.updatedBy),
   invoiceIdx: index('idx_invoice_payments_invoice').on(table.invoiceId),
   dateIdx: index('idx_invoice_payments_date').on(table.paymentDate),
   // #1916: DB-level idempotency backstop. Application-level SELECT-then-INSERT
@@ -269,6 +278,8 @@ export const orders = pgTable('orders', {
   metadata: utils.metadata(),
   ...utils.audit(),
 }, (table) => ({
+    deletedByFk2261Idx: index("orders_deleted_by_fk_idx").on(table.deletedBy),
+    updatedByFk2261Idx: index("orders_updated_by_fk_idx").on(table.updatedBy),
   tenantIdx: utils.tenantIdx(table),
   orderNumberIdx: uniqueIndex('idx_orders_number').on(table.tenantId, table.orderNumber),
   contactIdx: index('idx_orders_contact').on(table.contactId),
@@ -330,6 +341,8 @@ export const contracts = pgTable('contracts', {
   metadata: utils.metadata(),
   ...utils.audit(),
 }, (table) => ({
+    deletedByFk2261Idx: index("contracts_deleted_by_fk_idx").on(table.deletedBy),
+    updatedByFk2261Idx: index("contracts_updated_by_fk_idx").on(table.updatedBy),
   tenantIdx: utils.tenantIdx(table),
   contactIdx: index('idx_contracts_contact').on(table.contactId),
   companyIdx: index('idx_contracts_company').on(table.companyId),
@@ -377,7 +390,6 @@ export const plans = pgTable('plans', {
 }, (table) => {
   return {
     nameIdx: index('idx_plans_name').on(table.name),
-    slugIdx: index('idx_plans_slug').on(table.slug),
     activeIdx: index('idx_plans_active').on(table.isActive, table.sortOrder),
   
   drz2255_idx_plans_rate_limit: index('idx_plans_rate_limit').on(table.isActive).where(sql`(is_active = true)`),};
@@ -489,6 +501,8 @@ export const serviceSubscriptions = pgTable('service_subscriptions', {
   metadata: utils.metadata(),
   ...utils.audit(),
 }, (table) => ({
+    deletedByFk2261Idx: index("service_subscriptions_deleted_by_fk_idx").on(table.deletedBy),
+    updatedByFk2261Idx: index("service_subscriptions_updated_by_fk_idx").on(table.updatedBy),
   tenantIdx: utils.tenantIdx(table),
   contactIdx: index('idx_service_subscriptions_contact').on(table.contactId),
   companyIdx: index('idx_service_subscriptions_company').on(table.companyId),
@@ -517,6 +531,8 @@ export const dunningSettings = pgTable('dunning_settings', {
   metadata: utils.metadata(),
   ...utils.audit(),
 }, (table) => ({
+    deletedByFk2261Idx: index("dunning_settings_deleted_by_fk_idx").on(table.deletedBy),
+    updatedByFk2261Idx: index("dunning_settings_updated_by_fk_idx").on(table.updatedBy),
   tenantIdx: utils.tenantIdx(table),
   activeIdx: index('idx_dunning_settings_active').on(table.tenantId, table.isActive),
 

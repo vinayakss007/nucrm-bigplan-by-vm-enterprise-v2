@@ -7,7 +7,7 @@ import { createHmac, randomUUID } from 'crypto';
 import { db } from '@/drizzle/db';
 import { integrations } from '@/drizzle/schema';
 import { webhookQueue } from '@/drizzle/schema/support';
-import { eq, and, lte, lt, asc } from 'drizzle-orm';
+import { eq, and, lte, lt, asc, isNull, sql } from 'drizzle-orm';
 import { logger } from '@/lib/logger';
 import { safeFetch, SsrfBlockedError } from '@/lib/security/ssrf';
 
@@ -58,7 +58,13 @@ export async function fireWebhooks(
       .where(and(
         eq(integrations.tenantId, tenantId),
         eq(integrations.type, 'webhook'),
-        eq(integrations.isActive, true)
+        eq(integrations.isActive, true),
+        // #2390: `isActive` is the *pause* switch, set independently by PATCH.
+        // The delete handler tombstones the row and deliberately leaves
+        // isActive alone, so without this predicate "delete this webhook" only
+        // hid the row from the list view while every event kept enqueueing
+        // signed deliveries to a URL the customer had already removed.
+        isNull(integrations.deletedAt)
       ));
       
     if (!hooks.length) return;
@@ -197,7 +203,29 @@ export async function fireWebhooks(
 /** Maximum number of concurrent webhook retry requests */
 export const MAX_CONCURRENCY = 5;
 
-/** Retry failed webhook deliveries from the webhook_deliveries table */
+/**
+ * #2390 — the parent integration of a queued delivery, as seen from the queue.
+ *
+ * `webhook_queue.webhook_id` points at `integrations(id)` (rows WHERE
+ * type = 'webhook'; the separate `webhooks` table is unused — see the note in
+ * `drizzle/schema/support.ts`), and deleting a webhook is a tombstone UPDATE, so
+ * the `ON DELETE cascade` FK never fires. Without this predicate the sweep POSTed
+ * to URLs whose integration had been deleted, and — because `isActive` is checked
+ * nowhere on this path — to integrations the tenant had merely *paused*.
+ */
+const parentWhere = sql`i.id = ${webhookQueue.webhookId} AND i.deleted_at IS NULL`;
+const parentAliveAndActive = sql`EXISTS (SELECT 1 FROM integrations i WHERE ${parentWhere} AND i.is_active = true)`;
+const parentDeleted = sql`NOT EXISTS (SELECT 1 FROM integrations i WHERE ${parentWhere})`;
+
+/**
+ * Retry failed webhook deliveries from the queue.
+ *
+ * Returns the number of deliveries that were re-sent *successfully*. Rows whose
+ * parent integration has been deleted are not retried at all — see
+ * `drainDeletedWebhookQueue` — and rows whose parent is merely inactive are
+ * skipped without being drained, so re-enabling the webhook leaves its pending
+ * retries intact.
+ */
 export async function retryFailedWebhooks(): Promise<number> {
   try {
     const failed = await db.select()
@@ -205,7 +233,11 @@ export async function retryFailedWebhooks(): Promise<number> {
       .where(and(
         eq(webhookQueue.status, 'failed'),
         lt(webhookQueue.attempt, MAX_RETRIES),
-        lte(webhookQueue.nextRetryAt, new Date())
+        lte(webhookQueue.nextRetryAt, new Date()),
+        // A paused or tombstoned integration must not receive traffic from this
+        // sweep; the `fireWebhooks` path already honours both, and this one is
+        // the path that used to ignore them.
+        parentAliveAndActive
       ))
       .orderBy(asc(webhookQueue.createdAt))
       .limit(50);
@@ -239,6 +271,47 @@ export async function retryFailedWebhooks(): Promise<number> {
   }
 }
 
+/**
+ * #2390 — retire queued deliveries whose integration is gone.
+ *
+ * `retryFailedWebhooks` will not send them, which stops the outbound traffic but
+ * leaves the rows sitting at `failed` with attempts still on the clock forever:
+ * the backlog warning keeps counting them and the tenant's delivery log keeps
+ * showing a retry that will never happen. `dead_letter` is the existing terminal
+ * state (there is no CHECK on `webhook_queue.status`, and `lib/webhooks/dlq.ts`
+ * already treats dead-lettered rows as out of the retry loop), so the row stops
+ * lying about what is going to happen to it.
+ *
+ * Returns the number retired. Never sends anything.
+ */
+export async function drainDeletedWebhookQueue(): Promise<number> {
+  try {
+    const drained = await db.update(webhookQueue)
+      .set({
+        status: 'dead_letter',
+        errorMessage: 'Webhook integration was deleted; the queued delivery was retired without sending',
+        nextRetryAt: null,
+      })
+      .where(and(
+        eq(webhookQueue.status, 'failed'),
+        parentDeleted
+      ))
+      .returning({ id: webhookQueue.id });
+
+    if (drained.length > 0) {
+      logger.warn('[webhooks] retired queued deliveries for deleted integrations', {
+        count: drained.length,
+      });
+    }
+    return drained.length;
+  } catch (err: unknown) {
+    logger.error('[webhooks] could not retire deliveries for deleted integrations', {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return 0;
+  }
+}
+
 /** Process a single webhook retry item. Returns true if delivery succeeded. */
 async function retryWebhookItem(item: typeof webhookQueue.$inferSelect): Promise<boolean> {
   try {
@@ -254,7 +327,11 @@ async function retryWebhookItem(item: typeof webhookQueue.$inferSelect): Promise
     if (res.ok) {
       await db.update(webhookQueue)
         .set({
-          status: 'success',
+          // The rest of this file, `webhooks/route.ts` delivered_count and the
+          // live send path all spell this state 'delivered'. 'success' was a
+          // second spelling for one state, so a delivery that succeeded *on
+          // retry* was invisible to the counter next to the row it belonged to.
+          status: 'delivered',
           responseStatus: res.status,
           deliveredAt: new Date(),
         })

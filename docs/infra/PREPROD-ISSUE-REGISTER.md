@@ -72,9 +72,12 @@ Severity: **S1** blocks go-live · **S2** broken feature or security weakness ·
 | PP-050 | S2  | Performance + observability | A cron sweep pins 1 of 10 pool connections for ~75 s to do literally zero work, and the leak detector's 30 s threshold now fires 13×/hour — 311 of 311 holds in 24 h are cron, so a real leak would be invisible                                  | 🚨 OPEN · four exits (upstream / threshold / code / server-side batching), none chosen          |
 | PP-051 | S2  | Scheduling + DR             | Three schedule sources disagree about cron and the live one runs 17 of 22 routes, so 5 never fire — including `/api/cron/backup`, the only pg_dump+offsite path, whose last 4 attempts all failed                                                 | 🚨 OPEN · owner decision (#53, #54, #50, #79)                                                   |
 | PP-052 | S2  | Disk / observability        | PP-033's build-cache cap has fired once, exited 0 and reclaimed 0 B at 151.3 GB used against a 40 GB cap — `docker builder du` says 114.9 GB is reclaimable, `docker system df` says 0 B, and the bytes live in containerd, not `/var/lib/docker` | 🚨 OPEN · three exits (command / daemon GC / accept), none chosen; disk at 41 % so no emergency |
-| PP-053 | S2  | Backup + restore            | Six tables the DB isolates through a **parent** row were scoped by their own (missing or ignored) `tenant_id` in three registries — a wipe 42703 aborts the atomic restore, and three more filters compare a foreign key to a tenant uuid, so backups succeed while holding nothing                                                            | 🔧 FIXED, PR **#2352** (guard test) · policy escape open (#7, #90)                          |
+| PP-053 | S2  | Backup + restore            | Six tables the DB isolates through a **parent** row were scoped by their own (missing or ignored) `tenant_id` in three registries — a wipe 42703 aborts the atomic restore, and three more filters compare a foreign key to a tenant uuid, so backups succeed while holding nothing                                                            | 🔧 MERGED as **#2352** (2026-10-05) · policy escape still open (#7, #90)                          |
 | PP-054 | S3  | Sentry + observability      | NUCRM-3J (`analytics_events` 42501) has been fixed and live since PR #2162, yet the watchdog filed it "NEW" on 2026-10-04 — because `NEW` means "rotated into the top-25-by-date list", not "new failure", and `events=` is a cumulative count                                                                | 🚨 OPEN · watchdog semantics + two side findings (`error_logs` empty all-time, INSERT…RETURNING refused) |
+| PP-055 | S2  | Backup + restore            | The pre-restore wipe deletes **six tables the import allowlist refuses to re-insert**, so `POST /api/admin/tenant-restore` deletes a tenant's rows, hits `Table 'pipelines' is not allowed for import`, and rolls the whole restore back — permanently, for 177 of 183 tenants | 🔧 FIXED (wipe-side), PR **#2354** · the two divergent allowlists stay an owner decision (#79, #90) |
 | PP-056 | S3  | Host / tooling              | `/tmp` is a **3.9 GB tmpfs** and vitest leaves a ~22 MB temp dir on **every** run: 88 of them held **1.9 GB**, which filled it. `npx vitest run` then exited **1 with no `Test Files`/`Tests` summary at all** — a scratch-space outage is indistinguishable from a red suite. Sweeping the suite after fixing it found **three assertions that only pass when `.env.local` is absent** (2 × CSRF + rate-limit) — and a fourth that turned out to be a **stale-clone-base artifact**, which is its own harness lesson | 🔧 MITIGATED (1.5 GB of stale clones moved off tmpfs, `TMPDIR` pinned to the root fs) · CSRF pair in PR **#2359**, rate-limit + this entry in **#2365** · four exits, all owner's call |
+| PP-057 | S2  | Migrations + tooling        | The repo has exactly one "what is applied?" command and it cannot see the ledger: `db:status` queries `__drizzle_migrations(name, applied_at)` — no such table, no such columns — and maps **any** failure to "history table does not exist", so against preprod it printed **`Applied: 0 / Pending: <every journal entry>`** on a database with **99 applied and 18 outstanding**. `db:migrate --dry-run` compounds it: its first line counts journal entries (**`116 pending migration(s)`**) before reading anything, and that number is what the y/N apply prompt offers. Nothing in CI or the runbooks would ever have revealed the 18-behind state, which includes `0091` (the usage-snapshot bypass **#56** shipped), `0059` (**#74**'s still-unstamped entry) and now `0116` (**#2367**, merged while this PR was open) | 🔧 SCRIPTS FIXED in this PR (verified 99/18 against two instruments) · applying the 18 is an **owner decision** · also measured: `0115`'s absence is **not** a live cross-tenant read |
+| PP-058 | S2  | Migrations + tooling        | `db:migrate` connects as the tables' **owner** (`nucrm`) with `FORCE ROW LEVEL SECURITY` active on 48 of the 49 tables the pending set names, and `scripts/migrate.ts:184` sets **no tenant GUC** — so every data-correcting statement in a migration matches **0 rows** and silently corrects nothing, while the DDL built on top of it (`CREATE UNIQUE INDEX`, `SET NOT NULL`) reads the whole heap regardless. Measured on preprod: `0114_leads_tenant_oid_unique` (pending) dedupes `(tenant_id, lead_oid)` before creating the unique index, but its own CTE sees 0 of 25 leads while the truth is **1 duplicate group / 5 rows / 4 losers** (all five soft-deleted, all nine days older than the header's own "measured 0"), so the pending 21-entry run **aborts on 23505** — the exact failure its header says the dedupe exists to prevent | 🚨 OPEN · owner decision · no historical damage demonstrated · `0109` already proves the fix is one `set_config` line |
 
 ## Sentry issues → register entries
 
@@ -2417,10 +2420,95 @@ analytics question kept running into.
   24 h of nginx access logs aggregated to status counts, six 12 h Loki chunks aggregated to counts.
   Related: **#82**, **#44**, **#63**, **PP-044**.
 
+## PP-055 — 🚨 The pre-restore wipe deletes six tables that the import allowlist refuses to re-insert: `POST /api/admin/tenant-restore` wipes a tenant, throws `Table 'pipelines' is not allowed for import`, and rolls the whole restore back — for 177 of 183 tenants, every time _(S2 · Backup + restore · PR #2354)_
+
+- **Found by:** diffing the four table registries that a restore passes through, while closing **PP-053**.
+  `lib/tenant-restore-wipe.ts` (what gets deleted), `lib/tenant-data-export.ts` (what gets written into the
+  backup), `lib/restore/backup-parser.ts` (what the SQL-text path accepts) and `lib/sql-allowlist.ts` (what
+  may be inserted) are four hand-maintained lists with no shared source and no assertion relating them.
+  Set arithmetic over them — `TENANT_DELETE_ORDER ∌ sql-allowlist` — is a bug class PP-053 only described.
+- **Mechanism, end to end:** `app/api/admin/tenant-restore/route.ts:413` builds a `TenantDataImporter` and
+  calls `importer.restore(tables, { deleteExisting, skipTables })`. Inside **one** transaction
+  (`#2225`'s atomic restore) `lib/tenant-data-import.ts:138` runs `deleteTenantDataInTx(…, failFast: true)`
+  over `TENANT_DELETE_ORDER`, then `:142` calls `importTable(…, failFast: true)`, whose first statement is
+  `:168` `if (!isValidTableName(tableName.toLowerCase())) throw new Error("Table 'X' is not allowed for import")`.
+  The throw is not caught (`failFast` re-raises), the transaction rolls back, and the response is `failed`.
+  The delete is therefore *correct and then undone*: no data loss — but the restore can never succeed for a
+  tenant holding rows in one of those tables. Nothing in the error message points at the wipe, which is why
+  this survived: the API's own body carries `deleteExisting`, so the reader looks for a delete bug, not an
+  insert-permission bug.
+- **The six tables** (`TENANT_DELETE_ORDER` ∩ ¬`VALID_TABLES`, measured with `reltuples` first, then exact):
+  `pipelines`, `deal_products`, `custom_field_defs`, `field_permissions`, `record_permissions`,
+  `sso_providers`. Five of them are empty in preprod today (0 rows), so they were latent.
+  **`pipelines` is not** — `--superadmin npm run probe:sql`: **202 rows across 177 of 183 tenants**.
+  So the live blast radius is 97 % of tenants, and the trigger is any restore attempt with `deleteExisting`.
+  A sibling, `announcements` (0 rows platform-wide), is deliberately left out of the allowlist: the exporter
+  now filters `PLATFORM_TABLES`, so nothing emits it, and `importTable` returns 0 before the allowlist check
+  when a table has no rows (`lib/tenant-data-import.ts:165`), so a missing name cannot bite on an empty table.
+- **Fix, on the wipe side:** `lib/sql-allowlist.ts` 103 → **109** entries — the six names above, with the
+  `// Schema & permissions configuration` group (`custom_field_defs`, `field_permissions`, `record_permissions`)
+  added beside the existing permission tables. The set header now states the invariant in words, and points at
+  the guard that enforces it, because the wipe does **not** consult the allowlist: an unlisted table is
+  deleted with no complaint and only refused at insert.
+- **Guard:** two new assertions in `tests/unit/tenant-junction-scoping.test.ts` (now **15**). The 14th:
+  `TENANT_DELETE_ORDER.filter(t => !isValidTableName(t)) == []` and the same over the exporter's
+  `TENANT_TABLES` minus `PLATFORM_TABLES`. It fails on the pre-fix tree with the six names listed, and cannot
+  be satisfied by deleting a table from the wipe alone without the export-side assertion noticing. The 15th
+  pins the premise that makes the unfixed half safe — `TENANT_TABLES ⊆ TENANT_SCOPED_TABLES`, which needed
+  `backup-parser.ts:25` to become `export const`.
+- **Deliberately not done — the other half of the divergence is an owner decision.** The two remaining
+  one-way sets are: **9 names in `backup-parser.ts`'s `TENANT_SCOPED_TABLES` that the allowlist refuses**
+  (`announcements`, `backup_schedules`, `critical_data_backups`, `restore_snapshots`, `selective_restore_logs`,
+  `selective_restore_audit_log`, `tenant_backup_records`, `tenant_restore_records`, `call_logs`) — harmless
+  today, they are dropped silently at `lib/tenant-data-import.ts:283` and eight of them are restore
+  *infrastructure* that should not be re-imported at all; and **22 names the allowlist accepts that the parser
+  refuses** (`users`, `sessions`, `refresh_tokens`, `plans`, `contacts`… `error_logs`, `attachments`,
+  `automation_*`, `ticket_replies`, `support_tickets`, `email_sequences`, `email_verifications`, `kb_articles`,
+  `follow_ups`, `activity_logs`). I did **not** collapse the parser's list onto `sql-allowlist.ts`, because
+  that is the moment the panel's SQL-text restore path (`app/api/superadmin/selective-restore/execute/route.ts:153`)
+  starts writing `users`, `sessions`, `plans` and `refresh_tokens` from a paste-able dump — an auth-state
+  widening, not a bug fix. It stays out of scope for both #2352 (PP-053) and this PR; the reason it is safe to leave is
+  `TENANT_TABLES ⊆ TENANT_SCOPED_TABLES` (measured: `exportedNotInParser == []`), which the 15th assertion now
+  keeps true. Related: **#79** (panel reads `backup_records`, the nightly job writes
+  `tenant_backup_records`), **#90** (the selective-restore policy escape), **#7** (the six tables' super-admin
+  RLS escape), **PP-044**, **PP-053**.
+- **Verified:** `npx tsx /tmp/list-diff2.mts` (four-list diff) before → `wipeNotInAllow` = the six names,
+  after → `[]`; `exportedNotInAllow` = `['announcements']` (intentional, above); `PANEL_SILENTLY_DROPS` = `[]`.
+  Row counts re-measured in the same run: `pipelines` 202 / 177 tenants, the other five and `announcements` 0,
+  `tenants` 183, all inside `probe:sql`'s always-rolled-back `READ ONLY` transaction and only under `--superadmin`
+  (as plain context the same queries return 0 — RLS, not emptiness, which is itself the **PP-053**/#7 story).
+  `npx eslint lib/sql-allowlist.ts tests/unit/tenant-junction-scoping.test.ts --max-warnings=0` clean;
+  `node scripts/check-file-size.mjs` → OK (1599 files); `npx vitest run tests/unit/sql-allowlist.test.ts
+  tests/unit/tenant-data-import.test.ts tests/unit/tenant-import.test.ts
+  tests/unit/tenant-restore-atomic-2225.test.ts tests/unit/restore` → **8 files / 213 passed**; the guard
+  → **15/15**; full `tests/unit` → 7069 passed with only the two pre-existing `setCsrfCookie` failures.
+- **The insert side was measured too, so the fix cannot just move the failure.** All twelve tables this PR and
+  PP-053 touch have a `tenant_isolation` policy for `cmd = '*'`. Eleven of them — the five here plus the six
+  from PP-053 — record `polwithcheck IS NULL`, i.e. RLS never refuses their INSERT; `pipelines` is the only one
+  with a check, and its check is
+  `tenant_id = NULLIF(current_setting('app.current_tenant'), '')::uuid OR NULLIF(current_setting('app.is_super_admin'), '')::bool = true`.
+  So no table that this change makes importable is one the tenant/super-admin context then refuses to write:
+  the `not allowed for import` throw is not traded for a 42501.
+- **Still not verified, and this is where the next blocker lives:** no restore has been executed against
+  preprod. Removing the throw does **not** make the panel restore work, because `USING` on those eleven tables is
+  `tenant_id IS NULL OR tenant_id = current_setting('app.current_tenant')::uuid` with **no super-admin branch** —
+  a detached super-admin restore cannot see the target tenant's rows, so its wipe deletes 0 rows and only the
+  primary-key conflict on re-insert makes that loud. That asymmetry (`pipelines` has the escape, the other
+  eleven do not) is **#7**/**#90** and remains an owner decision; **#7**'s "six tables" should now be read as
+  **eleven**, counting the six parent-isolated ones.
+- **Files:** `lib/sql-allowlist.ts`, `lib/restore/backup-parser.ts` (one word: `TENANT_SCOPED_TABLES` becomes
+  `export const`, no behaviour change), `tests/unit/tenant-junction-scoping.test.ts`, this register.
+  Evidence read: `lib/tenant-data-import.ts:86,138,142,164-169,195,283`,
+  `app/api/admin/tenant-restore/route.ts:413-420`, `app/api/admin/tenant-restore/route.ts:261-265,362-390`
+  (super-admin-only guard, and the restore detached with `runTenantRestore(...).catch(…)`),
+  `drizzle/db.ts:55-90` (a bare `db.transaction()` re-applies only tenant and user, per PP-027),
+  `lib/restore/restore-executor.ts:171,214,437,493`,
+  `app/api/superadmin/selective-restore/execute/route.ts:128,153`.
+
 ## PP-056 — 🔧 `/tmp` is a 3.9 GB tmpfs and vitest leaves a ~22 MB temp dir behind on **every** run: 88 of them held **1.9 GB** and filled it, after which `npx vitest run` exited 1 with no `Test Files`/`Tests` line at all — a scratch-space outage is indistinguishable from a red suite _(S3 · Host + tooling)_
 
-_(Numbering: **PP-055** is already spoken for by open PR #2354, which is not on `main` yet, so this takes
-**PP-056** and leaves the gap rather than renumbering anything — see "How to maintain this file".)_
+_(Numbering: **PP-055** went to PR **#2354**, which has since merged, so this takes **PP-056** and is
+contiguous with it — nothing was renumbered; see "How to maintain this file".)_
 
 - **Found by:** the full `tests/unit` sweep that was supposed to verify #2359. The command reported  `exit=1`, the log held two lines of progress dots and **no `Test Files` / `Tests` / `Duration`
   summary**. Reading that as "the suite is red" would have been wrong, and so would reading it as
@@ -2539,7 +2627,302 @@ _(Numbering: **PP-055** is already spoken for by open PR #2354, which is not on 
   Related: **#2359**, **#2345**, **#96**, **PP-054** (signal that is not its name), **PP-052** (the
   *other* disk, 290 GB free), **#77**, **#1249**, **#67** (harness false alarms).
 
+## PP-057 — 🔧 The repo's only "what is applied?" command cannot see the ledger: `db:status` printed `Applied: 0 / Pending: <journal size>` against a database with **99 applied and 18 outstanding**, and `db:migrate --dry-run` prints `116 pending migration(s)` from the journal *before* it reads anything _(S2 · Migrations + tooling)_
+
+_(Numbering: **PP-055** is open PR #2354 and **PP-056** is open PR #2365, so this takes **PP-057** and leaves
+both gaps rather than renumbering anything. Whoever merges second will collide in the Summary table only —
+keep all three rows. Both gap-PRs are still open; **#2367** and **#2369** merged meanwhile and #2367 is what
+moved the journal from 116 to 117, recorded below rather than back-patched into the first measurement.)_
+
+- **The state nobody had measured.** `drizzle.__drizzle_migrations` holds **99** rows, newest
+  `created_at = 1788782400014`. On `main` at `673eecf2` the journal had **116** entries and **116** matching
+  `.sql` files (file set == journal set, no invisible migration), so preprod was **17 behind**: `0059`,
+  `0101`–`0112`, `0091`, `0113`, `0114`, `0115`. Re-measured on current `main` (`310129bf`, after **#2367**
+  merged `0116_drop_duplicate_indexes`): journal **117** entries, **117** `.sql` files, **0** files with no
+  journal entry, ledger still **99** rows → **18 outstanding**, the 17 above plus `0116`. The gap grows
+  monotonically because nothing ever applies them: #43 recorded the same drift 11 deep in September.
+  Two of those are decisions this register already carries — **0091** (`usage_snapshots` super-admin bypass)
+  is **#56**'s fix, merged but not applied, and **0059** is **#74**'s still-unstamped entry. Note the
+  asymmetry that proves the point: **0092 IS stamped and 0091 is not**, because `0092` was applied by hand
+  once and `0091` was invisible to `db:migrate` at the time.
+- **Defect 1 — `db:status` reads a ledger that does not exist.** `scripts/migration-status.ts` queried
+  `SELECT name, applied_at FROM __drizzle_migrations` (unqualified → `public`, and the columns are
+  `id/hash/created_at`). Measured against preprod: `public.__drizzle_migrations` → **`42P01 relation does
+  not exist`**, while `drizzle.__drizzle_migrations` → **99 rows**. The read sits in a `try { … } catch`
+  whose handler prints `[status] Migration history table does not exist — no migrations applied yet` and
+  then **continues with an empty applied set**, so every `.sql` file is listed as pending:
+  `Applied: 0`, `Pending: <one line per journal entry>` (116 when the journal had 116; **117** on current
+  `main`), exit **0**. It also built a `const _appliedNames` set it never uses — the
+  comparison this script was written for was half-finished.
+- **Defect 2 — the catch cannot tell "no ledger" from "no connection".** Same `try`, two independent real
+  causes, one misleading message. Measured on the host: keeping the URL's `sslmode=require` →
+  **`self-signed certificate in certificate chain`**; stripping it → **`no pg_hba.conf entry for host
+  "95.111.194.98" … no encryption`**. Both land in "history table does not exist". The topology is the
+  reason: the host's `DATABASE_URL` is the provider's **public TLS endpoint**, while the paths that work are
+  `PROBE_DATABASE_URL` (`127.0.0.1:6432`, pgbouncer, plaintext) and the app container's own
+  `DATABASE_URL` (`…@pgbouncer:6432`). Every probe in this register goes through the first, which is why
+  `probe:sql` reported 99 rows while `db:status` reported 0 — **two tools, one database, opposite answers**.
+- **Defect 3 — `db:migrate --dry-run`'s headline is a file count, and the prompt reuses it.**
+  `scripts/migrate.ts` did `const pendingCount = journal.entries.length` and printed
+  `[migrate] ${pendingCount} pending migration(s):` **before** the pool exists; the same variable then
+  rendered `Apply ${pendingCount} migration(s) to the "…" database? (y/N)` and the non-interactive
+  `auto-applying ${pendingCount} migration(s)` line. Measured over the working connection: headline
+  **`116 pending migration(s)`**, real plan **`Summary: 99 already stamped, 17 to replay, 0 missing file(s)`**
+  — and on current `main` the same two instruments disagree the same way: headline **`117`** vs plan
+  **`99 already stamped, 18 to replay, 0 missing file(s)`**. So an
+  operator confirming a DDL run against a live database agrees to a number the script has not earned, in the
+  one place (#2254's fail-loud work) where the whole point was to consult the ledger first.
+- **Defect 4 (found while measuring 3, not fixed here).** `detectEnv(DATABASE_URL)` returns **`unknown`**
+  for preprod's public endpoint (`local` for loopback), and the non-interactive branch only fails closed on
+  `env === 'production'`. So `npm run db:migrate` with no `--yes`, from a TTY-less deploy script, **proceeds
+  unattended against preprod** and logged that it was "auto-applying 116 migrations". The apply itself is
+  plan-driven (it would touch only the outstanding ones), so this is a confirmation-gate gap, not a silent
+  DDL storm — and changing what counts as production-guarded is an **owner decision**, so this entry only
+  records it. The misleading *wording* is fixed here (that line now says "proceeding with the migrations the
+  ledger reports as outstanding"); the gate itself is untouched.
+- **Fixed in this PR (scripts and their output only — no execution path changed).**
+  - `scripts/migration-status.ts`: reads `SELECT hash, created_at FROM drizzle.__drizzle_migrations`,
+    resolves `PROBE_DATABASE_URL ?? DATABASE_URL` and strips the URL's `sslmode` exactly like
+    `scripts/lib/readonly-db.mts` does, and classifies each journal entry with the **same**
+    `planMigrations()` the migrator uses (hash **or** `created_at` stamped ⇒ applied). Prints ledger row
+    count, per-entry status, and a new **`Invisible: N file(s) with no journal entry`** section for `.sql`
+    files no journal entry names — the #46/#74 class, now visible from the status command. `42P01` alone
+    means "fresh database"; any other read error propagates and exits 1.
+  - `scripts/migrate.ts`: `--dry-run` now catches **only `42P01`** as "no ledger yet"; a ledger read that
+    fails for any other reason prints `[migrate] --dry-run could not read drizzle.__drizzle_migrations: …`
+    and exits 1 instead of inventing an all-pending plan. The journal count is renamed
+    `journalEntryCount` and every string that called it "pending" now says what it is
+    (`117 journal entr(ies); the ledger decides which are outstanding`), including both confirm prompts.
+    Scope stated honestly: on the unusable host URL the run dies **earlier** than this catch — at
+    `[migrate] Connecting to database…` / the advisory-lock `pool.connect()` (`migrate.ts:201`), which
+    exited 1 with the real `pg_hba` message before this change too. What the narrowing closes is the
+    quieter case: connection succeeds, the `SELECT` on the ledger fails (permission, timeout, wrong
+    search_path), and the old handler answered "everything is pending". There is no read-only way to
+    reproduce that case on preprod, so it is verified by the code path (`42P01` is the *only* condition
+    that sets `ledgerAvailable = false`) and by the two live cases above — not claimed as a measured repro.
+  - **Deliberately not done:** no migration applied, no `--yes` added, no reordering of the confirm step
+    relative to the ledger read (that would restructure a write path), no change to which URL the **write**
+    path uses, no CI gate, no `--fail-on-pending` flag.
+- **Verification — two independent instruments now agree on the same database, re-measured on both commits.**
+  Before, on a tree built from `main`@`673eecf2`: `db:status` → `Applied: 0 / Pending: 116` (exit **0**, no
+  error); `db:migrate --dry-run` → `116 pending migration(s)`, then `[migrate] Fatal: … no pg_hba.conf entry`
+  when it was pointed at the host URL. After, same tree: `db:status` → **`ledger rows: 99 · Applied: 99 ·
+  Pending: 17 · Total: 116`**, listing exactly `0059, 0101…0112, 0091, 0113, 0114, 0115`; `--dry-run` over the
+  working connection → **`Summary: 99 already stamped, 17 to replay, 0 missing file(s)`**. Then **`main` moved
+  to `310129bf`** (#2367 + #2369 merged) and everything was re-run on a second tree built from that sha:
+  `db:status` → **`ledger rows: 99 · Applied: 99 · Pending: 18 · Total: 117`** with the pending list gaining
+  `0116_drop_duplicate_indexes`; `--dry-run` → **`117 journal entr(ies); the ledger decides which are
+  outstanding`** then **`Summary: 99 already stamped, 18 to replay, 0 missing file(s)`**; the same command
+  against the host URL still exits **1** at `[migrate] Connecting to database…` with the real pg_hba message
+  and no plan. The `Invisible:` section prints nothing because `310129bf` has 117 `.sql` files for 117
+  journal entries — **0** unjournalised — which is the #46 guard doing its job, not the absence of a feature.
+  `db:status` against the host URL now exits **1** with `[status] Failed: no pg_hba.conf entry…` instead of
+  printing a confident `Applied: 0`. `eslint scripts/migrate.ts scripts/migration-status.ts` rc=0;
+  `npm run typecheck` rc=0 on both trees (`tsc --noEmit`, 0 errors).
+- **Harness caveat for anyone re-measuring this: the tree you run in decides part of the verdict.**
+  `310129bf` via `git archive | tar -x` produced `1 failed | 486 passed (487 files) · 1 failed | 7179 passed
+  (7180) · 156.87 s`; `673eecf2` the same way produced `3 failed | 482 passed (485) · 3 failed | 7160 passed
+  (7163) · 195.77 s`. The 485→487 is real (#2367/#2369 added two test files). The rest is environment, and
+  it is exactly PP-056's subject: the older tree carries a `.env.local → /srv/nucrm/.env.local` symlink (made
+  for the DB probes), the newer one has none — and `.env.local` is gitignored, so `git archive` cannot
+  produce it. Measured A/B on `310129bf` with the three known files only: `TRUST_PROXY` unset → **3 files
+  passed, 93/93**; `TRUST_PROXY=true` → **1 failed | 92 passed**, `rate-limit.test.ts > handles requests
+  without headers`. Both PRs that fix those assertions (#2359, #2365) are still open, so a tree without the
+  env file looks greener than the repo actually is. The one *new* failure,
+  `tests/unit/webhooks-delivery.test.ts:147`, asserts `status: 'success'` and got `'pending'` with
+  `Outbound request blocked: DNS resolution for "x.com" returned no addresses`; it **passes in isolation in
+  1.09 s** on the same tree and `getent hosts x.com` resolves, so it is load/timing-sensitive under the
+  8-worker sweep, not broken by anything here. Neither number is a claim about this PR: the diff is two files
+  under `scripts/`, which no test in `tests/unit` imports (grepped for assertions on `migrate.ts`'s changed
+  strings — the only hit is `scripts/migration-runner.ts:217`, a different script this PR does not touch).
+- **And a retraction this measurement bought: `0115` being unapplied is *not* a live cross-tenant read.**
+  #2366's message describes the risk as arriving "once the app stops connecting as superuser" — preprod
+  already doesn't: the connecting role is `nucrm`, `rolbypassrls = false`, `is_superuser = off`, and
+  `relrowsecurity` **and** `relforcerowsecurity` are both true on `deals`, `leads`, `tenants`, `users`
+  (owner `nucrm`, so `FORCE` is what makes the policies bind its own owner). Measured through the
+  un-hardened view: scoped to a tenant that owns **10** of the **21** deals in the table,
+  `deals_by_win_probability` returns **5** — a leak would return 21, and the 5 is the view body
+  (`deleted_at IS NULL` + inner join to `deal_stages`; the same tenant has 5 non-deleted deals, all with a
+  stage). With no tenant GUC it returns 0. So `0115` is defence-in-depth for a topology where the view's
+  owner and the caller differ (and for the day a reader role is added), not an emergency — which changes how
+  the pending-18 decision should be prioritised, so it is stated here rather than left to the merge.
+- **Exits, none taken by this PR:**
+  (a) **Apply the 18** — `db:migrate` from inside the app container (or with `PROBE_DATABASE_URL` as the
+  write target, which is the owner's call), `--dry-run` first; `0113`/`0114` take DDL locks and `0114` is a
+  unique index on a live `leads` table. `0116` (#2367, dropped 20 exact-duplicate indexes) joined the list
+  the moment it merged, which is the point of this entry: the backlog is a ratchet, not a fixed number.
+  (b) **#74's repair is incomplete** — `0059` still has no stamp and `0091` is unsent; both are now visible
+  in `db:status`, so the next step is deciding whether to stamp or replay them.
+  (c) **Confirmation gate** — decide whether `unknown` should be treated as production-fail-closed (defect
+  4), and whether the deploy pipeline should run `db:status` and refuse to start when `Pending > 0`.
+  (d) **The write path's URL** — preprod's host `DATABASE_URL` cannot be used by any script at all; either
+  document `PROBE_DATABASE_URL`/container-side execution or give the scripts a TLS-capable route.
+- **Files:** `scripts/migration-status.ts`, `scripts/migrate.ts`, this register. Evidence read:
+  `drizzle.__drizzle_migrations` counts + newest `created_at`, `42P01` on `public.__drizzle_migrations`,
+  `_journal.json` (116 entries on `673eecf2`, 117 on `310129bf`) vs `git ls-tree origin/main:drizzle/migrations`
+  (matching `.sql` file counts, 0 unjournalised on both),
+  `scripts/migration-status.ts` (old query + catch), `scripts/migrate.ts:118-128` (journal-count headline),
+  `:163-172` (prompts), `:219-226` (the `catch` that meant "fresh DB"), `:201` (where the host URL actually
+  dies), `lib/db/ssl-config.ts:33-41`,
+  `scripts/lib/readonly-db.mts:120-133`, `lib/db/pool.ts:174-182`, `pg_class`
+  `relrowsecurity/relforcerowsecurity/relowner` for 4 tables, `pg_get_viewdef('deals_by_win_probability')`,
+  `pg_roles.rolbypassrls`. Related: **#43** (the same drift, 11 deep in September), **#46**, **#56**,
+  **#74**, **#7**, **#54**, **PP-054** (a signal that is not its name), **PP-056** (a run that cannot write
+  its report still exits 1 — and the env-file caveat above is the same lesson from the other side),
+  **#2254**, **#2306**, **#2366**, **#2367**.
+
+## PP-058 — 🚨 The migration runner is RLS-blind to every tenant row: it connects as the tables' owner with `FORCE ROW LEVEL SECURITY` active and sets no tenant GUC, so the data-correcting half of a migration silently fixes 0 rows while the DDL half — which RLS cannot blind — then aborts on the damage it was written to repair. `0114` is the demonstrated case, and the pending 21-entry run cannot complete _(S2 · Migrations + tooling)_
+
+- **Found by:** following **PP-057**'s `Pending: 20` into *what those files actually do*. `db:status` now
+  reports the ledger honestly; the next question is whether the runner can execute what it says is pending.
+  Reading `0114` for its dedupe order-of-operations turned up the comment at `0114:22-23` — "Expected to be a
+  no-op on live data (measured 2026-10-04: `lead_oid_dup_groups = 0`) but written, not assumed — `CREATE UNIQUE
+  INDEX` would otherwise abort the whole run" — and that measurement is not reproducible in the context the
+  runner uses.
+- **Mechanism.** `scripts/migrate.ts:184-185` builds a plain `new Pool({ connectionString })`. It contains no
+  `set_config` and no `current_setting` anywhere (grep: 0 hits). Posture, measured from `pg_class`/`pg_roles`:
+  the app role is `nucrm`, `rolsuper=false`, `rolbypassrls=false`, and it is `relowner` of `leads`, `invoices`
+  and `webhook_events` — table owners **bypass RLS unless `FORCE ROW LEVEL SECURITY` is set**, and on these
+  tables `relforcerowsecurity=true`, each with a `tenant_isolation` policy keyed on
+  `NULLIF(current_setting('app.current_tenant'),'')::uuid`. With the GUC unset it reads `''` (no error), so the
+  predicate is false for every row and the statement affects **0 rows without raising anything**. The scope is
+  near-total: intersecting the table names appearing in the 21 pending files against `pg_class` yields **49
+  distinct real tables**, of which **48 have `relforcerowsecurity=true`** — `ai_providers` is the sole exception
+  (RLS off, 0 policies).
+- **Why that split is the bug class, not just an inconvenience.** RLS filters **DML**, not **DDL**.
+  `CREATE UNIQUE INDEX` reads the whole heap and is not policy-filtered, and neither is
+  `ALTER TABLE … SET NOT NULL`. So a migration of the shape *"repair the rows, then constrain them"* runs its
+  repair against an empty result set and its constraint against the real table. The two halves disagree, and
+  only one of them can see the data.
+- **`0114`, measured both ways** (`npm run probe:sql`, always rolled back; the verbatim `ranked` CTE from
+  `0114:26-42` run once per context):
+
+  | context | rows in dup groups | losers the dedupe reassigns | leads visible |
+  |---|---|---|---|
+  | runner-equivalent (no tenant GUC) | 0 | **0** | **0 of 25** |
+  | `--superadmin` (truth) | 5 | 4 | 25 |
+
+  The colliding group is tenant `c823aa31-e8e2-4286-8425-f6c4972822ab`, `lead_oid = 'LD-2026-001'`, 5 rows.
+  **All five are soft-deleted** (`deleted_at` set 13–16 s after each creation, `2026-09-25T14:54` → `15:07` —
+  the shape of trashed flow-simulator leads), and the index at `0114:63` is **not partial**: it is
+  `ON "leads" ("tenant_id", "lead_oid")` with no `WHERE deleted_at IS NULL`, which is the point — #2343 exists
+  precisely because allocation counted *live* rows and handed a trashed lead's label back. So trashed rows
+  collide, and all five rows predate the header's "measured 2026-10-04" by **nine days**. That measurement was
+  therefore either taken against a different database or taken in the same blind context the migration itself
+  will run in; on this database it does not reproduce. Two consequences the header does not state: the dedupe
+  is not "expected to be a no-op", it is a **4-row mutation of historical (trashed) records** that will execute
+  as 0 rows; and `0114:63` then raises 23505. Preprod's ledger holds 99 rows, so `migrate.ts:376` takes the
+  **incremental** path (`drizzle`'s built-in migrator, `:476`), which wraps each file in one transaction and
+  stops on the first error: the `DROP INDEX` at `:61` rolls back with it, and the run aborts. **The ledger
+  cannot be advanced past 0113 without changing something.**
+- **`0107` and `0108` are the same shape with the failure moved, not removed.** `0107` backfills
+  `tenant_id` from the parent row, then **counts** `WHERE tenant_id IS NULL` to "FAIL LOUDLY … RAISE EXCEPTION
+  with the offending count" (`0107:33-35`, `:115-118`) — but that count is DML-side and blind, so it reports 0
+  and the exception never fires; what actually stops the run is `SET NOT NULL`, whose error names the table but
+  none of the rows the author deliberately promised to name. `0108:25-43` pre-scans `invoices` for duplicate
+  `quote_id` specifically so a real duplicate produces *"Soft-delete the duplicate invoice rows, then re-run"*
+  instead of "an obscure 23505"; blind, that scan sees 0 and the obscure 23505 is back — the comment describes
+  the outcome the code cannot deliver. Both are currently latent on preprod because the data is clean
+  (`invoices` 0 rows; 0 NULL `tenant_id` across all five `0107` tables, `deal_stages` 0 NULL of 1192), so
+  nothing here is a live corruption — the guards are inert, not yet wrong.
+- **The fix is already in this repo, used exactly once.** `0109` hit the identical wall, documented it at
+  `0109:24-29` ("an ordinary connection sees zero of them — the backfill UPDATE would silently match nothing
+  and the SET NOT NULL below would then abort on the surviving NULLs") and solved it inside the `DO` block with
+  `PERFORM set_config('app.is_super_admin', 'true', true)` — transaction-local, so it leaks to no other session.
+  Across all **119** migration files, `0109` is the **only** one that sets that GUC. This is not a missing
+  capability; it is a convention that was written down once and never applied to the three files that need it.
+- **Not demonstrated, and said plainly.** No historical damage was found: `deal_stages` has 0 NULL `tenant_id`
+  of 1192, `companies` 0 dangling of 19, `deals` 0 un-backfilled of 21, and the four `0037` tables that backfill
+  from a parent are empty, so their outcome is vacuous rather than clean. Whether the already-applied
+  data-repair migrations (e.g. `0067_ticket_portal_token`'s unqualified `UPDATE support_tickets … SET
+  portal_token`, `0037`'s five backfills) ran blind **and were rescued by the loud `SET NOT NULL` that followed**
+  or ran blind and simply did nothing, cannot be recovered from the ledger — it stamps the file's hash, not its
+  row counts. The honest statement is: blindness is confirmed, harm is not.
+- **Deliberately not done — this is an owner decision, and there are four exits.** (1) Add the `0109`
+  `set_config` line to the DML half of `0107`/`0108`/`0114` (surgical; makes each file's own safety net work;
+  needs a re-derivation of the stamp for any file whose bytes change on a DB that already applied it — none of
+  these three has). (2) Dedupe `leads` through the application, which has a tenant context, before applying
+  `0114` (fixes today's blocker without touching migration policy, but leaves the inert guards in place).
+  (3) Give the runner a platform identity that the policies admit — which is **#7**/**#90**'s escape in a new
+  place, and wider than a migration concern. (4) Accept it and add a CI/guard check instead (see below). I
+  changed **no** migration file and applied **nothing**.
+- **The generalisable guard, if exit (4) is chosen:** a lint over `drizzle/migrations/*.sql` that fails any
+  file containing top-level DML or a `DO` block with DML against a `relforcerowsecurity=true` table unless it
+  also contains a `set_config('app.is_super_admin'…)` — the rule `0109` implies and nothing enforces. The
+  classification for the current pending set (separating `DO $$` blocks, which **execute** at migration time,
+  from `CREATE FUNCTION` bodies, which do not — I got this wrong on a first pass and corrected it):
+
+  | file | top-level DML | DO blocks | DDL that reads the heap |
+  |---|---|---|---|
+  | `0105_email_tracking_pixel_lookup` | 0 | 1 | — |
+  | `0107_rls_null_tenant_revenue_hardening` | 0 | 1 | `SET NOT NULL` ×5 |
+  | `0108_invoices_quote_id_unique` | 0 | 1 | `CREATE UNIQUE INDEX` |
+  | `0109_webhook_events_created_at_not_null` | 1 | 1 (sets the GUC) | `SET NOT NULL` |
+  | `0111_money_check_constraints` | 0 | 21 (all `ADD CONSTRAINT`) | — |
+  | `0113_dedupe_foreign_keys` | 0 | 11 (all catalog `RENAME`/`EXISTS` on `pg_constraint`) | — |
+  | `0114_leads_tenant_oid_unique` | 1 | 0 | `CREATE UNIQUE INDEX` |
+
+  `0113`'s "dedupe" is of *constraints*, not rows — every one of its `DO` blocks reads `pg_constraint` and
+  renames or drops catalog objects, which RLS does not filter, so it is **not** exposed despite its name; the
+  same is true of `0111`, which contains no row DML at all. Naming a migration after the repair it performs is
+  not evidence that it performs it.
+- **Verified:** `pg_class`/`pg_roles` posture for `leads`/`invoices`/`webhook_events` (all `rls_enabled=true`,
+  `rls_forced=true`, `owner=nucrm`, `rolsuper=false`, `rolbypassrls=false`); the full force-isolation census by
+  intersecting table names extracted from the 21 pending files against all 226 `pg_class` rows in `public`
+  (`--max-rows 500` — **the first run silently returned 50 of 226 while `rowCount` said 226**, so `leads` and
+  `invoices` were simply absent from the truncated set and the intersection reported "12 tables, 11 forced".
+  This is a defect in the probe itself, not operator error: `scripts/probe-sql.mts:113` slices to `maxRows`, the
+  JSON branch at `:118-120` emits that slice next to the *untruncated* `rowCount` and sets no `truncated` flag,
+  while only the text branch prints the honest `-- N row(s), M shown` line (`:135`). A `--json` consumer —
+  which is exactly what `jq` and every scripted check use — therefore cannot tell a census from a prefix
+  (fixed by **#2396**, which adds `returnedRows`/`truncated`/`maxRows` to that branch and renames/removes
+  nothing). The 48/49 figure is from the corrected run); the `0114` CTE in both contexts
+  (table above); `leads_dup_tenant_oid=1`/`invoices_dup_quote=0`/`webhook_events_null_created_at=0` and the five
+  `0107` NULL-tenant counts, all under `--superadmin` so a 0 cannot be RLS masquerading as emptiness — the
+  standing lesson of **#51**, **#78** and **PP-048**. `grep -c set_config` over `drizzle/migrations/*.sql` →
+  exactly one file. `npm run db:status` on this tree → `Applied: 99 / Pending: 21 / Total: 120`, `0114` pending.
+- **Files:** none changed — this entry only. Evidence read: `scripts/migrate.ts:27,184-185,349-376,476`,
+  `drizzle/migrations/0114_leads_tenant_oid_unique.sql`, `0113`, `0111`, `0109`, `0108`, `0107`,
+  `0067_ticket_portal_token.sql`, `0037_tenant_isolation_hardening.sql`, `lib/db/ssl-config.ts`,
+  `scripts/lib/readonly-db.mts:120-133`, `lib/db/pool.ts:233`, `pg_class`, `pg_policy`, `pg_roles`.
+  Related: **PP-057** (the instrument that finally showed the pending set), **#51**/**#52**/**#45** (RLS-blind
+  cron jobs — same class, fixed there with `withSecurityContext`, never applied to the runner), **#78** (panel
+  reads 0 of 132), **#7**/**#90** (the super-admin policy escape this would otherwise reintroduce), **#69**
+  (the runner is *not* superuser — measured), **#74** (the journal gap still hiding `0059`/`0091`),
+  **#2234**, **#2228**, **#2237**, **#2259**, **#2343**.
+- **No CI path can validate any of the exits above, and that should shape the #103 decision.** CI's RLS job is not a proxy for
+  a migration run. `.github/workflows/ci.yml:153` provisions with `npm run db:sync` — which is `drizzle-kit push` and writes **no
+  ledger** — and `:157-160` then applies RLS files through `scripts/apply-rls-ci.mjs` under
+  `DATABASE_URL=postgresql://postgres:postgres@…` (also the workflow-level default at `:11`). RLS does not filter a superuser and no
+  ledger means neither branch of `scripts/migrate.ts` is taken, so in the only context CI can reach, the blindness in this entry
+  cannot manifest. `scripts/migrate.ts` never runs in `ci.yml` at all: the only workflow that invokes it is `deploy.yml:298`, against
+  a live database — the runner is exercised by failing in preprod, never by a pre-merge check.
+  Discovery in `apply-rls-ci.mjs` is by file *name* (`:28`, `/rls|isolation|polic|bypass|member_read|tenant_reference|force_/i`).
+  Measured against the 21 pending tags it selects **3** — `0107`, `0091_usage_snapshots_superadmin_bypass`,
+  `0115_rls_view_hardening` — so of the six pending files this entry names as evidence, only `0107` is even attempted, and it is
+  attempted as the superuser. `0108`, `0109`, `0111`, `0113` and `0114` never execute in CI in any role — including `0109`, the one
+  file carrying the correct mitigation (`set_config('app.is_super_admin', 'true', true)` at `0109:48`; `0114` sets no GUC at all).
+  That exclusion is deliberate for index-only migrations — `tests/unit/schema/invoices-quote-unique-migration.test.ts:58` pins
+  `0108` *out* of discovery on purpose — so widening the regex is not a free fix either. Whichever exit #103 takes, verification has
+  to run as a non-superuser role against a ledger-backed database: a preprod `db:migrate` dry-run, or a CI service created
+  `NOBYPASSRLS` with the app's own grant set. Until then CI green says nothing about this entry at all.
+- **Recurrence guard shipped:** `scripts/check-migration-rls-dml.mjs` (**#2398**, wired into `lint-typecheck` as
+  `npm run guard:migration-rls`) fails CI on a *new* migration whose executable scope writes rows into a tenant-scoped table without
+  the transaction-local `app.is_super_admin` GUC that `0109` sets. Tenant-scoped is derived statically as *policy on
+  `app.current_tenant`* ∪ *tables declaring a `tenant_id` column* (34 ∪ 191 → 202 tables), and the union is load-bearing: `leads` and
+  `invoices` are invisible to the policy rule because their `tenant_isolation` policy is generated by the `FOREACH … EXECUTE format()`
+  loop at `0031_rls_remaining_tables.sql:149,177-180` over a text array, not written out; `deal_stages` is invisible to the column
+  rule. `ai_providers` correctly derives as non-tenant-scoped, which cross-validates the 48/49 live census above. It reads no database
+  and applies nothing. `CREATE FUNCTION` bodies are excluded because they do not execute at migration time, and that scoping is what
+  keeps the guard usable: four files — `0006_brute_force_protection` (2 writes), `0009_workflow_functions` (4),
+  `0032_missing_db_functions` (19) and `0081_fix_usage_snapshot_function` (1) — contain row DML and *zero* of it in executable scope,
+  so all four stay out of the offender set without any hand-written exemption. It baselines **19** files — 17 row-write and 2 dynamic-`EXECUTE`
+  (`0042_audit_log_immutability`, `0107`) — of which exactly **2 are pending on this DB** (`0107`, `0114`) and 17 are already applied.
+  The applied half is recorded as shape only: whether any of them silently matched zero rows depends on FORCE RLS and row presence
+  *at the time it ran*, which is not recoverable from here, so no historical damage is claimed.
+
 ## Running the pre-prod flow simulator
+
 It is the verification step for every RLS or auth change in this repo, and it is safe against a
 live database because **nothing commits** — each scenario is one explicit transaction ending in
 `ROLLBACK`, and it refuses to run at all unless the database is empty (or `--allow-nonempty`).

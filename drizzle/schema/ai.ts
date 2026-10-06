@@ -184,6 +184,7 @@ export const leadScoringRules = pgTable('lead_scoring_rules', {
   updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
   deletedBy: uuid('deleted_by').references(() => users.id, { onDelete: 'set null' }),
 }, (table) => ({
+    deletedByFk2261Idx: index("lead_scoring_rules_deleted_by_fk_idx").on(table.deletedBy),
   tenantIdx: utils.tenantIdx(table),
   activeIdx: utils.activeIdx(table),
 
@@ -262,7 +263,6 @@ export const tenantAiCredits = pgTable('tenant_ai_credits', {
   allocatedBy: uuid('allocated_by').references(() => users.id, { onDelete: 'set null' }),
 }, (table) => ({
   tenantIdx: utils.tenantIdx(table),
-  periodIdx: index('idx_tenant_ai_credits_period').on(table.tenantId, table.billingPeriod),
   statusIdx: index('idx_tenant_ai_credits_status').on(table.status),
 
   drz2255_tenant_ai_credits_tenant_id_billing_period_key: uniqueIndex('tenant_ai_credits_tenant_id_billing_period_key').on(table.tenantId, table.billingPeriod),
@@ -334,6 +334,9 @@ export const aiProviders = pgTable('ai_providers', {
   metadata: jsonb('metadata').$type<Record<string, unknown>>().notNull().default({}),
   ...utils.audit(),
 }, (table) => ({
+    createdByFk2261Idx: index("ai_providers_created_by_fk_idx").on(table.createdBy),
+    deletedByFk2261Idx: index("ai_providers_deleted_by_fk_idx").on(table.deletedBy),
+    updatedByFk2261Idx: index("ai_providers_updated_by_fk_idx").on(table.updatedBy),
   activeIdx: utils.activeIdx(table),
   metadataGinIdx: utils.metadataIdx(table),
   enabledIdx: index('idx_ai_providers_enabled').on(table.enabled),
@@ -361,6 +364,9 @@ export const tenantAiCredentials = pgTable('tenant_ai_credentials', {
   metadata: jsonb('metadata').$type<Record<string, unknown>>().notNull().default({}),
   ...utils.audit(),
 }, (table) => ({
+    createdByFk2261Idx: index("tenant_ai_credentials_created_by_fk_idx").on(table.createdBy),
+    deletedByFk2261Idx: index("tenant_ai_credentials_deleted_by_fk_idx").on(table.deletedBy),
+    updatedByFk2261Idx: index("tenant_ai_credentials_updated_by_fk_idx").on(table.updatedBy),
   tenantIdx: utils.tenantIdx(table),
   activeIdx: utils.activeIdx(table),
   metadataGinIdx: utils.metadataIdx(table),

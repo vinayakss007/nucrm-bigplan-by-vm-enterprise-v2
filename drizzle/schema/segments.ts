@@ -25,6 +25,8 @@ export const segments = pgTable('segments', {
   ...utils.audit(),
 }, (table) => {
   return {
+    deletedByFk2261Idx: index("segments_deleted_by_fk_idx").on(table.deletedBy),
+    updatedByFk2261Idx: index("segments_updated_by_fk_idx").on(table.updatedBy),
     tenantIdx: utils.tenantIdx(table),
     metadataGinIdx: utils.metadataIdx(table),
   

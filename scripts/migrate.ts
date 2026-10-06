@@ -115,14 +115,17 @@ async function main() {
     process.exit(1);
   }
   const journal = JSON.parse(fs.readFileSync(journalPath, 'utf-8'));
-  const pendingCount = journal.entries.length;
+  // Not a pending count: the ledger is not consulted until the pool is up, and the
+  // replay below is driven by planMigrations(), not by this number. It used to be
+  // printed (and confirmed in the apply prompt) as "N pending migration(s)".
+  const journalEntryCount = journal.entries.length;
 
-  if (pendingCount === 0) {
-    console.log('[migrate] No pending migrations.');
+  if (journalEntryCount === 0) {
+    console.log('[migrate] The journal has no entries — nothing to apply.');
     process.exit(0);
   }
 
-  console.log(`[migrate] ${pendingCount} pending migration(s):`);
+  console.log(`[migrate] ${journalEntryCount} journal entr(ies); the ledger decides which are outstanding:`);
   for (const entry of journal.entries) {
     console.log(`  - ${entry.tag}`);
   }
@@ -161,12 +164,15 @@ async function main() {
         process.exit(1);
       }
       console.log(
-        `[migrate] Non-interactive context detected — auto-applying ${pendingCount} ` +
-        `migration(s) to the "${env}" database (use --dry-run to preview, or run in a ` +
-        'TTY to be prompted).',
+        `[migrate] Non-interactive context detected — proceeding with the migrations ` +
+        `the ledger reports as outstanding on the "${env}" database (use --dry-run to preview, ` +
+        'or run in a TTY to be prompted).',
       );
     } else {
-      const ok = await confirm(`Apply ${pendingCount} migration(s) to the "${env}" database? (y/N)`);
+      const ok = await confirm(
+        `Apply the migrations ${journalEntryCount} journal entries describe ` +
+        `(run --dry-run first to see which are outstanding) to the "${env}" database? (y/N)`,
+      );
       if (!ok) {
         console.log('[migrate] Aborted by user.');
         process.exit(0);
@@ -221,7 +227,25 @@ async function main() {
     let ledgerAvailable = true;
     try {
       ledgerRows = await readLedgerRows(pool);
-    } catch {
+    } catch (err) {
+      // Only "the ledger table is not there yet" means a fresh database. A
+      // refused connection, a pg_hba/TLS rejection or a 42501 used to land here
+      // too, and the plan then printed every journal entry as pending — measured
+      // on preprod: "116 pending" against a ledger holding 99 rows, which an
+      // operator reads as "this database has never been migrated".
+      if ((err as { code?: string }).code !== '42P01') {
+        console.error(
+          '[migrate] --dry-run could not read drizzle.__drizzle_migrations:',
+          err instanceof Error ? err.message : String(err),
+        );
+        console.error('[migrate] Refusing to guess a plan from a failed read. Fix the connection and re-run.');
+        try {
+          await lockClient.query(`SELECT pg_advisory_unlock($1)`, [MIGRATION_LOCK_KEY]);
+        } catch { /* auto-releases on disconnect */ }
+        lockClient.release();
+        await pool.end().catch(() => {});
+        process.exit(1);
+      }
       ledgerAvailable = false; // fresh DB: "drizzle"."__drizzle_migrations" not created yet
     }
     printDryRunPlan(planMigrations(journal.entries, ledgerRows, readFileOrNull, statMtimeOrNull), ledgerAvailable);

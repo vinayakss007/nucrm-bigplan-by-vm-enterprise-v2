@@ -5,8 +5,10 @@
  */
 'use client';
 import { useState, useEffect } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
-import { Webhook, ChevronLeft, ChevronRight, AlertCircle, CheckCircle2, Clock } from 'lucide-react';
+import { Webhook, ChevronLeft, ChevronRight, AlertCircle, CheckCircle2, Clock, Loader2, RotateCcw } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { cn } from '@/lib/utils';
 
 interface WebhookLog {
@@ -55,6 +57,28 @@ export default function WebhookLogsPage() {
   );
   const logs: WebhookLog[] = data?.data ?? [];
   const total = data?.total ?? 0;
+
+  // #2391: the retry endpoint had never been reachable — it queried columns that
+  // do not exist — and nothing in the product called it. The failed rows are
+  // already listed here, so the action belongs next to them.
+  const queryClient = useQueryClient();
+  const retry = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch('/api/tenant/webhooks/retry', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ delivery_id: id }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(typeof d?.error === 'string' ? d.error : `Retry failed (${res.status})`);
+      return d as { data?: { status?: string } };
+    },
+    onSuccess: (d) => {
+      toast.success(d.data?.status === 'delivered' ? 'Delivered' : `Retry ${d.data?.status ?? 'failed'}`);
+      void queryClient.invalidateQueries({ queryKey: ['tenant', 'webhooks', 'logs'] });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Retry failed'),
+  });
 
   // Preserve the original behavior: accumulate discovered event types for the
   // filter dropdown as pages load.
@@ -136,6 +160,7 @@ export default function WebhookLogsPage() {
                 <th className="px-4 py-3 font-medium text-muted-foreground">HTTP Code</th>
                 <th className="px-4 py-3 font-medium text-muted-foreground">Error</th>
                 <th className="px-4 py-3 font-medium text-muted-foreground">Timestamp</th>
+                <th className="px-4 py-3 font-medium text-muted-foreground text-right">Retry</th>
               </tr>
             </thead>
             <tbody>
@@ -165,6 +190,21 @@ export default function WebhookLogsPage() {
                     </td>
                     <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">
                       {new Date(log.deliveredAt || log.createdAt).toLocaleString()}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      {(log.status === 'failed' || log.status === 'dead_letter') && (
+                        <button
+                          onClick={() => retry.mutate(log.id)}
+                          disabled={retry.isPending}
+                          title="Send this delivery again"
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-border text-xs font-medium hover:bg-accent disabled:opacity-50"
+                        >
+                          {retry.isPending && retry.variables === log.id
+                            ? <Loader2 className="w-3 h-3 animate-spin" />
+                            : <RotateCcw className="w-3 h-3" />}
+                          Retry
+                        </button>
+                      )}
                     </td>
                   </tr>
                 );

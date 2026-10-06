@@ -10,7 +10,7 @@ import { createCustomFieldSchema, updateCustomFieldSchema } from '@/lib/api/sche
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { customFieldDefs, contacts, companies, deals, leads } from '@/drizzle/schema';
-import { users, tenants, featureRegistry } from '@/drizzle/schema';
+import { featureRegistry } from '@/drizzle/schema';
 import { tasks } from '@/drizzle/schema';
 import { eq, and, asc, desc, sql, isNull } from 'drizzle-orm';
 import type { AnyPgTable } from 'drizzle-orm/pg-core';
@@ -19,24 +19,36 @@ import { concurrencyGuard } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
+/**
+ * Everything a tenant may DEFINE a custom field for. A definition is a row in
+ * custom_field_defs keyed by entity_type alone, so the subject table is never
+ * touched here — which is why `user` and `tenant` are allowed at all.
+ */
 const VALID_ENTITY_TYPES = ['contact', 'company', 'deal', 'lead', 'task', 'user', 'tenant'] as const;
-type EntityType = typeof VALID_ENTITY_TYPES[number];const tableMap: Record<EntityType, AnyPgTable> = {
+
+/**
+ * #2385: the metadata value endpoints build `WHERE id = … AND tenant_id = …`
+ * against the subject table, so the subject must actually carry both columns.
+ * `users` and `tenants` are legitimate custom-field DEFINITION subjects
+ * (custom_field_defs is keyed by entity_type alone) but have no tenant_id, and
+ * those three endpoints failed on them with Postgres 42703 (column does not
+ * exist) → a 500 for a documented entity type.
+ */
+const VALUE_ENTITY_TYPES = ['contact', 'company', 'deal', 'lead', 'task'] as const;
+type ValueEntityType = typeof VALUE_ENTITY_TYPES[number];
+const valueTableMap: Record<ValueEntityType, AnyPgTable> = {
   contact: contacts,
   company: companies,
   deal: deals,
   lead: leads,
   task: tasks,
-  user: users,
-  tenant: tenants,
 };
 
-function isEntityType(value: string): value is EntityType {
-  return VALID_ENTITY_TYPES.includes(value as EntityType);
-}
-
-function getTable(entityType: string) {
-  if (!isEntityType(entityType)) return null;
-  return tableMap[entityType];
+function getValueTable(entityType: string): AnyPgTable | null {
+  // Allowlist membership, not a bare map lookup: `tableMap['constructor']`
+  // resolves off Object.prototype and would then be interpolated as a table.
+  if (!(VALUE_ENTITY_TYPES as readonly string[]).includes(entityType)) return null;
+  return valueTableMap[entityType as ValueEntityType];
 }
 
 function sanitizeFieldKey(key: string): string {
@@ -75,14 +87,16 @@ export const GET = withApiRoute(async (req: NextRequest) => {
         return NextResponse.json({ error: 'entityType and entityId required' }, { status: 400 });
       }
 
-      const table = getTable(entityType);
+      const table = getValueTable(entityType);
       if (!table) {
-        return NextResponse.json({ error: `Unknown entity type: ${entityType}` }, { status: 400 });
+        return NextResponse.json({ error: `Custom field values are not supported for entity type: ${entityType}` }, { status: 400 });
       }
 
-      // We need to use raw SQL here because table is dynamic
+      // Raw SQL because the table is dynamic; getValueTable() is what makes
+      // ${table} safe. deleted_at IS NULL: a deleted record has no readable
+      // custom-field values (#2385).
       const results = await db.execute(
-        sql`SELECT id, metadata FROM ${table} WHERE id = ${entityId} AND tenant_id = ${ctx.tenantId}`
+        sql`SELECT id, metadata FROM ${table} WHERE id = ${entityId} AND tenant_id = ${ctx.tenantId} AND deleted_at IS NULL`
       );      const result = results.rows[0] as { id: string; metadata: Record<string, unknown> | null } | undefined;
 
       if (!result) {
@@ -94,7 +108,8 @@ export const GET = withApiRoute(async (req: NextRequest) => {
         limit: 200,
         where: and(
           eq(customFieldDefs.tenantId, ctx.tenantId),
-          eq(customFieldDefs.entityType, entityType)
+          eq(customFieldDefs.entityType, entityType),
+          isNull(customFieldDefs.deletedAt)
         ),
         orderBy: [asc(customFieldDefs.displayOrder)]
       });      const fieldMap: Record<string, { label: string; type: string; options?: unknown; value: unknown }> = {};
@@ -126,7 +141,7 @@ export const GET = withApiRoute(async (req: NextRequest) => {
     if (!entityType) {
       // Return all entity types available
       return NextResponse.json({
-        entityTypes: Object.keys(tableMap),
+        entityTypes: [...VALID_ENTITY_TYPES],
         hint: 'Add ?entityType=contact to list custom fields',
       });
     }
@@ -135,7 +150,10 @@ export const GET = withApiRoute(async (req: NextRequest) => {
         limit: 200,
       where: and(
         eq(customFieldDefs.tenantId, ctx.tenantId),
-        eq(customFieldDefs.entityType, entityType)
+        eq(customFieldDefs.entityType, entityType),
+        // #2385: DELETE tombstones the definition, so a deleted field would
+        // otherwise keep showing up in the settings list forever.
+        isNull(customFieldDefs.deletedAt)
       ),
       orderBy: [asc(customFieldDefs.displayOrder)]
     });
@@ -194,25 +212,28 @@ export const POST = withApiRoute(async (req: NextRequest) => {
       return NextResponse.json({ error: 'entityType, entityId, and fieldKey are required' }, { status: 400 });
     }
 
-    const table = getTable(entityType);
+    const table = getValueTable(entityType);
     if (!table) {
-      return NextResponse.json({ error: `Unknown entity type: ${entityType}` }, { status: 400 });
+      return NextResponse.json({ error: `Custom field values are not supported for entity type: ${entityType}` }, { status: 400 });
     }
 
-    const safeFieldKey = sanitizeFieldKey(fieldKey);
+    const safeFieldKey = typeof fieldKey === 'string' ? sanitizeFieldKey(fieldKey) : '';
     if (!safeFieldKey) {
       return NextResponse.json({ error: 'Invalid fieldKey' }, { status: 400 });
     }
 
-    // Verify ownership
+    // Verify ownership — and that the record is alive: a soft-deleted record is
+    // inert, not merely hidden (#2385).
     const entityResult = await db.execute(
-      sql`SELECT id FROM ${table} WHERE id = ${entityId} AND tenant_id = ${ctx.tenantId}`
+      sql`SELECT id FROM ${table} WHERE id = ${entityId} AND tenant_id = ${ctx.tenantId} AND deleted_at IS NULL`
     );
     if (entityResult.rows.length === 0) {
       return NextResponse.json({ error: 'Entity not found or not owned' }, { status: 404 });
     }
 
-    // Update metadata JSONB column (fieldKey is sanitized to alphanumeric + underscore)
+    // Update metadata JSONB column (fieldKey is sanitized to alphanumeric + underscore).
+    // The predicate repeats tenant + lifecycle scoping so the write is not
+    // guarded only by the read above it (#2385).
     await db.execute(
       sql`UPDATE ${table} 
        SET metadata = jsonb_set(
@@ -221,7 +242,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
          to_jsonb(${value}),
          true
        )
-       WHERE id = ${entityId}`
+       WHERE id = ${entityId} AND tenant_id = ${ctx.tenantId} AND deleted_at IS NULL`
     );
 
     return NextResponse.json({
@@ -242,13 +263,13 @@ export const POST = withApiRoute(async (req: NextRequest) => {
       return NextResponse.json({ error: 'entityType, entityId, and fields object are required' }, { status: 400 });
     }
 
-    const table = getTable(entityType);
+    const table = getValueTable(entityType);
     if (!table) {
-      return NextResponse.json({ error: `Unknown entity type: ${entityType}` }, { status: 400 });
+      return NextResponse.json({ error: `Custom field values are not supported for entity type: ${entityType}` }, { status: 400 });
     }
 
     const entityResult = await db.execute(
-      sql`SELECT metadata FROM ${table} WHERE id = ${entityId} AND tenant_id = ${ctx.tenantId}`
+      sql`SELECT metadata FROM ${table} WHERE id = ${entityId} AND tenant_id = ${ctx.tenantId} AND deleted_at IS NULL`
     );    const entity = entityResult.rows[0] as { id: string; metadata: Record<string, unknown> | null } | undefined;
     if (!entity) {
       return NextResponse.json({ error: 'Entity not found or not owned' }, { status: 404 });
@@ -267,7 +288,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
     };
 
     await db.execute(
-      sql`UPDATE ${table} SET metadata = ${mergedMetadata} WHERE id = ${entityId}`
+      sql`UPDATE ${table} SET metadata = ${mergedMetadata} WHERE id = ${entityId} AND tenant_id = ${ctx.tenantId} AND deleted_at IS NULL`
     );
 
     return NextResponse.json({
@@ -289,28 +310,43 @@ export const POST = withApiRoute(async (req: NextRequest) => {
     return NextResponse.json({ error: 'entityType, fieldKey, and fieldLabel are required' }, { status: 400 });
   }
 
+  // The key is stored lowercased and underscore-normalised, so the collision
+  // check has to run against that same value. Comparing the raw request key
+  // instead let `FOO` slip past a stored `foo` and hit the unique index as a
+  // raw 23505 → 500 (#2386).
+  const storedFieldKey = sanitizeFieldKey(fieldKey);
+
+  // Deliberately NOT filtered on deleted_at: idx_custom_fields_unique_key
+  // (drizzle/schema/crm.ts:388) covers tombstones, so a deleted field really
+  // does still reserve its key. Now that the list hides tombstones (#2385),
+  // "already exists" would describe a field the tenant cannot see — name the
+  // blocker instead.
   const existing = await db.query.customFieldDefs.findFirst({
     where: and(
       eq(customFieldDefs.tenantId, ctx.tenantId),
       eq(customFieldDefs.entityType, entityType),
-      eq(customFieldDefs.fieldKey, fieldKey)
+      eq(customFieldDefs.fieldKey, storedFieldKey)
     )
   });
 
   if (existing) {
-    return NextResponse.json({ error: `Field '${fieldKey}' already exists for ${entityType}` }, { status: 409 });
+    return NextResponse.json({
+      error: existing.deletedAt
+        ? `Field '${storedFieldKey}' for ${entityType} was deleted, but its key is still reserved. Choose a different key — values already stored under '${storedFieldKey}' remain on the records.`
+        : `Field '${storedFieldKey}' already exists for ${entityType}`,
+    }, { status: 409 });
   }
-
-  const VALID_TYPES = ['text','number','date','boolean','select','multiselect','url','email','phone','textarea','json','formula'] as const;
-  const safeType = (VALID_TYPES as readonly string[]).includes(fieldType) ? fieldType : 'text';
 
   const results = await db.insert(customFieldDefs)
     .values({
       tenantId: ctx.tenantId,
       entityType,
-      fieldKey: fieldKey.replace(/[^a-z0-9_]/gi, '_').toLowerCase(),
+      fieldKey: storedFieldKey,
       fieldLabel,
-      fieldType: safeType as string,
+      // createCustomFieldSchema already restricts this to `customFieldTypes`;
+      // a second local whitelist here had drifted (it lacked 'currency' and
+      // silently downgraded the UI's Currency field to 'text') (#2386).
+      fieldType,
       fieldOptions: fieldOptions || null,
       isRequired: isRequired || false,
       isSearchable: isSearchable !== false,
@@ -322,7 +358,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
     .returning();
 
   return NextResponse.json({
-    message: `Custom field '${fieldKey}' created for ${entityType}`,
+    message: `Custom field '${storedFieldKey}' created for ${entityType}`,
     field: results[0]!,
   }, { status: 201 });
 });
@@ -371,7 +407,11 @@ export const PUT = withApiRoute(async (req: NextRequest) => {
     .set(setValues)
     .where(and(
       eq(customFieldDefs.id, fieldId),
-      eq(customFieldDefs.tenantId, ctx.tenantId)
+      eq(customFieldDefs.tenantId, ctx.tenantId),
+      // A tombstone is not editable. concurrencyGuard only checks this when the
+      // client sends the optional expectedUpdatedAt, so the predicate has to
+      // carry it (#2385).
+      isNull(customFieldDefs.deletedAt)
     ))
     .returning();
 

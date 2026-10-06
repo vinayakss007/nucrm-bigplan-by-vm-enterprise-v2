@@ -1,5 +1,5 @@
  
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 
 const {
   generateCsrfToken,
@@ -45,9 +45,15 @@ describe('setCsrfCookie', () => {
     expect(result).not.toContain('; Secure');
   });
 
-  it('excludes Secure by default', () => {
-    const result = setCsrfCookie('abc123');
-    expect(result).not.toContain('; Secure');
+  it('resolves the Secure flag from the environment when no argument is passed', () => {
+    // #2275 precedence: an explicit COOKIE_SECURE always wins, so both
+    // directions are assertable without depending on whatever .env.local the
+    // runner happens to have loaded (vitest.setup.ts folds it into process.env).
+    vi.stubEnv('COOKIE_SECURE', 'true');
+    expect(setCsrfCookie('abc123')).toContain('; Secure');
+    vi.stubEnv('COOKIE_SECURE', 'false');
+    expect(setCsrfCookie('abc123')).not.toContain('; Secure');
+    vi.unstubAllEnvs();
   });
 });
 
