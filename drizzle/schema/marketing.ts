@@ -82,7 +82,11 @@ export const sequenceEnrollments = pgTable('sequence_enrollments', {
   sequenceId: uuid('sequence_id').notNull().references(() => sequences.id, { onDelete: 'cascade' }),
   contactId: uuid('contact_id').notNull().references(() => contacts.id, { onDelete: 'cascade' }),
   
-  status: text('status').notNull().default('active'), // 'active', 'completed', 'paused', 'unsubscribed', 'error'
+  // Vocabulary is enforced by chk_sequence_enrollments_status
+  // (0050 + widened by 0120 for 'cancelled', which unsubscribe / hard-bounce DNC /
+  // soft-bounce escalation / un-enroll all write). Registered in
+  // scripts/constraint-vocab.json — keep this comment and that entry in step.
+  status: text('status').notNull().default('active'), // 'active', 'completed', 'paused', 'unsubscribed', 'cancelled', 'error'
   currentStep: integer('current_step').notNull().default(1),
   nextStepAt: timestamp('next_step_at', { withTimezone: true }),
   

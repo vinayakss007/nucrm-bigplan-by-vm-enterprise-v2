@@ -138,6 +138,33 @@
       }
     },
     {
+      "id": "sequence_enrollments.status",
+      "constraint": "chk_sequence_enrollments_status",
+      "table": "sequence_enrollments",
+      "column": "status",
+      "migration": "0120_sequence_enrollments_cancelled_status",
+      "declaredIn": ["drizzle/schema/marketing.ts"],
+      "required": ["active", "completed", "cancelled"],
+      "legacy": ["paused", "unsubscribed", "error"],
+      "writers": {
+        "active": ["app/api/tenant/contacts/[id]/enroll/route.ts"],
+        "completed": ["lib/cron/sequence-steps.ts", "app/api/cron/process-sequences/route.ts"],
+        "cancelled": ["app/api/unsubscribe/route.ts", "app/api/webhooks/resend/route.ts", "app/api/tenant/contacts/[id]/enroll/route.ts"]
+      },
+      "note": [
+        "0050 froze this as ('active','completed','paused','unsubscribed','error') and",
+        "the app has always written a sixth value. 'cancelled' is what one-click",
+        "unsubscribe, hard-bounce DNC, soft-bounce escalation and the un-enroll button",
+        "all set, so every one of those four paths threw 23514 — and because three of",
+        "them run inside db.transaction, the contacts.do_not_contact write in the same",
+        "transaction rolled back with it: the CRM kept mailing people who opted out.",
+        "0120 widens the constraint rather than rewriting the callers, because the",
+        "state is real and distinct (see the migration header), and #2392's",
+        "cancel-on-delete path needs the same value. The three values no writer",
+        "produces are legacy: rows may already carry them."
+      ]
+    },
+    {
       "id": "sequence_steps.step_type",
       "constraint": "chk_sequence_steps_step_type",
       "table": "sequence_steps",

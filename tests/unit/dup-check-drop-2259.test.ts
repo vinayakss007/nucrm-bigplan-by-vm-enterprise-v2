@@ -227,7 +227,18 @@ describe("Duplicate enum CHECK dedupe (Issue #2259, migration 0119)", () => {
     ).toBeGreaterThan(-1);
     const e = JOURNAL_DATA.entries[i];
     expect(e.idx).toBe(119);
-    expect(e.idx).toBe(JOURNAL_DATA.entries.length - 1);
+    // Deliberately NOT `e.idx === entries.length - 1`: that asserts 0119 is the
+    // head of the chain, which every subsequent migration falsifies. What the
+    // #2259 fix actually needs is that 0119 is registered and the chain stays
+    // strictly ordered from it onwards.
+    for (let j = i + 1; j < JOURNAL_DATA.entries.length; j++) {
+      expect(JOURNAL_DATA.entries[j].idx).toBeGreaterThan(
+        JOURNAL_DATA.entries[j - 1].idx,
+      );
+      expect(JOURNAL_DATA.entries[j].when).toBeGreaterThan(
+        JOURNAL_DATA.entries[j - 1].when,
+      );
+    }
     expect(e.breakpoints).toBe(true);
     expect(e.when).toBeGreaterThan(JOURNAL_DATA.entries[i - 1].when);
     expect(`${e.tag}.sql`).toBe("0119_dedupe_check_constraints.sql");
