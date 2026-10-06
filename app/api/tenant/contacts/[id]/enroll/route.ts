@@ -10,8 +10,9 @@ import { updateContactSchema } from '@/lib/api/schemas';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { contacts, sequences, sequenceSteps, sequenceEnrollments } from '@/drizzle/schema';
-import { eq, and, asc, sql } from 'drizzle-orm';
+import { eq, and, asc, sql, isNull } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { cancelOpenEnrollments } from '@/lib/cron/sequence-steps';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 export const POST = withApiRoute(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
@@ -40,12 +41,14 @@ export const POST = withApiRoute(async (req: NextRequest, { params }: { params: 
     });
     if (!contact) return NextResponse.json({ error: 'Contact not found' }, { status: 404 });
 
-    // Verify sequence belongs to this tenant
+    // Verify sequence belongs to this tenant and is still live (#2392: a
+    // tombstoned sequence must not accept new enrollments either)
     const seq = await db.query.sequences.findFirst({
       where: and(
         eq(sequences.id, sequence_id),
         eq(sequences.tenantId, ctx.tenantId),
-        eq(sequences.status, 'active')
+        eq(sequences.status, 'active'),
+        isNull(sequences.deletedAt)
       ),
       columns: { id: true }
     });
@@ -56,7 +59,8 @@ export const POST = withApiRoute(async (req: NextRequest, { params }: { params: 
         limit: 200,
       where: and(
         eq(sequenceSteps.sequenceId, sequence_id),
-        eq(sequenceSteps.isActive, true)
+        eq(sequenceSteps.isActive, true),
+        isNull(sequenceSteps.deletedAt)
       ),
       orderBy: [asc(sequenceSteps.stepNumber)]
     });
@@ -118,18 +122,15 @@ export const DELETE = withApiRoute(async (req: NextRequest, { params }: { params
 
     const contactId = (await params).id;
 
-    await db.update(sequenceEnrollments)
-      .set({ 
-        status: 'cancelled',
-        updatedAt: new Date()
-      })
-      .where(and(
-        eq(sequenceEnrollments.contactId, contactId),
-        eq(sequenceEnrollments.sequenceId, sequence_id),
-        eq(sequenceEnrollments.tenantId, ctx.tenantId)
-      ));
+    // #2392: cancel the open enrollment and the step logs waiting on it, scoped
+    // to status 'active' so finished history is never rewritten to 'cancelled'.
+    const cancelledEnrollments = await db.transaction((tx) => cancelOpenEnrollments(
+      tx,
+      ctx.tenantId,
+      { contactId, sequenceId: sequence_id },
+    ));
 
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, cancelledEnrollments });
  
  
   } catch (err) { 

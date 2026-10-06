@@ -34,8 +34,62 @@ export type DueEnrollment = {
 export type SequenceStepRow = typeof sequenceSteps.$inferSelect;
 type DbTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
-// Outcome of the per-enrollment claim transaction (#2223). 'send' carries the
-// fully-built message which MUST only be dispatched after the tx has committed.
+/**
+ * Cancel every open enrollment matching `filter` and drop the step logs still
+ * waiting on them (#2392).
+ *
+ * Deleting a sequence or a contact leaves `sequence_enrollments` rows at
+ * `status='active'` and their `sequence_step_logs` at `status='pending'`, so
+ * without this the next cron pass would keep emailing a dead contact. Callers
+ * run it inside their own tombstone transaction so the cancel commits with the
+ * delete or not at all.
+ *
+ * The log update is scoped through `sequence_enrollments` rather than by
+ * `step_id` alone: a step can belong to a second, still-live enrollment, and
+ * cancelling that enrollment's pending log would silently swallow a real send.
+ */
+export type EnrollmentCancelFilter = { contactId?: string; sequenceId?: string };
+
+export async function cancelOpenEnrollments(
+  tx: DbTransaction,
+  tenantId: string,
+  filter: EnrollmentCancelFilter,
+): Promise<number> {
+  // An empty filter would cancel every open drip in the tenant.
+  if (!filter.contactId && !filter.sequenceId) {
+    throw new Error('cancelOpenEnrollments requires a contactId or a sequenceId');
+  }
+
+  const cancelled = await tx.update(sequenceEnrollments)
+    .set({ status: 'cancelled', completedAt: new Date(), updatedAt: new Date() })
+    .where(and(
+      eq(sequenceEnrollments.tenantId, tenantId),
+      eq(sequenceEnrollments.status, 'active'),
+      filter.contactId ? eq(sequenceEnrollments.contactId, filter.contactId) : undefined,
+      filter.sequenceId ? eq(sequenceEnrollments.sequenceId, filter.sequenceId) : undefined,
+    ))
+    .returning({ id: sequenceEnrollments.id });
+
+  if (cancelled.length === 0) return 0;
+
+  await tx.execute(sql`
+    UPDATE sequence_step_logs l
+    SET status = 'cancelled', "updated_at" = NOW()
+    FROM sequence_enrollments e
+    WHERE l.enrollment_id = e.id
+      AND l.tenant_id = ${tenantId}::uuid
+      AND l.status = 'pending'
+      AND e.status = 'cancelled'
+      AND e.id IN (${sql.join(cancelled.map(c => sql`${c.id}::uuid`), sql`, `)})
+  `);
+
+  return cancelled.length;
+}
+
+/**
+ * Outcome of the per-enrollment claim transaction (#2223). 'send' carries the
+ * fully-built message which MUST only be dispatched after the tx has committed.
+ */
 export type ClaimOutcome =
   | { kind: 'send'; message: PendingEmailSend }
   | { kind: 'processed' }
@@ -49,6 +103,86 @@ export type PendingEmailSend = {
   text: string;
   bodyText: string;
 };
+
+/**
+ * The due-enrollment sweep (#2392). Exported, and taken verbatim by the cron,
+ * so a test can render it and — more importantly — execute it against a real
+ * database: `status = 'active'` on the enrollment alone lets a drip keep
+ * sending after its sequence has been deleted or archived/paused, because
+ * deleting a sequence leaves its enrollment rows `active`.
+ *
+ * The `sequences` join is what closes that: `s.deleted_at IS NULL` drops
+ * tombstoned sequences and `s.status = 'active'` is deny-by-default, so a
+ * paused, archived or draft sequence — or a status value added to
+ * `chk_sequences_status` later — stops outbound mail rather than falling
+ * through a list of exclusions.
+ */
+export function dueEnrollmentsSql(tenantId: string, limit = 100) {
+  return sql`
+    SELECT e.id, e.tenant_id, e.sequence_id, e.contact_id, e.current_step, e.next_step_at, e.status
+    FROM sequence_enrollments e
+    JOIN sequences s
+      ON s.id = e.sequence_id
+     AND s.deleted_at IS NULL
+     AND s.status = 'active'
+    WHERE e.status = 'active'
+      AND e.deleted_at IS NULL
+      AND e.tenant_id = ${tenantId}::uuid
+      AND e.next_step_at <= NOW()
+    ORDER BY e.next_step_at ASC
+    LIMIT ${limit}
+    FOR UPDATE OF e SKIP LOCKED
+  `;
+}
+
+/**
+ * Batch contact fetch (#2392). `deleted_at IS NULL` keeps a tombstoned contact
+ * out of the map, which surfaces downstream as `contact: null` — the email step
+ * then cancels the enrollment instead of sending to a deleted person.
+ */
+export function contactLookupSql(tenantId: string, contactIds: readonly string[]) {
+  return sql`
+    SELECT id, email, do_not_contact FROM contacts
+    WHERE tenant_id = ${tenantId}::uuid
+      AND deleted_at IS NULL
+      AND id IN (${sql.join(contactIds.map(id => sql`${id}::uuid`), sql`, `)})
+  `;
+}
+
+/**
+ * Step lookup (#2392): an inactive or tombstoned step must not execute. Shared
+ * with the unit test so the predicate cannot drift away from the query.
+ */
+export function activeStepWhere(tenantId: string, sequenceIds: readonly string[]) {
+  return and(
+    eq(sequenceSteps.tenantId, tenantId),
+    sql`${sequenceSteps.sequenceId} IN (${sql.join(sequenceIds.map(id => sql`${id}::uuid`), sql`, `)})`,
+    eq(sequenceSteps.isActive, true),
+    sql`${sequenceSteps.deletedAt} IS NULL`,
+  );
+}
+
+/**
+ * Row lock + re-check for the claim transaction (#2392). Must mirror
+ * `dueEnrollmentsSql`: the gap between the sweep committing and this tx opening
+ * is precisely when a delete/archive/un-enroll lands, and a re-check that only
+ * tests `status = 'active'` will happily process a row whose sequence is gone.
+ */
+export function dueEnrollmentClaimSql(enrollmentId: string, tenantId: string) {
+  return sql`
+    SELECT e.id, e.status, e.current_step
+    FROM sequence_enrollments e
+    JOIN sequences s
+      ON s.id = e.sequence_id
+     AND s.deleted_at IS NULL
+     AND s.status = 'active'
+    WHERE e.id = ${enrollmentId}::uuid
+      AND e.tenant_id = ${tenantId}::uuid
+      AND e.status = 'active'
+      AND e.deleted_at IS NULL
+    FOR UPDATE OF e SKIP LOCKED
+  `;
+}
 
 /**
  * Build the sequence email from step content. Pure CPU work (HMAC token +
@@ -164,4 +298,38 @@ export async function finalizeStepLog(
 
   await advanceOrCompleteStep(tx, tenantId, enrollment);
   return true;
+}
+
+/**
+ * Cancel an email enrollment whose contact no longer resolves (#2392) and
+ * cancel the step log that was waiting on it, so the run reports a terminal
+ * state instead of an executed step.
+ */
+export async function cancelEnrollmentForMissingContact(
+  tx: DbTransaction,
+  tenantId: string,
+  enrollment: DueEnrollment,
+  step: SequenceStepRow,
+): Promise<void> {
+  await tx.update(sequenceEnrollments)
+    .set({ status: 'cancelled', completedAt: new Date(), updatedAt: new Date() })
+    .where(and(
+      eq(sequenceEnrollments.id, enrollment.id),
+      eq(sequenceEnrollments.tenantId, tenantId),
+      eq(sequenceEnrollments.status, 'active'),
+    ));
+
+  await tx.update(sequenceStepLogs)
+    .set({
+      status: 'cancelled',
+      executedAt: new Date(),
+      errorMessage: 'Contact row is gone (deleted or tombstoned) — enrollment cancelled',
+      updatedAt: new Date(),
+    })
+    .where(and(
+      eq(sequenceStepLogs.enrollmentId, enrollment.id),
+      eq(sequenceStepLogs.stepId, step.id),
+      eq(sequenceStepLogs.status, 'pending'),
+      eq(sequenceStepLogs.tenantId, tenantId),
+    ));
 }

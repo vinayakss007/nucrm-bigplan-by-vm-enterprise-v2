@@ -9,14 +9,19 @@ import { createEmailTracking, addTracking } from '@/lib/email/tracking';
 import { logError } from '@/lib/errors-server';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
-import { sequenceEnrollments, sequenceSteps, tasks, sequenceStepLogs } from '@/drizzle/schema';
-import { eq, and, sql } from 'drizzle-orm';
+import { sequenceEnrollments, tasks, sequenceStepLogs } from '@/drizzle/schema';
+import { eq, and } from 'drizzle-orm';
 import { sendEmail } from '@/lib/email/service';
 import { acquireLock, releaseLock } from '@/lib/cache';
 import { sweepTenants } from '@/lib/cron/tenant-scope';
 import {
+  activeStepWhere,
   advanceOrCompleteStep,
   buildSequenceEmailPayload,
+  cancelEnrollmentForMissingContact,
+  contactLookupSql,
+  dueEnrollmentClaimSql,
+  dueEnrollmentsSql,
   finalizeStepLog,
   type ClaimOutcome,
   type DueEnrollment,
@@ -48,16 +53,8 @@ export async function POST(req: NextRequest) {
       // poison the entire batch.
       const { dueEnrollments, stepMap } = await db.transaction(async (tx) => {
         // Fetch enrollments that are due (with FOR UPDATE SKIP LOCKED for idempotency)
-        const dueEnrollmentRows = await tx.execute(sql`
-          SELECT id, tenant_id, sequence_id, contact_id, current_step, next_step_at, status
-          FROM sequence_enrollments
-          WHERE status = 'active'
-            AND tenant_id = ${tenantId}::uuid
-            AND next_step_at <= NOW()
-          ORDER BY next_step_at ASC
-          LIMIT 100
-          FOR UPDATE SKIP LOCKED
-        `);
+        // #2392: the sweep itself is the lifecycle filter — see dueEnrollmentsSql.
+        const dueEnrollmentRows = await tx.execute(dueEnrollmentsSql(tenantId));
 
         if (dueEnrollmentRows.rows.length === 0) {
           return { dueEnrollments: [] as DueEnrollment[], stepMap: new Map<string, never>() };
@@ -67,11 +64,7 @@ export async function POST(req: NextRequest) {
         const contactIds = [...new Set(
           dueEnrollmentRows.rows.map(r => (r as Record<string, unknown>).contact_id as string)
         )];
-        const contactRows = await tx.execute(sql`
-          SELECT id, email, do_not_contact FROM contacts
-          WHERE tenant_id = ${tenantId}::uuid
-            AND id IN (${sql.join(contactIds.map(id => sql`${id}::uuid`), sql`, `)})
-        `);
+        const contactRows = await tx.execute(contactLookupSql(tenantId, contactIds));
         const cMap = new Map<string, { email: string | null; doNotContact: boolean }>();
         for (const cr of contactRows.rows) {
           const c = cr as Record<string, unknown>;
@@ -100,11 +93,7 @@ export async function POST(req: NextRequest) {
         // Batch-fetch all steps upfront to avoid N+1 queries
         const uniqueSequenceIds = [...new Set(enrollments.map(e => e.sequenceId))];
         const allSteps = await tx.query.sequenceSteps.findMany({
-          where: and(
-            eq(sequenceSteps.tenantId, tenantId),
-            sql`${sequenceSteps.sequenceId} IN (${sql.join(uniqueSequenceIds.map(id => sql`${id}::uuid`), sql`, `)})`,
-            eq(sequenceSteps.isActive, true)
-          ),
+          where: activeStepWhere(tenantId, uniqueSequenceIds),
         });
         // Build lookup map: sequenceId:stepNumber -> step
         const sMap = new Map<string, typeof allSteps[number]>();
@@ -131,14 +120,11 @@ export async function POST(req: NextRequest) {
         try {
           const claim = await db.transaction(async (tx): Promise<ClaimOutcome> => {
             // Re-confirm the enrollment is still active (guards against race after lock release)
-            const [current] = await tx.execute(sql`
-              SELECT id, status, current_step
-              FROM sequence_enrollments
-              WHERE id = ${enrollment.id}::uuid
-                AND tenant_id = ${tenantId}::uuid
-                AND status = 'active'
-              FOR UPDATE
-            `).then(r => r.rows as Array<Record<string, unknown>>);
+            // #2392: the window between the sweep and this tx is exactly when an
+            // archive/delete/un-enroll lands, so the re-check has to apply the
+            // same lifecycle filters the sweep does.
+            const [current] = await tx.execute(dueEnrollmentClaimSql(enrollment.id, tenantId))
+              .then(r => r.rows as Array<Record<string, unknown>>);
 
             if (!current) return { kind: 'noop' }; // Already processed or paused by another instance
 
@@ -155,6 +141,16 @@ export async function POST(req: NextRequest) {
                 })
                 .where(and(eq(sequenceEnrollments.id, enrollment.id), eq(sequenceEnrollments.tenantId, tenantId)));
               return { kind: 'noop' };
+            }
+
+            // #2392: no contact row means the contact was deleted (or was never
+            // in this tenant). Marking the step executed would advance the
+            // enrollment through the remaining steps one cron tick at a time
+            // and end it 'completed' — a dead contact reported as fully
+            // sequenced. Cancel it instead, so nothing downstream re-queues it.
+            if (!enrollment.contact && step.stepType === 'email') {
+              await cancelEnrollmentForMissingContact(tx, tenantId, enrollment, step);
+              return { kind: 'processed' };
             }
 
             const shouldSendEmail = step.stepType === 'email'

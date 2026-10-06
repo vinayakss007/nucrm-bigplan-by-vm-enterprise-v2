@@ -308,10 +308,14 @@ d('#2402 sequence_enrollments.status admits every value the code writes', () => 
     // test cannot pass by matching nothing.
     expect([...writers.keys()].sort()).toEqual(['cancelled', 'completed']);
     const cancelledBy = [...writers.get('cancelled')!].sort();
+    // #2392 moved the un-enroll route's write into the shared helper, so the
+    // list is the two remaining direct writers plus that helper. It is a move,
+    // not a removal: assert the exact set so a NEW writer cannot slip in
+    // unregistered.
     expect(cancelledBy).toEqual([
-      'app/api/tenant/contacts/[id]/enroll/route.ts',
       'app/api/unsubscribe/route.ts',
       'app/api/webhooks/resend/route.ts',
+      'lib/cron/sequence-steps.ts',
     ].sort());
 
     const allowed = new Set(await liveVocabulary(pool));
