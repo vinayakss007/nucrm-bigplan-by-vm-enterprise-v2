@@ -36,44 +36,68 @@ import { logger } from '@/lib/logger';
 import { apiError } from '@/lib/api-error';
 import { logError } from '@/lib/errors-server';
 import { sweepTenants } from '@/lib/cron/tenant-scope';
+import { addCalendarMonths, anchorDayOf, utcDateStamp } from '@/lib/billing/recurrence-date';
 
 const MAX_NUMBER_RETRIES = 3;
 
 /**
- * Advance a yyyy-mm-dd date string by one recurring period. Unknown or missing
- * frequencies fall back to monthly (the most common billing cadence) so a
- * misconfigured row still advances rather than regenerating every day.
+ * Advance a yyyy-mm-dd date string by one recurring period (#2429).
+ *
+ * Day-based cadences are plain day addition and were always correct. Month-based
+ * ones were `setUTCMonth`/`setUTCFullYear`, which ROLL an overflowing day forward
+ * instead of clamping it: 2026-01-31 + 1 month gave 2026-03-03. That is late for
+ * the period being billed and, worse, permanent — the 3rd then reads as the
+ * customer's billing day, so a month-end retainer drifted to the 3rd of every
+ * month and never came back. Hence the period is computed from the series'
+ * `anchorDay` rather than from the day currently stored.
+ *
+ * Unknown or missing frequencies fall back to monthly (the most common billing
+ * cadence) so a misconfigured row still advances rather than regenerating every
+ * day.
  */
-function advanceDate(fromISO: string, frequency: string | null): string {
-  const d = new Date(`${fromISO}T00:00:00Z`);
-  switch ((frequency || 'monthly').toLowerCase()) {
+function advanceDate(fromISO: string, frequency: string | null, anchorDay: number): string {
+  const freq = (frequency || 'monthly').toLowerCase();
+  switch (freq) {
     case 'daily':
-      d.setUTCDate(d.getUTCDate() + 1);
-      break;
     case 'weekly':
-      d.setUTCDate(d.getUTCDate() + 7);
-      break;
-    case 'biweekly':
-      d.setUTCDate(d.getUTCDate() + 14);
-      break;
+    case 'biweekly': {
+      const days = freq === 'weekly' ? 7 : freq === 'biweekly' ? 14 : 1;
+      const d = new Date(`${fromISO}T00:00:00Z`);
+      d.setUTCDate(d.getUTCDate() + days);
+      return d.toISOString().slice(0, 10);
+    }
     case 'quarterly':
-      d.setUTCMonth(d.getUTCMonth() + 3);
-      break;
+      return addCalendarMonths(fromISO, 3, anchorDay);
     case 'semiannual':
     case 'semi-annual':
     case 'biannual':
-      d.setUTCMonth(d.getUTCMonth() + 6);
-      break;
+      return addCalendarMonths(fromISO, 6, anchorDay);
     case 'yearly':
     case 'annual':
-      d.setUTCFullYear(d.getUTCFullYear() + 1);
-      break;
+      return addCalendarMonths(fromISO, 12, anchorDay);
     case 'monthly':
     default:
-      d.setUTCMonth(d.getUTCMonth() + 1);
-      break;
+      return addCalendarMonths(fromISO, 1, anchorDay);
   }
-  return d.toISOString().split('T')[0]!;
+}
+
+/**
+ * The day-of-month a template's series is anchored to. Recorded on the template
+ * the first time this job advances it (`metadata.billing_anchor_day`) so later
+ * runs can still tell a month-end customer from one who genuinely bills on the
+ * 28th. Rows written before #2429 have no stored anchor and take the day of their
+ * current `nextBillingDate`, which preserves whatever date they are on today
+ * rather than jumping them.
+ */
+function anchorDayFor(template: {
+  metadata: unknown;
+  nextBillingDate: string | null;
+}, fallbackDay: number): number {
+  const stored = (template.metadata as Record<string, unknown> | null)?.billing_anchor_day;
+  if (typeof stored === 'number' && Number.isInteger(stored) && stored >= 1 && stored <= 31) {
+    return stored;
+  }
+  return anchorDayOf(template.nextBillingDate, fallbackDay);
 }
 
 export async function POST(request: NextRequest) {
@@ -89,9 +113,13 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const todayStr = today.toISOString().split('T')[0]!;
+    // The due cutoff is a UTC calendar day. The previous form was local midnight
+    // read back through `toISOString()`, which is the PREVIOUS UTC day on a
+    // host east of Greenwich (TZ=Asia/Kolkata: 00:00 local -> `T18:30Z`), so
+    // every template looked one day less due than it was. Everything else here
+    // is already UTC (`advanceDate`, the issue->due gap), so this keeps the file
+    // consistent and makes the cutoff independent of the host timezone.
+    const todayStr = utcDateStamp();
 
     let due = 0;
     let generated = 0;
@@ -151,6 +179,10 @@ export async function POST(request: NextRequest) {
           // whole chain is reachable from one id. If the template is itself a
           // child, reuse its parent; otherwise the template IS the root.
           const seriesRootId = template.parentInvoiceId ?? template.id;
+
+          // #2429 — the day-of-month this series bills on, resolved once per
+          // template so the advanced date and the stored anchor cannot disagree.
+          const anchorDay = anchorDayFor(template, anchorDayOf(todayStr));
 
           // Derive the new dates from the period being billed.
           const issueDate = todayStr;
@@ -257,10 +289,19 @@ export async function POST(request: NextRequest) {
                 const nextDate = advanceDate(
                   template.nextBillingDate ?? todayStr,
                   template.recurringFrequency,
+                  anchorDay,
                 );
                 await tx
                   .update(invoices)
-                  .set({ nextBillingDate: nextDate, updatedAt: new Date() })
+                  .set({
+                    nextBillingDate: nextDate,
+                    // jsonb_set rather than a read-modify-write of the whole
+                    // column, so a seller's own metadata keys are never dropped
+                    // by this job. Idempotent: the anchor is read before it is
+                    // written, so re-running stores the same value.
+                    metadata: sql`jsonb_set(${invoices.metadata}, '{billing_anchor_day}', to_jsonb(${anchorDay}::int), true)`,
+                    updatedAt: new Date(),
+                  })
                   .where(and(eq(invoices.id, template.id), eq(invoices.tenantId, tenantId)));
               });
               break; // success

@@ -87,6 +87,7 @@ vi.mock('@/drizzle/schema', () => ({
     deletedAt: 'invoices.deleted_at',
     status: 'invoices.status',
     nextBillingDate: 'invoices.next_billing_date',
+    metadata: 'invoices.metadata',
   },
   invoiceLineItems: {
     toString: () => 'invoice_line_items',
@@ -239,6 +240,128 @@ describe('recurring-invoice-generator cron', () => {
 
     // Template schedule advanced monthly: 2026-02-01 -> 2026-03-01.
     expect(updated.some((u) => u.set.nextBillingDate === '2026-03-01')).toBe(true);
+  });
+
+  // ── #2429: month-end series must clamp, and must come back to month end ─────
+  // Every case below is a NON-LEAP February on purpose. Under the old
+  // `setUTCMonth` code 2024-01-31 -> 2024-02-29 looked correct, which is how the
+  // defect survived; 2026-01-31 -> 2026-03-03 is the same call, visibly wrong.
+
+  it('advances a month-end template to 28 Feb, not 3 Mar', async () => {
+    dueTemplates = [templateFixture({ nextBillingDate: '2026-01-31' })];
+    lineItems = [];
+
+    const { POST } = await import('@/app/api/cron/recurring-invoice-generator/route');
+    const body = await (await POST(makeReq())).json();
+
+    expect(body).toMatchObject({ ok: true, due: 1, generated: 1, failed: 0 });
+    expect(updated.map((u) => u.set.nextBillingDate)).toContain('2026-02-28');
+    expect(updated.some((u) => String(u.set.nextBillingDate).endsWith('-03'))).toBe(false);
+  });
+
+  it('returns a month-end series to the 31st after February, from the stored anchor', async () => {
+    // Second run of the series above: the template now sits on 2026-02-28 and
+    // carries the anchor recorded on the first run.
+    dueTemplates = [templateFixture({
+      nextBillingDate: '2026-02-28',
+      metadata: { billing_anchor_day: 31 },
+    })];
+    lineItems = [];
+
+    const { POST } = await import('@/app/api/cron/recurring-invoice-generator/route');
+    await POST(makeReq());
+
+    // Without the anchor this is 2026-03-28 — a month-end customer pinned to the
+    // 28th forever, which is the failure mode a plain clamp produces.
+    expect(updated.map((u) => u.set.nextBillingDate)).toContain('2026-03-31');
+  });
+
+  it('records the anchor day on the template without replacing its other metadata', async () => {
+    dueTemplates = [templateFixture({
+      nextBillingDate: '2026-01-31',
+      metadata: { seller_note: 'keep me' },
+    })];
+    lineItems = [];
+
+    const { POST } = await import('@/app/api/cron/recurring-invoice-generator/route');
+    await POST(makeReq());
+
+    const meta = updated.find((u) => u.set.metadata !== undefined)?.set.metadata;
+    // A SQL fragment computed from the stored column, not a literal object built
+    // from this read: a whole-column overwrite would drop the seller's own keys.
+    expect(typeof meta).toBe('string');
+    expect(String(meta)).toContain('invoices.metadata');
+    expect(String(meta)).toContain('31'); // the resolved anchor
+    expect(String(meta)).not.toContain('seller_note');
+  });
+
+  it('keeps a series that already drifted to the 3rd on the 3rd instead of jumping it', async () => {
+    dueTemplates = [templateFixture({
+      nextBillingDate: '2026-02-03',
+      metadata: { billing_anchor_day: 3 },
+    })];
+    lineItems = [];
+
+    const { POST } = await import('@/app/api/cron/recurring-invoice-generator/route');
+    await POST(makeReq());
+
+    expect(updated.map((u) => u.set.nextBillingDate)).toContain('2026-03-03');
+  });
+
+  it('honours the frequency regardless of how it is capitalised', async () => {
+    // The switch lowercases its input, so any comparison inside it must use the
+    // lowered value: `'WEEKLY' === 'weekly'` is false and silently billed daily.
+    dueTemplates = [templateFixture({
+      recurringFrequency: 'WEEKLY',
+      nextBillingDate: '2026-01-31',
+    })];
+    lineItems = [];
+
+    const { POST } = await import('@/app/api/cron/recurring-invoice-generator/route');
+    await POST(makeReq());
+
+    expect(updated.map((u) => u.set.nextBillingDate)).toContain('2026-02-07');
+  });
+
+  it('applies month-end clamping to an upper-case MONTHLY frequency', async () => {
+    dueTemplates = [templateFixture({
+      recurringFrequency: 'MONTHLY',
+      nextBillingDate: '2026-01-31',
+    })];
+    lineItems = [];
+
+    const { POST } = await import('@/app/api/cron/recurring-invoice-generator/route');
+    await POST(makeReq());
+
+    expect(updated.map((u) => u.set.nextBillingDate)).toContain('2026-02-28');
+  });
+
+  it('clamps quarterly and yearly periods too', async () => {
+    dueTemplates = [templateFixture({
+      recurringFrequency: 'quarterly',
+      nextBillingDate: '2026-01-31',
+    })];
+    lineItems = [];
+
+    const { POST } = await import('@/app/api/cron/recurring-invoice-generator/route');
+    await POST(makeReq());
+
+    // setUTCMonth(+3) gave 2026-05-01 here.
+    expect(updated.map((u) => u.set.nextBillingDate)).toContain('2026-04-30');
+  });
+
+  it('advances a leap-day annual anniversary to 28 Feb, not 1 Mar', async () => {
+    dueTemplates = [templateFixture({
+      recurringFrequency: 'yearly',
+      nextBillingDate: '2024-02-29',
+    })];
+    lineItems = [];
+
+    const { POST } = await import('@/app/api/cron/recurring-invoice-generator/route');
+    await POST(makeReq());
+
+    // setUTCFullYear(+1) rolled 2024-02-29 to 2025-03-01, losing the anniversary.
+    expect(updated.map((u) => u.set.nextBillingDate)).toContain('2025-02-28');
   });
 
   it('runs the whole pipeline inside a per-tenant sweep', async () => {

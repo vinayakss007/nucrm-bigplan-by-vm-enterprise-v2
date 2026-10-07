@@ -13,6 +13,7 @@ import { eq, and, desc, isNull } from 'drizzle-orm';
 import { concurrencyGuard } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody, validateBody } from '@/lib/api/validate';
+import { addMonthsClamped } from '@/lib/billing/recurrence-date';
 import { z } from 'zod';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
@@ -37,7 +38,10 @@ function nextRunFrom(frequency: (typeof FREQUENCIES)[number], from: Date = new D
     case 'hourly': nextRun.setHours(nextRun.getHours() + 1); break;
     case 'daily': nextRun.setDate(nextRun.getDate() + 1); break;
     case 'weekly': nextRun.setDate(nextRun.getDate() + 7); break;
-    case 'monthly': nextRun.setMonth(nextRun.getMonth() + 1); break;
+    // #2429 — `setMonth` rolled 2026-01-31 forward to 2026-03-03, so this is the
+    // value a user saw in the UI as "next run" for a month-end schedule: a
+    // skipped month, then a permanently migrated day.
+    case 'monthly': return addMonthsClamped(from, 1);
   }
   return nextRun;
 }
