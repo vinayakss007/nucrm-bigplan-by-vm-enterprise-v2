@@ -131,6 +131,11 @@ export { InvalidJsonBodyError } from '@/lib/errors-shared';
  * untagged `SyntaxError`, which every route's catch block turned into a 500 —
  * telling the caller the server broke when in fact their request was malformed.
  */
+// The one deliberate `any` in the source tree. `request.json()` is `any` at the
+// DOM boundary and 158 route files unpack the body without narrowing first, so
+// tightening this to `unknown` is a 906-error change in its own right (#1341
+// tracks it). The ratchet in scripts/check-any-suppressions.mjs counts this
+// line so it cannot grow while that migration is open.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function readJsonBody(request: Request): Promise<any> {
   try {
