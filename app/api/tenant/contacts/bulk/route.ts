@@ -23,6 +23,7 @@ import { logAudit } from '@/lib/audit';
 import { logError } from '@/lib/errors-server';
 import { invalidateWidgetCache } from '@/lib/dashboard/widget-cache';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { cancelOpenEnrollments } from '@/lib/cron/sequence-steps';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 const MAX_BULK = 500;
@@ -251,6 +252,15 @@ export const POST = withApiRoute(async (req: NextRequest) => {
             await tx.update(tenants)
               .set({ currentContacts: sql`greatest(0, ${tenants.currentContacts} - ${affected})` })
               .where(eq(tenants.id, ctx.tenantId));
+
+            // #2392: the single delete cancels in its tombstone transaction;
+            // this is the same write with a list of subjects, and the drip used
+            // to keep mailing all of them. Cancelling here rather than leaving
+            // the rows 'active' for the cron also means a restore cannot
+            // silently resume outbound email to people the tenant trashed.
+            extraResult.cancelledEnrollments = await cancelOpenEnrollments(tx, ctx.tenantId, {
+              contactIds: validIds,
+            });
           }
         });
         break;

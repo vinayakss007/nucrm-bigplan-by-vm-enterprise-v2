@@ -17,7 +17,7 @@
 import { db } from '@/drizzle/db';
 import { sanitizeHTMLServer } from '@/lib/sanitize';
 import { sequenceEnrollments, sequenceSteps, sequenceStepLogs } from '@/drizzle/schema';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, and, inArray, sql } from 'drizzle-orm';
 import { generateUnsubscribeToken } from '@/lib/email/unsubscribe-token';
 
 export type DueEnrollment = {
@@ -47,8 +47,19 @@ type DbTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
  * The log update is scoped through `sequence_enrollments` rather than by
  * `step_id` alone: a step can belong to a second, still-live enrollment, and
  * cancelling that enrollment's pending log would silently swallow a real send.
+ *
+ * `contactIds` is the plural because a tombstone is not always one row: the
+ * bulk delete, the merge and the GDPR erasure each remove many contacts in one
+ * statement, and `tests/unit/sequence-cancel-delete-paths-2392.test.ts` scans
+ * the source for anyone who sets `contacts.deleted_at` or `sequences.deleted_at`
+ * and requires a cancel on the same transaction handle. Five contact writers
+ * plus the sequence route is more than anyone remembers by hand.
  */
-export type EnrollmentCancelFilter = { contactId?: string; sequenceId?: string };
+export type EnrollmentCancelFilter = {
+  contactId?: string;
+  contactIds?: readonly string[];
+  sequenceId?: string;
+};
 
 export async function cancelOpenEnrollments(
   tx: DbTransaction,
@@ -56,9 +67,12 @@ export async function cancelOpenEnrollments(
   filter: EnrollmentCancelFilter,
 ): Promise<number> {
   // An empty filter would cancel every open drip in the tenant.
-  if (!filter.contactId && !filter.sequenceId) {
-    throw new Error('cancelOpenEnrollments requires a contactId or a sequenceId');
+  if (!filter.contactId && !filter.contactIds && !filter.sequenceId) {
+    throw new Error('cancelOpenEnrollments requires a contactId, contactIds or sequenceId');
   }
+  // `inArray` renders `contact_id in ()` for an empty list, which Postgres
+  // rejects as a syntax error rather than matching zero rows.
+  if (filter.contactIds && filter.contactIds.length === 0) return 0;
 
   const cancelled = await tx.update(sequenceEnrollments)
     .set({ status: 'cancelled', completedAt: new Date(), updatedAt: new Date() })
@@ -66,6 +80,7 @@ export async function cancelOpenEnrollments(
       eq(sequenceEnrollments.tenantId, tenantId),
       eq(sequenceEnrollments.status, 'active'),
       filter.contactId ? eq(sequenceEnrollments.contactId, filter.contactId) : undefined,
+      filter.contactIds ? inArray(sequenceEnrollments.contactId, [...filter.contactIds]) : undefined,
       filter.sequenceId ? eq(sequenceEnrollments.sequenceId, filter.sequenceId) : undefined,
     ))
     .returning({ id: sequenceEnrollments.id });
