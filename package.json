@@ -56,6 +56,7 @@
     "guard:counters": "node scripts/check-counter-increments.mjs",
     "guard:csv": "node scripts/check-csv-blob.mjs",
     "guard:portal-softdelete": "npx tsx scripts/check-portal-soft-delete.mts",
+    "guard:public-ratelimit": "npx tsx scripts/check-public-rate-limit.mts",
     "guard:audit": "node scripts/check-audit-baseline.mjs",
     "guard:semgrep": "node scripts/check-semgrep-baseline.mjs semgrep.sarif",
     "guard:vocab": "npx tsx --import ./scripts/load-env.mjs scripts/check-constraint-vocab.mts",
