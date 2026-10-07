@@ -257,7 +257,8 @@
     },
     "@esbuild-kit/core-utils": {
       "esbuild": "^0.25.0"
-    }
+    },
+    "sharp": "^0.35.5"
   },
   "optionalDependencies": {
     "@rolldown/binding-linux-x64-gnu": "^1.2.12"

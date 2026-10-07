@@ -26,6 +26,14 @@
       "reason": "brace-expansion 5.0.9 installed ONLY in nested dev toolchain trees (eslint/typescript-eslint minimatch glob parsing). Build-time DoS; the runtime copy is already forced to safe 2.1.x via package.json overrides. Fix lands when the lint toolchain refreshes minimatch."
     },
     {
+      "ghsa": "GHSA-PQG4-J6R4-53MV",
+      "pkg": "shell-quote",
+      "range": ">=1.8.4 <1.11.0",
+      "severity": "critical",
+      "title": "shell-quote: `quote()` command injection via a line terminator in a token after a `{ comment }` token",
+      "reason": "shell-quote 1.9.0, reached only through devDependency concurrently@10.0.5, which pins it exactly (\"shell-quote\": \"1.9.0\"). The first unaffected release is 1.11.0, so the only in-tree fixes are overriding a dependency's deliberate exact pin or the semver-major downgrade npm itself proposes (concurrently 9.2.1, whose tree still resolves into the affected range). quote() here serialises developer-written npm scripts; no request data, upload or header ever reaches it, in CI or in the product. Accepted as transient — prune when concurrently moves off the 1.9.0 pin."
+    },
+    {
       "ghsa": "GHSA-QHR7-859C-M2P7",
       "pkg": "brace-expansion",
       "range": ">=4.0.0 <5.0.11",
