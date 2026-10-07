@@ -3180,11 +3180,12 @@ the first measurement.)_
   `2026-10-03T15:43:25Z`, `git rev-list --count --since=2026-10-03T15:43:25Z origin/main` is **159** commits
   at `38ae90e2`, and `db:status` reports **22** journal entries newer than the ledger. Nothing is building
   the answer to "which tree does this database match".
-- **The register's own coordinates rot with it.** Main's PP-058 text still points at `deploy.yml:298` for
-  the migrate call and describes an inline `pg_dump` restore point at `:284-293`; both were replaced by
+- **The register's own coordinates rot with it.** Main's PP-058 text still points at deploy.yml line 298 for
+  the migrate call and describes an inline `pg_dump` restore point at lines 284 to 293; both were replaced by
   #2404 (the call is `:277`, the restore point is `scripts/deploy-migrate.ts`'s). That is not a second bug —
   it is the same one, seen from the docs: a deploy path nobody runs also has no reason to keep its own
-  documentation honest.
+  documentation honest. Stale numbers are spelled "line N" on purpose: `path:line` is how this file cites live
+  targets, so a citation-shaped token aimed at a dead line is indistinguishable from a live citation.
 - **The chain, end to end.** (i) **22** entries are pending, including `0112`/`0120` (PP-059's fix for a
   live rejection), `0091` (**#56**) and `0059` (**#74**); (ii) the only automated apply path is `:277`,
   behind an SSH hop that has not opened in 716 runs, pointing at another host; (iii) even when it opens,
