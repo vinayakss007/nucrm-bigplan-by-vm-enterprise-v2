@@ -2066,7 +2066,7 @@ connection setup (~400–600 ms) and bounds the 50-statement loop rather than pr
   duration as the only discriminator (a true leak repeats every 30 s forever; the worst observed run was **2** ticks, and
   `Total unreleased` peaked at `4`).
 - **The pin is not just noise — it is capacity.** `lib/db/pool.ts:183` passes `max: poolSize` and the running app container
-  carries `DATABASE_POOL_SIZE=10` (the compose default is 20 — `docker-compose.preprod.yml:152`, `pool.ts:168`), with `:190`
+  carries `DATABASE_POOL_SIZE=10` (the compose default is 20 — `docker-compose.preprod.yml:156`, `pool.ts:168`), with `:190`
   failing a checkout after 5 s (#2122). A sweep pins 1 of 10 for ~75 s, and the detector reported `Total unreleased: 4` in the
   same tick at the multi-job hours — **40 % of the app container's pool held by concurrent sweeps** while ordinary requests die
   at 5 s.
@@ -3016,7 +3016,7 @@ the first measurement.)_
   ledger** — and `:165-168` then applies RLS files through `scripts/apply-rls-ci.mjs` (`:166`) under
   `DATABASE_URL=postgresql://postgres:postgres@…` (also the workflow-level default at `:11`). RLS does not filter a superuser and no
   ledger means neither branch of `scripts/migrate.ts` is taken, so in the only context CI can reach, the blindness in this entry
-  cannot manifest. `scripts/migrate.ts` never runs in `ci.yml` at all: the only workflow that invokes it is `deploy.yml:277`, against
+  cannot manifest. `scripts/migrate.ts` never runs in `ci.yml` at all: the only workflow that invokes it is `deploy.yml:281`, against
   a live database — the runner is exercised by failing in preprod, never by a pre-merge check.
   <!-- coordinate corrections at 38ae90e2: before these corrections this paragraph pointed at ci.yml line 153
        and lines 157 to 160, and at deploy.yml line 298. #2404/#2405 shifted ci.yml by 3 lines (that 153 is now
