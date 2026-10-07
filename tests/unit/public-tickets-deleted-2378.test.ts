@@ -6,6 +6,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { NextRequest } from 'next/server';
 import { inspect } from 'util';
+import { PgDialect } from 'drizzle-orm/pg-core';
 
 // #2378: a soft-deleted ticket must be invisible AND inert through the portal.
 // The tenant DELETE handler only stamps support_tickets.deleted_at, so every
@@ -147,6 +148,13 @@ describe('GET /api/public/tickets — list omits soft-deleted tickets (#2378)', 
     const res = await GET(getTokenRequest('a-token-value'));
     expect(res.status).toBe(200);
     expect(mockState.findFirst).toHaveBeenCalledTimes(1);
+    // This is the query scripts/portal-softdelete-baseline.json exempts: it must
+    // still key on the portal token and still carry NO tombstone predicate.
+    // Rendered, because the node's inspect dump names every column of the table.
+    const lookup = mockState.findFirst.mock.calls[0][0] as { where: unknown };
+    const rendered = new PgDialect().sqlToQuery(lookup.where as never).sql;
+    expect(rendered).toContain('"portal_token"');
+    expect(rendered).not.toMatch(/deleted_at/);
   });
 });
 

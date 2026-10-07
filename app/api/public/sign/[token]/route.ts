@@ -19,7 +19,7 @@ import { checkRateLimit } from '@/lib/rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
 import { db } from '@/drizzle/db';
 import { documents, tenants } from '@/drizzle/schema';
-import { eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import {
   getInternalSigningByToken,
   recordInternalSignerEvent,
@@ -48,13 +48,15 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
       });
     }
 
-    // Minimal document + seller branding for the signer page.
+    // Minimal document + seller branding for the signer page. The `documents`
+    // read is credited to getInternalSigningByToken(), which 404s a tombstoned
+    // document before this line runs (#2380); nothing gates the tenant row.
     const doc = await db.query.documents.findFirst({
       where: eq(documents.id, view.documentId),
       columns: { id: true, name: true },
     });
     const tenant = await db.query.tenants.findFirst({
-      where: eq(tenants.id, view.request.tenantId),
+      where: and(eq(tenants.id, view.request.tenantId), isNull(tenants.deletedAt)),
       columns: { name: true, logoUrl: true, primaryColor: true },
     });
 

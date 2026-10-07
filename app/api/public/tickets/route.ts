@@ -119,9 +119,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'tenant_id is required' }, { status: 400 });
     }
 
-    // Find or create contact — ALWAYS scoped to (tenantId, email) (#1982).
+    // Find or create contact — ALWAYS scoped to (tenantId, email) (#1982), and
+    // never to a tombstoned one (#2382): deleting the customer ends their portal
+    // access, so "No account found with this email" is the right answer.
     const contact = await db.query.contacts.findFirst({
-      where: and(eq(contacts.tenantId, tenant_id), eq(contacts.email, lookupEmail)),
+      where: and(
+        eq(contacts.tenantId, tenant_id),
+        eq(contacts.email, lookupEmail),
+        isNull(contacts.deletedAt),
+      ),
     });
 
     if (!contact) return NextResponse.json({ error: 'No account found with this email' }, { status: 404 });

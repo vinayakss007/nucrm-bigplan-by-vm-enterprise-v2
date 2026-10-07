@@ -27,10 +27,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (!identity) return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
 
     const email = identity.email;
+    // #2382: same rule as accept — a tombstoned contact resolves to nobody.
     const contact = await db.query.contacts.findFirst({
       where: and(
         eq(contacts.email, identity.email),
         eq(contacts.tenantId, identity.tenantId),
+        isNull(contacts.deletedAt),
       ),
       columns: { id: true, tenantId: true },
     });
