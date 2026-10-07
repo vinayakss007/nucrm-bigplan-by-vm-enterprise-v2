@@ -11,7 +11,7 @@ import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { createTenantSchema, updateTenantSchema } from '@/lib/api/schemas';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { tenants, users, tenantMembers, plans } from '@/drizzle/schema';
+import { tenants, users, tenantMembers, plans, backupSchedules } from '@/drizzle/schema';
 import { eq, and, sql, ilike, desc, or } from 'drizzle-orm';
 import { hashPassword } from '@/lib/auth/session';
 import { logSuperAdminAction } from '@/lib/audit/super-admin';
@@ -409,10 +409,24 @@ export const DELETE = withApiRoute(async (request: NextRequest) => {
       //   - Queued webhook deliveries that reference this tenant
       await addJob('tenant-cleanup', { tenantId: id });
     } else {
-      await db
-        .update(tenants)
-        .set({ status: 'suspended', deletedAt: new Date(), updatedAt: new Date() })
-        .where(eq(tenants.id, id));
+      // #2393: this is an UPDATE, so backup_schedules' `ON DELETE cascade`
+      // cannot fire and the tenant's schedule would stay enabled=true —
+      // re-exporting a gone tenant every cron tick. Disable it alongside the
+      // tombstone, in the same transaction.
+      await db.transaction(async (tx) => {
+        await tx
+          .update(tenants)
+          .set({ status: 'suspended', deletedAt: new Date(), updatedAt: new Date() })
+          .where(eq(tenants.id, id));
+
+        await tx
+          .update(backupSchedules)
+          .set({ enabled: false, deletedAt: new Date(), updatedAt: new Date() })
+          .where(and(
+            eq(backupSchedules.tenantId, id),
+            sql`${backupSchedules.deletedAt} IS NULL`,
+          ));
+      });
       await logSuperAdminAction({
         adminId: ctx.userId,
         adminEmail: ctx.user?.email || "",
