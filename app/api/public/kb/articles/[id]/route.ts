@@ -8,6 +8,7 @@ import { db } from '@/drizzle/db';
 import { kbArticles, kbCategories } from '@/drizzle/schema';
 import { eq, and, isNull, sql } from 'drizzle-orm';
 import { resolvePortalIdentity } from '@/lib/portal-auth';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 /**
  * Public KB article detail — DECISION (#2284, follow-up to #2221 / PR #2283):
@@ -25,6 +26,13 @@ import { resolvePortalIdentity } from '@/lib/portal-auth';
  */
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    // This handler writes (`views + 1`) on a read route, so this ceiling is
+    // what bounds view-count inflation (#2417). Incrementing from a beacon
+    // instead would be the better shape, but it changes what `views` means to
+    // tenants, so it is not decided here.
+    const limited = await checkRateLimit(request, { action: 'public-kb-view', max: 30, windowMinutes: 1 });
+    if (limited) return limited;
+
     const identity = await resolvePortalIdentity(request);
     if (!identity) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });

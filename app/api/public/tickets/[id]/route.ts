@@ -9,9 +9,13 @@ import { db } from '@/drizzle/db';
 import { supportTickets, ticketReplies } from '@/drizzle/schema';
 import { eq, and, asc, sql, isNull } from 'drizzle-orm';
 import { resolvePortalIdentity, resolvePortalContact } from '@/lib/portal-auth';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const limited = await checkRateLimit(request, { action: 'public-ticket-detail', max: 30, windowMinutes: 1 });
+    if (limited) return limited;
+
     const { id } = await params;
 
     const token = request.headers.get('x-portal-token');
