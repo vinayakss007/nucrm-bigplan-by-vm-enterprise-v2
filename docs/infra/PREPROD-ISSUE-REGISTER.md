@@ -880,6 +880,19 @@ running=120s` with exit 1 and the `--force-recreate app` command to fix it.
      claim about them, and every token in this file is one of the things the guard resolves — 216 at the base, 217
      here, and a denominator that quietly grew by 12 while this comment was being written is a denominator nobody is
      reading.
+     A third round, found by re-running the screen at push time and caused entirely by this branch sitting open:
+     #2434 added three lines to lib/auth/middleware.ts (one import, then a two-line API-key quota check) and eight
+     to its test file. At that base the screen reports 25 moved where this correction started from 19, and the six
+     new ones are all the same shift — PP-047's lastTenantId read 374 → 377, `can()`'s short-circuit 430 → 433, the
+     noWorkspace computation 379 → 382, the pinned-behaviour test range 542-551 → 550-559, and PP-048's two
+     cached-context proofs 294 → 297. Three of those sentences also carry bare `:N` continuations, which the screen
+     cannot see at any base: 434/441/451 went to 437/444/454, and the 388 that sits beside the 294 went to 391 in
+     both places that pair them. Those four numbers moved by hand, by the same three lines, after reading the
+     functions they name.
+     This is the second time in one correction that a coordinate was verified correct while the branch was being
+     written and stale by the time it could merge — the seventeenth came from #2431 the same way. It is the reason
+     "17" is a measurement and not a total: whatever lands between this push and the merge moves these again, and
+     only re-running the screen against the base catches it.
      NOT re-pinned, deliberately: the two read-log lists — PP-055's auto-backup line set (55, 147, 243, 256-257, 297)
      and PP-051's process-sequences ranges (33-64, 70-108, 118, 285). Those numbers record ranges somebody read, not
      pointers to constructs; re-pinning them would invent an intent the entry never stated. They have moved with the
@@ -1750,7 +1763,7 @@ NOW() - interval '30 days'`, each followed by `v_count := v_count + 1`, and `RET
   status. Without the GUC the same query returns 0 rows — `users` is `relrowsecurity=t` **and**
   `relforcerowsecurity=t`, so the app role reads nothing by default.
 - **Stale part of the original report.** `default_tenant_id` is NULL but **irrelevant**: `requireAuth` reads only
-  `users.lastTenantId` (`lib/auth/middleware.ts:374`); `defaultTenantId` appears nowhere in auth code — grepping it
+  `users.lastTenantId` (`lib/auth/middleware.ts:377`); `defaultTenantId` appears nowhere in auth code — grepping it
   returns `drizzle/schema/core.ts:76`, `scripts/seed-dev.ts`, and a read-only projection at
   `app/api/superadmin/users/[id]/route.ts:48`.
 - **No platform workspace exists.** `select count(*), count(*) filter (where status='active') from tenants` →
@@ -1774,8 +1787,8 @@ NOW() - interval '30 days'`, each followed by `v_count := v_count + 1`, and `RET
   (`app/api/tenant/api-keys/route.ts:91` → `generateApiKey(ctx.tenantId, …)` → `lib/auth/api-key.ts:178`), so
   120 is a **lower bound**, not a ceiling.
 - **Nothing 403s first — the opposite of the assumption.** `can()` short-circuits for platform accounts
-  (`lib/auth/middleware.ts:430`), and `requirePerm`/`requireModule`/`requireFeature` all return null for super
-  admins (`:434`, `:441`, `:451`). Of the 120 insert routes, **0** carry a workspace guard.
+  (`lib/auth/middleware.ts:433`), and `requirePerm`/`requireModule`/`requireFeature` all return null for super
+  admins (`:437`, `:444`, `:454`). Of the 120 insert routes, **0** carry a workspace guard.
 - **The per-tenant super-admin panel is unaffected — the useful distinction.** Of **52** route files under
   `app/api/superadmin/**`, **0** write `ctx.tenantId` into a tenant column; they take the target tenant from the
   request (`tenant_id` from body/query at 12 sites), e.g. `app/superadmin/tenants/[id]/settings/page.tsx:85`.
@@ -1794,10 +1807,10 @@ NOW() - interval '30 days'`, each followed by `v_count := v_count + 1`, and `RET
   deliberate; writes failing is the unintended half. Existing special-cases: `lib/usage/middleware.ts:43`,
   `app/api/tenant/services/route.ts:24` (403 + `code: 'SUPERADMIN_NO_TENANT'` — **GET only**; the POST at `:59` has
   no guard), `app/api/superadmin/join-tenant/route.ts:139`. Pinned as intended behaviour by
-  `tests/unit/auth-middleware-require-auth.test.ts:542-551`.
+  `tests/unit/auth-middleware-require-auth.test.ts:550-559`.
 - **Option (a) — up-front rejection, costed.** No shared choke point sees it: neither `lib/api-error.ts` nor
   `lib/api/with-api-route.ts` mentions `NO_TENANT_SENTINEL` or `noWorkspace`. `requireAuth` is where `noWorkspace`
-  is already computed (`lib/auth/middleware.ts:379`) but it cannot reject there — sentinel **reads** are what power
+  is already computed (`lib/auth/middleware.ts:382`) but it cannot reject there — sentinel **reads** are what power
   the console's empty `/api/tenant/*`-shaped states, and `join-tenant`'s own GET plus `usage` depend on the context
   existing; a blanket 403 would change behaviour for all 239 files, not the 120 that fail. The narrow version is a
   verb-scoped guard in `withApiRoute` (which already owns the request scope and the 23503 mapping) firing only for
@@ -1866,7 +1879,7 @@ from pg_policies where schemaname='public' and (qual like '%app.is_super_admin%'
 - **What the code does — the real question (can an HTTP caller reach a `SET`?) answers NO.** The app writes the GUC only as
   the literals `'true'`/`'false'` (`lib/db/rls.ts:169` `setSuperAdminContext`, `:217` `setImpersonationContext` — tx
   required; the only variable is `isLocal`, a compile-time fragment), and `'true'` is reached only after the **database**
-  proves `users.is_super_admin` (`lib/auth/middleware.ts:294` cached context, `:388` fresh read under a verified JWT).
+  proves `users.is_super_admin` (`lib/auth/middleware.ts:297` cached context, `:391` fresh read under a verified JWT).
   Reset to `'false'` runs on every checkout (`lib/db/pool.ts:233`, `lib/db/request-connection.ts:94`). No route splices
   request data into SQL: the template-literal sinks in `app/` are compile-time identifiers or regex-gated numerics
   (`app/api/cron/backup-verify/route.ts:234-236` gates `nucrm_verify_${Date.now()}` through `^[a-z0-9_]+$` before
@@ -1899,7 +1912,7 @@ from pg_policies where schemaname='public' and (qual like '%app.is_super_admin%'
 - **Verified:** this session's own output for every number — `nucrm|f|f|t|0`; `0|0`; `191`/`162`; `0`/`0` for `team_*`;
   `49|60`; `226|225|1` with `ai_providers` at 0 policies; and the fail-closed query still `0|0` after the bypass.
 - **Files (all read-only):** `lib/db/rls.ts:138,165-189,206-221`, `lib/db/pool.ts:233`,
-  `lib/db/request-connection.ts:88-94`, `lib/auth/middleware.ts:294,388`,
+  `lib/db/request-connection.ts:88-94`, `lib/auth/middleware.ts:297,391`,
   `drizzle/migrations/0088_rls_bootstrap_and_isolation.sql:344-360`, `drizzle/migrations/0099_api_keys_auth_lookup.sql`,
   `drizzle/migrations/0105_email_tracking_pixel_lookup.sql`, `app/api/cron/backup-verify/route.ts:234-236`,
   `deploy/docker-compose.preprod.yml`, `deploy/docker-compose.production.yml`.
