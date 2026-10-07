@@ -78,7 +78,7 @@ Severity: **S1** blocks go-live · **S2** broken feature or security weakness ·
 | PP-056 | S3  | Host / tooling              | `/tmp` is a **3.9 GB tmpfs** and vitest leaves a ~22 MB temp dir on **every** run: 88 of them held **1.9 GB**, which filled it. `npx vitest run` then exited **1 with no `Test Files`/`Tests` summary at all** — a scratch-space outage is indistinguishable from a red suite. Sweeping the suite after fixing it found **three assertions that only pass when `.env.local` is absent** (2 × CSRF + rate-limit) — and a fourth that turned out to be a **stale-clone-base artifact**, which is its own harness lesson | 🔧 MITIGATED (1.5 GB of stale clones moved off tmpfs, `TMPDIR` pinned to the root fs) · CSRF pair in PR **#2359**, rate-limit + this entry in **#2365** · four exits, all owner's call |
 | PP-057 | S2  | Migrations + tooling        | The repo has exactly one "what is applied?" command and it cannot see the ledger: `db:status` queries `__drizzle_migrations(name, applied_at)` — no such table, no such columns — and maps **any** failure to "history table does not exist", so against preprod it printed **`Applied: 0 / Pending: <every journal entry>`** on a database with **99 applied and 18 outstanding**. `db:migrate --dry-run` compounds it: its first line counts journal entries (**`116 pending migration(s)`**) before reading anything, and that number is what the y/N apply prompt offers. Nothing in CI or the runbooks would ever have revealed the 18-behind state, which includes `0091` (the usage-snapshot bypass **#56** shipped), `0059` (**#74**'s still-unstamped entry) and now `0116` (**#2367**, merged while this PR was open) | 🔧 SCRIPTS FIXED in this PR (verified 99/18 against two instruments) · applying the 18 is an **owner decision** · also measured: `0115`'s absence is **not** a live cross-tenant read |
 | PP-058 | S2  | Migrations + tooling        | `db:migrate` connects as the tables' **owner** (`nucrm`) with `FORCE ROW LEVEL SECURITY` active on 48 of the 49 tables the pending set names, and `scripts/migrate.ts:184` sets **no tenant GUC** — so every data-correcting statement in a migration matches **0 rows** and silently corrects nothing, while the DDL built on top of it (`CREATE UNIQUE INDEX`, `SET NOT NULL`) reads the whole heap regardless. Measured on preprod: `0114_leads_tenant_oid_unique` (pending) dedupes `(tenant_id, lead_oid)` before creating the unique index, but its own CTE sees 0 of 25 leads while the truth is **1 duplicate group / 5 rows / 4 losers** (all five soft-deleted, all nine days older than the header's own "measured 0"), so the pending 21-entry run **aborts on 23505** — the exact failure its header says the dedupe exists to prevent | 🚨 OPEN · owner decision · no historical damage demonstrated · `0109` already proves the fix is one `set_config` line |
-| PP-059 | S2  | CHECK vs code               | `guard:vocab` — the only command in the repo that asks the **live database** what it will reject — exits **1** on `main` at `38ae90e2` with **2 of 9** constraints disagreeing: `chk_sequence_enrollments_status` (5 values) refuses `'cancelled'`, which `/api/unsubscribe` has written since the repo's first commit `ecbba74e`, and `chk_invoices_status` (8 values) refuses `'void'`, which `INVOICE_STATUSES` offers and `PATCH /api/tenant/invoices/[id]` passes through. Its own fixes, `0120` and `0112`, are two of the **22** entries PP-057 says nobody has agreed to apply — and **no workflow runs the guard**: `package.json` defines 14 `guard:*` scripts, `ci.yml` invokes 10 | 🚨 OPEN · guard wired nowhere · latent **on this DB** (both tables hold 0 rows, measured `--superadmin`) · CI green proves only that the `.sql` text says the right thing |
+| PP-059 | S2  | CHECK vs code               | `guard:vocab` — the only command in the repo that asks the **live database** what it will reject — exits **1** on `main` at `38ae90e2` with **2 of 9** constraints disagreeing: `chk_sequence_enrollments_status` (5 values) refuses `'cancelled'`, which `/api/unsubscribe` has written since the repo's first commit `ecbba74e`, and `chk_invoices_status` (8 values) refuses `'void'`, which `INVOICE_STATUSES` offers and `PATCH /api/tenant/invoices/[id]` passes through. Its own fixes, `0120` and `0112`, are two of the **22** entries PP-057 says nobody has agreed to apply — and it is the **only one of the 14 `guard:*` scripts no automation invokes**: workflows call 11 by alias and 2 by direct `node` command (`ci.yml:206`, `:239`), while `grep -rn check-constraint-vocab .github/workflows` returns **0** | 🚨 OPEN · guard wired nowhere · latent **on this DB** (both tables hold 0 rows, measured `--superadmin`) · CI green proves only that the `.sql` text says the right thing |
 | PP-060 | S2  | Deploy                      | The 22-entry backlog has **no automated apply path that could reach this database**: the only executable migrate in the repo's automation is `deploy.yml:277` (`scripts/deploy-migrate.ts --yes`, which spawns `migrate.ts --yes` at `:96`), inside the single `script:` block opened at `:77` — so it runs over SSH on the **pm2 production VM**, not on this Docker preprod host. That hop has failed every run since the last success (`30748691555`, 2026-08-02T12:51:06Z): **716 runs · 0 success** (615 failure / 54 cancelled / 47 skipped), 15 of 15 sampled recent runs contain `dial tcp ***:22: i/o timeout`, and the retained total is **3 successes in 1,257 runs**. No workflow mentions `db:status` (grep: 0 hits in all 5), `ci.yml` and `backup-drill.yml` build their databases with `db:sync`, and this host has no deploy cron or timer | 🚨 OPEN · owner action (`gh secret set DEPLOY_HOST`, the remedy AGENTS.md already documents) · even a healthy deploy migrates a **different database**, so PP-057's exit (a) has no mechanism behind it |
 
 ## Sentry issues → register entries
@@ -3014,13 +3014,22 @@ the first measurement.)_
   and still pending on this database — is the first commit in the repo's history that makes the two agree.
   Four and a half months of code writing a value the schema rejects, with no signal, because the tool that
   would have said so did not exist until 2026-10-02 (`3836629f`).
-- **And the tool that says so is wired to nothing.** `package.json` defines **14** `guard:*` scripts;
-  `ci.yml` invokes **10** (`rls`, `csrf`, `schemas`, `boundaries`, `filesize`, `any-suppressions`, `chain`,
-  `migration-rls`, `counters`, `csv` — `:45` through `:72`). The four left out are `guard:audit`,
-  `guard:semgrep`, `guard:running-config` and `guard:vocab` — of which only `running-config` executes
-  anywhere at all (`nightly-soak.yml:190` job, `:202` call, with `--allow-empty`). So three guards exist
-  that no automation ever runs, and the one that looks at the live database is among them. `guard:vocab` is
-  not merely failing-quiet: it is unfailing-quiet, because nobody calls it.
+- **And the tool that says so is wired to nothing — uniquely so.** Enumerated at `38ae90e2` from the workflow
+  files themselves: `package.json` defines **14** `guard:*` scripts. Workflows invoke **11** by alias —
+  `ci.yml` runs 10 (`rls`, `csrf`, `schemas`, `boundaries`, `filesize`, `any-suppressions`, `chain`,
+  `migration-rls`, `counters`, `csv`, at `:45` through `:72`) and `nightly-soak.yml:190`/`:202` runs the
+  eleventh (`guard:running-config --allow-empty`) — and invoke **2** more as bare `node` commands inside
+  `ci.yml`'s SAST job: `npm audit --audit-level=high --json | node scripts/check-audit-baseline.mjs` (`:206`)
+  and `node scripts/check-semgrep-baseline.mjs semgrep.sarif` (`:239`). That is 13 of 14. The fourteenth is
+  `guard:vocab`: `grep -rn check-constraint-vocab .github/workflows` returns **0**, and so does
+  `grep -rn constraint-vocab .github/workflows`, so no automation runs it under its alias *or* its filename.
+  It is not merely failing-quiet — it is unfailing-quiet, because nobody calls it, and it is the only guard in
+  the repo in that condition.
+  (The 11/2/1 split is itself worth recording. A wiring audit that greps for `npm run guard:` reports
+  **10 of 14** and mis-files `audit` and `semgrep` as unrun, because those two are called as direct `node`
+  invocations rather than through their aliases. This entry said exactly that until its own PR's CI run
+  printed `✖ npm audit baseline guard failed (#2301)` — a baseline rotting *loudly*, on the first try — and
+  the count was then taken from the workflows rather than from the alias list.)
 - **Why CI's database could not answer this even if it did.** CI *has* Postgres —
   `ci.yml:77-90` and `:122-135` start `postgres:16-alpine` services (`:79`, `:124`) — but it provisions them
   with `npm run db:sync` (`:111`, `:156`), i.e. `drizzle-kit push` from `drizzle/schema/**`. Those CHECKs
@@ -3054,15 +3063,18 @@ the first measurement.)_
   PP-057 records as undecided and PP-060 records as unreachable. `0112`/`0120` are pure `ALTER TABLE … DROP
   CONSTRAINT` + `ADD CONSTRAINT` widenings, so they are not exposed to PP-058's RLS blindness at all — this
   is the cheapest half of the backlog to drain and the one with a named consequence.
-  (c) **Decide what the other two unrun guards are for** — `guard:audit` and `guard:semgrep` are
-  baselines with no runner, which means the baselines cannot rot loudly; either schedule them or delete
-  them, but a script nobody runs is not a control.
+  (c) **Make the wiring greppable** — route `ci.yml:206` and `:239` through `npm run guard:audit` /
+  `npm run guard:semgrep` (the same two commands, already aliases in `package.json:58`/`:59`) so "which
+  guards run?" has one answer instead of two syntaxes, and so adding `guard:vocab` to the set is a one-line
+  change rather than a third convention. A control that is invisible to the obvious audit command is a
+  control that will be mis-reported again.
   (d) **Converge the two vocabularies** — declare these CHECKs in `drizzle/schema/**` so `db:sync` and
   `db:migrate` build the same constraint, or the CI/preprod divergence this entry depends on stays a
   permanent fixture of the tooling.
 - **Files:** `scripts/check-constraint-vocab.mts`, `scripts/constraint-vocab.json` (9 entries; its
   `sequence_enrollments.status` writers were rewritten by **#2392**), `.github/workflows/ci.yml` (10 guards
-  at `:45-72`, `db:sync` at `:111`/`:156`, services at `:77-90`/`:122-135`),
+  by alias at `:45-72`, 2 more by direct `node` call at `:206`/`:239`, `db:sync` at `:111`/`:156`, services
+  at `:77-90`/`:122-135`),
   `.github/workflows/nightly-soak.yml` (`:190`, `:202`),
   `tests/unit/schema/invoice-status-vocab-migration.test.ts`,
   `tests/unit/constraint-vocab-registry.test.ts`, `drizzle/migrations/0112_invoice_status_vocab.sql`,
