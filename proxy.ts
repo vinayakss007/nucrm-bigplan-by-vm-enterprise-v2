@@ -219,6 +219,11 @@ const PUBLIC_PATHS = [
   '/api/setup/check', '/api/setup/create-admin', '/api/lead-capture', '/api/lead-capture/submit',
   '/api/public/tickets', '/api/public/invoices', '/api/public/kb', '/api/public/offers',
   '/api/public/quotes',
+  // E-signature and CSAT links are opened from an email by someone with no
+  // session at all: the 192-bit URL token is the only credential, so the edge
+  // must not demand a JWT they cannot have (#2415 — absent from this list,
+  // every anonymous GET/POST to them was 401'd before reaching the handler).
+  '/api/public/sign', '/api/public/csat',
   // Customer-portal login mints the httpOnly session cookie — it must be
   // reachable without an existing session (#1982 portal-auth hardening).
   '/api/tenant/portal/login',
