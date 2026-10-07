@@ -76,7 +76,11 @@ jobs:
           command_timeout: 60m
           script: |
             set -e
-            cd /home/vinayak_shruti_biz/nucrm-bigplan-by-vm-enterprise-v2
+            # $HOME, not a literal path: the SSH identity comes from
+            # secrets.DEPLOY_USER above, and #2302 removed the deploy user's
+            # home directory from this public repo. Same directory on the VM,
+            # and it survives the user or path changing there.
+            cd "$HOME/nucrm-bigplan-by-vm-enterprise-v2"
 
             # Non-interactive SSH does not source .bashrc, so the nvm
             # toolchain (node/npm/pm2) is not on PATH. Load it explicitly.
