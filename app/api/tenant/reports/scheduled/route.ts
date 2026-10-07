@@ -13,6 +13,7 @@ import { eq, and, desc, isNull } from 'drizzle-orm';
 import { concurrencyGuard } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody, validateBody } from '@/lib/api/validate';
+import { addLocalMonthsClamped } from '@/lib/billing/recurring-dates';
 import { z } from 'zod';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
@@ -37,7 +38,9 @@ function nextRunFrom(frequency: (typeof FREQUENCIES)[number], from: Date = new D
     case 'hourly': nextRun.setHours(nextRun.getHours() + 1); break;
     case 'daily': nextRun.setDate(nextRun.getDate() + 1); break;
     case 'weekly': nextRun.setDate(nextRun.getDate() + 7); break;
-    case 'monthly': nextRun.setMonth(nextRun.getMonth() + 1); break;
+    // Clamped: `setMonth` rolls 2026-01-31 + 1 month onto 2026-03-03, and this
+    // value is what the UI shows as "next run" (#2429).
+    case 'monthly': return addLocalMonthsClamped(nextRun, 1);
   }
   return nextRun;
 }

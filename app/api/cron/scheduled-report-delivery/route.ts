@@ -15,6 +15,7 @@ import { scheduledReports } from '@/drizzle/schema';
 import { eq, and, isNull, sql } from 'drizzle-orm';
 import { acquireLock, releaseLock } from '@/lib/cache';
 import { sweepTenants } from '@/lib/cron/tenant-scope';
+import { addLocalMonthsClamped } from '@/lib/billing/recurring-dates';
 
 const REPORT_LOCK_KEY = 'cron:scheduled-report-delivery';
 const REPORT_LOCK_TTL = 120; // 2 minutes
@@ -74,13 +75,15 @@ function exportEntityFor(reportType: string): ExportEntityType {
   }
 }
 
-/** Compute the next run based on frequency (mirrors scheduled/route.ts:47-53) */
+/** Compute the next run based on frequency (mirrors nextRunFrom in app/api/tenant/reports/scheduled) */
 function computeNextRunAt(frequency: string): Date {
   const next = new Date();
   switch (frequency) {
     case 'hourly': next.setHours(next.getHours() + 1); break;
     case 'weekly': next.setDate(next.getDate() + 7); break;
-    case 'monthly': next.setMonth(next.getMonth() + 1); break;
+    // Clamped: `setMonth` rolls the 31st + 1 month onto the 3rd, so a month-end
+    // report migrated its run day off the calendar and never came back (#2429).
+    case 'monthly': return addLocalMonthsClamped(next, 1);
     case 'daily':
     default:
       next.setDate(next.getDate() + 1); break;

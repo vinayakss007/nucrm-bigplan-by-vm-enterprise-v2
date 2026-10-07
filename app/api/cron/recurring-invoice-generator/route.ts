@@ -15,7 +15,9 @@
  *     `FOR UPDATE` + MAX(sequence) scheme as the manual create route (#1462)
  *   - links the new invoice to the series via `parentInvoiceId` (points at the
  *     series ROOT so the whole series is discoverable from one id)
- *   - advances the source invoice's `nextBillingDate` by its frequency
+ *   - advances the source invoice's `nextBillingDate` by its frequency, keeping
+ *     the series' day-of-month anchor (in `metadata`) so a month-end customer
+ *     stays at month-end across short months (#2429)
  *
  * Idempotency: a distributed lock guards against overlapping runs, and the
  * advance of `nextBillingDate` in the SAME transaction that inserts the new
@@ -36,45 +38,15 @@ import { logger } from '@/lib/logger';
 import { apiError } from '@/lib/api-error';
 import { logError } from '@/lib/errors-server';
 import { sweepTenants } from '@/lib/cron/tenant-scope';
+import {
+  advanceBillingDate,
+  parseYMD,
+  readBillingAnchorDay,
+  utcTodayISO,
+  BILLING_ANCHOR_METADATA_KEY,
+} from '@/lib/billing/recurring-dates';
 
 const MAX_NUMBER_RETRIES = 3;
-
-/**
- * Advance a yyyy-mm-dd date string by one recurring period. Unknown or missing
- * frequencies fall back to monthly (the most common billing cadence) so a
- * misconfigured row still advances rather than regenerating every day.
- */
-function advanceDate(fromISO: string, frequency: string | null): string {
-  const d = new Date(`${fromISO}T00:00:00Z`);
-  switch ((frequency || 'monthly').toLowerCase()) {
-    case 'daily':
-      d.setUTCDate(d.getUTCDate() + 1);
-      break;
-    case 'weekly':
-      d.setUTCDate(d.getUTCDate() + 7);
-      break;
-    case 'biweekly':
-      d.setUTCDate(d.getUTCDate() + 14);
-      break;
-    case 'quarterly':
-      d.setUTCMonth(d.getUTCMonth() + 3);
-      break;
-    case 'semiannual':
-    case 'semi-annual':
-    case 'biannual':
-      d.setUTCMonth(d.getUTCMonth() + 6);
-      break;
-    case 'yearly':
-    case 'annual':
-      d.setUTCFullYear(d.getUTCFullYear() + 1);
-      break;
-    case 'monthly':
-    default:
-      d.setUTCMonth(d.getUTCMonth() + 1);
-      break;
-  }
-  return d.toISOString().split('T')[0]!;
-}
 
 export async function POST(request: NextRequest) {
   if (!verifySecret(request.headers.get('x-cron-secret'), process.env.CRON_SECRET)) {
@@ -89,9 +61,10 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const todayStr = today.toISOString().split('T')[0]!;
+    // The rest of this file is strictly UTC (`advanceBillingDate`, `dueDate`), so
+    // the cutoff has to be too. `setHours(0,0,0,0)` + `toISOString()` returns the
+    // previous UTC day on a non-UTC host (#2429).
+    const todayStr = utcTodayISO();
 
     let due = 0;
     let generated = 0;
@@ -254,13 +227,31 @@ export async function POST(request: NextRequest) {
                 // Advance the template's schedule IN THE SAME TRANSACTION so the
                 // generation + schedule bump commit atomically — a same-day re-run
                 // won't see this template as due again.
-                const nextDate = advanceDate(
-                  template.nextBillingDate ?? todayStr,
-                  template.recurringFrequency,
-                );
+                //
+                // The anchor day is the day-of-month this series bills on, and it is
+                // carried across periods rather than re-derived: after Jan 31 clamps
+                // to Feb 28, reading the day back off the row would make March bill on
+                // the 28th (#2429). A template with no stored anchor adopts its current
+                // day, so a series already billing on the 3rd keeps billing on the 3rd
+                // instead of being jumped to month-end under the customer.
+                const from = template.nextBillingDate ?? todayStr;
+                const anchorDay = readBillingAnchorDay(template.metadata) ?? parseYMD(from).day;
+                const nextDate = advanceBillingDate(from, template.recurringFrequency, anchorDay);
                 await tx
                   .update(invoices)
-                  .set({ nextBillingDate: nextDate, updatedAt: new Date() })
+                  .set({
+                    nextBillingDate: nextDate,
+                    updatedAt: new Date(),
+                    // Merge rather than replace: `invoices.metadata` is not user-mutable
+                    // (not in the tenant PATCH allowlist), but this row is the series
+                    // root and other jobs may key off its existing fields.
+                    metadata: {
+                      ...(typeof template.metadata === 'object' && template.metadata !== null
+                        ? template.metadata as Record<string, unknown>
+                        : {}),
+                      [BILLING_ANCHOR_METADATA_KEY]: anchorDay,
+                    },
+                  })
                   .where(and(eq(invoices.id, template.id), eq(invoices.tenantId, tenantId)));
               });
               break; // success

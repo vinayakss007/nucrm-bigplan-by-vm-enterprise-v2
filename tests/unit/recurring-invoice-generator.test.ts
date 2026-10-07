@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { NextRequest } from 'next/server';
 import type { CronTenantSweep } from '@/lib/cron/tenant-scope';
+import { BILLING_ANCHOR_METADATA_KEY } from '@/lib/billing/recurring-dates';
 
 // ── Captured writes so tests can assert on what the cron inserted/updated ─────
 type Row = Record<string, unknown>;
@@ -322,5 +323,109 @@ describe('recurring-invoice-generator cron', () => {
     expect(vi.mocked(logError)).toHaveBeenCalledWith(
       expect.objectContaining({ tenantId: TENANT_A }),
     );
+  });
+
+  // ── #2429: the schedule must clamp, and must remember what it bills on ──────
+  //
+  // `advanceDate` used to hand the date straight to `setUTCMonth`, so 2026-01-31
+  // advanced to 2026-03-03 and the series then kept stepping by one month from
+  // the 3rd forever. The assertions below are pinned to 2026 — in a leap year
+  // Jan 31 -> Feb 29 is right by luck, which is why the fixture above
+  // (2026-02-01 -> 2026-03-01, no overflow) never caught any of this.
+
+  it('clamps a month-end template onto Feb 28 and persists the anchor that makes it come back', async () => {
+    dueTemplates = [templateFixture({ nextBillingDate: '2026-01-31' })];
+    lineItems = [lineItemFixture];
+
+    const { POST } = await import('@/app/api/cron/recurring-invoice-generator/route');
+    await POST(makeReq());
+
+    const bump = updated.find((u) => u.set.nextBillingDate === '2026-02-28');
+    expect(bump).toBeTruthy();
+    expect(bump!.set.nextBillingDate).not.toBe('2026-03-03');
+    expect((bump!.set.metadata as Row)[BILLING_ANCHOR_METADATA_KEY]).toBe(31);
+  });
+
+  it('restores the 31st in March from a February that was clamped to the 28th', async () => {
+    // Reading the day back off the row would make this March bill on the 28th.
+    dueTemplates = [templateFixture({
+      nextBillingDate: '2026-02-28',
+      metadata: { [BILLING_ANCHOR_METADATA_KEY]: 31 },
+    })];
+    lineItems = [lineItemFixture];
+
+    const { POST } = await import('@/app/api/cron/recurring-invoice-generator/route');
+    await POST(makeReq());
+
+    expect(updated.some((u) => u.set.nextBillingDate === '2026-03-31')).toBe(true);
+  });
+
+  it('adopts the current day as the anchor for a series that already drifted, so nothing jumps', async () => {
+    // A template #2429 left billing on the 3rd keeps billing on the 3rd: the
+    // fix must not silently move a live customer's billing date.
+    dueTemplates = [templateFixture({ nextBillingDate: '2026-03-03' })];
+    lineItems = [lineItemFixture];
+
+    const { POST } = await import('@/app/api/cron/recurring-invoice-generator/route');
+    await POST(makeReq());
+
+    const bump = updated.find((u) => u.set.nextBillingDate === '2026-04-03');
+    expect(bump).toBeTruthy();
+    expect((bump!.set.metadata as Row)[BILLING_ANCHOR_METADATA_KEY]).toBe(3);
+  });
+
+  it('advances a quarterly month-end template to the last day of the target month', async () => {
+    dueTemplates = [templateFixture({
+      recurringFrequency: 'quarterly',
+      nextBillingDate: '2026-01-31',
+      metadata: { [BILLING_ANCHOR_METADATA_KEY]: 31 },
+    })];
+    lineItems = [lineItemFixture];
+
+    const { POST } = await import('@/app/api/cron/recurring-invoice-generator/route');
+    await POST(makeReq());
+
+    expect(updated.some((u) => u.set.nextBillingDate === '2026-04-30')).toBe(true);
+  });
+
+  it('merges the anchor into existing template metadata instead of replacing it', async () => {
+    dueTemplates = [templateFixture({
+      nextBillingDate: '2026-01-31',
+      metadata: { series_note: 'quarterly board retainer' },
+    })];
+    lineItems = [lineItemFixture];
+
+    const { POST } = await import('@/app/api/cron/recurring-invoice-generator/route');
+    await POST(makeReq());
+
+    const bump = updated.find((u) => u.set.nextBillingDate === '2026-02-28');
+    expect(bump!.set.metadata).toMatchObject({
+      series_note: 'quarterly board retainer',
+      [BILLING_ANCHOR_METADATA_KEY]: 31,
+    });
+  });
+
+  it('compares the due cutoff against the UTC day, not a local-midnight truncation', async () => {
+    const REAL_TZ = process.env.TZ;
+    // 06:00Z is 11:30 the same day in Kolkata, where the old
+    // `setHours(0,0,0,0)` + `toISOString()` read produced 2026-01-31 — one UTC
+    // day behind the wall clock, delaying every template due today.
+    process.env.TZ = 'Asia/Kolkata';
+    vi.useFakeTimers({ now: new Date('2026-02-01T06:00:00Z') });
+    try {
+      dueTemplates = [templateFixture()];
+      lineItems = [lineItemFixture];
+
+      const { lte } = await import('drizzle-orm');
+      const { POST } = await import('@/app/api/cron/recurring-invoice-generator/route');
+      await POST(makeReq());
+
+      expect(vi.mocked(lte)).toHaveBeenCalledWith('invoices.next_billing_date', '2026-02-01');
+      const inv = inserted.find((i) => i.table === 'invoices')!.values as Row;
+      expect(inv.issueDate).toBe('2026-02-01');
+    } finally {
+      vi.useRealTimers();
+      process.env.TZ = REAL_TZ;
+    }
   });
 });
