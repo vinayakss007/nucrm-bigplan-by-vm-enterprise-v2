@@ -1,0 +1,9 @@
+{
+  "_comment": "Known-drifting `path:line` citations in docs/infra/PREPROD-ISSUE-REGISTER.md. Each entry needs a written `reason` naming the PR that corrects it. The guard FAILS on any drift not listed here and hints when an entry goes stale (prune it). Regenerate preserving reasons: node scripts/check-register-coords.mjs --update",
+  "entries": [
+    {
+      "cite": "deploy.yml:298",
+      "reason": "PP-058's summary-row coordinate for the deploy-time migrate step. #2404/#2405 moved that step out of `.github/workflows/deploy.yml` into `scripts/deploy-migrate.ts` behind the call now at :277, which left :298 a blank line; the register sentence kept citing :298 and read as evidence for weeks. #2416 (open) corrects it in place and keeps the superseded value in its dated correction comment. Prune this entry the moment #2416 merges."
+    }
+  ]
+}
