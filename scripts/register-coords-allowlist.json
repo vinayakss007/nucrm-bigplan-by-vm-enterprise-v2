@@ -1,9 +1,4 @@
 {
   "_comment": "Known-drifting register coordinates, each with a written `reason` naming the PR that corrects it. The guard FAILS on any drift not listed here and hints when an entry goes stale (prune it). Regenerate preserving reasons: node scripts/check-register-coords.mjs --update",
-  "entries": [
-    {
-      "cite": "scheduled-report-delivery/route.ts:153",
-      "reason": "Moved to 158-160 by #2429 (the `monthly` branch of computeNextRunAt gained the clamped month helper plus its explanatory comment, and the helper import was added, shifting the cited `acquireLock`/`Another instance running` block down 5 lines). The PP-030 claim it cites is unchanged. docs/infra/PREPROD-ISSUE-REGISTER.md is being edited concurrently on another branch, so the register text is corrected there rather than in this PR; prune this entry once that lands."
-    }
-  ]
+  "entries": []
 }

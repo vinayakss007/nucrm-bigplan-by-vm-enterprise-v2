@@ -852,40 +852,51 @@ running=120s` with exit 1 and the `--force-recreate app` command to fix it.
 
 ## PP-032 — 🚨 The Backups panel and the nightly backup job use two different tables _(S2 · data model)_
 
-<!-- coordinate corrections at 62d67ccc — a screen, and exactly what it can and cannot see.
+<!-- coordinate corrections at 47160979 — a screen, and exactly what it can and cannot see.
      The screen: for every machine-visible `path:line` citation, blame the register line to find the commit that
-     wrote it, then compare the CONTENT of the cited line at that revision with the same line at main. 19 of the 216
-     differ. One is an artifact of the screen, not of the register: the tickets-route hit — five files share that
-     basename and the screen compared a different one; the tenant tickets route really does still hold
-     `tenantId: ctx.tenantId` on the line cited. The other 18 are real drift: 16 construct pointers, re-pinned below
-     after reading each construct in the current file, and 2 read-logs deliberately left alone.
+     wrote it, then compare the CONTENT of the cited line at that revision with the same line at main. It found 19 of
+     the 216 different, and the composition of those 19 is the part worth reading. 17 are pointers to constructs and
+     are re-pinned below, each after reading the construct in the current file. 2 are read-logs, deliberately left
+     alone. 1 was an artifact of the screen and not of the register: a tickets-route hit — five files share that
+     basename, so the suffix match reaches whichever it resolves first, and the very same citation flagged on the
+     first run (at 62d67ccc) and did not flag on the re-run at this base. Nothing about the entry changed between the
+     two runs; the tenant tickets route really does still hold `tenantId: ctx.tenantId` on the line it cites.
      Re-pinned (entry, old line → new line): PP-032 schema infra 148 → 159, cron auto-backup route 248 → 263 · PP-041
      migrate 210 → 129 (the journal loop; the plan-side use of the same array is at line 251) · PP-042
      verify-tenant-isolation 86 → 95 · PP-044 infra 250-296 → 268-316 (`restoreSnapshots` gained the #2261
      FK index) · PP-046 db-client-error 71 → 105, api-error 94 → 106 · PP-047 core 75 → 76, db-client-error 70 → 104,
      custom-fields route 309 → 342, webhooks route 87 → 104 · PP-049 auto-backup route 44-46 → 52-54,
-     process-sequences route 33-35 → 38-40, proxy 207 → 217, stripe route 103 → 113 · PP-051 process-sequences
-     route 49 → 54, whose 51-60 continuation no longer exists in that route: #2392 moved the SELECT itself out of the
-     route into the cron sequence-steps module, which the route now calls, so the clause cites call site and
-     definition. That addition is the only new citation-shaped token in this correction; every other number here is
-     written as prose, because a comment that mints coordinates is indistinguishable from a claim about them — and a
-     basename like `route.ts` resolves against whichever of five files the checker happens to reach first.
+     process-sequences route 33-35 → 38-40, scheduled-report-delivery 153-155 → 158-160, proxy 207 → 217,
+     stripe route 103 → 113 · PP-051 process-sequences route 49 → 54, whose 51-60 continuation no longer exists in
+     that route: #2392 moved the SELECT itself out of the route into the cron sequence-steps module, which the route
+     now calls, so the clause cites call site and definition.
+     Sixteen of those were measured at 62d67ccc and carry to this base because none of their files changed in between.
+     The seventeenth was not drift then: PP-049's scheduled-report-delivery lock was verified holding as cited while
+     this correction was being drafted, and #2431 moved it five lines while the branch sat unmerged. That is the same
+     failure this register keeps meeting — a coordinate correct when measured, stale by merge time — which is why the
+     rule a re-pin follows is to re-run the screen against the merge base at push time, not at branch-creation time.
+     The only new citation-shaped token anywhere in this correction is that sequence-steps definition line in PP-051's
+     clause; every other number here is prose, because a comment that mints coordinates is indistinguishable from a
+     claim about them, and every token in this file is one of the things the guard resolves — 216 at the base, 217
+     here, and a denominator that quietly grew by 12 while this comment was being written is a denominator nobody is
+     reading.
      NOT re-pinned, deliberately: the two read-log lists — PP-055's auto-backup line set (55, 147, 243, 256-257, 297)
      and PP-051's process-sequences ranges (33-64, 70-108, 118, 285). Those numbers record ranges somebody read, not
      pointers to constructs; re-pinning them would invent an intent the entry never stated. They have moved with the
      code, and are recorded here as drift rather than silently corrected.
      Neighbours inside the same sentences were re-read and hold as cited: the backup-service insert point, the cron
-     cleanup lock-held skip, backup-verify, scheduled-report-delivery, the razorpay handler, the cache module's lock
-     call sites (368/374, 418/424, 458) and its fail-open pair, PP-051's whole statement chain (tenant-scope
-     151 → 154 → 161 → 173 and 122-127, rls 88/107/169, the drizzle db client line, the request-connection line), and
-     every other `tenantId: ctx.tenantId` example in PP-047's ten-route list.
-     What this screen cannot see, stated because it is the interesting part: it compares against the commit that
-     *wrote the register line*, so a citation that was already wrong when it merged is invisible to it. That is
-     precisely the `ci.yml` defect #2427 fixes — measured on a branch base, stale by merge time, and the merge commit's
-     own `ci.yml` agrees with itself, so blame finds no disagreement. It also cannot see a bare `:N` continuation at
-     all, which is this file's own convention for prose follow-ons. So the 16 here and the 3 in #2427 are disjoint
-     sets: one class is "the code moved after the entry landed", the other is "the entry was stale on arrival", and no
-     screen of either kind substitutes for reading the cited lines. -->
+     cleanup lock-held skip, backup-verify, the razorpay handler, the cache module's lock call sites (368/374,
+     418/424, 458) and its fail-open pair, PP-051's whole statement chain (tenant-scope 151 → 154 → 161 → 173 and
+     122-127, rls 88/107/169, the drizzle db client line, the request-connection line), and every other
+     `tenantId: ctx.tenantId` example in PP-047's ten-route list.
+     What this screen cannot see: it compares against the commit that *wrote the register line*, so a citation that was
+     already wrong when it merged is invisible to it. That is precisely the `ci.yml` defect #2427 fixed by hand — and
+     it is why #2427's own three corrections were re-checked here rather than trusted: #2428 added twelve lines to that
+     workflow afterwards, and PP-058's db-sync step, RLS block and apply-rls script coordinates still land on the text
+     they describe. The screen also cannot see a bare `:N` continuation at all, which is this file's own convention for
+     prose follow-ons. So the 17 here and the 3 in #2427 are disjoint sets: one class is "the code moved after the
+     entry landed", the other is "the entry was stale on arrival", and no screen of either kind substitutes for reading
+     the cited lines. -->
 - `drizzle/schema/infra.ts:159` binds `backupRecords` to **`backup_records`**, which is what every
   panel route (list, `[id]`, download, restore) reads and what `lib/backups/backup-service.ts:244`
   inserts into. `app/api/cron/auto-backup/route.ts:263` writes **`tenant_backup_records`** with raw
@@ -1912,7 +1923,7 @@ which is a design decision (a shared skip site), not an edit.
   `acquireLock('cron:<name>', …)` and hand-roll the skip: **20** answer HTTP 200
   `{ok:true,skipped:true,reason:'lock-held'}` (`auto-backup/route.ts:52-54`, `cleanup/route.ts:88-90`,
   `backup-verify/route.ts:135-137`) and **2** tell the same lie with a different string,
-  `reason:'Another instance running'` (`process-sequences/route.ts:38-40`, `scheduled-report-delivery/route.ts:153-155`).
+  `reason:'Another instance running'` (`process-sequences/route.ts:38-40`, `scheduled-report-delivery/route.ts:158-160`).
   PP-030's "20 of 22" is right about the string and short by two about the behaviour: **all 22 misreport `unavailable` as a
   benign skip.**
 - **Why there is no central site to fix — every candidate checked.** `withCronLock` (`lib/cron/distributed-lock.ts:64`)
