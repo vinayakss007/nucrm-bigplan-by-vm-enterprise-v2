@@ -852,9 +852,54 @@ running=120s` with exit 1 and the `--force-recreate app` command to fix it.
 
 ## PP-032 — 🚨 The Backups panel and the nightly backup job use two different tables _(S2 · data model)_
 
-- `drizzle/schema/infra.ts:148` binds `backupRecords` to **`backup_records`**, which is what every
+<!-- coordinate corrections at 47160979 — a screen, and exactly what it can and cannot see.
+     The screen: for every machine-visible `path:line` citation, blame the register line to find the commit that
+     wrote it, then compare the CONTENT of the cited line at that revision with the same line at main. It found 19 of
+     the 216 different, and the composition of those 19 is the part worth reading. 17 are pointers to constructs and
+     are re-pinned below, each after reading the construct in the current file. 2 are read-logs, deliberately left
+     alone. 1 was an artifact of the screen and not of the register: a tickets-route hit — five files share that
+     basename, so the suffix match reaches whichever it resolves first, and the very same citation flagged on the
+     first run (at 62d67ccc) and did not flag on the re-run at this base. Nothing about the entry changed between the
+     two runs; the tenant tickets route really does still hold `tenantId: ctx.tenantId` on the line it cites.
+     Re-pinned (entry, old line → new line): PP-032 schema infra 148 → 159, cron auto-backup route 248 → 263 · PP-041
+     migrate 210 → 129 (the journal loop; the plan-side use of the same array is at line 251) · PP-042
+     verify-tenant-isolation 86 → 95 · PP-044 infra 250-296 → 268-316 (`restoreSnapshots` gained the #2261
+     FK index) · PP-046 db-client-error 71 → 105, api-error 94 → 106 · PP-047 core 75 → 76, db-client-error 70 → 104,
+     custom-fields route 309 → 342, webhooks route 87 → 104 · PP-049 auto-backup route 44-46 → 52-54,
+     process-sequences route 33-35 → 38-40, scheduled-report-delivery 153-155 → 158-160, proxy 207 → 217,
+     stripe route 103 → 113 · PP-051 process-sequences route 49 → 54, whose 51-60 continuation no longer exists in
+     that route: #2392 moved the SELECT itself out of the route into the cron sequence-steps module, which the route
+     now calls, so the clause cites call site and definition.
+     Sixteen of those were measured at 62d67ccc and carry to this base because none of their files changed in between.
+     The seventeenth was not drift then: PP-049's scheduled-report-delivery lock was verified holding as cited while
+     this correction was being drafted, and #2431 moved it five lines while the branch sat unmerged. That is the same
+     failure this register keeps meeting — a coordinate correct when measured, stale by merge time — which is why the
+     rule a re-pin follows is to re-run the screen against the merge base at push time, not at branch-creation time.
+     The only new citation-shaped token anywhere in this correction is that sequence-steps definition line in PP-051's
+     clause; every other number here is prose, because a comment that mints coordinates is indistinguishable from a
+     claim about them, and every token in this file is one of the things the guard resolves — 216 at the base, 217
+     here, and a denominator that quietly grew by 12 while this comment was being written is a denominator nobody is
+     reading.
+     NOT re-pinned, deliberately: the two read-log lists — PP-055's auto-backup line set (55, 147, 243, 256-257, 297)
+     and PP-051's process-sequences ranges (33-64, 70-108, 118, 285). Those numbers record ranges somebody read, not
+     pointers to constructs; re-pinning them would invent an intent the entry never stated. They have moved with the
+     code, and are recorded here as drift rather than silently corrected.
+     Neighbours inside the same sentences were re-read and hold as cited: the backup-service insert point, the cron
+     cleanup lock-held skip, backup-verify, the razorpay handler, the cache module's lock call sites (368/374,
+     418/424, 458) and its fail-open pair, PP-051's whole statement chain (tenant-scope 151 → 154 → 161 → 173 and
+     122-127, rls 88/107/169, the drizzle db client line, the request-connection line), and every other
+     `tenantId: ctx.tenantId` example in PP-047's ten-route list.
+     What this screen cannot see: it compares against the commit that *wrote the register line*, so a citation that was
+     already wrong when it merged is invisible to it. That is precisely the `ci.yml` defect #2427 fixed by hand — and
+     it is why #2427's own three corrections were re-checked here rather than trusted: #2428 added twelve lines to that
+     workflow afterwards, and PP-058's db-sync step, RLS block and apply-rls script coordinates still land on the text
+     they describe. The screen also cannot see a bare `:N` continuation at all, which is this file's own convention for
+     prose follow-ons. So the 17 here and the 3 in #2427 are disjoint sets: one class is "the code moved after the
+     entry landed", the other is "the entry was stale on arrival", and no screen of either kind substitutes for reading
+     the cited lines. -->
+- `drizzle/schema/infra.ts:159` binds `backupRecords` to **`backup_records`**, which is what every
   panel route (list, `[id]`, download, restore) reads and what `lib/backups/backup-service.ts:244`
-  inserts into. `app/api/cron/auto-backup/route.ts:248` writes **`tenant_backup_records`** with raw
+  inserts into. `app/api/cron/auto-backup/route.ts:263` writes **`tenant_backup_records`** with raw
   SQL. Nothing joins the two.
 - **Measured.** `backup_records` = 4 rows, `status` all `failed`, 0 `completed`;
   `tenant_backup_records` = 144 rows, 138 `completed`. The nightly run therefore produces 138
@@ -1376,7 +1421,7 @@ inferred.
 - **They are applied in preprod.** `custom_entities` and `custom_entity_data` exist; `usage_snapshots`
   carries exactly one policy named `tenant_isolation`, which is what 0091's `DROP POLICY IF EXISTS` +
   `CREATE POLICY` produces. So preprod is _ahead_ of the journal, not behind it.
-- **Why that is dangerous and not a curiosity.** `scripts/migrate.ts:210` iterates `journal.entries`.
+- **Why that is dangerous and not a curiosity.** `scripts/migrate.ts:129` iterates `journal.entries`.
   A migration with no journal entry is invisible to `npm run db:migrate` forever. Rebuild a database —
   new region, DR restore, a CI e2e schema — and `custom_entities`/`custom_entity_data` are never created
   and the `usage_snapshots` super-admin bypass is never installed. The second one is the exact failure
@@ -1441,7 +1486,7 @@ inferred.
   ```
   One row out of 226. The README's "277 policies on **225** tables" is 226 minus this table; that number
   was this entry's tell.
-- **The gate cannot see it, by construction.** `scripts/verify-tenant-isolation.ts:86`:
+- **The gate cannot see it, by construction.** `scripts/verify-tenant-isolation.ts:95`:
   `const tenantScoped = rows.filter((r) => r.tenant_id_type !== null)`. Every subsequent check —
   RLS enabled, forced, policy present, NULL-tenant leak — derives from `tenantScoped`. A table with no
   `tenant_id` column is never examined. PP-013's sweep was "RLS disabled on a table **with** `tenant_id`"
@@ -1577,7 +1622,7 @@ costs off)` with RLS engaged: `Index Scan using idx_email_opens_tenant on email_
   = **45 passed** (the rate-limit test asserts only the 429 boundary, which is unchanged: the limit is
   checked before the body and before any DB write).
 - **Files:** `app/api/superadmin/selective-restore/execute/route.ts`,
-  `app/api/superadmin/selective-restore/rollback/route.ts`, `drizzle/schema/infra.ts:250-296`,
+  `app/api/superadmin/selective-restore/rollback/route.ts`, `drizzle/schema/infra.ts:268-316`,
   `lib/restore/restore-executor.ts:162-193`
 
 ## PP-045 — ✅ `purge_trash()` covers four of the six tables the trash UI shows, and its return value is a statement counter, not a row count _(S3 · Retention + reporting)_
@@ -1651,8 +1696,8 @@ NOW() - interval '30 days'`, each followed by `v_count := v_count + 1`, and `RET
   `SQL="select count(*) from data_retention_policies;" && docker exec -e SQL="$SQL" nucrm-app sh -c 'psql "$DATABASE_URL" -tAc "$SQL"'`
   → `0`. Consistent with two of seven options being dead, though not proof: the feature is also just little used.
 - **Correction to the diagnosis that opened this.** The report said the CHECK refusal becomes "a bare HTTP 500".
-  That was true when it was written and is **not** true now: `lib/api/db-client-error.ts:71` maps SQLSTATE 23514
-  to `400 Invalid value for a constrained field`, and `apiError()` honours it at `lib/api-error.ts:94` — task
+  That was true when it was written and is **not** true now: `lib/api/db-client-error.ts:105` maps SQLSTATE 23514
+  to `400 Invalid value for a constrained field`, and `apiError()` honours it at `lib/api-error.ts:106` — task
   #38's central fix. So this route does **not** violate the no-500-for-client-errors rule. What remains is the
   drift itself: a settings control whose value is unsaveable, and a 400 that names neither field nor constraint
   for the person who clicked Create Policy.
@@ -1706,7 +1751,7 @@ NOW() - interval '30 days'`, each followed by `v_count := v_count + 1`, and `RET
   `relforcerowsecurity=t`, so the app role reads nothing by default.
 - **Stale part of the original report.** `default_tenant_id` is NULL but **irrelevant**: `requireAuth` reads only
   `users.lastTenantId` (`lib/auth/middleware.ts:374`); `defaultTenantId` appears nowhere in auth code — grepping it
-  returns `drizzle/schema/core.ts:75`, `scripts/seed-dev.ts`, and a read-only projection at
+  returns `drizzle/schema/core.ts:76`, `scripts/seed-dev.ts`, and a read-only projection at
   `app/api/superadmin/users/[id]/route.ts:48`.
 - **No platform workspace exists.** `select count(*), count(*) filter (where status='active') from tenants` →
   `183|9`, and those 9 active tenants are all `debug-/verify-/fresh-/my-/e2e-test-workspace-*`; a slug query for
@@ -1717,13 +1762,13 @@ NOW() - interval '30 days'`, each followed by `v_count := v_count + 1`, and `RET
   **185** NOT NULL `tenant_id` columns. `api_keys`' only policy is `tenant_isolation` `FOR *` with USING
   `tenant_id IS NULL OR tenant_id = NULLIF(current_setting('app.current_tenant'),'')::uuid` and **no WITH CHECK** —
   so the sentinel satisfies RLS (the GUC holds the same sentinel), the row reaches the FK, and Postgres raises
-  23503, which `lib/api/db-client-error.ts:70` turns into `{ status: 400, message: 'Invalid reference' }`.
+  23503, which `lib/api/db-client-error.ts:104` turns into `{ status: 400, message: 'Invalid reference' }`.
 - **Blast radius, counted.** 507 route files, 408 call `requireAuth`. **239** pair a POST/PUT/PATCH with a
   `ctx.tenantId` reference; **170** write `tenantId: ctx.tenantId` literally; **120 of those sit in a file that
   calls `.insert(`** — the 23503 class — by area: **Settings/platform 47 · CRM objects 38 · Comms+integrations 19 ·
   Billing 14 · AI 2**. The other **50** are update/delete-only: `tenant_id = sentinel` matches no row, so they
   answer 404 or a silent no-op and never reach the FK. 116 of the 120 are `/api/tenant/**`, 4 are `/api/v1/**`.
-  Examples: `app/api/tenant/roles/route.ts:70`, `custom-fields/route.ts:309`, `webhooks/route.ts:87`,
+  Examples: `app/api/tenant/roles/route.ts:70`, `custom-fields/route.ts:342`, `webhooks/route.ts:104`,
   `billing/checkout/route.ts:74`, `billing/dunning/route.ts:109`, `ai/draft/route.ts:147`, `tickets/route.ts:114`,
   `invoices/route.ts:181`, `import/route.ts:72`, `v1/deals/route.ts:148`. `api-keys` is a **positional** pass
   (`app/api/tenant/api-keys/route.ts:91` → `generateApiKey(ctx.tenantId, …)` → `lib/auth/api-key.ts:178`), so
@@ -1876,9 +1921,9 @@ which is a design decision (a shared skip site), not an edit.
      "not ready" runs, "SET errors" skips.
 - **Blast radius, measured not inherited.** `app/api/cron/` holds **22** route dirs and **22 of 22** call
   `acquireLock('cron:<name>', …)` and hand-roll the skip: **20** answer HTTP 200
-  `{ok:true,skipped:true,reason:'lock-held'}` (`auto-backup/route.ts:44-46`, `cleanup/route.ts:88-90`,
+  `{ok:true,skipped:true,reason:'lock-held'}` (`auto-backup/route.ts:52-54`, `cleanup/route.ts:88-90`,
   `backup-verify/route.ts:135-137`) and **2** tell the same lie with a different string,
-  `reason:'Another instance running'` (`process-sequences/route.ts:33-35`, `scheduled-report-delivery/route.ts:153-155`).
+  `reason:'Another instance running'` (`process-sequences/route.ts:38-40`, `scheduled-report-delivery/route.ts:158-160`).
   PP-030's "20 of 22" is right about the string and short by two about the behaviour: **all 22 misreport `unavailable` as a
   benign skip.**
 - **Why there is no central site to fix — every candidate checked.** `withCronLock` (`lib/cron/distributed-lock.ts:64`)
@@ -1886,7 +1931,7 @@ which is a design decision (a shared skip site), not an edit.
   tests reference it), it is built on a PG advisory lock rather than the Redis one, and it carries no `LOCK_FAIL_OPEN`.
   `withApiRoute` wraps only **3 of the 22** (auto-backup, cleanup, retry-webhooks); the other **19 export bare handlers**,
   so it cannot map an error centrally. `verifyCronSecret` (`lib/auth/cron.ts`) returns a boolean and knows nothing about
-  locks, and `proxy.ts:207` runs before the handler computes the lock outcome. **The skip response is constructible in
+  locks, and `proxy.ts:217` runs before the handler computes the lock outcome. **The skip response is constructible in
   exactly 22 places, one per route.**
 - **What a 200 `ok:true` conceals.** `deploy/cron/run-cron.sh` fires with
   `wget -q -O /dev/null --post-data=""`: only a non-2xx trips its `|| echo CRON FAILED`, and the body is thrown away.
@@ -1895,7 +1940,7 @@ which is a design decision (a shared skip site), not an edit.
   `detect-missed-followups`, `sla-check`, `usage-snapshot`) report green while doing zero work — and the monitoring that
   would notice is itself among the silenced.
 - **The shape to land (specified, not applied).** Keep `acquireLock`'s return **additive** so its other consumers —
-  `getOrSet` (:368/:374), `getOrSetStale` (:418/:424), `warm` (:458), `app/api/webhooks/stripe/route.ts:103`,
+  `getOrSet` (:368/:374), `getOrSetStale` (:418/:424), `warm` (:458), `app/api/webhooks/stripe/route.ts:113`,
   `app/api/webhooks/razorpay/route.ts:98`, and the 18 `tests/unit/*` files that mock `{ acquired, value }` — keep working:
   ```ts
   { acquired: boolean; value: string; outcome: 'acquired' | 'held' | 'unavailable'; degraded?: boolean }
@@ -1966,8 +2011,9 @@ connection setup (~400–600 ms) and bounds the 50-statement loop rather than pr
 - **Statements per tenant iteration, counted from the current tree** (empty-work path): `setTenantContext`
   `lib/cron/tenant-scope.ts:151` → `lib/db/rls.ts:88` (one statement, two `set_config`s) · `resolveActingUser` `:154` →
   `:122-127` · a second `setTenantContext` `:161` (0–1, data-dependent) · the Phase-1 `db.transaction`
-  `app/api/cron/process-sequences/route.ts:49` = `BEGIN` + the carrier re-apply `drizzle/db.ts:79` + the due-enrollments
-  `SELECT … FOR UPDATE SKIP LOCKED` `:51-60` + `COMMIT` · `clearTenantContext` in the per-iteration `finally` `:173` →
+  `app/api/cron/process-sequences/route.ts:54` = `BEGIN` + the carrier re-apply `drizzle/db.ts:79` + the due-enrollments
+  `SELECT … FOR UPDATE SKIP LOCKED` (called at `:57`; #2392 moved the SQL itself out of the route into
+  `lib/cron/sequence-steps.ts:135`) + `COMMIT` · `clearTenantContext` in the per-iteration `finally` `:173` →
   `rls.ts:107`. Fixed per sweep (5): `BEGIN` + `setSuperAdminContext` (`rls.ts:169`) + the tenants `SELECT`
   (`tenant-scope.ts:81`) + `COMMIT` + the pin's teardown reset (`request-connection.ts:241`). **Count = 7 per tenant**; the 8th
   (the re-set at `:161`) does not fire on this data — and the log discriminates: 8/tenant predicts 85.9 s, i.e. _every_ sweep
