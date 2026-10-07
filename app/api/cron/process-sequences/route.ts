@@ -5,7 +5,7 @@
  */
 import { apiError } from '@/lib/api-error';
 import { verifySecret } from '@/lib/crypto';
-import { createEmailTracking, addTracking } from '@/lib/email/tracking';
+import { createEmailTracking, addTracking, recordEmailMessageId } from '@/lib/email/tracking';
 import { logError } from '@/lib/errors-server';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
@@ -289,12 +289,38 @@ export async function POST(req: NextRequest) {
 
             const trackedHtml = trackId ? addTracking(message.html, trackId, APP_URL) : message.html;
 
-            await sendEmail({
+            const sent = await sendEmail({
               to: message.to,
               subject: message.subject,
               html: trackedHtml,
               text: message.text
             });
+
+            // #2422: sendEmail reports a provider rejection as
+            // { success: false } and does NOT throw, so this try/catch never
+            // saw it — a Resend 4xx/5xx was finalised as 'sent', the step log
+            // said delivered and the enrollment advanced to the next step.
+            if (!sent.success) {
+              success = false;
+              errorMessage = sent.error ?? 'email provider rejected the send';
+            } else if (trackId && sent.messageId) {
+              // #2406: the Resend webhook carries no tenant, and the only record
+              // that ties a delivery-status event to a workspace is this row.
+              // Linking the provider message id is what makes a bounce
+              // attributable to the exact contact instead of every holder of the
+              // address. A failure here costs only precision (the webhook falls
+              // back to unique-mailer attribution), so it must not mark a
+              // delivered email as failed.
+              try {
+                await recordEmailMessageId(trackId, sent.messageId);
+              } catch (linkErr) {
+                await logError({
+                  error: linkErr,
+                  context: 'process-sequences:message-id-link',
+                  tenantId: enrollment.tenantId,
+                });
+              }
+            }
 
           } catch (err) {
             success = false;

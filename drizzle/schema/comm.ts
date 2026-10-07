@@ -182,9 +182,16 @@ export const emailTracking = pgTable('email_tracking', {
   return {
     tenantIdx: utils.tenantIdx(table),
     metadataGinIdx: utils.metadataIdx(table),
-  
-  drz2255_idx_email_tracking_contact_id: index('idx_email_tracking_contact_id').on(table.contactId),
-  drz2255_idx_email_tracking_sequence_enrollment_id: index('idx_email_tracking_sequence_enrollment_id').on(table.sequenceEnrollmentId),};
+
+    drz2255_idx_email_tracking_contact_id: index('idx_email_tracking_contact_id').on(table.contactId),
+    drz2255_idx_email_tracking_sequence_enrollment_id: index('idx_email_tracking_sequence_enrollment_id').on(table.sequenceEnrollmentId),
+    // #2406: the Resend webhook is authenticated with one platform-wide secret
+    // and carries no tenant, so attributing an event is a lookup into this
+    // table — by provider message id (exact) and by recipient (which
+    // workspace mailed this address). Both run per inbound event.
+    messageIdIdx: index('idx_email_tracking_message_id').on(table.messageId),
+    recipientLowerIdx: index('idx_email_tracking_recipient_lower').on(sql`lower(${table.recipient})`),
+  };
 });
 
 // ── 4. INTEGRATIONS ───────────────────────────────────

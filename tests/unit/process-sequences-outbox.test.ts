@@ -122,6 +122,9 @@ vi.mock('@/lib/sanitize', () => ({ sanitizeHTMLServer: (s: string) => s }));
 vi.mock('@/lib/email/unsubscribe-token', () => ({ generateUnsubscribeToken: () => 'unsub-tok' }));
 vi.mock('@/lib/email/tracking', () => ({
   createEmailTracking: vi.fn(async () => { events.push('tracking'); return 'track-1'; }),
+  // #2406: the provider message id is written after the send, outside any
+  // transaction — pushing the event keeps the #2223 ordering proof exact.
+  recordEmailMessageId: vi.fn(async () => { events.push('link'); }),
   addTracking: (html: string) => html,
 }));
 vi.mock('@/lib/email/service', () => ({
@@ -131,7 +134,9 @@ vi.mock('@/lib/email/service', () => ({
     await new Promise((r) => setTimeout(r, 10));
     events.push('sendEmail');
     if (scenario.sendFails) throw new Error('SMTP 550 relay refused');
-    return { messageId: 'msg-1' };
+    // The real SendResult (#2422): a bare { messageId } is not what
+    // sendEmail() answers with, and the route now reads `success` off it.
+    return { success: true, provider: 'smtp', messageId: 'msg-1' };
   }),
 }));
 
@@ -227,7 +232,7 @@ describe('cron/process-sequences outbox (#2223)', () => {
     expect(events).toEqual([
       'tx:start', 'tx:commit', // phase 1: collect due enrollments
       'tx:start', 'tx:commit', // phase 2: claim 'pending' → 'sending', committed
-      'tracking', 'sendEmail', // phase 3: transport runs OUTSIDE any transaction
+      'tracking', 'sendEmail', 'link', // phase 3: transport runs OUTSIDE any transaction
       'tx:start', 'tx:commit', // phase 4: confirm 'sending' → 'sent' + advance
     ]);
 
