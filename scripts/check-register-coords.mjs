@@ -21,7 +21,7 @@
  *   - allowlist entries that no longer drift are reported as STALE (non-failing) so
  *     the file decays honestly.
  *
- * Scope notes, both deliberate:
+ * Scope notes, all deliberate:
  *   - A citation whose *path* matches no tracked file is skipped, not failed: the
  *     register also cites vendored (`next/dist/...`), generated (`_06uykto._.js`)
  *     and container-absolute paths. The count and list are printed so a mass
@@ -29,6 +29,16 @@
  *   - A citation is `drifted` only when every candidate is blank or out-of-range.
  *     Suffix matching means `pool.ts:233` resolves against `lib/db/pool.ts`; if two
  *     tracked files end with the same path fragment, one live target is enough.
+ *   - A citation minted inside an HTML comment FAILS, with no allowlist escape. Liveness
+ *     is the wrong question there: a comment records a correction, and `CITE_RE` reads
+ *     its tokens as claims — so a hand-written comment can grow the resolved set without
+ *     anyone asserting anything. Record the number as prose ("line 159") instead.
+ *
+ * What this guard cannot see, and #2433's dated comment says so at length: a pointer
+ * that lands on a NON-BLANK line describing something else is a live citation as far as
+ * this file is concerned. Measured across 17 real drifts found by comparing cited
+ * content against the commit that wrote the register line, liveness caught 1 — the one
+ * whose new target happened to be blank.
  *
  * If the register itself is missing or unreadable the guard FAILS CLOSED — a moved
  * or unmounted doc must never read as "all citations verified".
@@ -68,6 +78,55 @@ export function extractCitations(lines) {
     for (const m of lines[i].matchAll(CITE_RE)) {
       out.push({ regLine: i + 1, path: m[1], n: Number(m[2]), cite: `${m[1]}:${m[2]}` });
     }
+  }
+  return out;
+}
+
+/**
+ * Per-character mask: 1 where the character sits inside an `<!-- … -->` span.
+ * This walks characters rather than lines because the boundary case is the whole
+ * point — a token on the line that CLOSES a comment is prose if it comes after
+ * the `-->`, and a comment if it comes before. Nothing else in this file makes
+ * that distinction, and the register's correction comments run long.
+ */
+export function commentMask(text) {
+  const mask = new Uint8Array(text.length);
+  let depth = 0;
+  for (let i = 0; i < text.length; i++) {
+    const opens = text.startsWith('<!--', i);
+    const closes = !opens && text.startsWith('-->', i);
+    if (opens) depth += 1;
+    else if (closes) depth = Math.max(0, depth - 1);
+    mask[i] = depth > 0 ? 1 : 0;
+    if (opens) i += 3;
+    else if (closes) i += 2;
+  }
+  return mask;
+}
+
+/**
+ * Citations minted INSIDE an HTML comment. The register's convention is that a dated
+ * correction comment records coordinates as prose ("line 159"), never `path:line`,
+ * because `CITE_RE` cannot tell a record about a coordinate from a claim about one:
+ * every token minted here silently joins the set the guard resolves and the tally it
+ * prints. Measured on the first such comment written by hand — 12 tokens, all of them
+ * resolving, none of them a claim anyone reviewed.
+ */
+export function extractCommentCitations(lines) {
+  const text = lines.join('\n');
+  const mask = commentMask(text);
+  const re = new RegExp(CITE_RE.source, 'g');
+  const out = [];
+  let m;
+  while ((m = re.exec(text)) !== null) {
+    const start = m.index + m[0].indexOf(m[1]);
+    if (!mask[start]) continue;
+    out.push({
+      regLine: text.slice(0, m.index).split('\n').length,
+      path: m[1],
+      n: Number(m[2]),
+      cite: `${m[1]}:${m[2]}`,
+    });
   }
   return out;
 }
@@ -145,6 +204,15 @@ const KEY_NOTE =
   '  genuinely waiting on another PR, add an entry with a written `reason` to\n' +
   `  ${DEFAULT_ALLOWLIST_PATH} in a reviewed PR.\n`;
 
+const COMMENT_NOTE =
+  '\n  There is no allowlist for this, deliberately. A comment is a record of what\n' +
+  '  was corrected, not a claim about a file, and `CITE_RE` cannot tell the two\n' +
+  '  apart — every token minted inside `<!-- -->` is a citation as far as this\n' +
+  '  guard is concerned, and a silent addition to the set it reports as resolved.\n' +
+  '  Write the number as prose ("line 159", "148 → 159"), which is what the\n' +
+  '  register already does, or move the citation into the body text where a\n' +
+  '  reviewer can see it asserting something.\n';
+
 export function main(argv = process.argv.slice(2)) {
   let args;
   try {
@@ -189,6 +257,7 @@ export function main(argv = process.argv.slice(2)) {
     tracked,
     readFile: (p) => (existsSync(p) ? readFileSync(p, 'utf8') : null),
   });
+  const commentCites = extractCommentCitations(lines);
 
   let allow = { entries: [] };
   if (existsSync(args.allow)) {
@@ -232,12 +301,26 @@ export function main(argv = process.argv.slice(2)) {
     `[check-register-coords] ${checked}/${total} citations resolve against the tracked tree ` +
       `(${skipped.size} unmatchable prose path(s) skipped)` +
       (suppressed.length ? `, ${suppressed.length} allowlisted` : '') +
+      (commentCites.length ? `, ${commentCites.length} minted inside a comment` : '') +
       `.`,
   );
   if (skipped.size > 0) {
     console.log(
       `  skipped: ${[...skipped.keys()].slice(0, 12).join(', ')}${skipped.size > 12 ? `, +${skipped.size - 12} more` : ''}`,
     );
+  }
+
+  if (commentCites.length > 0) {
+    console.error(
+      `\n\u001b[31m\u2716 register comment guard failed (#2416 follow-up).\u001b[0m\n` +
+        `\n  ${commentCites.length} citation-shaped token(s) in ${args.register} sit inside an HTML\n` +
+        `  comment. The tally above already counted them as citations, which is the\n` +
+        `  problem: a comment records a correction, and nothing about these was\n` +
+        `  reviewed as a claim about a file.\n\n` +
+        commentCites.map((c) => `    - reg:${c.regLine}  ${c.cite}`).join('\n') +
+        COMMENT_NOTE,
+    );
+    process.exit(1);
   }
   if (stale.length > 0) {
     console.log(
@@ -255,7 +338,7 @@ export function main(argv = process.argv.slice(2)) {
     );
     process.exit(1);
   }
-  console.log(`[check-register-coords] OK — no drifted coordinates.`);
+  console.log(`[check-register-coords] OK — no drifted coordinates, none minted inside a comment.`);
 }
 
 // Run only when invoked as a CLI, so unit tests can import the pure logic.

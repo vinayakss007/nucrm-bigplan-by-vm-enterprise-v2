@@ -8,6 +8,7 @@ import {
   resolvePath,
   computeCoordDelta,
   applyAllowlist,
+  extractCommentCitations,
 } from '../../scripts/check-register-coords.mjs';
 
 /**
@@ -25,6 +26,7 @@ import {
 const ROOT = join(import.meta.dirname!, '..', '..');
 const SCRIPT = join(ROOT, 'scripts', 'check-register-coords.mjs');
 const ALLOW = join(ROOT, 'scripts', 'register-coords-allowlist.json');
+const REGISTER = join(ROOT, 'docs', 'infra', 'PREPROD-ISSUE-REGISTER.md');
 
 /** A tracked file we know has both blank and non-blank lines. */
 const TARGET = '.github/workflows/ci.yml';
@@ -161,6 +163,58 @@ describe('check-register-coords.mjs — citation extraction', () => {
   });
 });
 
+describe('check-register-coords.mjs — citations minted inside comments', () => {
+  it('fails a comment that mints a citation, and does not call it drift', () => {
+    const r = reg('comment.md', `<!-- correction: see ${TARGET}:${liveAt} -->\n`);
+    const out = run(['--register', r, '--allow', allowFixture('allow-c1.json', [])]);
+    expect(out.status).toBe(1);
+    expect(out.out).toContain('comment guard failed');
+    expect(out.out).toContain(`${TARGET}:${liveAt}`);
+    expect(out.out).toContain('1 minted inside a comment');
+    // The line IS live — which is exactly why liveness alone cannot see this.
+    expect(out.out).not.toContain('BLANK');
+    expect(out.out).not.toContain('out of range');
+  });
+
+  it('does not fail a citation that follows the closing --> on the same line', () => {
+    const r = reg('boundary.md', `<!-- note --> body text ${TARGET}:${liveAt} here\n`);
+    const out = run(['--register', r, '--allow', allowFixture('allow-c2.json', [])]);
+    expect(out.status).toBe(0);
+    expect(out.out).toContain('OK — no drifted coordinates');
+  });
+
+  it('does fail the same line when the token comes BEFORE the -->', () => {
+    const r = reg('boundary2.md', `<!-- note body text ${TARGET}:${liveAt} -->\n`);
+    const out = run(['--register', r, '--allow', allowFixture('allow-c3.json', [])]);
+    expect(out.status).toBe(1);
+    expect(out.out).toContain('comment guard failed');
+  });
+
+  it('reads the register convention — bare numbers in a comment — as nothing', () => {
+    const body = '<!-- coordinate corrections: infra 148 → 159, migrate 210 → 129, route 44-46 → 52-54 -->\n';
+    expect(extractCommentCitations(body.split('\n'))).toEqual([]);
+    const out = run(['--register', reg('prose.md', body), '--allow', allowFixture('allow-c4.json', [])]);
+    expect(out.status).toBe(0);
+  });
+
+  it('treats an unterminated <!-- as comment all the way to end of file', () => {
+    const r = reg(
+      'open.md',
+      `prose ${TARGET}:${liveAt}\n<!-- never closed\nmore prose ${TARGET}:${liveAt2}\n`,
+    );
+    const out = run(['--register', r, '--allow', allowFixture('allow-c5.json', [])]);
+    expect(out.status).toBe(1);
+    expect(out.out).toContain('reg:3');
+    expect(out.out).not.toContain('reg:1');
+  });
+
+  it('counts comment-minted tokens in the total the guard resolves — the reason to fail', () => {
+    const body = [`prose ${TARGET}:${liveAt}`, `<!-- see ${TARGET}:${liveAt2} -->`];
+    expect(extractCitations(body)).toHaveLength(2);
+    expect(extractCommentCitations(body).map((c) => c.cite)).toEqual([`${TARGET}:${liveAt2}`]);
+  });
+});
+
 describe('check-register-coords.mjs — resolution rules', () => {
   const tracked = ['lib/db/pool.ts', 'src/lib/db/pool.ts', 'app/api/x/[id]/route.ts'];
   const files: Record<string, string> = {
@@ -238,5 +292,13 @@ describe('the real register against the real allowlist', () => {
       expect(e.reason.length).toBeGreaterThan(40);
       expect(e.reason).not.toMatch(/^TODO/);
     }
+  });
+
+  it('mints no citation inside an HTML comment — corrections are recorded as prose', () => {
+    const lines = readFileSync(REGISTER, 'utf8').split('\n');
+    expect(extractCommentCitations(lines)).toEqual([]);
+    // Floor, not an exact count: the resolved total must stay large, and a non-empty
+    // comment set above would mean part of it was never an assertion about a file.
+    expect(extractCitations(lines).length).toBeGreaterThan(200);
   });
 });

@@ -2765,7 +2765,7 @@ the first measurement.)_
   **3 files passed (3) · 93 passed (93)**. Where this entry read `1 failed | 92 passed` with `TRUST_PROXY=true`,
   both columns now say 93/93, so `rate-limit.test.ts` is no longer "the *only* one of the three that passes
   because `.env.local` is gitignored": none of the three passes or fails because of it. The class is closed;
-  what this entry goes on to describe (`webhooks-delivery.test.ts:147`) is a different failure. -->
+  what this entry goes on to describe (line 147 of that test) is a different failure. -->
   The one *new* failure,
   `tests/unit/webhooks-delivery.test.ts:147`, asserts `status: 'success'` and got `'pending'` with
   `Outbound request blocked: DNS resolution for "x.com" returned no addresses`; it **passes in isolation in
