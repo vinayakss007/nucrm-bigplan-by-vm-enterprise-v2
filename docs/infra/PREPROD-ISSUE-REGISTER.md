@@ -2953,8 +2953,8 @@ the first measurement.)_
   (the runner is *not* superuser — measured), **#74** (the journal gap still hiding `0059`/`0091`),
   **#2234**, **#2228**, **#2237**, **#2259**, **#2343**.
 - **No CI path can validate any of the exits above, and that should shape the #103 decision.** CI's RLS job is not a proxy for
-  a migration run. `.github/workflows/ci.yml:156` provisions with `npm run db:sync` — which is `drizzle-kit push` and writes **no
-  ledger** — and `:160-163` then applies RLS files through `scripts/apply-rls-ci.mjs` (`:161`) under
+  a migration run. `.github/workflows/ci.yml:161` provisions with `npm run db:sync` — which is `drizzle-kit push` and writes **no
+  ledger** — and `:165-168` then applies RLS files through `scripts/apply-rls-ci.mjs` (`:166`) under
   `DATABASE_URL=postgresql://postgres:postgres@…` (also the workflow-level default at `:11`). RLS does not filter a superuser and no
   ledger means neither branch of `scripts/migrate.ts` is taken, so in the only context CI can reach, the blindness in this entry
   cannot manifest. `scripts/migrate.ts` never runs in `ci.yml` at all: the only workflow that invokes it is `deploy.yml:277`, against
@@ -2967,6 +2967,23 @@ the first measurement.)_
        non-resolving target, and it was this one. (Historical values are written as "line N" rather than
        `path:line` on purpose: a citation-shaped token pointing at a stale target is indistinguishable from a
        live one to anything that greps this file.) -->
+  <!-- coordinate corrections at d17ab596: the re-pin above was exact when written (38ae90e2: db:sync at line
+       156, the apply-rls step 160-to-163, its run at 161) and five lines stale by the time #2416 shipped.
+       All three citations landed on non-blank, in-range lines of the *wrong* step — which is exactly what a
+       liveness check reads as OK: #2424's sweep, run against this file on this tree, reports 211 of 216
+       citations resolving and exit 0 both before and after this correction. Measured per revision for
+       `run: npm run db:sync` in the `test-unit` job, apply-rls's run beside it: line 153 / 158 when this
+       paragraph was written (098198f2), 156 / 161 at 38ae90e2, 159 / 164 at 28562f40, 161 / 166 here. Three
+       merges moved the job, each by adding a guard step to `lint-typecheck` above it (per-commit numstat
+       over that one file): b836e992 (#2398, guard:migration-rls) +3, 61eb7551 (#2414,
+       guard:portal-softdelete) +3, a062e10e (#2420, guard:public-ratelimit) +2 — and the 38ae90e2 pass
+       absorbed the first of those only.
+       That comment names the wrong cause, and recording it here beats editing the comment: it says
+       "#2404/#2405 shifted ci.yml by 3 lines", but 098198f2..38ae90e2 touches ci.yml in exactly one commit —
+       b836e992 (#2398), +3/−0. #2398 moved the workflow citation; #2404/#2405 moved the deploy-side one the
+       same sentence names. Two files, one recorded cause.
+       Re-read at this revision and correct as cited: the env default at :11, the deploy.yml migrate call at
+       :277, and the discovery regex at `scripts/apply-rls-ci.mjs` line 28. -->
   Discovery in `apply-rls-ci.mjs` is by file *name* (`:28`, `/rls|isolation|polic|bypass|member_read|tenant_reference|force_/i`).
   Measured against the 21 pending tags it selects **3** — `0107`, `0091_usage_snapshots_superadmin_bypass`,
   `0115_rls_view_hardening` — so of the six pending files this entry names as evidence, only `0107` is even attempted, and it is
