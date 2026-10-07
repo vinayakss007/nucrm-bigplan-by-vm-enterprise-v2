@@ -18,6 +18,7 @@ import { contacts, sequenceEnrollments, activities } from '@/drizzle/schema';
 import { eq, and, isNull, inArray, sql } from 'drizzle-orm';
 import { logError } from '@/lib/errors-server';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { resolveRecipientScope, type AttributedScope } from '@/lib/email/webhook-scope';
 
 const VALID_RESEND_EVENT_TYPES = [
   'email.bounced',
@@ -130,9 +131,43 @@ export async function POST(req: NextRequest) {
     
     const email = event.data?.to?.[0]?.toLowerCase() ?? null;
 
+    // #2406: the event identifies a recipient, not a workspace, and one
+    // workspace's bounce must not suppress another customer's contact. Resolve
+    // the tenant BEFORE anything is written; an event that cannot be
+    // attributed is counted and dropped rather than applied everywhere.
+    const WRITING_EVENT_TYPES = new Set(['email.bounced', 'email.complained', 'email.replied']);
+    let attributed: AttributedScope | null = null;
+    if (email && WRITING_EVENT_TYPES.has(event.type)) {
+      const scope = await resolveRecipientScope({
+        emailId: event.data?.email_id ?? null,
+        recipient: email,
+      });
+      if (scope.kind === 'unattributed') {
+        // Recipient local part is deliberately absent: this row outlives the
+        // event and a support table is not where a customer's contact list
+        // belongs. The domain plus the provider message id is enough to triage.
+        await logError({
+          error: new Error(`Unattributed Resend ${event.type} (${scope.reason}) — no tenant write applied`),
+          context: 'resend-webhook:unattributed',
+          level: 'warning',
+          metadata: {
+            eventType: event.type,
+            emailId: event.data?.email_id ?? null,
+            recipientDomain: email.split('@')[1] ?? null,
+            candidates: scope.candidates,
+            bounceType: event.data?.bounce_type ?? null,
+          },
+          captureToSentry: false,
+        });
+        console.warn(`[resend-webhook] DROPPED ${event.type} (${scope.reason}) — ${email.split('@')[1] ?? 'no-domain'}`);
+        return NextResponse.json({ received: true, attributed: false });
+      }
+      attributed = scope;
+    }
+
     switch (event.type) {
       case 'email.bounced': {
-        if (!email) break;
+        if (!email || !attributed) break;
         
         // Determine if this is a hard or soft bounce
         // Resend may provide bounce_type in data; default to hard for safety
@@ -140,17 +175,17 @@ export async function POST(req: NextRequest) {
 
         if (bounceType === 'hard') {
           // Hard bounce: immediately set doNotContact
-          await handleHardBounce(email, event.type);
+          await handleHardBounce(attributed, email, event.type);
         } else {
           // Soft bounce: track and escalate after threshold
-          await handleSoftBounce(email);
+          await handleSoftBounce(attributed, email);
         }
         break;
       }
       case 'email.complained': {
-        if (email) {
+        if (email && attributed) {
           // Complaints always immediately DNC
-          await handleHardBounce(email, event.type);
+          await handleHardBounce(attributed, email, event.type);
         }
         break;
       }
@@ -158,8 +193,8 @@ export async function POST(req: NextRequest) {
         // Optional: track delivery in email_log if needed
         break;
       case 'email.replied':
-        if (email) {
-          await handleReply(email);
+        if (email && attributed) {
+          await handleReply(attributed, email);
         }
         break;
       default:
@@ -178,8 +213,15 @@ export async function POST(req: NextRequest) {
 /**
  * Handle a hard bounce or complaint: immediately set doNotContact=true
  * and cancel active sequence enrollments.
+ *
+ * #2406: every statement here is bounded to ONE workspace. The event that
+ * reaches this function names a recipient, not a tenant, and `contacts.email`
+ * is not globally unique — two customers may hold the same person. Matching on
+ * the address alone suppressed marketing in every workspace that had the
+ * contact and cancelled their enrollments in the same transaction, with no
+ * audit row for the customer who lost the mailing.
  */
-async function handleHardBounce(email: string, eventType: string): Promise<void> {
+async function handleHardBounce(scope: AttributedScope, email: string, eventType: string): Promise<void> {
   // DNC flag + enrollment cancellation must be atomic: a contact flagged
   // do-not-contact whose enrollments were left active would keep sending.
   const affectedContacts = await db.transaction(async (tx) => {
@@ -187,14 +229,21 @@ async function handleHardBounce(email: string, eventType: string): Promise<void>
       .update(contacts)
       .set({
         doNotContact: true,
+        // The ::text below is load-bearing: jsonb_build_object takes "any", so
+        // an untyped bind parameter is rejected at parse time (42P18) and the
+        // whole transaction — including do_not_contact — aborts. See #2421.
         metadata: sql`jsonb_set(
           COALESCE(${contacts.metadata}, '{}'::jsonb),
           '{bounceType}',
           '"hard"'
-        ) || jsonb_build_object('lastBounceAt', ${new Date().toISOString()})`,
+        ) || jsonb_build_object('lastBounceAt', ${new Date().toISOString()}::text)`,
         updatedAt: new Date()
       })
       .where(and(
+        eq(contacts.tenantId, scope.tenantId),
+        // An exact scope already names the row the send went to; the address
+        // check stays so a mismatched pair cannot flag a different contact.
+        ...(scope.kind === 'exact' ? [eq(contacts.id, scope.contactId)] : []),
         eq(contacts.email, email),
         eq(contacts.doNotContact, false),
         isNull(contacts.deletedAt)
@@ -212,7 +261,8 @@ async function handleHardBounce(email: string, eventType: string): Promise<void>
         .set({ status: 'cancelled', updatedAt: new Date() })
         .where(and(
           inArray(sequenceEnrollments.contactId, contactIds),
-          eq(sequenceEnrollments.status, 'active')
+          eq(sequenceEnrollments.status, 'active'),
+          eq(sequenceEnrollments.tenantId, scope.tenantId)
         ));
     }
 
@@ -251,11 +301,16 @@ async function handleHardBounce(email: string, eventType: string): Promise<void>
  * contact so no further follow-ups are sent to someone who already engaged.
  * Unlike bounces/complaints, a reply must not set doNotContact.
  */
-async function handleReply(email: string): Promise<void> {
+async function handleReply(scope: AttributedScope, email: string): Promise<void> {
   const [contact] = await db
     .select({ id: contacts.id, tenantId: contacts.tenantId })
     .from(contacts)
     .where(and(
+      // #2406: with no tenant predicate this `.limit(1)` picked whichever
+      // workspace Postgres happened to return first and stopped ITS follow-ups
+      // for a reply that belonged to someone else's campaign.
+      eq(contacts.tenantId, scope.tenantId),
+      ...(scope.kind === 'exact' ? [eq(contacts.id, scope.contactId)] : []),
       eq(contacts.email, email),
       isNull(contacts.deletedAt)
     ))
@@ -268,7 +323,8 @@ async function handleReply(email: string): Promise<void> {
     .set({ status: 'completed', completedAt: new Date(), updatedAt: new Date() })
     .where(and(
       eq(sequenceEnrollments.contactId, contact.id),
-      eq(sequenceEnrollments.status, 'active')
+      eq(sequenceEnrollments.status, 'active'),
+      eq(sequenceEnrollments.tenantId, contact.tenantId)
     ))
     .returning({ id: sequenceEnrollments.id });
 
@@ -296,12 +352,16 @@ async function handleReply(email: string): Promise<void> {
  * Handle a soft bounce: increment bounce counter in metadata and escalate
  * to doNotContact after SOFT_BOUNCE_THRESHOLD bounces within the window.
  */
-async function handleSoftBounce(email: string): Promise<void> {
-  // Fetch contacts with this email
+async function handleSoftBounce(scope: AttributedScope, email: string): Promise<void> {
+  // Fetch contacts with this email — in ONE workspace (#2406: this unscoped
+  // read is what made a soft bounce a fleet-wide event, because every tenant
+  // holding the address was iterated and incremented).
   const matchingContacts = await db
     .select({ id: contacts.id, tenantId: contacts.tenantId, metadata: contacts.metadata })
     .from(contacts)
     .where(and(
+      eq(contacts.tenantId, scope.tenantId),
+      ...(scope.kind === 'exact' ? [eq(contacts.id, scope.contactId)] : []),
       eq(contacts.email, email),
       eq(contacts.doNotContact, false),
       isNull(contacts.deletedAt)
@@ -326,6 +386,10 @@ async function handleSoftBounce(email: string): Promise<void> {
         .from(contacts)
         .where(and(
           eq(contacts.id, contact.id),
+          // #2406: redundant against the scoped read above, and kept anyway —
+          // every statement that touches a contact from this webhook carries its
+          // tenant, so no future copy of this block can reintroduce the leak.
+          eq(contacts.tenantId, scope.tenantId),
           eq(contacts.doNotContact, false),
           isNull(contacts.deletedAt)
         ))
@@ -357,10 +421,13 @@ async function handleSoftBounce(email: string): Promise<void> {
                 '{bounceType}', '"soft_escalated"'
               ),
               '{softBounces}', ${JSON.stringify(recentBounces)}::jsonb
-            ) || jsonb_build_object('lastBounceAt', ${now.toISOString()}, 'bounceCount', ${newCount})`,
+            ) || jsonb_build_object('lastBounceAt', ${now.toISOString()}::text, 'bounceCount', ${newCount}::int)`,
             updatedAt: now,
           })
-          .where(eq(contacts.id, contact.id));
+          .where(and(
+            eq(contacts.id, contact.id),
+            eq(contacts.tenantId, scope.tenantId)
+          ));
 
         // Cancel enrollments
         await tx
@@ -368,7 +435,8 @@ async function handleSoftBounce(email: string): Promise<void> {
           .set({ status: 'cancelled', updatedAt: now })
           .where(and(
             eq(sequenceEnrollments.contactId, contact.id),
-            eq(sequenceEnrollments.status, 'active')
+            eq(sequenceEnrollments.status, 'active'),
+            eq(sequenceEnrollments.tenantId, scope.tenantId)
           ));
       } else {
         // Just track the soft bounce
@@ -381,10 +449,13 @@ async function handleSoftBounce(email: string): Promise<void> {
                 '{bounceType}', '"soft"'
               ),
               '{softBounces}', ${JSON.stringify(recentBounces)}::jsonb
-            ) || jsonb_build_object('lastBounceAt', ${now.toISOString()}, 'bounceCount', ${newCount})`,
+            ) || jsonb_build_object('lastBounceAt', ${now.toISOString()}::text, 'bounceCount', ${newCount}::int)`,
             updatedAt: now,
           })
-          .where(eq(contacts.id, contact.id));
+          .where(and(
+            eq(contacts.id, contact.id),
+            eq(contacts.tenantId, scope.tenantId)
+          ));
       }
 
       return { newCount, shouldDnc };
