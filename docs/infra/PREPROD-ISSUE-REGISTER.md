@@ -4,8 +4,14 @@
 > here, with the evidence that proves it and the verification that closed it.
 > Update the status the moment it changes; IDs are never reused.
 >
-> - **Last updated:** 2026-10-04 (UTC)
-> - **Stack under test:** `deploy/docker-compose.preprod.yml` — 17 containers, local MinIO as S3
+> - **Last updated:** 2026-10-07 (UTC)
+> - **Stack under test:** `deploy/docker-compose.production.yml` **overlaid** with
+>   `deploy/docker-compose.preprod.yml` (one compose project, `deploy`) — **18** containers running, measured:
+>   17 from compose (18 services, `minio-init` is an exited one-shot; `realtime` comes only from the preprod
+>   file) plus `nucrm-test-db`, which runs **outside** compose. The old line said
+>   `docker-compose.preprod.yml` — 17 containers, which named one of the two files and counted neither
+>   correctly (17 is `production.yml`'s service count, and it was coincidence, not measurement).
+>   Local MinIO as S3.
 > - **Entry point:** `https://95.111.194.98/api/health` → `{"status":"ok","db":"connected","schema_ready":true,"sentry":"configured"}`
 > - **Companion doc:** [`PREPROD-FIXES-LESSONS.md`](./PREPROD-FIXES-LESSONS.md) — chronological fix log and the transferable lessons behind each bug.
 
@@ -2633,7 +2639,17 @@ _(Numbering: **PP-055** was PR #2354 and **PP-056** is PR #2365, so this took **
 rather than renumbering anything. That was **two** gaps and is now **one**: **#2354 merged** (`a2a53569`,
 2026-10-05) so PP-055 is on `main`, while **#2365 is still open** (`e4c7e3ba`) — both measured against `main`
 at `426e0595`; when #2365 lands that clause flips to *merged*, which is a status update per "How to maintain
-this file", not a renumbering. The note also under-predicted its own collision: it said "the Summary table
+this file", not a renumbering. <!-- STATUS UPDATE (flipped exactly as that sentence promised), measured at
+38ae90e2: **#2365 merged 2026-10-06T11:25:44Z**, and its merge commit *is* `38ae90e2` — main's tip, the very
+sha every measurement in this file is stamped to (`gh api pulls/2365` → merged_at + merge_commit_sha; head
+still `e4c7e3ba`, so nothing moved underneath the citation). PP-056 is therefore no longer a numbering gap.
+The holes that remain are mechanical, not numbering: 53 Summary rows and 56 sections over PP-001–PP-058.
+PP-023/024/025 have a section with no row; **PP-026/027 have neither a row nor a section, in any revision** —
+all 64 revisions of this file in `git rev-list --all` were scanned for a `## PP-026`/`## PP-027` heading and a
+`| PP-026 |`/`| PP-027 |` Summary row and none contains either, though `git log -S"PP-027"` still finds three
+commits, because `PP-027` is cited in prose as though it were an entry ("PP-027's bare-`db.transaction()`
+recovery", "per PP-027"). A prose citation to an ID with no entry is not something renumbering can repair, and
+IDs are never reused: it needs an owner to say whether those two are retired or simply missing. --> The note also under-predicted its own collision: it said "the Summary table
 only", but merging #2365 into `098198f2` conflicted in **two** hunks of this one file
 (`git merge-tree b64b3c6b 098198f2`, markers at its lines 77–83 and 2426–2809) — the Summary table, where
 `main` carried **three** new rows (PP-055/057/058) against #2365's one, **and the section bodies**, where
@@ -2740,6 +2756,16 @@ the first measurement.)_
   `tests/unit/csrf.test.ts` + `tests/unit/csrf-unit.test.ts`) and **#2365 is still open** (`e4c7e3ba`, as of
   `426e0595`), so `rate-limit.test.ts` is now the *only* one of the three that passes because `.env.local` is
   gitignored — a tree without the env file still looks greener than the repo actually is.
+  <!-- STATUS UPDATE, measured at 38ae90e2: **#2365 merged 2026-10-06T11:25:44Z** and its merge commit *is*
+  `38ae90e2` itself. Its subject is this exact case — "stop a third assertion passing only when .env.local is
+  absent (PP-056)" — and it touched only `tests/unit/rate-limit.test.ts` (+register), where `:319`/`:322` now
+  pin `handles requests without headers` under `vi.stubEnv('TRUST_PROXY', 'true')` **and** `'false'`. So the
+  A/B this entry measured by inference is now a dead end: re-run here — the three known files, this worktree has
+  **no** `.env.local` — `TRUST_PROXY` unset → **3 files passed (3) · 93 passed (93)**, `TRUST_PROXY=true` →
+  **3 files passed (3) · 93 passed (93)**. Where this entry read `1 failed | 92 passed` with `TRUST_PROXY=true`,
+  both columns now say 93/93, so `rate-limit.test.ts` is no longer "the *only* one of the three that passes
+  because `.env.local` is gitignored": none of the three passes or fails because of it. The class is closed;
+  what this entry goes on to describe (`webhooks-delivery.test.ts:147`) is a different failure. -->
   The one *new* failure,
   `tests/unit/webhooks-delivery.test.ts:147`, asserts `status: 'success'` and got `'pending'` with
   `Outbound request blocked: DNS resolution for "x.com" returned no addresses`; it **passes in isolation in
@@ -2927,12 +2953,20 @@ the first measurement.)_
   (the runner is *not* superuser — measured), **#74** (the journal gap still hiding `0059`/`0091`),
   **#2234**, **#2228**, **#2237**, **#2259**, **#2343**.
 - **No CI path can validate any of the exits above, and that should shape the #103 decision.** CI's RLS job is not a proxy for
-  a migration run. `.github/workflows/ci.yml:153` provisions with `npm run db:sync` — which is `drizzle-kit push` and writes **no
-  ledger** — and `:157-160` then applies RLS files through `scripts/apply-rls-ci.mjs` under
+  a migration run. `.github/workflows/ci.yml:156` provisions with `npm run db:sync` — which is `drizzle-kit push` and writes **no
+  ledger** — and `:160-163` then applies RLS files through `scripts/apply-rls-ci.mjs` (`:161`) under
   `DATABASE_URL=postgresql://postgres:postgres@…` (also the workflow-level default at `:11`). RLS does not filter a superuser and no
   ledger means neither branch of `scripts/migrate.ts` is taken, so in the only context CI can reach, the blindness in this entry
-  cannot manifest. `scripts/migrate.ts` never runs in `ci.yml` at all: the only workflow that invokes it is `deploy.yml:298`, against
+  cannot manifest. `scripts/migrate.ts` never runs in `ci.yml` at all: the only workflow that invokes it is `deploy.yml:277`, against
   a live database — the runner is exercised by failing in preprod, never by a pre-merge check.
+  <!-- coordinate corrections at 38ae90e2: before these corrections this paragraph pointed at ci.yml line 153
+       and lines 157 to 160, and at deploy.yml line 298. #2404/#2405 shifted ci.yml by 3 lines (that 153 is now
+       `npm ci`) and moved deploy's migrate into scripts/deploy-migrate.ts behind the call now at :277, leaving
+       line 298 a blank. Found mechanically: a sweep of every `path:line` citation in this file against the
+       tracked tree — 208 of them resolvable, before the citations added below — returned exactly one
+       non-resolving target, and it was this one. (Historical values are written as "line N" rather than
+       `path:line` on purpose: a citation-shaped token pointing at a stale target is indistinguishable from a
+       live one to anything that greps this file.) -->
   Discovery in `apply-rls-ci.mjs` is by file *name* (`:28`, `/rls|isolation|polic|bypass|member_read|tenant_reference|force_/i`).
   Measured against the 21 pending tags it selects **3** — `0107`, `0091_usage_snapshots_superadmin_bypass`,
   `0115_rls_view_hardening` — so of the six pending files this entry names as evidence, only `0107` is even attempted, and it is
