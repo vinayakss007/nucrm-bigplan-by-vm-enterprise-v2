@@ -15,6 +15,7 @@ import { scheduledReports } from '@/drizzle/schema';
 import { eq, and, isNull, sql } from 'drizzle-orm';
 import { acquireLock, releaseLock } from '@/lib/cache';
 import { sweepTenants } from '@/lib/cron/tenant-scope';
+import { addMonthsClamped } from '@/lib/billing/recurrence-date';
 
 const REPORT_LOCK_KEY = 'cron:scheduled-report-delivery';
 const REPORT_LOCK_TTL = 120; // 2 minutes
@@ -76,11 +77,15 @@ function exportEntityFor(reportType: string): ExportEntityType {
 
 /** Compute the next run based on frequency (mirrors scheduled/route.ts:47-53) */
 function computeNextRunAt(frequency: string): Date {
-  const next = new Date();
+  let next = new Date();
   switch (frequency) {
     case 'hourly': next.setHours(next.getHours() + 1); break;
     case 'weekly': next.setDate(next.getDate() + 7); break;
-    case 'monthly': next.setMonth(next.getMonth() + 1); break;
+    // #2429 — `setMonth` rolled 2026-01-31 to 2026-03-03, so a monthly report
+    // created on the 29th, 30th or 31st skipped February and then kept running
+    // on the 3rd. Clamping keeps it in the next month; see recurrence-date.ts
+    // for why a clamped value cannot restore a month-end anchor.
+    case 'monthly': next = addMonthsClamped(next, 1); break;
     case 'daily':
     default:
       next.setDate(next.getDate() + 1); break;
