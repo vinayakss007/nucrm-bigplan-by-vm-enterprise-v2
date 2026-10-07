@@ -3054,7 +3054,7 @@ the first measurement.)_
   PP-057 records as undecided and PP-060 records as unreachable. `0112`/`0120` are pure `ALTER TABLE … DROP
   CONSTRAINT` + `ADD CONSTRAINT` widenings, so they are not exposed to PP-058's RLS blindness at all — this
   is the cheapest half of the backlog to drain and the one with a named consequence.
-  (c) **Decide what the other three unrun guards are for** — `guard:audit` and `guard:semgrep` are
+  (c) **Decide what the other two unrun guards are for** — `guard:audit` and `guard:semgrep` are
   baselines with no runner, which means the baselines cannot rot loudly; either schedule them or delete
   them, but a script nobody runs is not a control.
   (d) **Converge the two vocabularies** — declare these CHECKs in `drizzle/schema/**` so `db:sync` and
