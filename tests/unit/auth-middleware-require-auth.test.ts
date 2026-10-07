@@ -135,6 +135,14 @@ vi.mock('@/lib/modules/registry', () => ({
   ModuleRegistry: { hasModule: m.hasModule, hasFeature: m.hasFeature },
 }));
 
+// #2432 added a plan-quota read (checkLimit) to the API-key branch of
+// requireAuth. These tests are about auth resolution and context propagation, so
+// the quota is a pass-through; the quota itself is covered by
+// tests/unit/plan-quota-api-key-2432.test.ts.
+vi.mock('@/lib/usage/middleware', () => ({
+  checkLimit: async () => null,
+}));
+
 // NOTE: @/lib/auth/csrf is intentionally NOT mocked — it is pure and self-contained,
 // so requireCsrf is exercised against the real token comparison logic.
 import {
