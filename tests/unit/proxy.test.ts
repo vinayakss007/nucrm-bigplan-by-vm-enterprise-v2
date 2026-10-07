@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { readdirSync } from 'fs';
+import { join } from 'path';
 
 type MockHeaders = Map<string, string> & { set: ReturnType<typeof vi.fn>; get: ReturnType<typeof vi.fn> };
 
@@ -388,6 +390,50 @@ describe('proxy middleware', () => {
       const res = await proxy(makeReq('/tenant/contacts'));
       expect(res._isRedirect).toBe(true);
       expect(String(res.url)).toBe('http://localhost:3000/auth/login?callbackUrl=%2Ftenant%2Fcontacts');
+    });
+  });
+
+  // #2415: the seam between the edge and the public routes went untested for
+  // as long as both halves existed — `proxy()` was tested for the auth split,
+  // the handlers were tested by calling them directly, and nothing ever asked
+  // whether an anonymous browser request *reaches* a handler. /api/public/sign
+  // and /api/public/csat were 401'd by the edge from the day they shipped.
+  // Paths are derived from the route tree rather than listed by hand, so the
+  // next public route added without a PUBLIC_PATHS entry fails here instead of
+  // shipping dead.
+  const publicApiRoutePaths = (() => {
+    const root = join(process.cwd(), 'app', 'api', 'public');
+    const walk = (rel: string): string[] =>
+      readdirSync(rel ? join(root, rel) : root, { withFileTypes: true }).flatMap((ent) => {
+        const child = rel ? `${rel}/${ent.name}` : ent.name;
+        if (ent.isDirectory()) return walk(child);
+        if (ent.name !== 'route.ts') return [];
+        return ['/api/public/' + child.replace(/\/route\.ts$/, '').replace(/\[[^\]]+\]/g, 'TOKEN')];
+      });
+    return walk('').sort();
+  })();
+
+  describe('public API routes reach their handler anonymously (#2415)', () => {
+    it('derives the list from app/api/public, not from a hand-written roster', () => {
+      expect(publicApiRoutePaths).toContain('/api/public/sign/TOKEN');
+      expect(publicApiRoutePaths).toContain('/api/public/csat/TOKEN');
+      expect(publicApiRoutePaths.length).toBeGreaterThanOrEqual(14);
+    });
+
+    for (const path of publicApiRoutePaths) {
+      for (const method of ['GET', 'POST']) {
+        it(`${method} ${path} passes the edge with no session`, async () => {
+          const { proxy } = await import('@/proxy');
+          const res = await proxy(makeReq(path, { method }));
+          expect(res._isNext, `${method} ${path} was intercepted: ${JSON.stringify(res.body ?? res.status)}`).toBe(true);
+        });
+      }
+    }
+
+    it('control: a protected API path is still 401 for an anonymous caller', async () => {
+      const { proxy } = await import('@/proxy');
+      const res = await proxy(makeReq('/api/tenant/contacts'));
+      expect(res.status).toBe(401);
     });
   });
 });
