@@ -3144,8 +3144,10 @@ the first measurement.)_
 - **Even a green run would not touch this database.** The workflow documents its own topology, and
   `deploy/DEPLOYMENT_PATHS.md:5-13` states it as the canonical decision: **Path A** = production under
   **PM2 on the VM** (git-based update, Docker only for infra/monitoring), **Path B** = Docker for
-  development, "Do **not** use it to serve production". `deploy.yml` is Path A line by line: it `cd`s to
-  `/home/vinayak_shruti_biz/nucrm-bigplan-by-vm-enterprise-v2` (`:79`), probes `HEALTH_PORTS: 3099 3000`
+  development, "Do **not** use it to serve production". `deploy.yml` is Path A line by line: it `cd`s to a
+  checkout under a VM user's home directory (`:79` — that line already carries the login name, and
+  AGENTS.md keeps logins out of this file, so it is cited by line rather than copied), probes
+  `HEALTH_PORTS: 3099 3000`
   (`:38`), discovers and restarts a pm2 app (`:93-110`, `:137`). Measured here: `/home` is **empty**
   (`ls -A /home` prints nothing), `command -v pm2` finds nothing, and nothing listens on 3099
   (`curl -s -o /dev/null -w '%{http_code}' 127.0.0.1:3099/api/health` → `000`). This host is the Docker
