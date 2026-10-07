@@ -12,6 +12,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
+import { checkLimit } from '@/lib/usage/middleware';
 import { db } from '@/drizzle/db';
 import { fileAttachments, tenants, plans, users } from '@/drizzle/schema';
 import { eq, and, desc, sql } from 'drizzle-orm';
@@ -183,6 +184,13 @@ export const POST = withApiRoute(async (req: NextRequest) => {
     if (!resource_id) return NextResponse.json({ error: 'resource_id required' }, { status: 400 });
     if (!UUID_RE.test(resource_id)) return NextResponse.json({ error: 'Invalid resource_id format' }, { status: 400 });
     if (file.size > MAX_FILE_SIZE) return NextResponse.json({ error: 'File too large (max 25 MB)' }, { status: 413 });
+
+    // #2432: MAX_FILE_SIZE is a per-file cap shared by every workspace; the
+    // tenant's own `max_storage_gb` was never consulted, so "1 GB" plans could
+    // attach files without limit. file_attachments is one of the two tables the
+    // storage meter sums, so this is the gate that makes the plan real.
+    const overStorage = await checkLimit(ctx, 'storageGb');
+    if (overStorage) return overStorage;
 
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);

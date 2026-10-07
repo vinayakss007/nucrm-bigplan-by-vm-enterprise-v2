@@ -11,6 +11,7 @@ import { eq, and, gt, or, sql, desc, asc } from 'drizzle-orm';
 import { verifyToken, hashToken } from '@/lib/auth/session';
 import { setTenantContext, setSuperAdminContext, withUserContext, NO_TENANT_SENTINEL } from '@/lib/db/rls';
 import { tryApiKeyAuth } from '@/lib/auth/api-key';
+import { checkApiKeyCallQuota } from '@/lib/usage/api-key-quota';
 import { requestContext, withRequestId } from '@/lib/tenant/request-context';
 import { withPinnedConnection } from '@/lib/db/request-connection';
 import { ModuleRegistry } from '@/lib/modules/registry';
@@ -250,6 +251,8 @@ export async function requireAuth(request: NextRequest): Promise<AuthContext | N
       }
       apiKeyCtx.authMethod = 'api_key';
       await setTenantContext(apiKeyCtx.tenantId, apiKeyCtx.userId);
+      const overQuota = await checkApiKeyCallQuota(apiKeyCtx); // #2432: after setTenantContext (RLS); fails open
+      if (overQuota) return overQuota;
       requestContext.set(requestId, { ...apiKeyCtx, cachedAt: Date.now() });
       return apiKeyCtx;
     }
