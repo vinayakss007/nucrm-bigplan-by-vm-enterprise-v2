@@ -73,6 +73,8 @@ jobs:
 
       - name: Public-route soft-delete guard (#2382)
         run: npm run guard:portal-softdelete
+      - name: Public-route rate-limit guard (#2417)
+        run: npm run guard:public-ratelimit
 
   test-unit:
     name: Unit Tests
