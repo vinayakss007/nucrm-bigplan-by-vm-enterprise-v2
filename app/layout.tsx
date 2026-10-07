@@ -5,7 +5,7 @@
  */
 import type { Metadata, Viewport } from 'next';
 import { headers } from 'next/headers';
-import { Inter, JetBrains_Mono } from 'next/font/google';
+import localFont from 'next/font/local';
 import { ThemeProvider } from '@/components/shared/theme-provider';
 import { ErrorWrapper } from '@/components/shared/error-wrapper';
 import { Toaster } from 'react-hot-toast';
@@ -36,16 +36,32 @@ import './globals.css';
  */
 export const dynamic = 'force-dynamic';
 
-const inter = Inter({
-  subsets: ['latin'],
-  weight: ['400', '500', '600', '700', '800', '900'],
+// #2426 — self-hosted, byte-for-byte the same files `next/font/google` used to
+// download at build time (latin subset, static weight instances, from
+// fonts.gstatic.com). A build that fetches fonts is not hermetic: CI's Build
+// job failed on an unchanged commit because the font query could not resolve,
+// and the production image build had the same hidden dependency on Google
+// being reachable. Keeping the two `variable` names identical means no other
+// file changes, and `adjustFontFallback` stays on so the metric-matched
+// fallback @font-face (size-adjust) is still generated from these files.
+const inter = localFont({
+  src: [
+    { path: './fonts/inter-latin-400.woff2', weight: '400', style: 'normal' },
+    { path: './fonts/inter-latin-500.woff2', weight: '500', style: 'normal' },
+    { path: './fonts/inter-latin-600.woff2', weight: '600', style: 'normal' },
+    { path: './fonts/inter-latin-700.woff2', weight: '700', style: 'normal' },
+    { path: './fonts/inter-latin-800.woff2', weight: '800', style: 'normal' },
+    { path: './fonts/inter-latin-900.woff2', weight: '900', style: 'normal' },
+  ],
   variable: '--font-inter',
   display: 'swap',
 });
 
-const jetbrainsMono = JetBrains_Mono({
-  subsets: ['latin'],
-  weight: ['400', '500'],
+const jetbrainsMono = localFont({
+  src: [
+    { path: './fonts/jetbrains-mono-latin-400.woff2', weight: '400', style: 'normal' },
+    { path: './fonts/jetbrains-mono-latin-500.woff2', weight: '500', style: 'normal' },
+  ],
   variable: '--font-jetbrains-mono',
   display: 'swap',
 });
