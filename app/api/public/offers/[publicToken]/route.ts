@@ -19,7 +19,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { quotes, quoteLineItems, contacts, tenants } from '@/drizzle/schema';
-import { eq, asc } from 'drizzle-orm';
+import { eq, and, asc, isNull } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { canTransition, findOfferByToken, incrementOfferViewedCount, patchOfferMetadata } from '@/lib/offers';
@@ -83,14 +83,14 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ publ
         sort_order: quoteLineItems.sortOrder,
       })
       .from(quoteLineItems)
-      .where(eq(quoteLineItems.quoteId, offer.id))
+      .where(and(eq(quoteLineItems.quoteId, offer.id), isNull(quoteLineItems.deletedAt)))
       .orderBy(asc(quoteLineItems.sortOrder));
 
     // Look up the contact's display name (no email — that would help phishing)
     let buyerName = '';
     if (offer.contactId) {
       const c = await db.query.contacts.findFirst({
-        where: eq(contacts.id, offer.contactId),
+        where: and(eq(contacts.id, offer.contactId), isNull(contacts.deletedAt)),
         columns: { firstName: true, lastName: true },
       });
       if (c) buyerName = `${c.firstName ?? ''} ${c.lastName ?? ''}`.trim();
@@ -98,7 +98,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ publ
 
     // Show the seller's workspace branding (name only)
     const tenant = await db.query.tenants.findFirst({
-      where: eq(tenants.id, offer.tenantId),
+      where: and(eq(tenants.id, offer.tenantId), isNull(tenants.deletedAt)),
       columns: { name: true, logoUrl: true, primaryColor: true },
     });
 

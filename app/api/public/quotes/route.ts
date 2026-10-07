@@ -28,6 +28,7 @@ export async function GET(request: NextRequest) {
       where: and(
         eq(contacts.email, portalClient.email),
         eq(contacts.tenantId, portalClient.tenantId),
+        isNull(contacts.deletedAt),
       ),
       columns: { id: true, tenantId: true },
     });

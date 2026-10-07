@@ -18,7 +18,9 @@ export async function GET(request: NextRequest) {
     if (!email) return NextResponse.json({ data: [] });
 
     const contact = await db.query.contacts.findFirst({
-      where: eq(contacts.email, email),
+      // #2382: a tombstoned contact is a deleted customer — no invoice list,
+      // no portal access, no matter which lookup still matches their email.
+      where: and(eq(contacts.email, email), isNull(contacts.deletedAt)),
       columns: { id: true, tenantId: true }
     });
 

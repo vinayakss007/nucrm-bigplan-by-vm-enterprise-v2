@@ -71,6 +71,9 @@ jobs:
       - name: CSV formula-escape guard (#2340)
         run: npm run guard:csv
 
+      - name: Public-route soft-delete guard (#2382)
+        run: npm run guard:portal-softdelete
+
   test-unit:
     name: Unit Tests
     runs-on: ubuntu-latest
