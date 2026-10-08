@@ -2999,8 +2999,9 @@ the first measurement.)_
   (the runner is *not* superuser — measured), **#74** (the journal gap still hiding `0059`/`0091`),
   **#2234**, **#2228**, **#2237**, **#2259**, **#2343**.
 - **No CI path can validate any of the exits above, and that should shape the #103 decision.** CI's RLS job is not a proxy for
-  a migration run. `.github/workflows/ci.yml:161` provisions with `npm run db:sync` — which is `drizzle-kit push` and writes **no
-  ledger** — and `:165-168` then applies RLS files through `scripts/apply-rls-ci.mjs` (`:166`) under
+  a migration run. `.github/workflows/ci.yml:163` (re-pinned from `:161` on 2026-10-08 — the #2440
+  projection guard step added two lines above it) provisions with `npm run db:sync` — which is `drizzle-kit push` and writes **no
+  ledger** — and `:167-170` then applies RLS files through `scripts/apply-rls-ci.mjs` (`:168`) under
   `DATABASE_URL=postgresql://postgres:postgres@…` (also the workflow-level default at `:11`). RLS does not filter a superuser and no
   ledger means neither branch of `scripts/migrate.ts` is taken, so in the only context CI can reach, the blindness in this entry
   cannot manifest. `scripts/migrate.ts` never runs in `ci.yml` at all: the only workflow that invokes it is `deploy.yml:277`, against

@@ -75,6 +75,8 @@ jobs:
         run: npm run guard:portal-softdelete
       - name: Public-route rate-limit guard (#2417)
         run: npm run guard:public-ratelimit
+      - name: Public-write row-projection guard (#2440)
+        run: npm run guard:public-projection
 
   test-unit:
     name: Unit Tests

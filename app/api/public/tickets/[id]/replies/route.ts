@@ -86,6 +86,12 @@ async function insertReply(
       return NextResponse.json({ error: 'Cannot reply to a closed ticket' }, { status: 409 });
     }
 
+    // #2440: name the columns. This response is appended straight into the
+    // customer's thread (app/portal/(protected)/tickets/[id]/page.tsx), so an
+    // argument-less `.returning()` would ship every column the table grows —
+    // the same class of echo #2217 removed for portal_token. `userId` is kept
+    // because the thread renders `!!reply.userId` to tell an agent apart from
+    // the visitor; a customer reply always inserts NULL for it.
     const [reply] = await db.transaction(async (tx) => {
       const [r] = await tx.insert(ticketReplies).values({
         ticketId: id,
@@ -93,7 +99,15 @@ async function insertReply(
         contactId: ticket.contactId,
         body,
         isInternal: false,
-      }).returning();
+      }).returning({
+        id: ticketReplies.id,
+        ticketId: ticketReplies.ticketId,
+        userId: ticketReplies.userId,
+        contactId: ticketReplies.contactId,
+        body: ticketReplies.body,
+        isInternal: ticketReplies.isInternal,
+        createdAt: ticketReplies.createdAt,
+      });
 
       if (ticket.status === 'resolved') {
         await tx.update(supportTickets)
