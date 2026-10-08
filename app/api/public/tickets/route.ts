@@ -14,6 +14,7 @@ import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { generatePortalToken } from '@/lib/ticket-portal';
 import { resolvePortalIdentity, resolvePortalContact } from '@/lib/portal-auth';
+import { PUBLIC_TICKET_COLUMNS } from '@/lib/public-ticket-projection';
 
 const publicTicketSchema = z.object({
   email: z.string().email('Valid email is required'),
@@ -71,12 +72,9 @@ export async function GET(request: NextRequest) {
       contactId = contact.id;
     }
 
-    const data = await db.select({
-      id: supportTickets.id, subject: supportTickets.subject,
-      body: supportTickets.body, status: supportTickets.status,
-      priority: supportTickets.priority, category: supportTickets.category,
-      created_at: supportTickets.createdAt,
-    })
+    // #2443: the same named projection the detail handler uses, so a customer's
+    // list and their ticket page cannot disagree about the shape of a ticket.
+    const data = await db.select(PUBLIC_TICKET_COLUMNS)
     .from(supportTickets)
     .where(and(
       eq(supportTickets.tenantId, tenantId),
