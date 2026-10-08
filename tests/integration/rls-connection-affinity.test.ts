@@ -71,6 +71,22 @@
  * established on the same pinned connection the tenant GUC was set on. The
  * connection-affinity fix (the thing #1615 adds) is what makes the GUC visible
  * to that role's query; RLS then blocks the cross-tenant read.
+ *
+ * WHY THE RESTORE COPIES THE POLICY TEXT INSTEAD OF REWRITING IT (#2451)
+ * ----------------------------------------------------------------------
+ * `beforeAll` DROPs `contacts`' real `tenant_isolation` policy, so `afterAll`
+ * can only put it back out of something that recorded it. The original version
+ * of this file recorded `hadPolicy: boolean` and then re-created a policy it had
+ * typed by hand — `tenant_id::text = current_setting('app.current_tenant')` —
+ * which is 0037's single-argument, error-raising pair: on a session with no
+ * tenant GUC it aborts the statement with 42704 rather than denying the row, the
+ * precise defect #2438 was filed for, and it also overwrote 0092's
+ * `app.is_super_admin` arm. Every statement of that restore was
+ * `.catch(() => {})`, so it also could not fail loudly. `capturePolicySnapshot()`
+ * now reads the whole policy (`cmd`, strictness, roles, `USING`, `WITH CHECK`)
+ * out of `pg_policies`, and the restore re-issues that text; a restore that
+ * fails throws, because a half-restored shared database is the thing this
+ * function exists to prevent.
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
@@ -119,7 +135,106 @@ const RLS_TABLES = ['contacts'] as const;
 // Snapshot of RLS state captured before the test modifies anything.
 // Used in afterAll to restore the original state instead of
 // unconditionally disabling RLS.
-let rlsSnapshot: Record<string, { enabled: boolean; forced: boolean; hadPolicy: boolean }> = {};
+//
+// `policies` holds the FULL deparse of every `tenant_isolation` policy that was
+// on the table, not just a yes/no "was there one" flag. It has to: `beforeAll`
+// DROPs those policies and `afterAll` re-CREATEs them, so anything not captured
+// here is destroyed. The version of this file before #2451 captured only
+// `hadPolicy` and then restored a hand-written
+// `tenant_id::text = current_setting('app.current_tenant')` pair, which
+//   (a) re-installed the error-raising shape #2438 exists to remove — one
+//       argument to current_setting() raises `unrecognized configuration
+//       parameter` and aborts the statement instead of denying the row, and
+//   (b) deleted whatever the policy actually said (on a migrated database that
+//       is 0092's `app.is_super_admin` bypass arm).
+// Both happened silently, because every statement in the restore was
+// `.catch(() => {})`, and left `contacts` — the most queried table in the CRM —
+// in that state for the rest of the integration run.
+type CapturedPolicy = {
+  cmd: string;
+  permissive: string;
+  roles: string[];
+  qual: string | null;
+  withCheck: string | null;
+};
+let rlsSnapshot: Record<string, { enabled: boolean; forced: boolean; policies: CapturedPolicy[] }> = {};
+
+// `FOR <cmd>` and `AS <permissive>` are emitted into CREATE POLICY as written,
+// so only the values Postgres itself reports for those columns are accepted.
+const POLICY_COMMANDS = new Set(['ALL', 'SELECT', 'INSERT', 'UPDATE', 'DELETE']);
+const POLICY_STRICTNESS = new Set(['PERMISSIVE', 'RESTRICTIVE']);
+
+/**
+ * Rebuild a `CREATE POLICY` statement from the catalogue text captured by
+ * `capturePolicySnapshot()`. `pg_policies.qual` / `.with_check` are Postgres'
+ * own deparses of the policy expressions, which are valid input for
+ * `USING (…)` / `WITH CHECK (…)` — restoring that text verbatim is what keeps
+ * the database's policy the same one it had before this file ran.
+ */
+function buildRestorePolicySql(table: string, policy: CapturedPolicy): string {
+  if (!POLICY_COMMANDS.has(policy.cmd)) {
+    throw new Error(`unexpected tenant_isolation policy command on ${table}: ${policy.cmd}`);
+  }
+  if (!POLICY_STRICTNESS.has(policy.permissive)) {
+    throw new Error(`unexpected tenant_isolation policy strictness on ${table}: ${policy.permissive}`);
+  }
+  const quotedRoles = policy.roles.map((role) => `"${role.replace(/"/g, '""')}"`).join(', ');
+  const target = `"${table.replace(/"/g, '""')}"`;
+  return [
+    `CREATE POLICY "tenant_isolation" ON ${target}`,
+    `AS ${policy.permissive}`,
+    `FOR ${policy.cmd}`,
+    `TO ${quotedRoles || 'public'}`,
+    `USING (${policy.qual ?? 'TRUE'})`,
+    ...(policy.withCheck ? [`WITH CHECK (${policy.withCheck})`] : []),
+  ].join(' ');
+}
+
+/**
+ * Read the RLS state of `RLS_TABLES` as it is right now, so `afterAll` can put
+ * it back. `pg_class.relforcerls` only exists on PostgreSQL 18+, and CI runs
+ * postgres:16, so probe for the column and only select it when present —
+ * otherwise this snapshot query fails with `column "relforcerls" does not exist`
+ * and the whole file errors.
+ */
+async function capturePolicySnapshot(): Promise<void> {
+  const { rows: forceColRows } = await db.execute(sql`
+    SELECT 1 FROM pg_attribute
+    WHERE attrelid = 'pg_class'::regclass AND attname = 'relforcerls'
+  `);
+  const hasForceColumn = forceColRows.length > 0;
+  rlsSnapshot = {};
+  for (const table of RLS_TABLES) {
+    const row = hasForceColumn
+      ? await db.execute(sql`
+        SELECT relrowsecurity AS enabled, relforcerls AS forced
+        FROM pg_class WHERE relname = ${table}
+      `)
+      : await db.execute(sql`
+        SELECT relrowsecurity AS enabled, false AS forced
+        FROM pg_class WHERE relname = ${table}
+      `);
+    // `pg_policies` is scoped by schemaname + tablename, so the row it returns is
+    // the policy on THIS table — joining pg_class by relname alone would also pick
+    // up a same-named policy on a table in another schema.
+    //
+    // `roles` is cast to text[] because the view declares it as name[], which
+    // node-postgres hands back as the raw literal `{public}` instead of an array.
+    const { rows: policyRows } = await db.execute(sql`
+      SELECT cmd, permissive, roles::text[] AS roles, qual, with_check AS "withCheck"
+        FROM pg_policies
+       WHERE schemaname = 'public' AND tablename = ${table} AND policyname = 'tenant_isolation'
+       ORDER BY cmd
+    `);
+    const result = (row as { rows: Array<{ enabled: boolean; forced: boolean }> }).rows?.[0];
+    const policies = policyRows as unknown as CapturedPolicy[];
+    rlsSnapshot[table] = {
+      enabled: result?.enabled ?? false,
+      forced: result?.forced ?? false,
+      policies,
+    };
+  }
+}
 
 /**
  * Idempotently establish, on the connected database, the RLS preconditions that
@@ -148,27 +263,39 @@ async function ensureRlsPreconditions(): Promise<void> {
 
   for (const table of RLS_TABLES) {
     const tbl = sql.raw(`"${table}"`);
-    await db.execute(sql`ALTER TABLE ${tbl} ENABLE ROW LEVEL SECURITY`);
-    // FORCE so the guarantee also holds for the table OWNER (production's app
-    // role is a non-owner, but forcing keeps the policy authoritative here too).
-    await db.execute(sql`ALTER TABLE ${tbl} FORCE ROW LEVEL SECURITY`);
-    await db.execute(sql`GRANT SELECT, INSERT, UPDATE, DELETE ON ${tbl} TO rls_affinity_test_role`);
-    // Fail-closed policy, mirroring migration 0039: empty/unset GUC -> NULL ->
-    // deny; a valid uuid GUC -> equality; NULL tenant_id rows are global.
-    await db.execute(sql`DROP POLICY IF EXISTS tenant_isolation ON ${tbl}`);
-    await db.execute(sql`
-      CREATE POLICY tenant_isolation ON ${tbl}
-      FOR ALL
-      USING (
-        tenant_id IS NULL
-        OR tenant_id = (
-          CASE
-            WHEN NULLIF(current_setting('app.current_tenant', true), '') IS NULL THEN NULL
-            ELSE NULLIF(current_setting('app.current_tenant', true), '')::uuid
-          END
-        )
-      )
-    `);
+    // Transactional for the same reason the restore is: the DROP below takes the
+    // table's real policy away, and a concurrent integration file must never see
+    // `contacts` with no tenant_isolation policy in between.
+    await withPinnedConnection(async () => {
+      await db.execute(sql`BEGIN`);
+      try {
+        await db.execute(sql`ALTER TABLE ${tbl} ENABLE ROW LEVEL SECURITY`);
+        // FORCE so the guarantee also holds for the table OWNER (production's app
+        // role is a non-owner, but forcing keeps the policy authoritative here too).
+        await db.execute(sql`ALTER TABLE ${tbl} FORCE ROW LEVEL SECURITY`);
+        await db.execute(sql`GRANT SELECT, INSERT, UPDATE, DELETE ON ${tbl} TO rls_affinity_test_role`);
+        // Fail-closed policy, mirroring migration 0039: empty/unset GUC -> NULL ->
+        // deny; a valid uuid GUC -> equality; NULL tenant_id rows are global.
+        await db.execute(sql`DROP POLICY IF EXISTS tenant_isolation ON ${tbl}`);
+        await db.execute(sql`
+          CREATE POLICY tenant_isolation ON ${tbl}
+          FOR ALL
+          USING (
+            tenant_id IS NULL
+            OR tenant_id = (
+              CASE
+                WHEN NULLIF(current_setting('app.current_tenant', true), '') IS NULL THEN NULL
+                ELSE NULLIF(current_setting('app.current_tenant', true), '')::uuid
+              END
+            )
+          )
+        `);
+        await db.execute(sql`COMMIT`);
+      } catch (err) {
+        await db.execute(sql`ROLLBACK`).catch(() => {});
+        throw err;
+      }
+    });
   }
 }
 
@@ -277,40 +404,14 @@ describe.skipIf(!dbAvailable)('RLS connection affinity (#1615)', () => {
              set_config('app.current_user', '', false)
     `);
 
+    // Snapshot the RLS state as it is RIGHT NOW, before anything is changed, so
+    // afterAll can put the table back exactly as it found it (#2451). Order
+    // matters: the fixture policy created below must not be what gets restored.
+    await capturePolicySnapshot();
+
     // Establish the RLS objects + non-superuser role the assertions rely on.
     // CI's db:sync does not apply the RLS migrations, so we (re)create them
     // here; this is idempotent when the real migrations already ran.
-    //
-    // NOTE: pg_class.relforcerls only exists on PostgreSQL 18+. CI runs
-    // postgres:16, so probe for the column once and only select it when
-    // present — otherwise this snapshot query fails with
-    // `column "relforcerls" does not exist` and the whole file errors.
-    const { rows: forceColRows } = await db.execute(sql`
-      SELECT 1 FROM pg_attribute
-      WHERE attrelid = 'pg_class'::regclass AND attname = 'relforcerls'
-    `);
-    const hasForceColumn = forceColRows.length > 0;
-    rlsSnapshot = {};
-    for (const table of RLS_TABLES) {
-      const row = hasForceColumn
-        ? await db.execute(sql`
-          SELECT relrowsecurity AS enabled, relforcerls AS forced
-          FROM pg_class WHERE relname = ${table}
-        `)
-        : await db.execute(sql`
-          SELECT relrowsecurity AS enabled, false AS forced
-          FROM pg_class WHERE relname = ${table}
-        `);
-      const { rows: policyRows } = await db.execute(sql`
-        SELECT 1 FROM pg_policies WHERE tablename = ${table} AND policyname = 'tenant_isolation'
-      `);
-      const result = (row as { rows: Array<{ enabled: boolean; forced: boolean }> }).rows?.[0];
-      rlsSnapshot[table] = {
-        enabled: result?.enabled ?? false,
-        forced: result?.forced ?? false,
-        hadPolicy: policyRows.length > 0,
-      };
-    }
     await ensureRlsPreconditions();
   });
 
@@ -333,29 +434,63 @@ describe.skipIf(!dbAvailable)('RLS connection affinity (#1615)', () => {
 
     // Restore the original RLS state so this suite does not change
     // the shared DB state other integration test files observe.
+    //
+    // Restored from the policy text captured in beforeAll, never from a
+    // hand-written substitute. This file DROPs the table's real
+    // `tenant_isolation` policy, so a restore that CREATEs an expression it did
+    // not read does two things at once: it destroys the policy that was there,
+    // and it installs whatever was typed here. What was typed here was
+    //   tenant_id::text = current_setting('app.current_tenant')
+    // — the single-argument, error-raising pair from 0037 that #2438 exists to
+    // remove — so every integration run left `contacts` aborting (42704) instead
+    // of denying on a missing tenant context, and dropped 0092's
+    // `app.is_super_admin` arm with it.
+    //
+    // A failed restore is reported instead of swallowed: `.catch(() => {})` over
+    // these statements is exactly why that survived every CI run unnoticed.
+    const restoreFailures: string[] = [];
     for (const table of RLS_TABLES) {
       const tbl = sql.raw(`"${table}"`);
       const snap = rlsSnapshot[table];
       if (snap) {
-        if (snap.hadPolicy) {
-          await db.execute(sql`DROP POLICY IF EXISTS tenant_isolation ON ${tbl}`).catch(() => {});
-          if (snap.enabled) {
-            await db.execute(sql`CREATE POLICY tenant_isolation ON ${tbl}
-              FOR ALL USING (tenant_id::text = current_setting('app.current_tenant'))
-              WITH CHECK (tenant_id::text = current_setting('app.current_tenant'))`).catch(() => {});
-          }
-        } else {
-          await db.execute(sql`DROP POLICY IF EXISTS tenant_isolation ON ${tbl}`).catch(() => {});
-        }
-        if (!snap.enabled) {
-          await db.execute(sql`ALTER TABLE ${tbl} NO FORCE ROW LEVEL SECURITY`).catch(() => {});
-          await db.execute(sql`ALTER TABLE ${tbl} DISABLE ROW LEVEL SECURITY`).catch(() => {});
+        try {
+          // One transaction per table. Postgres DDL is transactional, so nothing
+          // can observe `contacts` between the DROP of the fixture policy and the
+          // CREATE of the original — integration test files run in parallel
+          // workers, and outside a transaction that gap is a window in which the
+          // table has no policy at all for another file's reader. It also means a
+          // restore that fails halfway leaves the table exactly as it was, rather
+          // than half-restored.
+          await withPinnedConnection(async () => {
+            await db.execute(sql`BEGIN`);
+            try {
+              await db.execute(sql`DROP POLICY IF EXISTS tenant_isolation ON ${tbl}`);
+              for (const policy of snap.policies) {
+                await db.execute(sql.raw(buildRestorePolicySql(table, policy)));
+              }
+              if (!snap.enabled) {
+                await db.execute(sql`ALTER TABLE ${tbl} NO FORCE ROW LEVEL SECURITY`);
+                await db.execute(sql`ALTER TABLE ${tbl} DISABLE ROW LEVEL SECURITY`);
+              }
+              await db.execute(sql`COMMIT`);
+            } catch (err) {
+              await db.execute(sql`ROLLBACK`).catch(() => {});
+              throw err;
+            }
+          });
+        } catch (err) {
+          restoreFailures.push(`${table}: ${err instanceof Error ? err.message : String(err)}`);
         }
       }
       await db.execute(sql`REVOKE ALL ON ${tbl} FROM rls_affinity_test_role`).catch(() => {});
     }
     await db.execute(sql`REVOKE USAGE ON SCHEMA public FROM rls_affinity_test_role`).catch(() => {});
     await db.execute(sql`DROP ROLE IF EXISTS rls_affinity_test_role`).catch(() => {});
+    if (restoreFailures.length > 0) {
+      throw new Error(
+        `RLS restore failed; the shared database is left holding this file's fixture policy: ${restoreFailures.join(' | ')}`
+      );
+    }
   });
 
   it("a request's OWN tenant context is visible to its later db queries (connection affinity)", async () => {
