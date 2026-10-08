@@ -11,10 +11,15 @@
  * not fatal. It then asserts RLS is ON for the core tenant-scoped
  * tables and exits non-zero if it is not.
  */
-import { execSync } from 'node:child_process';
+import { execSync, execFileSync } from 'node:child_process';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  buildShapeSweepSql,
+  parseShapeSweep,
+  evaluateShapeSweep,
+} from './rls-policy-shape.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(__dirname, '..', 'drizzle', 'migrations');
@@ -113,6 +118,46 @@ function main() {
     console.error('\nERROR: RLS not enabled on all core tables');
     process.exit(1);
   }
+
+  // #2438 — assert that no tenant table is left with the error-raising
+  // `tenant_isolation` policy.
+  //
+  // `current_setting('app.current_tenant')` with ONE argument aborts the whole
+  // statement when no tenant GUC exists, instead of denying the row. `0037`
+  // still emits exactly that pair (`0037:239`, `0037:247-249`) for every table
+  // whose `tenant_id` is NOT NULL, and `0039` — the migration written to end it —
+  // only rewrites tables that *already* have a `tenant_isolation` policy when its
+  // loop runs (`0039:46-53` `CONTINUE`) and swallows each per-table failure into a
+  // `RAISE WARNING` (`0039:79-81`). A tenant table hardened after that loop, or
+  // skipped by it, therefore keeps the aborting shape silently and forever — and
+  // nothing in CI compared the two, which is why this class of defect could only
+  // be found by hand-inspecting `pg_policy`.
+  //
+  // The assertion cannot live in a migration either: this script reports a
+  // failing migration as SKIPPED and not fatal, so it has to run here, where CI
+  // cannot swallow it. Detection itself lives in `scripts/rls-policy-shape.mjs`
+  // so the unit and integration tests exercise the same pattern and the same
+  // discovery floor that gate the build.
+  let sweep;
+  try {
+    sweep = parseShapeSweep(
+      execFileSync(
+        'psql',
+        [databaseUrl, '-t', '-A', '-F', '|', '-c', buildShapeSweepSql()],
+        { stdio: 'pipe', timeout: 20000 },
+      ).toString(),
+    );
+  } catch (e) {
+    console.error(`\nERROR: could not evaluate the tenant_isolation policy shapes: ${String(e.message).slice(0, 120)}`);
+    process.exit(1);
+  }
+
+  const shapeVerdict = evaluateShapeSweep(sweep);
+  if (shapeVerdict.status !== 'pass') {
+    console.error(`\nERROR: ${shapeVerdict.message} (#2438)`);
+    process.exit(1);
+  }
+  console.log(`\nOK: ${shapeVerdict.message} (#2438)`);
 
   // #2232: surface the full isolation picture (enabled+forced, policy count,
   // NULL-tenant gaps) from the dedicated verifier. Non-fatal here: the CI
