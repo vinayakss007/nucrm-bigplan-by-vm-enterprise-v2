@@ -75,7 +75,7 @@ jobs:
         run: npm run guard:portal-softdelete
       - name: Public-route rate-limit guard (#2417)
         run: npm run guard:public-ratelimit
-      - name: Public-write row-projection guard (#2440)
+      - name: Public row-projection guard (#2440 writes, #2443 reads)
         run: npm run guard:public-projection
       - name: Register coordinate guard (#2416)
         run: npm run guard:coords

@@ -37,8 +37,22 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (!contact) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
     const { id } = await params;
+    // #2443: these two quote reads never reach the wire — the response is the
+    // three-field `{ ok, status, accepted_at }` below — so they were not leaking
+    // anything. They still named nothing, which makes `SELECT *` the plan for a
+    // statement that tests two columns and copies five into an activity row.
+    // Naming them costs less to fetch and makes "what does this handler look at"
+    // readable without diffing the table.
     const [quote] = await db
-      .select()
+      .select({
+        id: quotes.id,
+        tenantId: quotes.tenantId,
+        status: quotes.status,
+        expiresAt: quotes.expiresAt,
+        title: quotes.title,
+        dealId: quotes.dealId,
+        totalAmount: quotes.totalAmount,
+      })
       .from(quotes)
       .where(and(eq(quotes.id, id), eq(quotes.tenantId, contact.tenantId), eq(quotes.contactId, contact.id), isNull(quotes.deletedAt)))
       .limit(1);
