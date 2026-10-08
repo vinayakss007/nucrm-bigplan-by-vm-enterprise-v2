@@ -754,7 +754,7 @@ route/DB exercise → full suite: 5610 passed / 0 failed) is documented in
 | `npm run db:migrate`     | Run pending migrations (refuses to stamp a pushed schema — #2450) |
 | `npm run db:generate`    | Generate new migration file                    |
 | `npm run db:rollback`    | Roll back last migration                       |
-| `npm run db:status`      | Check migration status                         |
+| `npm run db:status`      | Migration status; on an empty ledger it also says whether the schema was pushed or restored (#2450) |
 | `npm run db:drop`        | Drop all tables (destructive)                  |
 | `npm run db:reset`       | Drop all tables + re-sync                      |
 

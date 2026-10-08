@@ -16,6 +16,7 @@ import {
   extractExpectedSchema,
   formatMissingObjects,
   groupMissingByOwner,
+  ledgerGuidance,
   runRecoveryStamp,
   verifyStampedLedger,
   type ExpectedState,
@@ -226,6 +227,38 @@ describe('classifyProvisioning (#2450 AC3)', () => {
 
   it('calls an empty schema push-provisioned rather than dividing by zero', () => {
     expect(classifyProvisioning(shape({ policies: 0, rlsEnabledTables: 0, tables: 0 }))).toBe('push');
+  });
+});
+
+describe('ledgerGuidance (#2450 — db:status must not send people to a refusal)', () => {
+  const text = (lines: string[]) => lines.join('\n');
+
+  it('names db:bootstrap for an empty ledger over a pushed schema', () => {
+    const g = text(ledgerGuidance(shape({ policies: 0, rlsEnabledTables: 0, tables: 227 }), 0));
+    expect(g).toContain('npm run db:bootstrap');
+    expect(g).toContain('REFUSES');
+    expect(g).toContain('drizzle-kit push');
+    // The old sentence was bare `db:migrate` advice, which #2450 turned into a
+    // refusal for exactly this shape.
+    expect(g).not.toMatch(/^Run 'npm run db:migrate' to apply pending/m);
+  });
+
+  it('keeps db:migrate advice for a dump restore and says it will verify', () => {
+    const g = text(ledgerGuidance(shape({ tables: 227, rlsEnabledTables: 225, policies: 277 }), 0));
+    expect(g).toContain('dump restore');
+    expect(g).toContain('verify every headline object');
+    expect(g).not.toContain('db:bootstrap');
+  });
+
+  it('is not afraid of a stray fixture policy either (#2455)', () => {
+    const g = text(ledgerGuidance(shape({ policies: 1, rlsEnabledTables: 1, tables: 227 }), 0));
+    expect(g).toContain('npm run db:bootstrap');
+  });
+
+  it('gives the ordinary advice once the ledger has rows, and for a truly empty schema', () => {
+    expect(ledgerGuidance(shape(), 122)).toHaveLength(1);
+    expect(ledgerGuidance(shape(), 122)[0]).toContain("npm run db:migrate");
+    expect(ledgerGuidance(shape({ policies: 0, rlsEnabledTables: 0, tables: 0 }), 0)).toHaveLength(1);
   });
 });
 

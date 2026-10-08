@@ -242,6 +242,34 @@ export function diffExpectedVsActual(expected: ExpectedState, actual: ActualStat
 }
 
 /**
+ * The sentence `db:status` ends with when the ledger says "everything pending".
+ * It used to be one line — *run `npm run db:migrate`* — which since #2450 is
+ * actively wrong advice for a push-provisioned schema: migrate now refuses that
+ * database, so the read-only instrument sent the operator to a command that sends
+ * them back. The two shapes get different next commands, and both are named here
+ * so the status tool cannot drift from the migrator again.
+ */
+export function ledgerGuidance(shape: ProvisioningShape, ledgerRows: number): string[] {
+  if (ledgerRows > 0 || shape.tables === 0) {
+    return ["Run 'npm run db:migrate' to apply pending journal entries (verify first with 'npm run db:migrate -- --dry-run')."];
+  }
+  if (classifyProvisioning(shape) === 'push') {
+    return [
+      `The ledger is empty and RLS covers ${shape.rlsEnabledTables} of ${shape.tables} tables: this schema was`,
+      'built by `drizzle-kit push` (db:sync/db:push), which creates tables and columns only.',
+      "npm run db:migrate REFUSES it rather than stamping an unprotected database (#2450).",
+      'Build it from the journal instead — on an EMPTY database:',
+      '  npm run db:bootstrap   (replays the journal, stamps, verifies RLS coverage by query)',
+    ];
+  }
+  return [
+    `The ledger is empty while RLS covers ${shape.rlsEnabledTables} of ${shape.tables} tables: a dump restore`,
+    'of a database that ran the journal. npm run db:migrate will stamp the ledger and then',
+    'verify every headline object the journal promises against the live catalog.',
+  ];
+}
+
+/**
  * Group by the journal entry that promised each object, biggest gap first.
  * This is the shape an operator acts on: "#2450's 21 missing functions are
  * 16 from 0032 and 5 from four other files" is a sentence, where a flat list
