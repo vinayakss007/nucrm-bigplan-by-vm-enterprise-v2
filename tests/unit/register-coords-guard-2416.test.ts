@@ -302,3 +302,15 @@ describe('the real register against the real allowlist', () => {
     expect(extractCitations(lines).length).toBeGreaterThan(200);
   });
 });
+
+describe('the guard is wired into CI (#2416 follow-up)', () => {
+  it('is an npm script and a step in the lint-typecheck job', () => {
+    const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')) as {
+      scripts: Record<string, string>;
+    };
+    expect(pkg.scripts['guard:coords']).toContain('check-register-coords');
+    const ci = readFileSync(join(ROOT, '.github', 'workflows', 'ci.yml'), 'utf8');
+    const job = ci.slice(ci.indexOf('  lint-typecheck:'), ci.indexOf('  test-unit:'));
+    expect(job).toContain('npm run guard:coords');
+  });
+});
