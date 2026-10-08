@@ -3040,13 +3040,42 @@ the first measurement.)_
   (the runner is *not* superuser — measured), **#74** (the journal gap still hiding `0059`/`0091`),
   **#2234**, **#2228**, **#2237**, **#2259**, **#2343**.
 - **No CI path can validate any of the exits above, and that should shape the #103 decision.** CI's RLS job is not a proxy for
-  a migration run. `.github/workflows/ci.yml:163` (re-pinned from `:161` on 2026-10-08 — the #2440
-  projection guard step added two lines above it) provisions with `npm run db:sync` — which is `drizzle-kit push` and writes **no
-  ledger** — and `:167-170` then applies RLS files through `scripts/apply-rls-ci.mjs` (`:168`) under
+  a migration run. `.github/workflows/ci.yml:165` (re-pinned from `:161` on 2026-10-08 — the #2440
+  projection guard step added two lines above it, and the coordinate guard step recorded in the comment below
+  added two more) provisions with `npm run db:sync` — which is `drizzle-kit push` and writes **no
+  ledger** — and `:169-172` then applies RLS files through `scripts/apply-rls-ci.mjs` (`:170`) under
   `DATABASE_URL=postgresql://postgres:postgres@…` (also the workflow-level default at `:11`). RLS does not filter a superuser and no
   ledger means neither branch of `scripts/migrate.ts` is taken, so in the only context CI can reach, the blindness in this entry
   cannot manifest. `scripts/migrate.ts` never runs in `ci.yml` at all: the only workflow that invokes it is `deploy.yml:281`, against
   a live database — the runner is exercised by failing in preprod, never by a pre-merge check.
+  <!-- coordinate corrections at the commit that wired this guard into CI: adding the step moved three of the
+       coordinates in the paragraph above. Re-measured after the insertion rather than before it: db:sync 163 →
+       165, the apply-rls step 167-170 → 169-172 and its run 168 → 170. Two did not move and are not touched:
+       the workflow-level URL default at line 11 sits above every job, and the `guard:chain` step PP-041 cites
+       at line 63 sits above the step added here. That pair of numbers has now moved twice in one day, and only
+       the second move is this commit's: the earlier 161 → 163 was #2440's projection guard step landing on the
+       same two lines above, which is what the parenthetical in the paragraph records. A comment that wrote
+       those numbers as `path:line` would be counted by the very check this paragraph describes, which is why
+       they are prose.
+       What the wiring is, and what it is not. It does not make drift blocking — it already was, and claiming
+       otherwise would be this file inventing a change it did not make. The unit suite's real-register
+       assertion in `tests/unit/register-coords-guard-2416.test.ts` (line 280) runs the same command against
+       the same register inside `npm run test:unit` and asserts status 0, so a stale pointer has failed CI
+       since #2416 shipped; it just failed as one case among thousands, six minutes in, under the name "Unit
+       Tests". The step adds three things and no fourth: a name of its own, a runtime under a second, and
+       membership in the one job `build` waits on (line 275 of the workflow — `test-unit`, at line 83, carries
+       no `needs` and starts in parallel anyway). Faster and attributable, not newly enforceable.
+       What the wiring does not buy, measured on #2433's screen rather than assumed: a pointer that lands on a
+       wrong-but-non-blank line is invisible to it, and so is a bare `:N` continuation. Across the drift this
+       file has actually had — 17 pointers, then 6 more, then 2 — liveness caught 1. The content-vs-authoring
+       screen that catches the rest needs full git history, which `actions/checkout` does not fetch by default;
+       that is the check still missing, not this one.
+       Recording rather than editing, per this file's own convention for a comment that was wrong when it was
+       written: the dated comment below says these coordinates were measured for "`run: npm run db:sync` in the
+       `test-unit` job". The numbers in it are right and the job name never was — at 098198f2, 38ae90e2,
+       d17ab596 and here, the db:sync step that sits beside an apply-rls step is the one in `test-integration`,
+       while `test-unit`'s db:sync is 45 lines above it and has no RLS step beside it at all. This entry's
+       paragraph does not name a job, so nothing outside that comment inherits the error. -->
   <!-- coordinate corrections at 38ae90e2: before these corrections this paragraph pointed at ci.yml line 153
        and lines 157 to 160, and at deploy.yml line 298. #2404/#2405 shifted ci.yml by 3 lines (that 153 is now
        `npm ci`) and moved deploy's migrate into scripts/deploy-migrate.ts behind the call now at :277, leaving
