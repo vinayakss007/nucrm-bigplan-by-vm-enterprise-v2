@@ -39,8 +39,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (!contact) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
     const { id } = await params;
+    // #2443: see the accept route — same logic-only read, columns named.
     const [quote] = await db
-      .select()
+      .select({
+        id: quotes.id,
+        tenantId: quotes.tenantId,
+        status: quotes.status,
+        title: quotes.title,
+        dealId: quotes.dealId,
+      })
       .from(quotes)
       .where(and(eq(quotes.id, id), eq(quotes.tenantId, contact.tenantId), eq(quotes.contactId, contact.id), isNull(quotes.deletedAt)))
       .limit(1);
