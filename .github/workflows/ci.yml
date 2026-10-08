@@ -329,3 +329,47 @@ jobs:
             exit 1
           fi
           echo "OK: package-lock.json is the only committed lockfile."
+
+  # #2450 — the install sequences, run end to end against a real PostgreSQL.
+  # CI's own provisioning (`db:sync` + `apply-rls-ci.mjs`) never executes the
+  # migration chain, so the chain was only ever believed: following the
+  # documented sequence (`db:sync` then `db:migrate`) produced 227 tables, ZERO
+  # RLS policies, an empty ledger and 21 missing SQL functions. This job runs
+  # both shapes and asserts each outcome is coherent — the pushed schema is
+  # refused before anything is stamped, an empty `db:bootstrap` build measures
+  # up (policies, RLS-enabled tables, ledger = journal, no promised object
+  # missing). Appended after every existing job on purpose: the register cites
+  # ci.yml:63, :86, :120, :165 and :215, and inserting anywhere above them
+  # moves those coordinates out from under `guard:coords`.
+  fresh-install:
+    name: Fresh Install Sequence
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: nucrm_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - run: npm ci
+
+      - name: Push refuses coherently; bootstrap builds a protected, stamped schema
+        run: npx tsx scripts/check-fresh-install-sequence.mts
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/nucrm_test
+          DATABASE_SSL: "false"

@@ -5,9 +5,10 @@
  *
  * Usage: npm run db:status
  *
- * Read-only: the single statement is a SELECT over
- * "drizzle"."__drizzle_migrations", the ledger `db:migrate` and drizzle's own
- * migrator consult. It is deliberately NOT the unqualified
+ * Read-only: a SELECT over "drizzle"."__drizzle_migrations" — the ledger
+ * `db:migrate` and drizzle's own migrator consult — plus, only when something
+ * is pending, the catalog counts behind `loadProvisioningShape`. It is
+ * deliberately NOT the unqualified
  * "__drizzle_migrations" (name/applied_at) this file used to read: that
  * relation does not exist on any database this repo builds, so every run fell
  * into the catch path and printed "Applied: 0" — including on a database that
@@ -23,6 +24,7 @@ import {
   type JournalEntryLike,
   type LedgerRowLike,
 } from './migrate-fresh';
+import { loadProvisioningShape, ledgerGuidance } from './migrate-recovery';
 
 const MIGRATIONS_DIR = path.resolve('./drizzle/migrations');
 const JOURNAL_PATH = path.join(MIGRATIONS_DIR, 'meta', '_journal.json');
@@ -138,7 +140,13 @@ async function main(): Promise<void> {
     if (orphans.length > 0) console.log(`  Invisible: ${orphans.length} file(s) with no journal entry`);
 
     if (pendingCount > 0 || missingCount > 0 || orphans.length > 0) {
-      console.log(`\n  Run 'npm run db:migrate' to apply pending journal entries (verify first with 'npm run db:migrate -- --dry-run').`);
+      // The ledger alone cannot say what to do next: an empty ledger over a
+      // schema that `drizzle-kit push` built is a different problem from an empty
+      // ledger over a restored dump, and #2450 made `db:migrate` refuse the
+      // first. Ask the same classifier the migrator asks, so the two tools can
+      // never tell the operator opposite stories.
+      const shape = await loadProvisioningShape(pool);
+      for (const line of ledgerGuidance(shape, ledger.rows.length)) console.log(`  ${line}`);
     } else {
       console.log(`\n  Database is up to date`);
     }

@@ -49,6 +49,14 @@ from the schema files — see `.github/workflows/ci.yml`, the "Sync database sch
 step. The migrations are therefore never executed by any automated process. The
 3000+ passing tests say nothing about whether they work.
 
+That last sentence is no longer true, and #2450 is why it stopped being true:
+`db:sync` leaves 0 RLS policies and 0 journal-written functions, so a schema
+built that way is not the product, and `db:migrate` now refuses to stamp it.
+The `fresh-install` CI job runs `scripts/check-fresh-install-sequence.mts`, which
+replays the whole journal into an empty database with `npm run db:bootstrap` and
+fails if the catalog does not measure up (≥200 policies, ≥200 RLS-enabled tables,
+ledger = journal, no promised object missing).
+
 Production was almost certainly built the same way. The application also runs
 fine on a schema rebuilt from scratch by `db:migrate` — that runner's
 error-tolerant fresh path absorbs the lineage overlap that breaks drizzle's

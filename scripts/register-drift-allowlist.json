@@ -4,16 +4,59 @@
     {
       "cite": "app/api/cron/auto-backup/route.ts:55",
       "regLines": [
-        2464
+        2467
       ],
       "reason": "Read-log, not a pointer: PP-055 lists the auto-backup line set (55, 147, 243, 256-257, 297) as ranges somebody read, and #2441 declined to re-pin it for exactly that reason — re-pinning would invent an intent the entry never stated. Listed here so the decision is on the record instead of silent drift."
     },
     {
       "cite": "app/api/cron/process-sequences/route.ts:33",
       "regLines": [
-        2166
+        2169
       ],
       "reason": "Read-log, not a pointer: PP-051 lists the process-sequences ranges (33-64, 70-108, 118, 285) as what was read, and #2441 declined to re-pin them for that reason. The acquireLock call this line names has moved, but the entry never claimed to point at it — so the screen lists it and nothing re-pins it."
+    },
+    {
+      "cite": "migrate.ts:201",
+      "regLines": [
+        2812
+      ],
+      "reason": "Moved by #2450, which inserts the push-provisioned precondition and the post-build floor check into this file's main(); the cited line is unchanged in content, only its number. New coordinate on main after that PR: migrate.ts:29 (was 27), :132 (was 118), :143 (was 129), :198 (was 184), :215 (was 201), :429 (was 376). The register text itself is owned by the #2410 refresh, so #2450 does not edit it: whoever re-pins those entries uses the numbers above and this entry then reports as STALE and is pruned."
+    },
+    {
+      "cite": "migrate.ts:376",
+      "regLines": [
+        2966
+      ],
+      "reason": "Moved by #2450, which inserts the push-provisioned precondition and the post-build floor check into this file's main(); the cited line is unchanged in content, only its number. New coordinate on main after that PR: migrate.ts:29 (was 27), :132 (was 118), :143 (was 129), :198 (was 184), :215 (was 201), :429 (was 376). The register text itself is owned by the #2410 refresh, so #2450 does not edit it: whoever re-pins those entries uses the numbers above and this entry then reports as STALE and is pruned."
+    },
+    {
+      "cite": "scripts/migrate.ts:118",
+      "regLines": [
+        2916
+      ],
+      "reason": "Moved by #2450, which inserts the push-provisioned precondition and the post-build floor check into this file's main(); the cited line is unchanged in content, only its number. New coordinate on main after that PR: migrate.ts:29 (was 27), :132 (was 118), :143 (was 129), :198 (was 184), :215 (was 201), :429 (was 376). The register text itself is owned by the #2410 refresh, so #2450 does not edit it: whoever re-pins those entries uses the numbers above and this entry then reports as STALE and is pruned."
+    },
+    {
+      "cite": "scripts/migrate.ts:129",
+      "regLines": [
+        1468
+      ],
+      "reason": "Moved by #2450, which inserts the push-provisioned precondition and the post-build floor check into this file's main(); the cited line is unchanged in content, only its number. New coordinate on main after that PR: migrate.ts:29 (was 27), :132 (was 118), :143 (was 129), :198 (was 184), :215 (was 201), :429 (was 376). The register text itself is owned by the #2410 refresh, so #2450 does not edit it: whoever re-pins those entries uses the numbers above and this entry then reports as STALE and is pruned."
+    },
+    {
+      "cite": "scripts/migrate.ts:184",
+      "regLines": [
+        86,
+        2934
+      ],
+      "reason": "Moved by #2450, which inserts the push-provisioned precondition and the post-build floor check into this file's main(); the cited line is unchanged in content, only its number. New coordinate on main after that PR: migrate.ts:29 (was 27), :132 (was 118), :143 (was 129), :198 (was 184), :215 (was 201), :429 (was 376). The register text itself is owned by the #2410 refresh, so #2450 does not edit it: whoever re-pins those entries uses the numbers above and this entry then reports as STALE and is pruned."
+    },
+    {
+      "cite": "scripts/migrate.ts:27",
+      "regLines": [
+        3038
+      ],
+      "reason": "Moved by #2450, which inserts the push-provisioned precondition and the post-build floor check into this file's main(); the cited line is unchanged in content, only its number. New coordinate on main after that PR: migrate.ts:29 (was 27), :132 (was 118), :143 (was 129), :198 (was 184), :215 (was 201), :429 (was 376). The register text itself is owned by the #2410 refresh, so #2450 does not edit it: whoever re-pins those entries uses the numbers above and this entry then reports as STALE and is pruned."
     }
   ]
 }

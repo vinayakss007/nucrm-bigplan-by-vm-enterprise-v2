@@ -34,6 +34,22 @@ npm run dev                  # Start at localhost:3000
 > `npm run db:sync` is **guarded**: it exits 1 with "db:sync is dangerous — use db:migrate instead"
 > unless `CI=true`. It was the documented way to create tables for a long time; use `db:migrate`, or
 > `npm run setup`, which copies `.env.example` and migrates in one step.
+>
+> **`db:sync` is not an install path, and `db:migrate` now says so** (#2450). `drizzle-kit push`
+> creates tables and columns only — no RLS policy, no SQL function, no hand-written index — so a
+> pushed schema has **zero row-level security**. `db:migrate` detects that shape — RLS is missing
+> across the schema, not merely a policy or two left behind by a test fixture — and refuses before
+> stamping, instead of stamping the ledger and failing three lines later. To build a
+> database from scratch, point `DATABASE_URL` at an **empty** database and run:
+>
+> ```bash
+> npm run db:bootstrap   # replays the journal, stamps the ledger, then verifies RLS by query
+> ```
+>
+> Measured on PostgreSQL 16 from an empty database: 226 tables, 269 RLS policies over 226
+> RLS-enabled tables, 100 functions, 122/122 journal entries stamped. CI still provisions with
+> `db:sync` + `node scripts/apply-rls-ci.mjs` (fast, and it deliberately never runs `db:migrate`);
+> that is a test fixture, not an install.
 
 Then create the first admin:
 
@@ -731,15 +747,16 @@ route/DB exercise → full suite: 5610 passed / 0 failed) is documented in
 
 ### Database
 
-| Script                | Description                                    |
-| --------------------- | ---------------------------------------------- |
-| `npm run db:sync`     | Push schema to database (create/update tables) |
-| `npm run db:migrate`  | Run pending migrations                         |
-| `npm run db:generate` | Generate new migration file                    |
-| `npm run db:rollback` | Roll back last migration                       |
-| `npm run db:status`   | Check migration status                         |
-| `npm run db:drop`     | Drop all tables (destructive)                  |
-| `npm run db:reset`    | Drop all tables + re-sync                      |
+| Script                   | Description                                    |
+| ------------------------ | ---------------------------------------------- |
+| `npm run db:sync`        | `drizzle-kit push` — tables/columns only, no RLS, no functions; CI provisioning, never an install path (#2450) |
+| `npm run db:bootstrap`   | Build an **empty** database from the journal, then verify RLS coverage and stamped ledger by query (#2450) |
+| `npm run db:migrate`     | Run pending migrations (refuses to stamp a pushed schema — #2450) |
+| `npm run db:generate`    | Generate new migration file                    |
+| `npm run db:rollback`    | Roll back last migration                       |
+| `npm run db:status`      | Migration status; on an empty ledger it also says whether the schema was pushed or restored (#2450) |
+| `npm run db:drop`        | Drop all tables (destructive)                  |
+| `npm run db:reset`       | Drop all tables + re-sync                      |
 
 ### Seeding
 
