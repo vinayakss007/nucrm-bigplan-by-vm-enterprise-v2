@@ -154,6 +154,22 @@ describe('POST /api/public/tickets (#1982)', () => {
     const body = await res.json();
     expect(body.data).toMatchObject({ id: 'tick1' });
   });
+
+  it('names the two contact columns the lookup is for (#2457)', async () => {
+    // The guard is textual: it proves a top-level `columns:` exists, not which
+    // columns it names — and widening `{ id, tenantId }` to `{ id, tenantId,
+    // portalToken }` would satisfy it. #2443 pinned `PUBLIC_TICKET_COLUMNS` for
+    // the same reason. An unprojected `db.query.contacts.findFirst({ where })`
+    // fetches all 55 columns of the live table (measured), of which the handler
+    // uses exactly these two, both only to scope the insert below it.
+    findFirstMock.mockResolvedValue({ id: 'c1', tenantId: 't1' });
+    returningMock.mockResolvedValue([{ id: 'tick1' }]);
+    const { POST } = await import('@/app/api/public/tickets/route');
+    await POST(post({ email: 'a@b.com', subject: 'help', tenant_id: '11111111-1111-4111-8111-111111111111' }));
+    expect(findFirstMock).toHaveBeenCalledTimes(1);
+    const options = findFirstMock.mock.calls[0][0] as { columns?: Record<string, unknown> };
+    expect(Object.keys(options.columns ?? {}).sort()).toEqual(['id', 'tenantId']);
+  });
 });
 
 describe('GET /api/public/tickets/[id] (#2217 internal replies, #2443 whole-row read)', () => {
