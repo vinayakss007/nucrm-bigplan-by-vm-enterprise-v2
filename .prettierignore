@@ -1,0 +1,6 @@
+# Hand-aligned Markdown tables whose exact bytes are load-bearing.
+# scripts/check-register-coords.mjs and scripts/check-register-drift.mjs compare each
+# `path:line` citation in this file against the line it was authored on; prettier --write
+# (run by .husky/pre-commit via lint-staged) re-wraps those rows and resets the blame the
+# drift screen reads. No workflow runs prettier, so this only removes a commit-time side effect.
+docs/infra/PREPROD-ISSUE-REGISTER.md
