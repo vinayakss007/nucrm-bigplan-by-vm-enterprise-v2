@@ -496,7 +496,7 @@ GET /api/superadmin/data-explorer?q=search&type=contacts&tenantId=tnt_xxx&page=1
 | `POST` | `/api/public/offers/:token/accept` | Accept offer |
 | `POST` | `/api/public/offers/:token/decline` | Decline offer |
 | `POST` | `/api/public/tickets` | Submit support ticket |
-| `GET` | `/api/public/invoices` | Public invoice lookup |
+| `GET` | `/api/public/invoices` | Portal invoice list (portal session or portal token required) |
 
 ---
 
