@@ -293,6 +293,25 @@ describe('the CLI against a real repository', () => {
     expect(out.out).toContain('OK — every drifted pointer is allowlisted');
   });
 
+  it('regenerates one entry per cite and records every register line that points there', () => {
+    // An allowlist is maintained with --update, so --update has to write everything a
+    // reviewer needs in order to keep the file honest. `applyDriftAllowlist` matches on
+    // `cite`, so these two sentences are silenced by one entry — and a regenerated file
+    // that dropped the line list would read exactly like one drift, not two.
+    const repo = makeRepo('regen', 'The claim lives in target.ts:2.\nAlso see target.ts:2.\n');
+    changeTarget(repo, 'alpha\nmoved away\ngamma\n');
+    const allow = allowFixture('allow-regen.json', [
+      { cite: 'target.ts:2', regLines: [1], reason: 'PR #9 re-pins both sentences' },
+    ]);
+    const out = run(['--register', 'REG.md', '--allow', allow, '--update'], repo);
+    expect(out.status).toBe(0);
+    expect(out.out).toContain('allowlist regenerated: 1 entries');
+    const written = JSON.parse(readFileSync(allow, 'utf8'));
+    expect(written.entries).toHaveLength(1);
+    expect(written.entries[0].regLines).toEqual([1, 2]);
+    expect(written.entries[0].reason).toBe('PR #9 re-pins both sentences');
+  });
+
   it('fails closed on a shallow checkout instead of reporting no drift', () => {
     const repo = makeRepo('deep', 'The claim lives in target.ts:2.\n');
     changeTarget(repo, 'alpha\nmoved away\ngamma\n');
@@ -357,6 +376,10 @@ describe('the real register against the real tree', () => {
       expect(e.reason.length).toBeGreaterThan(20);
       expect(e.reason).not.toMatch(/^TODO/);
       expect(e.reason).toMatch(/#\d+|no open PR|Unowned/);
+      // The cite says what drifted; the register lines say which sentence claims it, and
+      // without them an entry that silences two pointers is indistinguishable from one.
+      expect(Array.isArray(e.regLines)).toBe(true);
+      expect(e.regLines.length).toBeGreaterThan(0);
     }
   });
 

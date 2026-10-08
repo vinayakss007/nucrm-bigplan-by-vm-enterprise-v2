@@ -304,10 +304,20 @@ export function main(argv = process.argv.slice(2)) {
 
   if (args.update) {
     const old = new Map((allow.entries || []).map((e) => [e.cite, e]));
-    const entries = d.moved
-      .map((m) => ({
-        cite: m.cite,
-        reason: old.get(m.cite)?.reason || 'TODO: justify — which PR re-pins this pointer?',
+    // Group by cite, keeping every register line that points there: `applyDriftAllowlist`
+    // matches on cite, so one entry silences several pointers, and a regenerated file that
+    // dropped the line list would leave a reviewer no way to tell ONE entry covering two
+    // sentences from two drifts that merely share a target.
+    const byCite = new Map();
+    for (const m of d.moved) {
+      const e = byCite.get(m.cite) || { cite: m.cite, regLines: [] };
+      if (!e.regLines.includes(m.regLine)) e.regLines.push(m.regLine);
+      byCite.set(m.cite, e);
+    }
+    const entries = [...byCite.values()]
+      .map((e) => ({
+        ...e,
+        reason: old.get(e.cite)?.reason || 'TODO: justify — which PR re-pins this pointer?',
       }))
       .sort((a, b) => a.cite.localeCompare(b.cite));
     writeFileSync(
