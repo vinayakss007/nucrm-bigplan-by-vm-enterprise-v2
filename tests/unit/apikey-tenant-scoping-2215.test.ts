@@ -130,6 +130,14 @@ vi.mock('@/lib/db/rls', () => ({
 
 vi.mock('@/lib/errors-server', () => ({ logError: m.logError }));
 
+// #2432 put a plan-quota read (checkLimit) in the API-key branch of requireAuth.
+// This file is about #2215's tenant-override guard, so the quota is a
+// pass-through here; the quota behaviour itself is covered by
+// tests/unit/plan-quota-api-key-2432.test.ts.
+vi.mock('@/lib/usage/middleware', () => ({
+  checkLimit: async () => null,
+}));
+
 // tryApiKeyAuth is stubbed so the auth-layer tests control the key's tenant
 // directly; requireApiKeyScope/hasScope run for REAL — they are pure and the
 // whole point of the scope-enforcement tests.

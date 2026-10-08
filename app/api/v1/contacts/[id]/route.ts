@@ -19,6 +19,7 @@ import { requireApiKeyScope } from '@/lib/auth/api-key';
 import { handleError, NotFoundError } from '@/lib/errors';
 import { devLogger } from '@/lib/dev-logger';
 import { syncCalculatedFields } from '@/lib/formula/sync';
+import { cancelOpenEnrollments } from '@/lib/cron/sequence-steps';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 /**
@@ -165,18 +166,29 @@ export const DELETE = withApiRoute(async (request: NextRequest, { params }: { pa
     if (scopeDenied) return scopeDenied;
     const { id } = await params;
 
-    // Soft delete - set deleted_at using Drizzle
-    const [result] = await db.update(contacts)
-      .set({
-        deletedAt: new Date(),
-        deletedBy: ctx.userId,
-      })
-      .where(and(
-        eq(contacts.id, id),
-        eq(contacts.tenantId, ctx.tenantId),
-        sql`${contacts.deletedAt} IS NULL`
-      ))
-      .returning({ id: contacts.id });
+    // Soft delete - set deleted_at using Drizzle.
+    // #2392: the API-key path deleted the contact and left the drip running, so
+    // an integration could mail a person it had just removed. One transaction,
+    // so "deleted" can never mean "still enrolled".
+    const result = await db.transaction(async (tx) => {
+      const [r] = await tx.update(contacts)
+        .set({
+          deletedAt: new Date(),
+          deletedBy: ctx.userId,
+        })
+        .where(and(
+          eq(contacts.id, id),
+          eq(contacts.tenantId, ctx.tenantId),
+          sql`${contacts.deletedAt} IS NULL`
+        ))
+        .returning({ id: contacts.id });
+
+      if (!r) return null;
+
+      // Wrapped in an object: a delete with zero open enrollments returns 0,
+      // and `!0` would read as "contact not found".
+      return { cancelledEnrollments: await cancelOpenEnrollments(tx, ctx.tenantId, { contactId: id }) };
+    });
 
     if (!result) {
       throw new NotFoundError('Contact');
@@ -184,7 +196,7 @@ export const DELETE = withApiRoute(async (request: NextRequest, { params }: { pa
 
     devLogger.request('DELETE', `/api/v1/contacts/${id}`, 200, 0, undefined, ctx.userId);
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, cancelledEnrollments: result.cancelledEnrollments });
   } catch (error) {
     const { id } = await params;
     devLogger.error(error as Error, `DELETE /api/v1/contacts/${id}`);

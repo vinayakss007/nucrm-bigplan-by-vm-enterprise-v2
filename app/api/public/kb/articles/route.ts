@@ -8,6 +8,7 @@ import { db } from '@/drizzle/db';
 import { kbArticles, kbCategories } from '@/drizzle/schema';
 import { eq, and, desc, isNull } from 'drizzle-orm';
 import { resolvePortalIdentity } from '@/lib/portal-auth';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 /**
  * Public KB list — DECISION (#2221): this is NOT a global help center.
@@ -20,6 +21,9 @@ import { resolvePortalIdentity } from '@/lib/portal-auth';
  */
 export async function GET(request: NextRequest) {
   try {
+    const limited = await checkRateLimit(request, { action: 'public-kb-list', max: 30, windowMinutes: 1 });
+    if (limited) return limited;
+
     const identity = await resolvePortalIdentity(request);
     if (!identity) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });

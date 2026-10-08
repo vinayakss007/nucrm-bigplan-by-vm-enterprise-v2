@@ -81,9 +81,13 @@ describe('cron/auto-backup skip alerting (#2127)', () => {
       if (text.includes('SELECT id FROM tenants')) {
         return rows([{ id: 'tenant-ok' }, { id: 'tenant-orphan' }]);
       }
-      if (text.includes('owner_id FROM tenants')) {
+      if (text.includes('SELECT id, owner_id, status, deleted_at FROM tenants')) {
         ownerCalls++;
-        return rows(ownerCalls === 1 ? [{ owner_id: 'user-1' }] : []);
+        // #2393 widened this projection: the cron now reads the tenant's own
+        // liveness columns from it, so a fixture must look like a LIVE row.
+        return rows(ownerCalls === 1
+          ? [{ owner_id: 'user-1', status: 'trialing', deleted_at: null }]
+          : [{ owner_id: null, status: 'trialing', deleted_at: null }]);
       }
       if (text.includes('tenant_members')) {
         return rows([]);
@@ -115,8 +119,8 @@ describe('cron/auto-backup skip alerting (#2127)', () => {
       if (text.includes('SELECT id FROM tenants')) {
         return rows([{ id: 'tenant-ok' }]);
       }
-      if (text.includes('owner_id FROM tenants')) {
-        return rows([{ owner_id: 'user-1' }]);
+      if (text.includes('SELECT id, owner_id, status, deleted_at FROM tenants')) {
+        return rows([{ owner_id: 'user-1', status: 'trialing', deleted_at: null }]);
       }
       if (text.includes('INSERT INTO tenant_backup_records')) {
         return rows([{ id: 'b1' }]);
@@ -155,8 +159,8 @@ describe('cron/auto-backup skip alerting (#2127)', () => {
       if (text.includes('SELECT id FROM tenants')) {
         return rows([{ id: 't1' }, { id: 't2' }, { id: 't3' }]);
       }
-      if (text.includes('owner_id FROM tenants')) {
-        return rows([{ owner_id: 'user-1' }]);
+      if (text.includes('SELECT id, owner_id, status, deleted_at FROM tenants')) {
+        return rows([{ owner_id: 'user-1', status: 'trialing', deleted_at: null }]);
       }
       if (text.includes('INSERT INTO tenant_backup_records')) {
         return rows([{ id: 'b' + attempted }]);

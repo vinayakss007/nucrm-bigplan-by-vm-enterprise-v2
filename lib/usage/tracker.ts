@@ -10,6 +10,11 @@
  * and live counts from real CRM tables (not the daily `usage_snapshots` aggregate,
  * which would be stale).
  *
+ * Every kind is measured from the table that owns the fact: rows for contacts,
+ * leads, deals, forms, automations and members; `api_key_usage` for API calls;
+ * `documents` + `file_attachments` for storage bytes. `usage_snapshots` is a
+ * reporting/history table and no limit reads it — #2432.
+ *
  * Writes a `limit_violations` row when a tenant exceeds a hard limit so that
  * super-admin dashboards and alert pipelines can pick it up.
  */
@@ -23,10 +28,12 @@ import {
   forms,
   automations,
   tenantMembers,
-  usageSnapshots,
+  documents,
+  fileAttachments,
+  apiKeyUsage,
   limitViolations,
 } from '@/drizzle/schema';
-import { and, eq, isNull, sql } from 'drizzle-orm';
+import { and, eq, gte, isNull, sql } from 'drizzle-orm';
 import type { AnyPgColumn, AnyPgTable } from 'drizzle-orm/pg-core';
 
 /** Resource categories that map to columns on the `plans` table. */
@@ -91,15 +98,31 @@ export async function getPlanLimits(tenantId: string): Promise<PlanLimits> {
   const r = row[0];
   if (!r) return NULL_LIMITS;
   return {
-    maxContacts: r.maxContacts ?? null,
-    maxDeals: r.maxDeals ?? null,
-    maxUsers: r.maxUsers ?? null,
-    maxAutomations: r.maxAutomations ?? null,
-    maxForms: r.maxForms ?? null,
-    maxApiCallsDay: r.maxApiCallsDay ?? null,
-    // numeric → string in pg; coerce to number
-    maxStorageGb: r.maxStorageGb == null ? null : Number(r.maxStorageGb),
+    maxContacts: toLimit(r.maxContacts),
+    maxDeals: toLimit(r.maxDeals),
+    maxUsers: toLimit(r.maxUsers),
+    maxAutomations: toLimit(r.maxAutomations),
+    maxForms: toLimit(r.maxForms),
+    maxApiCallsDay: toLimit(r.maxApiCallsDay),
+    // numeric arrives as a string from pg; toLimit coerces
+    maxStorageGb: toLimit(r.maxStorageGb),
   };
+}
+
+/**
+ * #2432: a plan cap is only meaningful after normalisation.
+ *
+ * `null` already meant unlimited here, but the plan editor renders any negative
+ * as "Unlimited" (app/superadmin/billing/page.tsx:233 shows
+ * `max_api_calls_day < 0 ? 'Unlimited'`). Kept verbatim, a `-1` would reach
+ * `exceeded = actual >= -1` and lock a tenant out of exactly the resource the
+ * operator was trying to unlimit — so negative and non-numeric both become null.
+ */
+function toLimit(value: number | string | null | undefined): number | null {
+  if (value == null) return null;
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 0) return null;
+  return n;
 }
 
 /** Live count of a single resource for a tenant, respecting soft delete. */
@@ -123,25 +146,46 @@ export async function getCount(tenantId: string, kind: LimitKind): Promise<numbe
       return rows[0]?.c ?? 0;
     }
     case 'apiCallsDay': {
-      // Pull from today's snapshot if present; otherwise 0. Calls are aggregated
-      // by the cron writer, so live SUM would be heavy here.
-      const today = todayDateString();
+      // #2432: `api_key_usage` is the ledger — lib/auth/api-key.ts inserts one
+      // row per authenticated key request, so the counted event and the
+      // enforced event are literally the same row. The old reader looked for a
+      // `usage_snapshots` row dated today, and that column is
+      // SUM(user_usage.api_calls_today) over a table nothing in this repo ever
+      // writes, so it answered 0 for every tenant on every day.
+      const startOfUtcDay = new Date();
+      startOfUtcDay.setUTCHours(0, 0, 0, 0);
       const rows = await db
-        .select({ c: usageSnapshots.apiCallsCount })
-        .from(usageSnapshots)
-        .where(and(eq(usageSnapshots.tenantId, tenantId), eq(usageSnapshots.snapshotDate, today)))
-        .limit(1);
+        .select({ c: sql<number>`count(*)::int` })
+        .from(apiKeyUsage)
+        .where(and(eq(apiKeyUsage.tenantId, tenantId), gte(apiKeyUsage.createdAt, startOfUtcDay)));
       return rows[0]?.c ?? 0;
     }
     case 'storageGb': {
-      const today = todayDateString();
-      const rows = await db
-        .select({ mb: usageSnapshots.storageUsedMb })
-        .from(usageSnapshots)
-        .where(and(eq(usageSnapshots.tenantId, tenantId), eq(usageSnapshots.snapshotDate, today)))
-        .limit(1);
-      const mb = rows[0]?.mb;
-      return mb == null ? 0 : Number(mb) / 1024;
+      // #2432: live sum of the bytes the tenant currently holds, in GB.
+      //
+      // Exactly two tables receive upload rows: `documents` (written by
+      // POST /api/tenant/documents) and `file_attachments` (written by
+      // POST /api/tenant/files). `storage_documents` and `file_uploads` in
+      // drizzle/schema/files.ts look like storage tables and have a size column
+      // too, but no code path writes them — including them would only add
+      // weight. Note that drizzle/schema/files.ts also exports a symbol named
+      // `documents`; the barrel re-exports that one as `storageDocuments`, so
+      // the `documents` imported above is the live table.
+      //
+      // Soft-deleted rows are excluded because the object is deleted eagerly on
+      // delete (drizzle/schema/files.ts header) and the same predicate is what
+      // counts every other resource here.
+      const result = await db.execute<{ bytes: string | number | null }>(sql`
+        SELECT coalesce(sum(bytes), 0) AS bytes FROM (
+          SELECT ${documents.sizeBytes} AS bytes FROM ${documents}
+            WHERE ${documents.tenantId} = ${tenantId} AND ${documents.deletedAt} IS NULL
+          UNION ALL
+          SELECT ${fileAttachments.fileSize} FROM ${fileAttachments}
+            WHERE ${fileAttachments.tenantId} = ${tenantId} AND ${fileAttachments.deletedAt} IS NULL
+        ) uploaded
+      `);
+      const bytes = Number(result.rows[0]?.bytes ?? 0);
+      return bytes / 1024 ** 3;
     }
     default: {
       const _exhaustive: never = kind; void _exhaustive;
@@ -207,10 +251,6 @@ function limitFor(plan: PlanLimits, kind: LimitKind): number | null {
     case 'apiCallsDay': return plan.maxApiCallsDay;
     case 'storageGb': return plan.maxStorageGb;
   }
-}
-
-function todayDateString(): string {
-  return new Date().toISOString().slice(0, 10);
 }
 
 async function countWhere(

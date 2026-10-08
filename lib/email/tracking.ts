@@ -50,6 +50,30 @@ export async function createEmailTracking(data: {
 }
 
 /**
+ * Link a delivered message to the provider's own id.
+ *
+ * #2406: the Resend webhook is signed with one platform-wide secret and its
+ * payload carries no tenant, so an inbound bounce/complaint/reply has to be
+ * attributed before anything is written — and `email_tracking.message_id`, the
+ * column that ties the event's `email_id` back to one send, was never populated.
+ * Scoped by primary key, so it needs no tenant predicate to be correct.
+ *
+ * Throws on purpose: the caller records the miss (attribution silently degrades
+ * to "which workspace mailed this address", which is worth knowing about) but a
+ * link failure must never mark an accepted email as undelivered.
+ */
+export async function recordEmailMessageId(trackingId: string, messageId: string): Promise<void> {
+  const { db } = await import('@/drizzle/db');
+  const { emailTracking } = await import('@/drizzle/schema');
+  const { and, eq, isNull } = await import('drizzle-orm');
+
+  await db
+    .update(emailTracking)
+    .set({ messageId })
+    .where(and(eq(emailTracking.id, trackingId), isNull(emailTracking.deletedAt)));
+}
+
+/**
  * Add the open-tracking pixel to HTML.
  *
  * The path and query name are load-bearing: `/api/track/open` is the public

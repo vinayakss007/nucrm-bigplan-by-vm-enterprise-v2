@@ -139,7 +139,11 @@ services:
         # side code reads the runtime value from .env, but `next build` inlines
         # NEXT_PUBLIC_* into client bundles, so anything client-side would have
         # pointed at localhost. getAppUrl() throws in production if unset.
-        NEXT_PUBLIC_APP_URL: "${NEXT_PUBLIC_APP_URL:-https://95.111.194.98}"
+        # No default (#2302): this repo is public, and the fallback carried the
+        # live pre-prod host IP, so it shipped into every clone and every built
+        # bundle. Compose now fails at parse time with the message above rather
+        # than deploying an app that points at an address nobody chose.
+        NEXT_PUBLIC_APP_URL: "${NEXT_PUBLIC_APP_URL:?REQUIRED - see deploy/.env.production}"
     environment:
       - PGBOUNCER_ENABLED=true
       # #2116: nginx-production.conf now sends a single-hop authoritative
@@ -227,7 +231,7 @@ services:
         NODE_OPTIONS: "--max-old-space-size=4096"
         SENTRY_ENVIRONMENT: preprod
         SENTRY_RELEASE: "${SENTRY_RELEASE:-}"
-        NEXT_PUBLIC_APP_URL: "${NEXT_PUBLIC_APP_URL:-https://95.111.194.98}"
+        NEXT_PUBLIC_APP_URL: "${NEXT_PUBLIC_APP_URL:?REQUIRED - see deploy/.env.production}"
         DATABASE_URL: "postgresql://dummy:dummy@localhost:5432/dummy"
         SENTRY_DSN: "${SENTRY_DSN:-}"
         NEXT_PUBLIC_SENTRY_DSN: "${NEXT_PUBLIC_SENTRY_DSN:-}"

@@ -22,6 +22,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { NextRequest } from 'next/server';
+import type { SendResult } from '@/lib/email/service';
 import { PgDialect } from 'drizzle-orm/pg-core';
 import { randomUUID } from 'node:crypto';
 
@@ -112,10 +113,19 @@ vi.mock('@/lib/cron/tenant-scope', () => ({
   },
 }));
 
-const email = vi.hoisted(() => ({ sendEmail: vi.fn(async () => true) }));
+// The real `sendEmail` never throws for a provider rejection — it returns
+// `SendResult` (`{ success: false, error }`). A boolean here would silently
+// un-test the branch, which is how #2422 survived: the route discards the
+// result, and the old mock's `true` was truthy either way.
+const SEND_OK: SendResult = { success: true, provider: 'smtp', messageId: 'msg-control-1' };
+const email = vi.hoisted(() => ({ sendEmail: vi.fn(async (): Promise<SendResult> => SEND_OK) }));
 vi.mock('@/lib/email/service', () => ({ sendEmail: email.sendEmail }));
+const tracking = vi.hoisted(() => ({
+  createEmailTracking: vi.fn(async () => null as string | null),
+  recordEmailMessageId: vi.fn(async () => undefined),
+}));
 vi.mock('@/lib/email/tracking', () => ({
-  createEmailTracking: vi.fn(async () => null),
+  ...tracking,
   addTracking: (html: string) => html,
 }));
 vi.mock('@/lib/errors-server', () => ({ logError: async () => undefined }));
@@ -290,5 +300,111 @@ describe('email dispatch (#2392)', () => {
     expect(sql).toMatch(/e\.tenant_id = \$\d+::uuid/i);
     expect(params).toEqual([TENANT_ID, 100]);
     expect(params).not.toContain(OTHER_TENANT_ID);
+  });
+});
+
+// ── #2422: the provider answers with a value, and the route has to read it ────
+
+describe('provider rejection reverts the claim instead of recording a send (#2422)', () => {
+  // sweep, contact fetch, claim re-check — the statements before the send.
+  // Spread at every use: the mocked `execute` shifts rows off this array, so a
+  // shared reference would leave later tests with an empty result set.
+  const UP_TO_CLAIM: Array<Array<Record<string, unknown>>> = [
+    [ENROLLMENT_ROW],
+    [{ id: ENROLLMENT_ROW.contact_id, email: 'x@y.z', do_not_contact: false }],
+    [ENROLLMENT_ROW],
+  ];
+  const ADVANCE = [{ next_date: new Date(Date.now() + 86400000).toISOString() }];
+
+  /** The last write to a table: phase 3 confirm/revert always follows the claim. */
+  function lastWriteTo(table: string) {
+    const writes = h.updates.filter((u) => u.where !== undefined && sqlOf(u.where).includes(`"${table}"`));
+    return writes[writes.length - 1];
+  }
+
+  it('control — an accepted send is confirmed and the step advances', async () => {
+    h.executeResults = [...UP_TO_CLAIM, ADVANCE];
+    h.steps = [EMAIL_STEP];
+    const body = await (await runRoute()).json();
+
+    expect(body.processed).toBe(1);
+    expect(email.sendEmail).toHaveBeenCalledTimes(1);
+    expect(lastWriteTo('sequence_step_logs')!.payload.status).toBe('sent');
+    expect(lastWriteTo('sequence_enrollments')!.payload.currentStep).toBe(2);
+    // advanceOrCompleteStep asks the DB for the next date: the 4th statement.
+    expect(h.executes).toHaveLength(4);
+  });
+
+  it('a {success:false} result reverts the step log to pending with the provider error', async () => {
+    h.executeResults = [...UP_TO_CLAIM]; // no 4th row: the advance must not run
+    h.steps = [EMAIL_STEP];
+    email.sendEmail.mockResolvedValueOnce({ success: false, error: '550 5.1.1 <x@y.z>: Recipient address rejected' });
+
+    const body = await (await runRoute()).json();
+
+    expect(body.processed, 'a rejected send is not a processed step').toBe(0);
+    const stepLog = lastWriteTo('sequence_step_logs')!;
+    expect(stepLog.payload.status, 'the claim is reverted, never confirmed').toBe('pending');
+    expect(stepLog.payload.errorMessage).toBe('550 5.1.1 <x@y.z>: Recipient address rejected');
+
+    const enrollment = lastWriteTo('sequence_enrollments')!;
+    expect(enrollment.payload.currentStep, 'the step is retried, not skipped').toBeUndefined();
+    expect((enrollment.payload.nextStepAt as Date).getTime()).toBeGreaterThan(Date.now());
+    expect(h.executes).toHaveLength(3);
+  });
+
+  it('a rejection with no message still reaches the failure branch', async () => {
+    h.executeResults = [...UP_TO_CLAIM];
+    h.steps = [EMAIL_STEP];
+    email.sendEmail.mockResolvedValueOnce({ success: false });
+
+    const body = await (await runRoute()).json();
+
+    expect(body.processed).toBe(0);
+    expect(lastWriteTo('sequence_step_logs')!.payload.status).toBe('pending');
+    expect(lastWriteTo('sequence_step_logs')!.payload.errorMessage).toBe('email provider rejected the send');
+  });
+
+  it('control — a transport that throws still reverts (the branch the route always had)', async () => {
+    h.executeResults = [...UP_TO_CLAIM];
+    h.steps = [EMAIL_STEP];
+    email.sendEmail.mockRejectedValueOnce(new Error('connect ECONNREFUSED smtp:587'));
+
+    const body = await (await runRoute()).json();
+
+    expect(body.processed).toBe(0);
+    expect(lastWriteTo('sequence_step_logs')!.payload.errorMessage).toBe('connect ECONNREFUSED smtp:587');
+  });
+
+  it('the provider message id is linked to the tracking row (#2406)', async () => {
+    h.executeResults = [...UP_TO_CLAIM, ADVANCE];
+    h.steps = [EMAIL_STEP];
+    tracking.createEmailTracking.mockResolvedValueOnce('track-2406');
+
+    await runRoute();
+
+    expect(tracking.recordEmailMessageId).toHaveBeenCalledWith('track-2406', 'msg-control-1');
+  });
+
+  it('a failed link does not fail a delivered email (#2406)', async () => {
+    h.executeResults = [...UP_TO_CLAIM, ADVANCE];
+    h.steps = [EMAIL_STEP];
+    tracking.createEmailTracking.mockResolvedValueOnce('track-2406');
+    tracking.recordEmailMessageId.mockRejectedValueOnce(new Error('update failed'));
+
+    const body = await (await runRoute()).json();
+
+    expect(body.processed, 'attribution precision is not delivery').toBe(1);
+    expect(lastWriteTo('sequence_step_logs')!.payload.status).toBe('sent');
+  });
+
+  it('nothing is linked when there is no tracking row', async () => {
+    h.executeResults = [...UP_TO_CLAIM, ADVANCE];
+    h.steps = [EMAIL_STEP];
+    tracking.createEmailTracking.mockResolvedValueOnce(null);
+
+    await runRoute();
+
+    expect(tracking.recordEmailMessageId).not.toHaveBeenCalled();
   });
 });

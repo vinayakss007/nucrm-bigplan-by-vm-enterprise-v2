@@ -13,6 +13,7 @@ import { eq, and, or, ilike, sql, desc, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import { uuidIdSchemaWith } from '@/lib/validation/uuid';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
+import { cancelOpenEnrollments } from '@/lib/cron/sequence-steps';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 const restoreUserDataSchema = z.object({
@@ -471,14 +472,22 @@ export const DELETE = withApiRoute(async (request: NextRequest) => {
 
     const now = new Date();
 
-    await db.transaction(async (tx) => {
-      await tx.update(contacts)
+    const cancelledEnrollments = await db.transaction(async (tx) => {
+      const erased = await tx.update(contacts)
         .set({ deletedAt: now })
         .where(and(
           eq(contacts.tenantId, tenantId),
           eq(contacts.assignedTo, userId),
           sql`${contacts.deletedAt} IS NULL`
-        ));
+        ))
+        .returning({ id: contacts.id });
+
+      // #2392: an erasure that leaves the drip running mails the very person who
+      // asked to be removed — the worst shape of this leak, and the reason the
+      // tombstone write is captured instead of fire-and-forget.
+      const cancelled = await cancelOpenEnrollments(tx, tenantId, {
+        contactIds: erased.map((c) => c.id),
+      });
 
       await tx.update(deals)
         .set({ deletedAt: now })
@@ -487,6 +496,8 @@ export const DELETE = withApiRoute(async (request: NextRequest) => {
           eq(deals.assignedTo, userId),
           sql`${deals.deletedAt} IS NULL`
         ));
+
+      return cancelled;
     });
 
     console.log(`[User Data DELETE] GDPR erasure for user=${userId}, tenant=${tenantId}`);
@@ -498,6 +509,7 @@ export const DELETE = withApiRoute(async (request: NextRequest) => {
         contacts: 'soft-deleted',
         deals: 'soft-deleted',
       },
+      cancelled_enrollments: cancelledEnrollments,
     });
  
  

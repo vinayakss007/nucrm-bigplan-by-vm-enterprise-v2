@@ -14,6 +14,14 @@ import { withApiRoute } from '@/lib/api/with-api-route';
 import { verifyCronSecret } from '@/lib/auth/cron';
 import { TenantDataExporter } from '@/lib/tenant-data-export';
 import { sendAlertEmail } from '@/lib/email/alerts';
+import {
+  dueSchedulesSql,
+  globalScheduleExistsSql,
+  liveTenantIdsSql,
+  tenantBackupRowSql,
+  tenantIsLive,
+  type TenantBackupRow,
+} from '@/lib/cron/auto-backup-sql';
 
 
 /**
@@ -83,6 +91,7 @@ type BackupScheduleRow = {
   retention_days: number;
 };
 type BackupResult = { skipped?: boolean; tenantId?: string; reason?: string };
+// #2393: 'tenant-deleted' is a skip that must never page the super admin.
 
 async function runScheduledBackups() {
   const _now = new Date();
@@ -95,12 +104,10 @@ async function runScheduledBackups() {
   // #71: same honesty for tenants whose own backup failed mid-run.
   const failedTenants: string[] = [];
 
-  // Get all enabled schedules that are due
-  const schedules = await db.execute(sql`
-    SELECT * FROM backup_schedules
-    WHERE enabled = true AND (next_run_at IS NULL OR next_run_at <= NOW())
-    ORDER BY next_run_at ASC NULLS FIRST`
-  );
+  // Get all enabled schedules that are due — for tenants that still exist.
+  // #2393: `enabled` is not a liveness signal; the predicate lives in
+  // lib/cron/auto-backup-sql.ts so the integration suite can run it here.
+  const schedules = await db.execute(dueSchedulesSql());
   const rows = schedules.rows as BackupScheduleRow[];
 
   if (rows.length === 0) {
@@ -110,9 +117,7 @@ async function runScheduledBackups() {
     // previous `ON CONFLICT DO NOTHING` never fired and a duplicate default
     // was inserted on every run. Guard on the actual existence of a global
     // schedule (tenant_id IS NULL) and only create the default when none exist.
-    const globalExists = await db.execute(sql`
-      SELECT 1 FROM backup_schedules WHERE tenant_id IS NULL LIMIT 1`
-    );
+    const globalExists = await db.execute(globalScheduleExistsSql());
     if (globalExists.rows.length === 0) {
       await db.execute(sql`
         INSERT INTO backup_schedules (schedule_type, backup_type, retention_days, enabled, next_run_at)
@@ -134,7 +139,9 @@ async function runScheduledBackups() {
           const res = await backupSingleTenant(schedule.tenant_id, schedule) as BackupResult | undefined;
           if (res?.skipped) {
             skipped++;
-            if (res.tenantId) skippedTenants.push(String(res.tenantId));
+            // A deleted tenant is not an incomplete backup. Alerting about it
+            // is precisely the noise #2393 removes.
+            if (res.tenantId && res.reason !== 'tenant-deleted') skippedTenants.push(String(res.tenantId));
           }
         } catch (err) {
           errors++;
@@ -142,8 +149,10 @@ async function runScheduledBackups() {
           void logError({ error: err, context: 'cron/auto-backup tenant schedule', level: 'warning', metadata: { scheduleId: schedule.id, tenantId: schedule.tenant_id } });
         }
       } else {
-        // Global — backup ALL tenants
-        const tenants = await db.execute(sql`SELECT id FROM tenants WHERE status != ${'suspended'}`);
+        // Global — backup ALL live tenants. #2393: the deletion signal is
+        // `deleted_at`, not `status` alone — a status-only check silently
+        // admits any future status that means "gone".
+        const tenants = await db.execute(liveTenantIdsSql());
         for (const tenant of tenants.rows as { id: string }[]) {
           // #71: one tenant must not end the run. backupSingleTenant rethrows
           // after marking its row 'failed', and that escape used to skip every
@@ -158,7 +167,7 @@ async function runScheduledBackups() {
             const res = await backupSingleTenant(tenant.id, schedule) as BackupResult | undefined;
             if (res?.skipped) {
               skipped++;
-              if (res.tenantId) skippedTenants.push(String(res.tenantId));
+              if (res.tenantId && res.reason !== 'tenant-deleted') skippedTenants.push(String(res.tenantId));
             }
           } catch (err) {
             errors++;
@@ -217,10 +226,16 @@ async function backupSingleTenant(
   // works from the platform context. try/finally restores the platform
   // context so the schedule bookkeeping after this call is unaffected, and
   // a throw here can never leak one tenant's GUCs into the next tenant.
-  const ownerRow = await db.execute(sql`
-    SELECT owner_id FROM tenants WHERE id = ${tenantId} LIMIT 1`
-  );
-  let contextUserId = (ownerRow.rows[0] as { owner_id: string | null } | undefined)?.owner_id ?? undefined;
+  const ownerRow = await db.execute(tenantBackupRowSql(tenantId));
+  const tenantRow = ownerRow.rows[0] as TenantBackupRow | undefined;
+  // #2393: check liveness before anything else. Without it the answer depended
+  // on membership state rather than on the tenant being deleted — two deleted
+  // tenants behaved differently, and the one that still had members got a full
+  // export and a new tenant_backup_records row.
+  if (!tenantIsLive(tenantRow)) {
+    return { skipped: true, reason: 'tenant-deleted', tenantId };
+  }
+  let contextUserId = tenantRow.owner_id ?? undefined;
   if (!contextUserId) {
     // Older/provisioned tenants may have no owner_id. Any active member's
     // identity suffices here: the backup only needs a same-tenant

@@ -11,6 +11,7 @@ import { contacts, deals, activities, leads, tasks, tenants, contactTags, follow
 import { eq, and, sql } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
+import { cancelOpenEnrollments } from '@/lib/cron/sequence-steps';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 /**
@@ -62,7 +63,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     if (!duplicate) return NextResponse.json({ error: 'Duplicate contact not found' }, { status: 404 });
 
     // Merge in a transaction
-    await db.transaction(async (tx) => {
+    const { cancelledEnrollments } = await db.transaction(async (tx) => {
       // ── 1. Merge tags (combine array + reassign junction rows) ──
       const primaryTags = (primary.tags ?? []) as string[];
       const duplicateTags = (duplicate.tags ?? []) as string[];
@@ -180,6 +181,15 @@ export const POST = withApiRoute(async (request: NextRequest) => {
         })
         .where(eq(contacts.id, duplicate_id));
 
+      // #2392: the duplicate is gone, so its drip has no subject. Every other
+      // record of its was reassigned to the primary above; `sequence_enrollments`
+      // is deliberately NOT, because re-enrolling the merged-away address into
+      // the primary's sequences would send mail nobody asked for. Cancel them
+      // in this transaction instead.
+      const cancelledEnrollments = await cancelOpenEnrollments(tx, ctx.tenantId, {
+        contactId: duplicate_id,
+      });
+
       // Decrement contact counter (duplicate is effectively removed)
       await tx.update(tenants)
         .set({ currentContacts: sql`greatest(0, ${tenants.currentContacts} - 1)` })
@@ -196,6 +206,8 @@ export const POST = withApiRoute(async (request: NextRequest) => {
         action: 'merge',
         description: `Merged duplicate contact "${duplicate.firstName} ${duplicate.lastName}" into this record`,
       });
+
+      return { cancelledEnrollments };
     });
 
     return NextResponse.json({
@@ -203,6 +215,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
         primary_id,
         duplicate_id,
         merged: true,
+        cancelledEnrollments,
         message: `Successfully merged "${duplicate.firstName} ${duplicate.lastName}" into "${primary.firstName} ${primary.lastName}"`,
       },
     });

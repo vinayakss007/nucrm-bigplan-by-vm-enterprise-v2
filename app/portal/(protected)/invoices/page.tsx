@@ -37,7 +37,11 @@ export default function PortalInvoicesPage() {
 
   const { data, isLoading } = useApiQuery<{ data: PortalInvoice[] }>(
     ['portal-invoices', session?.email],
-    `/api/public/invoices?email=${encodeURIComponent(session?.email ?? '')}`,
+    // #2439: no identity in the URL. The httpOnly portal session cookie is the
+    // credential (same-origin fetch sends it automatically), exactly as the
+    // tickets and quotes pages do it — `?email=` was a caller-supplied identity
+    // and is no longer accepted by the route.
+    '/api/public/invoices',
     { enabled: !!session?.email },
   );
   const invoices = data?.data ?? [];

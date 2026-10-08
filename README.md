@@ -617,8 +617,8 @@ All API endpoints except auth/public require either:
 
 - `GET /api/health` — Health check
 - `GET /api/public/kb/articles` — Public KB articles
-- `GET /api/public/invoices` — Public invoice lookup
-- `GET /api/public/tickets` — Public ticket creation
+- `GET /api/public/invoices` — Portal invoice list (portal session or portal token required)
+- `GET /api/public/tickets` — Portal ticket list (portal session or ticket token required)
 - `GET /api/public/offers/[publicToken]` — Public offer view
 - `POST /api/public/offers/[publicToken]/accept` — Accept offer
 - `POST /api/public/offers/[publicToken]/decline` — Decline offer

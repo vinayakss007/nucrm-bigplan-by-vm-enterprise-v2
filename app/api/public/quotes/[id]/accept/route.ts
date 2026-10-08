@@ -30,6 +30,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       where: and(
         eq(contacts.email, identity.email),
         eq(contacts.tenantId, identity.tenantId),
+        isNull(contacts.deletedAt),
       ),
       columns: { id: true, tenantId: true },
     });
