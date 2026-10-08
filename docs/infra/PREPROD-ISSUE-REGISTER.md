@@ -893,6 +893,34 @@ running=120s` with exit 1 and the `--force-recreate app` command to fix it.
      written and stale by the time it could merge — the seventeenth came from #2431 the same way. It is the reason
      "17" is a measurement and not a total: whatever lands between this push and the merge moves these again, and
      only re-running the screen against the base catches it.
+     It has moved twice since, and the cause is that this correction is still a branch. #2433 squash-merged with the
+     seventeen above and nothing else, so the six from the third round are still drift on main and travel to this
+     branch as a cherry-pick. Then #2436 added a four-line comment block to two files whose pointers sit below the
+     insertion — the pre-prod compose (above line 139) and the deploy workflow (above line 76) — and that is the
+     fourth round, two more pointers: the compose's pool-size default, 152 → 156, in PP-050's capacity sentence, and
+     the deploy workflow's migrate call, 277 → 281, in PP-058's "no CI path can validate any of the exits". Neither
+     is visible to the guard: the stale compose pointer lands on a TRUST_PROXY line, the stale workflow pointer on a
+     rollback comment, each non-blank and in range. Four rounds now, and the liveness check saw 1 of the first
+     seventeen and none of the other eight — the one it caught was the pointer that landed on whitespace, which is
+     the narrow class. Its line on main, "211/216 citations resolve", exit 0, is the identical line it prints on this
+     branch; the only difference between the two registers is that eight of main's pointers describe the step above
+     or below the one their sentence names.
+     Screen at each state, same script, same definition of "moved" (the content of the cited line differs from the
+     content at the revision that wrote the register line): at main's c6efdac3 — 216 instances, 201 identical, 10
+     moved, 5 paths unmatchable; with all eight re-pins on this branch — 216 instances, 209 identical, 2 moved, the
+     same 5 unmatchable. Both survivors are read-logs, named below, so the moved set is now exactly the set this
+     correction intends to leave alone. Ten of this branch's 209 are identical by construction — blame reads this
+     branch's own commits as the revision that wrote the line, so the screen compares a coordinate with itself — and
+     the figure that means something is the other 199: coordinates that have not moved since some commit that is not
+     this correction wrote them. The bare tails in PP-050's compose file list (144 and 152, which #2436 pushed
+     to 148 and 156) are not in the moved set and are not corrected: the screen cannot see a tail with no path in
+     front of it, and the list is a read-log, so this sentence records it instead of editing it.
+     The dated comments earlier in this file quote their own revisions — two of them put the deploy migrate call at
+     line 277 — and each names the revision it was measured at, so they are a record rather than a claim about the
+     current tree and are left exactly as written. The three ci.yml coordinates #2427 re-pinned were re-checked rather
+     than trusted, because one more commit has added twelve lines to that workflow since they were measured (and this
+     branch has sat open twice): db:sync is still at line 161, the apply-rls step still spans 165 to 168 with its run
+     at 166, and the superuser URL default is still at line 11.
      NOT re-pinned, deliberately: the two read-log lists — PP-055's auto-backup line set (55, 147, 243, 256-257, 297)
      and PP-051's process-sequences ranges (33-64, 70-108, 118, 285). Those numbers record ranges somebody read, not
      pointers to constructs; re-pinning them would invent an intent the entry never stated. They have moved with the
