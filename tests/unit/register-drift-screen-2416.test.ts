@@ -310,6 +310,10 @@ describe('the CLI against a real repository', () => {
     expect(written.entries).toHaveLength(1);
     expect(written.entries[0].regLines).toEqual([1, 2]);
     expect(written.entries[0].reason).toBe('PR #9 re-pins both sentences');
+    // The header is regenerated too, so it has to document the field it writes — otherwise
+    // the first `--update` un-documents `regLines` out of the very file it maintains.
+    expect(written._comment).toContain('regLines');
+    expect(written._comment).toContain('or why nothing does');
   });
 
   it('fails closed on a shallow checkout instead of reporting no drift', () => {

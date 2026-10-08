@@ -326,9 +326,11 @@ export function main(argv = process.argv.slice(2)) {
         {
           _comment:
             'Register pointers whose cited LINE CONTENT differs from the revision that wrote them, ' +
-            'each with a written `reason` naming the PR that re-pins it. The screen FAILS on any ' +
-            'drift not listed here and reports entries that no longer drift as STALE (non-failing, ' +
-            'prune them). Regenerate preserving reasons: node scripts/check-register-drift.mjs --update',
+            'each with a written `reason` saying which PR re-pins it or why nothing does. The screen ' +
+            'FAILS on any drift not listed here and reports entries that no longer drift as STALE ' +
+            '(non-failing, prune them). `regLines` are the register sentences the cite silences — ' +
+            'the screen matches on cite, so one entry can cover several. Regenerate preserving ' +
+            'reasons: node scripts/check-register-drift.mjs --update',
           entries,
         },
         null,
