@@ -25,6 +25,7 @@
  * All functions here are testable with a fake runner — no database needed.
  */
 import { createHash } from 'node:crypto';
+import type { ProvisioningShape } from './migrate-recovery';
 
 /** A `meta/_journal.json` entry (only the fields we rely on). */
 export interface JournalEntryLike {
@@ -562,3 +563,76 @@ export async function runFreshReplay(opts: {
   }
   return stats;
 }
+
+/**
+ * What a from-scratch build of this journal MUST leave behind (#2450 AC2).
+ *
+ * Measured on PostgreSQL 16 from an empty database: 269 policies over 226
+ * RLS-enabled tables. The floors sit well under that on purpose — they are
+ * not a snapshot to be bumped whenever a table is added, they are the point
+ * where "the RLS migrations did not run" stops being deniable. `db:sync`
+ * provisions 0 policies, so anything above these floors already proves the
+ * journal executed here. Compared against the live catalog, never a log line.
+ */
+export const MIN_FRESH_BUILD_POLICIES = 200;
+export const MIN_FRESH_BUILD_RLS_TABLES = 200;
+
+/** Operator-readable shortfalls; empty means the build cleared every floor. */
+export function checkFreshBuildFloors(
+  shape: ProvisioningShape,
+  floors = { policies: MIN_FRESH_BUILD_POLICIES, rlsEnabledTables: MIN_FRESH_BUILD_RLS_TABLES },
+): string[] {
+  const issues: string[] = [];
+  if (shape.policies < floors.policies) {
+    issues.push(`RLS policies: ${shape.policies}, expected at least ${floors.policies}`
+      + (shape.policies === 0 ? ' (zero policies is the shape `drizzle-kit push` leaves — the journal never ran here)' : ''));
+  }
+  if (shape.rlsEnabledTables < floors.rlsEnabledTables) {
+    issues.push(`RLS-enabled tables: ${shape.rlsEnabledTables}, expected at least ${floors.rlsEnabledTables}`);
+  }
+  return issues;
+}
+
+/**
+ * The `db:bootstrap` guard (#2450): a from-scratch replay is only safe on a
+ * database that holds nothing. This is a refusal, not a wipe — the command
+ * never drops a schema, because "bootstrap this" from an operator with a
+ * pushed-but-populated database is exactly the ambiguity that produced #2450.
+ */
+export function checkBootstrapPrecondition(state: {
+  publicTables: number;
+  ledgerRows: number;
+  policies: number;
+}): string[] {
+  if (state.publicTables === 0 && state.ledgerRows === 0) return [];
+  const why: string[] = [];
+  if (state.policies === 0 && state.publicTables > 0) {
+    why.push('the public schema has tables but pg_policy has no rows, so it came from '
+      + 'drizzle-kit push (db:push/db:sync), not from these migrations');
+  } else if (state.publicTables > 0) {
+    why.push(`the public schema already has ${state.publicTables} table(s)`);
+  }
+  if (state.ledgerRows > 0) {
+    why.push(`the ledger already has ${state.ledgerRows} row(s) — this database is mid-journal, not fresh`);
+  }
+  return [
+    '[bootstrap] ERROR: db:bootstrap builds an EMPTY database from the journal and will not',
+    '[bootstrap] touch one that already has state.',
+    ...why.map((w) => `[bootstrap]   - ${w}`),
+    '[bootstrap] Create an empty database and point DATABASE_URL at it, or drop the throwaway',
+    '[bootstrap] one you just pushed. For a database holding real data, use db:migrate and follow',
+    '[bootstrap] docs/runbooks/migration-drift-recovery.md if it refuses.',
+  ];
+}
+
+// #2450: this file is a library and used to look like a command — running
+// `npx tsx scripts/migrate-fresh.ts` imported it, printed nothing and exited
+// 0, which reads as success to anyone looking for a from-scratch escape hatch.
+// The command lives in migrate.ts, so say so instead of staying silent.
+if (/[/\\]scripts[/\\]migrate-fresh\.ts$/.test(process.argv[1] ?? '')) {
+  console.error('[migrate-fresh] This module is the fresh-replay engine, not a command.');
+  console.error('[migrate-fresh] From-scratch build: npm run db:bootstrap  (= scripts/migrate.ts --bootstrap)');
+  process.exit(1);
+}
+
+

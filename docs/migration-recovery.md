@@ -1,6 +1,7 @@
 # Migration Ledger Recovery (post-stamp verification)
 
-Issue #1969 (follow-up to #966). This documents the empty-ledger recovery
+Issue #1969 (follow-up to #966), extended by #2450 (push vs dump, and
+attributing a failed stamp). This documents the empty-ledger recovery
 path in `scripts/migrate.ts` and what to do when it refuses to stamp.
 
 ## When recovery kicks in
@@ -10,12 +11,19 @@ ledger drizzle actually consults: `drizzle.__drizzle_migrations`. If the
 ledger is empty **and** the journal has entries, migrate decides between:
 
 1. **Fresh DB** — no app schema present → run every migration for real.
-2. **Recovery (stamp)** — schema present and both markers exist
+2. **Recovery (stamp)** — schema present, both markers exist
    (early marker: table `api_key_usage`; late marker: column
-   `backup_records.last_verified_at`) → the DB was provisioned by
-   `db:push`/`db:sync` or restored from a dump. Stamp all journal
-   entries instead of replaying DDL over live tables.
-3. **Partial schema (refuse)** — early marker present, late marker
+   `backup_records.last_verified_at`) **and `pg_policy` has rows**, which is
+   how a dump-restored database is told apart from a `db:push`/`db:sync` one
+   (#2450). Stamp all journal entries instead of replaying DDL over live
+   tables.
+3. **Push-provisioned (refuse before stamping, #2450)** — markers match but
+   `pg_policy` is empty. `drizzle-kit push` creates tables and columns only,
+   so this schema has no RLS policy and no SQL function: the journal never ran
+   here. Stamping would label an unprotected database as migrated, so migrate
+   exits 1 naming the missing object classes and `npm run db:bootstrap`, and
+   writes no ledger row.
+4. **Partial schema (refuse)** — early marker present, late marker
    missing. Stamping would cement drift; replaying would run 0000_init
    over live tables. Migrate exits 1 and asks for a decision.
 
@@ -27,7 +35,10 @@ dynamic SQL inside `DO $$` blocks is excluded) to build the set of
 tables and columns the journal claims exist, then compares it against
 `information_schema`. Any mismatch:
 
-- prints the missing objects (first 50),
+- prints the missing objects grouped by the journal entry that promised them,
+  with the total count and per-entry counts (#2450 AC4) — 21 bare function
+  signatures tell you nothing to fix; `0032_missing_db_functions — 16 object(s)`
+  tells you which file to read,
 - **truncates the seeded stamp** so the next run doesn't see a
   "migrated" ledger,
 - exits non-zero before any "All migrations applied successfully" line.

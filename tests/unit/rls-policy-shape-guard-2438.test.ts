@@ -155,6 +155,11 @@ describe('the verdict cannot silently degrade to a pass (#2438)', () => {
   it('treats a schema with no policies as inconclusive, not as a pass', () => {
     // Zero offenders because zero policies were found is the vacuous case that
     // let the original defect through.
+    //
+    // #2450 AC5 keeps this asserted on purpose: `db:sync` produces exactly this
+    // shape (227 tables, 0 policies), so this floor is what stops
+    // `node scripts/apply-rls-ci.mjs` — and any future command wired over a
+    // pushed schema — from reporting an unprotected database as secured.
     const verdict = evaluateShapeSweep({ strictCount: 0, offenders: '', total: 0 });
     expect(verdict.status).toBe('inconclusive');
     expect(verdict.message).toContain('did not run');

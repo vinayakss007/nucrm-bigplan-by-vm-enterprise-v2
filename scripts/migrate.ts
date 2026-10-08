@@ -5,9 +5,11 @@ import { sql } from 'drizzle-orm';
 import { Pool } from 'pg';
 import * as schema from '../drizzle/schema';
 import { pgSslConfig } from '../lib/db/ssl-config';
-import { runRecoveryStamp } from './migrate-recovery';
+import { runRecoveryStamp, loadProvisioningShape, loadActualState, verifyStampedLedger, formatMissingObjects } from './migrate-recovery';
 import {
   buildLedgerInsert,
+  checkBootstrapPrecondition,
+  checkFreshBuildFloors,
   planMigrations,
   runFreshReplay,
   type FreshReplayStats,
@@ -38,6 +40,10 @@ import { createInterface } from 'readline';
 const args = process.argv.slice(2);
 const isDryRun = args.includes('--dry-run');
 const isYes = args.includes('--yes') || args.includes('-y');
+// #2450: the fresh-install command. Same engine as the implicit fresh-replay
+// path below, plus a precondition that the database is genuinely empty and a
+// post-build check that measures RLS coverage from the catalog.
+const isBootstrap = args.includes('--bootstrap');
 
 function detectEnv(url: string): string {
   if (url.includes('localhost') || url.includes('127.0.0.1')) return 'local';
@@ -62,6 +68,14 @@ async function readLedgerRows(pool: Pool): Promise<LedgerRowLike[]> {
     `SELECT "hash", "created_at" FROM "drizzle"."__drizzle_migrations"`,
   );
   return res.rows.map((r) => ({ hash: r.hash, createdAt: r.created_at === null ? null : Number(r.created_at) }));
+}
+
+/** How many tables the public schema holds — the zero-table build test (#2235, #2450). */
+async function countPublicTables(pool: Pool): Promise<number> {
+  const res = await pool.query<{ cnt: string }>(
+    `SELECT COUNT(*)::text AS cnt FROM information_schema.tables WHERE table_schema = 'public'`,
+  );
+  return parseInt(res.rows[0].cnt, 10);
 }
 
 /** Print the --dry-run plan: per journal entry, already-stamped vs would-be
@@ -216,6 +230,45 @@ async function main() {
     lockClient.release();
     await pool.end();
     process.exit(1);
+  }
+
+  // ── --bootstrap: build an EMPTY database from the journal (#2450) ──────
+  //
+  // `db:sync` is `drizzle-kit push`, which creates tables and columns and
+  // nothing else: no RLS policy, no SQL function, no hand-written index. That
+  // shape used to be indistinguishable from a migrated schema to the recovery
+  // branch, which stamped all 122 journal entries onto it, verified, failed,
+  // rolled the stamp back and left the database labelled as neither — 0
+  // policies and no ledger, i.e. an unprotected schema with no record of why.
+  // `npm run db:bootstrap` is the command that refusal points at. The build is
+  // the ordinary fresh path below; what the flag adds is this precondition
+  // (refuse anything that is not empty, never drop a schema ourselves) and the
+  // post-build floors at the end of that branch.
+  if (isBootstrap) {
+    let bootstrapLedgerRows = 0;
+    try {
+      bootstrapLedgerRows = (await readLedgerRows(pool)).length;
+    } catch (err) {
+      // No ledger table yet is the expected state of a database nobody has
+      // touched. Any other read failure is a real one and must not be
+      // mistaken for "fresh".
+      if ((err as { code?: string }).code !== '42P01') throw err;
+    }
+    const problems = checkBootstrapPrecondition({
+      publicTables: await countPublicTables(pool),
+      ledgerRows: bootstrapLedgerRows,
+      policies: (await loadProvisioningShape(pool)).policies,
+    });
+    if (problems.length > 0) {
+      for (const line of problems) console.error(line);
+      try {
+        await lockClient.query(`SELECT pg_advisory_unlock($1)`, [MIGRATION_LOCK_KEY]);
+      } catch { /* auto-releases on disconnect */ }
+      lockClient.release();
+      await pool.end();
+      process.exit(1);
+    }
+    console.log('[bootstrap] Public schema and ledger are empty — replaying the whole journal, then verifying by query.');
   }
 
   // ── --dry-run: print the plan, change nothing (#2254 AC / #521 safety) ──
@@ -393,10 +446,7 @@ async function main() {
     // 0046) may ONLY be tolerated when the public schema is verifiably empty
     // before the first statement — with zero tables there is no data to
     // clobber. On any other DB these errors abort the run.
-    const tablesRes = await pool.query<{ cnt: string }>(
-      `SELECT COUNT(*)::text AS cnt FROM information_schema.tables WHERE table_schema = 'public'`,
-    );
-    const publicTableCount = parseInt(tablesRes.rows[0].cnt, 10);
+    const publicTableCount = await countPublicTables(pool);
     const zeroTableFreshBuild = publicTableCount === 0;
     console.log(`[migrate] Public schema has ${publicTableCount} table(s) before replay — ` +
       (zeroTableFreshBuild
@@ -471,6 +521,39 @@ async function main() {
       process.exit(1);
     }
     console.log(`[migrate] Ledger verified: all ${journal.entries.length} journal entries stamped — subsequent db:migrate runs are no-ops.`);
+
+    // #2450 AC2: a stamped ledger is necessary but not sufficient. The claim a
+    // fresh install needs is "this database is protected and complete", and
+    // that is only true if the object classes only the journal contributes —
+    // RLS policies and SQL functions — are actually in the catalog. Measure it
+    // from the catalog, never from the log lines above.
+    const buildShape = await loadProvisioningShape(pool);
+    const floorIssues = checkFreshBuildFloors(buildShape);
+    const buildMissing = verifyStampedLedger(
+      journal.entries.map((e) => ({ tag: e.tag, sql: readFileOrNull(e.tag) })),
+      await loadActualState(pool),
+    );
+    if (floorIssues.length > 0 || buildMissing.length > 0) {
+      console.error(`[migrate] FATAL: the replay finished but the schema is not what the journal promises.`);
+      for (const issue of floorIssues) console.error(`[migrate]   - ${issue}`);
+      if (buildMissing.length > 0) {
+        console.error(`[migrate]   headline objects still missing (${buildMissing.length}, from ` +
+          `${groupMissingByOwner(buildMissing).length} journal entr(ies)):`);
+        for (const line of formatMissingObjects(buildMissing)) console.error(`[migrate]     - ${line}`);
+      }
+      console.error(`[migrate] Measured: ${buildShape.policies} RLS policies over ${buildShape.rlsEnabledTables} ` +
+        `RLS-enabled tables, ${buildShape.functions} functions, ${buildShape.tables} tables.`);
+      console.error('[migrate] The ledger stays as it is (these files DID run); fix the missing DDL');
+      console.error('[migrate] at its source and re-build. Do not ship a database short of RLS.');
+      try {
+        await lockClient.query(`SELECT pg_advisory_unlock($1)`, [MIGRATION_LOCK_KEY]);
+      } catch { /* auto-releases on disconnect */ }
+      lockClient.release();
+      await pool.end();
+      process.exit(1);
+    }
+    console.log(`[migrate] Fresh build verified by query: ${buildShape.policies} RLS policies over ` +
+      `${buildShape.rlsEnabledTables} RLS-enabled tables, every journal headline object present.`);
   } else {
     console.log('[migrate] Applying pending migrations with drizzle-orm migrator...');
     await migrate(db, { migrationsFolder: './drizzle/migrations' });
