@@ -327,10 +327,25 @@ describe('the CLI against a real repository', () => {
 });
 
 describe('the real register against the real tree', () => {
-  it('has no un-allowlisted content drift (this is the nightly job\'s assertion)', () => {
+  // Gated on exactly one thing the screen needs — a history it can blame — not on the job.
+  // Measured on this PR's own CI run: every throwaway-repo case above passed and this one
+  // failed with "this checkout is shallow", because `test-unit` checks out with the default
+  // `fetch-depth: 1` while the screen refuses a shallow repo rather than reading a truncated
+  // history as agreement. The nightly `register-drift-screen` job fetches `fetch-depth: 0`
+  // and is where this assertion gates; on a shallow checkout the case below asserts the
+  // refusal instead, so the job still proves something about the screen it cannot otherwise.
+  const shallow = git(ROOT, ['rev-parse', '--is-shallow-repository']).trim() === 'true';
+
+  it.runIf(!shallow)('has no un-allowlisted content drift (this is the nightly job\'s assertion)', () => {
     const out = run(['--register', REGISTER, '--allow', ALLOW], ROOT);
     expect(out.out).toContain('OK — every drifted pointer is allowlisted');
     expect(out.status).toBe(0);
+  }, 120_000);
+
+  it.runIf(shallow)('fails closed on this shallow checkout instead of reporting agreement', () => {
+    const out = run(['--register', REGISTER, '--allow', ALLOW], ROOT);
+    expect(out.status).not.toBe(0);
+    expect(out.out).toContain('shallow');
   }, 120_000);
 
   it('carries an allowlist whose entries each have a written, non-placeholder reason', () => {
