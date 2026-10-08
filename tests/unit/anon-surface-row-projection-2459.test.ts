@@ -10,9 +10,9 @@
  * `proxy.ts:382` returns a plain pass-through for any path matching
  * `PUBLIC_PATHS`/`PUBLIC_PREFIXES` and never consults a session, so the
  * anonymous surface is 79 route files, not the 14 the projection guard walks.
- * This file covers the two of those 79 that had a closed, provably-sufficient
- * field set: the portal login (whose table's row *is* a bearer credential) and
- * the public form post's contact lookup.
+ * This file covers the three of those 79 that had a closed, provably-sufficient
+ * field set: the portal login and the inbound API-key lookup (both tables' rows
+ * carry a credential) and the public form post's contact lookup.
  *
  * It also pins the one site on that surface that must stay whole-row, because
  * projecting it would corrupt data rather than protect it — see the comment at
@@ -174,5 +174,28 @@ describe('the anonymous surface keeps its one measured exception', () => {
     expect(unprojected).toHaveLength(1);
     expect(unprojected[0][1]).toBe('fullContact');
     expect(forms).toContain('WHOLE ROW BY DESIGN');
+  });
+});
+
+describe('the anonymous API-key lookup (#2459)', () => {
+  const hook = readFileSync(join(ROOT, 'app/api/webhooks/inbound/route.ts'), 'utf8');
+  const read = /const row = await db\.query\.apiKeys\.findFirst\(\{[\s\S]*?\n\s*\}\);/.exec(hook);
+
+  it('names five of api_keys 13 columns', () => {
+    // resolveApiKey hands the whole row to both callers, so the row type is the
+    // surface here, not just the response. tsc is what proves five is *enough*
+    // (a missing field is TS2339 at the use site); this proves it is *not more*.
+    expect(read, 'the api_keys read was not found — did its shape change?').toBeDefined();
+    const columns = /columns:\s*\{([^}]*)\}/.exec(read![0])?.[1] ?? '';
+    const names = columns.split(',').map((s) => s.split(':')[0]?.trim()).filter(Boolean).sort();
+    expect(names).toEqual(['id', 'name', 'prefix', 'tenantId', 'userId']);
+  });
+
+  it('never asks for the credential column back', () => {
+    // key_hash is what the sha256 above compares against. Reading it into the
+    // handler adds nothing the WHERE does not already do, and it is the one
+    // column that would turn a future `...row` into a key disclosure.
+    expect(read![0]).not.toMatch(/keyHash:\s*true/);
+    expect(hook).toContain('key_hash');
   });
 });
