@@ -7,15 +7,12 @@
 
 import * as React from "react"
 import { useVirtualizer } from "@tanstack/react-virtual"
-// #2208 — react-table v9 rebuilt its generics around a feature-map first
-// parameter (`ColumnDef<TFeatures, TData, TValue>`) and renamed
-// `useReactTable`/`get*RowModel` to `useTable`/`create*RowModel`. v9 ships that
-// v8 surface as a supported compatibility layer, so this file imports it from
-// `/legacy` and re-exports `ColumnDef` under the name the nine consumer files
-// already use. The native feature-slot migration is the follow-up. Behaviour is
-// the point here — DataTable backs every list page — so
-// tests/unit/data-table-legacy-v9-2208.test.tsx renders this component and
-// asserts filtering, sorting, paging, selection and column visibility still work.
+// #2208 — react-table v9 moved the feature map into ColumnDef's first type
+// parameter and renamed useReactTable/get*RowModel to useTable/create*RowModel.
+// v9 ships the v8 surface as a supported compatibility layer, so this file
+// imports it from `/legacy` and re-exports `ColumnDef` under the name the nine
+// consumer files already use; the native feature-slot migration is the
+// follow-up. tests/unit/data-table-legacy-v9-2208.test.tsx pins the behaviour.
 import {
   flexRender,
   type SortingState,
@@ -60,9 +57,6 @@ import {
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
-  ArrowUpDown,
-  ArrowUp,
-  ArrowDown,
   Settings2,
   Search,
   X,
@@ -70,6 +64,7 @@ import {
 } from "lucide-react"
 
 export { ColumnDef }
+export { createSortableHeader } from "./data-table-sortable-header"
 
 export interface DataTableProps<TData extends RowData, TValue> {
   columns: ColumnDef<TData, TValue>[]
@@ -770,44 +765,4 @@ const handleBulkAction = async (action: BulkAction) => {
       )}
     </div>
   )
-}
-
-// Minimal structural type for the sortable-header column: only the methods used
-// here. Written out rather than picked off `Column<unknown, unknown>` because v9
-// constrains its row generic to `RowData`, so `Column<unknown, …>` no longer
-// type-checks. Declaring just these two members keeps the header callable with
-// any concretely-typed Column<TData> passed by callers.
-type SortableColumn = {
-  getIsSorted: () => false | "asc" | "desc"
-  toggleSorting: (isDescending?: boolean, autoRemove?: boolean) => void
-}
-
-// Helper to create sortable column headers
-export function createSortableHeader(
-  label: string,
-  accessorKey: string
-) {
-  return {
-    accessorKey,
-    header: ({ column }: { column: SortableColumn }) => {
-      const sortState = column.getIsSorted()
-      return (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-          aria-sort={sortState === "asc" ? "ascending" : sortState === "desc" ? "descending" : "none"}
-          className="h-8 p-0 hover:bg-transparent"
-        >
-          {label}
-          {sortState === "asc" ? (
-            <ArrowUp className="ml-2 h-4 w-4" />
-          ) : sortState === "desc" ? (
-            <ArrowDown className="ml-2 h-4 w-4" />
-          ) : (
-            <ArrowUpDown className="ml-2 h-4 w-4" />
-          )}
-        </Button>
-      )
-    },
-  }
 }
