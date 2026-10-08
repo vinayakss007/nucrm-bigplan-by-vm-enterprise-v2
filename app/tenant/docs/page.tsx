@@ -91,11 +91,11 @@ const ENDPOINTS = [
   {
     section: 'Public API',
     routes: [
-      { method: 'GET', path: '/api/public/tickets', desc: 'Portal: list tickets by email', auth: false },
+      { method: 'GET', path: '/api/public/tickets', desc: 'Portal: list tickets (portal session or ticket token required)', auth: true },
       { method: 'POST', path: '/api/public/tickets', desc: 'Portal: create ticket', auth: false },
       { method: 'GET', path: '/api/public/kb/articles', desc: 'Portal KB articles (tenant-scoped, portal session required)', auth: true },
       { method: 'GET', path: '/api/public/kb/articles/:id', desc: 'Portal KB article detail (tenant-scoped, portal session required)', auth: true },
-      { method: 'GET', path: '/api/public/invoices', desc: 'Portal: list invoices by email', auth: false },
+      { method: 'GET', path: '/api/public/invoices', desc: 'Portal: list invoices (portal session or portal token required)', auth: true },
     ],
   },
   {
