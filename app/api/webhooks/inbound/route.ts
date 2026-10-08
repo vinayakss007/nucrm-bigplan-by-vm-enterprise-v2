@@ -80,7 +80,7 @@ async function resolveApiKey(rawKey: string) {
   const keyHash = createHash('sha256').update(rawKey).digest('hex');
 
   const row = await db.query.apiKeys.findFirst({
-    // #2459: `api_keys` is 13 columns (drizzle/schema/core.ts:281) and one is
+    // #2459: `api_keys` is 16 columns (drizzle/schema/core.ts:281) and one is
     // `key_hash` — the credential this route exists to check, read here on a
     // proxy.ts public path with no session. These five are what both callers
     // touch; `key_hash` stays a WHERE predicate. tsc proves five is enough.

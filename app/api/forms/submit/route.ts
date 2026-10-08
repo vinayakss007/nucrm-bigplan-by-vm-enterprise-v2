@@ -146,7 +146,7 @@ export async function POST(req: NextRequest) {
         const existing = await tx.query.contacts.findFirst({
           where: and(eq(contacts.tenantId, form.tenantId), eq(contacts.email, email), isNull(contacts.deletedAt)),
           // #2459: only these two are read below (`existing.id`, `existing.tags`).
-          // Without the projection this ran `SELECT *` over the 47 columns
+          // Without the projection this ran `SELECT *` over the 55 columns
           // `drizzle/schema/crm.ts` declares for `contacts` — `ownerNotes` and
           // `customFields` among them — inside a handler the edge lets through
           // with no session at all (#2459).

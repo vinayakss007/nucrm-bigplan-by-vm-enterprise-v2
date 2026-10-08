@@ -10,9 +10,12 @@
  * `proxy.ts:382` returns a plain pass-through for any path matching
  * `PUBLIC_PATHS`/`PUBLIC_PREFIXES` and never consults a session, so the
  * anonymous surface is 79 route files, not the 14 the projection guard walks.
- * This file covers the three of those 79 that had a closed, provably-sufficient
- * field set: the portal login and the inbound API-key lookup (both tables' rows
- * carry a credential) and the public form post's contact lookup.
+ * This file covers three of those 79 whose field set is closed and provable:
+ * the portal login and the inbound API-key lookup (both tables' rows carry a
+ * credential) and the public form post's contact lookup. The bootstrap route
+ * is the fourth, measured and pinned in
+ * `setup-create-admin-row-shape-2459.test.ts`; the column counts cited by the
+ * comments below are what `anon-surface-column-counts-2459.test.ts` keeps true.
  *
  * It also pins the one site on that surface that must stay whole-row, because
  * projecting it would corrupt data rather than protect it — see the comment at
@@ -181,7 +184,7 @@ describe('the anonymous API-key lookup (#2459)', () => {
   const hook = readFileSync(join(ROOT, 'app/api/webhooks/inbound/route.ts'), 'utf8');
   const read = /const row = await db\.query\.apiKeys\.findFirst\(\{[\s\S]*?\n\s*\}\);/.exec(hook);
 
-  it('names five of api_keys 13 columns', () => {
+  it('names five of api_keys 16 columns', () => {
     // resolveApiKey hands the whole row to both callers, so the row type is the
     // surface here, not just the response. tsc is what proves five is *enough*
     // (a missing field is TS2339 at the use site); this proves it is *not more*.
