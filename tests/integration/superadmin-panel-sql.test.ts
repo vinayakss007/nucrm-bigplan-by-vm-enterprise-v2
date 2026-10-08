@@ -44,10 +44,30 @@
  * from db:sync or a full db:migrate. Like
  * tests/integration/analytics-ingest-rls.test.ts it self-skips when no database
  * is reachable and cleans up every row it writes.
+ *
+ * WHAT IT LEAVES BEHIND (#2455)
+ * -----------------------------
+ * That self-establishment used to be destructive: the file ENABLEd RLS, DROPped
+ * EVERY policy on activities — including ones it did not create — and re-CREATEd
+ * a hand-typed copy under the shipped name. It did that on purpose, "to make the
+ * proof independent of whether db:sync left extra rules behind", but the cost
+ * was that a policy a future migration adds to activities would be deleted here,
+ * silently, on every database this suite touches, while the proof still passed on
+ * its own copy. The role and its grants leaked too, and the hand-typed copy meant
+ * the suite could keep proving an arm the migration no longer ships.
+ *
+ * Now: the state is captured before anything is changed, the shipped object is
+ * read out of 0092 rather than retyped (tests/helpers/shipped-rls-policy.ts), a
+ * policy is installed only when the database does not already admit the
+ * super-admin bypass, the fixture carries its own name so it can never overwrite
+ * a shipped one, and teardown removes exactly what was added, revokes the grants
+ * and drops the role. A restore that fails is thrown, not swallowed — the same
+ * discipline rls-connection-affinity.test.ts adopted in #2451.
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { Pool } from 'pg';
 import { randomUUID } from 'crypto';
+import { readShippedPolicy, admitsSuperAdmin, type CapturedPolicy } from '../helpers/shipped-rls-policy';
 
 async function isDatabaseAvailable(): Promise<boolean> {
   const databaseUrl = process.env.DATABASE_URL;
@@ -68,6 +88,11 @@ const dbAvailable = await isDatabaseAvailable();
 const d = dbAvailable ? describe : describe.skip;
 
 const RLS_TEST_ROLE = 'superadmin_panel_sql_rls_test_role';
+// The fixture is NEVER installed under 0092's name: writing a shipped object's
+// name is how this file used to replace the database's own policy with its
+// private copy (#2455). Under its own name it can only ever be added, and only
+// ever removed by the code that added it.
+const FIXTURE_POLICY_NAME = 'superadmin_panel_sql_fixture_isolation';
 // Synthetic so no real workspace is touched; the activities.tenant_id FK still
 // requires a parent tenants row, created below and deleted in afterAll.
 const TEST_TENANT_ID = randomUUID();
@@ -79,8 +104,43 @@ const TRIAL_WARNING_INSERT = `
   VALUES ($1, NULL, 'trial_warning', 'Trial warning sent - 2 days left', 'tenant', $1, 'trial_warning')
 `;
 
+/**
+ * The RLS state as it was found. `CapturedPolicy` is the `pg_policies` row shape
+ * from the helper; `qual`/`with_check` there are the engine's own deparse of the
+ * arms, which is valid input for a `USING (…)` / `WITH CHECK (…)` clause — that
+ * is what makes a restore faithful rather than a re-interpretation (#2451).
+ */
+type CapturedRls = { enabled: boolean; forced: boolean; policies: CapturedPolicy[] };
+
 d('superadmin panel SQL regressions (usage / monitoring / trial-check)', () => {
   let pool: Pool;
+  // Everything this file found before it changed anything. Restoring is defined
+  // against these values, never against a guess at what the schema "should" be.
+  let activitiesBefore: CapturedRls = { enabled: false, forced: false, policies: [] };
+  let enabledRlsHere = false;
+  let installedFixture = false;
+
+  async function captureActivitiesRls(): Promise<CapturedRls> {
+    // Scoped by the relation's OID and the policy's schema+table: joining
+    // pg_class on relname alone would also pick up a same-named table in another
+    // schema. relforcerowsecurity has existed since 9.5, so no version probe.
+    const { rows: cls } = await pool.query(
+      `SELECT relrowsecurity AS enabled, relforcerowsecurity AS forced
+         FROM pg_class WHERE oid = 'activities'::regclass`,
+    );
+    const { rows: policies } = await pool.query(
+      `SELECT policyname AS name, cmd, permissive, roles::text[] AS roles,
+              qual, with_check AS "withCheck"
+         FROM pg_policies
+        WHERE schemaname = 'public' AND tablename = 'activities'
+        ORDER BY policyname`,
+    );
+    return {
+      enabled: Boolean(cls[0]?.enabled),
+      forced: Boolean(cls[0]?.forced),
+      policies: policies as CapturedPolicy[],
+    };
+  }
 
   beforeAll(async () => {
     pool = new Pool({ connectionString: process.env.DATABASE_URL });
@@ -98,30 +158,30 @@ d('superadmin panel SQL regressions (usage / monitoring / trial-check)', () => {
     await pool.query(`GRANT ${RLS_TEST_ROLE} TO CURRENT_USER`);
     await pool.query(`GRANT USAGE ON SCHEMA public TO ${RLS_TEST_ROLE}`);
     await pool.query(`GRANT SELECT, INSERT ON activities TO ${RLS_TEST_ROLE}`);
-    await pool.query(`ALTER TABLE activities ENABLE ROW LEVEL SECURITY`);
 
-    // Reset activities to the single authoritative tenant_isolation policy
-    // (verbatim from 0092): permissive INSERT/SELECT keyed on a tenant-GUC match
-    // OR the app.is_super_admin boolean. Dropping every policy first makes the
-    // proof independent of whether db:sync left extra rules behind.
-    await pool.query(`
-      DO $$
-      DECLARE p record;
-      BEGIN
-        FOR p IN SELECT polname FROM pg_policy WHERE polrelid = 'activities'::regclass LOOP
-          EXECUTE format('DROP POLICY %I ON activities', p.polname);
-        END LOOP;
-      END $$;
-    `);
-    await pool.query(`
-      CREATE POLICY "tenant_isolation" ON "activities" FOR ALL USING (
-        (tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::uuid)
-        OR ((NULLIF(current_setting('app.is_super_admin', true), ''))::boolean = true)
-      ) WITH CHECK (
-        (tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::uuid)
-        OR ((NULLIF(current_setting('app.is_super_admin', true), ''))::boolean = true)
-      );
-    `);
+    // Capture FIRST — anything read after the mutations below is this file's own
+    // handiwork, and a snapshot taken then restores the fixture instead of the
+    // database.
+    activitiesBefore = await captureActivitiesRls();
+
+    if (!activitiesBefore.enabled) {
+      await pool.query(`ALTER TABLE activities ENABLE ROW LEVEL SECURITY`);
+      enabledRlsHere = true;
+    }
+
+    // The proof needs a policy that admits the platform GUC for both the read and
+    // the insert. If the schema already ships one (any database built through the
+    // migrations), USE IT and change nothing. Only a schema that has no policies
+    // at all — `db:sync`/drizzle-kit push, which is what CI provisions — gets a
+    // fixture, and the fixture is the statement 0092 itself builds, read out of
+    // the migration file rather than typed into this file. If that migration ever
+    // drops the app.is_super_admin arm, readShippedPolicy() throws and this suite
+    // fails, instead of quietly re-adding the bypass it is supposed to be testing.
+    const bypass = admitsSuperAdmin(activitiesBefore.policies);
+    if (!bypass.reads || !bypass.writes) {
+      await pool.query(readShippedPolicy().statementFor('activities', FIXTURE_POLICY_NAME));
+      installedFixture = true;
+    }
 
     // Parent row the activities FK demands; only name/slug are required (status
     // and plan_id default), and there is no plan FK or insert trigger on tenants.
@@ -133,10 +193,68 @@ d('superadmin panel SQL regressions (usage / monitoring / trial-check)', () => {
 
   afterAll(async () => {
     if (!pool) return;
+    const failures: string[] = [];
+
     // FK order: activities are cascaded by the tenant delete, but remove them
     // explicitly so a partial run cannot strand a marker row.
     await pool.query(`DELETE FROM activities WHERE tenant_id = $1`, [TEST_TENANT_ID]).catch(() => {});
     await pool.query(`DELETE FROM tenants WHERE id = $1`, [TEST_TENANT_ID]).catch(() => {});
+
+    // Remove exactly what beforeAll added, in one transaction: Postgres DDL is
+    // transactional, so another file reading activities in the middle of teardown
+    // never sees the table with the fixture dropped and RLS still enabled, and a
+    // restore that fails halfway leaves the table as it was rather than half-done.
+    const client = await pool.connect();
+    try {
+      await client.query('RESET ALL');
+      await client.query('BEGIN');
+      if (installedFixture) {
+        await client.query(`DROP POLICY IF EXISTS "${FIXTURE_POLICY_NAME}" ON activities`);
+      }
+      if (enabledRlsHere) {
+        await client.query(`ALTER TABLE activities DISABLE ROW LEVEL SECURITY`);
+      }
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK').catch(() => {});
+      failures.push(`rls restore: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      client.release();
+    }
+
+    // The role this file creates is its own to remove; leaving it behind is a
+    // grant that outlives the test that needed it.
+    for (const stmt of [
+      `REVOKE SELECT, INSERT ON activities FROM ${RLS_TEST_ROLE}`,
+      `REVOKE USAGE ON SCHEMA public FROM ${RLS_TEST_ROLE}`,
+      `REVOKE ${RLS_TEST_ROLE} FROM CURRENT_USER`,
+      `DROP ROLE IF EXISTS ${RLS_TEST_ROLE}`,
+    ]) {
+      try {
+        await pool.query(stmt);
+      } catch (err) {
+        failures.push(`${stmt.split(' ')[0]}: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+
+    // Nothing this file was not supposed to touch may have gone missing. The old
+    // version DROPped every policy and proved only its own copy, so a policy a
+    // later migration adds would vanish here with the suite still green.
+    const after = await captureActivitiesRls();
+    const missing = activitiesBefore.policies
+      .map((p) => p.name)
+      .filter((name) => name !== FIXTURE_POLICY_NAME && !after.policies.some((p) => p.name === name));
+    if (missing.length > 0) {
+      failures.push(`policies destroyed by this suite: ${missing.join(', ')}`);
+    }
+    if (failures.length > 0) {
+      // A failed restore is reported instead of swallowed: `.catch(() => {})` over
+      // these statements is why the destroyed-policy version survived CI at all.
+      throw new Error(
+        `superadmin-panel-sql could not leave the database as it found it: ${failures.join(' | ')}`,
+      );
+    }
+
     await pool.end().catch(() => {});
   });
 
