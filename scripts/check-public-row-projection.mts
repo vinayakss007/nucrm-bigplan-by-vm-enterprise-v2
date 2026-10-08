@@ -5,11 +5,14 @@
  */
 
 /**
- * Public-write row-projection guard (#2440) + public-read row-projection guard (#2443).
+ * Public-write row-projection guard (#2440) + public-read row-projection guard
+ * (#2443) + public relational-query read guard (#2457).
  *
  * Every exported handler under `app/api/public/**` must name the columns it
- * moves: `.returning({...})` never `.returning()`, and `.select({...})` (or a
- * shared named projection) never `.select()`.
+ * moves, in whichever of the three spellings drizzle offers: `.returning({...})`
+ * never `.returning()`, `.select({...})` (or a shared named projection) never
+ * `.select()`, and `db.query.<table>.findFirst({ columns: {...} })` never
+ * `db.query.<table>.findFirst({ where })`.
  *
  * An argument-less `.returning()` is `RETURNING *` — the response body is
  * whatever the table happens to hold, now and after any later migration.
@@ -43,6 +46,10 @@
  *    fields it tests or copies, `decline` the five. That also stops them
  *    fetching a row the size of the table to decide a branch. Zero exceptions,
  *    so zero baseline to pin.
+ *  - `db.query.<table>.findFirst()/findMany()` is in scope as of #2457 — the
+ *    same rule, applied to the spelling the first two passes did not match. See
+ *    `findRelationalReadSites` for why a third regex was needed rather than a
+ *    wider read of the same one.
  *
  * Conventions match the guard family (`check-public-rate-limit.mts`,
  * `check-portal-soft-delete.mts`): pure exported functions so a unit test can
@@ -73,6 +80,14 @@ export const MIN_PUBLIC_WRITE_SITES = 2;
  * broken regex or a broken walk, not a codebase that reads no columns.
  */
 export const MIN_PUBLIC_READ_SITES = 8;
+
+/**
+ * And the same for the relational query API: nine `db.query.<table>.findFirst()`
+ * calls sit in six of the fourteen public route files (#2457 measured), so a
+ * walk that turns up none is a broken screen, not a codebase that reads nothing
+ * through `db.query`.
+ */
+export const MIN_PUBLIC_RELATIONAL_READ_SITES = 5;
 
 export type WriteSite = {
   file: string;
@@ -220,6 +235,132 @@ export function readFindings(sites: ReadSite[]): Finding[] {
   }));
 }
 
+export type RelationalReadSite = {
+  file: string;
+  verb: string;
+  line: number;
+  table: string;
+  method: 'findFirst' | 'findMany';
+  /** true when the call cannot be shown to name a column set */
+  unprojected: boolean;
+};
+
+const RELATIONAL_RE = /\.query\s*\.\s*([a-zA-Z_$][\w$]*)\s*\.\s*(findFirst|findMany)\s*\(\s*/g;
+
+/**
+ * The options object of a `db.query.<table>.findFirst(...)` call, without its
+ * braces, or null when the argument is not an object literal the screen can read.
+ */
+export function relationalOptions(text: string): string | null {
+  let i = 0;
+  while (i < text.length && /\s/.test(text[i])) i++;
+  if (text[i] !== '{') return null;
+  let depth = 0;
+  for (let j = i; j < text.length; j++) {
+    const c = text[j];
+    if (c === '"' || c === "'" || c === '`') {
+      const close = text.indexOf(c, j + 1);
+      if (close === -1) return null;
+      j = close;
+      continue;
+    }
+    if (c === '{' || c === '(' || c === '[') depth++;
+    else if (c === '}' || c === ')' || c === ']') {
+      depth--;
+      if (depth === 0) return text.slice(i + 1, j);
+    }
+  }
+  return null;
+}
+
+/**
+ * A `columns:` key at the top level of the options object. Not anywhere inside
+ * it: `with: { tickets: { columns: {...} } }` narrows the *nested* rows and
+ * leaves the outer row wide, which is the mistake this shape invites.
+ */
+export function hasTopLevelColumns(options: string): boolean {
+  let depth = 0;
+  for (let i = 0; i < options.length; i++) {
+    const c = options[i];
+    if (c === '"' || c === "'" || c === '`') {
+      // A value may be a string containing braces; it is not structure.
+      const close = options.indexOf(c, i + 1);
+      i = close === -1 ? options.length : close;
+      continue;
+    }
+    if (c === '{' || c === '(' || c === '[') { depth++; continue; }
+    if (c === '}' || c === ')' || c === ']') { depth--; continue; }
+    if (depth !== 0 || !/[A-Za-z_$]/.test(c)) continue;
+    let end = i;
+    while (end < options.length && /[\w$]/.test(options[end])) end++;
+    let colon = end;
+    while (colon < options.length && /\s/.test(options[colon])) colon++;
+    if (options[colon] === ':') {
+      if (options.slice(i, end) === 'columns') return true;
+      i = colon;
+    } else {
+      i = end - 1;
+    }
+  }
+  return false;
+}
+
+/**
+ * `db.query.<table>.findFirst()` is a read too, and by default it is `SELECT *`
+ * of the whole table shape.
+ *
+ * #2440 and #2443 made a public handler name the columns it moves, and screened
+ * the two spellings that token contains — `.select(...)` and `.returning(...)`.
+ * Drizzle's relational query API is a third spelling that neither regex matches:
+ * `db.query.contacts.findFirst({ where })` fetches every column of the table
+ * (55 for `contacts`, measured on the live database) unless the call names
+ * `columns: {...}`. So the tree could satisfy the guard while nine
+ * anonymous-reachable whole-row reads sat inside the very files the guard walks,
+ * and the screen would still print "every one naming the columns it moves".
+ *
+ * Same rule as the reads above, and for the same reason: no classifier for "used
+ * only for a status check", because that judgement is a guess the next editor
+ * does not have to re-make.
+ */
+export function findRelationalReadSites(
+  body: string,
+  file: string,
+  verb: string,
+  line: number,
+): RelationalReadSite[] {
+  const code = stripComments(body);
+  const out: RelationalReadSite[] = [];
+  const re = new RegExp(RELATIONAL_RE.source, 'g');
+  for (let m = re.exec(code); m !== null; m = re.exec(code)) {
+    const after = code.slice(m.index + m[0].length);
+    const options = relationalOptions(after);
+    const projected = options !== null && hasTopLevelColumns(options);
+    out.push({
+      file,
+      verb,
+      line: line + code.slice(0, m.index).split('\n').length - 1,
+      table: m[1],
+      method: m[2] as 'findFirst' | 'findMany',
+      unprojected: !projected,
+    });
+  }
+  return out;
+}
+
+export function relationalFindings(sites: RelationalReadSite[]): Finding[] {
+  return sites.filter((s) => s.unprojected).map((s) => ({
+    file: s.file,
+    line: s.line,
+    verb: s.verb,
+    detail: `a public route reads db.query.${s.table}.${s.method}() without a top-level `
+      + '`columns:` projection — that is SELECT * of the whole row, so the row in scope is '
+      + 'whatever the table holds, now and after any later migration. Name the columns '
+      + '(`columns: { id: true, tenantId: true }`), exactly as .select() and .returning() '
+      + 'must name theirs. A `columns:` nested inside `with:` narrows the related rows only, '
+      + 'not this one.',
+  }));
+}
+
 export function findings(sites: WriteSite[]): Finding[] {
   return sites.filter((s) => s.unprojected).map((s) => ({
     file: s.file,
@@ -264,17 +405,22 @@ export function maskHandlerBodies(source: string, handlers: { line: number; body
   return lines.join('\n');
 }
 
-export type RunResult = { files: number; writes: number; reads: number; problems: Finding[] };
+export type RunResult = { files: number; writes: number; reads: number; relational: number; problems: Finding[] };
 
-export function run(root = '.', opts: { sites?: WriteSite[]; readSites?: ReadSite[]; dirs?: string[] } = {}): RunResult {
+export function run(
+  root = '.',
+  opts: { sites?: WriteSite[]; readSites?: ReadSite[]; relationalSites?: RelationalReadSite[]; dirs?: string[] } = {},
+): RunResult {
   let sites = opts.sites;
   let reads = opts.readSites;
-  if (!sites && !reads) {
+  let rel = opts.relationalSites;
+  if (!sites && !reads && !rel) {
     sites = [];
     reads = [];
+    rel = [];
     let files = 0;
-    for (const rel of opts.dirs ?? [join('app', 'api', 'public')]) {
-      const dir = isAbsolute(rel) ? rel : join(root, rel);
+    for (const relDir of opts.dirs ?? [join('app', 'api', 'public')]) {
+      const dir = isAbsolute(relDir) ? relDir : join(root, relDir);
       for (const file of walkRouteFiles(dir)) {
         files++;
         const abs = readFileSync(file, 'utf8');
@@ -283,10 +429,12 @@ export function run(root = '.', opts: { sites?: WriteSite[]; readSites?: ReadSit
         for (const h of handlers) {
           sites.push(...findWriteSites(h.body, h.file, h.verb, h.line));
           reads.push(...findReadSites(h.body, h.file, h.verb, h.line));
+          rel.push(...findRelationalReadSites(h.body, h.file, h.verb, h.line));
         }
         const rest = maskHandlerBodies(abs, handlers);
         sites.push(...findWriteSites(rest, relFile, 'module', 1));
         reads.push(...findReadSites(rest, relFile, 'module', 1));
+        rel.push(...findRelationalReadSites(rest, relFile, 'module', 1));
       }
     }
     if (!opts.dirs && files === 0) throw new Error('no route.ts found under app/api/public — nothing audited');
@@ -302,17 +450,26 @@ export function run(root = '.', opts: { sites?: WriteSite[]; readSites?: ReadSit
         + 'no .select() was matched, so this run proves nothing about the read side',
       );
     }
+    if (rel.length < MIN_PUBLIC_RELATIONAL_READ_SITES) {
+      throw new Error(
+        `found only ${rel.length} public relational read site(s); expected at least `
+        + `${MIN_PUBLIC_RELATIONAL_READ_SITES} — no db.query.<table>.findFirst() was matched, `
+        + 'so this run proves nothing about the relational query API',
+      );
+    }
   }
   // A planted write-only or read-only run is a legitimate run: the kind that
   // was not supplied reports zero rather than silently walking the disk for it.
   sites = sites ?? [];
   reads = reads ?? [];
-  const all = [...sites, ...reads];
+  rel = rel ?? [];
+  const all = [...sites, ...reads, ...rel];
   return {
     files: new Set(all.map((s) => s.file)).size,
     writes: sites.length,
     reads: reads.length,
-    problems: [...findings(sites), ...readFindings(reads)],
+    relational: rel.length,
+    problems: [...findings(sites), ...readFindings(reads), ...relationalFindings(rel)],
   };
 }
 
@@ -326,9 +483,9 @@ async function main(): Promise<void> {
     process.stdout.write(JSON.stringify(result, null, 2) + '\n');
   } else if (result.problems.length === 0) {
     process.stdout.write(
-      `[check-public-row-projection] OK — ${result.writes} public write site(s) and `
-      + `${result.reads} read site(s) across ${result.files} route file(s), every one naming the `
-      + `columns it moves.\n`,
+      `[check-public-row-projection] OK — ${result.writes} public write site(s), `
+      + `${result.reads} .select() read site(s) and ${result.relational} relational read site(s) `
+      + `across ${result.files} route file(s), every one naming the columns it moves.\n`,
     );
   } else {
     process.stdout.write(`[check-public-row-projection] ${result.problems.length} violation(s):\n`);
@@ -336,12 +493,18 @@ async function main(): Promise<void> {
       process.stdout.write(`  ${f.file}:${f.line} ${f.verb} — ${f.detail}\n`);
     }
   }
-  process.exit(result.problems.length === 0 ? 0 : 1);
+  // `process.exitCode`, never `process.exit()`: stdout on a pipe is written
+  // asynchronously and exit discards whatever has not drained. A `--json`
+  // consumer then gets a truncated document — measured on this repo, 65,536
+  // bytes of a 195,246-byte audit of `app/api`, delivered with exit status 1
+  // and a perfectly parseable prefix. That is a silently under-reported audit,
+  // which is the failure mode this guard family exists to avoid.
+  process.exitCode = result.problems.length === 0 ? 0 : 1;
 }
 
 if (process.argv[1] && process.argv[1].includes('check-public-row-projection')) {
   main().catch((err: unknown) => {
     process.stderr.write(`[check-public-row-projection] ${(err as Error).message}\n`);
-    process.exit(2);
+    process.exitCode = 2;
   });
 }

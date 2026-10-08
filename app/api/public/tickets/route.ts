@@ -130,6 +130,11 @@ export async function POST(request: NextRequest) {
         eq(contacts.email, lookupEmail),
         isNull(contacts.deletedAt),
       ),
+      // #2457: `columns` is what keeps this from being SELECT * of a 55-column
+      // row (measured on the live database) for an anonymous caller. Only `id`
+      // and `tenantId` are read below, and both are used to scope the insert —
+      // the same pair `resolvePortalContact` already projects.
+      columns: { id: true, tenantId: true },
     });
 
     if (!contact) return NextResponse.json({ error: 'No account found with this email' }, { status: 404 });
