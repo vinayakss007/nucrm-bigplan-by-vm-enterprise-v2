@@ -237,6 +237,36 @@ export async function main(deploymentUrl = process.env.DATABASE_URL ?? ''): Prom
       failures.push(`A: the refused run still stamped ${afterMigrate.ledgerRows} ledger row(s)`);
     }
 
+    // ── A2. one stray fixture policy must not read as "the journal ran" ─────
+    // `tests/integration/superadmin-panel-sql.test.ts` enables RLS and installs a
+    // hand-typed policy on `activities` to prove an RLS behaviour, and leaves it
+    // (#2455). A classifier keyed on bare `pg_policy` presence would flip this
+    // pushed schema to "dump-restored" and stamp 122 entries over zero
+    // protection — the exact failure #2450 exists to close, re-opened by a test.
+    await withMaintenance(swapDatabase(deploymentUrl, pushDb), async (client) => {
+      await client.query(`ALTER TABLE activities ENABLE ROW LEVEL SECURITY`);
+      await client.query(`
+        DO $$
+        BEGIN
+          IF NOT EXISTS (SELECT 1 FROM pg_policy WHERE polrelid = 'activities'::regclass) THEN
+            CREATE POLICY "tenant_isolation" ON "activities" FOR ALL
+              USING (tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::uuid);
+          END IF;
+        END $$;
+      `);
+    });
+    const polluted = await readCounts(swapDatabase(deploymentUrl, pushDb));
+    const migratePolluted = run('npx', ['tsx', 'scripts/migrate.ts', '--yes'], {
+      DATABASE_URL: swapDatabase(deploymentUrl, pushDb), DATABASE_SSL: 'false',
+    });
+    step('A2: a lone fixture policy still refuses a pushed schema', checkCoherentRefusal(migratePolluted),
+      `policies=${polluted.policies}, RLS on ${polluted.rlsEnabledTables}/${polluted.tables} tables, rc=${migratePolluted.rc}`);
+    const afterPolluted = await readCounts(swapDatabase(deploymentUrl, pushDb));
+    if (afterPolluted.ledgerRows !== 0) {
+      failures.push(`A2: the run stamped ${afterPolluted.ledgerRows} ledger row(s) over a schema with `
+        + `${polluted.policies} policy(ies) on ${polluted.rlsEnabledTables} of ${polluted.tables} tables`);
+    }
+
     // ── C. db:bootstrap must refuse that same schema, not reconcile it ─────
     const bootstrapOnPush = run('npx', ['tsx', 'scripts/migrate.ts', '--bootstrap', '--yes'], {
       DATABASE_URL: swapDatabase(deploymentUrl, pushDb), DATABASE_SSL: 'false',

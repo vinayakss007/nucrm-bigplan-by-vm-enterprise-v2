@@ -119,8 +119,10 @@ kept unedited rather than rewritten because the reasoning still stands:
   stamps the journal and executes nothing."_ They do not collapse. A pushed
   schema has **zero RLS policies and zero journal-written SQL functions**, so
   stamping it labels an unprotected database as migrated. `scripts/migrate-recovery.ts`
-  now classifies the schema by `pg_policy` and **refuses to stamp a pushed one**,
-  naming `npm run db:bootstrap` as the way out.
+  now classifies the schema by RLS coverage over `pg_policy` and **refuses to
+  stamp a pushed one** — coverage rather than bare policy presence, because a
+  test fixture can leave one policy behind on an otherwise unprotected schema
+  (#2455) — naming `npm run db:bootstrap` as the way out.
 - _"Until this lands, a from-scratch build must use `db:sync`."_ It must not.
   `db:sync` produces a tables-only fixture; `npm run db:bootstrap` (an empty
   database, the whole journal replayed, the ledger stamped, then RLS coverage and

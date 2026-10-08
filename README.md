@@ -37,9 +37,10 @@ npm run dev                  # Start at localhost:3000
 >
 > **`db:sync` is not an install path, and `db:migrate` now says so** (#2450). `drizzle-kit push`
 > creates tables and columns only — no RLS policy, no SQL function, no hand-written index — so a
-> pushed schema has **zero row-level security**. `db:migrate` detects that shape (`pg_policy` empty)
-> and refuses before stamping, instead of stamping the ledger and failing three lines later. To build
-> a database from scratch, point `DATABASE_URL` at an **empty** database and run:
+> pushed schema has **zero row-level security**. `db:migrate` detects that shape — RLS is missing
+> across the schema, not merely a policy or two left behind by a test fixture — and refuses before
+> stamping, instead of stamping the ledger and failing three lines later. To build a
+> database from scratch, point `DATABASE_URL` at an **empty** database and run:
 >
 > ```bash
 > npm run db:bootstrap   # replays the journal, stamps the ledger, then verifies RLS by query

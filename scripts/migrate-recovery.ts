@@ -91,12 +91,24 @@ export type ProvisioningKind = 'push' | 'dump';
  * Was this schema built by `drizzle-kit push`, or is it a dump of a database
  * that ran the journal? `pg_policy` is the tell: RLS policies exist only
  * because hand-written migration files create them (32 files, 192 CREATE
- * POLICY statements), and push has no notion of them. A schema with no
- * policies has therefore never executed the journal, whatever its tables
- * look like — and stamping it would label an unprotected database migrated.
+ * POLICY statements), and push has no notion of them — and stamping a schema
+ * that never executed the journal would label an unprotected database migrated.
+ *
+ * The bare count is not enough, though, because a policy is not proof on its
+ * own: `tests/integration/superadmin-panel-sql.test.ts` enables RLS and installs
+ * one hand-typed policy on `activities` to prove an RLS behaviour, and never
+ * restores the set it dropped. So a *pushed* schema that has run the integration
+ * suite holds exactly one policy over one RLS-enabled table with every object
+ * the journal contributes still missing (#2455). What says the journal ran is
+ * that RLS covers the schema, not that a policy exists somewhere: measured on
+ * databases that executed the journal, 225 of 227 tables wear it (production,
+ * and a CI schema built by `apply-rls-ci`); a pushed schema is 0 of 227.
  */
+export const MIN_RLS_TABLE_RATIO = 0.5;
+
 export function classifyProvisioning(shape: ProvisioningShape): ProvisioningKind {
-  return shape.policies === 0 ? 'push' : 'dump';
+  if (shape.tables === 0 || shape.policies === 0) return 'push';
+  return shape.rlsEnabledTables / shape.tables >= MIN_RLS_TABLE_RATIO ? 'dump' : 'push';
 }
 
 const ID = '("[a-zA-Z_][\\w$]*"|[a-zA-Z_][\\w$]*)';
@@ -404,9 +416,10 @@ export async function runRecoveryStamp(opts: {
     // and leaves the database labelled as neither migrated nor unmigrated.
     fail([
       '[migrate] ERROR: this schema was built by `drizzle-kit push` (db:push/db:sync), not by these migrations.',
-      `[migrate] Evidence: pg_policy holds ${shape.policies} rows and ${shape.rlsEnabledTables} tables have` +
-      ' row-level security enabled. Push creates tables and columns from' +
-      ' drizzle/schema/* only, so every RLS policy, SQL function and' +
+      `[migrate] Evidence: pg_policy holds ${shape.policies} row(s) and RLS is enabled on` +
+      ` ${shape.rlsEnabledTables} of ${shape.tables} tables — a schema whose journal ever ran` +
+      ' wears it on nearly all of them (measured: 225 of 227). Push creates tables and' +
+      ' columns from drizzle/schema/* only, so every RLS policy, SQL function and' +
       ' hand-written index the journal contributes is absent here — while the' +
       ' markers this branch matches on are all present.',
       '[migrate] Stamping would label an UNPROTECTED database as fully migrated; and',
@@ -423,7 +436,7 @@ export async function runRecoveryStamp(opts: {
     ]);
   }
 
-  log('[migrate] Dump-restored schema (RLS policies present). Stamping the journal');
+  log(`[migrate] Journal-shaped schema (RLS on ${shape.rlsEnabledTables} of ${shape.tables} tables). Stamping the journal`);
   log(`[migrate] as applied rather than replaying it over live tables. Seeding ${journalEntries.length} entries...`);
 
   for (const entry of journalEntries) {

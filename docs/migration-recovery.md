@@ -13,12 +13,15 @@ ledger is empty **and** the journal has entries, migrate decides between:
 1. **Fresh DB** — no app schema present → run every migration for real.
 2. **Recovery (stamp)** — schema present, both markers exist
    (early marker: table `api_key_usage`; late marker: column
-   `backup_records.last_verified_at`) **and `pg_policy` has rows**, which is
+   `backup_records.last_verified_at`) **and RLS covers the schema**, which is
    how a dump-restored database is told apart from a `db:push`/`db:sync` one
-   (#2450). Stamp all journal entries instead of replaying DDL over live
-   tables.
-3. **Push-provisioned (refuse before stamping, #2450)** — markers match but
-   `pg_policy` is empty. `drizzle-kit push` creates tables and columns only,
+   (#2450). A journal-migrated schema wears RLS on nearly every table (measured
+   225 of 227); a lone stray policy — an integration suite installs one on
+   `activities` to prove an RLS behaviour (#2455) — is not coverage. Stamp all
+   journal entries instead of replaying DDL over live tables.
+3. **Push-provisioned (refuse before stamping, #2450)** — markers match but the
+   schema has no RLS across it (`scripts/migrate-recovery.ts`,
+   `classifyProvisioning`). `drizzle-kit push` creates tables and columns only,
    so this schema has no RLS policy and no SQL function: the journal never ran
    here. Stamping would label an unprotected database as migrated, so migrate
    exits 1 naming the missing object classes and `npm run db:bootstrap`, and

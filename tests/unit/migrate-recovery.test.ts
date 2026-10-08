@@ -210,9 +210,22 @@ describe('classifyProvisioning (#2450 AC3)', () => {
     expect(classifyProvisioning(shape({ policies: 0, rlsEnabledTables: 0, tables: 227 }))).toBe('push');
   });
 
-  it('calls a schema that carries policies dump-restored', () => {
+  it('calls a schema that carries policies over its tables dump-restored', () => {
     expect(classifyProvisioning(shape({ policies: 269 }))).toBe('dump');
-    expect(classifyProvisioning(shape({ policies: 1 }))).toBe('dump');
+    // A restore from a snapshot taken mid-chain still wears RLS across the
+    // schema, so it keeps the stamp path (and the runbook) rather than a refuse.
+    expect(classifyProvisioning(shape({ policies: 80, rlsEnabledTables: 140, tables: 227 }))).toBe('dump');
+  });
+
+  it('is not fooled by a lone fixture policy on a pushed schema (#2455)', () => {
+    // `tests/integration/superadmin-panel-sql.test.ts` enables RLS and installs
+    // one hand-typed policy on `activities`, and leaves it there. Bare presence
+    // would read that as a dump and stamp 122 entries over an unprotected schema.
+    expect(classifyProvisioning(shape({ policies: 1, rlsEnabledTables: 1, tables: 227 }))).toBe('push');
+  });
+
+  it('calls an empty schema push-provisioned rather than dividing by zero', () => {
+    expect(classifyProvisioning(shape({ policies: 0, rlsEnabledTables: 0, tables: 0 }))).toBe('push');
   });
 });
 
@@ -325,7 +338,7 @@ describe('runRecoveryStamp', () => {
     stubRoutes.length = 0;
     stubRoutes.push(
       ['api_key_usage', [{ api_key_usage: true, last_marker: true }]],
-      ['AS tables', [{ tables: '1', columns: '1', functions: '0', policies: '269', rls_enabled_tables: '226' }]],
+      ['AS tables', [{ tables: '226', columns: '3231', functions: '100', policies: '269', rls_enabled_tables: '226' }]],
       ['FROM pg_tables WHERE schemaname', [{ tablename: 'contacts' }]],
       ['information_schema.columns WHERE table_schema', [{ table_name: 'contacts', column_name: 'id' }]],
       ['FROM pg_proc p', [{ proname: 'some_fn' }]],
@@ -352,7 +365,7 @@ describe('runRecoveryStamp', () => {
     // policy count is now part of that evidence (#2450 ask 3).
     expect(logs.join('\n')).toContain('Markers matched: table "api_key_usage"');
     expect(logs.join('\n')).toContain('269 RLS policies over 226 RLS-enabled tables');
-    expect(logs.join('\n')).toContain('Dump-restored schema');
+    expect(logs.join('\n')).toContain('Journal-shaped schema');
   });
 
   it('#2450: refuses a push-provisioned schema BEFORE stamping anything', async () => {
@@ -382,7 +395,8 @@ describe('runRecoveryStamp', () => {
     // The refusal names the shape, the object classes it is missing, and the
     // command that completes — which is what #2450 asked the error to do.
     expect(joined).toContain('drizzle-kit push');
-    expect(joined).toContain('pg_policy holds 0 rows');
+    expect(joined).toContain('pg_policy holds 0 row(s)');
+    expect(joined).toContain('RLS is enabled on 0 of 227 tables');
     expect(joined).toContain('RLS policy, SQL function');
     expect(joined).toContain('npm run db:bootstrap');
     // And it must refuse WITHOUT stamping: the failure mode was stamp 122,
@@ -397,7 +411,7 @@ describe('runRecoveryStamp', () => {
     stubRoutes.length = 0;
     stubRoutes.push(
       ['api_key_usage', [{ api_key_usage: true, last_marker: true }]],
-      ['AS tables', [{ tables: '9', columns: '9', functions: '0', policies: '269', rls_enabled_tables: '226' }]],
+      ['AS tables', [{ tables: '226', columns: '3231', functions: '100', policies: '269', rls_enabled_tables: '226' }]],
       ['FROM pg_tables WHERE schemaname', [{ tablename: 'contacts' }]],
       ['information_schema.columns WHERE table_schema', [{ table_name: 'contacts', column_name: 'id' }]],
       ['FROM pg_proc p', []],
