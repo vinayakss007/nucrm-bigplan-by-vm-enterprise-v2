@@ -83,7 +83,7 @@ Severity: **S1** blocks go-live · **S2** broken feature or security weakness ·
 | PP-055 | S2  | Backup + restore            | The pre-restore wipe deletes **six tables the import allowlist refuses to re-insert**, so `POST /api/admin/tenant-restore` deletes a tenant's rows, hits `Table 'pipelines' is not allowed for import`, and rolls the whole restore back — permanently, for 177 of 183 tenants                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | 🔧 FIXED (wipe-side), PR **#2354** · the two divergent allowlists stay an owner decision (#79, #90)                                                                                                     |
 | PP-056 | S3  | Host / tooling              | `/tmp` is a **3.9 GB tmpfs** and vitest leaves a ~22 MB temp dir on **every** run: 88 of them held **1.9 GB**, which filled it. `npx vitest run` then exited **1 with no `Test Files`/`Tests` summary at all** — a scratch-space outage is indistinguishable from a red suite. Sweeping the suite after fixing it found **three assertions that only pass when `.env.local` is absent** (2 × CSRF + rate-limit) — and a fourth that turned out to be a **stale-clone-base artifact**, which is its own harness lesson                                                                                                                                                                                                                                                                                                                                                                                                                          | 🔧 MITIGATED (1.5 GB of stale clones moved off tmpfs, `TMPDIR` pinned to the root fs) · CSRF pair in PR **#2359**, rate-limit + this entry in **#2365** · four exits, all owner's call                  |
 | PP-057 | S2  | Migrations + tooling        | The repo has exactly one "what is applied?" command and it cannot see the ledger: `db:status` queries `__drizzle_migrations(name, applied_at)` — no such table, no such columns — and maps **any** failure to "history table does not exist", so against preprod it printed **`Applied: 0 / Pending: <every journal entry>`** on a database with **99 applied and 18 outstanding**. `db:migrate --dry-run` compounds it: its first line counts journal entries (**`116 pending migration(s)`**) before reading anything, and that number is what the y/N apply prompt offers. Nothing in CI or the runbooks would ever have revealed the 18-behind state, which includes `0091` (the usage-snapshot bypass **#56** shipped), `0059` (**#74**'s still-unstamped entry) and now `0116` (**#2367**, merged while this PR was open)                                                                                                                | 🔧 SCRIPTS FIXED in this PR (verified 99/18 against two instruments) · applying the 18 is an **owner decision** · also measured: `0115`'s absence is **not** a live cross-tenant read                   |
-| PP-058 | S2  | Migrations + tooling        | `db:migrate` connects as the tables' **owner** (`nucrm`) with `FORCE ROW LEVEL SECURITY` active on 48 of the 49 tables the pending set names, and `scripts/migrate.ts:184` sets **no tenant GUC** — so every data-correcting statement in a migration matches **0 rows** and silently corrects nothing, while the DDL built on top of it (`CREATE UNIQUE INDEX`, `SET NOT NULL`) reads the whole heap regardless. Measured on preprod: `0114_leads_tenant_oid_unique` (pending) dedupes `(tenant_id, lead_oid)` before creating the unique index, but its own CTE sees 0 of 25 leads while the truth is **1 duplicate group / 5 rows / 4 losers** (all five soft-deleted, all nine days older than the header's own "measured 0"), so the pending 21-entry run **aborts on 23505** — the exact failure its header says the dedupe exists to prevent                                                                                            | 🚨 OPEN · owner decision · no historical damage demonstrated · `0109` already proves the fix is one `set_config` line                                                                                   |
+| PP-058 | S2  | Migrations + tooling        | `db:migrate` connects as the tables' **owner** (`nucrm`) with `FORCE ROW LEVEL SECURITY` active on 48 of the 49 tables the pending set names, and `scripts/migrate.ts:198` sets **no tenant GUC** — so every data-correcting statement in a migration matches **0 rows** and silently corrects nothing, while the DDL built on top of it (`CREATE UNIQUE INDEX`, `SET NOT NULL`) reads the whole heap regardless. Measured on preprod: `0114_leads_tenant_oid_unique` (pending) dedupes `(tenant_id, lead_oid)` before creating the unique index, but its own CTE sees 0 of 25 leads while the truth is **1 duplicate group / 5 rows / 4 losers** (all five soft-deleted, all nine days older than the header's own "measured 0"), so the pending 21-entry run **aborts on 23505** — the exact failure its header says the dedupe exists to prevent                                                                                            | 🚨 OPEN · owner decision · no historical damage demonstrated · `0109` already proves the fix is one `set_config` line                                                                                   |
 | PP-059 | S2  | CHECK vs code               | `guard:vocab` — the only command in the repo that asks the **live database** what it will reject — exits **1** on `main` — measured at `38ae90e2`, re-measured at `f3787f32` — with **2 of 9** constraints disagreeing: `chk_sequence_enrollments_status` (5 values) refuses `'cancelled'`, which `/api/unsubscribe` has written since the repo's first commit `ecbba74e`, and `chk_invoices_status` (8 values) refuses `'void'`, which `INVOICE_STATUSES` offers and `PATCH /api/tenant/invoices/[id]` passes through. Its own fixes, `0120` and `0112`, are two of the **23** entries PP-057 says nobody has agreed to apply (the count was **22** when this row was written; `0121` landed since) — and it is the **only one of the 19 `guard:*` scripts no automation invokes**: workflows call 16 by alias and 2 by direct `node` command (`ci.yml:215`, `:248`), while `grep -rn check-constraint-vocab .github/workflows` returns **0** | 🚨 OPEN · guard wired nowhere · latent **on this DB** (both tables hold 0 rows, measured `--superadmin`) · CI green proves only that the `.sql` text says the right thing                               |
 | PP-060 | S2  | Deploy                      | The 23-entry backlog has **no automated apply path that could reach this database**: the only executable migrate in the repo's automation is `deploy.yml:281` (`scripts/deploy-migrate.ts --yes`, which spawns `migrate.ts --yes` at `:96`), inside the single `script:` block opened at `:77` — so it runs over SSH on the **pm2 production VM**, not on this Docker preprod host. That hop has failed every run since the last success (`30748691555`, 2026-08-02T12:51:06Z): **741 runs · 0 success** (639 failure / 54 cancelled / 48 skipped), 15 of 15 sampled recent runs contain `dial tcp ***:22: i/o timeout`, and the retained total is **3 successes in 1,282 runs**. No workflow mentions `db:status` (grep: 0 hits in all 5), `ci.yml` and `backup-drill.yml` build their databases with `db:sync`, and this host has no deploy cron or timer                                                                                    | 🚨 OPEN · owner action (`gh secret set DEPLOY_HOST`, the remedy AGENTS.md already documents) · even a healthy deploy migrates a **different database**, so PP-057's exit (a) has no mechanism behind it |
 
@@ -1465,7 +1465,7 @@ inferred.
 - **They are applied in preprod.** `custom_entities` and `custom_entity_data` exist; `usage_snapshots`
   carries exactly one policy named `tenant_isolation`, which is what 0091's `DROP POLICY IF EXISTS` +
   `CREATE POLICY` produces. So preprod is _ahead_ of the journal, not behind it.
-- **Why that is dangerous and not a curiosity.** `scripts/migrate.ts:129` iterates `journal.entries`.
+- **Why that is dangerous and not a curiosity.** `scripts/migrate.ts:143` (re-pinned from `:129` on 2026-10-08 — **#2450** inserted lines above it here) iterates `journal.entries`.
   A migration with no journal entry is invisible to `npm run db:migrate` forever. Rebuild a database —
   new region, DR restore, a CI e2e schema — and `custom_entities`/`custom_entity_data` are never created
   and the `usage_snapshots` super-admin bypass is never installed. The second one is the exact failure
@@ -2809,7 +2809,7 @@ not exist`**, while `drizzle.__drizzle_migrations` → **99 rows**. The read sit
     `journalEntryCount` and every string that called it "pending" now says what it is
     (`117 journal entr(ies); the ledger decides which are outstanding`), including both confirm prompts.
     Scope stated honestly: on the unusable host URL the run dies **earlier** than this catch — at
-    `[migrate] Connecting to database…` / the advisory-lock `pool.connect()` (`migrate.ts:201`), which
+    `[migrate] Connecting to database…` / the advisory-lock `pool.connect()` (`migrate.ts:215`, re-pinned from `:201` on 2026-10-08 — **#2450** inserted lines above it here), which
     exited 1 with the real `pg_hba` message before this change too. What the narrowing closes is the
     quieter case: connection succeeds, the `SELECT` on the ledger fails (permission, timeout, wrong
     search_path), and the old handler answered "everything is pending". There is no read-only way to
@@ -2913,9 +2913,9 @@ Pending: 22 · Total: 121 journal entr(ies)`, exit 0, and the `Invisible:` secti
   `drizzle.__drizzle_migrations` counts + newest `created_at`, `42P01` on `public.__drizzle_migrations`,
   `_journal.json` (116 entries on `673eecf2`, 117 on `310129bf`) vs `git ls-tree origin/main:drizzle/migrations`
   (matching `.sql` file counts, 0 unjournalised on both),
-  `scripts/migration-status.ts` (old query + catch), `scripts/migrate.ts:118-128` (journal-count headline),
-  `:163-172` (prompts), `:219-226` (the `catch` that meant "fresh DB"), `:201` (where the host URL actually
-  dies), `lib/db/ssl-config.ts:33-41`,
+  `scripts/migration-status.ts` (old query + catch), `scripts/migrate.ts:132-142` (journal-count headline),
+  `:177-186` (prompts), `:233-279` (the `catch` that meant "fresh DB"), `:215` (where the host URL actually
+  dies — these four re-pinned on 2026-10-08 from line 118, 163, 219 and 201, which **#2450** moved), `lib/db/ssl-config.ts:33-41`,
   `scripts/lib/readonly-db.mts:120-133`, `lib/db/pool.ts:174-182`, `pg_class`
   `relrowsecurity/relforcerowsecurity/relowner` for 4 tables, `pg_get_viewdef('deals_by_win_probability')`,
   `pg_roles.rolbypassrls`. Related: **#43** (the same drift, 11 deep in September), **#46**, **#56**,
@@ -2931,7 +2931,7 @@ Pending: 22 · Total: 121 journal entr(ies)`, exit 0, and the `Invisible:` secti
   no-op on live data (measured 2026-10-04: `lead_oid_dup_groups = 0`) but written, not assumed — `CREATE UNIQUE
 INDEX` would otherwise abort the whole run" — and that measurement is not reproducible in the context the
   runner uses.
-- **Mechanism.** `scripts/migrate.ts:184-185` builds a plain `new Pool({ connectionString })`. It contains no
+- **Mechanism.** `scripts/migrate.ts:198-199` (re-pinned from `:184-185` on 2026-10-08, **#2450**) builds a plain `new Pool({ connectionString })`. It contains no
   `set_config` and no `current_setting` anywhere (grep: 0 hits). Posture, measured from `pg_class`/`pg_roles`:
   the app role is `nucrm`, `rolsuper=false`, `rolbypassrls=false`, and it is `relowner` of `leads`, `invoices`
   and `webhook_events` — table owners **bypass RLS unless `FORCE ROW LEVEL SECURITY` is set**, and on these
@@ -2963,8 +2963,8 @@ INDEX` would otherwise abort the whole run" — and that measurement is not repr
   therefore either taken against a different database or taken in the same blind context the migration itself
   will run in; on this database it does not reproduce. Two consequences the header does not state: the dedupe
   is not "expected to be a no-op", it is a **4-row mutation of historical (trashed) records** that will execute
-  as 0 rows; and `0114:63` then raises 23505. Preprod's ledger holds 99 rows, so `migrate.ts:376` takes the
-  **incremental** path (`drizzle`'s built-in migrator, `:476`), which wraps each file in one transaction and
+  as 0 rows; and `0114:63` then raises 23505. Preprod's ledger holds 99 rows, so `migrate.ts:429` (re-pinned from `:376` on 2026-10-08, **#2450**) takes the
+  **incremental** path (`drizzle`'s built-in migrator, now at line 559), which wraps each file in one transaction and
   stops on the first error: the `DROP INDEX` at `:61` rolls back with it, and the run aborts. **The ledger
   cannot be advanced past 0113 without changing something.**
 
@@ -3035,10 +3035,28 @@ portal_token`, `0037`'s five backfills) ran blind **and were rescued by the loud
   `0107` NULL-tenant counts, all under `--superadmin` so a 0 cannot be RLS masquerading as emptiness — the
   standing lesson of **#51**, **#78** and **PP-048**. `grep -c set_config` over `drizzle/migrations/*.sql` →
   exactly one file. `npm run db:status` on this tree → `Applied: 99 / Pending: 21 / Total: 120`, `0114` pending.
-- **Files:** none changed — this entry only. Evidence read: `scripts/migrate.ts:27,184-185,349-376,476`,
+- **Files:** none changed — this entry only. Evidence read: `scripts/migrate.ts:29,198-199,402-429,559` (re-pinned on 2026-10-08 from line 27, 184-185, 349-376 and 476, which **#2450** moved),
   `drizzle/migrations/0114_leads_tenant_oid_unique.sql`, `0113`, `0111`, `0109`, `0108`, `0107`,
   `0067_ticket_portal_token.sql`, `0037_tenant_isolation_hardening.sql`, `lib/db/ssl-config.ts`,
   `scripts/lib/readonly-db.mts:120-133`, `lib/db/pool.ts:233`, `pg_class`, `pg_policy`, `pg_roles`.
+  <!-- coordinate corrections for #2456 (2026-10-08): seven sentences in this register — four in PP-058
+       (this section's three, plus its row in the Summary table above), two in PP-057, one in PP-041 — cited
+       lines of scripts/migrate.ts that still hold exactly the construct named, but sit below the lines
+       #2450 inserted into that file's main().
+       Each one therefore resolved to a non-blank, in-range, WRONG line: guard:register-drift sees that,
+       guard:coords does not. Every target was re-read in the current file rather than translated, because the
+       shift is piecewise — plus 2 from line 10, plus 6 from 41, plus 14 from 67, plus 53 from 221 through 395,
+       plus 50 across 396-472, plus 83 from 473. Pool construction 184 to 198, journal loop 129 to 143 (PP-032's correction moved it 210 to 129), the
+       headline range 118-128 to 132-142, prompts 163-172 to 177-186, the dry-run head 219-226 to 233-279, the
+       advisory-lock connect 201 to 215, the branch selector 376 to 429, the migrator call 476 to 559, the
+       header read-log 27 to 29 and 349-376 to 402-429. Two of those deserve a word. The 219-226 range
+       straddles the --bootstrap precondition block #2450 added, so its endpoints now bracket 46 lines that
+       were not part of the read; it is kept as an endpoint-to-endpoint translation because endpoints are what
+       the sentence names. PP-058's Summary row is re-pinned to 198 with no note in the cell: that table is
+       hand-padded to a fixed column width, and a three-digit-for-three-digit swap is the only edit that keeps
+       its pipes aligned, so the superseded number lives here instead. The six allowlist entries these replace
+       are deleted; the two app/api/cron read-logs stay, for the reason #2441 recorded — they list ranges
+       somebody read, not constructs a pointer claims to find. -->
   Related: **PP-057** (the instrument that finally showed the pending set), **#51**/**#52**/**#45** (RLS-blind
   cron jobs — same class, fixed there with `withSecurityContext`, never applied to the runner), **#78** (panel
   reads 0 of 132), **#7**/**#90** (the super-admin policy escape this would otherwise reintroduce), **#69**
