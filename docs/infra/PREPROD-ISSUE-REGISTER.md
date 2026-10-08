@@ -880,6 +880,47 @@ running=120s` with exit 1 and the `--force-recreate app` command to fix it.
      claim about them, and every token in this file is one of the things the guard resolves — 216 at the base, 217
      here, and a denominator that quietly grew by 12 while this comment was being written is a denominator nobody is
      reading.
+     A third round, found by re-running the screen at push time and caused entirely by this branch sitting open:
+     #2434 added three lines to lib/auth/middleware.ts (one import, then a two-line API-key quota check) and eight
+     to its test file. At that base the screen reports 25 moved where this correction started from 19, and the six
+     new ones are all the same shift — PP-047's lastTenantId read 374 → 377, `can()`'s short-circuit 430 → 433, the
+     noWorkspace computation 379 → 382, the pinned-behaviour test range 542-551 → 550-559, and PP-048's two
+     cached-context proofs 294 → 297. Three of those sentences also carry bare `:N` continuations, which the screen
+     cannot see at any base: 434/441/451 went to 437/444/454, and the 388 that sits beside the 294 went to 391 in
+     both places that pair them. Those four numbers moved by hand, by the same three lines, after reading the
+     functions they name.
+     This is the second time in one correction that a coordinate was verified correct while the branch was being
+     written and stale by the time it could merge — the seventeenth came from #2431 the same way. It is the reason
+     "17" is a measurement and not a total: whatever lands between this push and the merge moves these again, and
+     only re-running the screen against the base catches it.
+     It has moved twice since, and the cause is that this correction is still a branch. #2433 squash-merged with the
+     seventeen above and nothing else, so the six from the third round are still drift on main and travel to this
+     branch as a cherry-pick. Then #2436 added a four-line comment block to two files whose pointers sit below the
+     insertion — the pre-prod compose (above line 139) and the deploy workflow (above line 76) — and that is the
+     fourth round, two more pointers: the compose's pool-size default, 152 → 156, in PP-050's capacity sentence, and
+     the deploy workflow's migrate call, 277 → 281, in PP-058's "no CI path can validate any of the exits". Neither
+     is visible to the guard: the stale compose pointer lands on a TRUST_PROXY line, the stale workflow pointer on a
+     rollback comment, each non-blank and in range. Four rounds now, and the liveness check saw 1 of the first
+     seventeen and none of the other eight — the one it caught was the pointer that landed on whitespace, which is
+     the narrow class. Its line on main, "211/216 citations resolve", exit 0, is the identical line it prints on this
+     branch; the only difference between the two registers is that eight of main's pointers describe the step above
+     or below the one their sentence names.
+     Screen at each state, same script, same definition of "moved" (the content of the cited line differs from the
+     content at the revision that wrote the register line): at main's c6efdac3 — 216 instances, 201 identical, 10
+     moved, 5 paths unmatchable; with all eight re-pins on this branch — 216 instances, 209 identical, 2 moved, the
+     same 5 unmatchable. Both survivors are read-logs, named below, so the moved set is now exactly the set this
+     correction intends to leave alone. Ten of this branch's 209 are identical by construction — blame reads this
+     branch's own commits as the revision that wrote the line, so the screen compares a coordinate with itself — and
+     the figure that means something is the other 199: coordinates that have not moved since some commit that is not
+     this correction wrote them. The bare tails in PP-050's compose file list (144 and 152, which #2436 pushed
+     to 148 and 156) are not in the moved set and are not corrected: the screen cannot see a tail with no path in
+     front of it, and the list is a read-log, so this sentence records it instead of editing it.
+     The dated comments earlier in this file quote their own revisions — two of them put the deploy migrate call at
+     line 277 — and each names the revision it was measured at, so they are a record rather than a claim about the
+     current tree and are left exactly as written. The three ci.yml coordinates #2427 re-pinned were re-checked rather
+     than trusted, because one more commit has added twelve lines to that workflow since they were measured (and this
+     branch has sat open twice): db:sync is still at line 161, the apply-rls step still spans 165 to 168 with its run
+     at 166, and the superuser URL default is still at line 11.
      NOT re-pinned, deliberately: the two read-log lists — PP-055's auto-backup line set (55, 147, 243, 256-257, 297)
      and PP-051's process-sequences ranges (33-64, 70-108, 118, 285). Those numbers record ranges somebody read, not
      pointers to constructs; re-pinning them would invent an intent the entry never stated. They have moved with the
@@ -1750,7 +1791,7 @@ NOW() - interval '30 days'`, each followed by `v_count := v_count + 1`, and `RET
   status. Without the GUC the same query returns 0 rows — `users` is `relrowsecurity=t` **and**
   `relforcerowsecurity=t`, so the app role reads nothing by default.
 - **Stale part of the original report.** `default_tenant_id` is NULL but **irrelevant**: `requireAuth` reads only
-  `users.lastTenantId` (`lib/auth/middleware.ts:374`); `defaultTenantId` appears nowhere in auth code — grepping it
+  `users.lastTenantId` (`lib/auth/middleware.ts:377`); `defaultTenantId` appears nowhere in auth code — grepping it
   returns `drizzle/schema/core.ts:76`, `scripts/seed-dev.ts`, and a read-only projection at
   `app/api/superadmin/users/[id]/route.ts:48`.
 - **No platform workspace exists.** `select count(*), count(*) filter (where status='active') from tenants` →
@@ -1774,8 +1815,8 @@ NOW() - interval '30 days'`, each followed by `v_count := v_count + 1`, and `RET
   (`app/api/tenant/api-keys/route.ts:91` → `generateApiKey(ctx.tenantId, …)` → `lib/auth/api-key.ts:178`), so
   120 is a **lower bound**, not a ceiling.
 - **Nothing 403s first — the opposite of the assumption.** `can()` short-circuits for platform accounts
-  (`lib/auth/middleware.ts:430`), and `requirePerm`/`requireModule`/`requireFeature` all return null for super
-  admins (`:434`, `:441`, `:451`). Of the 120 insert routes, **0** carry a workspace guard.
+  (`lib/auth/middleware.ts:433`), and `requirePerm`/`requireModule`/`requireFeature` all return null for super
+  admins (`:437`, `:444`, `:454`). Of the 120 insert routes, **0** carry a workspace guard.
 - **The per-tenant super-admin panel is unaffected — the useful distinction.** Of **52** route files under
   `app/api/superadmin/**`, **0** write `ctx.tenantId` into a tenant column; they take the target tenant from the
   request (`tenant_id` from body/query at 12 sites), e.g. `app/superadmin/tenants/[id]/settings/page.tsx:85`.
@@ -1794,10 +1835,10 @@ NOW() - interval '30 days'`, each followed by `v_count := v_count + 1`, and `RET
   deliberate; writes failing is the unintended half. Existing special-cases: `lib/usage/middleware.ts:43`,
   `app/api/tenant/services/route.ts:24` (403 + `code: 'SUPERADMIN_NO_TENANT'` — **GET only**; the POST at `:59` has
   no guard), `app/api/superadmin/join-tenant/route.ts:139`. Pinned as intended behaviour by
-  `tests/unit/auth-middleware-require-auth.test.ts:542-551`.
+  `tests/unit/auth-middleware-require-auth.test.ts:550-559`.
 - **Option (a) — up-front rejection, costed.** No shared choke point sees it: neither `lib/api-error.ts` nor
   `lib/api/with-api-route.ts` mentions `NO_TENANT_SENTINEL` or `noWorkspace`. `requireAuth` is where `noWorkspace`
-  is already computed (`lib/auth/middleware.ts:379`) but it cannot reject there — sentinel **reads** are what power
+  is already computed (`lib/auth/middleware.ts:382`) but it cannot reject there — sentinel **reads** are what power
   the console's empty `/api/tenant/*`-shaped states, and `join-tenant`'s own GET plus `usage` depend on the context
   existing; a blanket 403 would change behaviour for all 239 files, not the 120 that fail. The narrow version is a
   verb-scoped guard in `withApiRoute` (which already owns the request scope and the 23503 mapping) firing only for
@@ -1866,7 +1907,7 @@ from pg_policies where schemaname='public' and (qual like '%app.is_super_admin%'
 - **What the code does — the real question (can an HTTP caller reach a `SET`?) answers NO.** The app writes the GUC only as
   the literals `'true'`/`'false'` (`lib/db/rls.ts:169` `setSuperAdminContext`, `:217` `setImpersonationContext` — tx
   required; the only variable is `isLocal`, a compile-time fragment), and `'true'` is reached only after the **database**
-  proves `users.is_super_admin` (`lib/auth/middleware.ts:294` cached context, `:388` fresh read under a verified JWT).
+  proves `users.is_super_admin` (`lib/auth/middleware.ts:297` cached context, `:391` fresh read under a verified JWT).
   Reset to `'false'` runs on every checkout (`lib/db/pool.ts:233`, `lib/db/request-connection.ts:94`). No route splices
   request data into SQL: the template-literal sinks in `app/` are compile-time identifiers or regex-gated numerics
   (`app/api/cron/backup-verify/route.ts:234-236` gates `nucrm_verify_${Date.now()}` through `^[a-z0-9_]+$` before
@@ -1899,7 +1940,7 @@ from pg_policies where schemaname='public' and (qual like '%app.is_super_admin%'
 - **Verified:** this session's own output for every number — `nucrm|f|f|t|0`; `0|0`; `191`/`162`; `0`/`0` for `team_*`;
   `49|60`; `226|225|1` with `ai_providers` at 0 policies; and the fail-closed query still `0|0` after the bypass.
 - **Files (all read-only):** `lib/db/rls.ts:138,165-189,206-221`, `lib/db/pool.ts:233`,
-  `lib/db/request-connection.ts:88-94`, `lib/auth/middleware.ts:294,388`,
+  `lib/db/request-connection.ts:88-94`, `lib/auth/middleware.ts:297,391`,
   `drizzle/migrations/0088_rls_bootstrap_and_isolation.sql:344-360`, `drizzle/migrations/0099_api_keys_auth_lookup.sql`,
   `drizzle/migrations/0105_email_tracking_pixel_lookup.sql`, `app/api/cron/backup-verify/route.ts:234-236`,
   `deploy/docker-compose.preprod.yml`, `deploy/docker-compose.production.yml`.
@@ -2053,7 +2094,7 @@ connection setup (~400–600 ms) and bounds the 50-statement loop rather than pr
   duration as the only discriminator (a true leak repeats every 30 s forever; the worst observed run was **2** ticks, and
   `Total unreleased` peaked at `4`).
 - **The pin is not just noise — it is capacity.** `lib/db/pool.ts:183` passes `max: poolSize` and the running app container
-  carries `DATABASE_POOL_SIZE=10` (the compose default is 20 — `docker-compose.preprod.yml:152`, `pool.ts:168`), with `:190`
+  carries `DATABASE_POOL_SIZE=10` (the compose default is 20 — `docker-compose.preprod.yml:156`, `pool.ts:168`), with `:190`
   failing a checkout after 5 s (#2122). A sweep pins 1 of 10 for ~75 s, and the detector reported `Total unreleased: 4` in the
   same tick at the multi-job hours — **40 % of the app container's pool held by concurrent sweeps** while ordinary requests die
   at 5 s.
@@ -3004,7 +3045,7 @@ the first measurement.)_
   ledger** — and `:167-170` then applies RLS files through `scripts/apply-rls-ci.mjs` (`:168`) under
   `DATABASE_URL=postgresql://postgres:postgres@…` (also the workflow-level default at `:11`). RLS does not filter a superuser and no
   ledger means neither branch of `scripts/migrate.ts` is taken, so in the only context CI can reach, the blindness in this entry
-  cannot manifest. `scripts/migrate.ts` never runs in `ci.yml` at all: the only workflow that invokes it is `deploy.yml:277`, against
+  cannot manifest. `scripts/migrate.ts` never runs in `ci.yml` at all: the only workflow that invokes it is `deploy.yml:281`, against
   a live database — the runner is exercised by failing in preprod, never by a pre-merge check.
   <!-- coordinate corrections at 38ae90e2: before these corrections this paragraph pointed at ci.yml line 153
        and lines 157 to 160, and at deploy.yml line 298. #2404/#2405 shifted ci.yml by 3 lines (that 153 is now
