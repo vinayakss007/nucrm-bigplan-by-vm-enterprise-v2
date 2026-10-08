@@ -1,0 +1,50 @@
+{
+  "_comment": "Register pointers whose cited LINE CONTENT differs from the revision that wrote them, each with a written `reason` naming the PR that re-pins it. The screen FAILS on any drift not listed here and reports entries that no longer drift as STALE (non-failing, prune them). Regenerate preserving reasons: node scripts/check-register-drift.mjs --update. Seeded at c6efdac3 from the 10 pointers that screen measured; eight are re-pinned by open PR #2441 and two are owned by nobody yet — that is the honest starting state, and it shrinks as those PRs merge.",
+  "entries": [
+    {
+      "cite": "lib/auth/middleware.ts:294",
+      "regLines": [1869, 1902],
+      "reason": "PR #2441 re-pins both instances (the cached-session RLS grant moved when the super-admin branch was rewritten). Prune when #2441 merges."
+    },
+    {
+      "cite": "lib/auth/middleware.ts:374",
+      "regLines": [1753],
+      "reason": "PR #2441 re-pins it. Prune when #2441 merges."
+    },
+    {
+      "cite": "lib/auth/middleware.ts:379",
+      "regLines": [1800],
+      "reason": "PR #2441 re-pins it. Prune when #2441 merges."
+    },
+    {
+      "cite": "lib/auth/middleware.ts:430",
+      "regLines": [1777],
+      "reason": "PR #2441 re-pins it. Prune when #2441 merges."
+    },
+    {
+      "cite": "tests/unit/auth-middleware-require-auth.test.ts:542",
+      "regLines": [1797],
+      "reason": "PR #2441 re-pins it, together with the bare continuations at 434/441/451 that no citation regex sees. Prune when #2441 merges."
+    },
+    {
+      "cite": "docker-compose.preprod.yml:152",
+      "regLines": [2056],
+      "reason": "PR #2441 re-pins it to the pool-size default #2436 moved (152 -> 156). Prune when #2441 merges."
+    },
+    {
+      "cite": "deploy.yml:277",
+      "regLines": [3006],
+      "reason": "PR #2441 re-pins it to the migrate call #2436 moved (277 -> 281). Prune when #2441 merges."
+    },
+    {
+      "cite": "app/api/cron/process-sequences/route.ts:33",
+      "regLines": [2125],
+      "reason": "Unowned: no open PR re-pins it. The acquireLock call that sentence cites is no longer at line 33 (the route gained the sequence-lifecycle work), so the pointer reads live and says the wrong thing — exactly the failure guard:coords cannot see. The next register re-pin PR takes it."
+    },
+    {
+      "cite": "app/api/cron/auto-backup/route.ts:55",
+      "regLines": [2423],
+      "reason": "Unowned: no open PR re-pins it. Line 55 is now a closing brace where setSuperAdminContext() was written. Same class as the PP-058 deploy.yml:298 bug this whole series started from. The next register re-pin PR takes it."
+    }
+  ]
+}
