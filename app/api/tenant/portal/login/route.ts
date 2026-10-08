@@ -74,8 +74,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Portal not enabled' }, { status: 403 });
     }
 
+    // #2459: this table's row *is* a bearer credential — `access_token` is what
+    // the comparison below tests and what the session cookie below is built
+    // from. An unprojected .select() loaded the whole 10-column row (all of
+    // `portal_clients`, counted from the schema) into this handler on every
+    // anonymous login attempt, and nothing shipped only because the response
+    // object below hand-picks `id`/`name`/`email`: spread this row into that
+    // object and the token goes out with it. Same shape as #2440's create path,
+    // named for the same reason. Five of the ten are read here; the other five
+    // (tenantId, isActive, lastLoginAt, createdBy, createdAt) never leave the
+    // query.
     const [client] = await db
-      .select()
+      .select({
+        id: portalClients.id,
+        name: portalClients.name,
+        email: portalClients.email,
+        accessToken: portalClients.accessToken,
+        expiresAt: portalClients.expiresAt,
+      })
       .from(portalClients)
       .where(and(
         eq(portalClients.email, email),

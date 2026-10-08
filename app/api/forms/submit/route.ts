@@ -144,7 +144,13 @@ export async function POST(req: NextRequest) {
         // existence check and the insert below see a consistent snapshot and
         // concurrent submissions with the same email don't create duplicates.
         const existing = await tx.query.contacts.findFirst({
-          where: and(eq(contacts.tenantId, form.tenantId), eq(contacts.email, email), isNull(contacts.deletedAt))
+          where: and(eq(contacts.tenantId, form.tenantId), eq(contacts.email, email), isNull(contacts.deletedAt)),
+          // #2459: only these two are read below (`existing.id`, `existing.tags`).
+          // Without the projection this ran `SELECT *` over the 47 columns
+          // `drizzle/schema/crm.ts` declares for `contacts` — `ownerNotes` and
+          // `customFields` among them — inside a handler the edge lets through
+          // with no session at all (#2459).
+          columns: { id: true, tags: true },
         });
 
         if (existing) {
@@ -257,7 +263,21 @@ export async function POST(req: NextRequest) {
 
     // 6. Trigger Calculations & Automations
     if (contactId) {
-      // Recalculate formula fields for the contact
+      // Recalculate formula fields for the contact.
+      //
+      // #2459: WHOLE ROW BY DESIGN — do not "fix" this into a column projection.
+      // `fullContact` is not a candidate for a response (nothing in this handler
+      // serializes it); it is the *input* to a tenant-authored formula engine:
+      // syncCalculatedFields (lib/formula/sync.ts:18) takes `recordData:
+      // Record<string, unknown>` and at :43 evaluates every `custom_field_defs`
+      // row with is_calculated against it, referencing arbitrary contact columns
+      // by name. Narrowing this read does not throw and does not fail typecheck —
+      // `Record<string, unknown>` accepts any object — the engine just reads
+      // `undefined` for whatever was left out, `evaluate` returns null, the field
+      // is skipped, and this contact's stored calculated values quietly go stale.
+      // Silent data corruption, which is worse than the leak this rule exists to
+      // prevent. See #2459 for the inventory of the 33 anonymous-surface reads and
+      // why this one is the only exception.
       const fullContact = await db.query.contacts.findFirst({
         where: eq(contacts.id, contactId)
       });
