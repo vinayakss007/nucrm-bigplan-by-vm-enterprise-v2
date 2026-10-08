@@ -93,7 +93,11 @@ export async function GET(request: NextRequest) {
 /**
  * Public ticket creation — logged-in portal callers are identified by their
  * session (cookie/token); anonymous embeds must pass tenant_id in the body.
- * Returns the portal_token in the response so the client can use it for future access.
+ * The response is the new ticket only: it never carries `portal_token`, which
+ * is a bearer credential for the customer's ticket history (#2440). Portal
+ * access for a real customer comes from /api/tenant/portal/login (httpOnly
+ * session) or a `portal_clients` access token, both of which expire and can be
+ * deactivated.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -134,6 +138,10 @@ export async function POST(request: NextRequest) {
 
     const portalToken = generatePortalToken();
 
+    // #2440: name the returned columns instead of `.returning()`-ing the whole
+    // row. `portal_token` is the bearer credential the GET handlers accept, and
+    // an anonymous embed caller must not be issued one — the token stays in the
+    // database and never reaches this response.
     const [ticket] = await db.insert(supportTickets).values({
       tenantId: contact.tenantId,
       contactId: contact.id,
@@ -143,7 +151,14 @@ export async function POST(request: NextRequest) {
       priority,
       status: 'open',
       portalToken,
-    }).returning();
+    }).returning({
+      id: supportTickets.id,
+      subject: supportTickets.subject,
+      status: supportTickets.status,
+      priority: supportTickets.priority,
+      category: supportTickets.category,
+      createdAt: supportTickets.createdAt,
+    });
 
     return NextResponse.json({ data: ticket }, { status: 201 });
  
