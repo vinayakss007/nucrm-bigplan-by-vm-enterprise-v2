@@ -29,63 +29,63 @@ Severity: **S1** blocks go-live · **S2** broken feature or security weakness ·
 
 ## Summary
 
-| ID     | Sev | Area                        | Issue (one line)                                                                                                                                                                                                                                  | Status                                                                                          |
-| ------ | --- | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| PP-001 | S2  | Deploy                      | `nginx` reported `(unhealthy)` while serving 200s — probe hit IPv6 `::1`                                                                                                                                                                          | ✅ FIXED & VERIFIED                                                                             |
-| PP-002 | S2  | Deploy                      | `app` reported `(unhealthy)` for the same `localhost` → `::1` reason                                                                                                                                                                              | ✅ FIXED & VERIFIED                                                                             |
-| PP-003 | S1  | Setup                       | First-run setup form **always 403** — key sent in body, route reads header                                                                                                                                                                        | 🔧 FIXED IN TREE                                                                                |
-| PP-004 | S2  | Backups                     | Failed `pg_dump` left a partial dump that passes sanity checks                                                                                                                                                                                    | 🔧 FIXED IN TREE                                                                                |
-| PP-005 | S2  | Build                       | `NEXT_PUBLIC_APP_URL` hardcoded to `http://localhost:3000` in the image bundle                                                                                                                                                                    | ✅ FIXED & VERIFIED                                                                             |
-| PP-006 | S2  | Build                       | `next build` TypeScript step OOMs on Node's default heap                                                                                                                                                                                          | ✅ FIXED & VERIFIED                                                                             |
-| PP-007 | S1  | Build                       | `realtime.ts` (socket.io server) shipped in **no** image                                                                                                                                                                                          | ✅ FIXED & VERIFIED                                                                             |
-| PP-008 | S1  | Compose                     | Undeclared `alertmanagerdata` volume aborted the whole compose project                                                                                                                                                                            | ✅ FIXED & VERIFIED                                                                             |
-| PP-009 | S1  | Compose                     | `minio/minio:latest`, `minio/mc:latest`, `edoburu/pgbouncer:1.23` no longer resolve                                                                                                                                                               | ✅ FIXED & VERIFIED                                                                             |
-| PP-010 | S1  | RLS / Setup                 | **First super-admin insert is rejected by RLS** — even with a correct setup key                                                                                                                                                                   | 🔧 FIXED IN TREE                                                                                |
-| PP-011 | S1  | RLS / Signup                | **Public signup is rejected by RLS** (`users_insert_auth` unsatisfiable pre-auth)                                                                                                                                                                 | 🔧 FIXED IN TREE                                                                                |
-| PP-012 | S1  | RLS / Auth                  | `login_attempts` write+read blocked → brute-force lockout silently inert                                                                                                                                                                          | 🔧 FIXED IN TREE                                                                                |
-| PP-013 | S1  | RLS                         | Tenant-isolation gate FAILED — 5 RLS-disabled, 10 policy-less, 6 NULL-tenant leaky                                                                                                                                                                | ✅ FIXED & VERIFIED                                                                             |
-| PP-014 | S1  | Backups                     | `pg_dump` fails as the app role (`FORCE ROW LEVEL SECURITY` + `row_security=off`)                                                                                                                                                                 | 🚨 OPEN                                                                                         |
-| PP-015 | S1  | Backups                     | `BACKUP_DATABASE_URL` still points at the RLS-bound `nucrm` role                                                                                                                                                                                  | 🚨 OPEN                                                                                         |
-| PP-016 | S3  | Observability               | Sentry events carry no `release`; `environment` **is** set and ingest is verified working — see the 2026-10-04 addendum                                                                                                                           | 🔎 RE-MEASURED (release + API read scope open)                                                  |
-| PP-017 | S3  | Observability               | promtail `docker_sd_configs` unset → Loki gets no container logs                                                                                                                                                                                  | ⏸️ BLOCKED                                                                                      |
-| PP-018 | S2  | Storage                     | UpCloud Managed Object Storage `CreateBucket` → AccessDenied; buckets absent                                                                                                                                                                      | ⏸️ BLOCKED                                                                                      |
-| PP-019 | S2  | Integrations                | `RESEND_API_KEY`, `ANTHROPIC_API_KEY` missing → those features degrade silently                                                                                                                                                                   | ⏸️ BLOCKED                                                                                      |
-| PP-020 | S2  | Hardening                   | UFW + SSH hardening and `infra-readiness.sh` not yet applied                                                                                                                                                                                      | ⏸️ BLOCKED                                                                                      |
-| PP-021 | S3  | Performance                 | Sentry `NUCRM-1`: N+1 query on `GET /api/metrics` (12 events)                                                                                                                                                                                     | 📌 INFO                                                                                         |
-| PP-022 | S3  | RLS                         | `super_admin_audit_logs.tenant_id` is `text`, so the standard policy can't apply                                                                                                                                                                  | 📌 INFO                                                                                         |
-| PP-028 | S1  | Performance                 | Every DB statement costs a flat ~200 ms — attributed: one round trip to the public DB endpoint, server time is 0.012 ms                                                                                                                           | 🔬 MEASURED                                                                                     |
-| PP-029 | S2  | Deploy                      | Our SIGTERM handler exited before Next.js drained; `pool.end()` hung the stop 35.93 s                                                                                                                                                             | ✅ FIXED + live-verified                                                                        |
-| PP-030 | S1  | Scheduling                  | `acquireLock` fail-closed is indistinguishable from a held lock → 20 cron jobs report `ok:true` and do nothing when Redis isn't ready                                                                                                             | 🔬 MEASURED                                                                                     |
-| PP-031 | S2  | RLS + query                 | Super-admin Backups console returns nothing: swallowed `uuid = text` join, RLS-blind `backup_schedules` read and writes                                                                                                                           | ✅ FIXED + live-verified                                                                        |
-| PP-032 | S2  | Data model                  | Panel reads `backup_records` (4 failed rows), nightly job writes `tenant_backup_records` (144 rows) — two tables, no shared view                                                                                                                  | 🚨 OPEN (decision)                                                                              |
-| PP-033 | S1  | Deploy + obs                | BuildKit cache filled root to 84% with no bound; `docker system df` under-reports it and the 80% disk alert was never live                                                                                                                        | ✅ FIXED + live-verified                                                                        |
-| PP-034 | S1  | Observability               | Alertmanager has **never delivered an alert** — `host.docker.internal` does not resolve in its container and the receiver was never installed (~10.8k failed notifications, still counting)                                                       | 🔧 PARTIAL IN TREE (needs recreate + a real receiver)                                           |
-| PP-035 | S1  | Privacy                     | Sentry v11 `dataCollection` defaults to **collecting everything**, and `sentry.client.config.ts` (the only file with `scrubPii`) is not in the Turbopack browser bundle — so the browser has sent PII unscrubbed                                  | 🔧 FIXED IN TREE (not live until #84)                                                           |
-| PP-036 | S2  | Performance                 | Every sign-in paid ~830 ms to read one settings row — the IP allow-list gate is 4 statements at PP-028's flat 200 ms, and it runs for tenants that have no list                                                                                   | 🔧 FIXED IN TREE (not live until #84)                                                           |
-| PP-037 | S2  | Performance                 | Sign-in asked "are you blocked?" **twice**, in two security contexts — 8 statements, live-measured at 1 608 ms, against a table that holds no row for almost every caller                                                                         | 🔧 FIXED IN TREE (live-measured, not deployed until #84)                                        |
-| PP-038 | S2  | Auth + brute force          | The form-encoded sign-in path took the email raw while the JSON path lowercases it: one lockout comes off that account, and a correct password typed with a capital letter fails                                                                  | 🔧 FIXED IN TREE (not live until #84)                                                           |
-| PP-039 | S2  | Performance                 | Resolving _one_ session token cost **two** `set_config` round-trips, because the acting-user and pre-auth-read GUCs were applied one statement at a time — paid by every authenticated request                                                    | 🔧 FIXED IN TREE (live-measured, not deployed until #84)                                        |
-| PP-040 | S2  | Schema drift                | Two live tables (`ai_providers`, `tenant_ai_credentials`) come from migrations 0013/0018 and are declared by **no** schema file — `npm run db:sync` would drop them, and `drift-check` printed them as `[info]` under "No drift ✓"                | 🔧 GUARD SHIPPED · tables need a decision                                                       |
-| PP-041 | S2  | Migrations                  | Two applied migrations (`0059`, `0091`) are absent from `_journal.json`, so a fresh database never creates `custom_entities` or the `usage_snapshots` bypass — and `verify-migration-chain` only checks the other direction                       | 🚨 OPEN                                                                                         |
-| PP-042 | S3  | RLS + gates                 | `ai_providers` is the only one of 226 tables with neither RLS nor a policy, and `db:verify-isolation` is structurally blind to it — every check filters to tables that have a `tenant_id` column                                                  | 🔧 GATE SHIPPED · table decision open (PP-040)                                                  |
-| PP-043 | S3  | Performance                 | Task #26's "tracking list scans `email_opens` because `email_id` has no index" — the missing index is real, the sequential scan is not: the live plan is an `Index Scan` at 0.021 ms                                                              | 📌 INFO · measured non-issue, no index added                                                    |
-| PP-044 | S2  | Panel + data safety         | Selective restore's first write is rejected by RLS (measured 42501), its rollback endpoint read a column that never existed and rewrote a completed restore as `failed`, and all three tables hold 0 rows                                         | 🔧 2 FIXES IN TREE · 3 decisions open (#7, snapshot link)                                       |
-| PP-045 | S3  | Retention + reporting       | The manual "purge now" path deleted four of the six trash types the UI shows and reported `purge_trash()`'s statement counter (≤4) as an item count, with no audit record                                                                         | 🔧 FIXED IN TREE · window and super-admin scope open                                            |
-| PP-046 | S3  | CHECK vs code               | The compliance dropdown offered `notes` and `tasks` as retention entity types; the table's CHECK accepts five values and neither of those, so two options could never be saved                                                                    | 🔧 FIXED IN TREE · enforcement is the open half (#60)                                           |
-| PP-047 | S2  | Auth context + panel        | The platform account has no workspace, so `ctx.tenantId` is the nil-UUID sentinel and ~120 insert routes answer `400 Invalid reference` instead of a reason — and the route that fixes it (`join-tenant`) has no UI caller                        | ⏸️ BLOCKED · owner decision: guard in `withApiRoute` or give the account a workspace            |
-| PP-048 | S1  | Security / RLS boundary     | Tenant isolation rests on `app.is_super_admin`, a placeholder GUC any session can `SET`: a leaked `DATABASE_URL` opens 49 tables / 60 policies cross-tenant (measured 191 users, 162 contacts) — no HTTP path can reach it                        | ⏸️ BLOCKED · owner decision: role-based policies or per-purpose GUCs                            |
-| PP-049 | S3  | Cron + observability        | PP-030's fix has nowhere central to live: 22 of 22 cron routes hand-roll `ok:true/skipped`, and `lib/cache/index.ts` has a **second** site (:323-327) that masks a Redis error as a held lock and ignores `LOCK_FAIL_OPEN`                        | 🚨 OPEN · 23-file batch (additive `outcome` + 22 sites)                                         |
-| PP-050 | S2  | Performance + observability | A cron sweep pins 1 of 10 pool connections for ~75 s to do literally zero work, and the leak detector's 30 s threshold now fires 13×/hour — 311 of 311 holds in 24 h are cron, so a real leak would be invisible                                  | 🚨 OPEN · four exits (upstream / threshold / code / server-side batching), none chosen          |
-| PP-051 | S2  | Scheduling + DR             | Three schedule sources disagree about cron and the live one runs 17 of 22 routes, so 5 never fire — including `/api/cron/backup`, the only pg_dump+offsite path, whose last 4 attempts all failed                                                 | 🚨 OPEN · owner decision (#53, #54, #50, #79)                                                   |
-| PP-052 | S2  | Disk / observability        | PP-033's build-cache cap has fired once, exited 0 and reclaimed 0 B at 151.3 GB used against a 40 GB cap — `docker builder du` says 114.9 GB is reclaimable, `docker system df` says 0 B, and the bytes live in containerd, not `/var/lib/docker` | 🚨 OPEN · three exits (command / daemon GC / accept), none chosen; disk at 41 % so no emergency |
-| PP-053 | S2  | Backup + restore            | Six tables the DB isolates through a **parent** row were scoped by their own (missing or ignored) `tenant_id` in three registries — a wipe 42703 aborts the atomic restore, and three more filters compare a foreign key to a tenant uuid, so backups succeed while holding nothing                                                            | 🔧 MERGED as **#2352** (2026-10-05) · policy escape still open (#7, #90)                          |
-| PP-054 | S3  | Sentry + observability      | NUCRM-3J (`analytics_events` 42501) has been fixed and live since PR #2162, yet the watchdog filed it "NEW" on 2026-10-04 — because `NEW` means "rotated into the top-25-by-date list", not "new failure", and `events=` is a cumulative count                                                                | 🚨 OPEN · watchdog semantics + two side findings (`error_logs` empty all-time, INSERT…RETURNING refused) |
-| PP-055 | S2  | Backup + restore            | The pre-restore wipe deletes **six tables the import allowlist refuses to re-insert**, so `POST /api/admin/tenant-restore` deletes a tenant's rows, hits `Table 'pipelines' is not allowed for import`, and rolls the whole restore back — permanently, for 177 of 183 tenants | 🔧 FIXED (wipe-side), PR **#2354** · the two divergent allowlists stay an owner decision (#79, #90) |
-| PP-056 | S3  | Host / tooling              | `/tmp` is a **3.9 GB tmpfs** and vitest leaves a ~22 MB temp dir on **every** run: 88 of them held **1.9 GB**, which filled it. `npx vitest run` then exited **1 with no `Test Files`/`Tests` summary at all** — a scratch-space outage is indistinguishable from a red suite. Sweeping the suite after fixing it found **three assertions that only pass when `.env.local` is absent** (2 × CSRF + rate-limit) — and a fourth that turned out to be a **stale-clone-base artifact**, which is its own harness lesson | 🔧 MITIGATED (1.5 GB of stale clones moved off tmpfs, `TMPDIR` pinned to the root fs) · CSRF pair in PR **#2359**, rate-limit + this entry in **#2365** · four exits, all owner's call |
-| PP-057 | S2  | Migrations + tooling        | The repo has exactly one "what is applied?" command and it cannot see the ledger: `db:status` queries `__drizzle_migrations(name, applied_at)` — no such table, no such columns — and maps **any** failure to "history table does not exist", so against preprod it printed **`Applied: 0 / Pending: <every journal entry>`** on a database with **99 applied and 18 outstanding**. `db:migrate --dry-run` compounds it: its first line counts journal entries (**`116 pending migration(s)`**) before reading anything, and that number is what the y/N apply prompt offers. Nothing in CI or the runbooks would ever have revealed the 18-behind state, which includes `0091` (the usage-snapshot bypass **#56** shipped), `0059` (**#74**'s still-unstamped entry) and now `0116` (**#2367**, merged while this PR was open) | 🔧 SCRIPTS FIXED in this PR (verified 99/18 against two instruments) · applying the 18 is an **owner decision** · also measured: `0115`'s absence is **not** a live cross-tenant read |
-| PP-058 | S2  | Migrations + tooling        | `db:migrate` connects as the tables' **owner** (`nucrm`) with `FORCE ROW LEVEL SECURITY` active on 48 of the 49 tables the pending set names, and `scripts/migrate.ts:184` sets **no tenant GUC** — so every data-correcting statement in a migration matches **0 rows** and silently corrects nothing, while the DDL built on top of it (`CREATE UNIQUE INDEX`, `SET NOT NULL`) reads the whole heap regardless. Measured on preprod: `0114_leads_tenant_oid_unique` (pending) dedupes `(tenant_id, lead_oid)` before creating the unique index, but its own CTE sees 0 of 25 leads while the truth is **1 duplicate group / 5 rows / 4 losers** (all five soft-deleted, all nine days older than the header's own "measured 0"), so the pending 21-entry run **aborts on 23505** — the exact failure its header says the dedupe exists to prevent | 🚨 OPEN · owner decision · no historical damage demonstrated · `0109` already proves the fix is one `set_config` line |
-| PP-059 | S2  | CHECK vs code               | `guard:vocab` — the only command in the repo that asks the **live database** what it will reject — exits **1** on `main` at `38ae90e2` with **2 of 9** constraints disagreeing: `chk_sequence_enrollments_status` (5 values) refuses `'cancelled'`, which `/api/unsubscribe` has written since the repo's first commit `ecbba74e`, and `chk_invoices_status` (8 values) refuses `'void'`, which `INVOICE_STATUSES` offers and `PATCH /api/tenant/invoices/[id]` passes through. Its own fixes, `0120` and `0112`, are two of the **22** entries PP-057 says nobody has agreed to apply — and it is the **only one of the 14 `guard:*` scripts no automation invokes**: workflows call 11 by alias and 2 by direct `node` command (`ci.yml:206`, `:239`), while `grep -rn check-constraint-vocab .github/workflows` returns **0** | 🚨 OPEN · guard wired nowhere · latent **on this DB** (both tables hold 0 rows, measured `--superadmin`) · CI green proves only that the `.sql` text says the right thing |
-| PP-060 | S2  | Deploy                      | The 22-entry backlog has **no automated apply path that could reach this database**: the only executable migrate in the repo's automation is `deploy.yml:277` (`scripts/deploy-migrate.ts --yes`, which spawns `migrate.ts --yes` at `:96`), inside the single `script:` block opened at `:77` — so it runs over SSH on the **pm2 production VM**, not on this Docker preprod host. That hop has failed every run since the last success (`30748691555`, 2026-08-02T12:51:06Z): **716 runs · 0 success** (615 failure / 54 cancelled / 47 skipped), 15 of 15 sampled recent runs contain `dial tcp ***:22: i/o timeout`, and the retained total is **3 successes in 1,257 runs**. No workflow mentions `db:status` (grep: 0 hits in all 5), `ci.yml` and `backup-drill.yml` build their databases with `db:sync`, and this host has no deploy cron or timer | 🚨 OPEN · owner action (`gh secret set DEPLOY_HOST`, the remedy AGENTS.md already documents) · even a healthy deploy migrates a **different database**, so PP-057's exit (a) has no mechanism behind it |
+| ID     | Sev | Area                        | Issue (one line)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | Status                                                                                                                                                                                                  |
+| ------ | --- | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| PP-001 | S2  | Deploy                      | `nginx` reported `(unhealthy)` while serving 200s — probe hit IPv6 `::1`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | ✅ FIXED & VERIFIED                                                                                                                                                                                     |
+| PP-002 | S2  | Deploy                      | `app` reported `(unhealthy)` for the same `localhost` → `::1` reason                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | ✅ FIXED & VERIFIED                                                                                                                                                                                     |
+| PP-003 | S1  | Setup                       | First-run setup form **always 403** — key sent in body, route reads header                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | 🔧 FIXED IN TREE                                                                                                                                                                                        |
+| PP-004 | S2  | Backups                     | Failed `pg_dump` left a partial dump that passes sanity checks                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | 🔧 FIXED IN TREE                                                                                                                                                                                        |
+| PP-005 | S2  | Build                       | `NEXT_PUBLIC_APP_URL` hardcoded to `http://localhost:3000` in the image bundle                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | ✅ FIXED & VERIFIED                                                                                                                                                                                     |
+| PP-006 | S2  | Build                       | `next build` TypeScript step OOMs on Node's default heap                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | ✅ FIXED & VERIFIED                                                                                                                                                                                     |
+| PP-007 | S1  | Build                       | `realtime.ts` (socket.io server) shipped in **no** image                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | ✅ FIXED & VERIFIED                                                                                                                                                                                     |
+| PP-008 | S1  | Compose                     | Undeclared `alertmanagerdata` volume aborted the whole compose project                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | ✅ FIXED & VERIFIED                                                                                                                                                                                     |
+| PP-009 | S1  | Compose                     | `minio/minio:latest`, `minio/mc:latest`, `edoburu/pgbouncer:1.23` no longer resolve                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | ✅ FIXED & VERIFIED                                                                                                                                                                                     |
+| PP-010 | S1  | RLS / Setup                 | **First super-admin insert is rejected by RLS** — even with a correct setup key                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | 🔧 FIXED IN TREE                                                                                                                                                                                        |
+| PP-011 | S1  | RLS / Signup                | **Public signup is rejected by RLS** (`users_insert_auth` unsatisfiable pre-auth)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | 🔧 FIXED IN TREE                                                                                                                                                                                        |
+| PP-012 | S1  | RLS / Auth                  | `login_attempts` write+read blocked → brute-force lockout silently inert                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | 🔧 FIXED IN TREE                                                                                                                                                                                        |
+| PP-013 | S1  | RLS                         | Tenant-isolation gate FAILED — 5 RLS-disabled, 10 policy-less, 6 NULL-tenant leaky                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | ✅ FIXED & VERIFIED                                                                                                                                                                                     |
+| PP-014 | S1  | Backups                     | `pg_dump` fails as the app role (`FORCE ROW LEVEL SECURITY` + `row_security=off`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | 🚨 OPEN                                                                                                                                                                                                 |
+| PP-015 | S1  | Backups                     | `BACKUP_DATABASE_URL` still points at the RLS-bound `nucrm` role                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | 🚨 OPEN                                                                                                                                                                                                 |
+| PP-016 | S3  | Observability               | Sentry events carry no `release`; `environment` **is** set and ingest is verified working — see the 2026-10-04 addendum                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | 🔎 RE-MEASURED (release + API read scope open)                                                                                                                                                          |
+| PP-017 | S3  | Observability               | promtail `docker_sd_configs` unset → Loki gets no container logs                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | ⏸️ BLOCKED                                                                                                                                                                                              |
+| PP-018 | S2  | Storage                     | UpCloud Managed Object Storage `CreateBucket` → AccessDenied; buckets absent                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | ⏸️ BLOCKED                                                                                                                                                                                              |
+| PP-019 | S2  | Integrations                | `RESEND_API_KEY`, `ANTHROPIC_API_KEY` missing → those features degrade silently                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | ⏸️ BLOCKED                                                                                                                                                                                              |
+| PP-020 | S2  | Hardening                   | UFW + SSH hardening and `infra-readiness.sh` not yet applied                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | ⏸️ BLOCKED                                                                                                                                                                                              |
+| PP-021 | S3  | Performance                 | Sentry `NUCRM-1`: N+1 query on `GET /api/metrics` (12 events)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | 📌 INFO                                                                                                                                                                                                 |
+| PP-022 | S3  | RLS                         | `super_admin_audit_logs.tenant_id` is `text`, so the standard policy can't apply                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | 📌 INFO                                                                                                                                                                                                 |
+| PP-028 | S1  | Performance                 | Every DB statement costs a flat ~200 ms — attributed: one round trip to the public DB endpoint, server time is 0.012 ms                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | 🔬 MEASURED                                                                                                                                                                                             |
+| PP-029 | S2  | Deploy                      | Our SIGTERM handler exited before Next.js drained; `pool.end()` hung the stop 35.93 s                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | ✅ FIXED + live-verified                                                                                                                                                                                |
+| PP-030 | S1  | Scheduling                  | `acquireLock` fail-closed is indistinguishable from a held lock → 20 cron jobs report `ok:true` and do nothing when Redis isn't ready                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | 🔬 MEASURED                                                                                                                                                                                             |
+| PP-031 | S2  | RLS + query                 | Super-admin Backups console returns nothing: swallowed `uuid = text` join, RLS-blind `backup_schedules` read and writes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | ✅ FIXED + live-verified                                                                                                                                                                                |
+| PP-032 | S2  | Data model                  | Panel reads `backup_records` (4 failed rows), nightly job writes `tenant_backup_records` (144 rows) — two tables, no shared view                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | 🚨 OPEN (decision)                                                                                                                                                                                      |
+| PP-033 | S1  | Deploy + obs                | BuildKit cache filled root to 84% with no bound; `docker system df` under-reports it and the 80% disk alert was never live                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | ✅ FIXED + live-verified                                                                                                                                                                                |
+| PP-034 | S1  | Observability               | Alertmanager has **never delivered an alert** — `host.docker.internal` does not resolve in its container and the receiver was never installed (~10.8k failed notifications, still counting)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | 🔧 PARTIAL IN TREE (needs recreate + a real receiver)                                                                                                                                                   |
+| PP-035 | S1  | Privacy                     | Sentry v11 `dataCollection` defaults to **collecting everything**, and `sentry.client.config.ts` (the only file with `scrubPii`) is not in the Turbopack browser bundle — so the browser has sent PII unscrubbed                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | 🔧 FIXED IN TREE (not live until #84)                                                                                                                                                                   |
+| PP-036 | S2  | Performance                 | Every sign-in paid ~830 ms to read one settings row — the IP allow-list gate is 4 statements at PP-028's flat 200 ms, and it runs for tenants that have no list                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | 🔧 FIXED IN TREE (not live until #84)                                                                                                                                                                   |
+| PP-037 | S2  | Performance                 | Sign-in asked "are you blocked?" **twice**, in two security contexts — 8 statements, live-measured at 1 608 ms, against a table that holds no row for almost every caller                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | 🔧 FIXED IN TREE (live-measured, not deployed until #84)                                                                                                                                                |
+| PP-038 | S2  | Auth + brute force          | The form-encoded sign-in path took the email raw while the JSON path lowercases it: one lockout comes off that account, and a correct password typed with a capital letter fails                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | 🔧 FIXED IN TREE (not live until #84)                                                                                                                                                                   |
+| PP-039 | S2  | Performance                 | Resolving _one_ session token cost **two** `set_config` round-trips, because the acting-user and pre-auth-read GUCs were applied one statement at a time — paid by every authenticated request                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | 🔧 FIXED IN TREE (live-measured, not deployed until #84)                                                                                                                                                |
+| PP-040 | S2  | Schema drift                | Two live tables (`ai_providers`, `tenant_ai_credentials`) come from migrations 0013/0018 and are declared by **no** schema file — `npm run db:sync` would drop them, and `drift-check` printed them as `[info]` under "No drift ✓"                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | 🔧 GUARD SHIPPED · tables need a decision                                                                                                                                                               |
+| PP-041 | S2  | Migrations                  | Two applied migrations (`0059`, `0091`) are absent from `_journal.json`, so a fresh database never creates `custom_entities` or the `usage_snapshots` bypass — and `verify-migration-chain` only checks the other direction                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | 🚨 OPEN                                                                                                                                                                                                 |
+| PP-042 | S3  | RLS + gates                 | `ai_providers` is the only one of 226 tables with neither RLS nor a policy, and `db:verify-isolation` is structurally blind to it — every check filters to tables that have a `tenant_id` column                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | 🔧 GATE SHIPPED · table decision open (PP-040)                                                                                                                                                          |
+| PP-043 | S3  | Performance                 | Task #26's "tracking list scans `email_opens` because `email_id` has no index" — the missing index is real, the sequential scan is not: the live plan is an `Index Scan` at 0.021 ms                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | 📌 INFO · measured non-issue, no index added                                                                                                                                                            |
+| PP-044 | S2  | Panel + data safety         | Selective restore's first write is rejected by RLS (measured 42501), its rollback endpoint read a column that never existed and rewrote a completed restore as `failed`, and all three tables hold 0 rows                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | 🔧 2 FIXES IN TREE · 3 decisions open (#7, snapshot link)                                                                                                                                               |
+| PP-045 | S3  | Retention + reporting       | The manual "purge now" path deleted four of the six trash types the UI shows and reported `purge_trash()`'s statement counter (≤4) as an item count, with no audit record                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | 🔧 FIXED IN TREE · window and super-admin scope open                                                                                                                                                    |
+| PP-046 | S3  | CHECK vs code               | The compliance dropdown offered `notes` and `tasks` as retention entity types; the table's CHECK accepts five values and neither of those, so two options could never be saved                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | 🔧 FIXED IN TREE · enforcement is the open half (#60)                                                                                                                                                   |
+| PP-047 | S2  | Auth context + panel        | The platform account has no workspace, so `ctx.tenantId` is the nil-UUID sentinel and ~120 insert routes answer `400 Invalid reference` instead of a reason — and the route that fixes it (`join-tenant`) has no UI caller                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | ⏸️ BLOCKED · owner decision: guard in `withApiRoute` or give the account a workspace                                                                                                                    |
+| PP-048 | S1  | Security / RLS boundary     | Tenant isolation rests on `app.is_super_admin`, a placeholder GUC any session can `SET`: a leaked `DATABASE_URL` opens 49 tables / 60 policies cross-tenant (measured 191 users, 162 contacts) — no HTTP path can reach it                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | ⏸️ BLOCKED · owner decision: role-based policies or per-purpose GUCs                                                                                                                                    |
+| PP-049 | S3  | Cron + observability        | PP-030's fix has nowhere central to live: 22 of 22 cron routes hand-roll `ok:true/skipped`, and `lib/cache/index.ts` has a **second** site (:323-327) that masks a Redis error as a held lock and ignores `LOCK_FAIL_OPEN`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | 🚨 OPEN · 23-file batch (additive `outcome` + 22 sites)                                                                                                                                                 |
+| PP-050 | S2  | Performance + observability | A cron sweep pins 1 of 10 pool connections for ~75 s to do literally zero work, and the leak detector's 30 s threshold now fires 13×/hour — 311 of 311 holds in 24 h are cron, so a real leak would be invisible                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | 🚨 OPEN · four exits (upstream / threshold / code / server-side batching), none chosen                                                                                                                  |
+| PP-051 | S2  | Scheduling + DR             | Three schedule sources disagree about cron and the live one runs 17 of 22 routes, so 5 never fire — including `/api/cron/backup`, the only pg_dump+offsite path, whose last 4 attempts all failed                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | 🚨 OPEN · owner decision (#53, #54, #50, #79)                                                                                                                                                           |
+| PP-052 | S2  | Disk / observability        | PP-033's build-cache cap has fired once, exited 0 and reclaimed 0 B at 151.3 GB used against a 40 GB cap — `docker builder du` says 114.9 GB is reclaimable, `docker system df` says 0 B, and the bytes live in containerd, not `/var/lib/docker`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | 🚨 OPEN · three exits (command / daemon GC / accept), none chosen; disk at 41 % so no emergency                                                                                                         |
+| PP-053 | S2  | Backup + restore            | Six tables the DB isolates through a **parent** row were scoped by their own (missing or ignored) `tenant_id` in three registries — a wipe 42703 aborts the atomic restore, and three more filters compare a foreign key to a tenant uuid, so backups succeed while holding nothing                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | 🔧 MERGED as **#2352** (2026-10-05) · policy escape still open (#7, #90)                                                                                                                                |
+| PP-054 | S3  | Sentry + observability      | NUCRM-3J (`analytics_events` 42501) has been fixed and live since PR #2162, yet the watchdog filed it "NEW" on 2026-10-04 — because `NEW` means "rotated into the top-25-by-date list", not "new failure", and `events=` is a cumulative count                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | 🚨 OPEN · watchdog semantics + two side findings (`error_logs` empty all-time, INSERT…RETURNING refused)                                                                                                |
+| PP-055 | S2  | Backup + restore            | The pre-restore wipe deletes **six tables the import allowlist refuses to re-insert**, so `POST /api/admin/tenant-restore` deletes a tenant's rows, hits `Table 'pipelines' is not allowed for import`, and rolls the whole restore back — permanently, for 177 of 183 tenants                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | 🔧 FIXED (wipe-side), PR **#2354** · the two divergent allowlists stay an owner decision (#79, #90)                                                                                                     |
+| PP-056 | S3  | Host / tooling              | `/tmp` is a **3.9 GB tmpfs** and vitest leaves a ~22 MB temp dir on **every** run: 88 of them held **1.9 GB**, which filled it. `npx vitest run` then exited **1 with no `Test Files`/`Tests` summary at all** — a scratch-space outage is indistinguishable from a red suite. Sweeping the suite after fixing it found **three assertions that only pass when `.env.local` is absent** (2 × CSRF + rate-limit) — and a fourth that turned out to be a **stale-clone-base artifact**, which is its own harness lesson                                                                                                                                                                                                                                                                                                                                                                                                                          | 🔧 MITIGATED (1.5 GB of stale clones moved off tmpfs, `TMPDIR` pinned to the root fs) · CSRF pair in PR **#2359**, rate-limit + this entry in **#2365** · four exits, all owner's call                  |
+| PP-057 | S2  | Migrations + tooling        | The repo has exactly one "what is applied?" command and it cannot see the ledger: `db:status` queries `__drizzle_migrations(name, applied_at)` — no such table, no such columns — and maps **any** failure to "history table does not exist", so against preprod it printed **`Applied: 0 / Pending: <every journal entry>`** on a database with **99 applied and 18 outstanding**. `db:migrate --dry-run` compounds it: its first line counts journal entries (**`116 pending migration(s)`**) before reading anything, and that number is what the y/N apply prompt offers. Nothing in CI or the runbooks would ever have revealed the 18-behind state, which includes `0091` (the usage-snapshot bypass **#56** shipped), `0059` (**#74**'s still-unstamped entry) and now `0116` (**#2367**, merged while this PR was open)                                                                                                                | 🔧 SCRIPTS FIXED in this PR (verified 99/18 against two instruments) · applying the 18 is an **owner decision** · also measured: `0115`'s absence is **not** a live cross-tenant read                   |
+| PP-058 | S2  | Migrations + tooling        | `db:migrate` connects as the tables' **owner** (`nucrm`) with `FORCE ROW LEVEL SECURITY` active on 48 of the 49 tables the pending set names, and `scripts/migrate.ts:184` sets **no tenant GUC** — so every data-correcting statement in a migration matches **0 rows** and silently corrects nothing, while the DDL built on top of it (`CREATE UNIQUE INDEX`, `SET NOT NULL`) reads the whole heap regardless. Measured on preprod: `0114_leads_tenant_oid_unique` (pending) dedupes `(tenant_id, lead_oid)` before creating the unique index, but its own CTE sees 0 of 25 leads while the truth is **1 duplicate group / 5 rows / 4 losers** (all five soft-deleted, all nine days older than the header's own "measured 0"), so the pending 21-entry run **aborts on 23505** — the exact failure its header says the dedupe exists to prevent                                                                                            | 🚨 OPEN · owner decision · no historical damage demonstrated · `0109` already proves the fix is one `set_config` line                                                                                   |
+| PP-059 | S2  | CHECK vs code               | `guard:vocab` — the only command in the repo that asks the **live database** what it will reject — exits **1** on `main` — measured at `38ae90e2`, re-measured at `f3787f32` — with **2 of 9** constraints disagreeing: `chk_sequence_enrollments_status` (5 values) refuses `'cancelled'`, which `/api/unsubscribe` has written since the repo's first commit `ecbba74e`, and `chk_invoices_status` (8 values) refuses `'void'`, which `INVOICE_STATUSES` offers and `PATCH /api/tenant/invoices/[id]` passes through. Its own fixes, `0120` and `0112`, are two of the **23** entries PP-057 says nobody has agreed to apply (the count was **22** when this row was written; `0121` landed since) — and it is the **only one of the 19 `guard:*` scripts no automation invokes**: workflows call 16 by alias and 2 by direct `node` command (`ci.yml:215`, `:248`), while `grep -rn check-constraint-vocab .github/workflows` returns **0** | 🚨 OPEN · guard wired nowhere · latent **on this DB** (both tables hold 0 rows, measured `--superadmin`) · CI green proves only that the `.sql` text says the right thing                               |
+| PP-060 | S2  | Deploy                      | The 23-entry backlog has **no automated apply path that could reach this database**: the only executable migrate in the repo's automation is `deploy.yml:281` (`scripts/deploy-migrate.ts --yes`, which spawns `migrate.ts --yes` at `:96`), inside the single `script:` block opened at `:77` — so it runs over SSH on the **pm2 production VM**, not on this Docker preprod host. That hop has failed every run since the last success (`30748691555`, 2026-08-02T12:51:06Z): **741 runs · 0 success** (639 failure / 54 cancelled / 48 skipped), 15 of 15 sampled recent runs contain `dial tcp ***:22: i/o timeout`, and the retained total is **3 successes in 1,282 runs**. No workflow mentions `db:status` (grep: 0 hits in all 5), `ci.yml` and `backup-drill.yml` build their databases with `db:sync`, and this host has no deploy cron or timer                                                                                    | 🚨 OPEN · owner action (`gh secret set DEPLOY_HOST`, the remedy AGENTS.md already documents) · even a healthy deploy migrates a **different database**, so PP-057's exit (a) has no mechanism behind it |
 
 ## Sentry issues → register entries
 
@@ -940,6 +940,7 @@ running=120s` with exit 1 and the `--force-recreate app` command to fix it.
      prose follow-ons. So the 17 here and the 3 in #2427 are disjoint sets: one class is "the code moved after the
      entry landed", the other is "the entry was stale on arrival", and no screen of either kind substitutes for reading
      the cited lines. -->
+
 - `drizzle/schema/infra.ts:159` binds `backupRecords` to **`backup_records`**, which is what every
   panel route (list, `[id]`, download, restore) reads and what `lib/backups/backup-service.ts:244`
   inserts into. `app/api/cron/auto-backup/route.ts:263` writes **`tenant_backup_records`** with raw
@@ -2382,7 +2383,7 @@ analytics question kept running into.
   `price_book_id` and `form_submissions` by `form_id` — a uuid FK compared to a tenant uuid. No error,
   no warning, no log line: the table is simply exported empty. `contact_tags`/`lead_tags` did the loud
   version (42703), and `exportAll` swallowed it per table — 82 `[Export] Table … not found or error,
-  skipping` warnings each in the retained log window, last one 2026-10-03 09:10Z.
+skipping` warnings each in the retained log window, last one 2026-10-03 09:10Z.
   (c) `lib/restore/restore-executor.ts` used `WHERE tenant_id = …` in all three of its per-table sites
   (`createPreRestoreSnapshot`, its `rollbackToSnapshot` DELETE, `countExistingRecords`) while knowing the
   junction names — its own `TABLE_DEPENDENCY_ORDER` lists six of them. The snapshot's
@@ -2426,8 +2427,8 @@ analytics question kept running into.
 - **Ordering checked, and it is not a second bug.** Writing the predicate correctly is only half of a
   wipe: if a parent were deleted before the child that references it, the FK error would abort the atomic
   restore exactly the way the 42703 did. Both hard-coded lists were measured against the six scopes —
-  `TENANT_DELETE_ORDER` (86 entries) puts every parent-isolated child *before* its parent, and
-  `TABLE_DEPENDENCY_ORDER` (88) puts it *after* on the insert side, with all six present in both. The wipe
+  `TENANT_DELETE_ORDER` (86 entries) puts every parent-isolated child _before_ its parent, and
+  `TABLE_DEPENDENCY_ORDER` (88) puts it _after_ on the insert side, with all six present in both. The wipe
   half is now asserted by the guard; the insert list is not exported, so it was verified by reading it.
 - **The half that is not fixed, deliberately.** None of the six `tenant_isolation` policies has an
   `app.is_super_admin` branch (measured `super=false` on all six, while `contacts`/`leads` are
@@ -2442,10 +2443,10 @@ analytics question kept running into.
   cron trigger; every DB statement read-only and inside the probe helper's always-rolled-back
   `READ ONLY` transaction; no policy or role change; no `git stash`/amend.
 - **Verified:** `probe:sql` reproduction of the old shape → `probe failed [42703]: column "tenant_id"
-  does not exist`; the eight new shapes → 8 rows, all counts 0, no error; re-probed after the collapse so
+does not exist`; the eight new shapes → 8 rows, all counts 0, no error; re-probed after the collapse so
   the shipped statement text itself was run live — `SELECT * FROM announcements WHERE false` → 0 rows,
   `SELECT count(*)::int AS cnt FROM modules WHERE false` → `0`, `SELECT count(*)::int FROM contact_tags
-  WHERE contact_id IN (SELECT id FROM contacts WHERE contacts.tenant_id = …)` → `0` under that tenant's
+WHERE contact_id IN (SELECT id FROM contacts WHERE contacts.tenant_id = …)` → `0` under that tenant's
   GUC, each a single round trip at the usual ~1.3-1.5 s; `pg_policy` predicate text
   (`uses_exists` per table) and `pg_attribute` column lists for the six plus `quote_line_items`,
   `form_submissions`, `modules`, `announcements`, `tenant_modules` (2058), `tenants` (183);
@@ -2455,7 +2456,7 @@ analytics question kept running into.
   `| tail -15` and reported tail's status, not tsc's, and hid 3 errors in another agent's WIP
   `components/tenant/docs-client.tsx`, which are since gone);
   every unit file that imports these modules — `grep -rl "tenant-restore-wipe|restore-executor|
-  tenant-data-export|tenant-data-import|sql-allowlist" tests/`, 16 files → **476 passed**; the whole
+tenant-data-export|tenant-data-import|sql-allowlist" tests/`, 16 files → **476 passed**; the whole
   `tests/unit` sweep → **7066 passed / 2 failed**, and both failures are the same
   `setCsrfCookie`-Secure-flag assertion (`tests/unit/csrf.test.ts`, `tests/unit/csrf-unit.test.ts`),
   NODE_ENV-sensitive and in files that import nothing touched here; `npx eslint --max-warnings=0` clean
@@ -2473,11 +2474,11 @@ analytics question kept running into.
 
 **Found:** 2026-10-05, by measuring the ingest path instead of trusting the alert.
 
-**Status:** 🚨 OPEN — the issue itself is closed by evidence; the *watchdog's semantics* are the defect.
+**Status:** 🚨 OPEN — the issue itself is closed by evidence; the _watchdog's semantics_ are the defect.
 
 - **The underlying bug is fixed, live, and measurably working.** Migration
   `0096_analytics_events_ingest_insert.sql` restores `CREATE POLICY "analytics_events_insert" ON
-  "analytics_events" FOR INSERT WITH CHECK (true)` after 0088's GUC/super-admin predicate killed the whole
+"analytics_events" FOR INSERT WITH CHECK (true)` after 0088's GUC/super-admin predicate killed the whole
   stream with 42501; it came from **PR #2162, merged 2026-09-26**. Measured now: `27/27`
   `POST /api/track/event` returned **204** through nginx in the last 24 h and 27 rows landed on 10-04; a
   synthetic event from this session returned 204 in 321 ms and wrote its row; zero `analytics`/`42501`
@@ -2485,7 +2486,7 @@ analytics question kept running into.
   NUCRM-3J describes is not happening.
 - **Why it still looked new.** `/root/sentry-watchdog/check.py` polls
   `is:unresolved&sortBy=date&limit=25` and diffs the set of issue **ids** against `state.json.seen`
-  (114 entries). A `NEW` line is emitted the first time an id appears in *that window* — an old,
+  (114 entries). A `NEW` line is emitted the first time an id appears in _that window_ — an old,
   already-fixed issue re-enters the top 25 as newer noise ages out, and gets announced as brand new.
   Two more readings in the same line are also easy to mis-take: the `[YYYY-MM-DD HH:MM:SSZ]` prefix is
   the **poll time**, not the Sentry `firstSeen`/`lastSeen`, and `events=25` is the issue's **cumulative**
@@ -2528,7 +2529,7 @@ analytics question kept running into.
   over `TENANT_DELETE_ORDER`, then `:142` calls `importTable(…, failFast: true)`, whose first statement is
   `:168` `if (!isValidTableName(tableName.toLowerCase())) throw new Error("Table 'X' is not allowed for import")`.
   The throw is not caught (`failFast` re-raises), the transaction rolls back, and the response is `failed`.
-  The delete is therefore *correct and then undone*: no data loss — but the restore can never succeed for a
+  The delete is therefore _correct and then undone_: no data loss — but the restore can never succeed for a
   tenant holding rows in one of those tables. Nothing in the error message points at the wipe, which is why
   this survived: the API's own body carries `deleteExisting`, so the reader looks for a delete bug, not an
   insert-permission bug.
@@ -2556,7 +2557,7 @@ analytics question kept running into.
   (`announcements`, `backup_schedules`, `critical_data_backups`, `restore_snapshots`, `selective_restore_logs`,
   `selective_restore_audit_log`, `tenant_backup_records`, `tenant_restore_records`, `call_logs`) — harmless
   today, they are dropped silently at `lib/tenant-data-import.ts:283` and eight of them are restore
-  *infrastructure* that should not be re-imported at all; and **22 names the allowlist accepts that the parser
+  _infrastructure_ that should not be re-imported at all; and **22 names the allowlist accepts that the parser
   refuses** (`users`, `sessions`, `refresh_tokens`, `plans`, `contacts`… `error_logs`, `attachments`,
   `automation_*`, `ticket_replies`, `support_tickets`, `email_sequences`, `email_verifications`, `kb_articles`,
   `follow_ups`, `activity_logs`). I did **not** collapse the parser's list onto `sql-allowlist.ts`, because
@@ -2574,8 +2575,8 @@ analytics question kept running into.
   (as plain context the same queries return 0 — RLS, not emptiness, which is itself the **PP-053**/#7 story).
   `npx eslint lib/sql-allowlist.ts tests/unit/tenant-junction-scoping.test.ts --max-warnings=0` clean;
   `node scripts/check-file-size.mjs` → OK (1599 files); `npx vitest run tests/unit/sql-allowlist.test.ts
-  tests/unit/tenant-data-import.test.ts tests/unit/tenant-import.test.ts
-  tests/unit/tenant-restore-atomic-2225.test.ts tests/unit/restore` → **8 files / 213 passed**; the guard
+tests/unit/tenant-data-import.test.ts tests/unit/tenant-import.test.ts
+tests/unit/tenant-restore-atomic-2225.test.ts tests/unit/restore` → **8 files / 213 passed**; the guard
   → **15/15**; full `tests/unit` → 7069 passed with only the two pre-existing `setCsrfCookie` failures.
 - **The insert side was measured too, so the fix cannot just move the failure.** All twelve tables this PR and
   PP-053 touch have a `tenant_isolation` policy for `cmd = '*'`. Eleven of them — the five here plus the six
@@ -2605,7 +2606,7 @@ analytics question kept running into.
 _(Numbering: **PP-055** went to PR **#2354**, which has since merged, so this takes **PP-056** and is
 contiguous with it — nothing was renumbered; see "How to maintain this file".)_
 
-- **Found by:** the full `tests/unit` sweep that was supposed to verify #2359. The command reported  `exit=1`, the log held two lines of progress dots and **no `Test Files` / `Tests` / `Duration`
+- **Found by:** the full `tests/unit` sweep that was supposed to verify #2359. The command reported `exit=1`, the log held two lines of progress dots and **no `Test Files` / `Tests` / `Duration`
   summary**. Reading that as "the suite is red" would have been wrong, and so would reading it as
   "the suite ran" — it never got far enough to have an opinion about the code under test.
 - **Measured at the time of the outage.** `df /tmp` → `3.9G used, 4.0K avail, 100 %`. Nothing held
@@ -2615,8 +2616,8 @@ contiguous with it — nothing was renumbered; see "How to maintain this file".)
 - **Who ate 3.9 GB of RAM-backed scratch.**
   - **88** top-level dirs with a 21-character random name, each holding `client/` + `ssr/` — a
     vitest/`vite-node` temp dir. **1 910 MB**, average ~22 MB. **84 of them (1 828 MB) contain
-    nothing modified today; the oldest dates to 2026-09-26 11:22.** Accumulation is per *run*, not
-    per *crash*: the verification run after mitigation completed cleanly (511 files, 227 s) and
+    nothing modified today; the oldest dates to 2026-09-26 11:22.** Accumulation is per _run_, not
+    per _crash_: the verification run after mitigation completed cleanly (511 files, 227 s) and
     still left its temp dir in the `TMPDIR` it was given.
   - Two stale checkouts: `/tmp/nucrm-trunk` **1.5 GB** (mtime Sep 26 16:51; 1.5 GB of it is
     `node_modules`) and `/tmp/nucrm-main` 33 MB (mtime Sep 25 13:20). Neither had an open handle.
@@ -2625,8 +2626,8 @@ contiguous with it — nothing was renumbered; see "How to maintain this file".)
 - **Why it fails silently instead of loudly.** Everything here defaults to `os.tmpdir()` = `/tmp`:
   the test runner, esbuild, `git cat-file`, and the shell harness's own cwd bookkeeping. Once the
   tmpfs is gone the error is not a test assertion, it is I/O — every command additionally emitted
-  `/bin/bash: line 1: pwd: write error: No space left on device`. A suite that cannot *write its
-  report* exits non-zero exactly like a suite that cannot *pass a test*, and the only thing
+  `/bin/bash: line 1: pwd: write error: No space left on device`. A suite that cannot _write its
+  report_ exits non-zero exactly like a suite that cannot _pass a test_, and the only thing
   distinguishing them is a summary line that is absent. This is the same failure class as PP-054
   (a signal that is not what its name says) and as **#77** (a masked condition reported as success).
 - **Mitigated without deleting anything (reversible, no owner decision needed).** Moved both stale
@@ -2640,12 +2641,12 @@ contiguous with it — nothing was renumbered; see "How to maintain this file".)
   - `duplicate-fk-declarations-2259` failed with `expected 113 to be 114` — this worktree's branch
     has no 0114 journal entry; **#2345** rewrites exactly that assertion. Not a new finding.
   - `rate-limit.test.ts:310` failed with `TypeError: Cannot read properties of null (reading
-    'headers')` — a **third instance of the same environment-dependency class** as #2359, filed
+'headers')` — a **third instance of the same environment-dependency class** as #2359, filed
     below.
   - Two files could not be collected: `Error: Cannot find module
-    'tests/unit/lead-oid-allocation.test.ts'` and `leads-post-oid-retry-2343.test.ts`. They are not
+'tests/unit/lead-oid-allocation.test.ts'` and `leads-post-oid-retry-2343.test.ts`. They are not
     broken tests: the **shared worktree's HEAD moved underneath the run** (`git rev-parse
-    --abbrev-ref HEAD` read `fix/2343-lead-oid-atomic-unique` when collection started and
+--abbrev-ref HEAD` read `fix/2343-lead-oid-atomic-unique` when collection started and
     `fix/2344-atomic-counters` after), so files collected at t0 had been checked out from under
     vitest. Consequence for every future sweep: **a `tests/unit` run in the shared worktree is not
     attributable**; it has to come from its own clone, the way the CI-equivalent worktrees do.
@@ -2670,7 +2671,7 @@ contiguous with it — nothing was renumbered; see "How to maintain this file".)
   `tests/unit/route-pinning-real-route.test.ts > … pins a client for its whole body`,
   `AssertionError: expected 'sentinel' not to be 'sentinel'`. Bisected to a single variable, 2 runs
   each way with that file alone: `TRUST_PROXY=true` → fails, unset → passes; the other five have no
-  effect alone, and the remaining five set *together* pass. Mechanism looked textbook — line 66
+  effect alone, and the remaining five set _together_ pass. Mechanism looked textbook — line 66
   hands the real route a fake request literal (`{ url: '…' } as never`) with **no `headers`
   property**, and `getClientIp` dereferences `request.headers.get(…)` the moment
   `TRUST_PROXY === 'true'` (`lib/client-ip.ts:19`); the throw is swallowed inside the pinned scope,
@@ -2704,7 +2705,7 @@ contiguous with it — nothing was renumbered; see "How to maintain this file".)
   `.env.local` untouched; no CI change to make a runner supply scratch space.
 - **Exits, none chosen:**
   (a) **Preflight the suite** — fail loudly and immediately when `os.tmpdir()` has less than ~500 MB
-  free, before vitest starts. This is the only exit that fixes the *silence*; it does not stop the
+  free, before vitest starts. This is the only exit that fixes the _silence_; it does not stop the
   leak. Repo-side, cheap.
   (b) **Move harness scratch onto the root filesystem** — set `TMPDIR` (or vitest's temp dir) to
   `/var/tmp` for test/lint scripts. Fixes the 3.9 GB ceiling, leaves ~22 MB/run accumulating on a
@@ -2720,9 +2721,9 @@ contiguous with it — nothing was renumbered; see "How to maintain this file".)
   `origin/main:tests/unit/rate-limit.test.ts` (confirms it is on main, not on a feature branch),
   `.env.local:48`, `.github/workflows/ci.yml` (no `TRUST_PROXY`), `vitest.setup.ts:4-17`.
   Related: **#2359**, **#2345**, **#96**, **PP-054** (signal that is not its name), **PP-052** (the
-  *other* disk, 290 GB free), **#77**, **#1249**, **#67** (harness false alarms).
+  _other_ disk, 290 GB free), **#77**, **#1249**, **#67** (harness false alarms).
 
-## PP-057 — 🔧 The repo's only "what is applied?" command cannot see the ledger: `db:status` printed `Applied: 0 / Pending: <journal size>` against a database with **99 applied and 18 outstanding**, and `db:migrate --dry-run` prints `116 pending migration(s)` from the journal *before* it reads anything _(S2 · Migrations + tooling)_
+## PP-057 — 🔧 The repo's only "what is applied?" command cannot see the ledger: `db:status` printed `Applied: 0 / Pending: <journal size>` against a database with **99 applied and 18 outstanding**, and `db:migrate --dry-run` prints `116 pending migration(s)` from the journal _before_ it reads anything _(S2 · Migrations + tooling)_
 
 _(Numbering: **PP-055** was PR #2354 and **PP-056** is PR #2365, so this took **PP-057** and left both gaps
 rather than renumbering anything. That was **two** gaps and is now **one**: **#2354 merged** (`a2a53569`,
@@ -2762,7 +2763,7 @@ the first measurement.)_
 - **Defect 1 — `db:status` reads a ledger that does not exist.** `scripts/migration-status.ts` queried
   `SELECT name, applied_at FROM __drizzle_migrations` (unqualified → `public`, and the columns are
   `id/hash/created_at`). Measured against preprod: `public.__drizzle_migrations` → **`42P01 relation does
-  not exist`**, while `drizzle.__drizzle_migrations` → **99 rows**. The read sits in a `try { … } catch`
+not exist`**, while `drizzle.__drizzle_migrations` → **99 rows**. The read sits in a `try { … } catch`
   whose handler prints `[status] Migration history table does not exist — no migrations applied yet` and
   then **continues with an empty applied set**, so every `.sql` file is listed as pending:
   `Applied: 0`, `Pending: <one line per journal entry>` (116 when the journal had 116; **117** on current
@@ -2771,7 +2772,7 @@ the first measurement.)_
 - **Defect 2 — the catch cannot tell "no ledger" from "no connection".** Same `try`, two independent real
   causes, one misleading message. Measured on the host: keeping the URL's `sslmode=require` →
   **`self-signed certificate in certificate chain`**; stripping it → **`no pg_hba.conf entry for host
-  "95.111.194.98" … no encryption`**. Both land in "history table does not exist". The topology is the
+"95.111.194.98" … no encryption`**. Both land in "history table does not exist". The topology is the
   reason: the host's `DATABASE_URL` is the provider's **public TLS endpoint**, while the paths that work are
   `PROBE_DATABASE_URL` (`127.0.0.1:6432`, pgbouncer, plaintext) and the app container's own
   `DATABASE_URL` (`…@pgbouncer:6432`). Every probe in this register goes through the first, which is why
@@ -2792,7 +2793,7 @@ the first measurement.)_
   unattended against preprod** and logged that it was "auto-applying 116 migrations". The apply itself is
   plan-driven (it would touch only the outstanding ones), so this is a confirmation-gate gap, not a silent
   DDL storm — and changing what counts as production-guarded is an **owner decision**, so this entry only
-  records it. The misleading *wording* is fixed here (that line now says "proceeding with the migrations the
+  records it. The misleading _wording_ is fixed here (that line now says "proceeding with the migrations the
   ledger reports as outstanding"); the gate itself is untouched.
 - **Fixed in this PR (scripts and their output only — no execution path changed).**
   - `scripts/migration-status.ts`: reads `SELECT hash, created_at FROM drizzle.__drizzle_migrations`,
@@ -2812,7 +2813,7 @@ the first measurement.)_
     exited 1 with the real `pg_hba` message before this change too. What the narrowing closes is the
     quieter case: connection succeeds, the `SELECT` on the ledger fails (permission, timeout, wrong
     search_path), and the old handler answered "everything is pending". There is no read-only way to
-    reproduce that case on preprod, so it is verified by the code path (`42P01` is the *only* condition
+    reproduce that case on preprod, so it is verified by the code path (`42P01` is the _only_ condition
     that sets `ledgerAvailable = false`) and by the two live cases above — not claimed as a measured repro.
   - **Deliberately not done:** no migration applied, no `--yes` added, no reordering of the confirm step
     relative to the ledger read (that would restructure a write path), no change to which URL the **write**
@@ -2821,12 +2822,12 @@ the first measurement.)_
   Before, on a tree built from `main`@`673eecf2`: `db:status` → `Applied: 0 / Pending: 116` (exit **0**, no
   error); `db:migrate --dry-run` → `116 pending migration(s)`, then `[migrate] Fatal: … no pg_hba.conf entry`
   when it was pointed at the host URL. After, same tree: `db:status` → **`ledger rows: 99 · Applied: 99 ·
-  Pending: 17 · Total: 116`**, listing exactly `0059, 0101…0112, 0091, 0113, 0114, 0115`; `--dry-run` over the
+Pending: 17 · Total: 116`**, listing exactly `0059, 0101…0112, 0091, 0113, 0114, 0115`; `--dry-run` over the
   working connection → **`Summary: 99 already stamped, 17 to replay, 0 missing file(s)`**. Then **`main` moved
   to `310129bf`** (#2367 + #2369 merged) and everything was re-run on a second tree built from that sha:
   `db:status` → **`ledger rows: 99 · Applied: 99 · Pending: 18 · Total: 117`** with the pending list gaining
   `0116_drop_duplicate_indexes`; `--dry-run` → **`117 journal entr(ies); the ledger decides which are
-  outstanding`** then **`Summary: 99 already stamped, 18 to replay, 0 missing file(s)`**; the same command
+outstanding`** then **`Summary: 99 already stamped, 18 to replay, 0 missing file(s)`**; the same command
   against the host URL still exits **1** at `[migrate] Connecting to database…` with the real pg_hba message
   and no plan. The `Invisible:` section prints nothing because `310129bf` has 117 `.sql` files for 117
   journal entries — **0** unjournalised — which is the #46 guard doing its job, not the absence of a feature.
@@ -2835,15 +2836,15 @@ the first measurement.)_
   `npm run typecheck` rc=0 on both trees (`tsc --noEmit`, 0 errors).
 - **Harness caveat for anyone re-measuring this: the tree you run in decides part of the verdict.**
   `310129bf` via `git archive | tar -x` produced `1 failed | 486 passed (487 files) · 1 failed | 7179 passed
-  (7180) · 156.87 s`; `673eecf2` the same way produced `3 failed | 482 passed (485) · 3 failed | 7160 passed
-  (7163) · 195.77 s`. The 485→487 is real (#2367/#2369 added two test files). The rest is environment, and
+(7180) · 156.87 s`; `673eecf2` the same way produced `3 failed | 482 passed (485) · 3 failed | 7160 passed
+(7163) · 195.77 s`. The 485→487 is real (#2367/#2369 added two test files). The rest is environment, and
   it is exactly PP-056's subject: the older tree carries a `.env.local → /srv/nucrm/.env.local` symlink (made
   for the DB probes), the newer one has none — and `.env.local` is gitignored, so `git archive` cannot
   produce it. Measured A/B on `310129bf` with the three known files only: `TRUST_PROXY` unset → **3 files
   passed, 93/93**; `TRUST_PROXY=true` → **1 failed | 92 passed**, `rate-limit.test.ts > handles requests
-  without headers`. Of the PRs that fix those assertions, **#2359 has merged** (`4ea1e4c5`, 2026-10-05 —
+without headers`. Of the PRs that fix those assertions, **#2359 has merged** (`4ea1e4c5`, 2026-10-05 —
   `tests/unit/csrf.test.ts` + `tests/unit/csrf-unit.test.ts`) and **#2365 is still open** (`e4c7e3ba`, as of
-  `426e0595`), so `rate-limit.test.ts` is now the *only* one of the three that passes because `.env.local` is
+  `426e0595`), so `rate-limit.test.ts` is now the _only_ one of the three that passes because `.env.local` is
   gitignored — a tree without the env file still looks greener than the repo actually is.
   <!-- STATUS UPDATE, measured at 38ae90e2: **#2365 merged 2026-10-06T11:25:44Z** and its merge commit *is*
   `38ae90e2` itself. Its subject is this exact case — "stop a third assertion passing only when .env.local is
@@ -2855,14 +2856,14 @@ the first measurement.)_
   both columns now say 93/93, so `rate-limit.test.ts` is no longer "the *only* one of the three that passes
   because `.env.local` is gitignored": none of the three passes or fails because of it. The class is closed;
   what this entry goes on to describe (line 147 of that test) is a different failure. -->
-  The one *new* failure,
+  The one _new_ failure,
   `tests/unit/webhooks-delivery.test.ts:147`, asserts `status: 'success'` and got `'pending'` with
   `Outbound request blocked: DNS resolution for "x.com" returned no addresses`; it **passes in isolation in
   1.09 s** on the same tree and `getent hosts x.com` resolves, so it is load/timing-sensitive under the
   8-worker sweep, not broken by anything here. Neither number is a claim about this PR: the diff is two files
   under `scripts/`, which no test in `tests/unit` imports (grepped for assertions on `migrate.ts`'s changed
   strings — the only hit is `scripts/migration-runner.ts:217`, a different script this PR does not touch).
-- **And a retraction this measurement bought: `0115` being unapplied is *not* a live cross-tenant read.**
+- **And a retraction this measurement bought: `0115` being unapplied is _not_ a live cross-tenant read.**
   #2366's message describes the risk as arriving "once the app stops connecting as superuser" — preprod
   already doesn't: the connecting role is `nucrm`, `rolbypassrls = false`, `is_superuser = off`, and
   `relrowsecurity` **and** `relforcerowsecurity` are both true on `deals`, `leads`, `tenants`, `users`
@@ -2874,10 +2875,10 @@ the first measurement.)_
   owner and the caller differ (and for the day a reader role is added), not an emergency — which changes how
   the pending-18 decision should be prioritised, so it is stated here rather than left to the merge.
 - **Re-measured on `main` at `32d252b9` (2026-10-06): `db:status` → `ledger rows: 99 · Applied: 99 ·
-  Pending: 22 · Total: 121 journal entr(ies)`, exit 0, and the `Invisible:` section still prints nothing.**
+Pending: 22 · Total: 121 journal entr(ies)`, exit 0, and the `Invisible:` section still prints nothing.**
   Four entries joined since the `310129bf` measurement above: `0117_validate_fk_constraints` (#2370,
   `a4cc5a57`), `0118_fk_column_indexes` (#2372, `cd86a8d4`), `0119_dedupe_check_constraints` (#2377,
-  `0a3171d3`) and `0120_sequence_enrollments_cancelled_status` (#2405, which *is* `32d252b9`). All four are
+  `0a3171d3`) and `0120_sequence_enrollments_cancelled_status` (#2405, which _is_ `32d252b9`). All four are
   DDL only — `grep -cE '^\s*(insert|update|delete)\b'` returns **0** on each file, `guard:migration-rls` on
   that tree counts **121 migration(s) · 202 tenant-scoped table(s) · 17 row-write offenders + 2
   dynamic-target baselined** and reports no new ones, and `guard:chain` counts **121 up-file(s) · 121
@@ -2890,7 +2891,7 @@ the first measurement.)_
   PP-057's Summary row ("**99 applied and 18 outstanding**" and "applying the 18 is an **owner decision**"),
   this entry's own heading (the same "18 outstanding"), the sentence directly above ("the pending-18
   decision"), Exits (a) below ("**Apply the 18**"), and PP-058's heading + Summary row ("the pending
-  **21-entry** run cannot complete"). The *dated* re-measurements in this section stay exactly as written —
+  **21-entry** run cannot complete"). The _dated_ re-measurements in this section stay exactly as written —
   each names the tree it ran on, which is why `Pending: 17` on `673eecf2` and `Pending: 18` on `310129bf` are
   still true sentences about past trees — but an undated count reads as a live fact and is now wrong by four.
   **Read 22 as of `32d252b9`.** Nothing here is renumbered or back-patched: the Summary-row edit belongs to
@@ -2924,11 +2925,11 @@ the first measurement.)_
 
 ## PP-058 — 🚨 The migration runner is RLS-blind to every tenant row: it connects as the tables' owner with `FORCE ROW LEVEL SECURITY` active and sets no tenant GUC, so the data-correcting half of a migration silently fixes 0 rows while the DDL half — which RLS cannot blind — then aborts on the damage it was written to repair. `0114` is the demonstrated case, and the pending 21-entry run cannot complete _(S2 · Migrations + tooling)_
 
-- **Found by:** following **PP-057**'s `Pending: 20` into *what those files actually do*. `db:status` now
+- **Found by:** following **PP-057**'s `Pending: 20` into _what those files actually do_. `db:status` now
   reports the ledger honestly; the next question is whether the runner can execute what it says is pending.
   Reading `0114` for its dedupe order-of-operations turned up the comment at `0114:22-23` — "Expected to be a
   no-op on live data (measured 2026-10-04: `lead_oid_dup_groups = 0`) but written, not assumed — `CREATE UNIQUE
-  INDEX` would otherwise abort the whole run" — and that measurement is not reproducible in the context the
+INDEX` would otherwise abort the whole run" — and that measurement is not reproducible in the context the
   runner uses.
 - **Mechanism.** `scripts/migrate.ts:184-185` builds a plain `new Pool({ connectionString })`. It contains no
   `set_config` and no `current_setting` anywhere (grep: 0 hits). Posture, measured from `pg_class`/`pg_roles`:
@@ -2942,22 +2943,22 @@ the first measurement.)_
   (RLS off, 0 policies).
 - **Why that split is the bug class, not just an inconvenience.** RLS filters **DML**, not **DDL**.
   `CREATE UNIQUE INDEX` reads the whole heap and is not policy-filtered, and neither is
-  `ALTER TABLE … SET NOT NULL`. So a migration of the shape *"repair the rows, then constrain them"* runs its
+  `ALTER TABLE … SET NOT NULL`. So a migration of the shape _"repair the rows, then constrain them"_ runs its
   repair against an empty result set and its constraint against the real table. The two halves disagree, and
   only one of them can see the data.
 - **`0114`, measured both ways** (`npm run probe:sql`, always rolled back; the verbatim `ranked` CTE from
   `0114:26-42` run once per context):
 
-  | context | rows in dup groups | losers the dedupe reassigns | leads visible |
-  |---|---|---|---|
-  | runner-equivalent (no tenant GUC) | 0 | **0** | **0 of 25** |
-  | `--superadmin` (truth) | 5 | 4 | 25 |
+  | context                           | rows in dup groups | losers the dedupe reassigns | leads visible |
+  | --------------------------------- | ------------------ | --------------------------- | ------------- |
+  | runner-equivalent (no tenant GUC) | 0                  | **0**                       | **0 of 25**   |
+  | `--superadmin` (truth)            | 5                  | 4                           | 25            |
 
   The colliding group is tenant `c823aa31-e8e2-4286-8425-f6c4972822ab`, `lead_oid = 'LD-2026-001'`, 5 rows.
   **All five are soft-deleted** (`deleted_at` set 13–16 s after each creation, `2026-09-25T14:54` → `15:07` —
   the shape of trashed flow-simulator leads), and the index at `0114:63` is **not partial**: it is
   `ON "leads" ("tenant_id", "lead_oid")` with no `WHERE deleted_at IS NULL`, which is the point — #2343 exists
-  precisely because allocation counted *live* rows and handed a trashed lead's label back. So trashed rows
+  precisely because allocation counted _live_ rows and handed a trashed lead's label back. So trashed rows
   collide, and all five rows predate the header's "measured 2026-10-04" by **nine days**. That measurement was
   therefore either taken against a different database or taken in the same blind context the migration itself
   will run in; on this database it does not reproduce. Two consequences the header does not state: the dedupe
@@ -2966,12 +2967,13 @@ the first measurement.)_
   **incremental** path (`drizzle`'s built-in migrator, `:476`), which wraps each file in one transaction and
   stops on the first error: the `DROP INDEX` at `:61` rolls back with it, and the run aborts. **The ledger
   cannot be advanced past 0113 without changing something.**
+
 - **`0107` and `0108` are the same shape with the failure moved, not removed.** `0107` backfills
   `tenant_id` from the parent row, then **counts** `WHERE tenant_id IS NULL` to "FAIL LOUDLY … RAISE EXCEPTION
   with the offending count" (`0107:33-35`, `:115-118`) — but that count is DML-side and blind, so it reports 0
   and the exception never fires; what actually stops the run is `SET NOT NULL`, whose error names the table but
   none of the rows the author deliberately promised to name. `0108:25-43` pre-scans `invoices` for duplicate
-  `quote_id` specifically so a real duplicate produces *"Soft-delete the duplicate invoice rows, then re-run"*
+  `quote_id` specifically so a real duplicate produces _"Soft-delete the duplicate invoice rows, then re-run"_
   instead of "an obscure 23505"; blind, that scan sees 0 and the obscure 23505 is back — the comment describes
   the outcome the code cannot deliver. Both are currently latent on preprod because the data is clean
   (`invoices` 0 rows; 0 NULL `tenant_id` across all five `0107` tables, `deal_stages` 0 NULL of 1192), so
@@ -2986,7 +2988,7 @@ the first measurement.)_
   of 1192, `companies` 0 dangling of 19, `deals` 0 un-backfilled of 21, and the four `0037` tables that backfill
   from a parent are empty, so their outcome is vacuous rather than clean. Whether the already-applied
   data-repair migrations (e.g. `0067_ticket_portal_token`'s unqualified `UPDATE support_tickets … SET
-  portal_token`, `0037`'s five backfills) ran blind **and were rescued by the loud `SET NOT NULL` that followed**
+portal_token`, `0037`'s five backfills) ran blind **and were rescued by the loud `SET NOT NULL` that followed**
   or ran blind and simply did nothing, cannot be recovered from the ledger — it stamps the file's hash, not its
   row counts. The honest statement is: blindness is confirmed, harm is not.
 - **Deliberately not done — this is an owner decision, and there are four exits.** (1) Add the `0109`
@@ -3003,27 +3005,28 @@ the first measurement.)_
   classification for the current pending set (separating `DO $$` blocks, which **execute** at migration time,
   from `CREATE FUNCTION` bodies, which do not — I got this wrong on a first pass and corrected it):
 
-  | file | top-level DML | DO blocks | DDL that reads the heap |
-  |---|---|---|---|
-  | `0105_email_tracking_pixel_lookup` | 0 | 1 | — |
-  | `0107_rls_null_tenant_revenue_hardening` | 0 | 1 | `SET NOT NULL` ×5 |
-  | `0108_invoices_quote_id_unique` | 0 | 1 | `CREATE UNIQUE INDEX` |
-  | `0109_webhook_events_created_at_not_null` | 1 | 1 (sets the GUC) | `SET NOT NULL` |
-  | `0111_money_check_constraints` | 0 | 21 (all `ADD CONSTRAINT`) | — |
-  | `0113_dedupe_foreign_keys` | 0 | 11 (all catalog `RENAME`/`EXISTS` on `pg_constraint`) | — |
-  | `0114_leads_tenant_oid_unique` | 1 | 0 | `CREATE UNIQUE INDEX` |
+  | file                                      | top-level DML | DO blocks                                             | DDL that reads the heap |
+  | ----------------------------------------- | ------------- | ----------------------------------------------------- | ----------------------- |
+  | `0105_email_tracking_pixel_lookup`        | 0             | 1                                                     | —                       |
+  | `0107_rls_null_tenant_revenue_hardening`  | 0             | 1                                                     | `SET NOT NULL` ×5       |
+  | `0108_invoices_quote_id_unique`           | 0             | 1                                                     | `CREATE UNIQUE INDEX`   |
+  | `0109_webhook_events_created_at_not_null` | 1             | 1 (sets the GUC)                                      | `SET NOT NULL`          |
+  | `0111_money_check_constraints`            | 0             | 21 (all `ADD CONSTRAINT`)                             | —                       |
+  | `0113_dedupe_foreign_keys`                | 0             | 11 (all catalog `RENAME`/`EXISTS` on `pg_constraint`) | —                       |
+  | `0114_leads_tenant_oid_unique`            | 1             | 0                                                     | `CREATE UNIQUE INDEX`   |
 
-  `0113`'s "dedupe" is of *constraints*, not rows — every one of its `DO` blocks reads `pg_constraint` and
+  `0113`'s "dedupe" is of _constraints_, not rows — every one of its `DO` blocks reads `pg_constraint` and
   renames or drops catalog objects, which RLS does not filter, so it is **not** exposed despite its name; the
   same is true of `0111`, which contains no row DML at all. Naming a migration after the repair it performs is
   not evidence that it performs it.
+
 - **Verified:** `pg_class`/`pg_roles` posture for `leads`/`invoices`/`webhook_events` (all `rls_enabled=true`,
   `rls_forced=true`, `owner=nucrm`, `rolsuper=false`, `rolbypassrls=false`); the full force-isolation census by
   intersecting table names extracted from the 21 pending files against all 226 `pg_class` rows in `public`
   (`--max-rows 500` — **the first run silently returned 50 of 226 while `rowCount` said 226**, so `leads` and
   `invoices` were simply absent from the truncated set and the intersection reported "12 tables, 11 forced".
   This is a defect in the probe itself, not operator error: `scripts/probe-sql.mts:113` slices to `maxRows`, the
-  JSON branch at `:118-120` emits that slice next to the *untruncated* `rowCount` and sets no `truncated` flag,
+  JSON branch at `:118-120` emits that slice next to the _untruncated_ `rowCount` and sets no `truncated` flag,
   while only the text branch prints the honest `-- N row(s), M shown` line (`:135`). A `--json` consumer —
   which is exactly what `jq` and every scripted check use — therefore cannot tell a census from a prefix
   (fixed by **#2396**, which adds `returnedRows`/`truncated`/`maxRows` to that branch and renames/removes
@@ -3039,7 +3042,7 @@ the first measurement.)_
   Related: **PP-057** (the instrument that finally showed the pending set), **#51**/**#52**/**#45** (RLS-blind
   cron jobs — same class, fixed there with `withSecurityContext`, never applied to the runner), **#78** (panel
   reads 0 of 132), **#7**/**#90** (the super-admin policy escape this would otherwise reintroduce), **#69**
-  (the runner is *not* superuser — measured), **#74** (the journal gap still hiding `0059`/`0091`),
+  (the runner is _not_ superuser — measured), **#74** (the journal gap still hiding `0059`/`0091`),
   **#2234**, **#2228**, **#2237**, **#2259**, **#2343**.
 - **No CI path can validate any of the exits above, and that should shape the #103 decision.** CI's RLS job is not a proxy for
   a migration run. `.github/workflows/ci.yml:165` (re-pinned from `:161` on 2026-10-08 — the #2440
@@ -3103,35 +3106,35 @@ the first measurement.)_
        same sentence names. Two files, one recorded cause.
        Re-read at this revision and correct as cited: the env default at :11, the deploy.yml migrate call at
        :277, and the discovery regex at `scripts/apply-rls-ci.mjs` line 28. -->
-  Discovery in `apply-rls-ci.mjs` is by file *name* (`:28`, `/rls|isolation|polic|bypass|member_read|tenant_reference|force_/i`).
+  Discovery in `apply-rls-ci.mjs` is by file _name_ (`:28`, `/rls|isolation|polic|bypass|member_read|tenant_reference|force_/i`).
   Measured against the 21 pending tags it selects **3** — `0107`, `0091_usage_snapshots_superadmin_bypass`,
   `0115_rls_view_hardening` — so of the six pending files this entry names as evidence, only `0107` is even attempted, and it is
   attempted as the superuser. `0108`, `0109`, `0111`, `0113` and `0114` never execute in CI in any role — including `0109`, the one
   file carrying the correct mitigation (`set_config('app.is_super_admin', 'true', true)` at `0109:48`; `0114` sets no GUC at all).
   That exclusion is deliberate for index-only migrations — `tests/unit/schema/invoices-quote-unique-migration.test.ts:58` pins
-  `0108` *out* of discovery on purpose — so widening the regex is not a free fix either. Whichever exit #103 takes, verification has
+  `0108` _out_ of discovery on purpose — so widening the regex is not a free fix either. Whichever exit #103 takes, verification has
   to run as a non-superuser role against a ledger-backed database: a preprod `db:migrate` dry-run, or a CI service created
   `NOBYPASSRLS` with the app's own grant set. Until then CI green says nothing about this entry at all.
 - **Recurrence guard shipped:** `scripts/check-migration-rls-dml.mjs` (**#2398**, wired into `lint-typecheck` as
-  `npm run guard:migration-rls`) fails CI on a *new* migration whose executable scope writes rows into a tenant-scoped table without
-  the transaction-local `app.is_super_admin` GUC that `0109` sets. Tenant-scoped is derived statically as *policy on
-  `app.current_tenant`* ∪ *tables declaring a `tenant_id` column* (34 ∪ 191 → 202 tables), and the union is load-bearing: `leads` and
+  `npm run guard:migration-rls`) fails CI on a _new_ migration whose executable scope writes rows into a tenant-scoped table without
+  the transaction-local `app.is_super_admin` GUC that `0109` sets. Tenant-scoped is derived statically as _policy on
+  `app.current_tenant`_ ∪ _tables declaring a `tenant_id` column_ (34 ∪ 191 → 202 tables), and the union is load-bearing: `leads` and
   `invoices` are invisible to the policy rule because their `tenant_isolation` policy is generated by the `FOREACH … EXECUTE format()`
   loop at `0031_rls_remaining_tables.sql:149,177-180` over a text array, not written out; `deal_stages` is invisible to the column
   rule. `ai_providers` correctly derives as non-tenant-scoped, which cross-validates the 48/49 live census above. It reads no database
   and applies nothing. `CREATE FUNCTION` bodies are excluded because they do not execute at migration time, and that scoping is what
   keeps the guard usable: four files — `0006_brute_force_protection` (2 writes), `0009_workflow_functions` (4),
-  `0032_missing_db_functions` (19) and `0081_fix_usage_snapshot_function` (1) — contain row DML and *zero* of it in executable scope,
+  `0032_missing_db_functions` (19) and `0081_fix_usage_snapshot_function` (1) — contain row DML and _zero_ of it in executable scope,
   so all four stay out of the offender set without any hand-written exemption. It baselines **19** files — 17 row-write and 2 dynamic-`EXECUTE`
   (`0042_audit_log_immutability`, `0107`) — of which exactly **2 are pending on this DB** (`0107`, `0114`) and 17 are already applied.
   The applied half is recorded as shape only: whether any of them silently matched zero rows depends on FORCE RLS and row presence
-  *at the time it ran*, which is not recoverable from here, so no historical damage is claimed.
+  _at the time it ran_, which is not recoverable from here, so no historical damage is claimed.
 
-## PP-059 — 🚨 The one command in this repo that asks the **live database** what it will reject is red on `main` and runs in no workflow: `guard:vocab` exits **1** with **2 of 9** constraints disagreeing at `38ae90e2` — `chk_sequence_enrollments_status` refuses `'cancelled'`, which `/api/unsubscribe` has written since the repo's first commit, and `chk_invoices_status` refuses `'void'`, which `INVOICE_STATUSES` offers and `PATCH /api/tenant/invoices/[id]` passes straight through — while the migrations that would fix both (`0120`, `0112`) sit in the 22-entry pile PP-057 counted and PP-060 shows nothing can apply _(S2 · CHECK vs code)_
+## PP-059 — 🚨 The one command in this repo that asks the **live database** what it will reject is red on `main` and runs in no workflow: `guard:vocab` exits **1** with **2 of 9** constraints disagreeing (measured at `38ae90e2`, re-measured at `f3787f32`) — `chk_sequence_enrollments_status` refuses `'cancelled'`, which `/api/unsubscribe` has written since the repo's first commit, and `chk_invoices_status` refuses `'void'`, which `INVOICE_STATUSES` offers and `PATCH /api/tenant/invoices/[id]` passes straight through — while the migrations that would fix both (`0120`, `0112`) sit in the 23-entry pile PP-057 counts and PP-060 shows nothing can apply _(S2 · CHECK vs code)_
 
 - **Found by:** running the tooling **#2405** landed, at main's tip, against the database it was written
-  for. PP-057 answered *"how many entries are outstanding?"*, PP-058 answered *"can the runner apply
-  them?"* — this answers *"does the outstanding pile matter yet?"*, and it is the first time this register
+  for. PP-057 answered _"how many entries are outstanding?"_, PP-058 answered _"can the runner apply
+  them?"_ — this answers _"does the outstanding pile matter yet?"_, and it is the first time this register
   has asked the live database what it rejects instead of reading what a migration file intends to do.
 - **Which database "live" means here.** The running app container's own `DATABASE_URL` ends
   `…@pgbouncer:6432/nucrm` (`docker exec nucrm-app printenv DATABASE_URL`), and `nucrm-pgbouncer`'s
@@ -3140,7 +3143,7 @@ the first measurement.)_
   not belong in it"). `PROBE_DATABASE_URL` is that same container published on loopback (`127.0.0.1:6432`),
   so `guard:vocab`, `db:status` and every `probe:sql` cited in this register reach **the database the app
   itself writes to** — confirmed by reading the ledger through it: `drizzle.__drizzle_migrations` holds
-  **99** rows, the same number `db:status` prints as `Applied: 99`. The database this register *cannot*
+  **99** rows, the same number `db:status` prints as `Applied: 99`. The database this register _cannot_
   reach is the VM's, and that gap is PP-060's subject.
 - **What the guard is.** `scripts/check-constraint-vocab.mts` loads `scripts/constraint-vocab.json`
   (**9** registered constraints) and, through `withReadonlySession`, `pg_get_constraintdef` for each one. A
@@ -3149,17 +3152,18 @@ the first measurement.)_
   pinned text vocabularies as CHECK constraints, the code kept growing, the constraints did not, and the
   writes began failing — silently where a caller swallows the error, loudly where a route propagates it.
   Exit codes, all three measured here: **2** = no connection string (`Set PROBE_DATABASE_URL … or run
-  through an npm script that loads .env.local`), **1** = drift, **0** = agreement.
-- **Measured at `38ae90e2` (2026-10-07), read-only through that pgbouncer:**
+through an npm script that loads .env.local`), **1** = drift, **0** = agreement.
+- **Measured at `38ae90e2` (2026-10-07) and again at `f3787f32` (2026-10-08) — same rc, same two FAILs, same
+  counts and same writer lists both times — read-only through that pgbouncer:**
   `npm run guard:vocab` → `rc=1`, `constraint vocabulary guard — 9 constraints checked against the live
-  database`, and exactly two FAILs:
+database`, and exactly two FAILs:
   `[missing-in-db] sequence_enrollments.status` — `db= 5  registry_required=3  legacy=3`,
-  *" `'cancelled'` is written by code but `chk_sequence_enrollments_status` rejects it (23514). Writers:
+  _" `'cancelled'` is written by code but `chk_sequence_enrollments_status` rejects it (23514). Writers:
   drizzle/schema/marketing.ts, app/api/unsubscribe/route.ts, app/api/webhooks/resend/route.ts,
-  lib/cron/sequence-steps.ts"*;
+  lib/cron/sequence-steps.ts"_;
   `[missing-in-db] invoices.status` — `db= 8  registry_required=9  legacy=0`,
-  *" `'void'` is written by code but `chk_invoices_status` rejects it (23514). Writers:
-  lib/api/schemas/billing.ts, lib/billing/payments.ts, app/api/webhooks/payu/route.ts"*.
+  _" `'void'` is written by code but `chk_invoices_status` rejects it (23514). Writers:
+  lib/api/schemas/billing.ts, lib/billing/payments.ts, app/api/webhooks/payu/route.ts"_.
   Cross-checked against the catalog rather than the guard's own arithmetic: a `pg_constraint` query counts
   string literals by quote pairs and tests membership — `chk_invoices_status` = **8** literals,
   `has_void=false`, `has_cancelled=true`; `chk_sequence_enrollments_status` = **5** literals,
@@ -3167,10 +3171,12 @@ the first measurement.)_
 - **Both values are reachable writes, not dead vocabulary.** `INVOICE_STATUSES`
   (`lib/api/schemas/billing.ts:42-52`) lists 9 statuses including `'void'`;
   `app/api/tenant/invoices/[id]/route.ts:139` includes `status` in its mutable field list and `:166`
-  validates the incoming value *against that same constant*, so `{"status":"void"}` clears validation and
+  validates the incoming value _against that same constant_, so `{"status":"void"}` clears validation and
   reaches the UPDATE. On the enrollment side the writes are literal: `app/api/unsubscribe/route.ts:56` and
-  `app/api/webhooks/resend/route.ts:212` and `:368` each set `status: 'cancelled'`, and since **#2392** the
-  shared helper `cancelOpenEnrollments` (`lib/cron/sequence-steps.ts:53`, writing at `:64`, `:315`, `:324`)
+  `app/api/webhooks/resend/route.ts:261` and `:435` each set `status: 'cancelled'` — both re-pinned on
+  2026-10-08 from `:212`/`:368`, which **#2425**'s tenant attribution moved out from under this entry —
+  and since **#2392** the
+  shared helper `cancelOpenEnrollments` (`lib/cron/sequence-steps.ts:64`, writing at `:78`, `:330`, `:339`)
   is the only place that literal is issued: the un-enroll route calls it
   (`app/api/tenant/contacts/[id]/enroll/route.ts:127`) and no longer contains the value itself. Which is why
   the registry's writer list changed under this entry's feet between `32d252b9` and `38ae90e2` — it tracks
@@ -3183,24 +3189,28 @@ the first measurement.)_
   Four and a half months of code writing a value the schema rejects, with no signal, because the tool that
   would have said so did not exist until 2026-10-02 (`3836629f`).
 - **And the tool that says so is wired to nothing — uniquely so.** Enumerated at `38ae90e2` from the workflow
-  files themselves: `package.json` defines **14** `guard:*` scripts. Workflows invoke **11** by alias —
-  `ci.yml` runs 10 (`rls`, `csrf`, `schemas`, `boundaries`, `filesize`, `any-suppressions`, `chain`,
-  `migration-rls`, `counters`, `csv`, at `:45` through `:72`) and `nightly-soak.yml:190`/`:202` runs the
-  eleventh (`guard:running-config --allow-empty`) — and invoke **2** more as bare `node` commands inside
-  `ci.yml`'s SAST job: `npm audit --audit-level=high --json | node scripts/check-audit-baseline.mjs` (`:206`)
-  and `node scripts/check-semgrep-baseline.mjs semgrep.sarif` (`:239`). That is 13 of 14. The fourteenth is
+  files themselves, and re-enumerated at `f3787f32` after **#2445** and **#2447** landed the two register
+  guards: `package.json:47-65` defines **19** `guard:*` scripts. Workflows invoke **16** by alias — `ci.yml`
+  runs 14 (`rls`, `csrf`, `schemas`, `boundaries`, `filesize`, `any-suppressions`, `chain`, `migration-rls`,
+  `counters`, `csv`, `portal-softdelete`, `public-ratelimit`, `public-projection`, `coords`, at `:45` through
+  `:81`) and `nightly-soak.yml:209`/`:255` runs the other two (`guard:running-config --allow-empty`, and
+  `guard:register-drift` in the `register-drift-screen` job at `:241`) — and invoke **2** more as bare `node`
+  commands inside `ci.yml`'s SAST job: `npm audit --audit-level=high --json | node scripts/check-audit-baseline.mjs`
+  (`:215`) and `node scripts/check-semgrep-baseline.mjs semgrep.sarif` (`:248`). That is 18 of 19. The nineteenth is
   `guard:vocab`: `grep -rn check-constraint-vocab .github/workflows` returns **0**, and so does
-  `grep -rn constraint-vocab .github/workflows`, so no automation runs it under its alias *or* its filename.
+  `grep -rn constraint-vocab .github/workflows`, so no automation runs it under its alias _or_ its filename.
   It is not merely failing-quiet — it is unfailing-quiet, because nobody calls it, and it is the only guard in
-  the repo in that condition.
-  (The 11/2/1 split is itself worth recording. A wiring audit that greps for `npm run guard:` reports
-  **10 of 14** and mis-files `audit` and `semgrep` as unrun, because those two are called as direct `node`
+  the repo in that condition. Two of the four guards added since this entry was written — `coords` and
+  `register-drift` — are the ones that read _this file_, which is why the re-count is in the entry rather than
+  in a follow-up.
+  (The 16/2/1 split is itself worth recording. A wiring audit that greps for `npm run guard:` reports
+  **16 of 19** and mis-files `audit` and `semgrep` as unrun, because those two are called as direct `node`
   invocations rather than through their aliases. This entry said exactly that until its own PR's CI run
-  printed `✖ npm audit baseline guard failed (#2301)` — a baseline rotting *loudly*, on the first try — and
+  printed `✖ npm audit baseline guard failed (#2301)` — a baseline rotting _loudly_, on the first try — and
   the count was then taken from the workflows rather than from the alias list.)
-- **Why CI's database could not answer this even if it did.** CI *has* Postgres —
-  `ci.yml:77-90` and `:122-135` start `postgres:16-alpine` services (`:79`, `:124`) — but it provisions them
-  with `npm run db:sync` (`:111`, `:156`), i.e. `drizzle-kit push` from `drizzle/schema/**`. Those CHECKs
+- **Why CI's database could not answer this even if it did.** CI _has_ Postgres —
+  `ci.yml:86-99` and `:131-144` start `postgres:16-alpine` services (`:88`, `:133`) — but it provisions them
+  with `npm run db:sync` (`:120`, `:165`), i.e. `drizzle-kit push` from `drizzle/schema/**`. Those CHECKs
   are migration-only artifacts: across **63** schema files there are exactly **4** `check(...)`
   declarations, all in `record-links.ts` (`record_links_from_type_valid`, `_to_type_valid`,
   `_relation_valid`, `_not_self`). `chk_invoices_status` is declared nowhere in the schema;
@@ -3219,7 +3229,7 @@ the first measurement.)_
   active enrollment aborts its transaction — the UPDATE is inside `tx`, and the route's own
   `catch` (`app/api/unsubscribe/route.ts:121-123`) answers `500` with an HTML "Something went wrong. Please
   contact support." page, rolling back the do-not-contact flag and the activity row with it — but there is
-  no enrollment to cancel yet. Note that the 500 is *this route's* shape, not the class's:
+  no enrollment to cancel yet. Note that the 500 is _this route's_ shape, not the class's:
   `lib/api/db-client-error.ts:105-111` maps `23514` to **400** "Invalid value for a constrained field", and
   `/api/unsubscribe` does not use that mapper. Any tenant that has ever run a sequence, or voided an
   invoice, is in the fired half of that sentence.
@@ -3229,28 +3239,29 @@ the first measurement.)_
   `ci.yml` instead would produce a third answer that describes neither environment.
   (b) **Apply `0112` and `0120`** — the fix for a live user-facing rejection, sitting in the pile that
   PP-057 records as undecided and PP-060 records as unreachable. `0112`/`0120` are pure `ALTER TABLE … DROP
-  CONSTRAINT` + `ADD CONSTRAINT` widenings, so they are not exposed to PP-058's RLS blindness at all — this
+CONSTRAINT` + `ADD CONSTRAINT` widenings, so they are not exposed to PP-058's RLS blindness at all — this
   is the cheapest half of the backlog to drain and the one with a named consequence.
-  (c) **Make the wiring greppable** — route `ci.yml:206` and `:239` through `npm run guard:audit` /
-  `npm run guard:semgrep` (the same two commands, already aliases in `package.json:58`/`:59`) so "which
+  (c) **Make the wiring greppable** — route `ci.yml:215` and `:248` through `npm run guard:audit` /
+  `npm run guard:semgrep` (the same two commands, already aliases in `package.json:61`/`:62`) so "which
   guards run?" has one answer instead of two syntaxes, and so adding `guard:vocab` to the set is a one-line
-  change rather than a third convention. A control that is invisible to the obvious audit command is a
+  change rather than a third convention — **#2445** and **#2447** proved that half by wiring `coords` and
+  `register-drift` themselves. A control that is invisible to the obvious audit command is a
   control that will be mis-reported again.
   (d) **Converge the two vocabularies** — declare these CHECKs in `drizzle/schema/**` so `db:sync` and
   `db:migrate` build the same constraint, or the CI/preprod divergence this entry depends on stays a
   permanent fixture of the tooling.
 - **Files:** `scripts/check-constraint-vocab.mts`, `scripts/constraint-vocab.json` (9 entries; its
-  `sequence_enrollments.status` writers were rewritten by **#2392**), `.github/workflows/ci.yml` (10 guards
-  by alias at `:45-72`, 2 more by direct `node` call at `:206`/`:239`, `db:sync` at `:111`/`:156`, services
-  at `:77-90`/`:122-135`),
-  `.github/workflows/nightly-soak.yml` (`:190`, `:202`),
+  `sequence_enrollments.status` writers were rewritten by **#2392**), `.github/workflows/ci.yml` (14 guards
+  by alias at `:45-81`, 2 more by direct `node` call at `:215`/`:248`, `db:sync` at `:120`/`:165`, services
+  at `:86-99`/`:131-144`),
+  `.github/workflows/nightly-soak.yml` (`:209`, `:255`),
   `tests/unit/schema/invoice-status-vocab-migration.test.ts`,
   `tests/unit/constraint-vocab-registry.test.ts`, `drizzle/migrations/0112_invoice_status_vocab.sql`,
   `drizzle/migrations/0120_sequence_enrollments_cancelled_status.sql`. Evidence read: `pg_constraint`
   literal counts + `pg_get_constraintdef`, `drizzle.__drizzle_migrations` row count, `INVOICE_STATUSES`
   (`lib/api/schemas/billing.ts:42-52`), `app/api/tenant/invoices/[id]/route.ts:139,166`,
-  `app/api/unsubscribe/route.ts:42-56,121-123`, `app/api/webhooks/resend/route.ts:212,368`,
-  `lib/cron/sequence-steps.ts:53,64,315,324`, `app/api/tenant/contacts/[id]/enroll/route.ts:127`,
+  `app/api/unsubscribe/route.ts:42-56,121-123`, `app/api/webhooks/resend/route.ts:261,435`,
+  `lib/cron/sequence-steps.ts:64,78,330,339`, `app/api/tenant/contacts/[id]/enroll/route.ts:127`,
   `lib/api/db-client-error.ts:83,105-111,145`,
   `docker exec nucrm-app printenv DATABASE_URL`, `nucrm-pgbouncer` `[databases]` stanza,
   `git cat-file -e ecbba74e:app/api/unsubscribe/route.ts`, `git log -S` provenance, `package.json` script
@@ -3259,31 +3270,31 @@ the first measurement.)_
   (what applying it would and would not do), **PP-060** (why nothing can), **#2405** (which shipped both the
   guard's registry entry and `0120`).
 
-## PP-060 — 🚨 Nobody applies the pending migrations, and the automation that claims to could not reach this database if it worked: the repo's only executable migrate sits inside `deploy.yml`'s single SSH script block, a hop that has now failed **716 runs in a row** since the last success on 2026-08-02 (`3 successes in the 1,257 runs GitHub still retains`, 15 of 15 sampled failures ending `dial tcp ***:22: i/o timeout`) — and that workflow is pm2-shaped end to end, targeting the production VM, so even a green deploy would migrate a different database than the one this Docker app writes to _(S2 · Deploy)_
+## PP-060 — 🚨 Nobody applies the pending migrations, and the automation that claims to could not reach this database if it worked: the repo's only executable migrate sits inside `deploy.yml`'s single SSH script block, a hop behind **741 consecutive runs with no success** since the last green one on 2026-08-02 (`3 successes in the 1,282 runs GitHub still retains`, 15 of 15 sampled failures ending `dial tcp ***:22: i/o timeout`) — and that workflow is pm2-shaped end to end, targeting the production VM, so even a green deploy would migrate a different database than the one this Docker app writes to _(S2 · Deploy)_
 
-- **Found by:** taking PP-057's Exit (a) — *"Apply the 18"*, now **22** — literally, and asking **who**
-  would run it. Not a human reading this file: the deploy workflow's own comment at `:252-256` says the
+- **Found by:** taking PP-057's Exit (a) — _"Apply the 18"_, now **23** — literally, and asking **who**
+  would run it. Not a human reading this file: the deploy workflow's own comment at `:256-260` says the
   pipeline "MUST migrate the schema between checkout and build/restart" (#2233), so the mechanism looked
   already decided. It is not.
 - **Mechanism — where the migrate actually happens.** There are **5** workflow files. Exactly two name
   `migrate` at all: `deploy.yml` (**5** case-insensitive hits) and `backup-drill.yml` (**1** — and that one
   is a comment, see below). Across the whole `.github/workflows` directory `db:migrate` matches **once**, at
-  `deploy.yml:270`, inside the comment that lists what the new helper does ("a deploy and a manual
-  `db:migrate` cannot interleave"); `migrate.ts` matches **twice**, at `:261` (comment) and `:277` — the
+  `deploy.yml:274`, inside the comment that lists what the new helper does ("a deploy and a manual
+  `db:migrate` cannot interleave"); `migrate.ts` matches **twice**, at `:265` (comment) and `:281` — the
   one executable statement in the repo's automation:
   `DEPLOY_SHA="$SHA" npx tsx --import ./scripts/load-env.mjs scripts/deploy-migrate.ts --yes`.
   That line lives in the `script: |` block opened at `:77`, which belongs to the workflow's only meaningful
   step: **2 steps total** — `actions/checkout@v7` (`:59`) and `Deploy via SSH` (`:68`,
   `appleboy/ssh-action@v1` at `:69`, `host`/`username`/`key` from `DEPLOY_HOST`/`DEPLOY_USER`/
   `DEPLOY_SSH_KEY` at `:71-73`). Everything else the deploy does is inside that remote heredoc: the
-  RLS-privilege gate (`:242`), the migrate (`:277`), `npm run build`, the pm2 restarts.
+  RLS-privilege gate (`:246`), the migrate (`:281`), `npm run build`, the pm2 restarts.
   `scripts/deploy-migrate.ts` — the #2404 extraction of ~70 lines of inline bash into one tested call
-  (`lib/db/deploy-migration-run.ts`) — is itself a *wrapper*: `:96` spawns
+  (`lib/db/deploy-migration-run.ts`) — is itself a _wrapper_: `:96` spawns
   `npx tsx … scripts/migrate.ts --yes`, i.e. the exact runner PP-058 proved is RLS-blind to every tenant
   row. It refuses before that when `BACKUP_LOCAL_DIR` is ephemeral (`:138-143`) or `pg_dump` is not on
   PATH (`:146-155`) — both satisfiable here (this host's app image **does** ship `pg_dump` and `psql`:
   `docker exec nucrm-app command -v pg_dump` → `/usr/bin/pg_dump`), so neither refusal is this entry's
-  point. `package.json:78` now also defines `db:deploy-migrate` as a hand-run alias; **no workflow
+  point. `package.json:83` now also defines `db:deploy-migrate` as a hand-run alias; **no workflow
   invokes it** (grep: 0 hits across `.github/workflows`).
 - **The one workflow that could re-read the ledger never does.** Grepping all 5 files for `db:status` or
   `migration-status` returns **0 hits in every file**. So the pipeline that owns the sentence "the deploy
@@ -3294,41 +3305,43 @@ the first measurement.)_
   schema (#2124)", but the step that builds that schema (`:44-47`) runs `npm run db:sync` (drizzle-kit
   **push** from `drizzle/schema/**`) plus `node scripts/apply-rls-ci.mjs` — never `db:migrate`, never the
   `drizzle/migrations/**` directory. So the weekly backup drill verifies the pushed schema, not the
-  migrated one: the same structural blind spot PP-059 records for `ci.yml` (`ci.yml:111`, `:156`) also
+  migrated one: the same structural blind spot PP-059 records for `ci.yml` (`ci.yml:120`, `:165`) also
   applies to the tool whose stated purpose is trusting restores.
 - **Measured hop failure.** Full retained history (`gh api …/workflows/deploy.yml/runs`, 2026-06-05T11:45:25Z
-  → 2026-10-06T11:36:05Z, **1,257 runs**): **3 success / 957 failure / 240 cancelled / 57 skipped.** (Not
+  → 2026-10-08T05:58:59Z, **1,282 runs**): **3 success / 981 failure / 240 cancelled / 58 skipped.** (Not
   "lifetime": the retained window starts 2.5 weeks after the first commit `ecbba74e`.) The three successes
   are `451872822c` (run `30691421416`, 2026-08-01T08:15:55Z), `d5c3ec254a` (`30692483755`, 08:48:22Z) and
-  `46123b728d` (`30748691555`, 2026-08-02T12:51:06Z). Everything after that timestamp — **716 runs** — splits
-  **615 failure / 54 cancelled / 47 skipped / 0 success**, first failure `30784445875` (2026-08-03T04:26:32Z),
-  newest `37457484613` (2026-10-06T11:36:05Z, head `38ae90e2` — main's own tip). Taking the **15 most recent
+  `46123b728d` (`30748691555`, 2026-08-02T12:51:06Z). Everything after that timestamp — **741 runs** — splits
+  **639 failure / 54 cancelled / 48 skipped / 0 success**, first failure `30784445875` (2026-08-03T04:26:32Z),
+  newest `37735134900` (2026-10-08T05:58:59Z, head `f3787f32` — main's own tip). Taking the **15 most recent
   failures** and reading each job log through `actions/jobs/{id}/logs`: **15/15** contain
   `2026-…  dial tcp ***:22: i/o timeout` immediately followed by `##[error]Process completed with exit
-  code 1` (GitHub masks the host as `***`; the address is deliberately not recorded here either — AGENTS.md
-  puts it in the secret, not the repo). For the newest run the timeline is explicit: job started 11:36:10,
-  `##[group]Run appleboy/ssh-action@v1` at log line 139 (11:36:13.5), the dial timeout at line 724
-  (11:36:43.8) — a ~30 s TCP timeout inside a 35 s job; sampled durations across the 15 are **39–83 s**. A
+code 1` (GitHub masks the host as `***`; the address is deliberately not recorded here either — AGENTS.md
+  puts it in the secret, not the repo). For the sampled run `37734792580` the timeline is explicit: job log
+  opens 05:55:03.6, `##[group]Run appleboy/ssh-action@v1` at log line 139 (05:55:06.3), the dial timeout at
+  line 732 (05:55:36.7) — a ~30 s TCP timeout inside a 37 s job, 767 log lines; sampled durations across the
+  15 are **35–57 s**. A
   timeout, not a refusal, and not a script error: **none of the deploy body above has executed since
   2026-08-03.**
-- **This failure mode is known; its blast radius is not.** `AGENTS.md` already carries the remedy — *"VM
+- **This failure mode is known; its blast radius is not.** `AGENTS.md` already carries the remedy — _"VM
   external IP is EPHEMERAL — changes on every reboot … When the deploy fails with `dial tcp …:22:
-  connection refused/timeout`, run `curl -s ifconfig.me`, then `gh secret set DEPLOY_HOST`"* — plus the
+connection refused/timeout`, run `curl -s ifconfig.me`, then `gh secret set DEPLOY_HOST`"_ — plus the
   deploy-history line "200+ runs, 0 successes before 2026-08-01". The secret metadata (names +
   `updated_at` only; values are not readable through this interface) fits that story: `DEPLOY_HOST`
   `2026-08-02T11:58:43Z`, `DEPLOY_SSH_KEY` `2026-08-02T12:36:02Z` — ~13 minutes before the last green run —
   and `DEPLOY_USER` `2026-07-31T11:06:41Z`; none touched since. What AGENTS.md does **not** say, and what
-  this entry exists to record, is that the migration step is *inside* the unreachable hop: two months of red
+  this entry exists to record, is that the migration step is _inside_ the unreachable hop: two months of red
   deploys have therefore also been two months in which "applying the backlog is an owner decision" described
   a decision nobody was positioned to make by running anything.
 - **Even a green run would not touch this database.** The workflow documents its own topology, and
   `deploy/DEPLOYMENT_PATHS.md:5-13` states it as the canonical decision: **Path A** = production under
   **PM2 on the VM** (git-based update, Docker only for infra/monitoring), **Path B** = Docker for
   development, "Do **not** use it to serve production". `deploy.yml` is Path A line by line: it `cd`s to a
-  checkout under a VM user's home directory (`:79` — that line already carries the login name, and
-  AGENTS.md keeps logins out of this file, so it is cited by line rather than copied), probes
+  checkout under a VM user's home directory (`:83` — `cd "$HOME/nucrm-bigplan-by-vm-enterprise-v2"`; the
+  literal path with the login in it is gone, **#2436** replaced it with `$HOME` and the comment at `:79-82`
+  says why, so what this entry cites is now the _shape_ of the path, not its owner), probes
   `HEALTH_PORTS: 3099 3000`
-  (`:38`), discovers and restarts a pm2 app (`:93-110`, `:137`). Measured here: `/home` is **empty**
+  (`:38`), discovers and restarts a pm2 app (`:97-114`, `:141`). Measured here: `/home` is **empty**
   (`ls -A /home` prints nothing), `command -v pm2` finds nothing, and nothing listens on 3099
   (`curl -s -o /dev/null -w '%{http_code}' 127.0.0.1:3099/api/health` → `000`). This host is the Docker
   shape instead — **18** running containers (`docker ps -q | wc -l`), the app as `nucrm-app` on image
@@ -3338,25 +3351,30 @@ the first measurement.)_
   it moved the block into `scripts/deploy-migrate.ts`.
 - **So preprod has no deploy path either.** Measured absences, not inferred: the only deploy-shaped script
   in the tree, `scripts/deploy-vm.sh`, is a VM bootstrap (`:16` installs `postgresql-15`, `:27` clones a
-  *different* repository path) that no workflow calls — its only references left are three lines in
+  _different_ repository path) that no workflow calls — its only references left are three lines in
   `docs/archived/ISSUES.md`. This host's automation is one line — `crontab -l` =
   `*/15 * * * * /usr/bin/python3 /root/sentry-watchdog/check.py` — `/etc/cron.d` holds only
   `e2scrub_all`, and the only nucrm systemd unit on the timer list is `nucrm-builder-prune.timer`. (The
-  `nucrm-cron` container runs `crond -f -l 2` *inside* the stack for the app's own routes; it is not a
+  `nucrm-cron` container runs `crond -f -l 2` _inside_ the stack for the app's own routes; it is not a
   deploy path and does not build or migrate anything.) Meanwhile the running image is stale against main:
   `docker inspect` gives `nucrm-app` created `2026-10-03T15:48:09Z` from an image built
-  `2026-10-03T15:43:25Z`, `git rev-list --count --since=2026-10-03T15:43:25Z origin/main` is **159** commits
-  at `38ae90e2`, and `db:status` reports **22** journal entries newer than the ledger. Nothing is building
+  `2026-10-03T15:43:25Z`, `git rev-list --count --since=2026-10-03T15:43:25Z origin/main` is **183** commits
+  at `f3787f32` (it was **159** at `38ae90e2` when this entry was written), and `db:status` reports **23**
+  journal entries newer than the ledger. Nothing is building
   the answer to "which tree does this database match".
-- **The register's own coordinates rot with it.** Main's PP-058 text still points at deploy.yml line 298 for
-  the migrate call and describes an inline `pg_dump` restore point at lines 284 to 293; both were replaced by
-  #2404 (the call is `:277`, the restore point is `scripts/deploy-migrate.ts`'s). That is not a second bug —
-  it is the same one, seen from the docs: a deploy path nobody runs also has no reason to keep its own
-  documentation honest. Stale numbers are spelled "line N" on purpose: `path:line` is how this file cites live
+- **The register's own coordinates rot with it.** Main's PP-058 heading still calls the backlog "the pending
+  21-entry run" while `db:status` reports **23**, and a correction comment inside that same entry says the
+  deploy's migrate call is "now at `:277`" when the live statement is at `:281` — #2404 moved it once and
+  **#2445**/#2447 moved it again, and nothing re-read the prose. Neither is catchable by the guard that
+  exists: a count has no file to resolve against, and a bare "`:277`" with no path before the colon is not
+  citation-shaped, so `guard:coords` never sees it. That is not a second bug — it is the same one, seen from
+  the docs: a deploy path nobody runs also has no reason to keep its own documentation honest. Stale numbers
+  are spelled "line N" on purpose: `path:line` is how this file cites live
   targets, so a citation-shaped token aimed at a dead line is indistinguishable from a live citation.
-- **The chain, end to end.** (i) **22** entries are pending, including `0112`/`0120` (PP-059's fix for a
-  live rejection), `0091` (**#56**) and `0059` (**#74**); (ii) the only automated apply path is `:277`,
-  behind an SSH hop that has not opened in 716 runs, pointing at another host; (iii) even when it opens,
+- **The chain, end to end.** (i) **23** entries are pending, including `0112`/`0120` (PP-059's fix for a
+  live rejection), `0091` (**#56**) and `0059` (**#74**); (ii) the only automated apply path is
+  `deploy.yml:281`,
+  behind an SSH hop that has not opened in 741 runs, pointing at another host; (iii) even when it opens,
   PP-058 applies — the runner connects as the table owner with `FORCE ROW LEVEL SECURITY` on, so the
   row-writing halves of `0109` and `0114` match 0 rows silently, which is decision **#103**, upstream of
   everything here; (iv) nothing re-reads `db:status` to confirm the pile drained. Two of those four links are
@@ -3368,26 +3386,27 @@ the first measurement.)_
   (b) **Give preprod a deploy path** — either a `workflow_dispatch` job that runs against this host, or a
   written runbook (`db:deploy-migrate -- --dry-run`, then apply, executed **inside** the app container per
   PP-057's exit (d)). Today the deploy is done by hand and leaves no record: the running image was built
-  2026-10-03 and 159 commits have landed since, and nothing in the repo knows that.
+  2026-10-03 and 183 commits have landed since, and nothing in the repo knows that.
   (c) **Make the ledger observable where it is live** — run `db:status` on a schedule and alert on
   `Pending > 0`, or refuse to start the app container when it is non-zero. This is PP-057's exit (c) from the
   other side: `db:status` was fixed to tell the truth in #2371 and **nothing asks it**.
-  (d) **Decide #103 first** — otherwise (b) applies 22 entries whose row-correcting halves silently do
+  (d) **Decide #103 first** — otherwise (b) applies 23 entries whose row-correcting halves silently do
   nothing, and the register gains a green deploy and a lie.
-- **Files:** `.github/workflows/deploy.yml` (`:38` health ports, `:59`/`:68-77` the two steps, `:79` the VM
-  path, `:93-110`/`:137` pm2, `:242` privilege gate, `:252-283` the migration block with the only executable
-  migrate at `:277`), `scripts/deploy-migrate.ts` (`:96` spawn of `migrate.ts --yes`, `:138-143` and
+- **Files:** `.github/workflows/deploy.yml` (`:38` health ports, `:59`/`:68-77` the two steps, `:83` the VM
+  path, `:97-114`/`:141` pm2, `:246` privilege gate, `:256-287` the migration block with the only executable
+  migrate at `:281`), `scripts/deploy-migrate.ts` (`:96` spawn of `migrate.ts --yes`, `:138-143` and
   `:146-155` preconditions), `lib/db/deploy-migration-run.ts`, `.github/workflows/ci.yml` (services
-  `:79`/`:124`, `db:sync` `:111`/`:156`, 10 guards `:45-72`), `.github/workflows/backup-drill.yml` (`:4`
-  comment vs `:44-47` `db:sync`), `.github/workflows/nightly-soak.yml` (`:190`/`:202`),
-  `deploy/DEPLOYMENT_PATHS.md`, `scripts/deploy-vm.sh`, `package.json` (`:77` `db:migrate`, `:78`
-  `db:deploy-migrate`, `:81` `db:status`), `AGENTS.md` (ephemeral IP + `gh secret set` remedy + the two-path
-  correction). Evidence read: the retained Deploy run list (1,257 rows) and per-job logs via
+  `:88`/`:133`, `db:sync` `:120`/`:165`, 14 guards `:45-81`), `.github/workflows/backup-drill.yml` (`:4`
+  comment vs `:44-47` `db:sync`), `.github/workflows/nightly-soak.yml` (`:209`/`:255`),
+  `deploy/DEPLOYMENT_PATHS.md`, `scripts/deploy-vm.sh`, `package.json` (`:82` `db:migrate`, `:83`
+  `db:deploy-migrate`, `:86` `db:status`), `AGENTS.md` (ephemeral IP + `gh secret set` remedy + the two-path
+  correction). Evidence read: the retained Deploy run list (1,282 rows) and per-job logs via
   `actions/jobs/{id}/logs` for the 15 most recent failures plus `30748691555`, `30784445875` and
-  `37457484613`; `gh api …/actions/secrets` (names + `updated_at` only — no values are readable through
+  `37735134900`; `gh api …/actions/secrets` (names + `updated_at` only — no values are readable through
   this interface); `crontab -l`, `/etc/cron.d`, `systemctl list-timers`, `docker ps`,
   `docker inspect nucrm-app`, `command -v pm2`, `ls -A /home`, `curl 127.0.0.1:3099/api/health`,
-  `git rev-list --count`, `db:status` at `38ae90e2` (Applied 99 / Pending 22 / 121 journal entries, 2026-10-07). Related: **PP-057** (the
+  `git rev-list --count`, `db:status` at `f3787f32` (Applied 99 / Pending 23 / 122 journal entries, 2026-10-08;
+  **22** / 121 at `38ae90e2` on 2026-10-07, before `0121` landed). Related: **PP-057** (the
   count), **PP-058** + **#103** (what applying it would and would not do), **PP-059** (two of the pending
   entries are a live rejection fix, and the guard that says so runs nowhere), **#43**/**#74** (the earlier
   "11 entries behind" and the unstamped `0059`), **PP-034**/**#83** (alerting, which would have said this out loud).
