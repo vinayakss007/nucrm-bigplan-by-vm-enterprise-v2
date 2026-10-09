@@ -8,7 +8,7 @@ import { cookies } from 'next/headers';
 import { resolveCookieSecure } from '@/lib/auth/cookie-security';
 import { portalClients } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
-import { withPortalLookupContext } from '@/lib/db/rls';
+import { withPortalLookupContext } from '@/lib/db/portal-lookup-context';
 import { logger } from '@/lib/logger';
 
 export const PORTAL_SESSION_COOKIE = 'nucrm_portal_session';

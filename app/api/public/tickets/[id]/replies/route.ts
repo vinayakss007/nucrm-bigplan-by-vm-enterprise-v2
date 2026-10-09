@@ -11,7 +11,8 @@ import { z } from 'zod';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
 import { resolvePortalIdentity, resolvePortalContact } from '@/lib/portal-auth';
-import { withTenantContext, withPortalLookupContext, NO_USER_SENTINEL, type RlsTransaction } from '@/lib/db/rls';
+import { withTenantContext, NO_USER_SENTINEL, type RlsTransaction } from '@/lib/db/rls';
+import { withPortalLookupContext } from '@/lib/db/portal-lookup-context';
 
 const replySchema = z.object({
   // Per-ticket token for anonymous/embed callers. Logged-in portal callers

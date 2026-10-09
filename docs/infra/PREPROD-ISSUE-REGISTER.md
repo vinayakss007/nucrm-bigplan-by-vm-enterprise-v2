@@ -801,7 +801,7 @@ running=120s` with exit 1 and the `--force-recreate app` command to fix it.
   (GET + DELETE), `backups/[id]/download/route.ts` and `restore/route.ts` (GET + POST).
   Session-scoped rather than `withSecurityContext()` per query because these handlers make 3–4
   statements each and PP-028 prices one statement at ~200 ms; `withApiRoute` pins the client and
-  `RESET_TENANT_GUCS_SQL` (`lib/db/request-connection.ts:94`) clears `app.is_super_admin` on
+  `RESET_TENANT_GUCS_SQL` (`lib/db/request-connection.ts:94`, one statement of eight `set_config`s) clears `app.is_super_admin` on
   release — and since **#2446**, the three `app.portal_lookup_*` GUCs too, same statement — which is what makes the wider scope safe. It also reaches helpers that take `db`
   itself (`concurrencyGuard` in PATCH), which a `tx` would not.
 - **`?list=recent` is not widened.** The GUC is set only under `if (ctx.isSuperAdmin)`; a
@@ -1946,7 +1946,7 @@ from pg_policies where schemaname='public' and (qual like '%app.is_super_admin%'
   minted, no HTTP write of any kind, no row values read — counts and catalog metadata only.
 - **Verified:** this session's own output for every number — `nucrm|f|f|t|0`; `0|0`; `191`/`162`; `0`/`0` for `team_*`;
   `49|60`; `226|225|1` with `ai_providers` at 0 policies; and the fail-closed query still `0|0` after the bypass.
-- **Files (all read-only):** `lib/db/rls.ts:138,165-189,206-221`, `lib/db/pool.ts:233`,
+- **Files (all read-only):** `lib/db/rls.ts:138,165-189,206-221`, `lib/db/pool.ts:233` (the same eight-`set_config` reset),
   `lib/db/request-connection.ts:88-94` (both reset lists gained the `app.portal_lookup_*` names with
   **#2446**, which is why their text moved while the cited construct did not), `lib/auth/middleware.ts:297,391`,
   `drizzle/migrations/0088_rls_bootstrap_and_isolation.sql:344-360`, `drizzle/migrations/0099_api_keys_auth_lookup.sql`,

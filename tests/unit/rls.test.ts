@@ -226,7 +226,7 @@ describe('db/rls', () => {
     const EMAIL_GUC = 'app.portal_lookup_email';
 
     async function settings(claims: Record<string, string>) {
-      const { portalLookupSettings } = await import('@/lib/db/rls');
+      const { portalLookupSettings } = await import('@/lib/db/portal-lookup-context');
       return portalLookupSettings(claims);
     }
 
@@ -246,18 +246,18 @@ describe('db/rls', () => {
     });
 
     it('refuses an email with no tenant — an unscoped address lookup', async () => {
-      const { portalLookupSettings } = await import('@/lib/db/rls');
+      const { portalLookupSettings } = await import('@/lib/db/portal-lookup-context');
       expect(() => portalLookupSettings({ email: 'a@example.test' })).toThrow(/email without a tenantId/);
     });
 
     it('refuses an empty credential set rather than opening a bare lookup', async () => {
-      const { portalLookupSettings } = await import('@/lib/db/rls');
+      const { portalLookupSettings } = await import('@/lib/db/portal-lookup-context');
       expect(() => portalLookupSettings({})).toThrow(/no credential/);
       expect(() => portalLookupSettings({ accessToken: '   ', tenantId: '' })).toThrow(/no credential/);
     });
 
     it('refuses a value no real credential is as long as', async () => {
-      const { portalLookupSettings } = await import('@/lib/db/rls');
+      const { portalLookupSettings } = await import('@/lib/db/portal-lookup-context');
       // A 1 MB token would make the policy compare one string against every row.
       expect(() => portalLookupSettings({ accessToken: 'x'.repeat(513) })).toThrow(/longer than 512/);
       expect(() => portalLookupSettings({ tenantId: 'tenant-1', email: `e${'x'.repeat(600)}@example.test` })).toThrow(/longer than 512/);
@@ -274,7 +274,7 @@ describe('db/rls', () => {
       vi.mocked(db.transaction).mockImplementationOnce(async (fn) =>
         fn(tx as unknown as Parameters<typeof fn>[0]));
 
-      const { withPortalLookupContext } = await import('@/lib/db/rls');
+      const { withPortalLookupContext } = await import('@/lib/db/portal-lookup-context');
       const callback = vi.fn(async (client) => {
         // The callback gets the transaction it was opened on, never the pool:
         // a bare `db.*` inside would lose the GUC the statement just set.
@@ -312,7 +312,7 @@ describe('db/rls', () => {
       vi.mocked(db.transaction).mockImplementationOnce(async (fn) =>
         fn(tx as unknown as Parameters<typeof fn>[0]));
 
-      const { withPortalLookupContext } = await import('@/lib/db/rls');
+      const { withPortalLookupContext } = await import('@/lib/db/portal-lookup-context');
       const callback = vi.fn();
       await expect(
         withPortalLookupContext({ accessToken: 'tok-1' }, callback),
@@ -322,7 +322,7 @@ describe('db/rls', () => {
 
     it('refuses an unscoped lookup before touching the database', async () => {
       const { db } = await import('@/drizzle/db');
-      const { withPortalLookupContext } = await import('@/lib/db/rls');
+      const { withPortalLookupContext } = await import('@/lib/db/portal-lookup-context');
       await expect(
         withPortalLookupContext({ email: 'a@example.test' }, vi.fn()),
       ).rejects.toThrow(/email without a tenantId/);

@@ -9,7 +9,8 @@ import { supportTickets, ticketReplies } from '@/drizzle/schema';
 import { eq, and, asc, sql, isNull, type SQL } from 'drizzle-orm';
 import { resolvePortalIdentity, resolvePortalContact } from '@/lib/portal-auth';
 import { checkRateLimit } from '@/lib/rate-limit';
-import { withTenantContext, withPortalLookupContext, NO_USER_SENTINEL, type RlsTransaction } from '@/lib/db/rls';
+import { withTenantContext, NO_USER_SENTINEL, type RlsTransaction } from '@/lib/db/rls';
+import { withPortalLookupContext } from '@/lib/db/portal-lookup-context';
 import { PUBLIC_TICKET_COLUMNS, type PublicTicketRow } from '@/lib/public-ticket-projection';
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {

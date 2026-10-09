@@ -7,8 +7,8 @@ import type { NextRequest } from 'next/server';
 import { contacts, portalClients } from '@/drizzle/schema';
 import { eq, and, gt, isNull } from 'drizzle-orm';
 import { getPortalSession } from '@/lib/portal-session';
-import { withPortalLookupContext } from '@/lib/db/rls';
 import type { RlsTransaction } from '@/lib/db/rls';
+import { withPortalLookupContext } from '@/lib/db/portal-lookup-context';
 
 export interface PortalIdentity {
   email: string;

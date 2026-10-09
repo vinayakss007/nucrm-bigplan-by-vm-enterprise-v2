@@ -255,17 +255,27 @@ d('portal tenant context is established for an RLS-bound role (#2446)', () => {
     await admin.query(
       `DO $$ BEGIN
          IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${ROLE}') THEN
-           CREATE ROLE "${ROLE}" NOSUPERUSER NOBYPASSRLS NOINHERIT LOGIN PASSWORD '${ROLE_PASSWORD}';
+           CREATE ROLE "${ROLE}" NOSUPERUSER NOBYPASSRLS INHERIT LOGIN PASSWORD '${ROLE_PASSWORD}';
          ELSE
-           ALTER ROLE "${ROLE}" NOSUPERUSER NOBYPASSRLS NOINHERIT LOGIN PASSWORD '${ROLE_PASSWORD}';
+           ALTER ROLE "${ROLE}" NOSUPERUSER NOBYPASSRLS INHERIT LOGIN PASSWORD '${ROLE_PASSWORD}';
          END IF;
        END $$;`,
     );
-    await admin.query(`GRANT USAGE ON SCHEMA public TO "${ROLE}"`);
-    // Privileges are not what is under test — RLS is, and it binds this role
-    // whatever it is granted short of BYPASSRLS.
-    await admin.query(`GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA public TO "${ROLE}"`);
-    await admin.query(`GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO "${ROLE}"`);
+    // Privileges come from the two predefined data roles, NOT from `GRANT … ON
+    // SCHEMA public` / `GRANT … ON ALL TABLES`. Those are catalog UPDATEs on a
+    // tuple every other suite also writes: #2472's CI run died in
+    // tests/integration/superadmin-panel-sql.test.ts:159 with
+    // `error: tuple concurrently updated` (heapam.c / simple_heap_update, code
+    // XX000) while this file updated the same `pg_namespace` row and 226
+    // `pg_class` rows in parallel workers, against a database both of them
+    // share. `GRANT <role> TO <role>` only inserts a fresh pg_auth_members row
+    // keyed on this run's unique name, so nothing else can be mid-update on it.
+    // Both predefined roles are rolsuper=f / rolbypassrls=f, measured here, so
+    // RLS still binds this role exactly as the explicit grants did — privileges
+    // are not what is under test, the policies are. INHERIT is required for the
+    // membership to be active, and changes nothing about RLS enforcement.
+    await admin.query(`GRANT pg_read_all_data TO "${ROLE}"`);
+    await admin.query(`GRANT pg_write_all_data TO "${ROLE}"`);
 
     const restricted = new URL(originalUrl);
     restricted.username = encodeURIComponent(ROLE);
@@ -311,9 +321,12 @@ d('portal tenant context is established for an RLS-bound role (#2446)', () => {
       ['platform_settings', `DELETE FROM platform_settings WHERE tenant_id = ANY($1::uuid[])`, [[TENANT_A, TENANT_B]]],
       ['contacts', `DELETE FROM contacts WHERE tenant_id = ANY($1::uuid[])`, [[TENANT_A, TENANT_B]]],
       ['tenants', `DELETE FROM tenants WHERE id = ANY($1::uuid[])`, [[TENANT_A, TENANT_B]]],
-      // The grants are the dependency, not an owned object: DROP ROLE refuses
-      // while the role still holds privileges here, so revoke them first.
-      ['role grants', `DROP OWNED BY "${ROLE}"`, []],
+      // No `DROP OWNED BY` step any more, and that is the point of the membership
+      // swap above: the role owns nothing and appears in no object ACL, so the
+      // only catalog row this file leaves behind is its own pg_authid entry plus
+      // two pg_auth_members rows, and DROP ROLE removes those together. Measured:
+      // the same shape drops cleanly while the ACL-granted variant failed with
+      // "some objects depend on it".
       ['role', `DROP ROLE IF EXISTS "${ROLE}"`, []],
     ] as [string, string, unknown[]][]) {
       try {
@@ -332,13 +345,16 @@ d('portal tenant context is established for an RLS-bound role (#2446)', () => {
     // application runs as, not one that can see through the policies. Same two
     // flags `scripts/check-db-role-privileges.mjs` asserts of the deployed role.
     const bound = await admin.query(
-      'SELECT rolsuper, rolbypassrls, rolcanlogin FROM pg_roles WHERE rolname = $1',
+      'SELECT rolsuper, rolbypassrls, rolcanlogin, rolinherit FROM pg_roles WHERE rolname = $1',
       [ROLE],
     );
     expect(bound.rows[0], `the probe role ${ROLE} was not created`).toBeTruthy();
     expect(bound.rows[0].rolsuper, 'a superuser bypasses RLS and would prove nothing').toBe(false);
     expect(bound.rows[0].rolbypassrls, 'BYPASSRLS would prove nothing either').toBe(false);
     expect(bound.rows[0].rolcanlogin).toBe(true);
+    // Not a security property, a plumbing one: the two data-role memberships that
+    // give this role its privileges are only active while it inherits.
+    expect(bound.rows[0].rolinherit, 'NOINHERIT would make the membership grants inert').toBe(true);
 
     const asOwner = await admin.query(`SELECT count(*)::int AS n FROM portal_clients WHERE tenant_id = $1`, [TENANT_A]);
     expect(Number(asOwner.rows[0]?.n)).toBeGreaterThanOrEqual(1);

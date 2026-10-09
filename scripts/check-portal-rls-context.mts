@@ -65,7 +65,13 @@ export const MIN_SCANNED_FILES = 17;
 /** If the walk finds no tenant-keyed read at all, the patterns stopped working. */
 export const MIN_TABLE_READS = 20;
 
-/** Every call in `lib/db/rls.ts` that binds a handle with RLS GUCs set. */
+/**
+ * Every call that binds a handle with RLS GUCs set: six from `lib/db/rls.ts`,
+ * and `withPortalLookupContext` from `lib/db/portal-lookup-context.ts` (where
+ * #2472 moved it to stay under the #1843 line ratchet). The guard matches on the
+ * *call name* at each site, so the split changes nothing it can see — this list
+ * is only where the names come from.
+ */
 export const CONTEXT_HELPERS = [
   'withTenantContext',
   'withSecurityContext',

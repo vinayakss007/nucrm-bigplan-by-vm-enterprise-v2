@@ -13,7 +13,8 @@ import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { generatePortalToken } from '@/lib/ticket-portal';
 import { resolvePortalIdentity, resolvePortalContact } from '@/lib/portal-auth';
-import { withTenantContext, withPortalLookupContext, NO_USER_SENTINEL } from '@/lib/db/rls';
+import { withTenantContext, NO_USER_SENTINEL } from '@/lib/db/rls';
+import { withPortalLookupContext } from '@/lib/db/portal-lookup-context';
 import { PUBLIC_TICKET_COLUMNS } from '@/lib/public-ticket-projection';
 
 const publicTicketSchema = z.object({
