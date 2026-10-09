@@ -1981,7 +1981,8 @@ which is a design decision (a shared skip site), not an edit.
   tests reference it), it is built on a PG advisory lock rather than the Redis one, and it carries no `LOCK_FAIL_OPEN`.
   `withApiRoute` wraps only **3 of the 22** (auto-backup, cleanup, retry-webhooks); the other **19 export bare handlers**,
   so it cannot map an error centrally. `verifyCronSecret` (`lib/auth/cron.ts`) returns a boolean and knows nothing about
-  locks, and `proxy.ts:217` runs before the handler computes the lock outcome. **The skip response is constructible in
+  locks, and `proxy.ts:230` (re-pinned from `:217` on 2026-10-09 — **PP-061** inserted a six-path block
+  above it here) runs before the handler computes the lock outcome. **The skip response is constructible in
   exactly 22 places, one per route.**
 - **What a 200 `ok:true` conceals.** `deploy/cron/run-cron.sh` fires with
   `wget -q -O /dev/null --post-data=""`: only a non-2xx trips its `|| echo CRON FAILED`, and the body is thrown away.
