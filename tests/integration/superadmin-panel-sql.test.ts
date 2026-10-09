@@ -61,8 +61,11 @@
  * policy is installed only when the database does not already admit the
  * super-admin bypass, the fixture carries its own name so it can never overwrite
  * a shipped one, and teardown removes exactly what was added, revokes the grants
- * and drops the role. A restore that fails is thrown, not swallowed — the same
- * discipline rls-connection-affinity.test.ts adopted in #2451.
+ * and drops the role — but only the role this run created. A role that was
+ * already in the cluster is left alone and reported, because DROP ROLE is
+ * cluster-wide while the grants here are per-database (#2466). A restore that
+ * fails is thrown, not swallowed — the same discipline
+ * rls-connection-affinity.test.ts adopted in #2451.
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { Pool } from 'pg';
@@ -119,6 +122,9 @@ d('superadmin panel SQL regressions (usage / monitoring / trial-check)', () => {
   let activitiesBefore: CapturedRls = { enabled: false, forced: false, policies: [] };
   let enabledRlsHere = false;
   let installedFixture = false;
+  // Whether the ROLE is ours to remove at the end. Set in beforeAll from what the
+  // cluster already had, before this file grants anything.
+  let roleCreatedHere = false;
 
   async function captureActivitiesRls(): Promise<CapturedRls> {
     // Scoped by the relation's OID and the policy's schema+table: joining
@@ -144,6 +150,13 @@ d('superadmin panel SQL regressions (usage / monitoring / trial-check)', () => {
 
   beforeAll(async () => {
     pool = new Pool({ connectionString: process.env.DATABASE_URL });
+
+    // Ask the cluster who owned this role before we had it. Roles are cluster-wide
+    // while every grant below is per-database, so a role that is already here
+    // belongs to another run — or to another database's leftovers — and this file
+    // has no claim on removing it (#2466).
+    const roleFound = await pool.query('SELECT 1 FROM pg_roles WHERE rolname = $1', [RLS_TEST_ROLE]);
+    roleCreatedHere = (roleFound.rowCount ?? 0) === 0;
 
     await pool.query(`
       DO $$
@@ -223,18 +236,32 @@ d('superadmin panel SQL regressions (usage / monitoring / trial-check)', () => {
     }
 
     // The role this file creates is its own to remove; leaving it behind is a
-    // grant that outlives the test that needed it.
-    for (const stmt of [
-      `REVOKE SELECT, INSERT ON activities FROM ${RLS_TEST_ROLE}`,
-      `REVOKE USAGE ON SCHEMA public FROM ${RLS_TEST_ROLE}`,
-      `REVOKE ${RLS_TEST_ROLE} FROM CURRENT_USER`,
-      `DROP ROLE IF EXISTS ${RLS_TEST_ROLE}`,
-    ]) {
-      try {
-        await pool.query(stmt);
-      } catch (err) {
-        failures.push(`${stmt.split(' ')[0]}: ${err instanceof Error ? err.message : String(err)}`);
+    // grant that outlives the test that needed it. A role it did not create is
+    // somebody else's, and mutating one costs two things: the revokes would strip
+    // grants a concurrent run is reading through, and DROP ROLE is cluster-wide, so
+    // it fails while ANY other database holds an object or a grant for the role —
+    // which turned this file red over a fact about the cluster rather than about
+    // the SQL it proves (#2466). A pre-existing role keeps its grants; the run
+    // that created it is the one responsible for taking them back.
+    if (roleCreatedHere) {
+      for (const stmt of [
+        `REVOKE SELECT, INSERT ON activities FROM ${RLS_TEST_ROLE}`,
+        `REVOKE USAGE ON SCHEMA public FROM ${RLS_TEST_ROLE}`,
+        `REVOKE ${RLS_TEST_ROLE} FROM CURRENT_USER`,
+        `DROP ROLE IF EXISTS ${RLS_TEST_ROLE}`,
+      ]) {
+        try {
+          await pool.query(stmt);
+        } catch (err) {
+          failures.push(`${stmt.split(' ')[0]}: ${err instanceof Error ? err.message : String(err)}`);
+        }
       }
+    } else {
+      // Reported, not failed — pre-existence is not a restore this file owes.
+      console.warn(
+        `[superadmin-panel-sql] role "${RLS_TEST_ROLE}" already existed before this run, so it was ` +
+          `left in place along with its grants (DROP ROLE is cluster-wide; see #2466)`,
+      );
     }
 
     // Nothing this file was not supposed to touch may have gone missing. The old
