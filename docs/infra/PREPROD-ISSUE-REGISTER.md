@@ -88,6 +88,7 @@ Severity: **S1** blocks go-live · **S2** broken feature or security weakness ·
 | PP-058 | S2  | Migrations + tooling        | `db:migrate` connects as the tables' **owner** (`nucrm`) with `FORCE ROW LEVEL SECURITY` active on 48 of the 49 tables the pending set names, and `scripts/migrate.ts:198` sets **no tenant GUC** — so every data-correcting statement in a migration matches **0 rows** and silently corrects nothing, while the DDL built on top of it (`CREATE UNIQUE INDEX`, `SET NOT NULL`) reads the whole heap regardless. Measured on preprod: `0114_leads_tenant_oid_unique` (pending) dedupes `(tenant_id, lead_oid)` before creating the unique index, but its own CTE sees 0 of 25 leads while the truth is **1 duplicate group / 5 rows / 4 losers** (all five soft-deleted, all nine days older than the header's own "measured 0"), so the pending 21-entry run **aborts on 23505** — the exact failure its header says the dedupe exists to prevent                                                                                            | 🚨 OPEN · owner decision · no historical damage demonstrated · `0109` already proves the fix is one `set_config` line                                                                                   |
 | PP-059 | S2  | CHECK vs code               | `guard:vocab` — the only command in the repo that asks the **live database** what it will reject — exits **1** on `main` — measured at `38ae90e2`, re-measured at `f3787f32` — with **2 of 9** constraints disagreeing: `chk_sequence_enrollments_status` (5 values) refuses `'cancelled'`, which `/api/unsubscribe` has written since the repo's first commit `ecbba74e`, and `chk_invoices_status` (8 values) refuses `'void'`, which `INVOICE_STATUSES` offers and `PATCH /api/tenant/invoices/[id]` passes through. Its own fixes, `0120` and `0112`, are two of the **24** entries PP-057 says nobody has agreed to apply (the count was **22** when this row was written; `0121` landed since, then `0122` with **#2446**) — and it is the **only one of the 20 `guard:*` scripts no automation invokes**: workflows call 17 by alias and 2 by direct `node` command (`ci.yml:217`, `:250`), while `grep -rn check-constraint-vocab .github/workflows` returns **0** | 🚨 OPEN · guard wired nowhere · latent **on this DB** (both tables hold 0 rows, measured `--superadmin`) · CI green proves only that the `.sql` text says the right thing                               |
 | PP-060 | S2  | Deploy                      | The 24-entry backlog (23 until `0122` landed with **#2446**) has **no automated apply path that could reach this database**: the only executable migrate in the repo's automation is `deploy.yml:281` (`scripts/deploy-migrate.ts --yes`, which spawns `migrate.ts --yes` at `:96`), inside the single `script:` block opened at `:77` — so it runs over SSH on the **pm2 production VM**, not on this Docker preprod host. That hop has failed every run since the last success (`30748691555`, 2026-08-02T12:51:06Z): **741 runs · 0 success** (639 failure / 54 cancelled / 48 skipped), 15 of 15 sampled recent runs contain `dial tcp ***:22: i/o timeout`, and the retained total is **3 successes in 1,282 runs**. No workflow mentions `db:status` (grep: 0 hits in all 5), `ci.yml` and `backup-drill.yml` build their databases with `db:sync`, and this host has no deploy cron or timer                                                                                    | 🚨 OPEN · owner action (`gh secret set DEPLOY_HOST`, the remedy AGENTS.md already documents) · even a healthy deploy migrates a **different database**, so PP-057's exit (a) has no mechanism behind it |
+| PP-061 | S2  | Edge / auth surface         | **Six endpoints that authenticate with something other than a session were unreachable on this host.** `POST` to `/api/auth/oauth/token`, `/api/auth/oauth/revoke`, `/api/webhooks/razorpay`, `/api/webhooks/payu`, `/api/webhooks/telegram/bot` and `/api/tenant/plugins/webhook/<id>` each answered `401 {"error":"Authentication required"}` — the identical byte-for-byte body the middleware itself writes, so **no handler ran** — because none of the six is in `proxy.ts:226`'s public list. The OAuth exchange, **both payment receivers**, the bot and the plugin integrators all had a caller that could never arrive. The same screen then caught what the closed edge had been hiding: `app/api/tenant/plugins/webhook/[id]/route.ts:63` loaded **all 19 columns** of `custom_plugins` — including `drizzle/schema/plugins.ts:20`, whose own comment says it "stores token/username/password/client_id/etc" — and did it **before** verifying the caller at `app/api/tenant/plugins/webhook/[id]/route.ts:106`, on a URL that is itself the credential | 🔧 FIXED in this PR (6 paths opened, row projected to 4 of 19 columns, `tests/unit/proxy.test.ts:158`) · not live until deployed · `/api/tenant/visitors/track` measured as the seventh hit and **deliberately left closed** |
 
 ## Sentry issues → register entries
 
@@ -3473,6 +3474,127 @@ docker exec -w /app nucrm-app node --experimental-strip-types scripts/simulate-p
 Exit code is non-zero on any failed check, so it can gate a deploy once CI has a database service
 (CI today has none — `ci.yml` runs only the static guards, and `db:verify-isolation` is likewise
 not wired in).
+
+## PP-061 — 🔧 Six endpoints that authenticate with something other than a session were unreachable on this host: `POST` to the two OAuth exchange routes and to all four inbound receivers — both payment providers, the Telegram bot and the plugin integrator endpoint — answered `401 {"error":"Authentication required"}` — the middleware's own body, so **no handler ran** — and the same screen found that the row the plugin receiver loads **before** it checks the caller's HMAC was a full `SELECT` over all **19** columns of `custom_plugins`, three of which hold that plugin's own upstream credentials _(S2 · Edge / auth surface)_
+
+- **Found by:** finishing #2476 (binding an OAuth token to the client that minted it) and asking the
+  obvious next question — *who is ever going to call that route?* Not a screen of the register or of
+  PRs: I replicated `isPublic()` from `proxy.ts` against `git ls-files 'app/api/**/route.ts'`, then
+  classified each handler by what it authenticates with (session, client secret, provider HMAC, URL
+  secret). Seven routes came out as "carries its own credential, and the edge rejects it before the
+  handler can use it".
+- **And the first pass of that screen was wrong, which is worth recording more than the fix.** It
+  reported **five**. `/api/webhooks/payu` was not in it — the same defect, on the second of the two
+  payment receivers — because the screen asked "does this handler verify a signature?" against a
+  pattern list and PayU does not: it hashes a salt-prefixed pipe-joined string with SHA-512
+  (`lib/payu.ts:147`) and compares with `timingSafeEqual` at `lib/payu.ts:153`. Re-running the screen
+  as an **enumeration instead of a search** — every `app/api/**/route.ts` that contains any
+  credential-shaped construct (17 files), minus the edge's public list — is what produced the sixth.
+  The residue is exactly the four tenant-admin plugin routes (`/api/tenant/plugins`, `[id]`,
+  `[id]/execute`, `[id]/test`), which *should* need a session. Lesson: a grep-based inventory can only
+  find the shapes you already thought of; a subtractive one finds the rest.
+- **Measured — on this host, live, before the change.** Empty-body `POST` through nginx
+  (`https://127.0.0.1`) to each candidate:
+  `curl -sk -X POST https://127.0.0.1/api/auth/oauth/token -d '{}'` →
+  `401 {"error":"Authentication required"}` — and the same response, byte-for-byte, for
+  `/api/auth/oauth/revoke`, `/api/webhooks/razorpay`, `/api/webhooks/payu`,
+  `/api/webhooks/telegram/bot`,
+  `/api/tenant/plugins/webhook/00000000-0000-0000-0000-000000000000` and
+  `/api/tenant/visitors/track`. The body is what the middleware writes when a request has no valid
+  session; none of those seven handlers produces it. The handlers were never executed, so nothing here
+  ever ran against money, rows or an upstream.
+- **Mechanism — one list decides it.** `proxy.ts` routes any API request that is not `isPublic` to
+  session verification first. `PUBLIC_PATHS` carried `/api/public/*`, `/api/unsubscribe`,
+  `/api/tenant/portal/login` and the tracking endpoints, and **already carried** `/api/webhooks/stripe`,
+  `/resend`, `/whatsapp` and `/inbound` — which is the tell: four webhook receivers were public and
+  three were not, so the list had been extended one integration at a time, by whoever hit the bug.
+  A Razorpay server cannot attach a NuCRM JWT, and neither can a Telegram bot, an integrator's
+  outbound webhook or an OAuth client doing a `client_credentials` exchange. #2415 is the same bug
+  class, already fixed here for the e-signature links; these six had simply never been probed.
+- **Why opening them is defensible — what authenticates instead, read in each handler.**
+  `app/api/auth/oauth/token/route.ts:17` self-limits to 20/min and `:64` compares `client_secret`
+  length-first and then with `timingSafeEqual`; `app/api/auth/oauth/revoke/route.ts:16` and `:63`
+  are the same pair. `app/api/webhooks/razorpay/route.ts:57` returns 503 unless the provider is
+  configured and `:71` HMACs the **raw** body before parsing it — with no
+  `RAZORPAY_WEBHOOK_SECRET` set, `lib/razorpay.ts:131` throws inside that call and the route's own
+  catch turns it into a 400, so it fails **closed**. `app/api/webhooks/payu/route.ts:52` is the same
+  503 gate for `PAYU_MERCHANT_KEY`/`_SALT` and `:77` verifies the posted hash **before** any
+  invoice/payment query, with `lib/payu.ts:116` throwing if the salt is absent.
+  `app/api/webhooks/telegram/bot/route.ts:77`
+  answers 403 with no `TELEGRAM_WEBHOOK_SECRET`, and `:87` timing-safe-compares the
+  `secret_token` header *before* reading the body. `app/api/tenant/plugins/webhook/[id]/route.ts:101`
+  rejects in production when that plugin has no `webhookSecret`, and `:106` verifies the HMAC over
+  the raw text. Each of the six therefore arrives at a credential check that existed all along and
+  was unreachable.
+- **What opening them does *not* buy — and a claim this entry had to retract.** The first version of
+  the test I wrote for this asserted that the newly public paths would fall under the edge's
+  anonymous budget: 30/min/IP (`proxy.ts:30`) applied at `proxy.ts:418`. **That assertion failed.**
+  `proxy.ts:397` short-circuits on `shouldBypassRateLimit`, and `lib/rate-limit-edge.ts:110` matches
+  the webhook prefixes *deliberately* — provider retries must not be throttled away. So these paths
+  are exempt from the edge counter, and the only ceilings are the per-handler ones listed above. The
+  weakest of them is the plugin receiver: `app/api/tenant/plugins/webhook/[id]/route.ts:57` is an
+  in-process `Map`, 60/min per plugin id, **not shared across replicas** — and PayU has no limiter at
+  all, which is tolerable only because its hash check precedes every query. The test now pins the true
+  shape (`edgeCheckMock` is *not* called) instead of the comforting one.
+- **The row the closed edge was hiding.** While `/api/tenant/plugins/webhook/[id]` was 401'd by
+  middleware, `guard:public-projection` could not see it: the guard's scope is derived from the same
+  edge list, so an unreachable route is unreviewed by construction. Opening the path pulled
+  `app/api/tenant/plugins/webhook/[id]/route.ts:63` into scope, and it was a bare `db.select()` — all
+  **19** columns of `custom_plugins` (16 declared at `drizzle/schema/plugins.ts:11` plus the 3 that
+  `lifecycle()` adds), of which `baseUrl` `:18`, `authConfig` `:20` and `customHeaders` `:21` carry
+  that plugin's *own* upstream credentials, `actions` `:22` its callable surface, and none of the 15
+  had a reader in this file. The row is fetched before the signature is checked, on a URL that is
+  itself the authentication — so any log, error echo or future feature that serialises `plugin`
+  would exfiltrate it. Now projected to the 4 it uses (`id`, `tenantId`, `status`, `webhookSecret`).
+  Measured totals for the guard: **28 → 30** public write sites, **68 → 85** `.select()` read sites,
+  **54 → 59** route files, same single waiver. PayU contributed 3 of those read sites and needed no
+  change — `app/api/webhooks/payu/route.ts:121`, `:138` and `:171` already name their columns, which
+  is the pattern the projection guard exists to enforce and, on this route, had already been followed.
+  Nothing on `custom_plugins` was exposed in a response or a log on main, so this is a
+  defence-in-depth fix, not a live leak.
+- **Deliberately left closed — and pinned as closed.** `/api/tenant/visitors/track`
+  (`app/api/tenant/visitors/track/route.ts:35`) was the seventh hit and is the one that must stay a 401:
+  it presents no credential of any kind and installs no limiter, so publishing it would be an
+  unbounded anonymous write. `tests/unit/proxy.test.ts:158` asserts that 401 alongside the six
+  openings, so a future "make it public for convenience" change fails a test rather than widening
+  the surface silently.
+- **Also on main, untouched here:** `/api/lead-capture` and `/api/lead-capture/submit` sit in
+  `PUBLIC_PATHS` with **no route file behind either** — the projection guard still prints them as two
+  `NOTE` lines. Dead public surface is a smaller problem than a live one, but it is the same list and
+  should be pruned in the pass that has a reason to touch it.
+- **Verified by:** `tests/unit/proxy.test.ts:158` — 67 tests green; reverting **only** the 6-path
+  `PUBLIC_PATHS` change fails **exactly** those 6 `it.each` cases (the credential routes) and the
+  visitors-track case stays green, which is the falsification that proves the test exercises the edge
+  and not the handlers. `guard:public-projection` (68 → 85 read sites, see above), `guard:coords` and
+  `guard:register-drift` all OK on this branch. The live `curl` above still returns 401 on this host
+  until the branch is deployed — which is why this row is 🔧 and not ✅.
+- **A test caught this change, which is the point of having it.** The first full suite run after
+  widening the list went red on `tests/unit/public-row-projection-guard-2440.test.ts:453`, which
+  asserted `not.toContain('/api/auth/oauth/token')` — a negative control #2459 wrote to prove the
+  projection guard's scope extractor could not invent paths (it sat at line 464 of that revision). It
+  did its job once, and then had to be re-pointed at the two routes that must stay off the list for
+  real (`/api/auth/oauth/authorize`, which needs the session it is given, and
+  `/api/tenant/visitors/track`). Recording that here because the comfortable version of this PR would
+  have been to delete the assertion and move on.
+- **One guard that does not cover this, found while looking for coverage.** `guard:public-ratelimit`
+  printed "OK — 17 public handler(s) … all rate-limited" both before and after this change, which
+  looked like reassurance until it was read: its default scope is
+  `opts.dirs ?? [join('app', 'api', 'public')]` at `scripts/check-public-rate-limit.mts:263` — a
+  **directory list**, not the edge's public list. It has never examined an OAuth or webhook route,
+  and widening `PUBLIC_PATHS` does not add one. So "all rate-limited" is true of
+  `app/api/public/**` and silent about everything here; the per-handler limits in the fourth bullet
+  are the only reason these five are not wide open, and they are held in place by reading, not by a
+  check anyone can run.
+- **Review posture:** #2476 hardened the OAuth handler *before* this PR makes it reachable, on
+  purpose, in that order. This is a **surface-widening** change. The CSRF question is answered by a
+  measurement, not an assumption: `proxy.ts:532` validates a CSRF token only inside the branch that
+  runs *after* session verification, so anything on the public list is CSRF-unchecked by
+  construction — sound here because all six handlers read **0** occurrences of `cookies()`,
+  `requireAuth`, `getSession` or `verifyAuth` (measured per file), i.e. none of them can be driven
+  through a visitor's session cookie. What remains genuinely unmitigated, and is what a reviewer
+  should look at: the plugin receiver's 60/min limit lives in one process's `Map`, so it does not
+  hold across replicas; the PayU receiver has no limiter of its own at all; and the Telegram
+  receiver's authorisation is a single header compare before any per-chat budget exists.
 
 ## How to maintain this file
 
