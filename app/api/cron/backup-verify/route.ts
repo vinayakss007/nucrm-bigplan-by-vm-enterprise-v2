@@ -157,7 +157,14 @@ export async function POST(request: NextRequest) {
   try {
     // Find the most recent completed backup.
     const [backup] = await db
-      .select()
+      .select({
+        id: backupRecords.id,
+        backupType: backupRecords.backupType,
+        storagePath: backupRecords.storagePath,
+        storageType: backupRecords.storageType,
+        checksum: backupRecords.checksum,
+        completedAt: backupRecords.completedAt,
+      })
       .from(backupRecords)
       .where(eq(backupRecords.status, 'completed'))
       .orderBy(desc(backupRecords.completedAt))

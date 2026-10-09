@@ -394,10 +394,12 @@ async function handleContact(
   const firstName = sanitizeString(d['firstName'] as string, 100);
   if (!firstName) throw new Error('first_name is required');
 
-  // Check duplicate email
-  let existing: typeof contacts.$inferSelect | null = null;
+  // Both reads answer "is there a row, and what is its id" — so neither may put a
+  // whole contact (55 columns, measured via getTableColumns) in scope.
+  let existing: { id: string } | null = null;
   if (email) {
     existing = (await tx.query.contacts.findFirst({
+      columns: { id: true },
       where: and(
         eq(contacts.tenantId, tenantId),
         eq(contacts.email, email),
@@ -437,6 +439,7 @@ async function handleContact(
   if (action === 'update' && !existing) {
     // Try by ID if provided
     const byId = d['id'] ? await tx.query.contacts.findFirst({
+      columns: { id: true },
       where: and(
         eq(contacts.id, d['id'] as string),
         eq(contacts.tenantId, tenantId)
@@ -460,7 +463,7 @@ async function handleContact(
     tenantId,
     createdBy: userId,
     createdAt: new Date(),
-  }).returning();
+  }).returning({ id: contacts.id });
 
   return { id: newContact?.id ?? null, action: 'created' };
 }
@@ -481,9 +484,12 @@ async function handleLead(
   const firstName = sanitizeString(d['firstName'] as string, 100);
   if (!firstName) throw new Error('first_name is required for lead');
 
-  let existing: typeof leads.$inferSelect | null = null;
+  // Same shape as the contact reads above: `leads` is 62 columns and every use
+  // of this row is `existing.id`, so the declaration narrows with the projection.
+  let existing: { id: string } | null = null;
   if (email) {
     existing = (await tx.query.leads.findFirst({
+      columns: { id: true },
       where: and(
         eq(leads.tenantId, tenantId),
         eq(leads.email, email),
@@ -519,6 +525,7 @@ async function handleLead(
     if (!targetId) throw new Error('Lead id is required for update');
     
     const check = await tx.query.leads.findFirst({
+      columns: { id: true },
       where: and(
         eq(leads.id, targetId),
         eq(leads.tenantId, tenantId)
@@ -542,7 +549,7 @@ async function handleLead(
     createdBy: userId,
     ownerId: (d['ownerId'] as string) || userId,
     createdAt: new Date(),
-  }).returning();
+  }).returning({ id: leads.id });
 
   return { id: newLead?.id ?? null, action: 'created' };
 }
@@ -702,6 +709,7 @@ async function handleDeal(
     const dealId = d['id'] as string | null;
     if (dealId) {
       const check = await tx.query.deals.findFirst({
+        columns: { id: true },
         where: and(
           eq(deals.id, dealId),
           eq(deals.tenantId, tenantId),
@@ -737,7 +745,7 @@ async function handleDeal(
     stageEnteredAt: new Date(),
     createdBy: userId,
     createdAt: new Date(),
-  }).returning();
+  }).returning({ id: deals.id });
 
   return { id: newDeal?.id ?? null, action: 'created' };
 }
@@ -772,6 +780,7 @@ async function handleCompany(
     const companyId = d['id'] as string | null;
     if (companyId) {
       const check = await tx.query.companies.findFirst({
+        columns: { id: true },
         where: and(
           eq(companies.id, companyId),
           eq(companies.tenantId, tenantId)
@@ -790,7 +799,7 @@ async function handleCompany(
     tenantId,
     createdBy: userId,
     createdAt: new Date(),
-  }).returning();
+  }).returning({ id: companies.id });
 
   return { id: newCompany?.id ?? null, action: 'created' };
 }
@@ -827,6 +836,7 @@ async function handleTask(
     if (!taskId) throw new Error('id is required to update a task');
     
     const check = await tx.query.tasks.findFirst({
+      columns: { id: true },
       where: and(
         eq(tasks.id, taskId),
         eq(tasks.tenantId, tenantId),
@@ -844,7 +854,7 @@ async function handleTask(
     tenantId,
     createdBy: userId,
     createdAt: new Date(),
-  }).returning();
+  }).returning({ id: tasks.id });
 
   return { id: newTask?.id ?? null, action: 'created' };
 }

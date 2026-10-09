@@ -104,7 +104,9 @@ export async function POST(request: NextRequest) {
       eq(tenants.status, 'trialing'),
       sql`${tenants.trialEndsAt} BETWEEN now() AND now() + interval '3 days 1 hour'`,
       notExists(
-        tx.select()
+        // EXISTS discards the target list, so naming one column costs the query
+        // nothing and keeps the sweep off `SELECT *` of the activity row.
+        tx.select({ id: activities.id })
           .from(activities)
           .where(and(
             eq(activities.tenantId, tenants.id),

@@ -40,7 +40,13 @@ export async function POST(request: NextRequest) {
     }
 
     const [client] = await db
-      .select()
+      .select({
+        // 2 of `oauth_clients`' 9 columns (measured via getTableColumns): the id
+        // the tokens hang off, plus the secret this route exists to verify.
+        // tenant_id, redirect_uris and created_by have no reader here.
+        id: oauthClients.id,
+        clientSecret: oauthClients.clientSecret,
+      })
       .from(oauthClients)
       .where(and(eq(oauthClients.clientId, clientId), eq(oauthClients.isActive, true)))
       .limit(1);
@@ -71,7 +77,15 @@ export async function POST(request: NextRequest) {
       }
 
       const [authCode] = await db
-        .select()
+        .select({
+          // id is the UPDATE's target and usedAt the replay gate; userId + scope
+          // are the only values that reach the inserted token. `code` stays a
+          // WHERE predicate.
+          id: oauthCodes.id,
+          userId: oauthCodes.userId,
+          scope: oauthCodes.scope,
+          usedAt: oauthCodes.usedAt,
+        })
         .from(oauthCodes)
         .where(and(eq(oauthCodes.code, code), gt(oauthCodes.expiresAt, new Date())))
         .limit(1);
@@ -99,7 +113,13 @@ export async function POST(request: NextRequest) {
             scope: authCode.scope,
             expiresAt: new Date(Date.now() + 3600 * 1000),
           })
-          .returning();
+          // The response is built from these two fields alone — this is the
+          // OAuth token endpoint, so RETURNING * would hand the caller columns
+          // it never asked for.
+          .returning({
+            accessToken: oauthTokens.accessToken,
+            refreshToken: oauthTokens.refreshToken,
+          });
       });
 
       if (!token) {
@@ -127,7 +147,15 @@ export async function POST(request: NextRequest) {
       }
 
       const [existingToken] = await db
-        .select()
+        .select({
+          // id deletes the old row, expiresAt gates the grant, userId + scope are
+          // carried onto the replacement. The refresh token itself is a WHERE
+          // predicate and never re-enters scope after the lookup.
+          id: oauthTokens.id,
+          userId: oauthTokens.userId,
+          scope: oauthTokens.scope,
+          expiresAt: oauthTokens.expiresAt,
+        })
         .from(oauthTokens)
         .where(eq(oauthTokens.refreshToken, refreshToken))
         .limit(1);
@@ -152,7 +180,13 @@ export async function POST(request: NextRequest) {
             scope: existingToken.scope,
             expiresAt: new Date(Date.now() + 3600 * 1000),
           })
-          .returning();
+          // The response is built from these two fields alone — this is the
+          // OAuth token endpoint, so RETURNING * would hand the caller columns
+          // it never asked for.
+          .returning({
+            accessToken: oauthTokens.accessToken,
+            refreshToken: oauthTokens.refreshToken,
+          });
       });
 
       if (!newToken) {

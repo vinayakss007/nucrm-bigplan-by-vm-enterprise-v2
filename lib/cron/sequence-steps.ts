@@ -31,7 +31,17 @@ export type DueEnrollment = {
   contact: { email: string | null; doNotContact: boolean } | null;
 };
 
-export type SequenceStepRow = typeof sequenceSteps.$inferSelect;
+/**
+ * The step columns the sequence cron actually reads — a `Pick`, not the whole
+ * `$inferSelect`, so `findMany({ columns: … })` in `app/api/cron/process-sequences`
+ * has to name this same set and a new `step.foo` read fails to compile until the
+ * projection grows to match it. (#2459: this sweep runs on the cron secret, not a
+ * session, so its row reads are on the anonymous surface.)
+ */
+export type SequenceStepRow = Pick<
+  typeof sequenceSteps.$inferSelect,
+  'id' | 'sequenceId' | 'stepNumber' | 'stepType' | 'subject' | 'body' | 'content'
+>;
 type DbTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 /**

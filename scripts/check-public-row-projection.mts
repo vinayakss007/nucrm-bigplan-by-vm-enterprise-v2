@@ -6,13 +6,15 @@
 
 /**
  * Public-write row-projection guard (#2440) + public-read row-projection guard
- * (#2443) + public relational-query read guard (#2457).
+ * (#2443) + public relational-query read guard (#2457), over the whole anonymous
+ * surface (#2459).
  *
- * Every exported handler under `app/api/public/**` must name the columns it
- * moves, in whichever of the three spellings drizzle offers: `.returning({...})`
- * never `.returning()`, `.select({...})` (or a shared named projection) never
- * `.select()`, and `db.query.<table>.findFirst({ columns: {...} })` never
- * `db.query.<table>.findFirst({ where })`.
+ * Every exported handler on that surface — every route `proxy.ts` lets through
+ * without a session, not just the ones under a folder called `public` — must name
+ * the columns it moves, in whichever of the three spellings drizzle offers:
+ * `.returning({...})` never `.returning()`, `.select({...})` (or a shared named
+ * projection) never `.select()`, and `db.query.<table>.findFirst({ columns: {...} })`
+ * never `db.query.<table>.findFirst({ where })`.
  *
  * An argument-less `.returning()` is `RETURNING *` — the response body is
  * whatever the table happens to hold, now and after any later migration.
@@ -29,9 +31,18 @@
  * column to `support_tickets` (or `ticket_replies`, or any table a public route
  * writes) must not be able to widen a response by itself.
  *
- * Scope, deliberately:
- *  - Only `app/api/public/**`. Staff routes echo whole rows to authenticated
- *    agents and that is a different trust decision.
+ * Scope, deliberately (derived from the edge, not from a path guess — #2459):
+ *  - The first pass checked `app/api/public/**` because that was where the leak
+ *    was. The rule is about the caller, not the folder: the anonymous surface is
+ *    every route `proxy.ts` lets through without a session. So the directories
+ *    come from `PUBLIC_PATHS` and `PUBLIC_PREFIXES` — each `/api/...` entry
+ *    resolves to `app/<path>` and is walked as a tree, because `isPublic()`
+ *    matches those entries as a prefix as well as exactly (proxy.ts:276).
+ *    Naming directories by hand was the wrong unit: the coarse ones both missed
+ *    public routes (`/api/tenant/portal/login`) and dragged in staff routes that
+ *    happen to share a parent (`/api/tenant/portal/clients`).
+ *  - Staff routes echo whole rows to authenticated agents and that is a different
+ *    trust decision.
  *  - Reads are in scope as of #2443, and the rule for them is stricter than the
  *    issue asked for. #2443 AC6 offered a guard that tells apart "row returned
  *    to the client" from "row read for server-side logic", because the two
@@ -41,7 +52,7 @@
  *    guesses has to be re-guessed by the next editor: classify one read as
  *    harmless, then someone adds `return NextResponse.json({ data: quote })`
  *    fifteen lines below it and the tree is leaky while the guard prints OK. So
- *    there is no classifier. Every `.select()` under `app/api/public` names its
+ *    there is no classifier. Every `.select()` on the anonymous surface names its
  *    columns, the logic-only reads included — `accept` now names the seven
  *    fields it tests or copies, `decline` the five. That also stops them
  *    fetching a row the size of the table to decide a branch. Zero exceptions,
@@ -50,6 +61,22 @@
  *    same rule, applied to the spelling the first two passes did not match. See
  *    `findRelationalReadSites` for why a third regex was needed rather than a
  *    wider read of the same one.
+ *
+ * The one thing a rule this blunt needs is a way to say "here I mean it", and a
+ * way to check that the saying is still true:
+ *  - `// row-projection-exempt: #NNNN <reason>` within the three lines above a
+ *    call waives that call.
+ *  - A marker that cites no issue waives nothing: the issue is the only record of
+ *    why the read is wide, and without it the next editor has a comment and no
+ *    way to check it.
+ *  - A marker that covers nothing is a violation. Either the call below it gained
+ *    its projection and the marker is now decoration over a compliant read —
+ *    where it will be trusted by whoever copies the shape — or it drifted off the
+ *    call it was written for. Both are reported by `staleMarkerFindings`.
+ *  - Exactly one site uses it: `app/api/forms/submit`, whose contact read is the
+ *    input to a tenant-authored formula engine that addresses arbitrary columns
+ *    by name. Narrowing it does not throw and does not fail typecheck; the engine
+ *    reads `undefined`, returns null, and the stored values quietly go stale.
  *
  * Conventions match the guard family (`check-public-rate-limit.mts`,
  * `check-portal-soft-delete.mts`): pure exported functions so a unit test can
@@ -69,25 +96,29 @@ export type Finding = {
 
 /**
  * A guard that silently finds no handlers is worse than no guard: it reports
- * clean. The public tree has 14 route files and several writes; anything under
- * this is a broken walk, not a clean codebase.
+ * clean. The floors are set on the proxy-derived scope — 48 public `/api/` paths,
+ * 46 of them resolving to a route tree, 79 `route.ts` files, and #2459 measured
+ * 28 `.returning()` / 65 `.select()` / 47 relational sites across them. Each floor
+ * leaves about half of that as room for a legitimate refactor, and still fails a
+ * walk or a regex that died quietly. They gate the default scope only; see `run`.
  */
-export const MIN_PUBLIC_WRITE_SITES = 2;
+export const MIN_PUBLIC_WRITE_SITES = 12;
 
 /**
- * Same reasoning as the write floor: the public tree has sixteen `.select()`
- * calls across its route files, so a walk that turns up fewer than eight is a
- * broken regex or a broken walk, not a codebase that reads no columns.
+ * Same reasoning as the write floor: 65 `.select()` calls sit on the anonymous
+ * surface, so a walk that turns up fewer than thirty is a broken regex or a
+ * broken walk, not a codebase that reads no columns.
  */
-export const MIN_PUBLIC_READ_SITES = 8;
+export const MIN_PUBLIC_READ_SITES = 30;
 
 /**
- * And the same for the relational query API: nine `db.query.<table>.findFirst()`
- * calls sit in six of the fourteen public route files (#2457 measured), so a
- * walk that turns up none is a broken screen, not a codebase that reads nothing
- * through `db.query`.
+ * And the same for the relational query API: 47 `db.query.<table>.findFirst()` /
+ * `findMany()` calls sit on the anonymous surface (the cron sweeps and the OAuth
+ * endpoints are the bulk of them, which is what #2459 added to the scope), so a
+ * walk that turns up fewer than twenty is a broken screen, not a codebase that
+ * reads nothing through `db.query`.
  */
-export const MIN_PUBLIC_RELATIONAL_READ_SITES = 5;
+export const MIN_PUBLIC_RELATIONAL_READ_SITES = 20;
 
 export type WriteSite = {
   file: string;
@@ -159,6 +190,130 @@ export function stripComments(source: string): string {
     i++;
   }
   return out.join('');
+}
+
+/**
+ * An inline waiver. `line` is the 1-based line of the `//` itself.
+ */
+export type ExemptMarker = {
+  file: string;
+  line: number;
+  /** the issue the marker cites, or null when it cites none */
+  issue: string | null;
+};
+
+const MARKER_RE = /^\s*\/\/\s*row-projection-exempt\b[ \t]*:?[ \t]*(.*)$/;
+const CITED_ISSUE_RE = /#\s*(\d{2,})/;
+
+/** How far above the call a marker may sit and still cover it. */
+export const EXEMPT_WINDOW = 3;
+
+/**
+ * Every waiver marker in a file.
+ *
+ * Read from the raw source, because a marker is prose and `stripComments` exists
+ * to remove prose from the screen — but only prose that is really a marker: a
+ * line comment sitting inside a block comment is this guard documenting its own
+ * syntax, and minting a live waiver out of that would hand the next reader a
+ * marker he cannot delete without editing the explanation.
+ */
+export function findExemptMarkers(source: string, file: string): ExemptMarker[] {
+  const out: ExemptMarker[] = [];
+  const lines = source.split('\n');
+  let inBlock = false;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const isCommentLine = /^\s*\/\//.test(line);
+    if (!inBlock && isCommentLine) {
+      const m = MARKER_RE.exec(line);
+      if (m) {
+        const issue = CITED_ISSUE_RE.exec(m[1]);
+        out.push({ file, line: i + 1, issue: issue ? issue[1] : null });
+      }
+      // A line comment opens and closes nothing.
+      continue;
+    }
+    // Track the block comments only well enough to tell a marker from prose that
+    // quotes one. A brace inside a string literal can make this stick — and the
+    // direction it sticks in is the safe one: a lost waiver shows up as a
+    // violation on a read someone already documented, never as a false OK.
+    for (let j = 0; j < line.length - 1; j++) {
+      const pair = line.slice(j, j + 2);
+      if (inBlock) {
+        if (pair === '*/') { inBlock = false; j++; }
+        continue;
+      }
+      if (pair === '/*') { inBlock = true; j++; }
+    }
+  }
+  return out;
+}
+
+export type ExemptionResult = { waived: Finding[]; problems: Finding[] };
+
+/**
+ * Split the unprojected findings into "waived by a marker that cites an issue"
+ * and "still a violation", and report the markers that have no business being
+ * there.
+ *
+ * The three failure modes are the ones that make an inline exemption rot instead
+ * of working: a marker that cites nothing cannot be checked, a marker that drifted
+ * off its call still reads as permission to whoever finds it, and a marker above a
+ * call that already names its columns teaches the next editor that the marker is
+ * decoration.
+ */
+export function applyExemptions(unprojected: Finding[], markers: ExemptMarker[]): ExemptionResult {
+  const waived: Finding[] = [];
+  const problems: Finding[] = [];
+  const attached = new Set<number>();
+  const byFile = new Map<string, ExemptMarker[]>();
+  for (const mk of markers) {
+    const list = byFile.get(mk.file);
+    if (list) list.push(mk);
+    else byFile.set(mk.file, [mk]);
+  }
+  for (const f of unprojected) {
+    const covering = (byFile.get(f.file) ?? [])
+      .filter((mk) => mk.line <= f.line && f.line - mk.line <= EXEMPT_WINDOW)
+      .sort((a, b) => b.line - a.line)[0];
+    if (!covering) { problems.push(f); continue; }
+    attached.add(markers.indexOf(covering));
+    if (covering.issue) waived.push({ ...f, detail: `${f.detail} (waived by #${covering.issue} at line ${covering.line})` });
+    else {
+      problems.push({
+        ...f,
+        detail: 'the row-projection-exempt marker at line ' + covering.line + ' cites no issue, so it '
+          + 'waives nothing — the issue is the only record of why this read is wide, and without it the '
+          + 'next editor has a comment and no way to check it. Write `// row-projection-exempt: #NNNN <reason>`.',
+      });
+    }
+  }
+  problems.push(...staleMarkerFindings(markers, attached));
+  return { waived, problems };
+}
+
+/**
+ * Markers that attached to no unprojected call. `attached` holds the indices, into
+ * the same `markers` array, that the waiver pass claimed.
+ */
+export function staleMarkerFindings(markers: ExemptMarker[], attached: Set<number>): Finding[] {
+  const out: Finding[] = [];
+  markers.forEach((mk, i) => {
+    if (attached.has(i)) return;
+    out.push({
+      file: mk.file,
+      line: mk.line,
+      verb: 'marker',
+      detail: mk.issue
+        ? `a row-projection-exempt marker covering nothing — within ${EXEMPT_WINDOW} lines below it `
+          + 'there is no unprojected read (either the call gained its projection, in which case the '
+          + 'marker is now decoration over a compliant read and will be copied as one, or it drifted off '
+          + 'the call it was written for). Delete it.'
+        : `a row-projection-exempt marker that cites no issue and covers nothing within ${EXEMPT_WINDOW} `
+          + 'lines below it. Delete it, or point it at the unprojected read it means.',
+    });
+  });
+  return out;
 }
 
 export function findWriteSites(body: string, file: string, verb: string, line: number): WriteSite[] {
@@ -405,26 +560,120 @@ export function maskHandlerBodies(source: string, handlers: { line: number; body
   return lines.join('\n');
 }
 
-export type RunResult = { files: number; writes: number; reads: number; relational: number; problems: Finding[] };
+/**
+ * The `/api/...` entries of `proxy.ts`'s two public lists — the anonymous surface
+ * read from the file that decides it, instead of a guess about which folders look
+ * public. Comments are stripped first so a path quoted in prose cannot widen the
+ * scope.
+ */
+export function publicApiPaths(proxySource: string): string[] {
+  const code = stripComments(proxySource);
+  const out = new Set<string>();
+  const arrays = /const PUBLIC_(?:PATHS|PREFIXES)\s*=\s*\[([\s\S]*?)\];/g;
+  for (let m = arrays.exec(code); m !== null; m = arrays.exec(code)) {
+    for (const q of m[1].matchAll(/'([^']*)'/g)) {
+      if (q[1].startsWith('/api/')) out.add(q[1]);
+    }
+  }
+  return [...out].sort();
+}
+
+/** `app/<path>` — the directory an edge path is served from. */
+export function routeDirFor(path: string): string {
+  const segments = path.split('/').filter(Boolean);
+  if (segments.length < 2 || segments[0] !== 'api') throw new Error(`${path} is not an /api/ path`);
+  return join('app', ...segments);
+}
+
+export type Scope = { dirs: string[]; unresolved: string[] };
+
+/**
+ * Split the public paths into the ones with a route tree under them and the ones
+ * the edge advertises and nothing serves.
+ *
+ * The second group is reported, not failed. A path with no route cannot return a
+ * row, so it is not this guard's violation; it is the #2415 class — a `PUBLIC_PATHS`
+ * entry that says the edge is open on a door that is not there — and printing it
+ * here is how it stops being invisible either way.
+ */
+export function resolveScope(root: string, paths: string[]): Scope {
+  const dirs: string[] = [];
+  const unresolved: string[] = [];
+  for (const p of paths) {
+    const rel = routeDirFor(p);
+    if (existsSync(join(root, rel))) dirs.push(rel);
+    else unresolved.push(p);
+  }
+  return { dirs, unresolved };
+}
+
+export type RunResult = {
+  files: number;
+  writes: number;
+  reads: number;
+  relational: number;
+  /** unprojected calls excused by a marker that cites an issue */
+  waived: Finding[];
+  /** public `/api/` paths with no route tree behind them */
+  unresolved: string[];
+  problems: Finding[];
+};
 
 export function run(
   root = '.',
-  opts: { sites?: WriteSite[]; readSites?: ReadSite[]; relationalSites?: RelationalReadSite[]; dirs?: string[] } = {},
+  opts: {
+    sites?: WriteSite[];
+    readSites?: ReadSite[];
+    relationalSites?: RelationalReadSite[];
+    markers?: ExemptMarker[];
+    dirs?: string[];
+  } = {},
 ): RunResult {
   let sites = opts.sites;
   let reads = opts.readSites;
   let rel = opts.relationalSites;
+  let markers = opts.markers;
+  let unresolved: string[] = [];
   if (!sites && !reads && !rel) {
     sites = [];
     reads = [];
     rel = [];
+    // A planted marker list and a disk walk are not mutually exclusive: the
+    // caller may be testing a waiver against a real file. Copy rather than
+    // overwrite, and do not mutate the caller's array.
+    markers = opts.markers ? [...opts.markers] : [];
+    let scope: Scope;
+    if (opts.dirs) {
+      scope = { dirs: opts.dirs, unresolved: [] };
+    } else {
+      const proxyFile = join(root, 'proxy.ts');
+      if (!existsSync(proxyFile)) {
+        throw new Error('proxy.ts is missing — the anonymous surface cannot be derived');
+      }
+      const paths = publicApiPaths(readFileSync(proxyFile, 'utf8'));
+      if (paths.length === 0) {
+        throw new Error(
+          'no /api/ entry was matched in PUBLIC_PATHS / PUBLIC_PREFIXES — the edge lists were '
+          + 'not parsed, so this run proves nothing',
+        );
+      }
+      scope = resolveScope(root, paths);
+      if (scope.dirs.length === 0) {
+        throw new Error(`none of the ${paths.length} public /api/ paths resolves to app/<path> — nothing audited`);
+      }
+    }
     let files = 0;
-    for (const relDir of opts.dirs ?? [join('app', 'api', 'public')]) {
+    const walked = new Set<string>();
+    for (const relDir of scope.dirs) {
       const dir = isAbsolute(relDir) ? relDir : join(root, relDir);
       for (const file of walkRouteFiles(dir)) {
-        files++;
+        // Two edge entries can share a tree (`/api/x` as a prefix and a deeper
+        // path under it): walking it twice would count every site twice.
+        if (walked.has(file)) continue;
+        walked.add(file);
         const abs = readFileSync(file, 'utf8');
         const relFile = relative(root, file).split('\\').join('/');
+        files++;
         const handlers = enumerateHandlers(abs, relFile);
         for (const h of handlers) {
           sites.push(...findWriteSites(h.body, h.file, h.verb, h.line));
@@ -435,27 +684,39 @@ export function run(
         sites.push(...findWriteSites(rest, relFile, 'module', 1));
         reads.push(...findReadSites(rest, relFile, 'module', 1));
         rel.push(...findRelationalReadSites(rest, relFile, 'module', 1));
+        markers.push(...findExemptMarkers(abs, relFile));
       }
     }
-    if (!opts.dirs && files === 0) throw new Error('no route.ts found under app/api/public — nothing audited');
-    if (sites.length < MIN_PUBLIC_WRITE_SITES) {
-      throw new Error(
-        `found only ${sites.length} public write site(s); expected at least ${MIN_PUBLIC_WRITE_SITES} — `
-        + 'the insert chain was not matched, so this run proves nothing',
-      );
+    unresolved = scope.unresolved;
+    if (files === 0) {
+      throw new Error(opts.dirs
+        ? `no route.ts found under ${opts.dirs.join(', ')} — nothing audited`
+        : 'no route.ts found under the public /api/ paths derived from proxy.ts — nothing audited');
     }
-    if (reads.length < MIN_PUBLIC_READ_SITES) {
-      throw new Error(
-        `found only ${reads.length} public read site(s); expected at least ${MIN_PUBLIC_READ_SITES} — `
-        + 'no .select() was matched, so this run proves nothing about the read side',
-      );
-    }
-    if (rel.length < MIN_PUBLIC_RELATIONAL_READ_SITES) {
-      throw new Error(
-        `found only ${rel.length} public relational read site(s); expected at least `
-        + `${MIN_PUBLIC_RELATIONAL_READ_SITES} — no db.query.<table>.findFirst() was matched, `
-        + 'so this run proves nothing about the relational query API',
-      );
+    // The floors are calibrated for the default, proxy-derived scope. An auditor
+    // pointing the guard at a subtree is asking a narrower question, and "that
+    // subtree holds 9 relational reads" is the answer rather than a broken walk —
+    // the gate there is `files === 0`, and the counts get printed.
+    if (!opts.dirs) {
+      if (sites.length < MIN_PUBLIC_WRITE_SITES) {
+        throw new Error(
+          `found only ${sites.length} public write site(s); expected at least ${MIN_PUBLIC_WRITE_SITES} — `
+          + 'the insert chain was not matched, so this run proves nothing',
+        );
+      }
+      if (reads.length < MIN_PUBLIC_READ_SITES) {
+        throw new Error(
+          `found only ${reads.length} public read site(s); expected at least ${MIN_PUBLIC_READ_SITES} — `
+          + 'no .select() was matched, so this run proves nothing about the read side',
+        );
+      }
+      if (rel.length < MIN_PUBLIC_RELATIONAL_READ_SITES) {
+        throw new Error(
+          `found only ${rel.length} public relational read site(s); expected at least `
+          + `${MIN_PUBLIC_RELATIONAL_READ_SITES} — no db.query.<table>.findFirst() was matched, `
+          + 'so this run proves nothing about the relational query API',
+        );
+      }
     }
   }
   // A planted write-only or read-only run is a legitimate run: the kind that
@@ -464,12 +725,18 @@ export function run(
   reads = reads ?? [];
   rel = rel ?? [];
   const all = [...sites, ...reads, ...rel];
+  const exemptions = applyExemptions(
+    [...findings(sites), ...readFindings(reads), ...relationalFindings(rel)],
+    markers ?? [],
+  );
   return {
     files: new Set(all.map((s) => s.file)).size,
     writes: sites.length,
     reads: reads.length,
     relational: rel.length,
-    problems: [...findings(sites), ...readFindings(reads), ...relationalFindings(rel)],
+    waived: exemptions.waived,
+    unresolved,
+    problems: exemptions.problems,
   };
 }
 
@@ -485,8 +752,22 @@ async function main(): Promise<void> {
     process.stdout.write(
       `[check-public-row-projection] OK — ${result.writes} public write site(s), `
       + `${result.reads} .select() read site(s) and ${result.relational} relational read site(s) `
-      + `across ${result.files} route file(s), every one naming the columns it moves.\n`,
+      + `across ${result.files} route file(s) named by proxy.ts, every one naming the columns `
+      + `it moves${result.waived.length ? ` except ${result.waived.length} waived by an inline marker` : ''}.\n`,
     );
+    for (const w of result.waived) {
+      const cite = /waived by #(\d+)/.exec(w.detail);
+      process.stdout.write(
+        `[check-public-row-projection] waived — ${w.file}:${w.line} ${w.verb} `
+        + `(cited by ${cite ? '#' + cite[1] : 'a marker'})\n`,
+      );
+    }
+    for (const p of result.unresolved) {
+      process.stdout.write(
+        `[check-public-row-projection] NOTE — ${p} is in proxy.ts's public list and there is no `
+        + `app/${p.replace(/^\//, '')} behind it: the edge is open on a route that does not exist (#2415 class).\n`,
+      );
+    }
   } else {
     process.stdout.write(`[check-public-row-projection] ${result.problems.length} violation(s):\n`);
     for (const f of result.problems) {

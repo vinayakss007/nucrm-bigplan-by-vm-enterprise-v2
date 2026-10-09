@@ -1913,7 +1913,7 @@ from pg_policies where schemaname='public' and (qual like '%app.is_super_admin%'
   proves `users.is_super_admin` (`lib/auth/middleware.ts:297` cached context, `:391` fresh read under a verified JWT).
   Reset to `'false'` runs on every checkout (`lib/db/pool.ts:233`, `lib/db/request-connection.ts:94`). No route splices
   request data into SQL: the template-literal sinks in `app/` are compile-time identifiers or regex-gated numerics
-  (`app/api/cron/backup-verify/route.ts:234-236` gates `nucrm_verify_${Date.now()}` through `^[a-z0-9_]+$` before
+  (`app/api/cron/backup-verify/route.ts:241-243` gates `nucrm_verify_${Date.now()}` through `^[a-z0-9_]+$` before
   `CREATE DATABASE`; `app/api/tenant/sla/route.ts:36` is drizzle identifiers). Library-level splices are not reachable from
   `app/` (`lib/data-integrity.ts:289` has zero importers under `app/`; `lib/db/query-timeout.ts:63` is `Math.round`ed).
   **So this is (i) a credential-handling problem — a leaked `DATABASE_URL` _is_ a full cross-tenant read grant over 49
@@ -1945,7 +1945,7 @@ from pg_policies where schemaname='public' and (qual like '%app.is_super_admin%'
 - **Files (all read-only):** `lib/db/rls.ts:138,165-189,206-221`, `lib/db/pool.ts:233`,
   `lib/db/request-connection.ts:88-94`, `lib/auth/middleware.ts:297,391`,
   `drizzle/migrations/0088_rls_bootstrap_and_isolation.sql:344-360`, `drizzle/migrations/0099_api_keys_auth_lookup.sql`,
-  `drizzle/migrations/0105_email_tracking_pixel_lookup.sql`, `app/api/cron/backup-verify/route.ts:234-236`,
+  `drizzle/migrations/0105_email_tracking_pixel_lookup.sql`, `app/api/cron/backup-verify/route.ts:241-243`,
   `deploy/docker-compose.preprod.yml`, `deploy/docker-compose.production.yml`.
 
 ## PP-049 — 🚨 PP-030's honest 503 has no central place to live: 22 of 22 cron routes hand-roll their own skip, so the fix is a 23-file design batch, not a narrow change _(S3 · Cron + observability)_
@@ -2057,7 +2057,7 @@ connection setup (~400–600 ms) and bounds the 50-statement loop rather than pr
   `:122-127` · a second `setTenantContext` `:161` (0–1, data-dependent) · the Phase-1 `db.transaction`
   `app/api/cron/process-sequences/route.ts:54` = `BEGIN` + the carrier re-apply `drizzle/db.ts:79` + the due-enrollments
   `SELECT … FOR UPDATE SKIP LOCKED` (called at `:57`; #2392 moved the SQL itself out of the route into
-  `lib/cron/sequence-steps.ts:135`) + `COMMIT` · `clearTenantContext` in the per-iteration `finally` `:173` →
+  `lib/cron/sequence-steps.ts:145`) + `COMMIT` · `clearTenantContext` in the per-iteration `finally` `:173` →
   `rls.ts:107`. Fixed per sweep (5): `BEGIN` + `setSuperAdminContext` (`rls.ts:169`) + the tenants `SELECT`
   (`tenant-scope.ts:81`) + `COMMIT` + the pin's teardown reset (`request-connection.ts:241`). **Count = 7 per tenant**; the 8th
   (the re-set at `:161`) does not fire on this data — and the log discriminates: 8/tenant predicts 85.9 s, i.e. _every_ sweep
@@ -2116,7 +2116,7 @@ connection setup (~400–600 ms) and bounds the 50-statement loop rather than pr
   **75.3 s → 54.1 s, which is still over the 30 s threshold** — under 30 s needs ≤2 statements/tenant
   (`53×3+5 = 164` → 32.8 s), impossible **while each statement is its own client round trip** (see (d): the premise is
   round trips, not statements). The hand-off's other half, "merge the contacts SELECT into the due-enrollments SELECT",
-  saves **0 s here**: `route.ts:70-74` and `:102-108` sit behind the
+  saves **0 s here**: `route.ts:70-74` and `:110-116` sit behind the
   `:62-64` early return and never run when nothing is due — they only matter for tenants that have work. Adding a `hint` to
   `trackClient` (`:50` takes `stackError` only) is what would make a sweep distinguishable from a stuck handler, and it is a
   prerequisite for (b) being safe. (d) _Server-side batching_ — **found after this entry was first written, and it beats
@@ -2135,14 +2135,14 @@ connection setup (~400–600 ms) and bounds the 50-statement loop rather than pr
   down. It also does not touch the pool-pinning fact (one connection still held for the duration, even if the duration is
   now ~1 s) and it does not fix login, which needs each row in JS. Presented, not recommended.
 - **Detached queries do serialize onto the pin — but not on today's path.** `lib/email/tracking.ts:39-41` fires
-  `analyzeSentimentForContact(...)` un-awaited inside `createEmailTracking`, which `route.ts:285` awaits inside the pinned
+  `analyzeSentimentForContact(...)` un-awaited inside `createEmailTracking`, which `route.ts:295` awaits inside the pinned
   sweep scope, so its writes queue onto the same client via `serializeClientQueries` (`request-connection.ts:136-160`) and
   `drainClientQueries` (`:167-181`) holds the release until they finish — extending the hold instead of running in parallel.
   Same shape at `tenant-scope.ts:158/166/174` (`void logError(...)`, which inserts into `error_logs`,
   `lib/errors-server.ts:228`). **Neither can fire on the measured sweeps**: both sit behind a non-empty `dueEnrollments`
-  (`route.ts:118`) or a throw, and every run is `processed:0 / tenants_failed:0`. Sibling detached DB calls on other sweep
+  (`route.ts:126`) or a throw, and every run is `processed:0 / tenants_failed:0`. Sibling detached DB calls on other sweep
   paths: `app/api/cron/subscription-renewal-check/route.ts:147`, `contract-renewal-check/route.ts:161`,
-  `backup-verify/route.ts:272,306,324`. So this is a **latent multiplier** on the pin — it bites the first time a tenant has
+  `backup-verify/route.ts:279,313,331`. So this is a **latent multiplier** on the pin — it bites the first time a tenant has
   real work — not part of the 75.3 s.
 - **Config-drift footnote for the owner.** The repo's `deploy/pgbouncer/pgbouncer.ini` is not what runs: the repo file says
   `* = host=host.docker.internal port=5432` (`:2`), `pool_mode = transaction` (`:10`) and `query_timeout = 30` (`:20`), while
@@ -2166,7 +2166,7 @@ connection setup (~400–600 ms) and bounds the 50-statement loop rather than pr
   checkout sites confirmed by grep).
 - **Files (all read-only):** `lib/cron/tenant-scope.ts:81,122-127,139,145-178`, `lib/db/rls.ts:7-16,72-107,165-169,181-189`,
   `lib/db/request-connection.ts:31-42,136-181,202-249`, `lib/db/leak-detector.ts:27-29,41-42,50-57,100-122`,
-  `lib/db/pool.ts:168,183,190`, `drizzle/db.ts:69-81`, `app/api/cron/process-sequences/route.ts:33-64,70-108,118,285`,
+  `lib/db/pool.ts:168,183,190`, `drizzle/db.ts:69-81`, `app/api/cron/process-sequences/route.ts:33-64,70-116,126,295`,
   `lib/email/tracking.ts:39-41`, `lib/ai/sentiment.ts:165-176`, `lib/errors-server.ts:228`,
   `lib/api/with-api-route.ts:106-162`, `deploy/cron/crontab`, `deploy/cron/run-cron.sh`,
   `deploy/pgbouncer/pgbouncer.ini:2,10,20`, `deploy/docker-compose.preprod.yml:36,47,144,152`. Related: **PP-028** (the 200 ms
@@ -2211,10 +2211,25 @@ entry ships nothing.
   `lead-warming/route.ts:12` "Schedule: Daily at 9:00 AM", `backup/route.ts:20` "Called daily by cron — runs pg_dump",
   `sla-check/route.ts:21` "Runs periodically (e.g., every 5-10 minutes)", `process-lead-scoring/route.ts:8` "Cron: Nightly
   Lead Scoring Recompute". And nothing else calls them: `checkSLABreach`'s only non-test consumer is
-  `app/api/cron/sla-check/route.ts:126`; `bulkScoreLeads`'s only non-test consumer is `process-lead-scoring`;
+  `app/api/cron/sla-check/route.ts:152`; `bulkScoreLeads`'s only non-test consumer is `process-lead-scoring`;
   `processLeadWarming` is reached only through `lib/lead-warming/index.ts` and its own route. A repo-wide grep for
   `/api/cron/<name>` across these five returns tests, the dead scheduler and `postman/full-test-suite.sh` — **no UI caller, no
   worker, no second scheduler**.
+  <!-- coordinate corrections for #2473 (2026-10-09): that PR projected the anonymous-surface row reads, and four of the files
+       it edited grew — backup-verify by seven lines at 160, sla-check by six after 57, process-sequences by eight after 95 and
+       two more after 174, and the sequence-steps library by ten at 34. Every pointer into them was re-read in the current file
+       rather than translated, and each old/new pair was proved to hold identical text first; two of them are blank on both
+       sides, which is how those spans already read. The scratch-name gate moved from 234-236 to 241-243 (both times it is
+       cited) and the detached-write triple from 272/306/324 to 279/313/331. The due-enrollments SQL moved from 135 to 145;
+       the shared helper `cancelOpenEnrollments` and its three write sites from 64/78/330/339 to 74/88/340/349. In the sequence
+       sweep the counted spans are now 70-74 (above every insert, unchanged), 110-116 (was 102-108), 126 (was 118) and 295
+       (was 285); the Files-list range there becomes 70-116 endpoint to endpoint because the eight projected lines sit INSIDE
+       what was 70-108 — the same straddle #2456's correction comment describes for the migration runner. This entry's own
+       pointer is the one that turned CI red: it named 126, and 126 is blank now. It was already wrong on the merge base, where
+       126 is a closing brace and the call sits at 146, so the honest re-pin is the call at 152 rather than the shifted
+       neighbour of a blank. That is the guard's known blind spot working in the open: liveness cannot tell a pointer that
+       moved from a pointer that was never right, which is why one reads as evidence for weeks and fails only on the day it
+       lands on nothing. -->
 - **What is measurably absent, not inferred.** `pg_stat_user_tables` (one statement): `sla_breaches` **0** rows,
   `contact_scores` **0**, `lead_warming_events` **0**, `critical_data_backups` **0**, `super_admin_backups` **0**,
   `backup_schedules` **0** — while `tenant_backup_records` holds **144** and `backup_alerts` **7**. The three zero tables are
@@ -3194,7 +3209,8 @@ database`, and exactly two FAILs:
   `app/api/webhooks/resend/route.ts:261` and `:435` each set `status: 'cancelled'` — both re-pinned on
   2026-10-08 from `:212`/`:368`, which **#2425**'s tenant attribution moved out from under this entry —
   and since **#2392** the
-  shared helper `cancelOpenEnrollments` (`lib/cron/sequence-steps.ts:64`, writing at `:78`, `:330`, `:339`)
+  shared helper `cancelOpenEnrollments` (`lib/cron/sequence-steps.ts:74`, writing at `:88`, `:340`, `:349` — re-pinned
+  2026-10-09 from lines 64/78/330/339, which **#2473**'s `SequenceStepRow` block pushed down by ten)
   is the only place that literal is issued: the un-enroll route calls it
   (`app/api/tenant/contacts/[id]/enroll/route.ts:127`) and no longer contains the value itself. Which is why
   the registry's writer list changed under this entry's feet between `32d252b9` and `38ae90e2` — it tracks
@@ -3279,7 +3295,7 @@ CONSTRAINT` + `ADD CONSTRAINT` widenings, so they are not exposed to PP-058's RL
   literal counts + `pg_get_constraintdef`, `drizzle.__drizzle_migrations` row count, `INVOICE_STATUSES`
   (`lib/api/schemas/billing.ts:42-52`), `app/api/tenant/invoices/[id]/route.ts:139,166`,
   `app/api/unsubscribe/route.ts:42-56,121-123`, `app/api/webhooks/resend/route.ts:261,435`,
-  `lib/cron/sequence-steps.ts:64,78,330,339`, `app/api/tenant/contacts/[id]/enroll/route.ts:127`,
+  `lib/cron/sequence-steps.ts:74,88,340,349`, `app/api/tenant/contacts/[id]/enroll/route.ts:127`,
   `lib/api/db-client-error.ts:83,105-111,145`,
   `docker exec nucrm-app printenv DATABASE_URL`, `nucrm-pgbouncer` `[databases]` stanza,
   `git cat-file -e ecbba74e:app/api/unsubscribe/route.ts`, `git log -S` provenance, `package.json` script

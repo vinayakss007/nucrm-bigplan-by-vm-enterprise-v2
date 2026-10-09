@@ -276,8 +276,11 @@ export async function POST(req: NextRequest) {
       // `undefined` for whatever was left out, `evaluate` returns null, the field
       // is skipped, and this contact's stored calculated values quietly go stale.
       // Silent data corruption, which is worse than the leak this rule exists to
-      // prevent. See #2459 for the inventory of the 33 anonymous-surface reads and
+      // prevent. See #2459 for the inventory of the anonymous-surface reads and
       // why this one is the only exception.
+      //
+      // row-projection-exempt: #2459 whole-row by design — `fullContact` feeds
+      //   syncCalculatedFields, which reads arbitrary contact columns by name.
       const fullContact = await db.query.contacts.findFirst({
         where: eq(contacts.id, contactId)
       });
