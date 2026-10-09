@@ -47,7 +47,7 @@ export const PUBLIC_TICKET_COLUMNS = {
  * The row `PUBLIC_TICKET_COLUMNS` produces, written out rather than inferred so
  * that the key set is reviewable in one glance. TypeScript checks it at every
  * `db.select(PUBLIC_TICKET_COLUMNS)` call site: if the map and this type drift,
- * `ticketWithReplies` stops compiling.
+ * `readPublicTicket` stops compiling.
  */
 export type PublicTicketRow = {
   id: string;

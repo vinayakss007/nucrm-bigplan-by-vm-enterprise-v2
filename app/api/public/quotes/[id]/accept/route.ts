@@ -4,13 +4,25 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/drizzle/db';
-import { quotes, contacts, activities } from '@/drizzle/schema';
+import { quotes, activities } from '@/drizzle/schema';
 import { eq, and, isNull } from 'drizzle-orm';
-import { resolvePortalIdentity } from '@/lib/portal-auth';
+import { resolvePortalIdentity, resolvePortalContact } from '@/lib/portal-auth';
 import { apiError } from '@/lib/api-error';
 import { logAudit } from '@/lib/audit';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { withTenantContext, NO_USER_SENTINEL } from '@/lib/db/rls';
+
+/**
+ * What the one transaction decided. Mapped to a response below, outside the
+ * RLS context, so no branch of this handler can leave the transaction holding a
+ * half-done accept.
+ */
+type AcceptOutcome =
+  | { kind: 'no_contact' }
+  | { kind: 'no_quote' }
+  | { kind: 'bad_state' }
+  | { kind: 'expired' }
+  | { kind: 'accepted'; acceptedAt: Date; tenantId: string; quoteId: string };
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -25,52 +37,55 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const identity = await resolvePortalIdentity(request);
     if (!identity) return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
 
-    const email = identity.email;
-    const contact = await db.query.contacts.findFirst({
-      where: and(
-        eq(contacts.email, identity.email),
-        eq(contacts.tenantId, identity.tenantId),
-        isNull(contacts.deletedAt),
-      ),
-      columns: { id: true, tenantId: true },
-    });
-    if (!contact) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-
     const { id } = await params;
-    // #2443: these two quote reads never reach the wire — the response is the
-    // three-field `{ ok, status, accepted_at }` below — so they were not leaking
-    // anything. They still named nothing, which makes `SELECT *` the plan for a
-    // statement that tests two columns and copies five into an activity row.
-    // Naming them costs less to fetch and makes "what does this handler look at"
-    // readable without diffing the table.
-    const [quote] = await db
-      .select({
-        id: quotes.id,
-        tenantId: quotes.tenantId,
-        status: quotes.status,
-        expiresAt: quotes.expiresAt,
-        title: quotes.title,
-        dealId: quotes.dealId,
-        totalAmount: quotes.totalAmount,
-      })
-      .from(quotes)
-      .where(and(eq(quotes.id, id), eq(quotes.tenantId, contact.tenantId), eq(quotes.contactId, contact.id), isNull(quotes.deletedAt)))
-      .limit(1);
+    const email = identity.email;
 
-    if (!quote) return NextResponse.json({ error: 'Quote not found' }, { status: 404 });
+    // #2446: this handler touches four policy-bound tables (`contacts`, `quotes`,
+    // `activities`, and the `audit_logs` row below) and set no context for any of
+    // them, so the accept was unreachable — the contact read matched nothing and
+    // the answer was 404 "Not found" for a customer with a live quote. Everything
+    // from the contact lookup to the activity insert now runs in ONE transaction
+    // scoped to the tenant the credential names, which is also what keeps the
+    // status flip and the activity row atomic (they were already one transaction;
+    // they are now also one context).
+    const outcome = await withTenantContext(identity.tenantId, NO_USER_SENTINEL, async (tx): Promise<AcceptOutcome> => {
+      const contact = await resolvePortalContact(identity, tx);
+      if (!contact) return { kind: 'no_contact' };
 
-    const validStatuses = ['sent', 'viewed'];
-    if (!validStatuses.includes(quote.status ?? '')) {
-      return NextResponse.json({ error: 'Quote cannot be accepted in its current state' }, { status: 409 });
-    }
+      // #2443: these reads never reach the wire — the response is the three-field
+      // `{ ok, status, accepted_at }` below — so they were not leaking anything.
+      // They still named nothing, which makes `SELECT *` the plan for a statement
+      // that tests two columns and copies five into an activity row. Naming them
+      // costs less to fetch and makes "what does this handler look at" readable
+      // without diffing the table.
+      const [quote] = await tx
+        .select({
+          id: quotes.id,
+          tenantId: quotes.tenantId,
+          status: quotes.status,
+          expiresAt: quotes.expiresAt,
+          title: quotes.title,
+          dealId: quotes.dealId,
+          totalAmount: quotes.totalAmount,
+        })
+        .from(quotes)
+        .where(and(eq(quotes.id, id), eq(quotes.tenantId, contact.tenantId), eq(quotes.contactId, contact.id), isNull(quotes.deletedAt)))
+        .limit(1);
 
-    if (quote.expiresAt && new Date(quote.expiresAt).getTime() < Date.now()) {
-      await db.update(quotes).set({ status: 'expired', updatedAt: new Date() }).where(eq(quotes.id, quote.id));
-      return NextResponse.json({ error: 'Quote has expired' }, { status: 410 });
-    }
+      if (!quote) return { kind: 'no_quote' };
 
-    const now = new Date();
-    await db.transaction(async (tx) => {
+      const validStatuses = ['sent', 'viewed'];
+      if (!validStatuses.includes(quote.status ?? '')) return { kind: 'bad_state' };
+
+      const now = new Date();
+      if (quote.expiresAt && new Date(quote.expiresAt).getTime() < now.getTime()) {
+        await tx
+          .update(quotes)
+          .set({ status: 'expired', updatedAt: now })
+          .where(eq(quotes.id, quote.id));
+        return { kind: 'expired' };
+      }
+
       await tx
         .update(quotes)
         .set({ status: 'accepted', acceptedAt: now, updatedAt: now })
@@ -87,17 +102,35 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         description: `Client accepted quote "${quote.title}"`,
         metadata: { quote_id: quote.id, total_amount: quote.totalAmount, accepted_by_email: email },
       });
+
+      return {
+        kind: 'accepted',
+        acceptedAt: now,
+        tenantId: quote.tenantId,
+        quoteId: quote.id,
+      };
     });
 
+    // K2: these are the one transaction's decisions, returned as data and mapped
+    // to responses here, outside the RLS context. A `NextResponse.json()` inside
+    // a `db.transaction()` would have left that connection holding a half-done
+    // accept when the pool handed it to the next request.
+    if (outcome.kind === 'no_contact') return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    if (outcome.kind === 'no_quote') return NextResponse.json({ error: 'Quote not found' }, { status: 404 });
+    if (outcome.kind === 'bad_state') {
+      return NextResponse.json({ error: 'Quote cannot be accepted in its current state' }, { status: 409 });
+    }
+    if (outcome.kind === 'expired') return NextResponse.json({ error: 'Quote has expired' }, { status: 410 });
+
     await logAudit({
-      tenantId: quote.tenantId,
+      tenantId: outcome.tenantId,
       action: 'offer_accepted',
       entityType: 'quote',
-      entityId: quote.id,
+      entityId: outcome.quoteId,
       newData: { accepted_by_email: email },
     });
 
-    return NextResponse.json({ ok: true, status: 'accepted', accepted_at: now.toISOString() });
+    return NextResponse.json({ ok: true, status: 'accepted', accepted_at: outcome.acceptedAt.toISOString() });
   } catch (err) {
     return apiError(err);
   }

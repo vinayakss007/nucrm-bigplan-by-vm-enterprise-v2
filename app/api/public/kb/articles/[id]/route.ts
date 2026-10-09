@@ -4,11 +4,11 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/drizzle/db';
 import { kbArticles, kbCategories } from '@/drizzle/schema';
 import { eq, and, isNull, sql } from 'drizzle-orm';
 import { resolvePortalIdentity } from '@/lib/portal-auth';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { withTenantContext, NO_USER_SENTINEL } from '@/lib/db/rls';
 
 /**
  * Public KB article detail — DECISION (#2284, follow-up to #2221 / PR #2283):
@@ -23,6 +23,11 @@ import { checkRateLimit } from '@/lib/rate-limit';
  * not match — other tenant, draft, archived, soft-deleted, missing — gets an
  * identical 404 so this is not an existence oracle. Legitimately-public rows
  * keep the exact same { data: article } response shape.
+ *
+ * #2284 proved the tenant and #2417 bounded the writes; neither could make the
+ * route read anything. `kb_articles` is `tenant_isolation`-policyed and this
+ * handler set no context, so the article was invisible (404) and the `views + 1`
+ * UPDATE below matched no row — a counter that never moved was the tell (#2446).
  */
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -39,26 +44,37 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     const { id } = await params;
-    const [article] = await db.select({
-      id: kbArticles.id, title: kbArticles.title, slug: kbArticles.slug,
-      content: kbArticles.content, excerpt: kbArticles.excerpt,
-      views: kbArticles.views, createdAt: kbArticles.createdAt,
-      categoryName: kbCategories.name,
-    })
-    .from(kbArticles)
-    .leftJoin(kbCategories, eq(kbCategories.id, kbArticles.categoryId))
-    .where(and(
-      eq(kbArticles.id, id),
-      eq(kbArticles.tenantId, identity.tenantId),
-      eq(kbArticles.status, 'published'),
-      isNull(kbArticles.deletedAt),
-    ))
-    .limit(1);
+
+    // One transaction, because the read that proves the row is public and the
+    // write that counts the view must see the same tenant — and the response is
+    // built outside it, so a 404 branch never returns holding an open
+    // transaction.
+    const article = await withTenantContext(identity.tenantId, NO_USER_SENTINEL, async (tx) => {
+      const [row] = await tx.select({
+        id: kbArticles.id, title: kbArticles.title, slug: kbArticles.slug,
+        content: kbArticles.content, excerpt: kbArticles.excerpt,
+        views: kbArticles.views, createdAt: kbArticles.createdAt,
+        categoryName: kbCategories.name,
+      })
+        .from(kbArticles)
+        .leftJoin(kbCategories, eq(kbCategories.id, kbArticles.categoryId))
+        .where(and(
+          eq(kbArticles.id, id),
+          eq(kbArticles.tenantId, identity.tenantId),
+          eq(kbArticles.status, 'published'),
+          isNull(kbArticles.deletedAt),
+        ))
+        .limit(1);
+
+      if (!row) return null;
+
+      // id already proven to be a published, live, same-tenant row above.
+      await tx.update(kbArticles).set({ views: sql`${kbArticles.views} + 1` }).where(eq(kbArticles.id, id));
+
+      return row;
+    });
 
     if (!article) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-
-    // id already proven to be a published, live, same-tenant row above.
-    await db.update(kbArticles).set({ views: sql`${kbArticles.views} + 1` }).where(eq(kbArticles.id, id));
 
     return NextResponse.json({ data: article });
   } catch { return NextResponse.json({ error: 'Not found' }, { status: 404 }); }

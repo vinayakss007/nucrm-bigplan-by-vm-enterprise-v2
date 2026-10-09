@@ -4,7 +4,9 @@
 > here, with the evidence that proves it and the verification that closed it.
 > Update the status the moment it changes; IDs are never reused.
 >
-> - **Last updated:** 2026-10-07 (UTC)
+> - **Last updated:** 2026-10-09 (UTC) — **#2446** wired `guard:portal-rls-context` into `ci.yml`
+>   (which moved every `ci.yml`/`package.json` coordinate in PP-059/PP-060 by 1–2 lines) and landed
+>   migration `0122`, the 24th entry in the pending pile.
 > - **Stack under test:** `deploy/docker-compose.production.yml` **overlaid** with
 >   `deploy/docker-compose.preprod.yml` (one compose project, `deploy`) — **18** containers running, measured:
 >   17 from compose (18 services, `minio-init` is an exited one-shot; `realtime` comes only from the preprod
@@ -84,8 +86,8 @@ Severity: **S1** blocks go-live · **S2** broken feature or security weakness ·
 | PP-056 | S3  | Host / tooling              | `/tmp` is a **3.9 GB tmpfs** and vitest leaves a ~22 MB temp dir on **every** run: 88 of them held **1.9 GB**, which filled it. `npx vitest run` then exited **1 with no `Test Files`/`Tests` summary at all** — a scratch-space outage is indistinguishable from a red suite. Sweeping the suite after fixing it found **three assertions that only pass when `.env.local` is absent** (2 × CSRF + rate-limit) — and a fourth that turned out to be a **stale-clone-base artifact**, which is its own harness lesson                                                                                                                                                                                                                                                                                                                                                                                                                          | 🔧 MITIGATED (1.5 GB of stale clones moved off tmpfs, `TMPDIR` pinned to the root fs) · CSRF pair in PR **#2359**, rate-limit + this entry in **#2365** · four exits, all owner's call                  |
 | PP-057 | S2  | Migrations + tooling        | The repo has exactly one "what is applied?" command and it cannot see the ledger: `db:status` queries `__drizzle_migrations(name, applied_at)` — no such table, no such columns — and maps **any** failure to "history table does not exist", so against preprod it printed **`Applied: 0 / Pending: <every journal entry>`** on a database with **99 applied and 18 outstanding**. `db:migrate --dry-run` compounds it: its first line counts journal entries (**`116 pending migration(s)`**) before reading anything, and that number is what the y/N apply prompt offers. Nothing in CI or the runbooks would ever have revealed the 18-behind state, which includes `0091` (the usage-snapshot bypass **#56** shipped), `0059` (**#74**'s still-unstamped entry) and now `0116` (**#2367**, merged while this PR was open)                                                                                                                | 🔧 SCRIPTS FIXED in this PR (verified 99/18 against two instruments) · applying the 18 is an **owner decision** · also measured: `0115`'s absence is **not** a live cross-tenant read                   |
 | PP-058 | S2  | Migrations + tooling        | `db:migrate` connects as the tables' **owner** (`nucrm`) with `FORCE ROW LEVEL SECURITY` active on 48 of the 49 tables the pending set names, and `scripts/migrate.ts:198` sets **no tenant GUC** — so every data-correcting statement in a migration matches **0 rows** and silently corrects nothing, while the DDL built on top of it (`CREATE UNIQUE INDEX`, `SET NOT NULL`) reads the whole heap regardless. Measured on preprod: `0114_leads_tenant_oid_unique` (pending) dedupes `(tenant_id, lead_oid)` before creating the unique index, but its own CTE sees 0 of 25 leads while the truth is **1 duplicate group / 5 rows / 4 losers** (all five soft-deleted, all nine days older than the header's own "measured 0"), so the pending 21-entry run **aborts on 23505** — the exact failure its header says the dedupe exists to prevent                                                                                            | 🚨 OPEN · owner decision · no historical damage demonstrated · `0109` already proves the fix is one `set_config` line                                                                                   |
-| PP-059 | S2  | CHECK vs code               | `guard:vocab` — the only command in the repo that asks the **live database** what it will reject — exits **1** on `main` — measured at `38ae90e2`, re-measured at `f3787f32` — with **2 of 9** constraints disagreeing: `chk_sequence_enrollments_status` (5 values) refuses `'cancelled'`, which `/api/unsubscribe` has written since the repo's first commit `ecbba74e`, and `chk_invoices_status` (8 values) refuses `'void'`, which `INVOICE_STATUSES` offers and `PATCH /api/tenant/invoices/[id]` passes through. Its own fixes, `0120` and `0112`, are two of the **23** entries PP-057 says nobody has agreed to apply (the count was **22** when this row was written; `0121` landed since) — and it is the **only one of the 19 `guard:*` scripts no automation invokes**: workflows call 16 by alias and 2 by direct `node` command (`ci.yml:215`, `:248`), while `grep -rn check-constraint-vocab .github/workflows` returns **0** | 🚨 OPEN · guard wired nowhere · latent **on this DB** (both tables hold 0 rows, measured `--superadmin`) · CI green proves only that the `.sql` text says the right thing                               |
-| PP-060 | S2  | Deploy                      | The 23-entry backlog has **no automated apply path that could reach this database**: the only executable migrate in the repo's automation is `deploy.yml:281` (`scripts/deploy-migrate.ts --yes`, which spawns `migrate.ts --yes` at `:96`), inside the single `script:` block opened at `:77` — so it runs over SSH on the **pm2 production VM**, not on this Docker preprod host. That hop has failed every run since the last success (`30748691555`, 2026-08-02T12:51:06Z): **741 runs · 0 success** (639 failure / 54 cancelled / 48 skipped), 15 of 15 sampled recent runs contain `dial tcp ***:22: i/o timeout`, and the retained total is **3 successes in 1,282 runs**. No workflow mentions `db:status` (grep: 0 hits in all 5), `ci.yml` and `backup-drill.yml` build their databases with `db:sync`, and this host has no deploy cron or timer                                                                                    | 🚨 OPEN · owner action (`gh secret set DEPLOY_HOST`, the remedy AGENTS.md already documents) · even a healthy deploy migrates a **different database**, so PP-057's exit (a) has no mechanism behind it |
+| PP-059 | S2  | CHECK vs code               | `guard:vocab` — the only command in the repo that asks the **live database** what it will reject — exits **1** on `main` — measured at `38ae90e2`, re-measured at `f3787f32` — with **2 of 9** constraints disagreeing: `chk_sequence_enrollments_status` (5 values) refuses `'cancelled'`, which `/api/unsubscribe` has written since the repo's first commit `ecbba74e`, and `chk_invoices_status` (8 values) refuses `'void'`, which `INVOICE_STATUSES` offers and `PATCH /api/tenant/invoices/[id]` passes through. Its own fixes, `0120` and `0112`, are two of the **24** entries PP-057 says nobody has agreed to apply (the count was **22** when this row was written; `0121` landed since, then `0122` with **#2446**) — and it is the **only one of the 20 `guard:*` scripts no automation invokes**: workflows call 17 by alias and 2 by direct `node` command (`ci.yml:217`, `:250`), while `grep -rn check-constraint-vocab .github/workflows` returns **0** | 🚨 OPEN · guard wired nowhere · latent **on this DB** (both tables hold 0 rows, measured `--superadmin`) · CI green proves only that the `.sql` text says the right thing                               |
+| PP-060 | S2  | Deploy                      | The 24-entry backlog (23 until `0122` landed with **#2446**) has **no automated apply path that could reach this database**: the only executable migrate in the repo's automation is `deploy.yml:281` (`scripts/deploy-migrate.ts --yes`, which spawns `migrate.ts --yes` at `:96`), inside the single `script:` block opened at `:77` — so it runs over SSH on the **pm2 production VM**, not on this Docker preprod host. That hop has failed every run since the last success (`30748691555`, 2026-08-02T12:51:06Z): **741 runs · 0 success** (639 failure / 54 cancelled / 48 skipped), 15 of 15 sampled recent runs contain `dial tcp ***:22: i/o timeout`, and the retained total is **3 successes in 1,282 runs**. No workflow mentions `db:status` (grep: 0 hits in all 5), `ci.yml` and `backup-drill.yml` build their databases with `db:sync`, and this host has no deploy cron or timer                                                                                    | 🚨 OPEN · owner action (`gh secret set DEPLOY_HOST`, the remedy AGENTS.md already documents) · even a healthy deploy migrates a **different database**, so PP-057's exit (a) has no mechanism behind it |
 
 ## Sentry issues → register entries
 
@@ -800,7 +802,7 @@ running=120s` with exit 1 and the `--force-recreate app` command to fix it.
   Session-scoped rather than `withSecurityContext()` per query because these handlers make 3–4
   statements each and PP-028 prices one statement at ~200 ms; `withApiRoute` pins the client and
   `RESET_TENANT_GUCS_SQL` (`lib/db/request-connection.ts:94`) clears `app.is_super_admin` on
-  release, which is what makes the wider scope safe. It also reaches helpers that take `db`
+  release — and since **#2446**, the three `app.portal_lookup_*` GUCs too, same statement — which is what makes the wider scope safe. It also reaches helpers that take `db`
   itself (`concurrencyGuard` in PATCH), which a `tx` would not.
 - **`?list=recent` is not widened.** The GUC is set only under `if (ctx.isSuperAdmin)`; a
   non-admin request never sets it, so its read stays inside RLS for its own tenant rather than
@@ -1911,7 +1913,9 @@ from pg_policies where schemaname='public' and (qual like '%app.is_super_admin%'
   the literals `'true'`/`'false'` (`lib/db/rls.ts:169` `setSuperAdminContext`, `:217` `setImpersonationContext` — tx
   required; the only variable is `isLocal`, a compile-time fragment), and `'true'` is reached only after the **database**
   proves `users.is_super_admin` (`lib/auth/middleware.ts:297` cached context, `:391` fresh read under a verified JWT).
-  Reset to `'false'` runs on every checkout (`lib/db/pool.ts:233`, `lib/db/request-connection.ts:94`). No route splices
+  Reset to `'false'` runs on every checkout (`lib/db/pool.ts:233`, `lib/db/request-connection.ts:94` — both
+  lists extended by **#2446** with the three `app.portal_lookup_*` GUCs, so a portal-credential read cannot
+  outlive its transaction either). No route splices
   request data into SQL: the template-literal sinks in `app/` are compile-time identifiers or regex-gated numerics
   (`app/api/cron/backup-verify/route.ts:234-236` gates `nucrm_verify_${Date.now()}` through `^[a-z0-9_]+$` before
   `CREATE DATABASE`; `app/api/tenant/sla/route.ts:36` is drizzle identifiers). Library-level splices are not reachable from
@@ -1943,7 +1947,8 @@ from pg_policies where schemaname='public' and (qual like '%app.is_super_admin%'
 - **Verified:** this session's own output for every number — `nucrm|f|f|t|0`; `0|0`; `191`/`162`; `0`/`0` for `team_*`;
   `49|60`; `226|225|1` with `ai_providers` at 0 policies; and the fail-closed query still `0|0` after the bypass.
 - **Files (all read-only):** `lib/db/rls.ts:138,165-189,206-221`, `lib/db/pool.ts:233`,
-  `lib/db/request-connection.ts:88-94`, `lib/auth/middleware.ts:297,391`,
+  `lib/db/request-connection.ts:88-94` (both reset lists gained the `app.portal_lookup_*` names with
+  **#2446**, which is why their text moved while the cited construct did not), `lib/auth/middleware.ts:297,391`,
   `drizzle/migrations/0088_rls_bootstrap_and_isolation.sql:344-360`, `drizzle/migrations/0099_api_keys_auth_lookup.sql`,
   `drizzle/migrations/0105_email_tracking_pixel_lookup.sql`, `app/api/cron/backup-verify/route.ts:234-236`,
   `deploy/docker-compose.preprod.yml`, `deploy/docker-compose.production.yml`.
@@ -3038,7 +3043,8 @@ portal_token`, `0037`'s five backfills) ran blind **and were rescued by the loud
 - **Files:** none changed — this entry only. Evidence read: `scripts/migrate.ts:29,198-199,402-429,559` (re-pinned on 2026-10-08 from line 27, 184-185, 349-376 and 476, which **#2450** moved),
   `drizzle/migrations/0114_leads_tenant_oid_unique.sql`, `0113`, `0111`, `0109`, `0108`, `0107`,
   `0067_ticket_portal_token.sql`, `0037_tenant_isolation_hardening.sql`, `lib/db/ssl-config.ts`,
-  `scripts/lib/readonly-db.mts:120-133`, `lib/db/pool.ts:233`, `pg_class`, `pg_policy`, `pg_roles`.
+  `scripts/lib/readonly-db.mts:120-133`, `lib/db/pool.ts:233` (text extended by **#2446**'s
+  `app.portal_lookup_*` reset names, construct unchanged), `pg_class`, `pg_policy`, `pg_roles`.
   <!-- coordinate corrections for #2456 (2026-10-08): seven sentences in this register — four in PP-058
        (this section's three, plus its row in the Summary table above), two in PP-057, one in PP-041 — cited
        lines of scripts/migrate.ts that still hold exactly the construct named, but sit below the lines
@@ -3063,10 +3069,11 @@ portal_token`, `0037`'s five backfills) ran blind **and were rescued by the loud
   (the runner is _not_ superuser — measured), **#74** (the journal gap still hiding `0059`/`0091`),
   **#2234**, **#2228**, **#2237**, **#2259**, **#2343**.
 - **No CI path can validate any of the exits above, and that should shape the #103 decision.** CI's RLS job is not a proxy for
-  a migration run. `.github/workflows/ci.yml:165` (re-pinned from `:161` on 2026-10-08 — the #2440
+  a migration run. `.github/workflows/ci.yml:167` (re-pinned from `:161` on 2026-10-08 — the #2440
   projection guard step added two lines above it, and the coordinate guard step recorded in the comment below
-  added two more) provisions with `npm run db:sync` — which is `drizzle-kit push` and writes **no
-  ledger** — and `:169-172` then applies RLS files through `scripts/apply-rls-ci.mjs` (`:170`) under
+  added two more; re-pinned again to `:167` by **#2446**, whose portal-RLS-context guard step added two more
+  above it) provisions with `npm run db:sync` — which is `drizzle-kit push` and writes **no
+  ledger** — and `:171-174` then applies RLS files through `scripts/apply-rls-ci.mjs` (`:172`) under
   `DATABASE_URL=postgresql://postgres:postgres@…` (also the workflow-level default at `:11`). RLS does not filter a superuser and no
   ledger means neither branch of `scripts/migrate.ts` is taken, so in the only context CI can reach, the blindness in this entry
   cannot manifest. `scripts/migrate.ts` never runs in `ci.yml` at all: the only workflow that invokes it is `deploy.yml:281`, against
@@ -3148,7 +3155,7 @@ portal_token`, `0037`'s five backfills) ran blind **and were rescued by the loud
   The applied half is recorded as shape only: whether any of them silently matched zero rows depends on FORCE RLS and row presence
   _at the time it ran_, which is not recoverable from here, so no historical damage is claimed.
 
-## PP-059 — 🚨 The one command in this repo that asks the **live database** what it will reject is red on `main` and runs in no workflow: `guard:vocab` exits **1** with **2 of 9** constraints disagreeing (measured at `38ae90e2`, re-measured at `f3787f32`) — `chk_sequence_enrollments_status` refuses `'cancelled'`, which `/api/unsubscribe` has written since the repo's first commit, and `chk_invoices_status` refuses `'void'`, which `INVOICE_STATUSES` offers and `PATCH /api/tenant/invoices/[id]` passes straight through — while the migrations that would fix both (`0120`, `0112`) sit in the 23-entry pile PP-057 counts and PP-060 shows nothing can apply _(S2 · CHECK vs code)_
+## PP-059 — 🚨 The one command in this repo that asks the **live database** what it will reject is red on `main` and runs in no workflow: `guard:vocab` exits **1** with **2 of 9** constraints disagreeing (measured at `38ae90e2`, re-measured at `f3787f32`) — `chk_sequence_enrollments_status` refuses `'cancelled'`, which `/api/unsubscribe` has written since the repo's first commit, and `chk_invoices_status` refuses `'void'`, which `INVOICE_STATUSES` offers and `PATCH /api/tenant/invoices/[id]` passes straight through — while the migrations that would fix both (`0120`, `0112`) sit in the 24-entry pile PP-057 counts and PP-060 shows nothing can apply _(S2 · CHECK vs code)_
 
 - **Found by:** running the tooling **#2405** landed, at main's tip, against the database it was written
   for. PP-057 answered _"how many entries are outstanding?"_, PP-058 answered _"can the runner apply
@@ -3207,28 +3214,31 @@ database`, and exactly two FAILs:
   Four and a half months of code writing a value the schema rejects, with no signal, because the tool that
   would have said so did not exist until 2026-10-02 (`3836629f`).
 - **And the tool that says so is wired to nothing — uniquely so.** Enumerated at `38ae90e2` from the workflow
-  files themselves, and re-enumerated at `f3787f32` after **#2445** and **#2447** landed the two register
-  guards: `package.json:47-65` defines **19** `guard:*` scripts. Workflows invoke **16** by alias — `ci.yml`
-  runs 14 (`rls`, `csrf`, `schemas`, `boundaries`, `filesize`, `any-suppressions`, `chain`, `migration-rls`,
-  `counters`, `csv`, `portal-softdelete`, `public-ratelimit`, `public-projection`, `coords`, at `:45` through
-  `:81`) and `nightly-soak.yml:209`/`:255` runs the other two (`guard:running-config --allow-empty`, and
+  files themselves, re-enumerated at `f3787f32` after **#2445** and **#2447** landed the two register
+  guards, and re-enumerated again when **#2446** wired `guard:portal-rls-context` (which also moved the
+  `ci.yml` aliases from `:45-81` to `:45-83` and the two SAST `node` calls from `:215`/`:248` to
+  `:217`/`:250`): `package.json:47-66` defines **20** `guard:*` scripts. Workflows invoke **17** by alias — `ci.yml`
+  runs 15 (`rls`, `csrf`, `schemas`, `boundaries`, `filesize`, `any-suppressions`, `chain`, `migration-rls`,
+  `counters`, `csv`, `portal-softdelete`, `public-ratelimit`, `public-projection`, `portal-rls-context`,
+  `coords`, at `:45` through
+  `:83`) and `nightly-soak.yml:209`/`:255` runs the other two (`guard:running-config --allow-empty`, and
   `guard:register-drift` in the `register-drift-screen` job at `:241`) — and invoke **2** more as bare `node`
   commands inside `ci.yml`'s SAST job: `npm audit --audit-level=high --json | node scripts/check-audit-baseline.mjs`
-  (`:215`) and `node scripts/check-semgrep-baseline.mjs semgrep.sarif` (`:248`). That is 18 of 19. The nineteenth is
+  (`:217`) and `node scripts/check-semgrep-baseline.mjs semgrep.sarif` (`:250`). That is 19 of 20. The twentieth is
   `guard:vocab`: `grep -rn check-constraint-vocab .github/workflows` returns **0**, and so does
   `grep -rn constraint-vocab .github/workflows`, so no automation runs it under its alias _or_ its filename.
   It is not merely failing-quiet — it is unfailing-quiet, because nobody calls it, and it is the only guard in
   the repo in that condition. Two of the four guards added since this entry was written — `coords` and
   `register-drift` — are the ones that read _this file_, which is why the re-count is in the entry rather than
   in a follow-up.
-  (The 16/2/1 split is itself worth recording. A wiring audit that greps for `npm run guard:` reports
-  **16 of 19** and mis-files `audit` and `semgrep` as unrun, because those two are called as direct `node`
+  (The 17/2/1 split is itself worth recording. A wiring audit that greps for `npm run guard:` reports
+  **17 of 20** and mis-files `audit` and `semgrep` as unrun, because those two are called as direct `node`
   invocations rather than through their aliases. This entry said exactly that until its own PR's CI run
   printed `✖ npm audit baseline guard failed (#2301)` — a baseline rotting _loudly_, on the first try — and
   the count was then taken from the workflows rather than from the alias list.)
 - **Why CI's database could not answer this even if it did.** CI _has_ Postgres —
-  `ci.yml:86-99` and `:131-144` start `postgres:16-alpine` services (`:88`, `:133`) — but it provisions them
-  with `npm run db:sync` (`:120`, `:165`), i.e. `drizzle-kit push` from `drizzle/schema/**`. Those CHECKs
+  `ci.yml:88-101` and `:133-146` start `postgres:16-alpine` services (`:90`, `:135`) — but it provisions them
+  with `npm run db:sync` (`:122`, `:167`), i.e. `drizzle-kit push` from `drizzle/schema/**`. Those CHECKs
   are migration-only artifacts: across **63** schema files there are exactly **4** `check(...)`
   declarations, all in `record-links.ts` (`record_links_from_type_valid`, `_to_type_valid`,
   `_relation_valid`, `_not_self`). `chk_invoices_status` is declared nowhere in the schema;
@@ -3259,8 +3269,8 @@ database`, and exactly two FAILs:
   PP-057 records as undecided and PP-060 records as unreachable. `0112`/`0120` are pure `ALTER TABLE … DROP
 CONSTRAINT` + `ADD CONSTRAINT` widenings, so they are not exposed to PP-058's RLS blindness at all — this
   is the cheapest half of the backlog to drain and the one with a named consequence.
-  (c) **Make the wiring greppable** — route `ci.yml:215` and `:248` through `npm run guard:audit` /
-  `npm run guard:semgrep` (the same two commands, already aliases in `package.json:61`/`:62`) so "which
+  (c) **Make the wiring greppable** — route `ci.yml:217` and `:250` through `npm run guard:audit` /
+  `npm run guard:semgrep` (the same two commands, already aliases in `package.json:62`/`:63`) so "which
   guards run?" has one answer instead of two syntaxes, and so adding `guard:vocab` to the set is a one-line
   change rather than a third convention — **#2445** and **#2447** proved that half by wiring `coords` and
   `register-drift` themselves. A control that is invisible to the obvious audit command is a
@@ -3269,9 +3279,9 @@ CONSTRAINT` + `ADD CONSTRAINT` widenings, so they are not exposed to PP-058's RL
   `db:migrate` build the same constraint, or the CI/preprod divergence this entry depends on stays a
   permanent fixture of the tooling.
 - **Files:** `scripts/check-constraint-vocab.mts`, `scripts/constraint-vocab.json` (9 entries; its
-  `sequence_enrollments.status` writers were rewritten by **#2392**), `.github/workflows/ci.yml` (14 guards
-  by alias at `:45-81`, 2 more by direct `node` call at `:215`/`:248`, `db:sync` at `:120`/`:165`, services
-  at `:86-99`/`:131-144`),
+  `sequence_enrollments.status` writers were rewritten by **#2392**), `.github/workflows/ci.yml` (15 guards
+  by alias at `:45-83`, 2 more by direct `node` call at `:217`/`:250`, `db:sync` at `:122`/`:167`, services
+  at `:88-101`/`:133-146`),
   `.github/workflows/nightly-soak.yml` (`:209`, `:255`),
   `tests/unit/schema/invoice-status-vocab-migration.test.ts`,
   `tests/unit/constraint-vocab-registry.test.ts`, `drizzle/migrations/0112_invoice_status_vocab.sql`,
@@ -3312,7 +3322,7 @@ CONSTRAINT` + `ADD CONSTRAINT` widenings, so they are not exposed to PP-058's RL
   row. It refuses before that when `BACKUP_LOCAL_DIR` is ephemeral (`:138-143`) or `pg_dump` is not on
   PATH (`:146-155`) — both satisfiable here (this host's app image **does** ship `pg_dump` and `psql`:
   `docker exec nucrm-app command -v pg_dump` → `/usr/bin/pg_dump`), so neither refusal is this entry's
-  point. `package.json:83` now also defines `db:deploy-migrate` as a hand-run alias; **no workflow
+  point. `package.json:84` now also defines `db:deploy-migrate` as a hand-run alias; **no workflow
   invokes it** (grep: 0 hits across `.github/workflows`).
 - **The one workflow that could re-read the ledger never does.** Grepping all 5 files for `db:status` or
   `migration-status` returns **0 hits in every file**. So the pipeline that owns the sentence "the deploy
@@ -3323,7 +3333,7 @@ CONSTRAINT` + `ADD CONSTRAINT` widenings, so they are not exposed to PP-058's RL
   schema (#2124)", but the step that builds that schema (`:44-47`) runs `npm run db:sync` (drizzle-kit
   **push** from `drizzle/schema/**`) plus `node scripts/apply-rls-ci.mjs` — never `db:migrate`, never the
   `drizzle/migrations/**` directory. So the weekly backup drill verifies the pushed schema, not the
-  migrated one: the same structural blind spot PP-059 records for `ci.yml` (`ci.yml:120`, `:165`) also
+  migrated one: the same structural blind spot PP-059 records for `ci.yml` (`ci.yml:122`, `:167`) also
   applies to the tool whose stated purpose is trusting restores.
 - **Measured hop failure.** Full retained history (`gh api …/workflows/deploy.yml/runs`, 2026-06-05T11:45:25Z
   → 2026-10-08T05:58:59Z, **1,282 runs**): **3 success / 981 failure / 240 cancelled / 58 skipped.** (Not
@@ -3389,7 +3399,8 @@ connection refused/timeout`, run `curl -s ifconfig.me`, then `gh secret set DEPL
   the docs: a deploy path nobody runs also has no reason to keep its own documentation honest. Stale numbers
   are spelled "line N" on purpose: `path:line` is how this file cites live
   targets, so a citation-shaped token aimed at a dead line is indistinguishable from a live citation.
-- **The chain, end to end.** (i) **23** entries are pending, including `0112`/`0120` (PP-059's fix for a
+- **The chain, end to end.** (i) **24** entries are pending (23 at `f3787f32`, `0122` from **#2446** being the
+  24th), including `0112`/`0120` (PP-059's fix for a
   live rejection), `0091` (**#56**) and `0059` (**#74**); (ii) the only automated apply path is
   `deploy.yml:281`,
   behind an SSH hop that has not opened in 741 runs, pointing at another host; (iii) even when it opens,
@@ -3408,16 +3419,16 @@ connection refused/timeout`, run `curl -s ifconfig.me`, then `gh secret set DEPL
   (c) **Make the ledger observable where it is live** — run `db:status` on a schedule and alert on
   `Pending > 0`, or refuse to start the app container when it is non-zero. This is PP-057's exit (c) from the
   other side: `db:status` was fixed to tell the truth in #2371 and **nothing asks it**.
-  (d) **Decide #103 first** — otherwise (b) applies 23 entries whose row-correcting halves silently do
+  (d) **Decide #103 first** — otherwise (b) applies 24 entries whose row-correcting halves silently do
   nothing, and the register gains a green deploy and a lie.
 - **Files:** `.github/workflows/deploy.yml` (`:38` health ports, `:59`/`:68-77` the two steps, `:83` the VM
   path, `:97-114`/`:141` pm2, `:246` privilege gate, `:256-287` the migration block with the only executable
   migrate at `:281`), `scripts/deploy-migrate.ts` (`:96` spawn of `migrate.ts --yes`, `:138-143` and
   `:146-155` preconditions), `lib/db/deploy-migration-run.ts`, `.github/workflows/ci.yml` (services
-  `:88`/`:133`, `db:sync` `:120`/`:165`, 14 guards `:45-81`), `.github/workflows/backup-drill.yml` (`:4`
+  `:90`/`:135`, `db:sync` `:122`/`:167`, 15 guards `:45-83`), `.github/workflows/backup-drill.yml` (`:4`
   comment vs `:44-47` `db:sync`), `.github/workflows/nightly-soak.yml` (`:209`/`:255`),
-  `deploy/DEPLOYMENT_PATHS.md`, `scripts/deploy-vm.sh`, `package.json` (`:82` `db:migrate`, `:83`
-  `db:deploy-migrate`, `:86` `db:status`), `AGENTS.md` (ephemeral IP + `gh secret set` remedy + the two-path
+  `deploy/DEPLOYMENT_PATHS.md`, `scripts/deploy-vm.sh`, `package.json` (`:83` `db:migrate`, `:84`
+  `db:deploy-migrate`, `:88` `db:status`), `AGENTS.md` (ephemeral IP + `gh secret set` remedy + the two-path
   correction). Evidence read: the retained Deploy run list (1,282 rows) and per-job logs via
   `actions/jobs/{id}/logs` for the 15 most recent failures plus `30748691555`, `30784445875` and
   `37735134900`; `gh api …/actions/secrets` (names + `updated_at` only — no values are readable through

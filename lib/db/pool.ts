@@ -230,7 +230,7 @@ export function getPool(): Pool {
         // #1837: make a *persistent* failure observable instead of fully silent
         // — log at most once every 60s so a tearing-down client can't flood.
         void client
-          .query("SELECT set_config('app.current_tenant', '', false), set_config('app.current_user', '', false), set_config('app.is_super_admin', 'false', false), set_config('app.auth_lookup', '', false), set_config('app.tracking_lookup', '', false)")
+          .query("SELECT set_config('app.current_tenant', '', false), set_config('app.current_user', '', false), set_config('app.is_super_admin', 'false', false), set_config('app.auth_lookup', '', false), set_config('app.tracking_lookup', '', false), set_config('app.portal_lookup_token', '', false), set_config('app.portal_lookup_tenant', '', false), set_config('app.portal_lookup_email', '', false)")
           .catch((err: unknown) => {
             const now = Date.now();
             if (now - lastRlsResetWarnAt >= 60_000) {

@@ -4,11 +4,11 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/drizzle/db';
 import { kbArticles, kbCategories } from '@/drizzle/schema';
 import { eq, and, desc, isNull } from 'drizzle-orm';
 import { resolvePortalIdentity } from '@/lib/portal-auth';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { withTenantContext, NO_USER_SENTINEL } from '@/lib/db/rls';
 
 /**
  * Public KB list — DECISION (#2221): this is NOT a global help center.
@@ -18,6 +18,11 @@ import { checkRateLimit } from '@/lib/rate-limit';
  * server-validated portal identity (httpOnly session cookie or
  * x-portal-token, same mechanism as /api/public/tickets) — anonymous
  * callers get 401 instead of the whole fleet's articles.
+ *
+ * #2221's predicate was right and still unreadable: `kb_articles` and
+ * `kb_categories` both carry `tenant_isolation`, so the join and the filter ran
+ * against `app.current_tenant`, which this route never set. The result was a 200
+ * with an empty list for a tenant that has published articles (#2446).
  */
 export async function GET(request: NextRequest) {
   try {
@@ -29,21 +34,22 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
 
-    const data = await db.select({
-      id: kbArticles.id, title: kbArticles.title, slug: kbArticles.slug,
-      excerpt: kbArticles.excerpt, views: kbArticles.views,
-      createdAt: kbArticles.createdAt,
-      categoryName: kbCategories.name,
-    })
-    .from(kbArticles)
-    .leftJoin(kbCategories, eq(kbCategories.id, kbArticles.categoryId))
-    .where(and(
-      eq(kbArticles.tenantId, identity.tenantId),
-      eq(kbArticles.status, 'published'),
-      isNull(kbArticles.deletedAt),
-    ))
-    .orderBy(desc(kbArticles.createdAt))
-    .limit(50);
+    const data = await withTenantContext(identity.tenantId, NO_USER_SENTINEL, (tx) =>
+      tx.select({
+        id: kbArticles.id, title: kbArticles.title, slug: kbArticles.slug,
+        excerpt: kbArticles.excerpt, views: kbArticles.views,
+        createdAt: kbArticles.createdAt,
+        categoryName: kbCategories.name,
+      })
+        .from(kbArticles)
+        .leftJoin(kbCategories, eq(kbCategories.id, kbArticles.categoryId))
+        .where(and(
+          eq(kbArticles.tenantId, identity.tenantId),
+          eq(kbArticles.status, 'published'),
+          isNull(kbArticles.deletedAt),
+        ))
+        .orderBy(desc(kbArticles.createdAt))
+        .limit(50));
 
     return NextResponse.json({ data });
   } catch { return NextResponse.json({ data: [] }); }

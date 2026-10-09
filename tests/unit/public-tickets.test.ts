@@ -212,12 +212,25 @@ describe('GET /api/public/tickets/[id] (#2217 internal replies, #2443 whole-row 
   beforeEach(() => {
     vi.clearAllMocks();
     mockDb.selectCall = 0;
-    mockIdentity.current = { email: 'a@b.com' };
+    // #2446: the routes now run their reads inside the tenant the credential
+    // names, so an identity without one is not a case the handler can be called
+    // with — `withTenantContext` refuses an empty tenantId rather than opening a
+    // context on nothing.
+    mockIdentity.current = { email: 'a@b.com', tenantId: '11111111-1111-4111-8111-111111111111' };
     mockContact.current = { id: 'c1', tenantId: '11111111-1111-4111-8111-111111111111' };
   });
 
+  /** Cookie branch: the ticket read is the first select, replies the second. */
   const detailChain = () => (call: number, projection?: Record<string, unknown>) =>
     makeChain(() => (call === 0 ? [ticketRow] : []), undefined, projection);
+
+  /**
+   * x-portal-token branch (#2446): the token probe — which tenant owns the
+   * ticket this credential names — is now the first read, so the ticket is the
+   * second and the replies the third.
+   */
+  const tokenDetailChain = () => (call: number, projection?: Record<string, unknown>) =>
+    makeChain(() => (call <= 1 ? [ticketRow] : []), undefined, projection);
 
   it('never serializes portal_token in the ticket payload', async () => {
     mockDb.chainFactory = detailChain();
@@ -268,7 +281,7 @@ describe('GET /api/public/tickets/[id] (#2217 internal replies, #2443 whole-row 
 
   it('projects the x-portal-token branch as well as the cookie branch', async () => {
     // Two reads of the same table, one per auth path; #2443 is about both.
-    mockDb.chainFactory = detailChain();
+    mockDb.chainFactory = tokenDetailChain();
     const { GET } = await import('@/app/api/public/tickets/[id]/route');
     const res = await GET(getTicketRequest('tick1', { 'x-portal-token': 'tok' }), {
       params: Promise.resolve({ id: 'tick1' }),
