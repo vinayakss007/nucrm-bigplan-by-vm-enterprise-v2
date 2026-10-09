@@ -17,14 +17,24 @@ import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
-import { db } from '@/drizzle/db';
-import { documents, tenants } from '@/drizzle/schema';
+import { tenants } from '@/drizzle/schema';
 import { and, eq, isNull } from 'drizzle-orm';
+import { withTenantContext, NO_USER_SENTINEL } from '@/lib/db/rls';
 import {
   getInternalSigningByToken,
   recordInternalSignerEvent,
+  writeInternalSignerEvent,
   listSigningEvents,
 } from '@/lib/esignature';
+
+/**
+ * `generateSignerToken()` is `randomBytes(32).toString('base64url')` (43 chars of
+ * [A-Za-z0-9_-]); the bound is loose enough to admit any token an existing link
+ * could hold and tight enough that a junk path param 404s the way every other
+ * "no" path here does, instead of throwing its way into a 500 through the lookup
+ * context's 512-character guard.
+ */
+const SIGNER_TOKEN_RE = /^[A-Za-z0-9_-]{20,128}$/;
 
 function clientIp(req: NextRequest): string | undefined {
   return req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || undefined;
@@ -36,31 +46,39 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
     if (limited) return limited;
 
     const { token } = await params;
+    if (!SIGNER_TOKEN_RE.test(token)) {
+      return NextResponse.json({ error: 'Signing request not found' }, { status: 404 });
+    }
     const view = await getInternalSigningByToken(token);
     // Uniform 404 so an unauthenticated probe cannot enumerate tokens/state.
     if (!view) return NextResponse.json({ error: 'Signing request not found' }, { status: 404 });
 
-    // Record a 'viewed' event on first open (no-op once resolved/viewed).
-    if (!view.alreadyResolved && view.status === 'sent') {
-      await recordInternalSignerEvent(token, 'viewed', {
-        ip: clientIp(req),
-        userAgent: req.headers.get('user-agent') || undefined,
+    // #2468: the branding read, the audit trail and the first-open `viewed` write
+    // all key off a tenant-policyed table, and the credential that resolved them
+    // names a workspace only after it has been read. One transaction, scoped to
+    // the tenant the signing request row carries — never to anything in the URL,
+    // header or body. `db.query.*` on the pool, which these three statements used
+    // to be, returns zero rows for the role the application runs as.
+    const page = await withTenantContext(view.request.tenantId, NO_USER_SENTINEL, async (tx) => {
+      if (!view.alreadyResolved && view.status === 'sent') {
+        await writeInternalSignerEvent(tx, view, 'viewed', {
+          ip: clientIp(req),
+          userAgent: req.headers.get('user-agent') || undefined,
+        });
+      }
+
+      const tenant = await tx.query.tenants.findFirst({
+        where: and(eq(tenants.id, view.request.tenantId), isNull(tenants.deletedAt)),
+        columns: { name: true, logoUrl: true, primaryColor: true },
       });
-    }
 
-    // Minimal document + seller branding for the signer page. The `documents`
-    // read is credited to getInternalSigningByToken(), which 404s a tombstoned
-    // document before this line runs (#2380); nothing gates the tenant row.
-    const doc = await db.query.documents.findFirst({
-      where: eq(documents.id, view.documentId),
-      columns: { id: true, name: true },
-    });
-    const tenant = await db.query.tenants.findFirst({
-      where: and(eq(tenants.id, view.request.tenantId), isNull(tenants.deletedAt)),
-      columns: { name: true, logoUrl: true, primaryColor: true },
-    });
+      // The `documents` row is no longer read here: getInternalSigningByToken
+      // already admits it or 404s the link (#2380), so a second read of the same
+      // row would be a second gate to keep in sync for nothing.
+      const events = await listSigningEvents(tx, view.request.id);
 
-    const events = await listSigningEvents(view.request.id);
+      return { tenant, events };
+    });
 
     return NextResponse.json({
       signer: { name: view.signer.name, email: view.signer.email },
@@ -70,13 +88,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
         signed_at: view.signer.signedAt ?? null,
         declined_at: view.signer.declinedAt ?? null,
       },
-      document: { id: doc?.id ?? view.documentId, name: doc?.name ?? 'Document' },
+      document: { id: view.documentId, name: view.documentName },
       seller: {
-        name: tenant?.name ?? 'Sender',
-        logo: tenant?.logoUrl ?? null,
-        primary_color: tenant?.primaryColor ?? '#7c3aed',
+        name: page.tenant?.name ?? 'Sender',
+        logo: page.tenant?.logoUrl ?? null,
+        primary_color: page.tenant?.primaryColor ?? '#7c3aed',
       },
-      events,
+      events: page.events,
     });
   } catch (err) {
     return apiError(err);
@@ -89,6 +107,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
     if (limited) return limited;
 
     const { token } = await params;
+    if (!SIGNER_TOKEN_RE.test(token)) {
+      return NextResponse.json({ error: 'Signing request not found' }, { status: 404 });
+    }
     const body = await readJsonBody(req) as { action?: string };
     const action = body?.action;
 

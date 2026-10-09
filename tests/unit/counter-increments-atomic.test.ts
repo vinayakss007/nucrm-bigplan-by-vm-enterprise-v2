@@ -29,8 +29,10 @@ const REPO = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 const m = vi.hoisted(() => {
   const state = {
-    // each captured update: table name + the raw set object + where fragment
-    updates: [] as Array<{ table: string; set: Record<string, unknown>; where?: unknown }>,
+    // each captured update: table name + the raw set object + where fragment +
+    // whether it went through a transaction handle (which is where #2468's RLS
+    // context lives) or the bare pool
+    updates: [] as Array<{ table: string; set: Record<string, unknown>; where?: unknown; insideTx: boolean }>,
     inserts: [] as Array<{ table: string; values: Record<string, unknown> }>,
     visitorUpsert: { values: undefined as unknown, cfg: undefined as unknown },
     selectTables: [] as string[],
@@ -38,6 +40,10 @@ const m = vi.hoisted(() => {
     txCalls: 0,
     articleRows: [] as unknown[],
     offerRow: null as unknown,
+    // raw SQL passed to any tx handle's `execute` — the set_config calls
+    executes: [] as unknown[],
+    // table names resolved through a tx handle's relational `query.*` API
+    txQueryTables: [] as string[],
   };
   return { state };
 });
@@ -89,11 +95,36 @@ vi.mock('@/drizzle/db', async () => {
     },
   });
 
-  const makeUpdate = () => (table: unknown) => {
+  // Drizzle's relational `query.x.findFirst` API. `insideTx` records which
+  // handle a read ran on: a public route that establishes an RLS context has to
+  // reach the branding/contact rows through its transaction, not the pool.
+  const makeQuery = (insideTx: boolean) => ({
+    contacts: {
+      findFirst: vi.fn(async () => {
+        if (insideTx) state.txQueryTables.push('contacts');
+        return undefined;
+      }),
+    },
+    tenants: {
+      findFirst: vi.fn(async () => {
+        if (insideTx) state.txQueryTables.push('tenants');
+        return { id: 't1', name: 'Acme', logoUrl: null, primaryColor: null };
+      }),
+    },
+    quotes: {
+      findFirst: vi.fn(async () => {
+        if (insideTx) state.txQueryTables.push('quotes');
+        return null;
+      }),
+    },
+  });
+
+  const makeUpdate = (insideTx: boolean) => (table: unknown) => {
     const entry = {
       table: getTableName(table as Parameters<typeof getTableName>[0]),
       set: {} as Record<string, unknown>,
       where: undefined as unknown,
+      insideTx,
     };
     state.updates.push(entry);
     return {
@@ -112,23 +143,22 @@ vi.mock('@/drizzle/db', async () => {
   const db = {
     select: vi.fn(() => makeChain(false)),
     insert: vi.fn(makeInsert()),
-    update: vi.fn(makeUpdate()),
+    update: vi.fn(makeUpdate(false)),
     transaction: vi.fn(async (cb: (tx: Record<string, unknown>) => unknown) => {
       state.txCalls += 1;
       const tx = {
         insert: makeInsert(),
-        update: makeUpdate(),
+        update: makeUpdate(true),
         select: vi.fn(() => makeChain(true)),
-        execute: vi.fn(async () => undefined),
+        execute: vi.fn(async (query: unknown) => {
+          state.executes.push(query);
+          return undefined;
+        }),
+        query: makeQuery(true),
       };
       return cb(tx);
     }),
-    query: {
-      contacts: { findFirst: vi.fn(async () => undefined) },
-      tenants: {
-        findFirst: vi.fn(async () => ({ id: 't1', name: 'Acme', logoUrl: null, primaryColor: null })),
-      },
-    },
+    query: makeQuery(false),
   };
   return { db };
 });
@@ -229,6 +259,8 @@ beforeEach(() => {
   m.state.selectTables = [];
   m.state.txSelectCalls = 0;
   m.state.txCalls = 0;
+  m.state.executes = [];
+  m.state.txQueryTables = [];
   m.state.articleRows = [
     { id: 'art-1', title: 'How to import', slug: 'import', content: 'body', excerpt: null, views: 4, categoryName: null, createdAt: new Date() },
   ];
@@ -356,6 +388,8 @@ describe('GET /api/public/offers/[publicToken] — atomic viewed_count (#2344)',
     // tenant-guarded: a token can only ever bump its own quote in its own tenant
     const where = renderSql(increments[0]!.where);
     expect(where.params).toEqual(['quote-1', TENANT]);
+    // #2468: and it bumps through the transaction that carries the tenant GUC
+    expect(increments[0]!.insideTx).toBe(true);
 
     // the metadata patch writes viewed_at only — it no longer carries a
     // JS-computed viewed_count that would clobber concurrent viewers
@@ -365,17 +399,62 @@ describe('GET /api/public/offers/[publicToken] — atomic viewed_count (#2344)',
     const patchRendered = patches.map((p) => renderSql(p.set.metadata));
     expect(patchRendered.some((r) => r.sql.includes('viewed_at') || JSON.stringify(r.params).includes('viewed_at'))).toBe(true);
     expect(patchRendered.some((r) => r.sql.includes('^[0-9]+$'))).toBe(false);
+    expect(patches.every((p) => p.insideTx)).toBe(true);
   });
 
-  it('repeat view (viewed): single atomic increment, no transaction, no status write', async () => {
+  it('repeat view (viewed): single atomic increment, no status write — on the tx handle', async () => {
     m.state.offerRow = offerRow({ status: 'viewed' });
     const res = await viewOffer('tok-1234567890abcdef');
     expect(res.status).toBe(200);
-    expect(m.state.txCalls).toBe(0);
+    // #2468: this branch used to skip the transaction entirely because the only
+    // statement was the increment, which needed none. Now the line-item and
+    // branding reads on the same page are tenant-policyed too, so the whole
+    // view runs in one context. The single-statement/no-status-write properties
+    // of #2344 still hold inside it.
+    expect(m.state.txCalls).toBe(1);
     expect(m.state.updates).toHaveLength(1);
     const increments = incrementUpdates('quotes');
     expect(increments).toHaveLength(1);
+    expect(increments[0]!.insideTx).toBe(true);
     expect(renderSql(increments[0]!.where).params).toEqual(['quote-1', TENANT]);
+  });
+});
+
+describe('GET /api/public/offers/[publicToken] — tenant context from the credential (#2468)', () => {
+  async function viewOffer(token: string) {
+    return offerGET(jsonRequest(`http://localhost:3000/api/public/offers/${token}`), {
+      params: Promise.resolve({ publicToken: token }),
+    });
+  }
+
+  it('sets app.current_tenant to the tenant the token resolved, in the same tx', async () => {
+    m.state.offerRow = offerRow({ contactId: 'contact-1' });
+    const res = await viewOffer('tok-1234567890abcdef');
+    expect(res.status).toBe(200);
+    expect(m.state.txCalls).toBe(1);
+
+    const gucs = m.state.executes.map((q) => renderSql(q as SQLWrapper));
+    expect(gucs).toHaveLength(1);
+    expect(gucs[0]!.sql).toContain("set_config('app.current_tenant'");
+    expect(gucs[0]!.sql).toContain("set_config('app.current_user'");
+    // transaction-local, never session — PgBouncer hands connections to other
+    // requests, and a session GUC would leak this workspace onto them
+    expect(gucs[0]!.sql).toContain(', true)');
+    expect(gucs[0]!.params).toEqual([TENANT, '00000000-0000-0000-0000-000000000000']);
+
+    const body = await res.json();
+    expect(body.seller.name).toBe('Acme');
+    // the buyer name came from the contact read, which is policyed (see #2438)
+    expect(body.offer.buyer_name).toBe('');
+    expect(m.state.txQueryTables).toEqual(['contacts', 'tenants']);
+    expect(m.state.selectTables).toEqual([]);
+  });
+
+  it('never reads or writes a tenant-policyed table on the bare pool', async () => {
+    await viewOffer('tok-1234567890abcdef');
+    // no pool-level update/insert at all, and no pool-level relational read
+    expect(m.state.updates.every((u) => u.insideTx)).toBe(true);
+    expect(m.state.txQueryTables).toContain('tenants');
   });
 });
 

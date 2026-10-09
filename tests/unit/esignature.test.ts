@@ -9,7 +9,36 @@ const mockTxUpdate = vi.fn(() => ({ set: vi.fn(() => ({ where: vi.fn() })) }));
 // be live (documents.deleted_at IS NULL). Default to live so the pre-existing
 // internal-flow tests keep testing the flow; the deleted case is covered in
 // tests/unit/esignature-deleted-document-2380.test.ts.
-const mockLiveDocuments = { current: [{ id: 'doc-live' }] as unknown[] };
+const mockLiveDocuments = { current: [{ id: 'doc-live', name: 'Proposal.pdf' }] as unknown[] };
+
+// #2468: the signer lookup is no longer a 500-row JS scan on the pool — it is one
+// `SELECT … WHERE signers @> jsonb_build_array(jsonb_build_object('token', …))`
+// inside a transaction that carries the credential GUC. The mock stands in for
+// Postgres here: the row it hands back is whatever the test says the containment
+// admitted.
+const mockInternalRows = { current: [] as unknown[] };
+const mockTxSigningRequestFindFirst = vi.fn(async () => mockInternalRows.current[0] ?? null);
+// every `SELECT set_config(…)` issued on a transaction handle, in order, with the
+// GUC name as its first interpolated value
+const mockTxExecutes: unknown[] = [];
+const mockTxExecute = vi.fn(async (statement: unknown) => {
+  mockTxExecutes.push(statement);
+  return undefined;
+});
+
+// One awaitable chain that answers both shapes the internal flow reads with:
+// `tx.select().from(documents).where(…).limit(1)` and
+// `tx.select().from(signing_events).where(…).orderBy(…)`.
+function makeTxSelectChain() {
+  const chain: Record<string, unknown> = {
+    from: () => chain,
+    where: () => chain,
+    orderBy: () => Promise.resolve([]),
+  };
+  chain.limit = () => Promise.resolve(mockLiveDocuments.current);
+  chain.then = (res: (v: unknown) => unknown) => Promise.resolve(mockLiveDocuments.current).then(res);
+  return chain;
+}
 
 vi.mock('@/drizzle/db', () => ({
   db: {
@@ -28,31 +57,49 @@ vi.mock('@/drizzle/db', () => ({
       signingEvents: { findFirst: vi.fn() },
     },
     transaction: vi.fn(async (cb: (tx: unknown) => Promise<unknown>) => {
-      return await cb({ insert: mockTxInsert, update: mockTxUpdate });
+      return await cb({
+        insert: mockTxInsert,
+        update: mockTxUpdate,
+        select: () => makeTxSelectChain(),
+        execute: mockTxExecute,
+        query: { signingRequests: { findFirst: mockTxSigningRequestFindFirst } },
+      });
     }),
   },
 }));
 
 vi.mock('@/drizzle/schema/documents', () => ({
-  documents: { id: 'id', deletedAt: 'deleted_at' },
+  documents: { id: 'id', name: 'name', deletedAt: 'deleted_at' },
 }));
 
 vi.mock('@/drizzle/schema/esignature', () => ({
-  signingRequests: { id: 'id', tenantId: 'tenant_id', externalId: 'external_id', provider: 'provider', status: 'status' },
+  signingRequests: { id: 'id', tenantId: 'tenant_id', externalId: 'external_id', provider: 'provider', status: 'status', signers: 'signers', documentId: 'document_id', createdAt: 'created_at' },
   signingEvents: { id: 'id', requestId: 'request_id', tenantId: 'tenant_id', event: 'event', signerEmail: 'signer_email' },
 }));
 
-vi.mock('drizzle-orm', () => ({
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  eq: vi.fn((...args: any[]) => ['eq', ...args]),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  and: vi.fn((...args: any[]) => ['and', ...args]),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  asc: vi.fn((...args: any[]) => ['asc', ...args]),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  isNull: vi.fn((...args: any[]) => ['isNull', ...args]),
-  sql: vi.fn(),
-}));
+vi.mock('drizzle-orm', () => {
+  // `sql.join` has to exist for the portal-lookup statement builder, which splices
+  // one set_config per GUC into a single statement (PP-028: each extra round trip
+  // measured ~200 ms). The template tag keeps the interpolated values so a test can
+  // read which GUC carried which credential — the mock pool ignores the shape.
+  const sqlMock = Object.assign(
+    vi.fn((strings: unknown, ...values: unknown[]) => ({ strings, values })),
+    { join: vi.fn((parts: unknown, sep: unknown) => [parts, sep]) },
+  );
+  return {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    eq: vi.fn((...args: any[]) => ['eq', ...args]),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    and: vi.fn((...args: any[]) => ['and', ...args]),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    asc: vi.fn((...args: any[]) => ['asc', ...args]),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    desc: vi.fn((...args: any[]) => ['desc', ...args]),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    isNull: vi.fn((...args: any[]) => ['isNull', ...args]),
+    sql: sqlMock,
+  };
+});
 
 let _tokenCounter = 0;
 vi.mock('crypto', () => ({
@@ -142,7 +189,21 @@ describe('E-Signature - InternalAdapter', () => {
 });
 
 describe('E-Signature - internal signer flow (#1613)', () => {
-  beforeEach(() => { vi.clearAllMocks(); });
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockInternalRows.current = [];
+    mockLiveDocuments.current = [{ id: 'doc-live', name: 'Proposal.pdf' }];
+    mockTxExecutes.length = 0;
+  });
+
+  // The row Postgres' containment predicate admits for a valid signer token.
+  function matchedRow(overrides: Record<string, unknown> = {}) {
+    mockInternalRows.current = [{
+      id: 'r1', tenantId: 't1', documentId: 'd1', provider: 'internal', status: 'sent', externalId: 'e1',
+      signers: [{ email: 'a@b.com', name: 'A', token: 'TOKEN-A' }], metadata: {},
+      ...overrides,
+    }];
+  }
 
   it('createSigningRequest mints a per-signer token for the internal provider', async () => {
     mockTxReturning.mockResolvedValue([{
@@ -161,32 +222,26 @@ describe('E-Signature - internal signer flow (#1613)', () => {
   });
 
   it('getInternalSigningByToken resolves the matching signer', async () => {
-    (db.query.signingRequests.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
-      { id: 'r1', tenantId: 't1', documentId: 'd1', provider: 'internal', status: 'sent', externalId: 'e1',
-        signers: [{ email: 'a@b.com', name: 'A', token: 'TOKEN-A' }], metadata: {} },
-    ]);
+    matchedRow();
     const { getInternalSigningByToken } = await import('@/lib/esignature');
     const view = await getInternalSigningByToken('TOKEN-A');
     expect(view).not.toBeNull();
     expect(view!.signer.email).toBe('a@b.com');
     expect(view!.alreadyResolved).toBe(false);
+    expect(view!.documentName).toBe('Proposal.pdf');
   });
 
   it('getInternalSigningByToken returns null for an unknown token', async () => {
-    (db.query.signingRequests.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
-      { id: 'r1', tenantId: 't1', documentId: 'd1', provider: 'internal', status: 'sent', externalId: 'e1',
-        signers: [{ email: 'a@b.com', name: 'A', token: 'TOKEN-A' }], metadata: {} },
-    ]);
+    matchedRow();
     const { getInternalSigningByToken } = await import('@/lib/esignature');
+    // a row that carries no such signer — defence in depth behind the SQL predicate
     expect(await getInternalSigningByToken('nope')).toBeNull();
+    // an empty token never reaches the database at all
     expect(await getInternalSigningByToken('')).toBeNull();
   });
 
   it('recordInternalSignerEvent marks the request signed once all signers sign', async () => {
-    (db.query.signingRequests.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
-      { id: 'r1', tenantId: 't1', documentId: 'd1', provider: 'internal', status: 'viewed', externalId: 'e1',
-        signers: [{ email: 'a@b.com', name: 'A', token: 'TOKEN-A' }], metadata: {} },
-    ]);
+    matchedRow({ status: 'viewed' });
     const { recordInternalSignerEvent } = await import('@/lib/esignature');
     const res = await recordInternalSignerEvent('TOKEN-A', 'signed');
     expect(res.ok).toBe(true);
@@ -196,10 +251,9 @@ describe('E-Signature - internal signer flow (#1613)', () => {
   });
 
   it('recordInternalSignerEvent declines the whole request on any decline', async () => {
-    (db.query.signingRequests.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
-      { id: 'r1', tenantId: 't1', documentId: 'd1', provider: 'internal', status: 'sent', externalId: 'e1',
-        signers: [{ email: 'a@b.com', name: 'A', token: 'TOKEN-A' }, { email: 'c@d.com', name: 'C', token: 'TOKEN-C' }], metadata: {} },
-    ]);
+    matchedRow({
+      signers: [{ email: 'a@b.com', name: 'A', token: 'TOKEN-A' }, { email: 'c@d.com', name: 'C', token: 'TOKEN-C' }],
+    });
     const { recordInternalSignerEvent } = await import('@/lib/esignature');
     const res = await recordInternalSignerEvent('TOKEN-A', 'declined');
     expect(res.ok).toBe(true);
@@ -207,22 +261,93 @@ describe('E-Signature - internal signer flow (#1613)', () => {
   });
 
   it('recordInternalSignerEvent is idempotent for an already-resolved signer', async () => {
-    (db.query.signingRequests.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([
-      { id: 'r1', tenantId: 't1', documentId: 'd1', provider: 'internal', status: 'signed', externalId: 'e1',
-        signers: [{ email: 'a@b.com', name: 'A', token: 'TOKEN-A', signedAt: '2026-01-01T00:00:00Z' }], metadata: {} },
-    ]);
+    matchedRow({
+      status: 'signed',
+      signers: [{ email: 'a@b.com', name: 'A', token: 'TOKEN-A', signedAt: '2026-01-01T00:00:00Z' }],
+    });
     const { recordInternalSignerEvent } = await import('@/lib/esignature');
     const res = await recordInternalSignerEvent('TOKEN-A', 'signed');
     expect(res.ok).toBe(false);
     expect(res.reason).toBe('already_resolved');
+    // no second event row, no re-stamped status
+    expect(mockTxUpdate).not.toHaveBeenCalled();
+    expect(mockTxInsert).not.toHaveBeenCalled();
   });
 
-  it('recordInternalSignerEvent returns not_found for an unknown token', async () => {
-    (db.query.signingRequests.findMany as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+  it('recordInternalSignerEvent returns not_found when the credential matches no request', async () => {
     const { recordInternalSignerEvent } = await import('@/lib/esignature');
     const res = await recordInternalSignerEvent('missing', 'signed');
     expect(res.ok).toBe(false);
     expect(res.reason).toBe('not_found');
+  });
+});
+
+describe('E-Signature - the internal signer flow runs in a RLS context (#2468)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockInternalRows.current = [];
+    mockLiveDocuments.current = [{ id: 'doc-live', name: 'Proposal.pdf' }];
+    mockTxExecutes.length = 0;
+  });
+
+  function matchedRow() {
+    mockInternalRows.current = [{
+      id: 'r1', tenantId: '11111111-1111-4111-8111-111111111111', documentId: 'd1',
+      provider: 'internal', status: 'sent', externalId: 'e1',
+      signers: [{ email: 'a@b.com', name: 'A', token: 'TOKEN-A' }], metadata: {},
+    }];
+  }
+
+  it('names the credential in the lookup GUC before the signing_requests read', async () => {
+    matchedRow();
+    const { getInternalSigningByToken } = await import('@/lib/esignature');
+    const view = await getInternalSigningByToken('TOKEN-A');
+    expect(view).not.toBeNull();
+
+    // #2468: the row that says which workspace a signing link belongs to is the
+    // row the link authenticates with, so it cannot be tenant-scoped. It is
+    // admitted by 0123's credential arm instead.
+    expect(mockTxSigningRequestFindFirst).toHaveBeenCalledTimes(1);
+    const gucs = mockTxExecutes.map((s) => JSON.stringify(s));
+    expect(gucs[0]).toContain('app.portal_lookup_token');
+    expect(gucs[0]).toContain('TOKEN-A');
+    // …and the tenant GUC is set only once the row names the workspace, on the
+    // same handle, in the same transaction.
+    expect(gucs[1]).toContain('app.current_tenant');
+    expect(gucs[1]).toContain('11111111-1111-4111-8111-111111111111');
+    expect(db.transaction).toHaveBeenCalledTimes(1);
+  });
+
+  it('matches the credential in SQL instead of scanning requests in JS', async () => {
+    matchedRow();
+    const { sql } = await import('drizzle-orm');
+    await (await import('@/lib/esignature')).getInternalSigningByToken('TOKEN-A');
+    const fragments = (sql as unknown as { mock: { calls: unknown[][] } }).mock.calls;
+    expect(JSON.stringify(fragments)).toContain('@>');
+    expect(JSON.stringify(fragments)).toContain('jsonb_build_object');
+    expect(JSON.stringify(fragments)).toContain('TOKEN-A');
+  });
+
+  it('writes the event through a context-bound handle, not the bare pool', async () => {
+    matchedRow();
+    const { recordInternalSignerEvent } = await import('@/lib/esignature');
+    const res = await recordInternalSignerEvent('TOKEN-A', 'signed');
+    expect(res.ok).toBe(true);
+
+    // one transaction to resolve the credential, one to write in its workspace
+    expect(db.transaction).toHaveBeenCalledTimes(2);
+    expect(mockTxUpdate).toHaveBeenCalledTimes(1);
+    expect(mockTxInsert).toHaveBeenCalledTimes(1);
+    expect(mockTxExecutes.some((s) => JSON.stringify(s).includes('app.current_tenant'))).toBe(true);
+  });
+
+  it('listSigningEvents reads through the caller\'s handle', async () => {
+    const { listSigningEvents } = await import('@/lib/esignature');
+    const handle = { select: () => makeTxSelectChain() };
+    const events = await listSigningEvents(handle as never, 'r1');
+    expect(events).toEqual([]);
+    // the pool is never touched: a public route hands this a bound transaction
+    expect(db.select).not.toHaveBeenCalled();
   });
 });
 

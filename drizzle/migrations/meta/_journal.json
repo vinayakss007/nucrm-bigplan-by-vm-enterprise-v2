@@ -862,6 +862,13 @@
       "when": 1788782400038,
       "tag": "0122_portal_credential_rls_lookup",
       "breakpoints": true
+    },
+    {
+      "version": "7",
+      "idx": 123,
+      "when": 1788782400039,
+      "tag": "0123_bearer_credential_rls_lookup",
+      "breakpoints": true
     }
   ]
 }
