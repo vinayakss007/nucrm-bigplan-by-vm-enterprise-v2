@@ -38,7 +38,14 @@ export async function POST(request: NextRequest) {
     }
 
     const [client] = await db
-      .select()
+      .select({
+        // The two fields this step can use: the id that scopes the delete and the
+        // secret being verified. Unlike /token and /authorize this lookup has no
+        // `is_active` filter, so the flag is not available to name anyway — that
+        // asymmetry is a behaviour question, not a projection one.
+        id: oauthClients.id,
+        clientSecret: oauthClients.clientSecret,
+      })
       .from(oauthClients)
       .where(eq(oauthClients.clientId, clientId))
       .limit(1);

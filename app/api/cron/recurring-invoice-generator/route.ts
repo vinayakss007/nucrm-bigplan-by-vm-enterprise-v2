@@ -137,7 +137,35 @@ export async function POST(request: NextRequest) {
       // Templates due for generation: recurring, active (not cancelled), not
       // soft-deleted, with a due next-billing date on or before today.
       const dueTemplates = await db
-        .select()
+        .select({
+          // 23 of `invoices`' 42 columns (measured via getTableColumns): the clone
+          // recipe, the schedule advance and #2429's anchor read. Everything else
+          // — paidAt, paymentReference, sentReminder, the audit stamps — has no
+          // reader here, so it never enters this job's scope.
+          id: invoices.id,
+          contactId: invoices.contactId,
+          companyId: invoices.companyId,
+          dealId: invoices.dealId,
+          title: invoices.title,
+          issueDate: invoices.issueDate,
+          dueDate: invoices.dueDate,
+          subtotal: invoices.subtotal,
+          discountType: invoices.discountType,
+          discountValue: invoices.discountValue,
+          discountAmount: invoices.discountAmount,
+          taxAmount: invoices.taxAmount,
+          taxRate: invoices.taxRate,
+          totalAmount: invoices.totalAmount,
+          currency: invoices.currency,
+          notes: invoices.notes,
+          terms: invoices.terms,
+          footer: invoices.footer,
+          recurringFrequency: invoices.recurringFrequency,
+          nextBillingDate: invoices.nextBillingDate,
+          parentInvoiceId: invoices.parentInvoiceId,
+          metadata: invoices.metadata,
+          createdBy: invoices.createdBy,
+        })
         .from(invoices)
         .where(and(
           eq(invoices.tenantId, tenantId),
@@ -156,7 +184,22 @@ export async function POST(request: NextRequest) {
       // for invoice-number correctness (#1462) — only the reads are batched.
       const templateIds = dueTemplates.map(t => t.id);
       const allItems = await db
-        .select()
+        .select({
+          invoiceId: invoiceLineItems.invoiceId,
+          productId: invoiceLineItems.productId,
+          serviceId: invoiceLineItems.serviceId,
+          description: invoiceLineItems.description,
+          itemType: invoiceLineItems.itemType,
+          quantity: invoiceLineItems.quantity,
+          unitPrice: invoiceLineItems.unitPrice,
+          discountType: invoiceLineItems.discountType,
+          discountValue: invoiceLineItems.discountValue,
+          discountAmount: invoiceLineItems.discountAmount,
+          taxRate: invoiceLineItems.taxRate,
+          taxAmount: invoiceLineItems.taxAmount,
+          total: invoiceLineItems.total,
+          sortOrder: invoiceLineItems.sortOrder,
+        })
         .from(invoiceLineItems)
         .where(and(
           eq(invoiceLineItems.tenantId, tenantId),
@@ -257,7 +300,9 @@ export async function POST(request: NextRequest) {
                       billing_period: todayStr,
                     },
                   } as typeof invoices.$inferInsert)
-                  .returning();
+                  // `child` is only ever read for its id (the line items hang off
+                  // it); the other 41 columns are already known from `template`.
+                  .returning({ id: invoices.id });
 
                 if (!child) throw new Error('Failed to create recurring invoice');
 

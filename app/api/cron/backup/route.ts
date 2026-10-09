@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
     status: 'running',
     initiatedAuto: true,
     expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
-  }).returning());
+  }).returning({ id: backupRecords.id }));
 
   if (!backup) {
     return NextResponse.json({ error: 'Failed to create backup record' }, { status: 500 });

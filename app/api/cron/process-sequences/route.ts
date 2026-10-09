@@ -93,6 +93,14 @@ export async function POST(req: NextRequest) {
         // Batch-fetch all steps upfront to avoid N+1 queries
         const uniqueSequenceIds = [...new Set(enrollments.map(e => e.sequenceId))];
         const allSteps = await tx.query.sequenceSteps.findMany({
+          // 7 of `sequence_steps`' 17 columns: exactly what `SequenceStepRow`
+          // (lib/cron/sequence-steps.ts) is allowed to read. `delay_*`,
+          // `template_id`, `metadata` and the lifecycle columns are either
+          // WHERE-only or never touched.
+          columns: {
+            id: true, sequenceId: true, stepNumber: true, stepType: true,
+            subject: true, body: true, content: true,
+          },
           where: activeStepWhere(tenantId, uniqueSequenceIds),
         });
         // Build lookup map: sequenceId:stepNumber -> step
@@ -172,6 +180,8 @@ export async function POST(req: NextRequest) {
 
               if (claimed.length === 0) {
                 const existingLogs = await tx.query.sequenceStepLogs.findMany({
+                  // The only field read off this row is `status`; 2 of 11 columns.
+                  columns: { id: true, status: true },
                   where: and(
                     eq(sequenceStepLogs.enrollmentId, enrollment.id),
                     eq(sequenceStepLogs.stepId, step.id),

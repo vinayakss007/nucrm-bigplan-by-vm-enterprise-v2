@@ -37,6 +37,10 @@ export async function POST(request: NextRequest) {
 
   try {
     const lastBackup = await db.query.backupRecords.findFirst({
+      // Four of `backup_records`' 23 columns (measured via getTableColumns): what
+      // the response and both alert bodies read. The rest — checksum, error_message,
+      // metadata, the audit columns — never leave the row.
+      columns: { id: true, completedAt: true, storagePath: true, sizeBytes: true },
       where: eq(backupRecords.status, 'completed'),
       orderBy: [desc(backupRecords.completedAt)],
     });
@@ -47,6 +51,7 @@ export async function POST(request: NextRequest) {
     if (!lastBackup || !lastBackup.completedAt) {
       // No backup ever — critical
       const alreadyAlerted = await db.query.backupAlerts.findFirst({
+        columns: { id: true },
         where: and(
           eq(backupAlerts.alertType, 'no_backup'),
           eq(backupAlerts.resolved, false),
@@ -67,6 +72,7 @@ export async function POST(request: NextRequest) {
 
     if (hoursSinceBackup > alertThresholdHours) {
       const alreadyAlerted = await db.query.backupAlerts.findFirst({
+        columns: { id: true },
         where: and(
           eq(backupAlerts.alertType, 'no_backup'),
           eq(backupAlerts.resolved, false),

@@ -55,6 +55,12 @@ export async function POST(request: NextRequest) {
     const sweep = await sweepTenants('cron/sla-check', async (tenantId) => {
       // Fetch this tenant's active SLA policies, mapped tenantId+priority -> policy
       const policies = await db.query.slaPolicies.findMany({
+        // 7 of `sla_policies`' 11 columns — every field the breach evaluator
+        // reads. `is_active` is a WHERE predicate, never a value.
+        columns: {
+          id: true, tenantId: true, name: true, priority: true,
+          responseTimeMinutes: true, resolutionTimeMinutes: true, escalationRules: true,
+        },
         where: and(
           eq(slaPolicies.tenantId, tenantId),
           eq(slaPolicies.isActive, true),
