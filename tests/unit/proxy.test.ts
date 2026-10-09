@@ -149,6 +149,54 @@ describe('proxy middleware', () => {
     });
   });
 
+  // Five handlers authenticate something other than a user session — a client
+  // secret, a provider HMAC, a per-plugin webhook secret — so no caller can ever
+  // present the JWT the edge demanded of them. Measured on the running app before
+  // this list existed: POST to each answered 401 {"error":"Authentication required"}
+  // from the middleware, i.e. the handler never ran. This is #2415's class again
+  // (e-sign and CSAT were missing from the same list and got added there).
+  describe('session-free credential routes', () => {
+    const credentialRoutes = [
+      '/api/auth/oauth/token',
+      '/api/auth/oauth/revoke',
+      '/api/webhooks/razorpay',
+      '/api/webhooks/payu',
+      '/api/webhooks/telegram/bot',
+      '/api/tenant/plugins/webhook/0f9d0000-0000-4000-8000-000000000001',
+    ];
+
+    it.each(credentialRoutes)('lets POST %s reach its handler', async (pathname) => {
+      const { proxy } = await import('@/proxy');
+      const res = await proxy(makeReq(pathname, { method: 'POST' }));
+      expect(res._isNext).toBe(true);
+    });
+
+    // The webhook receivers are exempt from the edge's rl:pub budget by design
+    // (proxy.ts — a provider retrying from rotating IPs must not be throttled),
+    // so each of them has to be cheap before it does anything. Measured in the
+    // handlers: telegram compares X-Telegram-Bot-Api-Secret-Token with
+    // timingSafeEqual before reading the body, razorpay HMAC-verifies before its
+    // first query, payu returns 503 unless configured and sha512-verifies the
+    // posted hash (length-checked timingSafeEqual) before its first query, and the
+    // plugin route rejects on a missing secret with 403. The two OAuth routes are
+    // not exempt and do self-limit at 20/min.
+    it('does not put the webhook receivers under the edge unauthenticated budget', async () => {
+      const { proxy } = await import('@/proxy');
+      await proxy(makeReq('/api/webhooks/telegram/bot', { method: 'POST' }));
+      expect(edgeCheckMock).not.toHaveBeenCalled();
+    });
+
+    // /api/tenant/visitors/track is NOT one of those handlers — no credential, no
+    // signature, no limiter — and it stays behind the session check until it earns
+    // a secret and a bucket of its own.
+    it('keeps POST /api/tenant/visitors/track behind the session check', async () => {
+      const { proxy } = await import('@/proxy');
+      const res = await proxy(makeReq('/api/tenant/visitors/track', { method: 'POST' }));
+      expect(res._isNext).toBeFalsy();
+      expect(res.status).toBe(401);
+    });
+  });
+
   // #1992: CSP/nonce work belongs on HTML document responses only — RSC
   // flight-payload prefetches must skip it, and the nonce must be edge-safe
   // (WebCrypto base64, still matching Next's nonce regex).

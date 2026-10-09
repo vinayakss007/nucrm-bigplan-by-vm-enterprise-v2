@@ -461,7 +461,15 @@ describe('check-public-row-projection', () => {
       expect(paths).toContain('/api/v2');
       expect(paths.every((p) => p.startsWith('/api/'))).toBe(true);
       expect(paths).not.toContain('/portal');
-      expect(paths).not.toContain('/api/auth/oauth/token');
+      // PP-061 moved the OAuth exchange and the inbound receivers ONTO this list, so
+      // they are no longer evidence of anything here — and the projection guard's
+      // scope has to follow them, which these two assertions now pin. The routes that
+      // must stay OFF it are the consent screen (a browser that already has a
+      // session) and the credential-less, limiter-less anonymous visitor write.
+      expect(paths).toContain('/api/auth/oauth/token');
+      expect(paths).toContain('/api/webhooks/payu');
+      expect(paths).not.toContain('/api/auth/oauth/authorize');
+      expect(paths).not.toContain('/api/tenant/visitors/track');
     });
 
     it('does not widen the scope out of a comment that quotes a path', () => {
