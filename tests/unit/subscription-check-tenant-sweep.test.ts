@@ -32,6 +32,7 @@ const mockState = {
   inserts: [] as Array<{ table: string; values: unknown }>,
   updates: [] as Array<{ set: Record<string, unknown> }>,
   tenantUpdates: [] as Array<{ set: Record<string, unknown> }>,
+  inArrayCalls: [] as Array<{ column: unknown, values: unknown[] }>,
   /** The tenant whose context the (mocked) sweep is currently standing in. */
   activeTenant: null as string | null,
 };
@@ -84,6 +85,10 @@ vi.mock('drizzle-orm', () => {
     or: (...args: unknown[]) => args.filter(Boolean),
     lt: (column: unknown, value: unknown) => ({ __lt: { column, value } }),
     ne: (column: unknown, value: unknown) => ({ __ne: { column, value } }),
+    inArray: (column: unknown, values: unknown[]) => {
+      mockState.inArrayCalls.push({ column, values });
+      return { __inArray: { column, values } };
+    },
     sql: sqlTag,
   };
 });
@@ -170,6 +175,7 @@ describe('subscription-check cron — per-tenant sweep', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockState.eqCalls.length = 0;
+    mockState.inArrayCalls.length = 0;
     mockState.inserts.length = 0;
     mockState.updates.length = 0;
     mockState.tenantUpdates.length = 0;
@@ -234,6 +240,9 @@ describe('subscription-check cron — per-tenant sweep', () => {
     expect(tenantScoped).toHaveLength(4);
     expect(tenantScoped.map((c) => c.value)).toEqual([TENANT_A, TENANT_A, TENANT_B, TENANT_B]);
 
+    // The inArray filter should be called once per tenant with the stale subscription IDs.
+    expect(mockState.inArrayCalls).toHaveLength(2);
+
     // The join target is pinned to the same tenant, never left to RLS alone.
     expect(mockState.eqCalls.some((c) => c.column === 'tenants.id')).toBe(true);
   });
@@ -249,10 +258,15 @@ describe('subscription-check cron — per-tenant sweep', () => {
     expect(mockState.updates[0]!.set).toMatchObject({ planId: 'free', stripeSubscriptionId: null });
 
     expect(mockState.inserts).toHaveLength(2);
-    expect(mockState.inserts[0]!.values).toMatchObject({
-      tenantId: TENANT_A,
-      eventType: 'subscription_downgraded',
-    });
+    // Values will be an array because it's a bulk insert
+    expect(mockState.inserts[0]!.values).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          tenantId: TENANT_A,
+          eventType: 'subscription_downgraded',
+        }),
+      ])
+    );
   });
 
   it('reports nothing and writes nothing when no tenant has a stale subscription', async () => {
