@@ -19,16 +19,23 @@ const mockState: {
   selectCall: number;
   chainFactory: ((call: number) => Thenable<unknown> & Record<string, unknown>) | null;
   findFirst: ReturnType<typeof vi.fn>;
+  select: ReturnType<typeof vi.fn>;
   insert: ReturnType<typeof vi.fn>;
   transaction: ReturnType<typeof vi.fn>;
+  execute: ReturnType<typeof vi.fn>;
   identity: unknown;
   contact: unknown;
 } = {
   selectCall: 0,
   chainFactory: null,
   findFirst: vi.fn(),
+  select: vi.fn(() => {
+    const i = mockState.selectCall++;
+    return mockState.chainFactory!(i);
+  }),
   insert: vi.fn(),
   transaction: vi.fn(),
+  execute: vi.fn(),
   identity: null,
   contact: null,
 };
@@ -39,15 +46,11 @@ vi.mock('@/drizzle/db', () => ({
       supportTickets: { findFirst: (...a: unknown[]) => mockState.findFirst(...a) },
       contacts: { findFirst: (...a: unknown[]) => mockState.findFirst(...a) },
     },
-    select: vi.fn(() => {
-      const i = mockState.selectCall++;
-      return mockState.chainFactory!(i);
-    }),
+    select: (...args: unknown[]) => mockState.select(...args),
     insert: vi.fn(() => mockState.insert()),
     transaction: vi.fn((cb: (tx: unknown) => Promise<unknown>) => mockState.transaction(cb)),
   },
 }));
-
 vi.mock('@/lib/portal-auth', () => ({
   resolvePortalIdentity: () => mockState.identity,
   resolvePortalContact: () => mockState.contact,
@@ -107,10 +110,20 @@ beforeEach(() => {
   mockState.insert.mockImplementation(() => ({
     values: () => ({ returning: () => Promise.resolve([{ id: 'r1' }]) }),
   }));
+  // #2446: the routes run their reads and writes inside a tenant (or credential)
+  // context, which against a mocked pool means `db.transaction(cb)` hands `cb` a
+  // transaction object. It carries the same surface the bare `db` mock does, so
+  // moving a query into a context changes where it runs, not what is asserted.
   mockState.transaction.mockImplementation((cb: (tx: unknown) => Promise<unknown>) =>
     cb({
       insert: mockState.insert,
       update: () => ({ set: () => ({ where: () => Promise.resolve([]) }) }),
+      select: (...args: unknown[]) => mockState.select(...args),
+      query: {
+        supportTickets: { findFirst: (...a: unknown[]) => mockState.findFirst(...a) },
+        contacts: { findFirst: (...a: unknown[]) => mockState.findFirst(...a) },
+      },
+      execute: mockState.execute,
     }),
   );
   mockState.identity = null;
@@ -118,15 +131,21 @@ beforeEach(() => {
 });
 
 describe('GET /api/public/tickets — list omits soft-deleted tickets (#2378)', () => {
+  // #2446 moved the token arm's credential probe into this file's select stream:
+  // call 0 is now "which ticket does this token name" (still deliberately
+  // unfiltered, the query the baseline exempts) and the tenant-scoped list is
+  // the read after it.
+  const ownerRow = [{ contactId: 'c1', tenantId: TENANT }];
+
   it('token path filters deleted_at on the list query', async () => {
-    mockState.findFirst.mockResolvedValue({ contactId: 'c1', tenantId: TENANT });
     const captured: unknown[] = [];
-    mockState.chainFactory = () => makeChain(() => [], (w) => captured.push(w));
+    mockState.chainFactory = (call) =>
+      makeChain(() => (call === 0 ? ownerRow : []), (w) => captured.push(w));
     const { GET } = await import('@/app/api/public/tickets/route');
     const res = await GET(getTokenRequest('a-token-value'));
     expect(res.status).toBe(200);
-    expect(captured).toHaveLength(1);
-    expectSoftDeleteFilter(captured[0], 'list query (token path)');
+    expect(captured).toHaveLength(2);
+    expectSoftDeleteFilter(captured[1], 'list query (token path)');
   });
 
   it('cookie path filters deleted_at on the list query', async () => {
@@ -142,17 +161,16 @@ describe('GET /api/public/tickets — list omits soft-deleted tickets (#2378)', 
   });
 
   it('keeps the token→identity lookup unfiltered so deleting one ticket does not lock out the rest', async () => {
-    mockState.findFirst.mockResolvedValue({ contactId: 'c1', tenantId: TENANT });
-    mockState.chainFactory = () => makeChain(() => [], () => undefined);
+    const captured: unknown[] = [];
+    mockState.chainFactory = (call) =>
+      makeChain(() => (call === 0 ? ownerRow : []), (w) => captured.push(w));
     const { GET } = await import('@/app/api/public/tickets/route');
     const res = await GET(getTokenRequest('a-token-value'));
     expect(res.status).toBe(200);
-    expect(mockState.findFirst).toHaveBeenCalledTimes(1);
     // This is the query scripts/portal-softdelete-baseline.json exempts: it must
     // still key on the portal token and still carry NO tombstone predicate.
     // Rendered, because the node's inspect dump names every column of the table.
-    const lookup = mockState.findFirst.mock.calls[0][0] as { where: unknown };
-    const rendered = new PgDialect().sqlToQuery(lookup.where as never).sql;
+    const rendered = new PgDialect().sqlToQuery(captured[0] as never).sql;
     expect(rendered).toContain('"portal_token"');
     expect(rendered).not.toMatch(/deleted_at/);
   });
@@ -166,12 +184,13 @@ describe('GET /api/public/tickets/[id] — soft-deleted ticket is 404 (#2378)', 
 
   it('token branch filters deleted_at', async () => {
     const captured: unknown[] = [];
+    // call 0 = credential probe, call 1 = the customer's ticket read.
     mockState.chainFactory = (call) =>
-      makeChain(() => (call === 0 ? [liveTicket] : []), (w) => captured.push(w));
+      makeChain(() => (call <= 1 ? [liveTicket] : []), (w) => captured.push(w));
     const { GET } = await import('@/app/api/public/tickets/[id]/route');
     const res = await GET(getTokenRequest('token-value'), { params: Promise.resolve({ id: 'tick1' }) });
     expect(res.status).toBe(200);
-    expectSoftDeleteFilter(captured[0], 'ticket read (token branch)');
+    expectSoftDeleteFilter(captured[1], 'ticket read (token branch)');
   });
 
   it('cookie branch filters deleted_at', async () => {
@@ -200,16 +219,19 @@ describe('GET /api/public/tickets/[id] — soft-deleted ticket is 404 (#2378)', 
 
 describe('POST /api/public/tickets/[id]/replies — deleted ticket is inert (#2378)', () => {
   const body = { portalToken: 'a-portal-token-value', body: 'please help' };
+  // #2446: the token arm first asks the credential which tenant owns this ticket
+  // (call 0), then runs the guard below in that tenant's context (call 1).
+  const probeRow = [{ id: 'tick1', tenantId: TENANT }];
 
   it('token guard filters deleted_at', async () => {
     const captured: unknown[] = [];
-    mockState.chainFactory = () => makeChain(() => [], (w) => captured.push(w));
+    mockState.chainFactory = (call) => makeChain(() => (call === 0 ? probeRow : []), (w) => captured.push(w));
     const { POST } = await import('@/app/api/public/tickets/[id]/replies/route');
     const res = await POST(postReply('tick1', body), { params: Promise.resolve({ id: 'tick1' }) });
     expect(res.status).toBe(404);
-    expect(captured).toHaveLength(1);
-    expectSoftDeleteFilter(captured[0], 'replies guard (token branch)');
-    expect(mockState.transaction).not.toHaveBeenCalled();
+    expect(captured).toHaveLength(2);
+    expectSoftDeleteFilter(captured[1], 'replies guard (token branch)');
+    expect(mockState.insert).not.toHaveBeenCalled();
   });
 
   it('cookie guard filters deleted_at and writes nothing', async () => {
@@ -224,7 +246,7 @@ describe('POST /api/public/tickets/[id]/replies — deleted ticket is inert (#23
     );
     expect(res.status).toBe(404);
     expectSoftDeleteFilter(captured[0], 'replies guard (cookie branch)');
-    expect(mockState.transaction).not.toHaveBeenCalled();
+    expect(mockState.insert).not.toHaveBeenCalled();
   });
 
   it('still accepts a reply on a live ticket', async () => {
@@ -232,6 +254,6 @@ describe('POST /api/public/tickets/[id]/replies — deleted ticket is inert (#23
     const { POST } = await import('@/app/api/public/tickets/[id]/replies/route');
     const res = await POST(postReply('tick1', body), { params: Promise.resolve({ id: 'tick1' }) });
     expect(res.status).toBe(201);
-    expect(mockState.transaction).toHaveBeenCalledTimes(1);
+    expect(mockState.insert).toHaveBeenCalledTimes(1);
   });
 });

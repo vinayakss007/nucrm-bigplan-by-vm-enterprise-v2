@@ -1,0 +1,68 @@
+{
+  "_comment": "Exemptions for scripts/check-portal-rls-context.mts (#2446). Every entry is RE-VERIFIED on each run: the reason must be long enough to argue with, deferredTo must be a real issue number, pinnedBy must be a test file that exists and names the same table. An entry that matches no violation is printed as unused so the list ratchets down. Do not add an entry to make CI go green: a route that reads a tenant-policyed table on the pool returns zero rows silently, which is the failure #2446 was filed for.",
+  "entries": [
+    {
+      "file": "app/api/public/csat/[token]/route.ts",
+      "table": "csatSurveys",
+      "reason": "Deferred bearer-token surface: the route keys on csat_surveys.token, so no tenant is known until the row is read — and the read itself is refused by csat_surveys' tenant_isolation policy. Needs a 0122-style narrow lookup policy on that token column, then a context derived from the row. Measured: 0 of 5 fixture rows visible on the bare pool (#2468).",
+      "deferredTo": "#2468",
+      "pinnedBy": "tests/unit/portal-rls-context-guard-2446.test.ts"
+    },
+    {
+      "file": "app/api/public/sign/[token]/route.ts",
+      "table": "documents",
+      "reason": "Deferred bearer-token surface (#2468): db.query.documents.findFirst on the pool. documents is policyed, so the signing page reads no document for a live, signed request. lib/esignature.ts:248,359,385 do the same to signing_requests and are outside this guard's walk, which is the honest limit of this deferral, not its fix.",
+      "deferredTo": "#2468",
+      "pinnedBy": "tests/unit/portal-rls-context-guard-2446.test.ts"
+    },
+    {
+      "file": "app/api/public/offers/[publicToken]/route.ts",
+      "table": "quotes",
+      "reason": "Deferred bearer-token surface (#2468): the offer page reads quotes by public_token and then flips it to 'expired' on the pool — the read denies and the write is refused silently, so the issue's premise that offers still work is measurably wrong.",
+      "deferredTo": "#2468",
+      "pinnedBy": "tests/unit/portal-rls-context-guard-2446.test.ts"
+    },
+    {
+      "file": "app/api/public/offers/[publicToken]/route.ts",
+      "table": "quoteLineItems",
+      "reason": "Same deferral as quotes in this file (#2468): the line items are read outside any context, so even a visible offer would render an empty total. Recorded per-table so fixing one read without the other still fails.",
+      "deferredTo": "#2468",
+      "pinnedBy": "tests/unit/portal-rls-context-guard-2446.test.ts"
+    },
+    {
+      "file": "app/api/public/offers/[publicToken]/route.ts",
+      "table": "contacts",
+      "reason": "Deferred (#2468). contacts is the one table whose tenant_isolation policy RAISES instead of denying (#2438), so this read aborts the whole offer page rather than returning empty — which is why the offers surface cannot be excused as merely unreadable.",
+      "deferredTo": "#2468",
+      "pinnedBy": "tests/unit/portal-rls-context-guard-2446.test.ts"
+    },
+    {
+      "file": "app/api/public/offers/[publicToken]/accept/route.ts",
+      "table": "quotes",
+      "reason": "Deferred (#2468): both the guard read and the status flip run on a bare db.transaction() handle, which carries no tenant GUCs either — the acceptance never lands. This file's own db.update(quotes) is the second statement the guard reports here.",
+      "deferredTo": "#2468",
+      "pinnedBy": "tests/unit/portal-rls-context-guard-2446.test.ts"
+    },
+    {
+      "file": "app/api/public/offers/[publicToken]/accept/route.ts",
+      "table": "activities",
+      "reason": "Deferred (#2468): the activity row that records the acceptance is inserted on the same uncontextualised transaction, so even after the quote is fixed the audit trail would still silently drop the event.",
+      "deferredTo": "#2468",
+      "pinnedBy": "tests/unit/portal-rls-context-guard-2446.test.ts"
+    },
+    {
+      "file": "app/api/public/offers/[publicToken]/decline/route.ts",
+      "table": "quotes",
+      "reason": "Deferred (#2468), same shape as the accept sibling: the decline is one bare db.transaction() over quotes, so the customer's decline is refused without an error reaching them.",
+      "deferredTo": "#2468",
+      "pinnedBy": "tests/unit/portal-rls-context-guard-2446.test.ts"
+    },
+    {
+      "file": "app/api/public/offers/[publicToken]/decline/route.ts",
+      "table": "activities",
+      "reason": "Deferred (#2468): the decline's activity insert shares the uncontextualised transaction with the quote update above, so it fails and succeeds together with it.",
+      "deferredTo": "#2468",
+      "pinnedBy": "tests/unit/portal-rls-context-guard-2446.test.ts"
+    }
+  ]
+}

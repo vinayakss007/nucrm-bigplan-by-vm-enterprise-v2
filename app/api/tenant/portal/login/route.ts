@@ -5,9 +5,10 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
-import { db } from '@/drizzle/db';
 import { portalClients, platformSettings } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
+import { withTenantContext, NO_USER_SENTINEL, type RlsTransaction } from '@/lib/db/rls';
+import { withPortalLookupContext } from '@/lib/db/portal-lookup-context';
 import { readJsonBody } from '@/lib/api/validate';
 import { rateLimiter } from '@/lib/rate-limit';
 import { PORTAL_SESSION_COOKIE, encodePortalSessionCookie, portalSessionCookieOptions } from '@/lib/portal-session';
@@ -28,8 +29,19 @@ function timingSafeEqual(a: string, b: string): boolean {
   return result === 0 && a.length === b.length;
 }
 
-async function getPortalConfig(tenantId: string) {
-  const [setting] = await db
+/**
+ * The workspace's own `portal_config` row. Takes `tx` because it is only ever
+ * readable inside a portal lookup context (#2446): `platform_settings` carries
+ * `tenant_isolation`, whose USING clause needs `app.current_tenant` — a value an
+ * anonymous "is this portal on?" probe does not have, because learning it is the
+ * point of the query. On the bare pool this returned no row, so
+ * `config.enabled` was falsy and every portal login answered 403 "Portal not
+ * enabled" for a portal that is switched on. 0122 gives this read a policy keyed
+ * on (tenant_id, key = 'portal_config'), so it can see this one row and nothing
+ * else on the table.
+ */
+async function readPortalConfig(tx: RlsTransaction, tenantId: string) {
+  const [setting] = await tx
     .select({ value: platformSettings.value })
     .from(platformSettings)
     .where(and(
@@ -69,36 +81,47 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Too many login attempts. Please try again later.' }, { status: 429 });
     }
 
-    const config = await getPortalConfig(tenant_id);
+    // #2446: both reads below are pre-tenant, so neither could see anything on
+    // the bare pool — `config.enabled` was falsy (403 "Portal not enabled" for an
+    // enabled portal) and the client lookup returned no row ("Invalid
+    // credentials" no matter what was typed). They now share ONE
+    // withPortalLookupContext: one transaction, one set_config statement (PP-028
+    // prices each extra one at a flat ~200 ms), and the narrowest SELECT 0122
+    // offers — this workspace's `portal_config` row and this (tenant, email)
+    // client row, nothing else. Read-only by construction, so a bug further down
+    // this handler still cannot write through a context an anonymous caller
+    // named a tenant into.
+    const { config, client } = await withPortalLookupContext(
+      { tenantId: tenant_id, email },
+      async (tx) => {
+        const cfg = await readPortalConfig(tx, tenant_id);
+        // #2459: this row *is* a bearer credential — `access_token` is what the
+        // comparison below tests and what the session cookie is built from, and
+        // reading the whole 10-column row is exactly what turned a `client`
+        // spread into the response into a credential leak. Five of the table's
+        // columns are named here; the other five never leave the query.
+        const [row] = await tx
+          .select({
+            id: portalClients.id,
+            name: portalClients.name,
+            email: portalClients.email,
+            accessToken: portalClients.accessToken,
+            expiresAt: portalClients.expiresAt,
+          })
+          .from(portalClients)
+          .where(and(
+            eq(portalClients.email, email),
+            eq(portalClients.tenantId, tenant_id),
+            eq(portalClients.isActive, true)
+          ))
+          .limit(1);
+        return { config: cfg, client: row ?? null };
+      },
+    );
+
     if (!config.enabled) {
       return NextResponse.json({ error: 'Portal not enabled' }, { status: 403 });
     }
-
-    // #2459: this table's row *is* a bearer credential — `access_token` is what
-    // the comparison below tests and what the session cookie below is built
-    // from. An unprojected .select() loaded the whole 10-column row (all of
-    // `portal_clients`, counted from the schema) into this handler on every
-    // anonymous login attempt, and nothing shipped only because the response
-    // object below hand-picks `id`/`name`/`email`: spread this row into that
-    // object and the token goes out with it. Same shape as #2440's create path,
-    // named for the same reason. Five of the ten are read here; the other five
-    // (tenantId, isActive, lastLoginAt, createdBy, createdAt) never leave the
-    // query.
-    const [client] = await db
-      .select({
-        id: portalClients.id,
-        name: portalClients.name,
-        email: portalClients.email,
-        accessToken: portalClients.accessToken,
-        expiresAt: portalClients.expiresAt,
-      })
-      .from(portalClients)
-      .where(and(
-        eq(portalClients.email, email),
-        eq(portalClients.tenantId, tenant_id),
-        eq(portalClients.isActive, true)
-      ))
-      .limit(1);
 
     if (!client) {
       return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
@@ -112,10 +135,18 @@ export async function POST(request: NextRequest) {
 
     const sessionExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
-    await db
-      .update(portalClients)
-      .set({ lastLoginAt: new Date() })
-      .where(eq(portalClients.id, client.id));
+    // A write, so a different context: the lookup above is SELECT-only and knows
+    // no tenant. `tenant_isolation` is what admits this UPDATE, and the tenant it
+    // is scoped to is the one this request's own credential just resolved a live
+    // client row in — never a value the body supplied. NO_USER_SENTINEL because
+    // there is no CRM user behind a portal login (same shape as
+    // app/api/public/invoices and app/api/track/open).
+    await withTenantContext(tenant_id, NO_USER_SENTINEL, (tx) =>
+      tx
+        .update(portalClients)
+        .set({ lastLoginAt: new Date() })
+        .where(eq(portalClients.id, client.id)),
+    );
 
     // #1179: the session of record is the httpOnly `nucrm_portal_session` cookie
     // set below (validated server-side by getPortalSession(), and revocable by
@@ -166,7 +197,11 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Tenant ID required' }, { status: 400 });
     }
 
-    const config = await getPortalConfig(tenant_id);
+    // #2446: the same pre-tenant read as POST, alone this time — this endpoint
+    // answers "is this workspace's portal on, and what may it show", which is by
+    // design open to the embedded login widget, and nothing else on
+    // platform_settings (0122 freezes the key into the policy).
+    const config = await withPortalLookupContext({ tenantId: tenant_id }, (tx) => readPortalConfig(tx, tenant_id));
 
     return NextResponse.json({
       enabled: config.enabled,

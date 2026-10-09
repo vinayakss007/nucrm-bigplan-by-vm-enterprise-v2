@@ -215,4 +215,119 @@ describe('db/rls', () => {
       expect(results[0]).toHaveProperty('enabled');
     });
   });
+
+  // #2446 — the portal-credential lookup context. `portalLookupSettings` is the
+  // whole grant surface of migration 0122, so its rules are tested here rather
+  // than inferred from the SQL: an arm that can be opened with nothing, or with
+  // an email alone, is a cross-tenant read waiting to happen.
+  describe('portalLookupSettings', () => {
+    const TOKEN_GUC = 'app.portal_lookup_token';
+    const TENANT_GUC = 'app.portal_lookup_tenant';
+    const EMAIL_GUC = 'app.portal_lookup_email';
+
+    async function settings(claims: Record<string, string>) {
+      const { portalLookupSettings } = await import('@/lib/db/portal-lookup-context');
+      return portalLookupSettings(claims);
+    }
+
+    it('turns a presented access token into exactly its own GUC', async () => {
+      expect(await settings({ accessToken: '  tok-1  ' })).toEqual([{ guc: TOKEN_GUC, value: 'tok-1' }]);
+    });
+
+    it('accepts a workspace on its own, which is what login probes the config with', async () => {
+      expect(await settings({ tenantId: 'tenant-1' })).toEqual([{ guc: TENANT_GUC, value: 'tenant-1' }]);
+    });
+
+    it('pairs email with its tenant, because that is the arm 0122 matches on', async () => {
+      expect(await settings({ tenantId: 'tenant-1', email: 'a@example.test' })).toEqual([
+        { guc: TENANT_GUC, value: 'tenant-1' },
+        { guc: EMAIL_GUC, value: 'a@example.test' },
+      ]);
+    });
+
+    it('refuses an email with no tenant — an unscoped address lookup', async () => {
+      const { portalLookupSettings } = await import('@/lib/db/portal-lookup-context');
+      expect(() => portalLookupSettings({ email: 'a@example.test' })).toThrow(/email without a tenantId/);
+    });
+
+    it('refuses an empty credential set rather than opening a bare lookup', async () => {
+      const { portalLookupSettings } = await import('@/lib/db/portal-lookup-context');
+      expect(() => portalLookupSettings({})).toThrow(/no credential/);
+      expect(() => portalLookupSettings({ accessToken: '   ', tenantId: '' })).toThrow(/no credential/);
+    });
+
+    it('refuses a value no real credential is as long as', async () => {
+      const { portalLookupSettings } = await import('@/lib/db/portal-lookup-context');
+      // A 1 MB token would make the policy compare one string against every row.
+      expect(() => portalLookupSettings({ accessToken: 'x'.repeat(513) })).toThrow(/longer than 512/);
+      expect(() => portalLookupSettings({ tenantId: 'tenant-1', email: `e${'x'.repeat(600)}@example.test` })).toThrow(/longer than 512/);
+      expect(portalLookupSettings({ accessToken: 'x'.repeat(512) })).toHaveLength(1);
+    });
+  });
+
+  describe('withPortalLookupContext', () => {
+    it('sets every requested privilege with ONE transaction-local statement (#87)', async () => {
+      const { db } = await import('@/drizzle/db');
+      const { PgDialect } = await import('drizzle-orm/pg-core');
+      const execute = vi.fn().mockResolvedValue({ rows: [] });
+      const tx = { execute };
+      vi.mocked(db.transaction).mockImplementationOnce(async (fn) =>
+        fn(tx as unknown as Parameters<typeof fn>[0]));
+
+      const { withPortalLookupContext } = await import('@/lib/db/portal-lookup-context');
+      const callback = vi.fn(async (client) => {
+        // The callback gets the transaction it was opened on, never the pool:
+        // a bare `db.*` inside would lose the GUC the statement just set.
+        expect(client).toBe(tx);
+        return 'complete';
+      });
+      const result = await withPortalLookupContext(
+        { accessToken: 'tok-1', tenantId: 'tenant-1', email: 'a@example.test' },
+        callback,
+      );
+
+      expect(result).toBe('complete');
+      // PP-028: three separate set_config calls are three ~200 ms round-trips on
+      // every portal request, so the count is the thing under test.
+      expect(execute).toHaveBeenCalledTimes(1);
+      expect(mockExecute).not.toHaveBeenCalled();
+      const query = new PgDialect().sqlToQuery(execute.mock.calls[0]![0]);
+      expect(query.sql.match(/set_config/g)).toHaveLength(3);
+      // Transaction-local: never `false`, which would outlive the checkout.
+      expect(query.sql).not.toContain('false)');
+      expect(query.sql).toContain('true)');
+      // Names AND values are bound, never concatenated into the statement text:
+      // a credential is caller-controlled input.
+      expect(query.params).toEqual([
+        'app.portal_lookup_token', 'tok-1',
+        'app.portal_lookup_tenant', 'tenant-1',
+        'app.portal_lookup_email', 'a@example.test',
+      ]);
+      expect(query.sql).not.toContain('tok-1');
+    });
+
+    it('never runs the callback when the privilege cannot be set', async () => {
+      const { db } = await import('@/drizzle/db');
+      const tx = { execute: vi.fn().mockRejectedValue(new Error('context failed')) };
+      vi.mocked(db.transaction).mockImplementationOnce(async (fn) =>
+        fn(tx as unknown as Parameters<typeof fn>[0]));
+
+      const { withPortalLookupContext } = await import('@/lib/db/portal-lookup-context');
+      const callback = vi.fn();
+      await expect(
+        withPortalLookupContext({ accessToken: 'tok-1' }, callback),
+      ).rejects.toThrow('context failed');
+      expect(callback).not.toHaveBeenCalled();
+    });
+
+    it('refuses an unscoped lookup before touching the database', async () => {
+      const { db } = await import('@/drizzle/db');
+      const { withPortalLookupContext } = await import('@/lib/db/portal-lookup-context');
+      await expect(
+        withPortalLookupContext({ email: 'a@example.test' }, vi.fn()),
+      ).rejects.toThrow(/email without a tenantId/);
+      expect(db.transaction).not.toHaveBeenCalled();
+      expect(mockExecute).not.toHaveBeenCalled();
+    });
+  });
 });

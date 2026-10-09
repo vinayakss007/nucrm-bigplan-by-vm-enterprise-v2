@@ -31,11 +31,11 @@ export type RlsTransaction = Parameters<Parameters<DbClient['transaction']>[0]>[
  * `with*` helpers run `fn` directly against the mock. Production always has a
  * real pool, so this branch never triggers outside tests.
  */
-function isMockClient(client: { execute?: unknown } | undefined): boolean {
+export function isMockClient(client: { execute?: unknown } | undefined): boolean {
   return !client || typeof client.execute !== 'function';
 }
 
-function hasTransaction(client: { transaction?: unknown }): boolean {
+export function hasTransaction(client: { transaction?: unknown }): boolean {
   return !!client && typeof client.transaction === 'function';
 }
 
@@ -426,3 +426,4 @@ export async function verifyAllRLSEnabled(): Promise<{ table: string; enabled: b
 
   return results;
 }
+

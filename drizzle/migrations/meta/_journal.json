@@ -855,6 +855,13 @@
       "when": 1788782400037,
       "tag": "0121_email_tracking_attribution_indexes",
       "breakpoints": true
+    },
+    {
+      "version": "7",
+      "idx": 122,
+      "when": 1788782400038,
+      "tag": "0122_portal_credential_rls_lookup",
+      "breakpoints": true
     }
   ]
 }

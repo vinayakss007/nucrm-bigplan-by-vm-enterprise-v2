@@ -96,12 +96,15 @@ describe('resolvePortalContact — (email, tenantId) scoping (#2439 / #1913)', (
     expect(captured.bare).toHaveLength(0);
   });
 
-  it('still uses the pool for callers that have no context (the pre-#2446 shape)', async () => {
+  it('has no bare-pool path left — a caller with no context is a bug (#2446)', async () => {
     setup();
     const { resolvePortalContact } = await import('@/lib/portal-auth');
-    await resolvePortalContact(identity);
-    expect(captured.bare).toHaveLength(1);
-    expect(captured.onTx).toHaveLength(0);
+    // `tx` is required at compile time; forced through at runtime it must still
+    // not fall back to `db`. That fallback is precisely what made the portal
+    // unreadable: on the pool the `contacts` policy either aborts (#2438) or
+    // matches nothing, and both answer "this customer has no contact".
+    await expect(resolvePortalContact(identity, undefined as never)).rejects.toThrow();
+    expect(captured.bare).toHaveLength(0);
   });
 
   it('resolves a contact that matched nothing to nobody', async () => {

@@ -77,6 +77,8 @@ jobs:
         run: npm run guard:public-ratelimit
       - name: Public row-projection guard (#2440 writes, #2443 reads)
         run: npm run guard:public-projection
+      - name: Portal RLS-context guard (#2446)
+        run: npm run guard:portal-rls-context
       - name: Register coordinate guard (#2416)
         run: npm run guard:coords
 

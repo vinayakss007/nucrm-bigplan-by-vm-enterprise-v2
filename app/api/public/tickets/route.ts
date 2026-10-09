@@ -5,7 +5,6 @@
  */
 import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/drizzle/db';
 import { supportTickets, contacts } from '@/drizzle/schema';
 import { eq, and, desc, isNull } from 'drizzle-orm';
 import { z } from 'zod';
@@ -14,6 +13,8 @@ import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { generatePortalToken } from '@/lib/ticket-portal';
 import { resolvePortalIdentity, resolvePortalContact } from '@/lib/portal-auth';
+import { withTenantContext, NO_USER_SENTINEL } from '@/lib/db/rls';
+import { withPortalLookupContext } from '@/lib/db/portal-lookup-context';
 import { PUBLIC_TICKET_COLUMNS } from '@/lib/public-ticket-projection';
 
 const publicTicketSchema = z.object({
@@ -40,49 +41,76 @@ export async function GET(request: NextRequest) {
     const limited = await checkRateLimit(request, { action: 'public-tickets-list', max: 30, windowMinutes: 1 });
     if (limited) return limited;
 
-    let tenantId: string;
-    let contactId: string;
-
     const token = request.headers.get('x-portal-token');
     if (token) {
       // Validate the token — find the ticket it belongs to, then list all tickets for that contact
       // #2378: deliberately NOT filtered on deleted_at. A portal token is
       // per-ticket; hiding a deleted ticket here would lock the customer out
       // of their remaining tickets, while the list below still omits it.
-      const ticket = await db.query.supportTickets.findFirst({
-        where: eq(supportTickets.portalToken, token),
-        columns: { contactId: true, tenantId: true },
+      //
+      // #2446: this is a pre-tenant read (the tenant is what it discovers) and
+      // `support_tickets` carries only `tenant_isolation`, so on the bare pool it
+      // matched nothing and a valid token answered 401. It now runs in
+      // `withPortalLookupContext()`, whose 0122 policy admits exactly the one row
+      // whose `portal_token` equals the presented credential — and the tenant and
+      // contact the list is then scoped to come out of THAT row, never from the
+      // request.
+      const owner = await withPortalLookupContext({ accessToken: token }, async (tx) => {
+        const [row] = await tx
+          .select({ contactId: supportTickets.contactId, tenantId: supportTickets.tenantId })
+          .from(supportTickets)
+          .where(eq(supportTickets.portalToken, token))
+          .limit(1);
+        return row ?? null;
       });
 
-      if (!ticket || !ticket.contactId) {
+      if (!owner || !owner.contactId) {
         return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
       }
-      tenantId = ticket.tenantId;
-      contactId = ticket.contactId;
-    } else {
-      // Cookie-session path (portal UI): identity is server-validated, and the
-      // contact lookup is scoped to (email, tenantId) — no cross-tenant mixing.
-      const identity = await resolvePortalIdentity(request);
-      if (!identity) {
-        return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
-      }
-      const contact = await resolvePortalContact(identity);
-      if (!contact) return NextResponse.json({ data: [] });
-      tenantId = contact.tenantId;
-      contactId = contact.id;
+      const ownerContactId = owner.contactId;
+
+      const data = await withTenantContext(owner.tenantId, NO_USER_SENTINEL, (tx) =>
+        tx.select(PUBLIC_TICKET_COLUMNS)
+          .from(supportTickets)
+          .where(and(
+            eq(supportTickets.tenantId, owner.tenantId),
+            eq(supportTickets.contactId, ownerContactId),
+            isNull(supportTickets.deletedAt),
+          ))
+          .orderBy(desc(supportTickets.createdAt))
+          .limit(50));
+
+      return NextResponse.json({ data });
     }
 
-    // #2443: the same named projection the detail handler uses, so a customer's
-    // list and their ticket page cannot disagree about the shape of a ticket.
-    const data = await db.select(PUBLIC_TICKET_COLUMNS)
-    .from(supportTickets)
-    .where(and(
-      eq(supportTickets.tenantId, tenantId),
-      eq(supportTickets.contactId, contactId),
-      isNull(supportTickets.deletedAt),
-    ))
-    .orderBy(desc(supportTickets.createdAt))
-    .limit(50);
+    // Cookie-session path (portal UI): identity is server-validated, and the
+    // contact lookup is scoped to (email, tenantId) — no cross-tenant mixing.
+    const identity = await resolvePortalIdentity(request);
+    if (!identity) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
+    // #2446: `contacts` and `support_tickets` are both policy-bound, so the
+    // contact lookup and the list have to share one tenant-scoped transaction —
+    // a bare `db.*` here would run on the pool connection and read as nobody.
+    // #2438 is the reason `!contact` still answers `{ data: [] }` rather than
+    // throwing: with the context established, an empty list really does mean the
+    // customer has no tickets.
+    const data = await withTenantContext(identity.tenantId, NO_USER_SENTINEL, async (tx) => {
+      const contact = await resolvePortalContact(identity, tx);
+      if (!contact) return [];
+      // #2443: the same named projection the detail handler uses, so a customer's
+      // list and their ticket page cannot disagree about the shape of a ticket.
+      return tx.select(PUBLIC_TICKET_COLUMNS)
+        .from(supportTickets)
+        .where(and(
+          eq(supportTickets.tenantId, contact.tenantId),
+          eq(supportTickets.contactId, contact.id),
+          isNull(supportTickets.deletedAt),
+        ))
+        .orderBy(desc(supportTickets.createdAt))
+        .limit(50);
+    });
 
     return NextResponse.json({ data });
   } catch { return NextResponse.json({ data: [] }); }
@@ -120,52 +148,70 @@ export async function POST(request: NextRequest) {
     if (!tenant_id) {
       return NextResponse.json({ error: 'tenant_id is required' }, { status: 400 });
     }
+    const scopedTenantId = tenant_id;
 
-    // Find or create contact — ALWAYS scoped to (tenantId, email) (#1982), and
-    // never to a tombstoned one (#2382): deleting the customer ends their portal
-    // access, so "No account found with this email" is the right answer.
-    const contact = await db.query.contacts.findFirst({
-      where: and(
-        eq(contacts.tenantId, tenant_id),
-        eq(contacts.email, lookupEmail),
-        isNull(contacts.deletedAt),
-      ),
-      // #2457: `columns` is what keeps this from being SELECT * of a 55-column
-      // row (measured on the live database) for an anonymous caller. Only `id`
-      // and `tenantId` are read below, and both are used to scope the insert —
-      // the same pair `resolvePortalContact` already projects.
-      columns: { id: true, tenantId: true },
+    // #2446: the contact read and the insert are one tenant-scoped transaction.
+    // They were already the same two statements; what they lacked was a context,
+    // so the contact resolved to nobody (404 "No account found") for a real
+    // customer, and an anonymous embed that somehow got past it would have
+    // inserted on the pool connection with `app.current_tenant` unset — a row
+    // `support_tickets`' own FOR ALL policy refuses, which is how every public
+    // ticket in this issue's measurement failed to file.
+    //
+    // The context is the tenant the RESOLVED CONTACT belongs to. `tenant_id`
+    // names the workspace to look in (that is #1982's deliberate contract for
+    // anonymous embeds); `contact.tenantId`, which is what the insert stamps, is
+    // read out of the row that lookup returned, so the caller's field can widen
+    // nothing it does not already have an account in.
+    const ticket = await withTenantContext(scopedTenantId, NO_USER_SENTINEL, async (tx) => {
+      // Find or create contact — ALWAYS scoped to (tenantId, email) (#1982), and
+      // never to a tombstoned one (#2382): deleting the customer ends their portal
+      // access, so "No account found with this email" is the right answer.
+      const contact = await tx.query.contacts.findFirst({
+        where: and(
+          eq(contacts.tenantId, scopedTenantId),
+          eq(contacts.email, lookupEmail),
+          isNull(contacts.deletedAt),
+        ),
+        // #2457: `columns` is what keeps this from being SELECT * of a 55-column
+        // row (measured on the live database) for an anonymous caller. Only `id`
+        // and `tenantId` are read below, and both are used to scope the insert —
+        // the same pair `resolvePortalContact` already projects.
+        columns: { id: true, tenantId: true },
+      });
+
+      if (!contact) return null;
+
+      const portalToken = generatePortalToken();
+
+      // #2440: name the returned columns instead of `.returning()`-ing the whole
+      // row. `portal_token` is the bearer credential the GET handlers accept, and
+      // an anonymous embed caller must not be issued one — the token stays in the
+      // database and never reaches this response.
+      const [row] = await tx.insert(supportTickets).values({
+        tenantId: contact.tenantId,
+        contactId: contact.id,
+        subject,
+        body,
+        category,
+        priority,
+        status: 'open',
+        portalToken,
+      }).returning({
+        id: supportTickets.id,
+        subject: supportTickets.subject,
+        status: supportTickets.status,
+        priority: supportTickets.priority,
+        category: supportTickets.category,
+        createdAt: supportTickets.createdAt,
+      });
+
+      return row;
     });
 
-    if (!contact) return NextResponse.json({ error: 'No account found with this email' }, { status: 404 });
-
-    const portalToken = generatePortalToken();
-
-    // #2440: name the returned columns instead of `.returning()`-ing the whole
-    // row. `portal_token` is the bearer credential the GET handlers accept, and
-    // an anonymous embed caller must not be issued one — the token stays in the
-    // database and never reaches this response.
-    const [ticket] = await db.insert(supportTickets).values({
-      tenantId: contact.tenantId,
-      contactId: contact.id,
-      subject,
-      body,
-      category,
-      priority,
-      status: 'open',
-      portalToken,
-    }).returning({
-      id: supportTickets.id,
-      subject: supportTickets.subject,
-      status: supportTickets.status,
-      priority: supportTickets.priority,
-      category: supportTickets.category,
-      createdAt: supportTickets.createdAt,
-    });
+    if (!ticket) return NextResponse.json({ error: 'No account found with this email' }, { status: 404 });
 
     return NextResponse.json({ data: ticket }, { status: 201 });
- 
- 
   } catch (err) {
     return apiError(err);
   }

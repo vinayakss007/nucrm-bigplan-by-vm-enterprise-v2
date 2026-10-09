@@ -80,37 +80,52 @@ function project(row: Record<string, unknown>, selection?: Record<string, { name
   return out;
 }
 
+/**
+ * One insert fake for both `db.insert()` and `tx.insert()`. #2446 moved these
+ * writes inside a tenant (or credential) context, so the transaction handle has
+ * to offer the same surface the bare `db` does — otherwise this file would be
+ * reporting that the route asked for a connection, not that it echoed a
+ * credential. It answers with the row of whichever table is being written (a
+ * reply carries `ticketId`, a ticket carries `subject`), which is what the
+ * `.returning()` projection assertions below depend on.
+ */
+function insertChain() {
+  return {
+    values: (v: Record<string, unknown>) => {
+      valuesMock(v);
+      const row = 'ticketId' in v ? REPLY_ROW : TICKET_ROW;
+      return { returning: (...args: unknown[]) => returningMock(args[0], row) };
+    },
+  };
+}
+
+function selectChain() {
+  return {
+    from: () => ({
+      where: () => ({
+        limit: () => Promise.resolve([{ id: 'tick1', status: 'open', contactId: 'c1', tenantId: TENANT }]),
+      }),
+    }),
+  };
+}
+
 vi.mock('@/drizzle/db', () => ({
   db: {
     query: {
       contacts: { findFirst: (...args: unknown[]) => findFirstMock(...args) },
     },
-    insert: vi.fn(() => ({
-      values: (v: Record<string, unknown>) => {
-        valuesMock(v);
-        return { returning: (...args: unknown[]) => returningMock(args[0]) };
-      },
-    })),
+    insert: vi.fn(() => insertChain()),
     update: vi.fn(() => ({ set: vi.fn(() => ({ where: vi.fn().mockResolvedValue([]) })) })),
     transaction: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn({
-      insert: vi.fn(() => ({
-        values: (v: Record<string, unknown>) => {
-          valuesMock(v);
-          return {
-            returning: (sel?: Record<string, { name: string }>) =>
-              Promise.resolve([project(REPLY_ROW, sel)]),
-          };
-        },
-      })),
+      execute: vi.fn().mockResolvedValue([]),
+      query: {
+        contacts: { findFirst: (...args: unknown[]) => findFirstMock(...args) },
+      },
+      select: vi.fn(selectChain),
+      insert: vi.fn(() => insertChain()),
       update: vi.fn(() => ({ set: vi.fn(() => ({ where: vi.fn().mockResolvedValue([]) })) })),
     })),
-    select: vi.fn(() => ({
-      from: vi.fn(() => ({
-        where: vi.fn(() => ({
-          limit: vi.fn().mockResolvedValue([{ id: 'tick1', status: 'open', contactId: 'c1', tenantId: TENANT }]),
-        })),
-      })),
-    })),
+    select: vi.fn(selectChain),
   },
 }));
 
@@ -141,8 +156,8 @@ beforeEach(() => {
   mockContact.current = null;
   findFirstMock.mockResolvedValue({ id: 'c1', tenantId: TENANT });
   // default: the database row comes back whole
-  returningMock.mockImplementation((sel?: Record<string, { name: string }>) =>
-    Promise.resolve([project(TICKET_ROW, sel)]));
+  returningMock.mockImplementation((sel?: Record<string, { name: string }>, row: Record<string, unknown> = TICKET_ROW) =>
+    Promise.resolve([project(row, sel)]));
 });
 
 describe('POST /api/public/tickets (#2440)', () => {
