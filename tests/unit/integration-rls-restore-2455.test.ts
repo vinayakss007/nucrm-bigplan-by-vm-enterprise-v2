@@ -290,14 +290,24 @@ describe('the migration is the source of truth for the integration suite', () =>
     expect(code).toMatch(/if \(enabledRlsHere\)[\s\S]{0,120}DISABLE ROW LEVEL SECURITY/);
   });
 
-  it('removes the role and the grants it created', () => {
-    for (const stmt of [
-      'REVOKE SELECT, INSERT ON activities',
-      'REVOKE USAGE ON SCHEMA public',
-      `REVOKE \${RLS_TEST_ROLE} FROM CURRENT_USER`,
-      'DROP ROLE IF EXISTS',
-    ]) {
-      expect(code).toContain(stmt);
+  it('removes the role it created, and nothing that was already there', () => {
+    // #2474 moved the role's privileges from object ACLs (`GRANT USAGE ON SCHEMA
+    // public`, `GRANT SELECT, INSERT ON activities`) to membership in the
+    // predefined read/write roles, because an ACL grant on `public` is an UPDATE
+    // of one hot catalogue tuple that every suite's setup races for. So there is
+    // no schema ACL left to revoke — and asserting one here would demand the very
+    // statement that made this file's setup a hazard to its neighbours.
+    expect(code).toContain('ensureRlsProbeRole');
+    expect(code).toContain('releaseRlsProbeRole');
+    expect(code).not.toMatch(/GRANT (USAGE ON SCHEMA public|SELECT, INSERT ON activities)/);
+    // The release is what owes the unwind; the #2466 rule is that it only touches
+    // a role this run created, and says so when it found one already in the cluster.
+    expect(code).toMatch(/probe\.createdHere/);
+    expect(code).toContain('already existed before this run');
+    // And the helper is the one place that knows how the role comes apart.
+    const helper = readFileSync('tests/helpers/rls-probe-role.ts', 'utf8');
+    for (const stmt of ['REVOKE "${handle.role}" FROM CURRENT_USER', 'DROP ROLE IF EXISTS']) {
+      expect(helper).toContain(stmt);
     }
   });
 

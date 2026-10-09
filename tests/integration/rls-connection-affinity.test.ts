@@ -96,6 +96,12 @@ import { randomUUID } from 'crypto';
 import { db } from '../../drizzle/db';
 import { setTenantContext } from '../../lib/db/rls';
 import { withPinnedConnection } from '../../lib/db/request-connection';
+import {
+  ensureRlsProbeRole,
+  probeRoleClientFromExecutor,
+  releaseRlsProbeRole,
+  type ProbeRoleHandle,
+} from '../helpers/rls-probe-role';
 import { withApiRoute } from '../../lib/api/with-api-route';
 import * as schema from '../../drizzle/schema';
 import { eq } from 'drizzle-orm';
@@ -127,6 +133,12 @@ const dbAvailable = await isDatabaseAvailable();
 // because the CI connection role (`postgres`) is a superuser that bypasses RLS.
 // The name is test-scoped and safe to (re)create idempotently.
 const RLS_TEST_ROLE = 'rls_affinity_test_role';
+
+/**
+ * What `ensureRlsPreconditions` established, so `afterAll` knows whether the role
+ * is this run's to remove (#2466) rather than one it merely found.
+ */
+let probeRole: ProbeRoleHandle | undefined;
 
 // Tables this test issues filter-less reads against — the RLS preconditions and
 // grants below are applied to exactly these.
@@ -245,21 +257,13 @@ async function capturePolicySnapshot(): Promise<void> {
  * the real migrations already applied these objects.
  */
 async function ensureRlsPreconditions(): Promise<void> {
-  // Non-superuser role that RLS applies to. DROP/CREATE would fail if the role
-  // owns objects, so create-if-absent instead.
-  await db.execute(sql`
-    DO $$
-    BEGIN
-      IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'rls_affinity_test_role') THEN
-        CREATE ROLE rls_affinity_test_role NOSUPERUSER NOBYPASSRLS NOINHERIT;
-      ELSE
-        ALTER ROLE rls_affinity_test_role NOSUPERUSER NOBYPASSRLS;
-      END IF;
-    END $$;
-  `);
-  // The current (owner/superuser) role must be able to SET ROLE to it.
-  await db.execute(sql`GRANT rls_affinity_test_role TO CURRENT_USER`);
-  await db.execute(sql`GRANT USAGE ON SCHEMA public TO rls_affinity_test_role`);
+  // Non-superuser role that RLS applies to. Its privileges arrive as membership
+  // in pg_read_all_data / pg_write_all_data, not as `GRANT USAGE ON SCHEMA public`
+  // plus a per-table ACL grant: that pair is an UPDATE of the single `pg_namespace`
+  // row named `public` (and of the table's own `pg_class` row), which every other
+  // suite's `beforeAll` writes in the same second, and the loser of that race is
+  // reported as `tuple concurrently updated` rather than as a test failure (#2474).
+  probeRole = await ensureRlsProbeRole(probeRoleClientFromExecutor((text) => db.execute(sql.raw(text))), RLS_TEST_ROLE);
 
   for (const table of RLS_TABLES) {
     const tbl = sql.raw(`"${table}"`);
@@ -273,7 +277,6 @@ async function ensureRlsPreconditions(): Promise<void> {
         // FORCE so the guarantee also holds for the table OWNER (production's app
         // role is a non-owner, but forcing keeps the policy authoritative here too).
         await db.execute(sql`ALTER TABLE ${tbl} FORCE ROW LEVEL SECURITY`);
-        await db.execute(sql`GRANT SELECT, INSERT, UPDATE, DELETE ON ${tbl} TO rls_affinity_test_role`);
         // Fail-closed policy, mirroring migration 0039: empty/unset GUC -> NULL ->
         // deny; a valid uuid GUC -> equality; NULL tenant_id rows are global.
         await db.execute(sql`DROP POLICY IF EXISTS tenant_isolation ON ${tbl}`);
@@ -482,10 +485,16 @@ describe.skipIf(!dbAvailable)('RLS connection affinity (#1615)', () => {
           restoreFailures.push(`${table}: ${err instanceof Error ? err.message : String(err)}`);
         }
       }
-      await db.execute(sql`REVOKE ALL ON ${tbl} FROM rls_affinity_test_role`).catch(() => {});
     }
-    await db.execute(sql`REVOKE USAGE ON SCHEMA public FROM rls_affinity_test_role`).catch(() => {});
-    await db.execute(sql`DROP ROLE IF EXISTS rls_affinity_test_role`).catch(() => {});
+    if (probeRole) {
+      // No schema ACL to restore — restoring one was another UPDATE of the hot
+      // `public` tuple, i.e. the teardown raced exactly like the setup did. What
+      // is left is the role's own membership in this login role, then the role.
+      restoreFailures.push(...(await releaseRlsProbeRole(
+        probeRoleClientFromExecutor((text) => db.execute(sql.raw(text))),
+        probeRole,
+      )));
+    }
     if (restoreFailures.length > 0) {
       throw new Error(
         `RLS restore failed; the shared database is left holding this file's fixture policy: ${restoreFailures.join(' | ')}`
