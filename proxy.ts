@@ -213,6 +213,19 @@ const PUBLIC_PATHS = [
   '/api/auth/csrf-token', '/api/auth/sso',
   '/api/forms/submit', '/api/leads/public',
   '/api/webhooks/stripe', '/api/webhooks/resend', '/api/webhooks/whatsapp', '/api/webhooks/inbound',
+  // Same #2415 class, found by sweeping every handler that authenticates something
+  // other than a user session: these six verify a client secret, a provider HMAC
+  // or a per-plugin webhook secret, so demanding a JWT first meant no caller could
+  // ever reach them (measured: 401 {"error":"Authentication required"} from the
+  // middleware, handler never run). razorpay/payu/telegram/plugins each verify
+  // before touching money or rows and fail closed with no secret configured; the
+  // two OAuth routes compare client_secret with timingSafeEqual and self-limit.
+  // /api/tenant/visitors/track was the seventh hit and stays closed: it has no
+  // credential and no limiter, so publishing it would be an unbounded anonymous
+  // write. Pinned by tests/unit/proxy.test.ts.
+  '/api/webhooks/razorpay', '/api/webhooks/payu', '/api/webhooks/telegram/bot',
+  '/api/tenant/plugins/webhook',
+  '/api/auth/oauth/token', '/api/auth/oauth/revoke',
   '/api/health', '/api/track/click', '/api/track/open', '/api/track/event', '/api/unsubscribe',
   '/api/keepalive', '/api/test-email', '/api/cron', '/api/metrics', '/api/embed', '/api/emergency',
   '/api/flags', '/api/openapi',
