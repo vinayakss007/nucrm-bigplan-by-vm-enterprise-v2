@@ -10,7 +10,7 @@ Date: June 2, 2026
    - Root cause not determined - possibly a compilation deadlock or infinite loop.
 
 2. STUCK CLIENT CONNECTION (EXTERNAL)
-   - A connection from IP 27.0.58.39 (vasaicable.co.in, India) had 23,568 bytes
+   - A connection from IP a redacted customer IP (ISP-assigned, India) had 23,568 bytes
      stuck in the TCP receive buffer on port 3000 - data sent but never read.
    - Multiple connections in CLOSE-WAIT state (server not closing sockets).
    - Suggests the server is exposed to the internet without proper firewall/auth.

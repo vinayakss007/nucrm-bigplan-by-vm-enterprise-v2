@@ -24,7 +24,7 @@
  * Deleting a lock lets the next run proceed; the lock TTL still bounds how long
  * a stale guard survives. Lock keys are `nucrm:lock:cron:<job>`.
  *
- * TLS: preprod serves a self-signed certificate (CN=95.111.194.98, issued by
+ * TLS: preprod serves a self-signed certificate (CN=<PREPROD_HOST>, issued by
  * itself — certbot cannot issue for a bare IP). Verification stays ON and trusts
  * that one certificate from deploy/certs/preprod-ca.pem rather than disabling
  * it wholesale. Refresh with:

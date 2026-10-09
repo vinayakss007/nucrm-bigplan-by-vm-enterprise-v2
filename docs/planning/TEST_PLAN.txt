@@ -4,8 +4,8 @@
 ╚══════════════════════════════════════════════════════════════════════════════════╝
 
 Generated: 2026-06-23
-App URL: http://34.123.152.161:3000
-Admin: admin@nucrm.com / AdminPass123!
+App URL: http://<TEST_ENV_HOST>:3000
+Admin: <REDACTED-ADMIN-CREDENTIAL — rotate the account, do not re-add it here>
 
 
 ================================================================================

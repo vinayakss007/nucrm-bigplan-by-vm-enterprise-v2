@@ -1,4 +1,4 @@
-# Pre-Prod Issue Register — NuCRM on UpCloud VM `95.111.194.98`
+# Pre-Prod Issue Register — NuCRM on UpCloud VM `<PREPROD_HOST>`
 
 > **Maintained document.** Every issue found during pre-prod bring-up is recorded
 > here, with the evidence that proves it and the verification that closed it.
@@ -12,7 +12,7 @@
 >   `docker-compose.preprod.yml` — 17 containers, which named one of the two files and counted neither
 >   correctly (17 is `production.yml`'s service count, and it was coincidence, not measurement).
 >   Local MinIO as S3.
-> - **Entry point:** `https://95.111.194.98/api/health` → `{"status":"ok","db":"connected","schema_ready":true,"sentry":"configured"}`
+> - **Entry point:** `https://<PREPROD_HOST>/api/health` → `{"status":"ok","db":"connected","schema_ready":true,"sentry":"configured"}`
 > - **Companion doc:** [`PREPROD-FIXES-LESSONS.md`](./PREPROD-FIXES-LESSONS.md) — chronological fix log and the transferable lessons behind each bug.
 
 ## Status legend
@@ -107,7 +107,7 @@ driver `error`, once wrapped as `Error: Failed query: …`), which is why each p
 ## PP-001 — `nginx` reported `(unhealthy)` while serving 200s _(S2 · Deploy)_
 
 - **Symptom.** `docker compose ps` showed `nucrm-nginx … (unhealthy)` although
-  `curl -k https://95.111.194.98/api/health` returned 200. Any service with
+  `curl -k https://<PREPROD_HOST>/api/health` returned 200. Any service with
   `depends_on: nginx: condition: service_healthy` was gated on a false negative.
 - **Evidence.** Measured _inside_ the container:
   `wget -q -O- http://localhost/health` → exit 1, `wget -q -O- http://127.0.0.1/health` → exit 0.
@@ -613,7 +613,7 @@ image`), so **restarting worker or realtime silently deploys whatever `nucrm-app
   server time plus exactly one round trip, so this is not a per-statement fixed surcharge a proxy or
   per-statement logging would impose;
   (3) the round trip is measurable directly — `ping` to the hostname PgBouncer dials
-  (`public-…db.upclouddatabases.com` → `80.47.226.252`) = **199.120 / 200.673 / 205.032 ms**
+  (`public-…db.upclouddatabases.com` → `<PGBOUNCER_IP>`) = **199.120 / 200.673 / 205.032 ms**
   min/avg/max, within **0.4 ms** of the `\timing` figure (PP-050 has the full sample set), and PgBouncer's
   own `LOG stats` agrees at `query 216060 us`.
   Neither candidate that "not RTT" implied survives: delayed-ACK/Nagle artifacts sit near 40 ms on Linux, not
@@ -631,7 +631,7 @@ image`), so **restarting worker or realtime silently deploys whatever `nucrm-app
   are not in tension: the client↔PgBouncer hop is cheap, the **PgBouncer↔Postgres hop is the public internet**.
   The remote endpoint is only in PgBouncer's generated config (`deploy/docker-compose.preprod.yml:36` + `:47`
   `POOL_MODE=session`), which is why the fix is a PgBouncer-upstream change and not an app env change
-  (**PP-050 exit (a)**). `select inet_server_addr(), inet_server_port()` → `80.47.226.252|11569` confirms which
+  (**PP-050 exit (a)**). `select inet_server_addr(), inet_server_port()` → `<PGBOUNCER_IP>|11569` confirms which
   server those statements actually reach.
 - **Consequence.** Everything that issues statements in series is defined by this constant, not by
   query efficiency: a gate-shaped transaction (BEGIN + 2 `set_config` + SELECT + COMMIT) measures
@@ -2034,7 +2034,7 @@ connection setup (~400–600 ms) and bounds the 50-statement loop rather than pr
   UpCloud: host portion only, credential never printed (URL reported as a length) → `pgbouncer:6432/nucrm`, length 72. The
   remote endpoint lives in PgBouncer's generated config (`deploy/docker-compose.preprod.yml:36` `DB_HOST=${POSTGRES_HOST…}`,
   `:47` `POOL_MODE=session`, `:144` `PGBOUNCER_ENABLED=true`), and `select inet_server_addr(), inet_server_port()` →
-  `80.47.226.252|11569`, exactly where that hostname resolves. **Exit (a) is therefore a PgBouncer-upstream change, not a
+  `<PGBOUNCER_IP>|11569`, exactly where that hostname resolves. **Exit (a) is therefore a PgBouncer-upstream change, not a
   `DATABASE_URL` change.** `POOL_MODE=session` is also what forces the pin: the tenant GUCs are SESSION-scoped.
 - **Counters re-probed (one read-only transaction, `begin; …; rollback;`).** `61|53|8|0|0` — **61** non-suspended tenants,
   **53** with an acting user (the ones the loop visits), **8** skipped `no-acting-user`, **0** due `sequence_enrollments`,
@@ -2157,7 +2157,7 @@ connection setup (~400–600 ms) and bounds the 50-statement loop rather than pr
   string was never printed (host portion only, credentials masked, length reported); Loki queried over `127.0.0.1:3100`
   read-only, nothing posted to it.
 - **Verified:** the measurement session's own output for every number — `199.908 / 202.014 / 199.753 / 199.632 ms` (+601 ms setup);
-  `pgbouncer:6432/nucrm`, length 72; `80.47.226.252|11569`; ping `199.120/200.673/205.032 ms`; PgBouncer `query 216060 us`;
+  `pgbouncer:6432/nucrm`, length 72; `<PGBOUNCER_IP>|11569`; ping `199.120/200.673/205.032 ms`; PgBouncer `query 216060 us`;
   `61|53|8|0|0` and the independent `61|0|0|183`; 300 warnings / 288 acquisitions / max reported hold 80 s / `Total unreleased`
   max 4; **13 warnings in the last 60 min** reproduced by a second method; **311 of 311** acquisitions on a 5-minute boundary
   (own re-count); `POOL_MODE=session`, `PGBOUNCER_ENABLED=true`, `DATABASE_POOL_SIZE=10`, `DB_LEAK_THRESHOLD_MS` unset — all
@@ -2772,7 +2772,7 @@ not exist`**, while `drizzle.__drizzle_migrations` → **99 rows**. The read sit
 - **Defect 2 — the catch cannot tell "no ledger" from "no connection".** Same `try`, two independent real
   causes, one misleading message. Measured on the host: keeping the URL's `sslmode=require` →
   **`self-signed certificate in certificate chain`**; stripping it → **`no pg_hba.conf entry for host
-"95.111.194.98" … no encryption`**. Both land in "history table does not exist". The topology is the
+"<PREPROD_HOST>" … no encryption`**. Both land in "history table does not exist". The topology is the
   reason: the host's `DATABASE_URL` is the provider's **public TLS endpoint**, while the paths that work are
   `PROBE_DATABASE_URL` (`127.0.0.1:6432`, pgbouncer, plaintext) and the app container's own
   `DATABASE_URL` (`…@pgbouncer:6432`). Every probe in this register goes through the first, which is why
