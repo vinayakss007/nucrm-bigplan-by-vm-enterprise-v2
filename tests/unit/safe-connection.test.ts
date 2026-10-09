@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { safeQuery, safeTransaction, checkDatabaseHealth, isTransientError, getCircuitBreaker } from '@/lib/db/safe-connection';
 import * as poolModule from '@/lib/db/pool';
 
@@ -60,7 +60,7 @@ describe('Safe Connection Module', () => {
     it('executes a query successfully', async () => {
       const mockResult = { rows: [{ id: 1 }] };
       const mockQuery = vi.fn().mockResolvedValue(mockResult);
-      vi.mocked(poolModule.getPool).mockReturnValue({ query: mockQuery } as any);
+      vi.mocked(poolModule.getPool).mockReturnValue({ query: mockQuery } as unknown as ReturnType<typeof poolModule.getPool>);
 
       const result = await safeQuery('SELECT 1');
 
@@ -79,7 +79,7 @@ describe('Safe Connection Module', () => {
         .mockRejectedValueOnce(transientError)
         .mockResolvedValueOnce(mockResult);
 
-      vi.mocked(poolModule.getPool).mockReturnValue({ query: mockQuery } as any);
+      vi.mocked(poolModule.getPool).mockReturnValue({ query: mockQuery } as unknown as ReturnType<typeof poolModule.getPool>);
 
       const result = await safeQuery('SELECT 1', [], { initialDelayMs: 1 });
 
@@ -93,7 +93,7 @@ describe('Safe Connection Module', () => {
       nonTransientError.code = '42601'; // syntax_error
 
       const mockQuery = vi.fn().mockRejectedValue(nonTransientError);
-      vi.mocked(poolModule.getPool).mockReturnValue({ query: mockQuery } as any);
+      vi.mocked(poolModule.getPool).mockReturnValue({ query: mockQuery } as unknown as ReturnType<typeof poolModule.getPool>);
 
       await expect(safeQuery('SELECT 1')).rejects.toThrow('Syntax error');
       expect(mockQuery).toHaveBeenCalledTimes(1);
@@ -106,7 +106,7 @@ describe('Safe Connection Module', () => {
       transientError.code = 'ETIMEDOUT';
 
       const mockQuery = vi.fn().mockRejectedValue(transientError);
-      vi.mocked(poolModule.getPool).mockReturnValue({ query: mockQuery } as any);
+      vi.mocked(poolModule.getPool).mockReturnValue({ query: mockQuery } as unknown as ReturnType<typeof poolModule.getPool>);
 
       const maxRetries = 2;
       await expect(safeQuery('SELECT 1', [], { maxRetries, initialDelayMs: 1 }))
@@ -125,7 +125,7 @@ describe('Safe Connection Module', () => {
       };
       vi.mocked(poolModule.getPool).mockReturnValue({
         connect: vi.fn().mockResolvedValue(mockClient)
-      } as any);
+      } as unknown as ReturnType<typeof poolModule.getPool>);
 
       const work = vi.fn().mockResolvedValue('success');
       const result = await safeTransaction(work);
@@ -159,7 +159,7 @@ describe('Safe Connection Module', () => {
         .mockResolvedValueOnce(mockClient1)
         .mockResolvedValueOnce(mockClient2);
 
-      vi.mocked(poolModule.getPool).mockReturnValue({ connect: connectMock } as any);
+      vi.mocked(poolModule.getPool).mockReturnValue({ connect: connectMock } as unknown as ReturnType<typeof poolModule.getPool>);
 
       const work = vi.fn()
         .mockRejectedValueOnce(transientError)
@@ -187,7 +187,7 @@ describe('Safe Connection Module', () => {
 
       vi.mocked(poolModule.getPool).mockReturnValue({
         connect: vi.fn().mockResolvedValue(mockClient)
-      } as any);
+      } as unknown as ReturnType<typeof poolModule.getPool>);
 
       const work = vi.fn().mockRejectedValue(nonTransientError);
 
@@ -206,7 +206,7 @@ describe('Safe Connection Module', () => {
         idleCount: 2,
         waitingCount: 0,
       };
-      vi.mocked(poolModule.getPool).mockReturnValue(mockPool as any);
+      vi.mocked(poolModule.getPool).mockReturnValue(mockPool as unknown as ReturnType<typeof poolModule.getPool>);
 
       const health = await checkDatabaseHealth();
 
@@ -220,7 +220,7 @@ describe('Safe Connection Module', () => {
       const mockPool = {
         query: vi.fn().mockRejectedValue(new Error('Connection failed')),
       };
-      vi.mocked(poolModule.getPool).mockReturnValue(mockPool as any);
+      vi.mocked(poolModule.getPool).mockReturnValue(mockPool as unknown as ReturnType<typeof poolModule.getPool>);
 
       const health = await checkDatabaseHealth();
 
