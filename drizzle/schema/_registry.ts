@@ -10,6 +10,7 @@
  * This file serves as the single source of truth for all database tables.
  */
 
+import type { AnyPgTable } from 'drizzle-orm/pg-core';
 
 // =============================================================================
 // TABLE DEFINITION TYPES
@@ -52,8 +53,7 @@ export type SchemaGroup =
 
 /** Complete table registry entry */
 export interface TableRegistryEntry {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  table: any;
+  table: AnyPgTable;
   metadata: TableMetadata;
 }
 
@@ -112,8 +112,7 @@ export const TABLE_REGISTRY = {
  * Get all tables in a specific schema group.
  * Useful for module-based migrations and validations.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function getTablesByGroup(group: SchemaGroup): Record<string, any> {
+export function getTablesByGroup(group: SchemaGroup): Record<string, AnyPgTable> {
   return Object.fromEntries(
     Object.entries(TABLE_REGISTRY)
       .filter(([_, entry]) => entry.metadata.schemaGroup === group)
