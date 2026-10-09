@@ -64,6 +64,7 @@
     "guard:vocab": "npx tsx --import ./scripts/load-env.mjs scripts/check-constraint-vocab.mts",
     "guard:coords": "node scripts/check-register-coords.mjs",
     "guard:register-drift": "node scripts/check-register-drift.mjs",
+    "guard:catalog-grants": "node scripts/check-integration-catalog-grants.mjs",
     "probe:sql": "npx tsx --import ./scripts/load-env.mjs scripts/probe-sql.mts",
     "probe:rls": "npx tsx --import ./scripts/load-env.mjs scripts/probe-rls.mts",
     "probe:write-contexts": "npx tsx --tsconfig scripts/tsconfig.gate.json --import ./scripts/load-env.mjs scripts/probe-write-contexts.ts",

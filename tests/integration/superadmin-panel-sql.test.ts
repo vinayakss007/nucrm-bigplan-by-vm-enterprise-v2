@@ -37,7 +37,9 @@
  * Bugs 1 and 2 are pure SQL-vs-schema correctness, so their statements run on
  * the ordinary (super-user) connection — a type/column mismatch fails at the
  * analyzer regardless of who asks. Bug 3 is an RLS behaviour proof, so it runs
- * on a dedicated NOSUPERUSER/NOBYPASSRLS/NOINHERIT role with EMPTY GUCs, and
+ * on a dedicated NOSUPERUSER/NOBYPASSRLS role with EMPTY GUCs (INHERIT, because
+ * #2474: its privileges are membership in pg_read_all_data / pg_write_all_data,
+ * and a non-inheriting member takes nothing from a membership), and
  * self-establishes the authoritative activities tenant_isolation policy (from
  * 0092, a FOR ALL policy whose USING/WITH CHECK admit either a tenant-GUC match
  * or the app.is_super_admin boolean) so the proof holds whether the schema came
@@ -60,8 +62,8 @@
  * read out of 0092 rather than retyped (tests/helpers/shipped-rls-policy.ts), a
  * policy is installed only when the database does not already admit the
  * super-admin bypass, the fixture carries its own name so it can never overwrite
- * a shipped one, and teardown removes exactly what was added, revokes the grants
- * and drops the role — but only the role this run created. A role that was
+ * a shipped one, and teardown removes exactly what was added: the role's memberships
+ * and then the role, and only the role this run created. A role that was
  * already in the cluster is left alone and reported, because DROP ROLE is
  * cluster-wide while the grants here are per-database (#2466). A restore that
  * fails is thrown, not swallowed — the same discipline
@@ -71,6 +73,12 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { Pool } from 'pg';
 import { randomUUID } from 'crypto';
 import { readShippedPolicy, admitsSuperAdmin, type CapturedPolicy } from '../helpers/shipped-rls-policy';
+import {
+  ensureRlsProbeRole,
+  probeRoleClientFromPool,
+  releaseRlsProbeRole,
+  type ProbeRoleHandle,
+} from '../helpers/rls-probe-role';
 
 async function isDatabaseAvailable(): Promise<boolean> {
   const databaseUrl = process.env.DATABASE_URL;
@@ -122,9 +130,7 @@ d('superadmin panel SQL regressions (usage / monitoring / trial-check)', () => {
   let activitiesBefore: CapturedRls = { enabled: false, forced: false, policies: [] };
   let enabledRlsHere = false;
   let installedFixture = false;
-  // Whether the ROLE is ours to remove at the end. Set in beforeAll from what the
-  // cluster already had, before this file grants anything.
-  let roleCreatedHere = false;
+  let probe: ProbeRoleHandle | undefined;
 
   async function captureActivitiesRls(): Promise<CapturedRls> {
     // Scoped by the relation's OID and the policy's schema+table: joining
@@ -152,25 +158,12 @@ d('superadmin panel SQL regressions (usage / monitoring / trial-check)', () => {
     pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
     // Ask the cluster who owned this role before we had it. Roles are cluster-wide
-    // while every grant below is per-database, so a role that is already here
+    // while every grant here is per-database, so a role that is already here
     // belongs to another run — or to another database's leftovers — and this file
-    // has no claim on removing it (#2466).
-    const roleFound = await pool.query('SELECT 1 FROM pg_roles WHERE rolname = $1', [RLS_TEST_ROLE]);
-    roleCreatedHere = (roleFound.rowCount ?? 0) === 0;
-
-    await pool.query(`
-      DO $$
-      BEGIN
-        IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${RLS_TEST_ROLE}') THEN
-          CREATE ROLE ${RLS_TEST_ROLE} NOSUPERUSER NOBYPASSRLS NOINHERIT;
-        ELSE
-          ALTER ROLE ${RLS_TEST_ROLE} NOSUPERUSER NOBYPASSRLS;
-        END IF;
-      END $$;
-    `);
-    await pool.query(`GRANT ${RLS_TEST_ROLE} TO CURRENT_USER`);
-    await pool.query(`GRANT USAGE ON SCHEMA public TO ${RLS_TEST_ROLE}`);
-    await pool.query(`GRANT SELECT, INSERT ON activities TO ${RLS_TEST_ROLE}`);
+    // has no claim on removing it (#2466). `ensureRlsProbeRole` is what makes that
+    // question answerable rather than assumed: `probe.createdHere` says whether the
+    // CREATE ran, and the teardown acts on that.
+    probe = await ensureRlsProbeRole(probeRoleClientFromPool(pool), RLS_TEST_ROLE);
 
     // Capture FIRST — anything read after the mutations below is this file's own
     // handiwork, and a snapshot taken then restores the fixture instead of the
@@ -219,6 +212,7 @@ d('superadmin panel SQL regressions (usage / monitoring / trial-check)', () => {
     // restore that fails halfway leaves the table as it was rather than half-done.
     const client = await pool.connect();
     try {
+      await client.query('RESET ROLE');
       await client.query('RESET ALL');
       await client.query('BEGIN');
       if (installedFixture) {
@@ -241,26 +235,20 @@ d('superadmin panel SQL regressions (usage / monitoring / trial-check)', () => {
     // grants a concurrent run is reading through, and DROP ROLE is cluster-wide, so
     // it fails while ANY other database holds an object or a grant for the role —
     // which turned this file red over a fact about the cluster rather than about
-    // the SQL it proves (#2466). A pre-existing role keeps its grants; the run
-    // that created it is the one responsible for taking them back.
-    if (roleCreatedHere) {
-      for (const stmt of [
-        `REVOKE SELECT, INSERT ON activities FROM ${RLS_TEST_ROLE}`,
-        `REVOKE USAGE ON SCHEMA public FROM ${RLS_TEST_ROLE}`,
-        `REVOKE ${RLS_TEST_ROLE} FROM CURRENT_USER`,
-        `DROP ROLE IF EXISTS ${RLS_TEST_ROLE}`,
-      ]) {
-        try {
-          await pool.query(stmt);
-        } catch (err) {
-          failures.push(`${stmt.split(' ')[0]}: ${err instanceof Error ? err.message : String(err)}`);
-        }
+    // the SQL it proves (#2466). A pre-existing role keeps the role; the helper
+    // takes back only the memberships this run added.
+    if (probe) {
+      failures.push(...(await releaseRlsProbeRole(probeRoleClientFromPool(pool), probe)));
+      if (!probe.createdHere) {
+        // Reported, not failed — pre-existence is not a restore this file owes.
+        console.warn(
+          `[superadmin-panel-sql] role "${RLS_TEST_ROLE}" already existed before this run, so it was ` +
+            `left in place along with its grants (DROP ROLE is cluster-wide; see #2466)`,
+        );
       }
     } else {
-      // Reported, not failed — pre-existence is not a restore this file owes.
       console.warn(
-        `[superadmin-panel-sql] role "${RLS_TEST_ROLE}" already existed before this run, so it was ` +
-          `left in place along with its grants (DROP ROLE is cluster-wide; see #2466)`,
+        `[superadmin-panel-sql] beforeAll did not reach the probe role, so this run has nothing to unwind`,
       );
     }
 
@@ -287,8 +275,16 @@ d('superadmin panel SQL regressions (usage / monitoring / trial-check)', () => {
 
   // A pool connection may be returned still wearing the test role, so every RLS
   // checkout clears session state first and every release re-normalises it.
+  // `RESET ALL` is NOT that reset for the assumed role — measured on PG 16.15,
+  // after `SET ROLE x; RESET ALL` current_user is still x, because the role is not
+  // an ordinary GUC. So the role is un-assumed explicitly here and on release:
+  // otherwise the pool hands this file's own teardown a connection that is the
+  // probe role rather than the login role, and `REVOKE <probe> FROM CURRENT_USER`
+  // becomes `REVOKE <probe> FROM <probe>` — `permission denied to revoke role`,
+  // detail "Only roles with the ADMIN option on role ... may revoke this role".
   async function borrowRlsClient() {
     const client = await pool.connect();
+    await client.query('RESET ROLE');
     await client.query('RESET ALL');
     await client.query(`SET ROLE ${RLS_TEST_ROLE}`);
     return client;
@@ -384,6 +380,7 @@ d('superadmin panel SQL regressions (usage / monitoring / trial-check)', () => {
       // tenant was ever marked and every run re-mailed everyone.
       expect(code).toBe('42501');
     } finally {
+      await client.query('RESET ROLE').catch(() => {});
       await client.query('RESET ALL').catch(() => {});
       client.release();
     }
@@ -400,6 +397,7 @@ d('superadmin panel SQL regressions (usage / monitoring / trial-check)', () => {
       // not leave a committed marker for the dedup-visibility test to double-count.
       await client.query('ROLLBACK');
     } finally {
+      await client.query('RESET ROLE').catch(() => {});
       await client.query('RESET ALL').catch(() => {});
       client.release();
     }
@@ -430,6 +428,7 @@ d('superadmin panel SQL regressions (usage / monitoring / trial-check)', () => {
       );
       expect(shown.rows[0].c).toBe(1);
     } finally {
+      await client.query('RESET ROLE').catch(() => {});
       await client.query('RESET ALL').catch(() => {});
       client.release();
     }

@@ -1,6 +1,6 @@
 name: Nightly load soak + RLS role guards (#2120, #2306)
 
-# Four independent scheduled jobs.
+# Five independent scheduled jobs.
 #
 #   soak       — k6 load soak. Disabled unless the repo variable LOAD_SOAK_ENABLED
 #                is "true" and LOAD_SESSIONS_B64 (base64 of a sessions.json built
@@ -12,6 +12,13 @@ name: Nightly load soak + RLS role guards (#2120, #2306)
 #                Needs fetch-depth: 0, and needs a single fixed revision, which is
 #                why it is scheduled against main instead of gating pull requests
 #                (see the job below). Opt out with REGISTER_DRIFT_GUARD_ENABLED="false".
+#
+#   catalog-grants-screen — #2474. The screen over `tests/**` that keeps an
+#                integration suite from running `GRANT … ON SCHEMA public` (or
+#                `GRANT … ON ALL TABLES IN SCHEMA`), each of which is an UPDATE of
+#                one hot catalogue tuple that concurrent `beforeAll` blocks race
+#                (see the job below). Opt out with
+#                CATALOG_GRANTS_GUARD_ENABLED="false".
 #
 #   running-config-guard — #2332. The running-config drift guard scheduled with
 #                its result recorded as an artifact (see the job below). Opt out
@@ -263,6 +270,47 @@ jobs:
         with:
           name: register-drift-results-${{ github.run_number }}
           path: ${{ runner.temp }}/register-drift-results
+          if-no-files-found: warn
+          retention-days: 30
+
+  # ── #2474 — no suite may write a shared catalogue tuple at setup ────────────
+  # Four integration suites each ran `GRANT USAGE ON SCHEMA public TO <role>` in
+  # `beforeAll`. That statement is not a permission tweak: it is an UPDATE of the
+  # single `pg_namespace` row named `public`, and `vitest` spawns a worker per
+  # file. The loser of the race dies with `tuple concurrently updated` (XX000) in
+  # a file the branch under test never opened — CI run 37892687755 spent its red
+  # on exactly that. The four files are now converted to `tests/helpers/
+  # rls-probe-role.ts`, whose `GRANT <role> TO <role>` INSERTs a fresh
+  # `pg_auth_members` row keyed on that suite's own role name, so there is no
+  # shared tuple to contend for. This job protects the class rather than the four
+  # instances: a fifth suite written the old way turns the nightly red.
+  #
+  # Nightly rather than the fast job, as #2474 asks. It is a checkout-only scan —
+  # no install, no database, 0.6s for 599 files — so promoting it into `ci.yml`
+  # later would cost nothing; that is the owner's call, not this PR's.
+  catalog-grants-screen:
+    name: Integration catalogue-grant screen (#2474)
+    if: vars.CATALOG_GRANTS_GUARD_ENABLED != 'false'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Run the screen
+        run: |
+          set -uo pipefail
+          RESULTS_DIR="$RUNNER_TEMP/catalog-grants-results"
+          mkdir -p "$RESULTS_DIR"
+          npm run guard:catalog-grants 2>&1 | tee "$RESULTS_DIR/catalog-grants.log"
+          code=${PIPESTATUS[0]}
+          echo "screen exit=$code" | tee -a "$RESULTS_DIR/catalog-grants.log"
+          exit "$code"
+
+      - name: Upload screen results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: catalog-grants-results-${{ github.run_number }}
+          path: ${{ runner.temp }}/catalog-grants-results
           if-no-files-found: warn
           retention-days: 30
 

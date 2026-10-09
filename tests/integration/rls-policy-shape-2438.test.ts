@@ -52,6 +52,12 @@ import {
   parseShapeSweep,
   evaluateShapeSweep,
 } from '../../scripts/rls-policy-shape.mjs';
+import {
+  ensureRlsProbeRole,
+  probeRoleClientFromPool,
+  releaseRlsProbeRole,
+  type ProbeRoleHandle,
+} from '../helpers/rls-probe-role';
 
 async function isDatabaseAvailable(): Promise<boolean> {
   const databaseUrl = process.env.DATABASE_URL;
@@ -76,6 +82,7 @@ const SCRATCH = 'rls_2438_scratch';
 const STRICT_PAIR = `(tenant_id)::text = current_setting('app.current_tenant')`;
 
 let pool: Pool;
+let probe: ProbeRoleHandle | undefined;
 const tenantA = randomUUID();
 const tenantB = randomUUID();
 const contactIds: string[] = [];
@@ -102,19 +109,19 @@ describe.skipIf(!dbAvailable)('fail-closed tenant_isolation (#2438)', () => {
   beforeAll(async () => {
     pool = new Pool({ connectionString: process.env.DATABASE_URL, connectionTimeoutMillis: 5000 });
 
-    await pool.query(`
-      DO $$
-      BEGIN
-        IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${PROBE_ROLE}') THEN
-          CREATE ROLE ${PROBE_ROLE} NOSUPERUSER NOBYPASSRLS NOINHERIT LOGIN;
-        ELSE
-          ALTER ROLE ${PROBE_ROLE} NOSUPERUSER NOBYPASSRLS NOINHERIT LOGIN;
-        END IF;
-      END $$;
-    `);
-    await pool.query(`GRANT USAGE ON SCHEMA public TO ${PROBE_ROLE}`);
-    await pool.query(`GRANT SELECT, INSERT ON contacts TO ${PROBE_ROLE}`);
-    await pool.query(`GRANT ${PROBE_ROLE} TO CURRENT_USER`);
+    // #2474: this role used to be NOINHERIT and to earn its privileges from
+    // `GRANT USAGE ON SCHEMA public` + `GRANT SELECT, INSERT ON contacts`. A
+    // non-inheriting role cannot take membership in anything, so the membership
+    // form requires INHERIT — and the privileges that follow are exactly the same
+    // ones: USAGE on the schema, SELECT and INSERT on the table. What changed is
+    // where they are recorded: `pg_auth_members` gets a row keyed on this suite's
+    // own role name, instead of `pg_namespace` getting an UPDATE that races every
+    // other suite's setup for the one `public` tuple (that race is how
+    // `tuple concurrently updated` started killing files whose PR had not touched
+    // them). `ensureRlsProbeRole` asserts the role is still rolsuper=false and
+    // rolbypassrls=false, which is the only reason the assertions below mean
+    // anything at all.
+    probe = await ensureRlsProbeRole(probeRoleClientFromPool(pool), PROBE_ROLE, { login: true });
 
     await pool.query(
       `INSERT INTO tenants (id, name, slug) VALUES ($1, 'Shape Sweep A', $2), ($3, 'Shape Sweep B', $4)
@@ -138,13 +145,22 @@ describe.skipIf(!dbAvailable)('fail-closed tenant_isolation (#2438)', () => {
     }
     await pool.query(`DELETE FROM tenants WHERE id = ANY($1::uuid[])`, [[tenantA, tenantB]]).catch(() => {});
     await pool.query(`DROP TABLE IF EXISTS ${SCRATCH}`).catch(() => {});
-    // A role with grants or memberships cannot be dropped, so unwind both before
-    // the role itself. If any step fails the next run reuses the role through
-    // the ALTER-branch in beforeAll rather than erroring on CREATE.
-    await pool.query(`REVOKE SELECT, INSERT ON contacts FROM ${PROBE_ROLE}`).catch(() => {});
-    await pool.query(`REVOKE USAGE ON SCHEMA public FROM ${PROBE_ROLE}`).catch(() => {});
-    await pool.query(`REVOKE ${PROBE_ROLE} FROM CURRENT_USER`).catch(() => {});
-    await pool.query(`DROP ROLE IF EXISTS ${PROBE_ROLE}`).catch(() => {});
+    // Nothing to restore on `pg_namespace` — that revokes was itself an UPDATE of
+    // the hot row this suite was racing others for. The privileges came in as
+    // membership, so unwinding them is the role's own `REVOKE … FROM CURRENT_USER`
+    // and a `DROP ROLE` that no longer needs a `DROP OWNED BY` in front of it.
+    if (probe) {
+      // `dropRole: true` even for a role this run did not create, because this one
+      // is LOGIN: leaving a connectable role holding pg_read_all_data /
+      // pg_write_all_data is a worse leak than removing a stale copy of a name
+      // only this file uses. If it cannot be dropped — a fossil from the old
+      // ACL-based setup still holds a grant somewhere in the cluster (#2466) — the
+      // leak below says so out loud instead of being swallowed.
+      const leaks = await releaseRlsProbeRole(probeRoleClientFromPool(pool), probe, { dropRole: true });
+      for (const leak of leaks) {
+        console.warn(`[rls-policy-shape-2438] could not unwind the probe role: ${leak}`);
+      }
+    }
     await pool.end();
   });
 
