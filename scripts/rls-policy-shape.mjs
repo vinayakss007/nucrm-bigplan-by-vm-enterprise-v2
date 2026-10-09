@@ -47,6 +47,63 @@ export const STRICT_TENANT_ISOLATION_PATTERN =
   String.raw`current_setting\([^,)]*app\.current_tenant[^,)]*\)`;
 
 /**
+ * The GUC that lets a platform connection (no tenant) see platform-observed
+ * tables. `0092_metrics_tables_superadmin_bypass.sql` ORs it into USING and
+ * WITH CHECK of `tenant_isolation` on eight tables; without it those tables read
+ * as empty to every super-admin surface, which is the permanent-zero class of bug
+ * #2411/#2420 spent their lifetimes chasing.
+ *
+ * Named here so a test can assert the bypass is present WITHOUT retyping the
+ * expression: #2455 found an integration suite that re-created `activities`'
+ * policy from a hand-copied string, so a migration that deleted the bypass would
+ * have been quietly re-added by the test that was supposed to notice.
+ */
+export const SUPER_ADMIN_BYPASS_PARAM = 'app.is_super_admin';
+
+/**
+ * The bypass, in the form that DENIES rather than aborts: the two-argument
+ * `current_setting(…, true)`. Deliberately quote-agnostic for the same reason as
+ * `STRICT_TENANT_ISOLATION_PATTERN` above — it has to match both Postgres'
+ * deparse (`'app.is_super_admin'::text, true`) and the doubled quotes a migration
+ * file writes (`''app.is_super_admin'', true`).
+ */
+export const FAIL_CLOSED_BYPASS_PATTERN =
+  /current_setting\([^,)]*app\.is_super_admin[^,)]*,\s*true\s*\)/;
+
+/** True when one policy expression carries the fail-closed bypass. */
+export function expressionCarriesSuperAdminBypass(expression) {
+  return FAIL_CLOSED_BYPASS_PATTERN.test(String(expression ?? ''));
+}
+
+/**
+ * Check both halves of a policy. `withCheck` is absent on a read-only policy, so
+ * it is only required when Postgres reports one — a WITH CHECK that lacks the
+ * bypass is the write-path abort #2438 was filed for.
+ *
+ * @param {{qual?: string|null, withCheck?: string|null}} policy
+ * @returns {{ok: boolean, missing: string[]}}
+ */
+export function policyCarriesSuperAdminBypass(policy) {
+  const missing = [];
+  if (!expressionCarriesSuperAdminBypass(policy?.qual)) missing.push('USING');
+  if (policy?.withCheck != null && !expressionCarriesSuperAdminBypass(policy.withCheck)) {
+    missing.push('WITH CHECK');
+  }
+  return { ok: missing.length === 0, missing };
+}
+
+/**
+ * How many fail-closed bypass arms a migration file's text contains — the shipped
+ * object, read from the journal rather than remembered. 0092 writes the pair
+ * (USING + WITH CHECK), so a schema built from it should answer 2 arms per policy
+ * and the count drops to 0 the day the bypass is removed.
+ */
+export function countBypassArmsInMigrationSql(sqlText) {
+  const matches = String(sqlText ?? '').match(new RegExp(FAIL_CLOSED_BYPASS_PATTERN.source, 'g'));
+  return matches ? matches.length : 0;
+}
+
+/**
  * Minimum number of `tenant_isolation` policy expressions a real schema has.
  * Measured on the migrated database and on a CI-provisioned one: 198 policies
  * deparsing to 221 USING/WITH CHECK expressions. The floor is well below both
