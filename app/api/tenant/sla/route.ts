@@ -33,7 +33,7 @@ export const GET = withApiRoute(async (req: NextRequest) => {
         escalationRules: slaPolicies.escalationRules,
         isActive: slaPolicies.isActive,
         createdAt: slaPolicies.createdAt,
-        breachCount: sql<number>`(SELECT count(*)::int FROM ${slaBreaches} WHERE ${slaBreaches.policyId}::uuid = ${sql.raw('"sla_policies"."id"')})`,
+        breachCount: sql<number>`(SELECT count(*)::int FROM ${slaBreaches} WHERE ${slaBreaches.policyId}::uuid = ${slaPolicies.id})`,
       })
       .from(slaPolicies)
       .where(
