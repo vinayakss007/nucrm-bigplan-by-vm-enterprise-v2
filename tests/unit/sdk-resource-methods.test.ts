@@ -385,6 +385,8 @@ describe('MeetingsResource', () => {
     expect(req).toHaveBeenCalledWith('PATCH', '/meetings/m1', { title: 'Updated' });
     await resource.delete('m1');
     expect(req).toHaveBeenCalledWith('DELETE', '/meetings/m1');
+    await resource.cancel('m1');
+    expect(req).toHaveBeenCalledWith('POST', '/meetings/m1/cancel');
   });
 });
 
