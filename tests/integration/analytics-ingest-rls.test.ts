@@ -25,6 +25,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { Pool } from 'pg';
 import { randomUUID } from 'crypto';
+import { dropRlsProbeRole, ensureRlsProbeRole, withOwnerSession } from '../helpers/rls-probe-role-2474';
 
 async function isDatabaseAvailable(): Promise<boolean> {
   const databaseUrl = process.env.DATABASE_URL;
@@ -53,19 +54,17 @@ d('analytics_events ingest RLS (migration 0096)', () => {
   beforeAll(async () => {
     pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
-    await pool.query(`
-      DO $$
-      BEGIN
-        IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${RLS_TEST_ROLE}') THEN
-          CREATE ROLE ${RLS_TEST_ROLE} NOSUPERUSER NOBYPASSRLS NOINHERIT;
-        ELSE
-          ALTER ROLE ${RLS_TEST_ROLE} NOSUPERUSER NOBYPASSRLS;
-        END IF;
-      END $$;
-    `);
-    await pool.query(`GRANT ${RLS_TEST_ROLE} TO CURRENT_USER`);
-    await pool.query(`GRANT USAGE ON SCHEMA public TO ${RLS_TEST_ROLE}`);
-    await pool.query(`GRANT SELECT, INSERT ON analytics_events TO ${RLS_TEST_ROLE}`);
+    // tests/helpers/rls-probe-role-2474.ts, and not a GRANT on an object: `GRANT USAGE ON
+    // SCHEMA public` is an UPDATE of one hot pg_namespace row that four suites
+    // were racing in the same second, which is how CI started dying in whichever
+    // suite lost (#2474). Membership gives this probe SELECT/INSERT on
+    // analytics_events — and no TRUNCATE it does not ask for — while staying
+    // NOBYPASSRLS, so the 0096 permissive INSERT policy is still what decides.
+    //
+    // Over `withOwnerSession`, not `pool.query`: `GRANT … TO CURRENT_USER` is only
+    // the owner's to issue, and a pooled connection can arrive wearing a previous
+    // test's role, because `role` survives `RESET ALL` (measured on PG16).
+    await withOwnerSession(() => pool.connect(), (runDdl) => ensureRlsProbeRole(runDdl, RLS_TEST_ROLE));
     await pool.query(`ALTER TABLE analytics_events ENABLE ROW LEVEL SECURITY`);
     await pool.query(`ALTER TABLE analytics_events FORCE ROW LEVEL SECURITY`);
 
@@ -87,13 +86,20 @@ d('analytics_events ingest RLS (migration 0096)', () => {
   afterAll(async () => {
     if (!pool) return;
     await pool.query(`DELETE FROM analytics_events WHERE anon_id = $1`, [TEST_ANON_ID]).catch(() => {});
+    // This suite used to leave its probe role in the cluster. A role that appears
+    // in no object ACL drops cleanly, so there is no reason to hand the next run
+    // a role whose attributes it has to guess (#2466, #2474).
+    await withOwnerSession(() => pool.connect(), (runDdl) => dropRlsProbeRole(runDdl, RLS_TEST_ROLE));
     await pool.end().catch(() => {});
   });
 
   it('accepts a tenant-less ingest insert on an empty-GUC connection', async () => {
     const client = await pool.connect();
     try {
-      await client.query(`SET ROLE ${RLS_TEST_ROLE}`);
+      // RESET ROLE, not RESET ALL: `role` survives RESET ALL (measured on PG16),
+      // so a connection borrowed here can arrive wearing a previous test's role
+      // and only RESET ROLE puts it back to the owner.
+      await client.query(`RESET ROLE`);
       await client.query(`RESET ALL`);
       await client.query(`SET ROLE ${RLS_TEST_ROLE}`);
       // Exactly what lib/analytics/store.ts writes for an anonymous page_view.
@@ -103,6 +109,11 @@ d('analytics_events ingest RLS (migration 0096)', () => {
         [TEST_ANON_ID],
       );
     } finally {
+      // Release it as the owner it came in as. Leaving a role-wearing connection in
+      // the pool is what made the teardown `DROP ROLE` fail with `permission denied
+      // to drop role`, with every assertion in this file green.
+      await client.query(`RESET ROLE`).catch(() => {});
+      await client.query(`RESET ALL`).catch(() => {});
       client.release();
     }
   });
@@ -110,6 +121,7 @@ d('analytics_events ingest RLS (migration 0096)', () => {
   it('still denies filter-less reads on the same connection shape', async () => {
     const client = await pool.connect();
     try {
+      await client.query(`RESET ROLE`);
       await client.query(`RESET ALL`);
       await client.query(`SET ROLE ${RLS_TEST_ROLE}`);
       const { rows } = await client.query(
@@ -118,6 +130,8 @@ d('analytics_events ingest RLS (migration 0096)', () => {
       );
       expect(rows).toHaveLength(0);
     } finally {
+      await client.query(`RESET ROLE`).catch(() => {});
+      await client.query(`RESET ALL`).catch(() => {});
       client.release();
     }
   });

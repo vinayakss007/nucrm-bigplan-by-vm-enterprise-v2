@@ -290,14 +290,38 @@ describe('the migration is the source of truth for the integration suite', () =>
     expect(code).toMatch(/if \(enabledRlsHere\)[\s\S]{0,120}DISABLE ROW LEVEL SECURITY/);
   });
 
-  it('removes the role and the grants it created', () => {
-    for (const stmt of [
-      'REVOKE SELECT, INSERT ON activities',
+  it('removes the role it created, with no object ACL to unwind', () => {
+    // #2474 replaced the four-statement revoke chain with one DROP ROLE. The role
+    // now holds pg_read_all_data/pg_write_all_data memberships granted through
+    // ../helpers/rls-probe-role-2474.ts, so it appears in no relacl in any
+    // database — which is also what takes #2466's
+    // `cannot be dropped because some objects depend on it` away at the cause,
+    // rather than around it.
+    // Both directions run on a session that is not wearing a role: `role` survives
+    // `RESET ALL` (measured on PG16), so a pooled connection released by a test that
+    // only said `RESET ALL` hands the next borrower a connection wearing the probe,
+    // and the teardown `DROP ROLE` then asks the probe to drop itself (#2474).
+    expect(code).toMatch(
+      /withOwnerSession\(\(\) => pool\.connect\(\), \(runDdl\) => ensureRlsProbeRole\(runDdl/,
+    );
+    expect(code).toMatch(
+      /withOwnerSession\(\(\) => pool\.connect\(\), \(runDdl\) => dropRlsProbeRole\(runDdl/,
+    );
+    expect(code).toContain("await client.query('RESET ROLE')");
+    expect(code).toMatch(/if \(roleCreatedHere\)[\s\S]{0,220}dropRlsProbeRole/);
+    const executable = code.split('\n').filter((l) => {
+      const t = l.trimStart();
+      return !t.startsWith('//') && !t.startsWith('*') && !t.startsWith('/*');
+    });
+    for (const forbidden of [
+      'GRANT USAGE ON SCHEMA public',
       'REVOKE USAGE ON SCHEMA public',
-      `REVOKE \${RLS_TEST_ROLE} FROM CURRENT_USER`,
-      'DROP ROLE IF EXISTS',
+      'GRANT SELECT, INSERT ON activities',
+      'DROP OWNED BY',
     ]) {
-      expect(code).toContain(stmt);
+      expect(executable, `the suite still issues ${forbidden}`).not.toEqual(
+        expect.arrayContaining([expect.stringContaining(forbidden)]),
+      );
     }
   });
 

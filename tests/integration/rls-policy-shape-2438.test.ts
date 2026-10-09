@@ -46,6 +46,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { Pool } from 'pg';
 import { randomUUID } from 'node:crypto';
+import { dropRlsProbeRole, ensureRlsProbeRole, withOwnerSession } from '../helpers/rls-probe-role-2474';
 import {
   MIN_POLICY_EXPRESSIONS,
   buildShapeSweepSql,
@@ -102,19 +103,11 @@ describe.skipIf(!dbAvailable)('fail-closed tenant_isolation (#2438)', () => {
   beforeAll(async () => {
     pool = new Pool({ connectionString: process.env.DATABASE_URL, connectionTimeoutMillis: 5000 });
 
-    await pool.query(`
-      DO $$
-      BEGIN
-        IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${PROBE_ROLE}') THEN
-          CREATE ROLE ${PROBE_ROLE} NOSUPERUSER NOBYPASSRLS NOINHERIT LOGIN;
-        ELSE
-          ALTER ROLE ${PROBE_ROLE} NOSUPERUSER NOBYPASSRLS NOINHERIT LOGIN;
-        END IF;
-      END $$;
-    `);
-    await pool.query(`GRANT USAGE ON SCHEMA public TO ${PROBE_ROLE}`);
-    await pool.query(`GRANT SELECT, INSERT ON contacts TO ${PROBE_ROLE}`);
-    await pool.query(`GRANT ${PROBE_ROLE} TO CURRENT_USER`);
+    // Privileges arrive through role membership, not object ACLs: the
+    // `GRANT USAGE ON SCHEMA public` this replaced is an UPDATE of one hot
+    // pg_namespace row that four suites were racing (#2474), and
+    // tests/helpers/rls-probe-role-2474.ts is what measures the swap.
+    await withOwnerSession(() => pool.connect(), (runDdl) => ensureRlsProbeRole(runDdl, PROBE_ROLE));
 
     await pool.query(
       `INSERT INTO tenants (id, name, slug) VALUES ($1, 'Shape Sweep A', $2), ($3, 'Shape Sweep B', $4)
@@ -138,13 +131,12 @@ describe.skipIf(!dbAvailable)('fail-closed tenant_isolation (#2438)', () => {
     }
     await pool.query(`DELETE FROM tenants WHERE id = ANY($1::uuid[])`, [[tenantA, tenantB]]).catch(() => {});
     await pool.query(`DROP TABLE IF EXISTS ${SCRATCH}`).catch(() => {});
-    // A role with grants or memberships cannot be dropped, so unwind both before
-    // the role itself. If any step fails the next run reuses the role through
-    // the ALTER-branch in beforeAll rather than erroring on CREATE.
-    await pool.query(`REVOKE SELECT, INSERT ON contacts FROM ${PROBE_ROLE}`).catch(() => {});
-    await pool.query(`REVOKE USAGE ON SCHEMA public FROM ${PROBE_ROLE}`).catch(() => {});
-    await pool.query(`REVOKE ${PROBE_ROLE} FROM CURRENT_USER`).catch(() => {});
-    await pool.query(`DROP ROLE IF EXISTS ${PROBE_ROLE}`).catch(() => {});
+    // One statement, and it needs no REVOKE chain in front of it: a probe minted
+    // by tests/helpers/rls-probe-role-2474.ts owns nothing and appears in no object ACL, so
+    // DROP ROLE clears its memberships (including the SET ROLE grant) with it —
+    // measured, and the reason #2466's `some objects depend on it` cannot come
+    // back through this door.
+    await withOwnerSession(() => pool.connect(), (runDdl) => dropRlsProbeRole(runDdl, PROBE_ROLE));
     await pool.end();
   });
 

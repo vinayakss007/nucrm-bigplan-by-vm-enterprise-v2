@@ -1,10 +1,17 @@
 name: Nightly load soak + RLS role guards (#2120, #2306)
 
-# Four independent scheduled jobs.
+# Five independent scheduled jobs.
 #
 #   soak       — k6 load soak. Disabled unless the repo variable LOAD_SOAK_ENABLED
 #                is "true" and LOAD_SESSIONS_B64 (base64 of a sessions.json built
 #                by tests/load/make-sessions.sh) plus LOAD_BASE_URL secrets exist.
+#
+#   test-catalog-ddl-screen — #2474. The static scan that keeps an integration
+#                suite from putting `GRANT … ON SCHEMA public` back into a
+#                `beforeAll`, which is how four suites ended up UPDATEing the same
+#                pg_namespace tuple in the same second and CI died in a file the
+#                branch never touched. Opt out with
+#                TEST_CATALOG_DDL_GUARD_ENABLED="false".
 #
 #   register-drift-screen — #2416 follow-up. The content-vs-authoring screen over
 #                docs/infra/PREPROD-ISSUE-REGISTER.md: every `path:N` citation is
@@ -263,6 +270,49 @@ jobs:
         with:
           name: register-drift-results-${{ github.run_number }}
           path: ${{ runner.temp }}/register-drift-results
+          if-no-files-found: warn
+          retention-days: 30
+
+  # ── #2474 — the shared-catalog DDL screen ──────────────────────────────────
+  # `GRANT … ON SCHEMA public` is an UPDATE of the one pg_namespace row named
+  # `public`. Four integration suites each issued one in `beforeAll`, vitest runs
+  # one worker per file, and the four `beforeAll`s land in the same second — so
+  # the tuple is written concurrently and Postgres raises `XX000 tuple
+  # concurrently updated` rather than retrying. The casualty on CI was
+  # `tests/integration/superadmin-panel-sql.test.ts`, in a run of a PR that never
+  # edited it. The repair is role membership instead of object ACLs
+  # (tests/helpers/rls-probe-role-2474.ts); this is the screen that keeps a fifth
+  # suite from rejoining a race four suites were winning, which is why it exists
+  # at all: the failure is a lottery, so "it passed locally" proves nothing.
+  #
+  # Nightly, per the issue, not the fast job. The screen is a static scan of the
+  # checked-out tree — no database, no `npm ci`, milliseconds — and the unit test
+  # `tests/unit/test-catalog-ddl-screen-2474.test.ts` runs the same `scanTree()`
+  # on every `npm test`, so a reintroduction is caught by the PR job through the
+  # test suite even before this job fires.
+  test-catalog-ddl-screen:
+    name: Shared-catalog DDL screen (#2474)
+    if: vars.TEST_CATALOG_DDL_GUARD_ENABLED != 'false'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Run the screen
+        run: |
+          set -uo pipefail
+          RESULTS_DIR="$RUNNER_TEMP/test-catalog-ddl-results"
+          mkdir -p "$RESULTS_DIR"
+          npm run guard:test-catalog-ddl 2>&1 | tee "$RESULTS_DIR/test-catalog-ddl.log"
+          code=${PIPESTATUS[0]}
+          echo "screen exit=$code" | tee -a "$RESULTS_DIR/test-catalog-ddl.log"
+          exit "$code"
+
+      - name: Upload screen results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-catalog-ddl-results-${{ github.run_number }}
+          path: ${{ runner.temp }}/test-catalog-ddl-results
           if-no-files-found: warn
           retention-days: 30
 

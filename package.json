@@ -62,6 +62,7 @@
     "guard:semgrep": "node scripts/check-semgrep-baseline.mjs semgrep.sarif",
     "guard:vocab": "npx tsx --import ./scripts/load-env.mjs scripts/check-constraint-vocab.mts",
     "guard:coords": "node scripts/check-register-coords.mjs",
+    "guard:test-catalog-ddl": "node scripts/check-test-catalog-ddl.mjs",
     "guard:register-drift": "node scripts/check-register-drift.mjs",
     "probe:sql": "npx tsx --import ./scripts/load-env.mjs scripts/probe-sql.mts",
     "probe:rls": "npx tsx --import ./scripts/load-env.mjs scripts/probe-rls.mts",
