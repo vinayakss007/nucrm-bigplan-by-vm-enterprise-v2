@@ -3233,22 +3233,27 @@ database`, and exactly two FAILs:
   files themselves, re-enumerated at `f3787f32` after **#2445** and **#2447** landed the two register
   guards, and re-enumerated again when **#2446** wired `guard:portal-rls-context` (which also moved the
   `ci.yml` aliases from `:45-81` to `:45-83` and the two SAST `node` calls from `:215`/`:248` to
-  `:217`/`:250`): `package.json:47-66` defines **20** `guard:*` scripts. Workflows invoke **17** by alias — `ci.yml`
-  runs 15 (`rls`, `csrf`, `schemas`, `boundaries`, `filesize`, `any-suppressions`, `chain`, `migration-rls`,
-  `counters`, `csv`, `portal-softdelete`, `public-ratelimit`, `public-projection`, `portal-rls-context`,
+  `:217`/`:250`), and once more when **#2474** wired `guard:catalog-grants` into the nightly (which moved
+  the `package.json` guard block from `:47-66` to `:47-67` and `db:deploy-migrate` from `:84` to `:85`, and
+  in `nightly-soak.yml` moved the running-config line from `:209` to `:216`, the register-drift line from
+  `:255` to `:262` and its job from `:241` to `:248`): `package.json:47-67` defines **21** `guard:*`
+  scripts. Workflows invoke **18** by alias — `ci.yml` runs 15 (`rls`, `csrf`, `schemas`, `boundaries`,
+  `filesize`, `any-suppressions`, `chain`, `migration-rls`, `counters`, `csv`, `portal-softdelete`,
+  `public-ratelimit`, `public-projection`, `portal-rls-context`,
   `coords`, at `:45` through
-  `:83`) and `nightly-soak.yml:209`/`:255` runs the other two (`guard:running-config --allow-empty`, and
-  `guard:register-drift` in the `register-drift-screen` job at `:241`) — and invoke **2** more as bare `node`
+  `:83`) and `nightly-soak.yml` runs 3 (`guard:running-config --allow-empty` at `:216`, `guard:register-drift`
+  in the `register-drift-screen` job at `:248`/`:262`, and `guard:catalog-grants` in the
+  `catalog-grants-screen` job at `:291`/`:303`) — and invoke **2** more as bare `node`
   commands inside `ci.yml`'s SAST job: `npm audit --audit-level=high --json | node scripts/check-audit-baseline.mjs`
-  (`:217`) and `node scripts/check-semgrep-baseline.mjs semgrep.sarif` (`:250`). That is 19 of 20. The twentieth is
+  (`:217`) and `node scripts/check-semgrep-baseline.mjs semgrep.sarif` (`:250`). That is 20 of 21. The twenty-first is
   `guard:vocab`: `grep -rn check-constraint-vocab .github/workflows` returns **0**, and so does
   `grep -rn constraint-vocab .github/workflows`, so no automation runs it under its alias _or_ its filename.
   It is not merely failing-quiet — it is unfailing-quiet, because nobody calls it, and it is the only guard in
   the repo in that condition. Two of the four guards added since this entry was written — `coords` and
   `register-drift` — are the ones that read _this file_, which is why the re-count is in the entry rather than
   in a follow-up.
-  (The 17/2/1 split is itself worth recording. A wiring audit that greps for `npm run guard:` reports
-  **17 of 20** and mis-files `audit` and `semgrep` as unrun, because those two are called as direct `node`
+  (The 18/2/1 split is itself worth recording. A wiring audit that greps for `npm run guard:` reports
+  **18 of 21** and mis-files `audit` and `semgrep` as unrun, because those two are called as direct `node`
   invocations rather than through their aliases. This entry said exactly that until its own PR's CI run
   printed `✖ npm audit baseline guard failed (#2301)` — a baseline rotting _loudly_, on the first try — and
   the count was then taken from the workflows rather than from the alias list.)
@@ -3338,7 +3343,8 @@ CONSTRAINT` + `ADD CONSTRAINT` widenings, so they are not exposed to PP-058's RL
   row. It refuses before that when `BACKUP_LOCAL_DIR` is ephemeral (`:138-143`) or `pg_dump` is not on
   PATH (`:146-155`) — both satisfiable here (this host's app image **does** ship `pg_dump` and `psql`:
   `docker exec nucrm-app command -v pg_dump` → `/usr/bin/pg_dump`), so neither refusal is this entry's
-  point. `package.json:84` now also defines `db:deploy-migrate` as a hand-run alias; **no workflow
+  point. `package.json:85` now also defines `db:deploy-migrate` as a hand-run alias (re-pinned 2026-10-09
+  from `:84`, which **#2474**'s `guard:catalog-grants` script line pushed down by one); **no workflow
   invokes it** (grep: 0 hits across `.github/workflows`).
 - **The one workflow that could re-read the ledger never does.** Grepping all 5 files for `db:status` or
   `migration-status` returns **0 hits in every file**. So the pipeline that owns the sentence "the deploy
