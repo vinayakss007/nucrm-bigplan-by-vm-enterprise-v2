@@ -81,6 +81,8 @@ jobs:
         run: npm run guard:portal-rls-context
       - name: Register coordinate guard (#2416)
         run: npm run guard:coords
+      - name: Cron lock refusal + schedule guard (#2539)
+        run: npm run guard:cron-lock
 
   test-unit:
     name: Unit Tests

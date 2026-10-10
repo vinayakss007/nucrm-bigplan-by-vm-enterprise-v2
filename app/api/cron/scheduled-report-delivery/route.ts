@@ -14,6 +14,7 @@ import { db } from '@/drizzle/db';
 import { scheduledReports } from '@/drizzle/schema';
 import { eq, and, isNull, sql } from 'drizzle-orm';
 import { acquireLock, releaseLock } from '@/lib/cache';
+import { cronLockRefusalResponse } from '@/lib/cron/cron-lock';
 import { sweepTenants } from '@/lib/cron/tenant-scope';
 import { addMonthsClamped } from '@/lib/billing/recurrence-date';
 
@@ -157,7 +158,7 @@ export async function POST(req: NextRequest) {
 
   const lock = await acquireLock(REPORT_LOCK_KEY, REPORT_LOCK_TTL);
   if (!lock.acquired) {
-    return NextResponse.json({ ok: true, skipped: true, reason: 'Another instance running' });
+    return cronLockRefusalResponse(REPORT_LOCK_KEY);
   }
 
   let delivered = 0;
