@@ -3590,7 +3590,7 @@ not wired in).
   **directory list**, not the edge's public list. It has never examined an OAuth or webhook route,
   and widening `PUBLIC_PATHS` does not add one. So "all rate-limited" is true of
   `app/api/public/**` and silent about everything here; the per-handler limits in the fourth bullet
-  are the only reason these five are not wide open, and they are held in place by reading, not by a
+  are the only reason these six are not wide open, and they are held in place by reading, not by a
   check anyone can run.
 - **Review posture:** #2476 hardened the OAuth handler *before* this PR makes it reachable, on
   purpose, in that order. This is a **surface-widening** change. The CSRF question is answered by a
