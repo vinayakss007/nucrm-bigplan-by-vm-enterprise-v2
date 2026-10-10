@@ -89,7 +89,9 @@ export async function GET(request: NextRequest) {
       db: dbStatus,
       schema_ready: schemaReady,
       service: 'nucrm-app',
-      version: process.env['npm_package_version'] || '1.0.0',
+      // npm only sets this for processes it launched; the old '1.0.0' default
+      // claimed a release package.json has never carried.
+      version: process.env['npm_package_version'] || 'unknown',
       sentry: process.env['SENTRY_DSN'] ? 'configured' : 'not configured',
       timestamp: new Date().toISOString(),
     }, { status: healthy ? 200 : 503 });

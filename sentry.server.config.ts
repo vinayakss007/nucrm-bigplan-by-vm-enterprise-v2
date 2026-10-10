@@ -76,7 +76,7 @@ if (SENTRY_DSN) {
     initialScope: {
       tags: {
         service: 'nucrm-api',
-        version: process.env['npm_package_version'] || '1.0.0',
+        version: process.env['npm_package_version'] || 'unknown',
       },
     },
   });

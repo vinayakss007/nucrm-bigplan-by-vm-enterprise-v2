@@ -4,7 +4,20 @@
 > here, with the evidence that proves it and the verification that closed it.
 > Update the status the moment it changes; IDs are never reused.
 >
-> - **Last updated:** 2026-10-10 (UTC) — **PP-065**: the public lead-capture page is wired to an
+> - **Last updated:** 2026-10-10 (UTC) — **PP-066**: **#2498**'s projection had a third site **#2500**
+>   did not reach — the super-admin ticket PATCH at `app/api/superadmin/tickets/route.ts:190` was
+>   still `RETURNING *` over all **23** columns of `support_tickets`, `portal_token` among them — now
+>   `.returning({ id: supportTickets.id })` at `:197`, with the copies it cannot undo recorded beside
+>   it (`lib/automation/engine.ts:96` and `:109` persist the tenant create's payload into
+>   `automation_runs.metadata`, which is `jsonb`, so `DROP COLUMN` will not drain them — an `UPDATE`
+>   will). Re-measured for this entry: `db:status` → **Applied 99 · Pending 26 · Total 125**, the
+>   target database still holds `support_tickets_portal_token_not_null` (1 of 8), and the running
+>   container still answers `401 {"error":"Invalid token"}` to `x-portal-token`, so the credential is
+>   live on what is deployed while all of this is only merged. Written as PP-063, moved to
+>   **PP-064** when **#2501** took that ID for the deploy hop, and moved again to **PP-066** on
+>   this rebase: main landed PP-064 (the `nucrm-test-db` report) first; the earlier merge keeps the number and the
+>   later one moves, the resolution PP-057 and PP-063 record.
+> - **Previous:** 2026-10-10 (UTC) — **PP-065**: the public lead-capture page is wired to an
 >   endpoint it **can never satisfy**. `app/lead-capture/page.tsx:32` renders a form whose payload has
 >   **no `tenant_id` field**, and `app/api/leads/public/route.ts:32` requires one, so **every** submission
 >   from that page is a measured **400** and the page still advertises a 24-hour reply beside it; the
@@ -125,6 +138,7 @@ Severity: **S1** blocks go-live · **S2** broken feature or security weakness ·
 | PP-063 | S2  | Deploy                      | **The deploy hop's one failure line is two independent defects, and neither reads out of the log.** (D1) PP-060's `dial tcp ***:22: i/o timeout` is not "the VM is down": `sshd` answers on `0.0.0.0:22`, `ufw` is **inactive**, and 22 is reached from outside daily — but the only hostname this box is configured with is a **dynamic-DNS name with no updater installed anywhere on it**, and dialing that name from this host reproduces the identical silent timeout (**12,011 ms**) while the address this session actually arrived on answers in **114 ms**. (D2) behind it, the job deploys a runtime this host does not have: `deploy.yml:5` asserts pm2-not-Docker, `deploy.yml:158` `cd`s to a `$HOME` git checkout and `:172-189` drive `pm2` — measured here: no `pm2` binary, no nvm, `/home` **empty**, the app running as 18 Compose containers under `/srv/nucrm`. Re-pointing `DEPLOY_HOST` alone therefore produces a **different red**, not a deploy — and `set -e` at `:139` plus the `cd` mean the abort happens 146 lines **before** the first `git checkout --force` at `:305`, so the compose tree was never at risk | 🔧 DIAGNOSABILITY FIXED in this PR (pre-flight classifies the dial at `deploy.yml:79`; the remote side names the model mismatch at `deploy.yml:151`) · the hop itself is **owner action**: `DEPLOY_HOST` must hold a real address **and** someone must choose between "the pm2 VM" and rewriting this job for `docker compose up -d --build` |
 | PP-064 | S2  | Infra / security boundary   | **The only Postgres Compose does not declare is the only publish on this box that is not the front door yet bound to every interface.** `nucrm-test-db` (`postgres:16`, up since 2026-09-26, `Config.Labels {}`, `Binds null`, `RestartPolicy=no`) publishes `5432/tcp` on `0.0.0.0` **and** `[::]`, with `listen_addresses` = `*` and a `pg_hba.conf` line admitting any host to any database as any user; the superuser password is **8 characters** and is not printed here. The chain was completed, not inferred: dialing the box's own public address returned `AUTH OK` with `rolsuper = t`, over **33 databases / 32 app-shaped, 31 of them the full schema, 1,089 rows**, each carrying the whole production schema (263 policies, 3,231 columns, 1,119 indexes, 532 CHECK constraints). Nothing on the host restricts it — `iptables -S INPUT` is the single line `-P INPUT ACCEPT`, `DOCKER-USER` holds **0** rules, `ufw` is inactive, and the public IPv4 is bound to the box's own NIC (no NAT in front) | 🚨 OPEN · **report-only** - no compose file declares it, so no PR can re-bind it, and re-binding it means destroying 31 schema-bearing undocumented databases — one per PR/issue number, no manifest behind any of them · **owner action**: publish on `127.0.0.1` or drop the publish, turn on `log_connections`, rotate the credential · **not** tenant data (the app reaches an external managed database through PgBouncer on loopback, and the running metrics exporter was verified to point there too) · off-box reachability **unproven**, and the box keeps no record that could prove or disprove it · **S1** if the owner confirms nothing filters inbound above the NIC |
 | PP-065 | S2  | Lead capture                | **The public lead-capture page posts a body its own endpoint cannot accept**: `app/lead-capture/page.tsx:32` renders a form that sends **no `tenant_id`** while `app/api/leads/public/route.ts:32` requires one - measured live, **400** on the exact bytes the form builds, under copy promising a reply within 24 hours - the other two lead paths that were publicly listed until **#2505** removed the entries have had **no route in any commit of this repository's history** (live **404**) and the third lead component in the tree is imported by nobody and posts to a session-gated route (live **401**) - CI cannot see it: the route's own test supplies a tenant every time - closing it needs one owner decision, **which organization receives marketing leads** | 🚨 OPEN · report-only |
+| PP-066 | S3  | Staff API / credential      | **#2498's projection stopped one column short.** **#2500** named the columns both staff ticket *creates* return (`app/api/tenant/tickets/route.ts:126` → 10 columns, `app/api/superadmin/tickets/route.ts:126` → 9) and its test covers the response *and* the automation payload — but the third `.returning()` in that second file, the PATCH at `app/api/superadmin/tickets/route.ts:190`, was still argument-less: `RETURNING *` over all **23** columns of `support_tickets`, `portal_token` (still `NOT NULL` on the target database — 1 of its 8 NOT NULL constraints in `pg_constraint` — and still a working bearer credential on the deployed build: `401 {"error":"Invalid token"}` answers `x-portal-token`) and `metadata` (#2443's operator prose) among them. Nothing ever left: `if (!row)` at `:192` is the row's only consumer and the handler answers `{ ok: true }` at `:193`, so this is the **read**, not a disclosure — and `guard:public-projection` cannot see it by design, its file set is `proxy.ts`'s anonymous surface (#2459) and this is a session-authenticated staff route | 🔧 FIXED in this PR (`.returning({ id: supportTickets.id })` — one column is the whole requirement, and a map with a single consumer would be a second source of truth · `tests/unit/superadmin-tickets-patch-projection-2498.test.ts`, 6 tests through a fake that **applies** the column map, negative control **2 failed / 4 passed**) · **the copies #2500 and this PR do not undo:** `lib/automation/engine.ts:96` and `:109` persist the tenant create's payload into `automation_runs.metadata`, which is `jsonb`, so `DROP COLUMN` cannot reach what is already there — emptying it is an `UPDATE`, an owner step alongside the drop, not after it — and `fire_webhook` (`:311`) posts `data: enrichedData` (`:324`) onward · **#2499** stays open until `0124` is applied: **#2501** made the deploy hop *diagnosable* (`deploy.yml:79`, `:151`), it did not repair it, so PP-060's finding stands and `db:status` still reads **Applied 99 · Pending 26 · Total 125** |
 
 ## Sentry issues → register entries
 
@@ -3969,6 +3983,123 @@ psql -tAc "select count(*) from support_tickets"  # as the app role, with app.po
 - **Verified by:** read-only, plus one POST that was rejected before it reached the database. `git ls-tree -r --name-only`, `git log --all --diff-filter=A`, `git log -S` on `proxy.ts`, `git show` of every file cited, `git grep` for the import sites, `docker inspect` for env **presence** only, and live HTTP through the app container's own private bridge address with the site's `Host` header: `/health` → **200** as the probe control, `/lead-capture` → **200**, `/api/lead-capture` → **404**, `/api/lead-capture/submit` → **404**, `/api/tenant/leads` → **401**, `/api/leads/public` → **400** twice (once for the field the page omits, `Invalid input: expected string, received undefined`, and once for the empty-string shape a configured-but-unset env would produce, `tenant_id is required`). The front-door TLS listener on `127.0.0.1` refused these probes (measured: no connection at all, which is why the verdicts come from the container side of nginx) — the correct side anyway, since `proxy.ts` runs inside the app, above nothing that the reverse proxy could add or remove. First-pass error worth recording: an HTTP probe on plain port 80 returned **301 for every path including ones that 404**, because the redirect to TLS happens in the reverse proxy before the edge is consulted; reading status codes from that hop would have made all five verdicts identical and this entry would have looked disproven. Following the scheme, not the port, is what produced the numbers above.
 - **Nothing identifying appears here.** No address, hostname, provider endpoint, tenant id, credential or digest of any of them; the site's `Host` was read into a shell variable and never printed, and the bridge address was classified as a shape (`nnn.nn.n.nn`) rather than written. `127.0.0.1` is a bind scope, not a machine, and is the only literal address this entry uses. The synthetic probe address is in a reserved `.invalid` TLD and is the only payload value recorded anywhere.
 - **Related:** **PP-064** and **PP-063** (the same sweep), **PP-061** (the public list, the six credential routes and the "dead public surface" note this entry completes), **#2334** (the route's scope test, and why it cannot see this), **#2440**/**#2459**/**#2473** (the projection guard that tolerates the phantom paths by design), **#142** (the unset env class — this entry is *not* an instance of it, and says why), **#22** (dead fetch targets), **#134** (the 1.0.0 scope decision: "does public lead capture work?" is one of its questions, and the measured answer today is no).
+
+## PP-066 — 🔧 #2498's projection stopped one column short: after #2500 named the two staff ticket *creates*, the super-admin PATCH was still `RETURNING *` over all 23 columns of the table whose `portal_token` is a live credential on the deployed build and a live constraint on the target database _(S3 · Staff API / credential)_
+
+- **Found by** reading **#2500**'s diff against #2498's own acceptance criteria. Both POSTs name
+  their columns — `app/api/tenant/tickets/route.ts:126` returns 10, `app/api/superadmin/tickets/route.ts:126`
+  returns 9 — and `tests/unit/tickets-create-projection-2498.test.ts` already proves the create
+  response *and* the automation payload cannot carry `portalToken`. The file's third `.returning()`
+  was not in the diff. Measured rather than remembered:
+
+  ```bash
+  grep -rn "\.returning();" app/api/*/tickets/*.ts app/api/public/tickets/*.ts \
+        app/api/public/tickets/*/*.ts app/api/public/tickets/*/*/*.ts
+  # before this entry: app/api/superadmin/tickets/route.ts:190   (exactly one hit)
+  # after it:        no match, exit 1
+  ```
+
+  Every other occurrence of that text in those files is a comment explaining why it must not come
+  back (#2440, #2443, #2500). Filed as **#2504**, which carries the same grep.
+
+- **What the row was for.** `const [row] = await db.update(supportTickets).set(updateData)
+  .where(and(eq(id), eq(updatedAt, expectedUpdatedAt))).returning()` — `row` is consumed only by
+  `if (!row)` at `:192`, which answers the 409, and the success body is `{ ok: true }` at `:193`.
+  One column is the entire requirement, and the response names none of them. That asymmetry is why
+  this fix is `.returning({ id: supportTickets.id })` (`:197`) and not a shared column map: a map
+  with one consumer is a second source of truth, and #2500's inline lists are the shape this repo
+  already chose. It is also why this projection is **narrower** than the creates' — a create echoes
+  its row, a PATCH does not.
+
+- **Why S3 and not S2.** No credential travelled. Unlike the tenant create there is no
+  `{ data: row }` on this path and no `evaluateAutomations()` call, so nothing reached a caller, a
+  second table or an external URL. What remained is the read itself: the app selecting
+  `portal_token`, `metadata` and the whole `utils.audit()` set (`createdBy`/`updatedBy`/`deletedAt`/
+  `deletedBy`) into process memory to answer "did that UPDATE match a row?". On the deployed build
+  the column it selects is a bearer credential — see the probe below.
+
+- **The copies #2500 and this PR do not undo.** PP-062's headline, *"nothing in the product delivers
+  it"*, is a statement about the **mint** and it was true. It is not a statement about **copies**.
+  The tenant create spread its `.returning()` row into
+  `evaluateAutomations({ …, data: { …row, id: row.id } })`, and `lib/automation/engine.ts:96`
+  (`metadata: enrichedData`) and `:109` (`metadata: payload.data`) persist that payload into
+  **`automation_runs.metadata`**; `fire_webhook` (`:311`) POSTs `data: enrichedData` (`:324`) to
+  whatever URL an action is configured with. `automation_runs.metadata` is `jsonb`, so
+  **`DROP COLUMN portal_token` cannot drain what is already written there** — emptying it is an
+  `UPDATE`, and it is an owner step alongside the drop rather than after it. The engine reads
+  snake_case (`str(enrichedData, 'assigned_to')`) and `getNestedValue` treats an absent key and a
+  null one identically for `is_empty`/`is_not_empty`, which is why #2500's narrower column set could
+  be shipped without re-auditing every automation condition: dropping a key can move a condition
+  from "value" to "empty", never from false to true. Latent on this database, measured —
+  `automation_runs` **0** rows and `support_tickets` **0** rows for the one tenant
+  `--tenant 97415947-a505-4ada-bc76-e24d546e131e` exposes. `--superadmin` answers the *permission*
+  question, not the population one: the `support_tickets` policies have no super-admin arm, so
+  0/0/0 under `--superadmin` proves nothing about volume. The code path is the finding.
+
+- **Why no guard caught any of this, and why the guard stays as it is.** `guard:public-projection`
+  derives its file set from `proxy.ts`'s anonymous surface (#2459). Session-authenticated staff
+  routes are outside that scope **by design** — different audience, different threat model — and
+  stretching the guard over the whole staff API would be a new scope decision, not a bug fix. This
+  entry records the gap instead; a staff-surface screen is the candidate follow-up, and until one
+  exists, a test is the only thing in front of these sites. That is also the reason this file's fake
+  applies the column map rather than ignoring it: with no guard behind it, a fake that echoed the
+  fixture whatever the route asked would make every assertion here a restatement of the test data.
+
+- **The credential is still live on the deployed build** while all of this merges. Measured against
+  the running container, this session:
+
+  ```bash
+  docker exec nucrm-app node -e 'fetch("http://127.0.0.1:3000/api/public/tickets",
+    {headers:{"x-portal-token":"probe-bogus-token-0000"}}).then(async r=>console.log(r.status,(await r.text()).slice(0,120)))'
+  # → 401 {"error":"Invalid token"}
+  ```
+
+  `Invalid token` is the pre-#2444 branch's own text; once #2444's build is actually deployed the
+  same request answers `{"error":"Authentication required"}` from `resolvePortalIdentity()` being
+  null. Until then, every column this table returns is returning a usable credential.
+
+- **#2499, and what #2501 did to it.** `pg_constraint` on the target database still lists
+  `support_tickets_portal_token_not_null` — **1** of the table's **8** NOT NULL constraints — while
+  merged `main` supplies no value for that column at any of the three ticket inserts. So the first
+  staff *or* anonymous create after a build that outruns `0124` answers 500 with SQLSTATE `23502`.
+  **#2501** (PP-063) made the deploy hop *diagnosable* — the pre-flight classifies the dial at
+  `deploy.yml:79`, the remote side names the runtime mismatch at `deploy.yml:151` — it did **not**
+  repair the hop, so PP-060's conclusion is untouched: the only executable migrate in the repo's
+  automation runs over SSH against a pm2 VM this Docker host is not, and nothing automated can apply
+  `0124` here. CI cannot see the hazard either: `ci.yml` and `backup-drill.yml` provision with
+  `db:sync` (`drizzle-kit push`, so the column is nullable by schema) and no job runs `db:migrate`
+  against a stale ledger. The order stays **apply `0124`, then let this host serve `main`** — not the
+  reverse, and not either alone. `db:status` re-measured for this entry: **Applied 99 · Pending 26 ·
+  Total 125**.
+
+- **How it was verified.** `app/api/superadmin/tickets/route.ts:197` —
+  `.returning({ id: supportTickets.id })`.
+  `tests/unit/superadmin-tickets-patch-projection-2498.test.ts`, 6 tests: the fake's own
+  `project()` is asserted to return 23 keys when handed no map and one when handed one, the fixture
+  is asserted to carry everything the projection must drop, `returningArgs[0]` is pinned to
+  `['id']`, the read-back row is checked for `portalToken`/`metadata`/audit keys, and the two
+  response shapes are pinned on both sides of the change (`200 {"ok":true}` and the exact 409 text)
+  because the presence check is the projection's only job. Run together with #2500's suite:
+  **12 passed**. `npm run guard:public-projection`, `guard:coords` and `guard:register-drift` green;
+  `tsc --noEmit` at the **125**-error `components/**data-table**` baseline.
+
+- **Negative control, measured.** Reverting `:197` to `.returning()` and re-running the new file:
+  **2 failed / 4 passed (6)**. The two failures are the projection-shape assertions
+  (`returningArgs[0]` becomes `undefined`, the read-back row becomes 23 keys). The four survivors are
+  the fake self-check, the fixture check, `{ ok: true }` and the 409 — and they *must* survive: a
+  control that turned everything red here would be measuring behaviour change, which this PR does not
+  make.
+
+- **Register bookkeeping.** IDs are never reused: this is **PP-066** because **#2501** took PP-063 for
+  the deploy hop while #2498's follow-up was still open, main landed PP-064 (the `nucrm-test-db`
+  report) ahead of this entry, and PP-062 is #2444's — the same resolution
+  PP-057 and PP-063's own entry record (earlier merge keeps the number, later one moves). Status:
+  **Applied 99 · Pending 26 · Total 125**; the unapplied owner pile is still the 26 entries PP-060
+  counts.
+
+- **Review posture.** One line of source, one new test file, one register entry, no migration. The
+  interesting claim is a negative one — that #2500 left a `RETURNING *` on this table — so the grep
+  above is the fastest way to agree or disagree, and after this PR it returns nothing.
 
 ## How to maintain this file
 
