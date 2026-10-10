@@ -179,4 +179,5 @@ ALTER TABLE "segment_members" ALTER COLUMN "id" SET NOT NULL;
 --   'p' returns nothing, on the chain build and on preprod alike. The index
 --   named idx_segment_members_pk is a plain non-unique btree on
 --   (segment_id, entity_id). Making `id` a real primary key needs a uniqueness
---   decision that SET NOT NULL does not, so it is not smuggled in here.
+--   decision that SET NOT NULL does not, so it is not smuggled in here: filed
+--   separately as #2515.
