@@ -1919,7 +1919,7 @@ from pg_policies where schemaname='public' and (qual like '%app.is_super_admin%'
   outlive its transaction either). No route splices
   request data into SQL: the template-literal sinks in `app/` are compile-time identifiers or regex-gated numerics
   (`app/api/cron/backup-verify/route.ts:241-243` gates `nucrm_verify_${Date.now()}` through `^[a-z0-9_]+$` before
-  `CREATE DATABASE`; `app/api/tenant/sla/route.ts:36` is drizzle identifiers). Library-level splices are not reachable from
+  `CREATE DATABASE`; `app/api/tenant/sla/route.ts:36` is drizzle identifiers — the coordinate did not move but the text under it did: **#2482** rewrote that line on 2026-10-10 from `sql.raw('"sla_policies"."id"')`, a compile-time constant, to the `slaPolicies.id` identifier it is now, so the claim this sentence makes became literally true only with that PR). Library-level splices are not reachable from
   `app/` (`lib/data-integrity.ts:289` has zero importers under `app/`; `lib/db/query-timeout.ts:63` is `Math.round`ed).
   **So this is (i) a credential-handling problem — a leaked `DATABASE_URL` _is_ a full cross-tenant read grant over 49
   tables — and not (ii) an app-security one**: flipping the GUC over HTTP would need an injection point this sweep did not
