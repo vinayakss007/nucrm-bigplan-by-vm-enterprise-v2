@@ -4097,14 +4097,14 @@ was which screen in this repo owns column attributes. Answer: none, and the clos
   control had to seed a column the database will actually re-type. Assertion counts are not evidence
   here; the four exits above are.
 
-- **The CI sequence was run for real before committing, not assumed.** The whole `ci.yml:397` step
-  body, executed locally against a throwaway database: `CREATE DATABASE` → `db:bootstrap` →
-  `Applied: 125 · 3,156 statements · 274 RLS policies over 226 RLS-enabled tables` → `db:drift-check`
-  → `exit 0`, `3216 compared across 226 tables — 0 drift, 9 allowlisted, 1 info`. `actionlint`
-  (pinned `1.7.12`, the version `workflow-lint.yml` uses) over all six workflow files: no findings.
-  `node scripts/check-deploy-trigger.mjs`: OK, six uniquely-named workflow files. Unit suite for this
-  change: 19/19. `tsc --noEmit`: **125 errors**, byte-identical to the `components/**data-table**`
-  baseline this repo carries — none of them mine.
+- **The CI sequence was run for real, then run by CI.** The whole `ci.yml:397` step body, executed locally
+  against a throwaway database: `CREATE DATABASE` → `db:bootstrap` → `3,156 statements · 125 ledger rows ·
+  274 RLS policies over 226 RLS-enabled tables` → `db:drift-check` → `exit 0`, `3216 compared across 226
+  tables — 0 drift, 9 allowlisted, 1 info`; then the same step inside GitHub Actions (run `38040012824`),
+  which printed the same numbers **and** the stale set. `actionlint` pinned at `1.7.12`, the version
+  `workflow-lint.yml` uses: no findings. `check-deploy-trigger`: six uniquely-named workflow files. Unit
+  tests for this change 19/19, full suite 7,999 passed. `tsc --noEmit`: **125 errors** — byte-identical to
+  the `components/**data-table**` baseline this repo carries, none of them added here.
 
 - **Owner actions this entry does not take.** `PREPROD_DATABASE_URL` is not configured, so the `live`
   job fails its first step by design ("a guard that silently never runs is the bug this job exists to
