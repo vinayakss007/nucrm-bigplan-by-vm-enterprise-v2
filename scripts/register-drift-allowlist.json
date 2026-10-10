@@ -1,15 +1,15 @@
 {
-  "_comment": "Register pointers whose cited LINE CONTENT differs from the revision that wrote them, each with a written `reason` saying which PR re-pins it or why nothing does. The screen FAILS on any drift not listed here and reports entries that no longer drift as STALE (non-failing, prune them). `regLines` are the register sentences the cite silences \u2014 the screen matches on cite, so one entry can cover several. Regenerate preserving reasons: node scripts/check-register-drift.mjs --update",
+  "_comment": "Register pointers whose cited LINE CONTENT differs from the revision that wrote them, each with a written `reason` saying which PR re-pins it or why nothing does. The screen FAILS on any drift not listed here and reports entries that no longer drift as STALE (non-failing, prune them). `regLines` are the register sentences the cite silences — the screen matches on cite, so one entry can cover several. Regenerate preserving reasons: node scripts/check-register-drift.mjs --update",
   "entries": [
     {
       "cite": "app/api/cron/auto-backup/route.ts:55",
-      "regLines": [2590],
-      "reason": "Read-log, not a pointer: PP-055 lists the auto-backup line set (55, 147, 243, 256-257, 297) as ranges somebody read, and #2441 declined to re-pin it for exactly that reason \u2014 re-pinning would invent an intent the entry never stated. Listed here so the decision is on the record instead of silent drift."
+      "regLines": [2589],
+      "reason": "Read-log, not a pointer: PP-055 lists the auto-backup line set (55, 147, 243, 256-257, 297) as ranges somebody read, and #2441 declined to re-pin it for exactly that reason — re-pinning would invent an intent the entry never stated. Listed here so the decision is on the record instead of silent drift."
     },
     {
       "cite": "docs/README.md:71",
-      "regLines": [52],
-      "reason": "Chronic, not accidental: `docs/README.md:71` is the one pointer INTO the register, and the line it names is the sentence that re-pins itself \u2014 so every merge that adds register header text moves the pointer's own content and this cite reads as drift by construction. #2511's PP-061 bullet moved it (:4300 -> :4350); **#2507**'s PP-065 bullet re-pins it to :4384 on this tree, and **#2531** re-pins the same sentence to its own measurement \u2014 whichever merges second re-derives this file again. Prune this entry the day the README points at the rule by heading text instead of a line number."
+      "regLines": [51],
+      "reason": "Chronic, not accidental: `docs/README.md:71` is the one pointer INTO the register, and the line it names is the sentence that re-pins itself — so every merge that adds register header text moves the pointer's own content and this cite reads as drift by construction. PP-069 (#2516)'s header bullet moved it again (:4350 -> :4416, the sixth re-pin). Prune this entry the day the README points at the rule by heading text instead of a line number."
     }
   ]
 }
