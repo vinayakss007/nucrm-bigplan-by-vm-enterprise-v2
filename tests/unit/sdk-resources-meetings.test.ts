@@ -24,6 +24,14 @@ describe('MeetingsResource', () => {
     expect(req).toHaveBeenCalledWith('GET', '/meetings', undefined, {});
   });
 
+  it('list omits undefined fields from params', async () => {
+    const req = vi.fn().mockResolvedValue({ data: [], total: 0 });
+    const { MeetingsResource } = await import('@/lib/sdk/resources/meetings');
+    const r = new MeetingsResource(req);
+    await r.list({ page: 2 });
+    expect(req).toHaveBeenCalledWith('GET', '/meetings', undefined, { page: '2' });
+  });
+
   it('get calls GET /meetings/:id', async () => {
     const req = vi.fn().mockResolvedValue({ id: 'm-1' });
     const { MeetingsResource } = await import('@/lib/sdk/resources/meetings');
