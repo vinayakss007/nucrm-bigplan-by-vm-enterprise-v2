@@ -81,18 +81,18 @@ const ARRAY_UDT: Record<string, string> = {
  * nullability and type only exist on the column object, and a regex over the
  * source would be a second grammar to keep in sync.
  *
- * The barrel is NOT usable for this. `import * as schema from '../drizzle/schema'`
- * gives a namespace whose own keys are **3** — `default`, `fileUploads`,
- * `storageDocuments` — because tsx loads `drizzle/schema/index.ts` (42
- * `export *` lines) as CommonJS, so `Object.keys()` sees the interop shell and the
- * real 236 exports are one level down inside `schema.default`. Walking the 3 keys
- * finds 2 tables and calls the other 224 clean, with nothing printed to say so:
- * `getTableConfig()` succeeds on whatever it is handed, and a count of 2 is not
- * obviously wrong until you compare it to 226. Measured, then shipped around:
- * importing the 62 files one by one (45 in `drizzle/schema/`, 17 in
- * `drizzle/schema/registry/`) yields 226 tables / 3,216 columns, which is
- * what `drizzle-kit` and the vitest name-guard (#2255) each see by their own
- * loader. Any future screen over this schema has the same trap available.
+ * The barrel is not usable for this, and the reason is the entrypoint, not the
+ * schema. Two earlier explanations of this paragraph were wrong — #2508's "ESM
+ * drops every re-exported name that arrives twice" and this file's own "tsx
+ * loads `index.ts` as CommonJS" — so it is measured both ways now. As a `.ts`
+ * entry the barrel is fine: 227 table objects, 226 distinct names, the same set
+ * the 62 files give (231 objects, 226 names). As an `.mts` entry the namespace
+ * has **3** own keys (`default`, `fileUploads`, `storageDocuments`) — an interop
+ * shell, the real 236 exports one level down in `schema.default`, `schema.users`
+ * `undefined` — so a screen walking `Object.values()` compares **2** tables and
+ * calls the other 224 clean, printing neither number. Any future `.mts` screen
+ * inherits that trap by accident. Walking `drizzle/schema/` and its `registry/`
+ * (45 + 17 files) is deterministic in both module kinds, so that is what runs.
  */
 async function loadDeclaredColumns(): Promise<Map<string, Map<string, DeclaredColumn>>> {
   const schemaDir = path.resolve(process.cwd(), 'drizzle/schema');
