@@ -3,13 +3,13 @@
   "entries": [
     {
       "cite": "app/api/cron/auto-backup/route.ts:55",
-      "regLines": [2559],
+      "regLines": [2573],
       "reason": "Read-log, not a pointer: PP-055 lists the auto-backup line set (55, 147, 243, 256-257, 297) as ranges somebody read, and #2441 declined to re-pin it for exactly that reason — re-pinning would invent an intent the entry never stated. Listed here so the decision is on the record instead of silent drift."
     },
     {
       "cite": "docs/README.md:71",
-      "regLines": [22],
-      "reason": "Re-pinned by THIS entry (PP-068): the register sentence at line 21 cites the pointer's line NUMBER, and this PR rewrote the pointer's CONTENT on that same line (:4263 -> :4300, PP-067 -> PP-068) because #2518's merge moved the keep-the-entry rule again. The cite stays live and exact; only the quoted target moved, which is the re-pin itself."
+      "regLines": [36],
+      "reason": "Chronic, not accidental: `docs/README.md:71` is the one pointer INTO the register, and the line it names is the sentence that re-pins itself — so every merge that adds register header text moves the pointer's own content and this cite reads as drift by construction. #2511's PP-061 bullet moved it again (:4300 -> :4350). Prune this entry the day the README points at the rule by heading text instead of a line number."
     }
   ]
 }
