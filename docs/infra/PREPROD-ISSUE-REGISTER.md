@@ -4,24 +4,38 @@
 > here, with the evidence that proves it and the verification that closed it.
 > Update the status the moment it changes; IDs are never reused.
 >
-> - **Last updated:** 2026-10-10 (UTC) — **PP-066**: `npm run db:drift-check` is the only screen in
->   the repo that asks the **live database** what its columns are, and it compared **names** — so it
->   printed `No drift ✓` at exit 0 against pre-prod while `support_tickets.portal_token` was still
->   `NOT NULL` with no default (#2499's cause) and `super_admin_audit_logs` was three `text` columns
->   behind three `jsonb` declarations. It now compares 3,216 columns across 226 tables
->   (`scripts/drift-check.ts:166`), masks only what a named pending migration is already clearing
->   (`scripts/schema-drift-allowlist.json`), and is wired in both places #2508 AC3 asks for:
->   `.github/workflows/ci.yml:405` (a `db:bootstrap` database, so the chain itself is measured on
->   every pull request) and `.github/workflows/schema-drift.yml:162` (pre-prod, nightly, with a
->   negative control at `:105` that re-seeds the drift to prove the screen fires). Filed as
->   **#2508**; the two defect classes it found on its first run are **#2509** and **#2510**.
->   Written as PP-064 and moved to **PP-066** while open: **#2503** merged carrying 064, so **#2506** —
->   which minted that id first — moves, the earlier merge keeping the number, the resolution PP-057 and
->   PP-063 record; **#2507** holds 065 and is still open, so 066 is reserved, not taken from under it.
->   This entry also re-pins the one pointer _into_ the register, and found it broken before this PR:
->   `docs/README.md:71` aimed at `:1598` for the keep-the-entry rule, which lived at `:3913` at `4dc2ef82`
->   (**2,315 lines** of drift) and sits at `:4131` now that PP-064 has merged — no guard sees any of it,
->   because `scripts/check-register-coords.mjs` scans only the register's own outward citations.
+> - **Last updated:** 2026-10-10 (UTC) — **PP-067**: `npm run db:drift-check` is the only screen in
+> the repo that asks the **live database** what its columns are, and it compared **names** — so it
+> printed `No drift ✓` at exit 0 against pre-prod while `support_tickets.portal_token` was still `NOT
+> NULL` with no default (#2499's cause) and `super_admin_audit_logs` was three `text` columns behind
+> three `jsonb` declarations. It now compares 3,216 columns across 226 tables
+> (`scripts/drift-check.ts:166`), masks only what a named pending migration is already clearing
+> (`scripts/schema-drift-allowlist.json`), and is wired in both places #2508 AC3 asks for:
+> `.github/workflows/ci.yml:405` (a `db:bootstrap` database, so the chain itself is measured on every
+> pull request) and `.github/workflows/schema-drift.yml:162` (pre-prod, nightly, with a negative
+> control at `:105` that re-seeds the drift to prove the screen fires). Filed as **#2508**; the two
+> defect classes it found on its first run are **#2509** and **#2510**. Written as PP-064 and moved
+> to **PP-066** while open, and moved again to **PP-067** on this merge: **#2503** merged carrying
+> 064 and **#2506** merged carrying 066 — the earlier merge keeps the number and the later one moves,
+> the resolution PP-057 and PP-063 record; **#2507** still holds 065 open, so this entry lands at
+> 067. This entry also re-pins the one pointer _into_ the register, and found it broken before this
+> PR: `docs/README.md:71` aimed at `:1598` for the keep-the-entry rule, which lived at `:3913` at
+> `4dc2ef82` (**2,315 lines** of drift) and sits at `:4263` now that **PP-064**, **PP-066**
+> and this entry have merged — no guard sees any of it, because
+> `scripts/check-register-coords.mjs` scans only the register's own outward citations.
+> - **Previous:** 2026-10-10 (UTC) — **PP-066**: **#2498**'s projection had a third site **#2500**
+>   did not reach — the super-admin ticket PATCH at `app/api/superadmin/tickets/route.ts:190` was
+>   still `RETURNING *` over all **23** columns of `support_tickets`, `portal_token` among them — now
+>   `.returning({ id: supportTickets.id })` at `:197`, with the copies it cannot undo recorded beside
+>   it (`lib/automation/engine.ts:96` and `:109` persist the tenant create's payload into
+>   `automation_runs.metadata`, which is `jsonb`, so `DROP COLUMN` will not drain them — an `UPDATE`
+>   will). Re-measured for this entry: `db:status` → **Applied 99 · Pending 26 · Total 125**, the
+>   target database still holds `support_tickets_portal_token_not_null` (1 of 8), and the running
+>   container still answers `401 {"error":"Invalid token"}` to `x-portal-token`, so the credential is
+>   live on what is deployed while all of this is only merged. Written as PP-063, moved to
+>   **PP-064** when **#2501** took that ID for the deploy hop, and moved again to **PP-066** on
+>   this rebase: main landed PP-064 (the `nucrm-test-db` report) first; the earlier merge keeps the number and the
+>   later one moves, the resolution PP-057 and PP-063 record.
 > - **Previous:** 2026-10-10 (UTC) — **PP-064**: the host-side sweep that produced PP-063 found a
 >   second, unrelated thing on the same machine, and it is **reported, not fixed**. `nucrm-test-db` is the only
 >   Postgres running here that **no compose file declares**, and the only non-front-door publish on the box bound to **every** interface:
@@ -132,7 +146,8 @@ Severity: **S1** blocks go-live · **S2** broken feature or security weakness ·
 | PP-062 | S2  | Portal / credential         | `support_tickets.portal_token` was a **second credential living on the header the portal already uses for `portal_clients.access_token`**: `lib/portal-auth.ts:45` reads `x-portal-token` as a client token, and three public ticket routes read the *same* header (plus a POST body field) as a **ticket** token, resolved it to a **contact** and answered with that contact's **whole** ticket history — deliberately, #2378 — so possession of one ticket's string read every ticket that contact ever filed, subjects and bodies included. Permanent and un-revocable by construction: no `expires_at`, no `is_active`, no rotation, no revoke path, unlike `portal_clients` (`drizzle/schema/tokens.ts:202`, `:204`). **Nothing ever delivered it** — 0 references to `portal_token`/`portalToken` in `app/portal/**`, in `components/**`, in any email template or webhook payload — and #2440 had already stopped `POST /api/public/tickets` echoing a freshly minted one, so the only tokens that can still exist are ones handed out **before** that fix. That read was also the *only* thing letting an unauthenticated connection see a `support_tickets` row at all: 0122's `support_tickets_portal_token_lookup` arm. **Latent on this database**, measured: `support_tickets` holds 0 rows for the one tenant `tenants` exposes under `--superadmin`, and the retired grant is not even installed here because **0122 itself is pending** (PP-060) | 🔧 FIXED in this PR (credential retired in code, RLS and nullability by `0124` — the **26th** outstanding entry, `db:status` → `Applied: 99 · Pending: 26 · Total: 125`) · `DROP COLUMN` and `SET portal_token = NULL` stay **owner decisions** · not live until deployed |
 | PP-063 | S2  | Deploy                      | **The deploy hop's one failure line is two independent defects, and neither reads out of the log.** (D1) PP-060's `dial tcp ***:22: i/o timeout` is not "the VM is down": `sshd` answers on `0.0.0.0:22`, `ufw` is **inactive**, and 22 is reached from outside daily — but the only hostname this box is configured with is a **dynamic-DNS name with no updater installed anywhere on it**, and dialing that name from this host reproduces the identical silent timeout (**12,011 ms**) while the address this session actually arrived on answers in **114 ms**. (D2) behind it, the job deploys a runtime this host does not have: `deploy.yml:5` asserts pm2-not-Docker, `deploy.yml:158` `cd`s to a `$HOME` git checkout and `:172-189` drive `pm2` — measured here: no `pm2` binary, no nvm, `/home` **empty**, the app running as 18 Compose containers under `/srv/nucrm`. Re-pointing `DEPLOY_HOST` alone therefore produces a **different red**, not a deploy — and `set -e` at `:139` plus the `cd` mean the abort happens 146 lines **before** the first `git checkout --force` at `:305`, so the compose tree was never at risk | 🔧 DIAGNOSABILITY FIXED in this PR (pre-flight classifies the dial at `deploy.yml:79`; the remote side names the model mismatch at `deploy.yml:151`) · the hop itself is **owner action**: `DEPLOY_HOST` must hold a real address **and** someone must choose between "the pm2 VM" and rewriting this job for `docker compose up -d --build` |
 | PP-064 | S2  | Infra / security boundary   | **The only Postgres Compose does not declare is the only publish on this box that is not the front door yet bound to every interface.** `nucrm-test-db` (`postgres:16`, up since 2026-09-26, `Config.Labels {}`, `Binds null`, `RestartPolicy=no`) publishes `5432/tcp` on `0.0.0.0` **and** `[::]`, with `listen_addresses` = `*` and a `pg_hba.conf` line admitting any host to any database as any user; the superuser password is **8 characters** and is not printed here. The chain was completed, not inferred: dialing the box's own public address returned `AUTH OK` with `rolsuper = t`, over **33 databases / 32 app-shaped, 31 of them the full schema, 1,089 rows**, each carrying the whole production schema (263 policies, 3,231 columns, 1,119 indexes, 532 CHECK constraints). Nothing on the host restricts it — `iptables -S INPUT` is the single line `-P INPUT ACCEPT`, `DOCKER-USER` holds **0** rules, `ufw` is inactive, and the public IPv4 is bound to the box's own NIC (no NAT in front) | 🚨 OPEN · **report-only** - no compose file declares it, so no PR can re-bind it, and re-binding it means destroying 31 schema-bearing undocumented databases — one per PR/issue number, no manifest behind any of them · **owner action**: publish on `127.0.0.1` or drop the publish, turn on `log_connections`, rotate the credential · **not** tenant data (the app reaches an external managed database through PgBouncer on loopback, and the running metrics exporter was verified to point there too) · off-box reachability **unproven**, and the box keeps no record that could prove or disprove it · **S1** if the owner confirms nothing filters inbound above the NIC |
-| PP-066 | S2  | Schema drift                | **The only screen in this repo that asks the live database what its columns are compared _names_, and nothing ran it.** `scripts/drift-check.ts` checked table presence, function presence, RLS policy presence and row counts of undeclared tables — never a column — so pre-prod measured `No drift ✓` at **exit 0** while `support_tickets.portal_token` was live `NOT NULL` with **no default** against a schema file that declares it nullable (#2499's whole cause), and `super_admin_audit_logs` carried three `text` columns behind three `jsonb` declarations. `grep -rn drift-check .github/workflows` → **0 hits across all five workflow files**, while **five** documents told a human to run it. All three screens that do exist are name-only (`tests/unit/schema-drift-guard-2255.test.ts`, `scripts/check-schema-drift-live.ts`, `scripts/check-schema-drift.mjs` is Zod), and the obvious fix — importing the schema **barrel** — is load-mode-dependent: from a `.ts` entry it yields the same 226 tables the 62 files do, from an `.mts` entry it has **3** own keys and **2** tables, the 236 real exports hidden one level down in `schema.default`, silently | 🔧 FIXED in this PR (columns compared per table, three kinds — presence, nullability, type — behind a ratcheting allowlist that must name a `clearedBy` migration or a `filedAs` issue for every entry, and wired in both shapes **#2508** AC3 asks for: `ci.yml:405` measures a `db:bootstrap` database on every pull request, `.github/workflows/schema-drift.yml` measures pre-prod nightly **and** re-seeds the drift in a throwaway database to prove the screen fires (`:105`)) · measured after: pre-prod **6** findings, chain-built database **9**, **4** in common — the two databases are behind main in **different directions** · the live fixes stay open as **#2509** (nullability, 6 columns), **#2510** (audit types, 3 columns) and `0124`/`0109` for #2499 · the **3,216** are base-table columns; **PP-064**'s 3,231 is the same `nucrm_test` plus the **15** columns of its `deals_by_win_probability` view — both counts measured here |
+| PP-066 | S3  | Staff API / credential      | **#2498's projection stopped one column short.** **#2500** named the columns both staff ticket *creates* return (`app/api/tenant/tickets/route.ts:126` → 10 columns, `app/api/superadmin/tickets/route.ts:126` → 9) and its test covers the response *and* the automation payload — but the third `.returning()` in that second file, the PATCH at `app/api/superadmin/tickets/route.ts:190`, was still argument-less: `RETURNING *` over all **23** columns of `support_tickets`, `portal_token` (still `NOT NULL` on the target database — 1 of its 8 NOT NULL constraints in `pg_constraint` — and still a working bearer credential on the deployed build: `401 {"error":"Invalid token"}` answers `x-portal-token`) and `metadata` (#2443's operator prose) among them. Nothing ever left: `if (!row)` at `:192` is the row's only consumer and the handler answers `{ ok: true }` at `:193`, so this is the **read**, not a disclosure — and `guard:public-projection` cannot see it by design, its file set is `proxy.ts`'s anonymous surface (#2459) and this is a session-authenticated staff route | 🔧 FIXED in this PR (`.returning({ id: supportTickets.id })` — one column is the whole requirement, and a map with a single consumer would be a second source of truth · `tests/unit/superadmin-tickets-patch-projection-2498.test.ts`, 6 tests through a fake that **applies** the column map, negative control **2 failed / 4 passed**) · **the copies #2500 and this PR do not undo:** `lib/automation/engine.ts:96` and `:109` persist the tenant create's payload into `automation_runs.metadata`, which is `jsonb`, so `DROP COLUMN` cannot reach what is already there — emptying it is an `UPDATE`, an owner step alongside the drop, not after it — and `fire_webhook` (`:311`) posts `data: enrichedData` (`:324`) onward · **#2499** stays open until `0124` is applied: **#2501** made the deploy hop *diagnosable* (`deploy.yml:79`, `:151`), it did not repair it, so PP-060's finding stands and `db:status` still reads **Applied 99 · Pending 26 · Total 125** |
+| PP-067 | S2  | Schema drift                | **The only screen in this repo that asks the live database what its columns are compared _names_, and nothing ran it.** `scripts/drift-check.ts` checked table presence, function presence, RLS policy presence and row counts of undeclared tables — never a column — so pre-prod measured `No drift ✓` at **exit 0** while `support_tickets.portal_token` was live `NOT NULL` with **no default** against a schema file that declares it nullable (#2499's whole cause), and `super_admin_audit_logs` carried three `text` columns behind three `jsonb` declarations. `grep -rn drift-check .github/workflows` → **0 hits across all five workflow files**, while **five** documents told a human to run it. All three screens that do exist are name-only (`tests/unit/schema-drift-guard-2255.test.ts`, `scripts/check-schema-drift-live.ts`, `scripts/check-schema-drift.mjs` is Zod), and the obvious fix — importing the schema **barrel** — is load-mode-dependent: from a `.ts` entry it yields the same 226 tables the 62 files do, from an `.mts` entry it has **3** own keys and **2** tables, the 236 real exports hidden one level down in `schema.default`, silently | 🔧 FIXED in this PR (columns compared per table, three kinds — presence, nullability, type — behind a ratcheting allowlist that must name a `clearedBy` migration or a `filedAs` issue for every entry, and wired in both shapes **#2508** AC3 asks for: `ci.yml:405` measures a `db:bootstrap` database on every pull request, `.github/workflows/schema-drift.yml` measures pre-prod nightly **and** re-seeds the drift in a throwaway database to prove the screen fires (`:105`)) · measured after: pre-prod **6** findings, chain-built database **9**, **4** in common — the two databases are behind main in **different directions** · the live fixes stay open as **#2509** (nullability, 6 columns), **#2510** (audit types, 3 columns) and `0124`/`0109` for #2499 · the **3,216** are base-table columns; **PP-064**'s 3,231 is the same `nucrm_test` plus the **15** columns of its `deals_by_win_probability` view — both counts measured here |
 
 ## Sentry issues → register entries
 
@@ -1484,7 +1499,7 @@ inferred.
   declared `ai_provider_secrets` / `ai_activity`. So these are orphans of the design 0013 shipped and
   0020-era code replaced — evidence favours dropping them in a numbered migration over declaring them,
   but that is a destructive decision and not mine to take. The control was `scripts/drift-check.ts`
-  exiting 1 — and nothing ran it. **#2508**/**PP-066** closed the wiring half, and both tables are since
+  exiting 1 — and nothing ran it. **#2508**/**PP-067** closed the wiring half, and both tables are since
   declared (`drizzle/schema/ai.ts:324`, `:347`), which is what the screen's `226/226 expected present`
   and exit 0 against pre-prod are now reading.
 - **Files:** `scripts/drift-check.ts`, `README.md`
@@ -3963,7 +3978,124 @@ psql -tAc "select count(*) from support_tickets"  # as the app role, with app.po
 - **Nothing identifying appears here.** No address, no provider endpoint, no hostname, no password, no digest of any of them (`docs/` is scanned for public IPv4 literals by #145's guard, and a truncated digest of an IPv4 is not a redaction — PP-063 records why that was discarded). `0.0.0.0`, `[::]` and `127.0.0.1` are the three shapes this entry has to write and the three the guard exempts, because they name a *bind scope*, not a machine.
 - **Related:** **PP-063** (the same sweep, the same host, and the PR this was held out of), **PP-048** (the other way a Postgres-side boundary fails: that one needed the app's GUC design and an HTTP path; this one needs neither, only a TCP client), **PP-059** (the 532 CHECK constraints that are part of the exposed blueprint), **PP-060** and **#137** (the 26-entry pile that 32 of these databases exist to rehearse), **PP-058**/#2438 (whose before-images live in this instance and are the reason a cleanup is not mine to run), **#145** (why the entry is written this way), **#2416**/**guard:coords** (the coordinates above were re-pinned against `origin/main` at the time of writing).
 
-## PP-066 — 🔧 The only screen that asks the live database what its **columns** are compared names, and ran in no workflow: it printed `No drift ✓` at exit 0 against pre-prod while `support_tickets.portal_token` was live `NOT NULL` with no default — #2499's entire cause — and the fix that makes it read columns measures 3,216 of them across 226 tables, in two directions that are not the same set _(S2 · Schema drift)_
+## PP-066 — 🔧 #2498's projection stopped one column short: after #2500 named the two staff ticket *creates*, the super-admin PATCH was still `RETURNING *` over all 23 columns of the table whose `portal_token` is a live credential on the deployed build and a live constraint on the target database _(S3 · Staff API / credential)_
+
+- **Found by** reading **#2500**'s diff against #2498's own acceptance criteria. Both POSTs name
+  their columns — `app/api/tenant/tickets/route.ts:126` returns 10, `app/api/superadmin/tickets/route.ts:126`
+  returns 9 — and `tests/unit/tickets-create-projection-2498.test.ts` already proves the create
+  response *and* the automation payload cannot carry `portalToken`. The file's third `.returning()`
+  was not in the diff. Measured rather than remembered:
+
+  ```bash
+  grep -rn "\.returning();" app/api/*/tickets/*.ts app/api/public/tickets/*.ts \
+        app/api/public/tickets/*/*.ts app/api/public/tickets/*/*/*.ts
+  # before this entry: app/api/superadmin/tickets/route.ts:190   (exactly one hit)
+  # after it:        no match, exit 1
+  ```
+
+  Every other occurrence of that text in those files is a comment explaining why it must not come
+  back (#2440, #2443, #2500). Filed as **#2504**, which carries the same grep.
+
+- **What the row was for.** `const [row] = await db.update(supportTickets).set(updateData)
+  .where(and(eq(id), eq(updatedAt, expectedUpdatedAt))).returning()` — `row` is consumed only by
+  `if (!row)` at `:192`, which answers the 409, and the success body is `{ ok: true }` at `:193`.
+  One column is the entire requirement, and the response names none of them. That asymmetry is why
+  this fix is `.returning({ id: supportTickets.id })` (`:197`) and not a shared column map: a map
+  with one consumer is a second source of truth, and #2500's inline lists are the shape this repo
+  already chose. It is also why this projection is **narrower** than the creates' — a create echoes
+  its row, a PATCH does not.
+
+- **Why S3 and not S2.** No credential travelled. Unlike the tenant create there is no
+  `{ data: row }` on this path and no `evaluateAutomations()` call, so nothing reached a caller, a
+  second table or an external URL. What remained is the read itself: the app selecting
+  `portal_token`, `metadata` and the whole `utils.audit()` set (`createdBy`/`updatedBy`/`deletedAt`/
+  `deletedBy`) into process memory to answer "did that UPDATE match a row?". On the deployed build
+  the column it selects is a bearer credential — see the probe below.
+
+- **The copies #2500 and this PR do not undo.** PP-062's headline, *"nothing in the product delivers
+  it"*, is a statement about the **mint** and it was true. It is not a statement about **copies**.
+  The tenant create spread its `.returning()` row into
+  `evaluateAutomations({ …, data: { …row, id: row.id } })`, and `lib/automation/engine.ts:96`
+  (`metadata: enrichedData`) and `:109` (`metadata: payload.data`) persist that payload into
+  **`automation_runs.metadata`**; `fire_webhook` (`:311`) POSTs `data: enrichedData` (`:324`) to
+  whatever URL an action is configured with. `automation_runs.metadata` is `jsonb`, so
+  **`DROP COLUMN portal_token` cannot drain what is already written there** — emptying it is an
+  `UPDATE`, and it is an owner step alongside the drop rather than after it. The engine reads
+  snake_case (`str(enrichedData, 'assigned_to')`) and `getNestedValue` treats an absent key and a
+  null one identically for `is_empty`/`is_not_empty`, which is why #2500's narrower column set could
+  be shipped without re-auditing every automation condition: dropping a key can move a condition
+  from "value" to "empty", never from false to true. Latent on this database, measured —
+  `automation_runs` **0** rows and `support_tickets` **0** rows for the one tenant
+  `--tenant 97415947-a505-4ada-bc76-e24d546e131e` exposes. `--superadmin` answers the *permission*
+  question, not the population one: the `support_tickets` policies have no super-admin arm, so
+  0/0/0 under `--superadmin` proves nothing about volume. The code path is the finding.
+
+- **Why no guard caught any of this, and why the guard stays as it is.** `guard:public-projection`
+  derives its file set from `proxy.ts`'s anonymous surface (#2459). Session-authenticated staff
+  routes are outside that scope **by design** — different audience, different threat model — and
+  stretching the guard over the whole staff API would be a new scope decision, not a bug fix. This
+  entry records the gap instead; a staff-surface screen is the candidate follow-up, and until one
+  exists, a test is the only thing in front of these sites. That is also the reason this file's fake
+  applies the column map rather than ignoring it: with no guard behind it, a fake that echoed the
+  fixture whatever the route asked would make every assertion here a restatement of the test data.
+
+- **The credential is still live on the deployed build** while all of this merges. Measured against
+  the running container, this session:
+
+  ```bash
+  docker exec nucrm-app node -e 'fetch("http://127.0.0.1:3000/api/public/tickets",
+    {headers:{"x-portal-token":"probe-bogus-token-0000"}}).then(async r=>console.log(r.status,(await r.text()).slice(0,120)))'
+  # → 401 {"error":"Invalid token"}
+  ```
+
+  `Invalid token` is the pre-#2444 branch's own text; once #2444's build is actually deployed the
+  same request answers `{"error":"Authentication required"}` from `resolvePortalIdentity()` being
+  null. Until then, every column this table returns is returning a usable credential.
+
+- **#2499, and what #2501 did to it.** `pg_constraint` on the target database still lists
+  `support_tickets_portal_token_not_null` — **1** of the table's **8** NOT NULL constraints — while
+  merged `main` supplies no value for that column at any of the three ticket inserts. So the first
+  staff *or* anonymous create after a build that outruns `0124` answers 500 with SQLSTATE `23502`.
+  **#2501** (PP-063) made the deploy hop *diagnosable* — the pre-flight classifies the dial at
+  `deploy.yml:79`, the remote side names the runtime mismatch at `deploy.yml:151` — it did **not**
+  repair the hop, so PP-060's conclusion is untouched: the only executable migrate in the repo's
+  automation runs over SSH against a pm2 VM this Docker host is not, and nothing automated can apply
+  `0124` here. CI cannot see the hazard either: `ci.yml` and `backup-drill.yml` provision with
+  `db:sync` (`drizzle-kit push`, so the column is nullable by schema) and no job runs `db:migrate`
+  against a stale ledger. The order stays **apply `0124`, then let this host serve `main`** — not the
+  reverse, and not either alone. `db:status` re-measured for this entry: **Applied 99 · Pending 26 ·
+  Total 125**.
+
+- **How it was verified.** `app/api/superadmin/tickets/route.ts:197` —
+  `.returning({ id: supportTickets.id })`.
+  `tests/unit/superadmin-tickets-patch-projection-2498.test.ts`, 6 tests: the fake's own
+  `project()` is asserted to return 23 keys when handed no map and one when handed one, the fixture
+  is asserted to carry everything the projection must drop, `returningArgs[0]` is pinned to
+  `['id']`, the read-back row is checked for `portalToken`/`metadata`/audit keys, and the two
+  response shapes are pinned on both sides of the change (`200 {"ok":true}` and the exact 409 text)
+  because the presence check is the projection's only job. Run together with #2500's suite:
+  **12 passed**. `npm run guard:public-projection`, `guard:coords` and `guard:register-drift` green;
+  `tsc --noEmit` at the **125**-error `components/**data-table**` baseline.
+
+- **Negative control, measured.** Reverting `:197` to `.returning()` and re-running the new file:
+  **2 failed / 4 passed (6)**. The two failures are the projection-shape assertions
+  (`returningArgs[0]` becomes `undefined`, the read-back row becomes 23 keys). The four survivors are
+  the fake self-check, the fixture check, `{ ok: true }` and the 409 — and they *must* survive: a
+  control that turned everything red here would be measuring behaviour change, which this PR does not
+  make.
+
+- **Register bookkeeping.** IDs are never reused: this is **PP-066** because **#2501** took PP-063 for
+  the deploy hop while #2498's follow-up was still open, main landed PP-064 (the `nucrm-test-db`
+  report) ahead of this entry, and PP-062 is #2444's — the same resolution
+  PP-057 and PP-063's own entry record (earlier merge keeps the number, later one moves). Status:
+  **Applied 99 · Pending 26 · Total 125**; the unapplied owner pile is still the 26 entries PP-060
+  counts.
+
+- **Review posture.** One line of source, one new test file, one register entry, no migration. The
+  interesting claim is a negative one — that #2500 left a `RETURNING *` on this table — so the grep
+  above is the fastest way to agree or disagree, and after this PR it returns nothing.
+
+## PP-067 — 🔧 The only screen that asks the live database what its **columns** are compared names, and ran in no workflow: it printed `No drift ✓` at exit 0 against pre-prod while `support_tickets.portal_token` was live `NOT NULL` with no default — #2499's entire cause — and the fix that makes it read columns measures 3,216 of them across 226 tables, in two directions that are not the same set _(S2 · Schema drift)_
 
 **Found:** 2026-10-10, while closing #2499's loop: the defect was a column attribute, so the question
 was which screen in this repo owns column attributes. Answer: none, and the closest one was not run.
