@@ -4,10 +4,13 @@
 > here, with the evidence that proves it and the verification that closed it.
 > Update the status the moment it changes; IDs are never reused.
 >
-> - **Last updated:** 2026-10-10 (UTC) — **#2444** retired `support_tickets.portal_token` as a
->   bearer credential (**PP-062**) and landed migration `0124`, making the outstanding pile **26**
->   entries: `0123` arrived with **#2495** and `0124` with this PR, on top of the 24 PP-060 counted.
->   `db:status` re-measured today against preprod: `Applied: 99 · Pending: 26 · Total: 125`.
+> - **Last updated:** 2026-10-10 (UTC) — **#2444** merged as PR #2497 (**PP-062**, migration `0124`)
+>   and **#2498** took its place in this register (**PP-063**): both staff ticket creates answered
+>   `{ data: row }` from an argument-less `.returning()`, which is `RETURNING *` over all **23**
+>   `support_tickets` columns, and the tenant route spread that same row into `automation_runs`.
+>   `db:status` re-measured today: `Applied: 99 · Pending: 26 · Total: 125` — and the pile is now a
+>   deploy precondition, not only backlog: `support_tickets_portal_token_not_null` is live on this
+>   database while the merged build no longer supplies a value for that column.
 > - **Stack under test:** `deploy/docker-compose.production.yml` **overlaid** with
 >   `deploy/docker-compose.preprod.yml` (one compose project, `deploy`) — **18** containers running, measured:
 >   17 from compose (18 services, `minio-init` is an exited one-shot; `realtime` comes only from the preprod
@@ -91,6 +94,7 @@ Severity: **S1** blocks go-live · **S2** broken feature or security weakness ·
 | PP-060 | S2  | Deploy                      | The 24-entry backlog (23 until `0122` landed with **#2446**) has **no automated apply path that could reach this database**: the only executable migrate in the repo's automation is `deploy.yml:281` (`scripts/deploy-migrate.ts --yes`, which spawns `migrate.ts --yes` at `:96`), inside the single `script:` block opened at `:77` — so it runs over SSH on the **pm2 production VM**, not on this Docker preprod host. That hop has failed every run since the last success (`30748691555`, 2026-08-02T12:51:06Z): **741 runs · 0 success** (639 failure / 54 cancelled / 48 skipped), 15 of 15 sampled recent runs contain `dial tcp ***:22: i/o timeout`, and the retained total is **3 successes in 1,282 runs**. No workflow mentions `db:status` (grep: 0 hits in all 5), `ci.yml` and `backup-drill.yml` build their databases with `db:sync`, and this host has no deploy cron or timer                                                                                    | 🚨 OPEN · owner action (`gh secret set DEPLOY_HOST`, the remedy AGENTS.md already documents) · even a healthy deploy migrates a **different database**, so PP-057's exit (a) has no mechanism behind it |
 | PP-061 | S2  | Edge / auth surface         | **Six endpoints that authenticate with something other than a session were unreachable on this host.** `POST` to `/api/auth/oauth/token`, `/api/auth/oauth/revoke`, `/api/webhooks/razorpay`, `/api/webhooks/payu`, `/api/webhooks/telegram/bot` and `/api/tenant/plugins/webhook/<id>` each answered `401 {"error":"Authentication required"}` — the identical byte-for-byte body the middleware itself writes, so **no handler ran** — because none of the six is in `proxy.ts:226`'s public list. The OAuth exchange, **both payment receivers**, the bot and the plugin integrators all had a caller that could never arrive. The same screen then caught what the closed edge had been hiding: `app/api/tenant/plugins/webhook/[id]/route.ts:63` loaded **all 19 columns** of `custom_plugins` — including `drizzle/schema/plugins.ts:20`, whose own comment says it "stores token/username/password/client_id/etc" — and did it **before** verifying the caller at `app/api/tenant/plugins/webhook/[id]/route.ts:106`, on a URL that is itself the credential | 🔧 FIXED in this PR (6 paths opened, row projected to 4 of 19 columns, `tests/unit/proxy.test.ts:158`) · not live until deployed · `/api/tenant/visitors/track` measured as the seventh hit and **deliberately left closed** |
 | PP-062 | S2  | Portal / credential         | `support_tickets.portal_token` was a **second credential living on the header the portal already uses for `portal_clients.access_token`**: `lib/portal-auth.ts:45` reads `x-portal-token` as a client token, and three public ticket routes read the *same* header (plus a POST body field) as a **ticket** token, resolved it to a **contact** and answered with that contact's **whole** ticket history — deliberately, #2378 — so possession of one ticket's string read every ticket that contact ever filed, subjects and bodies included. Permanent and un-revocable by construction: no `expires_at`, no `is_active`, no rotation, no revoke path, unlike `portal_clients` (`drizzle/schema/tokens.ts:202`, `:204`). **Nothing ever delivered it** — 0 references to `portal_token`/`portalToken` in `app/portal/**`, in `components/**`, in any email template or webhook payload — and #2440 had already stopped `POST /api/public/tickets` echoing a freshly minted one, so the only tokens that can still exist are ones handed out **before** that fix. That read was also the *only* thing letting an unauthenticated connection see a `support_tickets` row at all: 0122's `support_tickets_portal_token_lookup` arm. **Latent on this database**, measured: `support_tickets` holds 0 rows for the one tenant `tenants` exposes under `--superadmin`, and the retired grant is not even installed here because **0122 itself is pending** (PP-060) | 🔧 FIXED in this PR (credential retired in code, RLS and nullability by `0124` — the **26th** outstanding entry, `db:status` → `Applied: 99 · Pending: 26 · Total: 125`) · `DROP COLUMN` and `SET portal_token = NULL` stay **owner decisions** · not live until deployed |
+| PP-063 | S2  | Staff API / credential      | Both **staff** ticket creates called `.returning()` with no column list — `RETURNING *` over all **23** columns of `support_tickets` — and answered `NextResponse.json({ data: row })`. The tenant route then spread that same row into `evaluateAutomations()`, which persists it as `automation_runs.metadata` (`lib/automation/engine.ts:96`, `:109`) and POSTs it to whatever URL a `fire_webhook` action names (`:324`). So one create moved the whole internal row to an API client, into a second table and out to a third party. Measured against the **running container**, `x-portal-token` still answers `401 {"error":"Invalid token"}` — #2444's retirement is merged but **undeployed**, so until it ships the column those two routes echo is a live bearer credential. `guard:public-projection` cannot see either site: its file set is `proxy.ts`'s anonymous surface (#2459) and these are session-authenticated staff routes. **Latent on this database**, measured with `--tenant 97415947-a505-4ada-bc76-e24d546e131e`: `support_tickets` **0** rows, `automation_runs` **0** rows, `portal_token is not null` **0** | 🔧 FIXED in this PR (`STAFF_TICKET_COLUMNS` — 17 named columns — at both POSTs and the super-admin PATCH) · the copies already in `automation_runs.metadata` are **not** undone by `DROP COLUMN`: they are `jsonb`, so draining them is an `UPDATE`, and that stays an **owner decision** · not live until deployed |
 
 ## Sentry issues → register entries
 
@@ -3713,6 +3717,111 @@ psql -tAc "select count(*) from support_tickets"  # as the app role, with app.po
   like a widening in SQL terms and is a narrowing in effect — it exists because the minting stopped,
   and `.unique()` is kept so a later `SET NOT NULL` remains possible if the owner ever wants the
   credential back.
+
+## PP-063 — 🔧 The staff ticket creates still echoed all 23 columns — `.returning()` with no list is `RETURNING *`, and the tenant route copied that row into `automation_runs.metadata` and out through `fire_webhook` — after #2444 stopped minting the credential inside it _(S2 · Staff API / credential)_
+
+- **Found by:** #2498, filed while checking what was left to do after #2444. The register said the
+  credential was retired; the probe said the **running container** still answers
+  `x-portal-token` with `{"error":"Invalid token"}` — i.e. the branch text from before
+  `254e715b`, replaced by `Authentication required` only in the merged, undeployed build. That
+  left one question, and it has an uncomfortable answer: while the credential is live, which
+  routes still hand it out? Two of them are staff ticket creates, and they were never in scope.
+
+- **The echo, one line each.** `.returning()` with no argument list is `RETURNING *`. Both POST
+  routes then did `NextResponse.json({ data: row })`, so the response *was* the table row — all
+  **23** columns (measured twice: this host's `information_schema.columns`, and a `db:sync` scratch
+  database; the table is `drizzle/schema/support.ts:95-158`): `portal_token`, `metadata`, the whole
+  `utils.audit()` set, `sla_policy_id`, `company_id`/`deal_id`/`lead_id`. A create response needs
+  the `id` and at most what the caller just posted.
+
+- **The copy nobody looked for.** The tenant route does not only return the row — it spreads the
+  same row into the automation payload (`evaluateAutomations({ …, data: { ...row, id: row.id } })`),
+  and `lib/automation/engine.ts:96` persists that as `metadata: enrichedData` into
+  **`automation_runs`** (the failed-run branch does the same at `:109`), while `fire_webhook`
+  POSTs `data: enrichedData` to a tenant-configured URL (`lib/automation/engine.ts:324`). So one
+  create could put the column in a **second table** and in front of an **external party**, and
+  `DROP COLUMN` does not reach either copy: `automation_runs.metadata` is `jsonb`, so draining it
+  is an `UPDATE`. This corrects #2444's "nothing ever delivered it", which is true of the *mint*
+  and was never checked for the *copy*.
+
+- **Why S2 and not S1.** Both routes sit behind `requireAuth`, so the audience is authenticated
+  staff of the owning tenant — people whose UI already lists those tickets. There is no
+  cross-tenant read here. The finding is a live bearer credential travelling in a response
+  nobody consumes, plus its duplication into an audit-ish table that the super-admin panel's
+  arbitrary-SQL surface can read.
+
+- **Nothing consumes it — measured, so the narrowing is free.** `app/tenant/tickets/page.tsx:388`
+  posts, then reads only `res.ok` (`:393`) and refetches; `app/superadmin/tickets/page.tsx:41-48`
+  does the same for PATCH (`{ ok: true }`) and that route has **no POST caller at all**. The
+  projection therefore cannot break a screen in this repo.
+
+- **The guard cannot see any of it.** `guard:public-projection` derives its file set from
+  `proxy.ts`'s anonymous surface (#2459) and its own header says staff routes echoing whole rows
+  "is a different trust decision". That sentence is incomplete: a staff read of a table whose
+  column is a credential for the **anonymous** surface is the same trust decision, made twice.
+  The third site — the super-admin PATCH — is habit rather than leak (its row never leaves), and
+  it is named here because the next editor will copy whichever shape is already in the file.
+
+- **Adjacent, and deliberately NOT fixed in this PR: `0124` is now a deploy precondition.**
+  Measured on this database: `pg_constraint` lists **8** NOT NULL constraints on
+  `support_tickets`, `support_tickets_portal_token_not_null` among them, while merged `main` no
+  longer supplies a value for that column on any insert path. So the first staff *or* anonymous
+  create after a build that outruns `0124` answers 500 with `23502`, and PP-060 is why that is not
+  hypothetical: nothing applies the pile. The order the owner has to use is **apply `0124`, then
+  deploy the build** — not the reverse, and not either alone. Filed as **#2499**, which carries the
+  `pg_constraint` output, the three insert sites on `main` and why a `db:sync`-provisioned CI
+  database can never show this.
+
+- **How it was verified.** `STAFF_TICKET_COLUMNS` (17 named columns, in
+  `lib/public-ticket-projection.ts` beside the `PUBLIC_TICKET_COLUMNS` #2443 established) at both
+  POSTs and the PATCH. 22 unit tests in the two suites that cover these routes — 16 in
+  `tests/unit/tenant-tickets-post.test.ts`, 6 in the new
+  `tests/unit/superadmin-tickets-write.test.ts` — with the drizzle fake **applying** the column map
+  it is handed rather than ignoring it, and the fixture carrying all 23 keys so "no credential in
+  the response" is only reachable by narrowing. `npm run test:unit` — `tests/unit`
+  plus `tests/dashboard` — green; `tsc --noEmit` at the 125-error `components/**data-table**` baseline.
+
+- **Negative control, measured.** Replacing `.returning(STAFF_TICKET_COLUMNS)` with
+  `.returning()` in both routes and re-running: **7 failed / 15 passed (22)**. The failures are the
+  three call-site pins (tenant POST, super-admin POST, super-admin PATCH), both response shapes,
+  the serialized-text check and the automation payload. The PATCH's `{ ok: true }` equality test
+  still passes, which is why it is written separately: that assertion must *not* move when the
+  projection does, because that row never left.
+
+- **`--superadmin` is a permission result, not a population result** (PP-062 recorded the trap; it
+  is easy to fall into twice). Counting `support_tickets` under `--superadmin` returns 0 because
+  `tenant_isolation` on that table has no super-admin arm, not because the table is empty. The
+  figures above were taken with `--tenant 97415947-a505-4ada-bc76-e24d546e131e`:
+  `support_tickets` **0**, `automation_runs` **0**, `portal_token is not null` **0**. Latent, as
+  ever — the code path is the bug, not the data on this host.
+
+  ```bash
+  # the credential is live on the deployed build (read-only, in-container):
+  docker exec nucrm-app node -e 'fetch("http://127.0.0.1:3000/api/public/tickets",
+    {headers:{"x-portal-token":"probe-bogus-token-0000"}}).then(async r=>console.log(r.status,(await r.text()).slice(0,200)))'
+  # → 401 {"error":"Invalid token"}   (the merged build answers "Authentication required")
+
+  # what the column still requires, and what the projection drops:
+  export PROBE_DATABASE_URL=$(grep -m1 '^PROBE_DATABASE_URL=' /srv/nucrm/.env.local | cut -d= -f2- | tr -d '"')
+  export DATABASE_SSL=false
+  npx tsx --import ./scripts/load-env.mjs scripts/probe-sql.mts --superadmin \
+    "select conname from pg_constraint where conrelid='support_tickets'::regclass and contype='n'"
+  npx tsx --import ./scripts/load-env.mjs scripts/probe-sql.mts --tenant 97415947-a505-4ada-bc76-e24d546e131e \
+    "select (select count(*) from support_tickets) tickets, (select count(*) from automation_runs) runs"
+
+  npx vitest run tests/unit/tenant-tickets-post.test.ts tests/unit/superadmin-tickets-write.test.ts
+  ```
+
+- **Register bookkeeping.** No migration in this PR, so the pile is unchanged at **26**:
+  `db:status` → `Applied: 99 · Pending: 26 · Total: 125`, re-measured today. `PP-062` was taken by
+  #2497 the moment it merged, so this is **PP-063** — the id gap is not a lost entry.
+
+- **Review posture:** surface-narrowing, same as #2440/#2443. The rule this leaves behind is that
+  adding a column to `support_tickets` cannot widen a staff create response by itself; that
+  decision now has an author and a reviewer in this file, and a test that fails if the map and the
+  call site drift apart. `DROP COLUMN`, the `UPDATE` that drains `automation_runs.metadata`, and
+  applying `0124` before the build that needs it stay **owner actions**.
+
 
 ## How to maintain this file
 
