@@ -65,7 +65,7 @@ jobs:
       # contradicted that and produced an image nothing consumed, so they are
       # removed. Docker is used for local development only.
 
-      # PP-062 pre-flight. This job has gone red on one line — `dial tcp ***:22:
+      # PP-063 pre-flight. This job has gone red on one line — `dial tcp ***:22:
       # i/o timeout` — on every one of the 778 runs since the last green one, and
       # that one line cannot separate the things it might be: DEPLOY_HOST unset, a
       # placeholder, a name whose record moved, or a firewall drop. Classify it
@@ -142,7 +142,7 @@ jobs:
             # home directory from this public repo. Same directory on the VM,
             # and it survives the user or path changing there.
             #
-            # PP-062: fail HERE, with the reason, rather than at `set -e` on this
+            # PP-063: fail HERE, with the reason, rather than at `set -e` on this
             # cd. On the host this job dials today there is no working copy at this
             # path at all, and no pm2 either, because the app runs as Docker
             # Compose — so repairing DEPLOY_HOST alone does not produce a deploy,
