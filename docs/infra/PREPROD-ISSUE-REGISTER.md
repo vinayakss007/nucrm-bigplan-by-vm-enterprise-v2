@@ -103,6 +103,7 @@ Severity: **S1** blocks go-live · **S2** broken feature or security weakness ·
 | PP-061 | S2  | Edge / auth surface         | **Six endpoints that authenticate with something other than a session were unreachable on this host.** `POST` to `/api/auth/oauth/token`, `/api/auth/oauth/revoke`, `/api/webhooks/razorpay`, `/api/webhooks/payu`, `/api/webhooks/telegram/bot` and `/api/tenant/plugins/webhook/<id>` each answered `401 {"error":"Authentication required"}` — the identical byte-for-byte body the middleware itself writes, so **no handler ran** — because none of the six is in `proxy.ts:226`'s public list. The OAuth exchange, **both payment receivers**, the bot and the plugin integrators all had a caller that could never arrive. The same screen then caught what the closed edge had been hiding: `app/api/tenant/plugins/webhook/[id]/route.ts:63` loaded **all 19 columns** of `custom_plugins` — including `drizzle/schema/plugins.ts:20`, whose own comment says it "stores token/username/password/client_id/etc" — and did it **before** verifying the caller at `app/api/tenant/plugins/webhook/[id]/route.ts:106`, on a URL that is itself the credential | 🔧 FIXED in this PR (6 paths opened, row projected to 4 of 19 columns, `tests/unit/proxy.test.ts:158`) · not live until deployed · `/api/tenant/visitors/track` measured as the seventh hit and **deliberately left closed** |
 | PP-062 | S2  | Portal / credential         | `support_tickets.portal_token` was a **second credential living on the header the portal already uses for `portal_clients.access_token`**: `lib/portal-auth.ts:45` reads `x-portal-token` as a client token, and three public ticket routes read the *same* header (plus a POST body field) as a **ticket** token, resolved it to a **contact** and answered with that contact's **whole** ticket history — deliberately, #2378 — so possession of one ticket's string read every ticket that contact ever filed, subjects and bodies included. Permanent and un-revocable by construction: no `expires_at`, no `is_active`, no rotation, no revoke path, unlike `portal_clients` (`drizzle/schema/tokens.ts:202`, `:204`). **Nothing ever delivered it** — 0 references to `portal_token`/`portalToken` in `app/portal/**`, in `components/**`, in any email template or webhook payload — and #2440 had already stopped `POST /api/public/tickets` echoing a freshly minted one, so the only tokens that can still exist are ones handed out **before** that fix. That read was also the *only* thing letting an unauthenticated connection see a `support_tickets` row at all: 0122's `support_tickets_portal_token_lookup` arm. **Latent on this database**, measured: `support_tickets` holds 0 rows for the one tenant `tenants` exposes under `--superadmin`, and the retired grant is not even installed here because **0122 itself is pending** (PP-060) | 🔧 FIXED in this PR (credential retired in code, RLS and nullability by `0124` — the **26th** outstanding entry, `db:status` → `Applied: 99 · Pending: 26 · Total: 125`) · `DROP COLUMN` and `SET portal_token = NULL` stay **owner decisions** · not live until deployed |
 | PP-063 | S2  | Deploy                      | **The deploy hop's one failure line is two independent defects, and neither reads out of the log.** (D1) PP-060's `dial tcp ***:22: i/o timeout` is not "the VM is down": `sshd` answers on `0.0.0.0:22`, `ufw` is **inactive**, and 22 is reached from outside daily — but the only hostname this box is configured with is a **dynamic-DNS name with no updater installed anywhere on it**, and dialing that name from this host reproduces the identical silent timeout (**12,029 ms**) while the address this session actually arrived on answers in **111 ms**. (D2) behind it, the job deploys a runtime this host does not have: `deploy.yml:5` asserts pm2-not-Docker, `deploy.yml:158` `cd`s to a `$HOME` git checkout and `:172-189` drive `pm2` — measured here: no `pm2` binary, no nvm, `/home` **empty**, the app running as 18 Compose containers under `/srv/nucrm`. Re-pointing `DEPLOY_HOST` alone therefore produces a **different red**, not a deploy — and `set -e` at `:139` plus the `cd` mean the abort happens 146 lines **before** the first `git checkout --force` at `:305`, so the compose tree was never at risk | 🔧 DIAGNOSABILITY FIXED in this PR (pre-flight classifies the dial at `deploy.yml:79`; the remote side names the model mismatch at `deploy.yml:151`) · the hop itself is **owner action**: `DEPLOY_HOST` must hold a real address **and** someone must choose between "the pm2 VM" and rewriting this job for `docker compose up -d --build` |
+| PP-063 | S2  | Deploy                      | **The deploy hop's one failure line is two independent defects, and neither reads out of the log.** (D1) PP-060's `dial tcp ***:22: i/o timeout` is not "the VM is down": `sshd` answers on `0.0.0.0:22`, `ufw` is **inactive**, and 22 is reached from outside daily — but the only hostname this box is configured with is a **dynamic-DNS name with no updater installed anywhere on it**, and dialing that name from this host reproduces the identical silent timeout (**12,011 ms**) while the address this session actually arrived on answers in **114 ms**. (D2) behind it, the job deploys a runtime this host does not have: `deploy.yml:5` asserts pm2-not-Docker, `deploy.yml:158` `cd`s to a `$HOME` git checkout and `:172-189` drive `pm2` — measured here: no `pm2` binary, no nvm, `/home` **empty**, the app running as 18 Compose containers under `/srv/nucrm`. Re-pointing `DEPLOY_HOST` alone therefore produces a **different red**, not a deploy — and `set -e` at `:139` plus the `cd` mean the abort happens 146 lines **before** the first `git checkout --force` at `:305`, so the compose tree was never at risk | 🔧 DIAGNOSABILITY FIXED in this PR (pre-flight classifies the dial at `deploy.yml:79`; the remote side names the model mismatch at `deploy.yml:151`) · the hop itself is **owner action**: `DEPLOY_HOST` must hold a real address **and** someone must choose between "the pm2 VM" and rewriting this job for `docker compose up -d --build` |
 
 ## Sentry issues → register entries
 
@@ -3766,8 +3767,13 @@ psql -tAc "select count(*) from support_tickets"  # as the app role, with app.po
   The only hostname this box knows is a dynamic-DNS name — written here as `<DDNS>`, because the repo is
   **public** and **#145** exists precisely to keep live addresses and names out of it — and resolving and
   dialing it from the box itself, with the address never echoed:
-  `resolves: yes, to a public address` / `dial 12s: TimeoutError after 12012ms`, while `127.0.0.1:22` on the
-  same machine answers in **112 ms**. That is CI's signature, reproduced locally, against a name that
+  `resolves: yes, to a public address` / `dial 12s: TimeoutError after 12011ms`, re-run twice today with the same result, while `127.0.0.1:22` on the
+  same machine answers **inside a millisecond** (re-measured with the same probe: `0 ms`, i.e. below the
+  resolution of the timer). The first draft of this line said loopback answers in **112 ms**, borrowed from the
+  closed-port REFUSED measurement two bullets below — a number from a different experiment pasted into this
+  one, caught only by going back and dialing it again. The contrast is the point either way: a connection that
+  completes instantly on one side of the kernel and never completes at all through the address the world is
+  given. That is CI's signature, reproduced locally, against a name that
   resolves. Either the record is stale or it never pointed here. And there is no "the reboot moved it, it
   will come back" reading available, because **nothing on this host maintains the record**:
   `systemctl list-unit-files`, `crontab -l`, `/etc/cron.d`, `/etc/cron.daily`, `/etc/systemd/system` and
@@ -3814,17 +3820,28 @@ psql -tAc "select count(*) from support_tickets"  # as the app role, with app.po
   confirmation. On a **healthy** connection it reported `banner readable: no` — a false negative that would
   have told a future reader sshd is broken on a machine where it answers 112 hosts a day. Removed; the
   connect verdict stayed.
-- **Falsified — all eight branches, each with a crafted value, and each producing its own verdict.** empty →
-  error at `:85`, rc 1 · `crm.yourdomain.com` → placeholder, rc 1 · `localhost` → placeholder, rc 1 ·
-  a `.invalid` name → "does not resolve" (`:105`), rc 1 · `10.1.2.3` → NON-PUBLIC (`:110`), rc 1 · **this
-  box's DDNS name** → `DEPLOY_HOST resolves, and to a public address.` then `::error::TCP :22 … got NO reply
-  in 10028ms` (`:123`), rc 1 — CI's failure reproduced end to end by the step built to detect it ·
-  `127.0.0.1` → `Port 22 answered in 111ms`, rc 0 · a public address that is not the VM's and does not answer on 22 →
-  NO reply, rc 1 (written without the literal: **#145**'s guard `tests/unit/deploy-host-literals-2302.test.ts` fails
-  any public IPv4 in `docs/`, and it failed this entry on its first draft — which is that guard working exactly as
-  designed, on the file whose twelve addresses it was written to remove). The **refused** branch is the
-  only one unreachable from outside, so its timing logic was verified separately against a closed local port:
-  rc 1 at **112 ms** → REFUSED, exactly as designed (under 9 s ⇒ refused, at/over 9 s ⇒ silent).
+- **Falsified — eight verdicts, twelve crafted values, each landing on its own branch.** empty → the unset
+  error at `:85`, rc 1 · `crm.yourdomain.com` and `crm.example.com` → placeholder, rc 1 · `localhost` →
+  placeholder, rc 1 · `127.0.0.1` → **placeholder, rc 1**: loopback is rejected as a *value* before anything is
+  dialed, so it is not the open case — and the first draft of this entry claimed it was. Re-running the whole
+  set after the resolver rewrite is what caught that, which is the honest order: the code changed, so the
+  results had to be taken again rather than carried over. `127.0.0.1,10.1.2.3` → the several-hosts notice, then
+  placeholder on its first entry, rc 1 · a `.invalid` name → "does not resolve" (`:105`), rc 1 · `10.1.2.3` and
+  `192.168.9.9` → NON-PUBLIC (`:110`), rc 1 · **this box's DDNS name** → `DEPLOY_HOST resolves, and to a public
+  address.` then `::error::TCP :22 … got NO reply in 10039ms` (`:123`), rc 1 — CI's failure reproduced end to
+  end by the step built to detect it · **this box's own current public address** → `Port 22 answered in
+  114ms`, rc 0; that is the open branch, and being reachable on the real host is the only reason its verdict
+  can be trusted · an unrelated public address that silently drops 22 → NO reply, rc 1 — a live host that
+  never answers reads *identically* to a
+  stale record, which is precisely the ambiguity the step exists to name. Every address above is a literal, a
+  private range or a documentation range; the box's own address and its DDNS name were passed through the
+  environment and are not written here — **#145**'s guard `tests/unit/deploy-host-literals-2302.test.ts` fails
+  any public IPv4 in `docs/`, and it has now failed this entry **twice**: once on its first draft, once when the
+  re-run above added a third-party address to prove the silent branch. That is the guard working exactly as
+  designed, on the file whose twelve addresses it was written to remove. The **refused** branch has no real
+  network path from here (port 22 answers on every public address this box owns), so it was verified on a copy
+  of the step with the probe port swapped to a closed local one: rc 1 at **110 ms** → REFUSED. That proves the
+  designed split — under 9 s ⇒ refused, at/over 9 s ⇒ silent — and nothing beyond it.
 - **Verified by:** `actionlint` **1.7.12** — CI's exact pin, `docker run --rm -v "$PWD":/repo -w /repo rhysd/actionlint:1.7.12 -no-color`
   → rc 0; `scripts/check-deploy-trigger.mjs` → OK; PyYAML parse confirms the step order
   `actions/checkout@v7 → Pre-flight → Deploy via SSH`; `guard:coords`, `guard:register-drift` and
