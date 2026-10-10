@@ -41,6 +41,13 @@
 #
 #       LAUNCH_GATE_STRICT=1 npm run launch-gate
 #
+#   Stage 5 authenticates, so it needs an identity that exists in the database it
+#   is pointed at. Pass one explicitly with SMOKE_LOGIN_EMAIL / SMOKE_LOGIN_PASSWORD
+#   (read by scripts/smoke-test.sh). Leaving them unset probes the fallback
+#   account, which no migration and no seed script creates — so on a fresh database
+#   that stage can only answer "invalid credentials", which says nothing about the
+#   build under test.
+#
 # CI WIRING (optional — not wired into .github/workflows/ci.yml by default):
 #   ci.yml already runs lint/typecheck/unit/integration/build as separate
 #   jobs, so a duplicate gate job is redundant for PRs. To add an explicit
