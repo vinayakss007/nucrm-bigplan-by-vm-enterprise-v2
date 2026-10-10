@@ -62,6 +62,10 @@ Treat a verification failure as: this DB is NOT at the stamped state.
    ledger matches history exactly.
 5. After any recovery, run `npm run db:drift-check` and
    `npm run db:verify-integrity` and only then route traffic back.
+   `db:drift-check` compares the restored database to `drizzle/schema` column by
+   column as well as table by table, so it is the check that notices a dump
+   restored from a revision whose `ALTER`s the journal never carried — a restore
+   that "has all the tables" and still refuses an `INSERT` (#2499's shape).
 
 Never manually insert rows into `drizzle.__drizzle_migrations` — that
 recreates exactly the blind-stamp hazard this check exists to catch.

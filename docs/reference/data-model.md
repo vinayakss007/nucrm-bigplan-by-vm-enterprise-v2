@@ -102,7 +102,8 @@ npm run db:status          # migration status
 npm run db:generate        # generate a migration from schema changes
 npm run db:migrate         # apply migrations
 npm run db:verify-chain    # verify migration chain integrity
-npm run db:drift-check     # detect drift between schema and DB
+npm run db:drift-check     # detect drift between schema and DB — tables, functions,
+                           # RLS policies AND every column (nullability, type, presence)
 npm run db:verify-isolation# confirm RLS/tenant isolation
 ```
 

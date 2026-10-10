@@ -4,7 +4,25 @@
 > here, with the evidence that proves it and the verification that closed it.
 > Update the status the moment it changes; IDs are never reused.
 >
-> - **Last updated:** 2026-10-10 (UTC) — **PP-063**: the deploy hop's single failure line is **two**
+> - **Last updated:** 2026-10-10 (UTC) — **PP-066**: `npm run db:drift-check` is the only screen in
+>   the repo that asks the **live database** what its columns are, and it compared **names** — so it
+>   printed `No drift ✓` at exit 0 against pre-prod while `support_tickets.portal_token` was still
+>   `NOT NULL` with no default (#2499's cause) and `super_admin_audit_logs` was three `text` columns
+>   behind three `jsonb` declarations. It now compares 3,216 columns across 226 tables
+>   (`scripts/drift-check.ts:166`), masks only what a named pending migration is already clearing
+>   (`scripts/schema-drift-allowlist.json`), and is wired in both places #2508 AC3 asks for:
+>   `.github/workflows/ci.yml:405` (a `db:bootstrap` database, so the chain itself is measured on
+>   every pull request) and `.github/workflows/schema-drift.yml:162` (pre-prod, nightly, with a
+>   negative control at `:105` that re-seeds the drift to prove the screen fires). Filed as
+>   **#2508**; the two defect classes it found on its first run are **#2509** and **#2510**.
+>   Written as PP-064 and moved to **PP-066**: **#2503**/**#2506** hold 064 and **#2507** holds 065,
+>   both open — the earlier merge keeps the number and the later one moves, the resolution PP-057
+>   and PP-063 record. This entry also re-pins the one pointer into the register itself — and the
+>   re-pin found that pointer was already broken before this PR: `docs/README.md:70` aimed at
+>   `:1598` for the keep-the-entry rule, which lived at `:3913` at `4dc2ef82` (**2,315 lines** of
+>   drift), and no guard could see it, because `scripts/check-register-coords.mjs` scans the register's
+>   own outward citations and nothing validates a citation pointing _into_ the register.
+> - **Previous:** 2026-10-10 (UTC) — **PP-063**: the deploy hop's single failure line is **two**
 >   independent defects (the address in `DEPLOY_HOST` is not this host; the job deploys a pm2 VM this
 >   host is not), measured over the **full** retained history — 1,319 runs, 3 success, 1,009 failure —
 >   which supersedes PP-060's windowed 741/1,282. PP-060/PP-058's `deploy.yml` coordinates re-pinned
@@ -103,6 +121,7 @@ Severity: **S1** blocks go-live · **S2** broken feature or security weakness ·
 | PP-061 | S2  | Edge / auth surface         | **Six endpoints that authenticate with something other than a session were unreachable on this host.** `POST` to `/api/auth/oauth/token`, `/api/auth/oauth/revoke`, `/api/webhooks/razorpay`, `/api/webhooks/payu`, `/api/webhooks/telegram/bot` and `/api/tenant/plugins/webhook/<id>` each answered `401 {"error":"Authentication required"}` — the identical byte-for-byte body the middleware itself writes, so **no handler ran** — because none of the six is in `proxy.ts:226`'s public list. The OAuth exchange, **both payment receivers**, the bot and the plugin integrators all had a caller that could never arrive. The same screen then caught what the closed edge had been hiding: `app/api/tenant/plugins/webhook/[id]/route.ts:63` loaded **all 19 columns** of `custom_plugins` — including `drizzle/schema/plugins.ts:20`, whose own comment says it "stores token/username/password/client_id/etc" — and did it **before** verifying the caller at `app/api/tenant/plugins/webhook/[id]/route.ts:106`, on a URL that is itself the credential | 🔧 FIXED in this PR (6 paths opened, row projected to 4 of 19 columns, `tests/unit/proxy.test.ts:158`) · not live until deployed · `/api/tenant/visitors/track` measured as the seventh hit and **deliberately left closed** |
 | PP-062 | S2  | Portal / credential         | `support_tickets.portal_token` was a **second credential living on the header the portal already uses for `portal_clients.access_token`**: `lib/portal-auth.ts:45` reads `x-portal-token` as a client token, and three public ticket routes read the *same* header (plus a POST body field) as a **ticket** token, resolved it to a **contact** and answered with that contact's **whole** ticket history — deliberately, #2378 — so possession of one ticket's string read every ticket that contact ever filed, subjects and bodies included. Permanent and un-revocable by construction: no `expires_at`, no `is_active`, no rotation, no revoke path, unlike `portal_clients` (`drizzle/schema/tokens.ts:202`, `:204`). **Nothing ever delivered it** — 0 references to `portal_token`/`portalToken` in `app/portal/**`, in `components/**`, in any email template or webhook payload — and #2440 had already stopped `POST /api/public/tickets` echoing a freshly minted one, so the only tokens that can still exist are ones handed out **before** that fix. That read was also the *only* thing letting an unauthenticated connection see a `support_tickets` row at all: 0122's `support_tickets_portal_token_lookup` arm. **Latent on this database**, measured: `support_tickets` holds 0 rows for the one tenant `tenants` exposes under `--superadmin`, and the retired grant is not even installed here because **0122 itself is pending** (PP-060) | 🔧 FIXED in this PR (credential retired in code, RLS and nullability by `0124` — the **26th** outstanding entry, `db:status` → `Applied: 99 · Pending: 26 · Total: 125`) · `DROP COLUMN` and `SET portal_token = NULL` stay **owner decisions** · not live until deployed |
 | PP-063 | S2  | Deploy                      | **The deploy hop's one failure line is two independent defects, and neither reads out of the log.** (D1) PP-060's `dial tcp ***:22: i/o timeout` is not "the VM is down": `sshd` answers on `0.0.0.0:22`, `ufw` is **inactive**, and 22 is reached from outside daily — but the only hostname this box is configured with is a **dynamic-DNS name with no updater installed anywhere on it**, and dialing that name from this host reproduces the identical silent timeout (**12,011 ms**) while the address this session actually arrived on answers in **114 ms**. (D2) behind it, the job deploys a runtime this host does not have: `deploy.yml:5` asserts pm2-not-Docker, `deploy.yml:158` `cd`s to a `$HOME` git checkout and `:172-189` drive `pm2` — measured here: no `pm2` binary, no nvm, `/home` **empty**, the app running as 18 Compose containers under `/srv/nucrm`. Re-pointing `DEPLOY_HOST` alone therefore produces a **different red**, not a deploy — and `set -e` at `:139` plus the `cd` mean the abort happens 146 lines **before** the first `git checkout --force` at `:305`, so the compose tree was never at risk | 🔧 DIAGNOSABILITY FIXED in this PR (pre-flight classifies the dial at `deploy.yml:79`; the remote side names the model mismatch at `deploy.yml:151`) · the hop itself is **owner action**: `DEPLOY_HOST` must hold a real address **and** someone must choose between "the pm2 VM" and rewriting this job for `docker compose up -d --build` |
+| PP-066 | S2  | Schema drift                | **The only screen in this repo that asks the live database what its columns are compared _names_, and nothing ran it.** `scripts/drift-check.ts` checked table presence, function presence, RLS policy presence and row counts of undeclared tables — never a column — so pre-prod measured `No drift ✓` at **exit 0** while `support_tickets.portal_token` was live `NOT NULL` with **no default** against a schema file that declares it nullable (#2499's whole cause), and `super_admin_audit_logs` carried three `text` columns behind three `jsonb` declarations. `grep -rn drift-check .github/workflows` → **0 hits across all five workflow files**, while **five** documents told a human to run it. All three screens that do exist are name-only (`tests/unit/schema-drift-guard-2255.test.ts`, `scripts/check-schema-drift-live.ts`, `scripts/check-schema-drift.mjs` is Zod), and the obvious fix — importing the schema **barrel** — sees **3** namespace keys and **2** tables out of 226, because tsx loads `index.ts` (42 `export *` lines) as CommonJS and the 236 real exports hide one level down inside `schema.default`, silently | 🔧 FIXED in this PR (columns compared per table, three kinds — presence, nullability, type — behind a ratcheting allowlist that must name a `clearedBy` migration or a `filedAs` issue for every entry, and wired in both shapes **#2508** AC3 asks for: `ci.yml:405` measures a `db:bootstrap` database on every pull request, `.github/workflows/schema-drift.yml` measures pre-prod nightly **and** re-seeds the drift in a throwaway database to prove the screen fires (`:105`)) · measured after: pre-prod **6** findings, chain-built database **9**, **4** in common — the two databases are behind main in **different directions** · the live fixes stay open as **#2509** (nullability, 6 columns), **#2510** (audit types, 3 columns) and `0124`/`0109` for #2499 |
 
 ## Sentry issues → register entries
 
@@ -1453,8 +1472,10 @@ inferred.
   and `pg_depend` shows no view or function depending on either. The gateway's real storage is the
   declared `ai_provider_secrets` / `ai_activity`. So these are orphans of the design 0013 shipped and
   0020-era code replaced — evidence favours dropping them in a numbered migration over declaring them,
-  but that is a destructive decision and not mine to take. Until then the control is
-  `scripts/drift-check.ts` exiting 1 — and CI does not run it.
+  but that is a destructive decision and not mine to take. The control was `scripts/drift-check.ts`
+  exiting 1 — and nothing ran it. **#2508**/**PP-066** closed the wiring half, and both tables are since
+  declared (`drizzle/schema/ai.ts:324`, `:347`), which is what the screen's `226/226 expected present`
+  and exit 0 against pre-prod are now reading.
 - **Files:** `scripts/drift-check.ts`, `README.md`
 - **Task:** #88 (this), #75 (statement cost), #84 (deploy — unrelated, this is an ops script).
 
@@ -3904,6 +3925,166 @@ psql -tAc "select count(*) from support_tickets"  # as the app role, with app.po
      output for state — so the resolver became a gethostbyname call with a plain cut-and-head fallback. Three
      lines longer, and every number in this file aimed below it moved with it. Recording the move instead of
      silently re-deriving it is the point: the paragraph above describes exactly what a quiet re-pin costs. -->
+
+## PP-066 — 🔧 The only screen that asks the live database what its **columns** are compared names, and ran in no workflow: it printed `No drift ✓` at exit 0 against pre-prod while `support_tickets.portal_token` was live `NOT NULL` with no default — #2499's entire cause — and the fix that makes it read columns measures 3,216 of them across 226 tables, in two directions that are not the same set _(S2 · Schema drift)_
+
+**Found:** 2026-10-10, while closing #2499's loop: the defect was a column attribute, so the question
+was which screen in this repo owns column attributes. Answer: none, and the closest one was not run.
+
+- **What the screen checked, and what it still checks.** `scripts/drift-check.ts` compares declared
+  table names to `pg_tables`, `CREATE FUNCTION` names from the migrations to `pg_proc`, `tenant_id`
+  tables to `pg_policy`, and the row counts of any undeclared table. Those four are all *presence*
+  questions. A database 26 migrations behind main answers all four correctly: every table exists,
+  every function exists, every tenant table has its policy — and `portal_token` is still `NOT NULL`.
+  Measured with the old script, against pre-prod, at `4dc2ef82`:
+
+  ```
+  tables: 226/226 expected present
+  functions: 87/17 expected present
+  No drift — schema matches migrations. ✓        exit 0
+  ```
+
+  Same connection, same database, one hour later, with section 5 added:
+
+  ```
+  columns: 3216 compared across 226 tables — 6 drift, 0 allowlisted, 1 info        exit 1
+    ✗ COLUMN DRIFT (nullability): support_tickets.portal_token is live NOT NULL with no default
+      and declared nullable — an INSERT that omits it fails with SQLSTATE 23502
+    ✗ COLUMN DRIFT (nullability): webhook_events.created_at is declared NOT NULL and the database
+      accepts NULL …
+    ✗ COLUMN DRIFT (nullability): segment_members.id …
+    ✗ COLUMN DRIFT (type): super_admin_audit_logs.{old_data,new_data,metadata} is declared jsonb
+      and the database has text …
+  ```
+
+  The first line is #2499: `drizzle/schema/support.ts:132` declares `portalToken: text('portal_token')`
+  (nullable), #2444 stopped every code path that supplied a value, and the `ALTER COLUMN … DROP NOT
+  NULL` that reconciles the database is sitting in `0124`, unapplied. `app/api/tenant/tickets/route.ts:112`
+  is the INSERT that omits the column, so staff ticket creation is the failure. Nothing between those
+  two facts could have produced a red signal, and PP-040's `drift-check` was the one command designed
+  to be it.
+
+- **Why "add the comparison" is not a two-line change: the barrel sees 2 tables.** The obvious
+  implementation — `import * as schema from '../drizzle/schema'` and walk the exports — was built
+  first and measured, and it is silently wrong: **3 exports, 2 tables**, where importing the 62 files
+  under `drizzle/schema/` individually gives **226 tables / 3,216 columns**. The reason is a loader
+  detail, not a schema one, and it is recorded as measured rather than guessed: tsx loads the barrel
+  (42 `export *` lines) as CommonJS, so the namespace's own keys are `default`, `fileUploads`,
+  `storageDocuments` — an interop shell — and the real **236** exports sit one level down inside
+  `schema.default`. Exactly one name does collide across the tree (`documents`, exported twice), so
+  "ESM dropped the collisions" is **not** the explanation and is not what this entry claims. Nothing
+  prints either way: `getTableConfig()` accepts whatever it is handed, so the screen would have
+  compared the two tables that survived and called the other 224 clean. `scripts/drift-check.ts:97`
+  (`loadDeclaredColumns`) reads `readdirSync(…, { recursive: true })` and
+  `await import(pathToFileURL(…))` per file for exactly this reason, skipping `index.ts`. Any future
+  screen over this schema has the same trap available.
+
+- **Three kinds, and the one that is deliberately not drift.** `scripts/drift-check.ts:166`
+  (`compareColumns`) is pure — two maps in, findings out, no database — so it is unit-testable
+  (`tests/unit/drift-check-column-comparison-2508.test.ts`, 19 tests: `:71` nullability, `:106` type,
+  `:156` presence, `:181` the ratchet, `:213` the committed allowlist's own shape). Live `NOT NULL`
+  **with** a default is *info*, not drift: a default covers every insert that omits the column, which
+  is the difference between #2499 and a harmless widening. Type comparison goes through
+  `information_schema` `data_type` + `udt_name`, with `numeric(15, 2)` → `numeric` normalisation and
+  `text[]` → `_text` array mapping, because the first pass produced 93 false findings from precision
+  alone. An unrecognised declared type (`tsvector`) is info: the screen refuses to guess.
+
+- **The allowlist is a debt record, and it reports itself when the debt is paid.**
+  `scripts/schema-drift-allowlist.json`, 11 entries, keys `kind:table.column`; every one names
+  `clearedBy` (a migration) or `filedAs` (an issue) — the unit test at `:213` asserts that, the reason
+  length, and key uniqueness, so the file cannot decay into a mute button.
+  `scripts/drift-check.ts:254` (`splitByAllowlist`) returns fresh / masked / **stale**, and `:413`
+  prints the stale set: an entry that no longer fires against *this* database is named on the console,
+  because the CI database and the pre-prod database are behind main in **different directions** and an
+  entry cleared on one still has to earn its keep on the other. Measured: pre-prod reports 5 entries
+  that do not fire there (the `custom_*` five, which this host's `drizzle-kit push` history made
+  `NOT NULL` correctly), the chain-built database reports 2 (`portal_token`, `webhook_events.created_at`,
+  which `0124`/`0109` clear and a fresh build already has right). Both runs exit 0; the printed count
+  is `6 allowlisted` and `9 allowlisted` respectively, never `No drift`.
+
+- **Two genuinely new defect classes, found on the first run and filed, not allowlisted away.** The
+  allowlist masks drift that is *already scheduled*; these were unscheduled, so they became issues
+  with their own measurements. **#2509** — `0071_schema_drift_backfill.sql:57` adds
+  `segment_members.id uuid DEFAULT gen_random_uuid()` with no `NOT NULL`, and the same file's
+  re-declarations of `custom_entities` (`:60`, `:67`, `:70`) never execute at all, because
+  `0059_custom_entities.sql:12` created those tables 12 migrations earlier with nullable columns and
+  `CREATE TABLE IF NOT EXISTS` ignores a column list for a table it is skipping. `utils.pk()`
+  (`drizzle/schema/segments.ts:38`) declares the id `NOT NULL`. Six columns, all on tables with
+  **0 rows** measured. **#2510** — `0002_flat_sir_ram.sql:1277` created `super_admin_audit_logs` with
+  `text` columns and `0007_super_admin_audit_logs.sql:16` is an inert `CREATE TABLE IF NOT EXISTS`
+  declaring `jsonb`; `0061` converted only `id`/`admin_id`/`target_id`. 141 rows measured, `old_data`
+  and `new_data` NULL in all of them and all 141 `metadata` values parsing as JSON objects — so the
+  conversion is safe and pending, which is exactly what an allowlist entry is for.
+
+- **AC3 — it runs somewhere, in both shapes.** `package.json:104` is the alias; before this entry
+  `grep -rn drift-check .github/workflows` returned **0** hits across all five workflow files while
+  **five** documents told a human to run it (`docs/admin/runbooks.md:60`, `docs/admin/deployment.md:135`,
+  `docs/reference/data-model.md:105`, `docs/migration-recovery.md:63`,
+  `docs/agent-plans/MAINTENANCE_PLAN.md:87`) — all five now say what it compares and where it is
+  scheduled. The pull-request half is a step appended to the `fresh-install` job,
+  `.github/workflows/ci.yml:397`: `psql -c 'CREATE DATABASE nucrm_chain'` (`:403`),
+  `npm run db:bootstrap -- --yes` (`:404`), `npm run db:drift-check` (`:405`). It is the chain and not
+  `db:sync`, because a pushed schema is `drizzle/schema` by construction and the comparison would be
+  tautological — the same reasoning #2450's job is built on. The scheduled half is
+  `.github/workflows/schema-drift.yml`, two jobs: `synthetic` (`:50`) builds the chain in CI, asserts
+  it is clean-or-named (`:88`) and then **re-seeds the drift** — `ALTER TABLE support_tickets ALTER
+  COLUMN subject DROP NOT NULL` (`:112`) — and fails the run if the screen does *not* go red naming
+  that column (`:105`), which is the #2306 lesson: a guard that has never been shown to fire is a
+  guard whose green means nothing. `live` (`:133`) points the same read-only script at
+  `secrets.PREPROD_DATABASE_URL` (`:152`) and measures (`:162`), artifact + `CRITICAL_ERROR_WEBHOOK_URL`
+  alert like the guards beside it, opt-out `vars.SCHEMA_DRIFT_GUARD_ENABLED`.
+
+- **Why a new workflow file, when AC3 named `nightly-soak.yml`.** That file's job list is cited by
+  **five** live coordinates in this register — `:216`, `:248`, `:262`, `:291`, `:303`, each verified
+  today as the `guard:running-config` call, the two job keys and the `guard:register-drift` /
+  `guard:catalog-grants` calls. A sixth job inserted anywhere above `:317` slides all five off the
+  lines their own sentences describe. `guard:coords` would not catch that — it checks that the line
+  *exists*, and those five do — and the screen that does check content is the nightly
+  `register-drift-screen`, so the discovery would be made one scheduled run late, by whoever was on
+  duty. A file appended at the end of `.github/workflows/` costs nothing and moves nothing, which is
+  the same reason `fresh-install` sits last in `ci.yml`.
+
+- **Negative controls, measured both ways (AC4).** Against a scratch chain-built database, four seeds,
+  each reverted and re-measured after:
+
+  | seed | screen |
+  |---|---|
+  | baseline | `exit 0` · `0 drift, 9 allowlisted, 1 info` |
+  | `ALTER TABLE support_tickets ALTER COLUMN subject DROP NOT NULL` | `exit 1` · `1 drift` · `COLUMN DRIFT (nullability): support_tickets.subject is declared NOT NULL and the database accepts NULL` |
+  | `ALTER TABLE support_tickets ALTER COLUMN status TYPE varchar(64)` | `exit 1` · `COLUMN DRIFT (type): support_tickets.status is declared text and the database has character varying` |
+  | `ALTER TABLE support_tickets ADD COLUMN scratch_probe text` | `exit 1` · `COLUMN DRIFT (presence): support_tickets.scratch_probe exists in the database and is declared by no schema file — \`npm run db:sync\` drops it, rows included` |
+
+  Every revert returned `exit 0`. The `type` seed is the one worth reading: the first candidate,
+  `metadata TYPE text`, was refused by PostgreSQL itself (`data type text has no default operator
+  class for access method "gin"`) — a GIN index on the column, not the screen, said no — so the
+  control had to seed a column the database will actually re-type. Assertion counts are not evidence
+  here; the four exits above are.
+
+- **The CI sequence was run for real before committing, not assumed.** The whole `ci.yml:397` step
+  body, executed locally against a throwaway database: `CREATE DATABASE` → `db:bootstrap` →
+  `Applied: 125 · 3,156 statements · 274 RLS policies over 226 RLS-enabled tables` → `db:drift-check`
+  → `exit 0`, `3216 compared across 226 tables — 0 drift, 9 allowlisted, 1 info`. `actionlint`
+  (pinned `1.7.12`, the version `workflow-lint.yml` uses) over all six workflow files: no findings.
+  `node scripts/check-deploy-trigger.mjs`: OK, six uniquely-named workflow files. Unit suite for this
+  change: 19/19. `tsc --noEmit`: **125 errors**, byte-identical to the `components/**data-table**`
+  baseline this repo carries — none of them mine.
+
+- **Owner actions this entry does not take.** `PREPROD_DATABASE_URL` is not configured, so the `live`
+  job fails its first step by design ("a guard that silently never runs is the bug this job exists to
+  prevent", the same posture as `rls-guards`, which has been red for exactly that reason on every
+  nightly in the retained window — 5 of 5, failing step `Live guards against the pre-prod database`).
+  Setting the secret is the fix for both; setting
+  `SCHEMA_DRIFT_GUARD_ENABLED=false` opts this one out *deliberately*. `0109` and `0124` still have to
+  be applied for #2499 to stop being a live 23502, and until they are, the two `portal_token` /
+  `webhook_events.created_at` entries are what keeps this screen honest about it rather than silent.
+  **#2509** and **#2510** own the other nine entries' exits; each carries the acceptance criterion
+  "delete the allowlist entry" as its last step, and the chain-built CI database is where that
+  deletion is proved first.
+- **Files:** `scripts/drift-check.ts`, `scripts/schema-drift-allowlist.json`,
+  `tests/unit/drift-check-column-comparison-2508.test.ts`, `.github/workflows/ci.yml`,
+  `.github/workflows/schema-drift.yml`, `docs/admin/runbooks.md`, `docs/admin/deployment.md`,
+  `docs/reference/data-model.md`, `docs/migration-recovery.md`, `docs/agent-plans/MAINTENANCE_PLAN.md`
+- **Task:** #59 (this), #39 (blocked on the same deploy/secret gap).
 
 ## How to maintain this file
 
