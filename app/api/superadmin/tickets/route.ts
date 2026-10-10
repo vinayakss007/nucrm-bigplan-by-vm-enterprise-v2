@@ -122,7 +122,20 @@ export const POST = withApiRoute(async (request: NextRequest) => {
         priority,
         portalToken: generatePortalToken(),
       })
-      .returning();
+      // #2498: `.returning()` handed the caller the live `portal_token` bearer
+      // credential and the whole 23-column row; name only the fields a create
+      // response needs. Same fix shape as #2440/#2443.
+      .returning({
+        id: supportTickets.id,
+        tenantId: supportTickets.tenantId,
+        subject: supportTickets.subject,
+        body: supportTickets.body,
+        status: supportTickets.status,
+        priority: supportTickets.priority,
+        category: supportTickets.category,
+        createdAt: supportTickets.createdAt,
+        updatedAt: supportTickets.updatedAt,
+      });
 
     return NextResponse.json({ data: row }, { status: 201 });
   } catch (err: unknown) {
