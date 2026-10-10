@@ -13,6 +13,7 @@ import { db } from '@/drizzle/db';
 import { backupRecords, errorLogs } from '@/drizzle/schema';
 import { eq, and, desc } from 'drizzle-orm';
 import { spawn } from 'child_process';
+import fs from 'fs';
 import { downloadFromS3, checkFileExists, deleteFile } from '@/lib/restore/runtime-fs';
 import { logError } from '@/lib/errors-server';
 import { logSuperAdminAction } from '@/lib/audit/super-admin';
@@ -72,13 +73,19 @@ async function runPgRestore(inputPath: string): Promise<void> {
       '--no-acl',
       '--clean',
       '--if-exists',
-      '--',
-      inputPath,
     ], {
       timeout: 600_000,
       stdio: ['pipe', 'pipe', 'pipe'],
       env: { ...process.env, ...pgEnv },
     });
+
+    const fileStream = fs.createReadStream(inputPath);
+    fileStream.on('error', (err) => {
+      child.kill();
+      reject(err);
+    });
+
+    fileStream.pipe(child.stdin);
 
     let stderr = '';
     child.stderr.on('data', (data) => { stderr += data.toString(); });

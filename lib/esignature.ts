@@ -347,6 +347,7 @@ export async function createSigningRequest(input: CreateSigningRequestInput): Pr
 export {
   getInternalSigningByToken,
   recordInternalSignerEvent,
+  writeInternalSignerEvent,
   listSigningEvents,
 } from "./esignature-internal";
 export type { InternalSignerView } from "./esignature-internal";

@@ -134,6 +134,17 @@ describe('violations the guard must name (#2446)', () => {
     expect(problems('app/api/public/x/route.ts', src).join('\n')).toContain('not bound by a context-establishing call');
   });
 
+  it('reports a relational read through that handle too — the pool NAME is not what makes a read unbound (#2468)', () => {
+    // QUERY_RE used to decide this with `\bdb\s*\.\s*query\b`, so an identical
+    // statement became invisible the moment it moved from `db.query` onto a bare
+    // `tx.query`. Measured on the offers route's `contacts` lookup after #2468 put
+    // it in a context: the read was still found, but no longer classed as a query,
+    // so it stopped being policed at all.
+    const src = 'await db.transaction(async (tx) => { await tx.query.invoices.findFirst({ where: eq(invoices.id, id) }); });';
+    expect(findReads(src, tables).filter((r) => r.isQuery)).toHaveLength(1);
+    expect(problems('app/api/public/x/route.ts', src).join('\n')).toContain('not bound by a context-establishing call');
+  });
+
   it('reports a statement that reads a policyed table with no handle it can name', () => {
     const src = 'const rows = await pool().select({ id: invoices.id }).from(invoices);';
     expect(problems('app/api/public/x/route.ts', src).join('\n')).toContain('hangs off nothing');
@@ -285,24 +296,67 @@ describe('the walk is the portal surface, and it fails closed', () => {
   }, 60_000);
 });
 
-describe('the deferrals in scripts/portal-rls-context-baseline.json are load-bearing (#2468)', () => {
-  const deferred: Array<[string, string]> = [
-    ['app/api/public/csat/[token]/route.ts', 'csatSurveys'],
-    ['app/api/public/sign/[token]/route.ts', 'documents'],
-    ['app/api/public/offers/[publicToken]/route.ts', 'quotes'],
-    ['app/api/public/offers/[publicToken]/route.ts', 'quoteLineItems'],
-    ['app/api/public/offers/[publicToken]/route.ts', 'contacts'],
-    ['app/api/public/offers/[publicToken]/accept/route.ts', 'quotes'],
-    ['app/api/public/offers/[publicToken]/accept/route.ts', 'activities'],
-    ['app/api/public/offers/[publicToken]/decline/route.ts', 'quotes'],
-    ['app/api/public/offers/[publicToken]/decline/route.ts', 'activities'],
+/**
+ * #2446 filed these five files as deferred, and the baseline carried nine
+ * entries saying so. #2468 fixed them, so this block is the SAME assertion with
+ * the sign of the deferral reversed: what the guard used to have to be talked
+ * out of, it now reports clean with `baseline: []` — while still SEING the
+ * statements it used to flag. "Zero violations because the analyzer stopped
+ * finding reads" is exactly the silent failure mode this file exists to catch,
+ * so every case here pins the read set it is refusing to complain about.
+ */
+describe('the bearer-token surface #2446 deferred is bound, with no baseline (#2468)', () => {
+  const fixed: Array<{ file: string; tables: string[] }> = [
+    { file: 'app/api/public/csat/[token]/route.ts', tables: ['csatSurveys'] },
+    { file: 'app/api/public/offers/[publicToken]/route.ts', tables: ['quotes', 'quoteLineItems', 'contacts'] },
+    { file: 'app/api/public/offers/[publicToken]/accept/route.ts', tables: ['quotes', 'activities'] },
+    { file: 'app/api/public/offers/[publicToken]/decline/route.ts', tables: ['quotes', 'activities'] },
   ];
 
-  for (const [file, table] of deferred) {
-    it(`${file} really does report ${table} when the baseline is removed`, async () => {
-      const real = await loadTenantTables(ROOT);
-      const found = analyzeSource(file, readFileSync(join(ROOT, file), 'utf8'), real, [], ROOT).violations;
-      expect(found.map((v) => v.table)).toContain(table);
+  let repoTables: Map<string, TenantTable>;
+  beforeAll(async () => {
+    repoTables = await loadTenantTables(ROOT);
+  }, 30_000);
+
+  for (const { file, tables: expected } of fixed) {
+    it(`${file}: every ${expected.join('/')} statement is read by the guard and bound by a context`, async () => {
+      const src = readFileSync(join(ROOT, file), 'utf8');
+      const found = analyzeSource(file, src, repoTables, [], ROOT);
+      expect(found.violations.map((v) => `${v.table}@${v.line}: ${v.problem}`)).toEqual([]);
+      // Non-vacuity, two ways: the analyzer still finds these tables here…
+      const read = findReads(src, repoTables).filter((r) => r.isQuery);
+      expect([...new Set(read.map((r) => r.js))].sort()).toEqual(expect.arrayContaining(expected.slice().sort()));
+      // …and none of them hangs off the bare pool any more.
+      expect(read.filter((r) => r.handle === 'db').map((r) => `${r.js}@${r.line}`)).toEqual([]);
     }, 30_000);
   }
+
+  it('the signing route reaches the database only through lib/esignature-internal.ts', async () => {
+    // Its documents read is gone (#2468 folded the name into the gate that
+    // already admitted the row, which is also what retired the
+    // portal-softdelete-baseline entry for it). So this file has nothing left to
+    // bind — and the proof of that is the pool never appearing in it at all.
+    const src = readFileSync(join(ROOT, 'app/api/public/sign/[token]/route.ts'), 'utf8');
+    expect(src).not.toMatch(/from '@\/drizzle\/db'/);
+    expect(findReads(src, repoTables).filter((r) => r.isQuery && r.handle === 'db')).toEqual([]);
+
+    // The reads moved to a file the guard does not walk, so run the walk over it
+    // explicitly rather than claiming a coverage the guard does not have.
+    const libFile = 'lib/esignature-internal.ts';
+    const libSrc = readFileSync(join(ROOT, libFile), 'utf8');
+    const lib = analyzeSource(libFile, libSrc, repoTables, [], ROOT);
+    expect(lib.violations.map((v) => `${v.table}@${v.line}: ${v.problem}`)).toEqual([]);
+    const libRead = findReads(libSrc, repoTables).filter((r) => r.isQuery);
+    expect([...new Set(libRead.map((r) => r.js))].sort()).toEqual(
+      expect.arrayContaining(['signingRequests', 'signingEvents', 'documents']),
+    );
+    expect(libRead.filter((r) => r.handle === 'db').map((r) => `${r.js}@${r.line}`)).toEqual([]);
+  }, 30_000);
+
+  it('the empty baseline is the state, not a conveniently short list', () => {
+    const baseline = JSON.parse(
+      readFileSync(join(ROOT, 'scripts', 'portal-rls-context-baseline.json'), 'utf8'),
+    ) as { entries: BaselineEntry[] };
+    expect(baseline.entries).toEqual([]);
+  });
 });
