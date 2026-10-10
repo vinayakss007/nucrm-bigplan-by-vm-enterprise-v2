@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { safeApiError } from '@/lib/api-error';
 import { requireAuth, can } from '@/lib/auth/middleware';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { getBrandingForTenant, BrandingConfig } from '@/lib/branding';
@@ -37,9 +38,8 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     const branding = await getBrandingForTenant(ctx.tenantId);
     return NextResponse.json({ data: branding });
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Internal server error';
     await logError({ error, context: 'Branding GET', requestMethod: 'GET' });
-    return NextResponse.json({ error: message }, { status: 500 });
+    return safeApiError(error); // #2527
   }
 });
 
@@ -130,12 +130,14 @@ export const PUT = withApiRoute(async (request: NextRequest) => {
     const updatedBranding = await getBrandingForTenant(ctx.tenantId);
     return NextResponse.json({ data: updatedBranding });
   } catch (error: unknown) {
+    // These two are this route's own sentinels — `throw new Error('NOT_FOUND')` at
+    // :79/:106 and the concurrency guard `throw new Error('CONFLICT')` at :90/:126 —
+    // not driver text, so translating them to 404/409 stays safe (#2527).
     if (error instanceof Error) {
       if (error.message === 'NOT_FOUND') return NextResponse.json({ error: 'Not found' }, { status: 404 });
       if (error.message === 'CONFLICT') return NextResponse.json({ error: 'Conflicts with another update' }, { status: 409 });
     }
-    const message = error instanceof Error ? error.message : 'Internal server error';
     await logError({ error, context: 'Branding PUT', requestMethod: 'PUT' });
-    return NextResponse.json({ error: message }, { status: 500 });
+    return safeApiError(error);
   }
 });
