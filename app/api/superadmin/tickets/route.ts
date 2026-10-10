@@ -187,7 +187,14 @@ export const PATCH = withApiRoute(async (request: NextRequest) => {
       .update(supportTickets)
       .set(updateData)
       .where(and(eq(supportTickets.id, id), eq(supportTickets.updatedAt, expectedUpdatedAt)))
-      .returning();
+      // #2504: the last argument-less `.returning()` on this table. `row` is read
+      // only by the presence check below and the response is `{ ok: true }`, so
+      // this was never a leak — but `RETURNING *` is 23 columns, `portal_token`
+      // (#2444's retired credential, still `NOT NULL` until `0124` lands) and
+      // `metadata` (#2443's operator prose) among them. One column is the whole
+      // requirement. `guard:public-projection` cannot see this site: its scope is
+      // `proxy.ts`'s anonymous surface (#2459) and this is a staff route.
+      .returning({ id: supportTickets.id });
 
     if (!row) return NextResponse.json({ error: 'Ticket was modified by another user — please refresh' }, { status: 409 });
     return NextResponse.json({ ok: true });
