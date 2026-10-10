@@ -9,7 +9,7 @@ import { acquireLock } from '@/lib/cache';
 import { NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { tenants, subscriptions, billingEvents } from '@/drizzle/schema';
-import { eq, and, lt, ne, or, sql } from 'drizzle-orm';
+import { eq, and, lt, ne, or, sql, inArray } from 'drizzle-orm';
 import { sweepTenants } from '@/lib/cron/tenant-scope';
 
 
@@ -92,54 +92,60 @@ export async function POST(request: Request) {
 
       scanned += staleSubscriptions.length;
 
-      for (const sub of staleSubscriptions) {
-        try {
-          // #1106: downgrade touches tenants + subscriptions + billing events —
-          // wrap all writes in one transaction so a partial failure can't leave
-          // the tenant half-downgraded.
-          await db.transaction(async (tx) => {
-            // Downgrade tenant to free
-            await tx
-              .update(tenants)
-              .set({
-                planId: 'free',
-                status: 'cancelled',
-                updatedAt: new Date(),
-              })
-              .where(eq(tenants.id, sub.tenantId));
+      if (staleSubscriptions.length === 0) return;
 
-            // Clean subscription row
-            await tx
-              .update(subscriptions)
-              .set({
-                planId: 'free',
-                stripeSubscriptionId: null,
-                cancelAtPeriodEnd: false,
-                updatedAt: new Date(),
-              })
-              .where(and(
-                eq(subscriptions.id, sub.subscriptionId),
-                eq(subscriptions.tenantId, tenantId),
-              ));
+      try {
+        // #1106: downgrade touches tenants + subscriptions + billing events —
+        // wrap all writes in one transaction so a partial failure can't leave
+        // the tenant half-downgraded.
+        await db.transaction(async (tx) => {
+          // Downgrade tenant to free
+          await tx
+            .update(tenants)
+            .set({
+              planId: 'free',
+              status: 'cancelled',
+              updatedAt: new Date(),
+            })
+            .where(eq(tenants.id, tenantId));
 
-            // Audit trail
-            await tx.insert(billingEvents).values({
-              tenantId: sub.tenantId,
-              eventType: 'subscription_downgraded',
-              metadata: {
-                reason: 'fallback_cron',
-                previous_status: sub.stripeStatus,
-                period_end: sub.currentPeriodEnd?.toISOString(),
-                detected_at: new Date().toISOString(),
-              },
-            });
-          });
+          const subIds = staleSubscriptions.map(s => s.subscriptionId);
 
-          downgraded++;
-        } catch (err) {
-          failed++;
-          void logError({ error: err, context: 'cron/subscription-check tenant', tenantId: sub.tenantId });
-        }
+          // Clean subscription rows
+          await tx
+            .update(subscriptions)
+            .set({
+              planId: 'free',
+              stripeSubscriptionId: null,
+              cancelAtPeriodEnd: false,
+              updatedAt: new Date(),
+            })
+            .where(and(
+              inArray(subscriptions.id, subIds),
+              eq(subscriptions.tenantId, tenantId),
+            ));
+
+          // Audit trail
+          const events = staleSubscriptions.map(sub => ({
+            tenantId: sub.tenantId,
+            eventType: 'subscription_downgraded' as const,
+            metadata: {
+              reason: 'fallback_cron',
+              previous_status: sub.stripeStatus,
+              period_end: sub.currentPeriodEnd?.toISOString(),
+              detected_at: new Date().toISOString(),
+            },
+          }));
+
+          if (events.length > 0) {
+            await tx.insert(billingEvents).values(events);
+          }
+        });
+
+        downgraded += staleSubscriptions.length;
+      } catch (err) {
+        failed += staleSubscriptions.length;
+        void logError({ error: err, context: 'cron/subscription-check tenant bulk', tenantId });
       }
     });
 
