@@ -119,7 +119,22 @@ export const POST = withApiRoute(async (request: NextRequest) => {
         priority: v.priority,
         status: v.status,
       } as typeof supportTickets.$inferInsert)
-      .returning();
+      // #2498: name the returned columns. `.returning()` echoed all 23 columns —
+      // the live `portal_token` bearer credential in the response AND, through
+      // the automation payload below, copied into automation_runs.metadata
+      // where DROP COLUMN cannot reach it. Same fix shape as #2440/#2443.
+      .returning({
+        id: supportTickets.id,
+        tenantId: supportTickets.tenantId,
+        contactId: supportTickets.contactId,
+        subject: supportTickets.subject,
+        body: supportTickets.body,
+        status: supportTickets.status,
+        priority: supportTickets.priority,
+        category: supportTickets.category,
+        createdAt: supportTickets.createdAt,
+        updatedAt: supportTickets.updatedAt,
+      });
 
     if (!row) throw new Error('Failed to create ticket');
 
