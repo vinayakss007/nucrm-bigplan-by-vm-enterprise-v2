@@ -18,6 +18,27 @@ import { decodeSettingValue } from '@/lib/api/setting-value';
 
 const PORTAL_CONFIG_KEY = 'portal_config';
 
+/**
+ * #2522: `portal_clients.access_token` is a bearer credential, not a display field.
+ * `app/api/tenant/portal/login/route.ts:131` compares the request token against this
+ * column with `timingSafeEqual` — holding it *is* being that portal client, for the
+ * full 365-day lifetime `POST` below issues. The admin page lists clients, never
+ * their tokens, so the token is not selected at all: an accidental `...row` in a
+ * future response cannot resurrect the leak if the value was never read.
+ *
+ * `POST` stays the show-once path (#2459 convention) that hands the freshly minted
+ * token to the admin so it can be copied into the invite link.
+ */
+const CLIENT_COLUMNS = {
+  id: portalClients.id,
+  name: portalClients.name,
+  email: portalClients.email,
+  isActive: portalClients.isActive,
+  lastLoginAt: portalClients.lastLoginAt,
+  expiresAt: portalClients.expiresAt,
+  createdAt: portalClients.createdAt,
+};
+
 export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
@@ -27,7 +48,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     }
 
     const clients = await db
-      .select()
+      .select(CLIENT_COLUMNS)
       .from(portalClients)
       .where(eq(portalClients.tenantId, ctx.tenantId))
       .orderBy(desc(portalClients.createdAt));
@@ -82,8 +103,10 @@ export const POST = withApiRoute(async (request: NextRequest) => {
         expiresAt,
         createdBy: ctx.userId,
       })
-      .returning();
+      .returning(CLIENT_COLUMNS);
 
+    // Show-once by design: `access_token` appears here and nowhere else, so the
+    // camelCase column name must not ride along on the projected row as well.
     return NextResponse.json({
       ok: true,
       data: {
