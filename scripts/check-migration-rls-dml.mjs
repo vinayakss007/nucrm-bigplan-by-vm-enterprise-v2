@@ -5,7 +5,7 @@
  */
 
 /**
- * Migration row-DML / RLS guard (PP-058).
+ * Migration row-DML / RLS guard (PP-058; per-table resolution added by #2516).
  *
  * WHY
  * ---
@@ -22,7 +22,9 @@
  * because `CREATE UNIQUE INDEX` and `SET NOT NULL` read the whole heap
  * regardless of any policy. PP-058 measured this on preprod: `0114` dedupes 0
  * of 4 known loser rows and the run dies on 23505, which is why 21 journal
- * entries cannot advance past `0113`.
+ * entries cannot advance past `0113`. PP-067 measured the same shape again on
+ * `0125`: `set_config('app.is_super_admin','true',true)` reports `UPDATE 0` on
+ * the tables whose policies do not read that GUC.
  *
  * CI CANNOT SEE THIS CLASS AT ALL
  * ------------------------------
@@ -33,48 +35,48 @@
  * That is why this check is static: it is the only place the two contexts can
  * be compared without a production-equivalent role.
  *
- * THE RULE
- * --------
- * If a migration file's *executable* scope writes rows into a tenant-scoped
- * table, then for EVERY such table the file must do one of:
+ * THE RULE — per table, not per file (#2516)
+ * ------------------------------------------
+ * For every tenant-scoped table a file's *executable* scope writes, ask what
+ * the chain's policies leave on THAT table and whether the GUCs the file sets
+ * can satisfy one of them (`scripts/rls-policy-map.mjs` does the reading):
  *
- *   (a) set transaction-locally a GUC that THIS TABLE'S OWN policies read —
- *       `0088` gates several policies on `app.is_super_admin`, e.g.
+ *   * the file sets `app.current_tenant` → accepted. Every policy generator in
+ *     the chain, literal or looped, gates on it, so a file that establishes the
+ *     tenant context per tenant is never the file this guard exists to catch;
+ *   * else some attributable PERMISSIVE policy for that write kind either
+ *     reads no GUC at all (`error_logs_insert_any WITH CHECK (true)`) or reads
+ *     one the file sets → accepted, and the report names the policy;
+ *   * else the write is RLS-blind and the file fails, with the reason printed.
  *
- *           PERFORM set_config('app.is_super_admin', 'true', true);
+ * `app.is_super_admin` is therefore worth nothing on its own: it is worth what
+ * the policies of the table being written happen to read. `0109` sets it and is
+ * correct, because `webhook_events`' `tenant_isolation` ORs on it — ledger rows
+ * are cross-tenant (NULL `tenant_id`), so `app.current_tenant` would see none of
+ * them. `custom_entities`, `custom_entity_data` and `segment_members` gate on
+ * `app.current_tenant` ONLY; a migration that writes those and sets only the
+ * marker is blind, and `0125` passes today purely because it *also* loops
+ * `set_config('app.current_tenant', t.id::text, true)` per tenant.
  *
- *       (`true` as the third argument makes it transaction-local, so it
- *       cannot leak into later files in the run); or
- *   (b) set `app.current_tenant`, which every `tenant_isolation` policy is
- *       built on.
+ * WHY THE OLD RULE WAS WRONG (#2516)
+ * ----------------------------------
+ * It was one regex over the raw file text plus an early return:
  *
- * `0109_webhook_events_created_at_not_null.sql` is the worked example of (a),
- * and 0125's repair of (b). The mitigation is resolved PER TABLE, not per
- * file (#2516). The old rule asked only "does this file mention the marker
- * anywhere" and `0125`'s first draft proved both ways that question lies:
- * the mention can sit in the header prose — where the final file now
- * *describes* the failure it is warning about — and a marker the written
- * table's policies never read is inert on exactly the evidence `0125`
- * records for `custom_entities`/`custom_entity_data`/`segment_members`:
- * "`app.is_super_admin` GUC is **inert** on these three `tenant_isolation`
- * policies (measured: `UPDATE 0`, then `23502` on the following `SET NOT
- * NULL`)". `set_config` ran, RLS stayed blind, the write matched zero rows,
- * and the guard passed.
+ *     const MITIGATION = /set_config\(\s*'app\.is_super_admin'/i;
+ *     … if (a.mitigated) return;             // whole file judged clean
  *
- * WHICH GUCS A TABLE'S POLICIES READ (static, no DB)
- * --------------------------------------------------
- * `collectPolicyGucs` unions, per table, every `current_setting('app.<name>')`
- * that appears in any literal `CREATE POLICY … ON <table>` in the migration
- * history. Static rather than a live `pg_policies` query deliberately: this
- * guard exists because the CI context and the migrate context disagree (see
- * above), and a live query would answer with whichever database it happened
- * to hit — both are mid-pile (`Applied 99 · Pending 27`), so the policies
- * visible now are not the set the file under review will meet. The cost, the
- * same one `collectTenantScoped` already pays below: policies built by
- * `format()`/`EXECUTE` loops have no literal text here, and the union ignores
- * later `ALTER`/`DROP POLICY` — so (a) can only ever be accepted on evidence
- * some policy actually reads the marker, never invented for tables whose
- * policy text is unseen.
+ * Three separate defects, all measurable:
+ *   1. file-global — the marker was treated as a licence for every write in the
+ *      file, so the three tables above were reported clean by a line of SQL that
+ *      cannot affect them. Evidence about a file is not evidence about a table.
+ *   2. unstripped text — `MITIGATION.test(rawSql)` ran before `stripComments`,
+ *      so a header comment *naming* the fix satisfied it. Every other rule in
+ *      the file had already learned that lesson (`0114`'s header describes an
+ *      UPDATE it does not perform).
+ *   3. no table in the loop — the reverse error too: `0109` passed for a reason
+ *      the guard never checked, so if a future `DROP POLICY` or a rewritten
+ *      `tenant_isolation` removes the super-admin branch from `webhook_events`,
+ *      the guard keeps saying "OK" while production starts saying `UPDATE 0`.
  *
  * WHAT "TENANT-SCOPED" MEANS HERE (static, no DB)
  * -----------------------------------------------
@@ -88,6 +90,17 @@
  * `CREATE POLICY … ON leads` mentions the GUC. Only (b) flags it, and (b) alone
  * would miss policy-bearing tables with no tenant_id column.
  *
+ * CORPUS ORDER IS EXECUTION ORDER
+ * -------------------------------
+ * `scripts/migrate.ts:143` iterates `journal.entries`, not the directory
+ * listing, and the two disagree: 20 of 126 journal positions differ from the
+ * sorted filenames, because `0091_usage_snapshots_superadmin_bypass` and
+ * `0092_metrics_tables_superadmin_bypass` are applied after `0112`. Reading the
+ * chain in filename order therefore attributes the wrong *last* policy to those
+ * tables — `deal_stages.tenant_isolation` is written last by `0092` (both GUCs),
+ * not by `0107` (`app.current_tenant` only). Last-writer-wins is only correct
+ * if "last" means journal-last, so `orderedCorpus()` reads the journal.
+ *
  * SCOPE HONESTY — what this guard does NOT cover
  * ---------------------------------------------
  *   * `CREATE FUNCTION` bodies are excluded (they do not execute at migration
@@ -98,15 +111,26 @@
  *     yet its promised diagnostic is equally inert under the same blind
  *     context. Naming that reliably needs dataflow, not a regex, so it is left
  *     to review rather than guessed at here;
+ *   * policies created by a catalogue-driven loop (`FOR rec IN SELECT … FROM
+ *     pg_attribute WHERE attname = 'tenant_id'`, `0037`/`0039`) have no static
+ *     target. They are recorded as `ambientLoops` and never count as evidence
+ *     *for* a table — a write into a table with nothing attributable is judged
+ *     blind unless it sets `app.current_tenant`, which is conservative in the
+ *     direction that matters;
+ *   * the live DB is the truth and this is a screen over SQL text. The tradeoff
+ *     is deliberate: a `pg_policies` read would be exact, but CI has no
+ *     production-equivalent role, migrations are the thing under review, and a
+ *     guard that needs a database cannot gate the commit that adds the database
+ *     step. `scripts/rls-policy-shape.mjs` remains the live-DB sweep.
  *   * the root defect is the runner's connection context, which is PP-058's
  *     open decision (#103). This guard stops NEW migrations from joining the
  *     set; it does not repair the existing ones.
  *
  * Known offenders are baselined — the ratchet pattern used by `guard:filesize`
  * and `guard:chain` — so this can be wired into CI today. Fixing one prints a
- * hint to shrink the baseline. The ratchet is *file*-granular: an entry
- * already in the baseline may change its write set without failing, so this
- * stops new offenders from appearing, it does not police the existing 19.
+ * hint to shrink the baseline. The ratchet is *file*-granular: an entry already
+ * in the baseline may change its write set without failing, so this stops new
+ * offenders from appearing, it does not police the existing 19.
  *
  * Regenerate after a deliberate repair:
  *   node scripts/check-migration-rls-dml.mjs --update
@@ -118,12 +142,15 @@
 import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
+import {
+  TENANT_GUC,
+  setGucs,
+  resolvePolicyMap,
+  writeIsVisible,
+} from './rls-policy-map.mjs';
+
 const DEFAULT_MIGRATIONS_DIR = 'drizzle/migrations';
 const DEFAULT_BASELINE_PATH = 'scripts/migration-rls-dml-baseline.json';
-// Both sides of the rule match the same shape: a GUC named `app.<something>`,
-// read by a policy or written by set_config. One pattern, two call sites.
-const APP_GUC = /current_setting\(\s*'app\.([a-z_]+)'/gi;
-const SET_CONFIG_GUC = /set_config\(\s*'app\.([a-z_]+)'/gi;
 
 /** Strip block and line comments so prose in a migration header cannot match a rule. */
 export function stripComments(sql) {
@@ -265,22 +292,48 @@ export function collectTenantScoped(sqlOfAllFiles) {
 }
 
 /**
- * Per table, the `app.<name>` GUCs its literal `CREATE POLICY` expressions
- * read, unioned over the whole migration history. This is the evidence the
- * per-table mitigation (#2516) accepts a marker against — see THE RULE.
+ * The corpus in the order the runner applies it.
+ *
+ * Journal-first, then any file on disk that the journal does not list (sorted,
+ * so a fixture without a `meta/_journal.json` still works). A missing or
+ * unreadable journal is not an error — it degrades to filename order, which is
+ * what this guard did before #2516 and what every fixture directory uses.
  */
-export function collectPolicyGucs(sqlOfAllFiles) {
-  const byTable = new Map();
-  for (const sql of sqlOfAllFiles.map(stripComments)) {
-    for (const [table, stmt] of policyStatements(sql)) {
-      const read = [...stmt.matchAll(APP_GUC)].map((m) => m[1]);
-      if (read.length === 0) continue;
-      const acc = byTable.get(table) ?? new Set();
-      byTable.set(table, acc);
-      for (const g of read) acc.add(g);
-    }
+export function orderedCorpus(migrationsDir) {
+  const onDisk = readdirSync(migrationsDir)
+    .filter((f) => f.endsWith('.sql') && !f.endsWith('.down.sql'))
+    .sort();
+  const rawOf = new Map(onDisk.map((f) => [f, readFileSync(`${migrationsDir}/${f}`, 'utf8')]));
+  let journal = null;
+  try {
+    journal = JSON.parse(readFileSync(`${migrationsDir}/meta/_journal.json`, 'utf8'));
+  } catch {
+    journal = null;
   }
-  return byTable;
+  const ordered = [];
+  const taken = new Set();
+  for (const entry of journal?.entries ?? []) {
+    const f = `${entry.tag}.sql`;
+    if (!rawOf.has(f) || taken.has(f)) continue;
+    taken.add(f);
+    ordered.push({ file: f, sql: rawOf.get(f) });
+  }
+  for (const f of onDisk) {
+    if (taken.has(f)) continue;
+    ordered.push({ file: f, sql: rawOf.get(f) });
+  }
+  return { ordered, journalEntries: (journal?.entries ?? []).length, unlisted: onDisk.length - taken.size };
+}
+
+/**
+ * What the chain leaves on each table, in apply order. Scoped like a migration:
+ * prose is not a policy and a stored function body does not run now — the same
+ * two rules that keep writes honest keep `CREATE POLICY` lines honest.
+ */
+export function buildPolicyMap(ordered) {
+  return resolvePolicyMap(
+    ordered.map((o) => ({ file: o.file, sql: executableScope(stripComments(o.sql)) })),
+  );
 }
 
 const DML_PATTERNS = [
@@ -291,21 +344,15 @@ const DML_PATTERNS = [
 
 /**
  * Verdict on one migration file: the rows it writes at migration time, per
- * target table, plus whether it writes through dynamic SQL (no static
- * target). `mitigated` means every tenant-scoped table the file touches is
- * covered by a GUC the file sets — `app.current_tenant` covers any table;
- * any other marker covers only tables whose own policies read that marker
- * (#2516), and `uncoveredWrites`/`uncoveredDynamicTables` name the ones a
- * partial mitigation left RLS-blind.
+ * target table, and of those which ones RLS cannot see given the GUCs it sets.
+ *
+ * `policyMap` may be omitted (a caller with no chain to read). Then the only
+ * defensible answer is the tenant GUC, and everything else is reported blind —
+ * never "assume the marker helped".
  */
-export function analyzeFile(rawSql, tenantScoped, policyGucs = new Map()) {
+export function analyzeFile(rawSql, tenantScoped, policyMap) {
   const scoped = executableScope(stripComments(rawSql));
-  const gucs = new Set(
-    [...scoped.matchAll(SET_CONFIG_GUC)].map((m) => m[1]),
-  );
-  const covered = (t) =>
-    gucs.has('current_tenant')
-    || [...gucs].some((g) => policyGucs.get(t)?.has(g) === true);
+  const gucs = setGucs(scoped);
   const writes = [];
   for (const [kind, re] of DML_PATTERNS) {
     for (const m of scoped.matchAll(re)) writes.push({ kind, table: m[1] });
@@ -315,54 +362,81 @@ export function analyzeFile(rawSql, tenantScoped, policyGucs = new Map()) {
   // doing this is never silently clean.
   const dynamic = /\bEXECUTE\s+(?:format\s*\(\s*)?'[^']*\b(?:UPDATE|DELETE\s+FROM|INSERT\s+INTO)\b/i.test(scoped);
   const tenantWrites = writes.filter((w) => tenantScoped.has(w.table));
-  const mentioned = [...tenantScoped].filter(
-    (t) => new RegExp(`["']${t}["']`).test(scoped),
-  );
-  const dynamicOverTenantTable = dynamic && mentioned.length > 0;
+  const dynamicOverTenantTable = dynamic
+    && [...tenantScoped].some((t) => new RegExp(`["']${t}["']`).test(scoped));
+  const blind = [];
+  for (const w of tenantWrites) {
+    const verdict = policyMap
+      ? writeIsVisible(policyMap, w.table, w.kind, gucs)
+      : {
+        ok: gucs.has(TENANT_GUC),
+        why: gucs.size === 0 ? 'no-guc-set' : 'policy-not-attributable',
+        expected: [TENANT_GUC],
+        seen: [...gucs],
+      };
+    if (!verdict.ok) blind.push({ ...w, ...verdict });
+  }
   return {
-    mitigated: tenantWrites.every((w) => covered(w.table))
-      && (!dynamicOverTenantTable || mentioned.every(covered)),
     gucs,
     writes,
     tenantWrites,
-    uncoveredWrites: tenantWrites.filter((w) => !covered(w.table)),
+    blind,
     dynamic,
     dynamicOverTenantTable,
-    uncoveredDynamicTables: mentioned.filter((t) => !covered(t)),
+    dynamicBlind: dynamicOverTenantTable && !gucs.has(TENANT_GUC),
   };
 }
 
+const REASON_TEXT = {
+  'no-guc-set': (w) => `${w.kind} ${w.table}: sets no GUC, and ${w.table}'s ${w.kind} policies read ${w.expected.join(', ')}`,
+  'guc-not-gated-here': (w) => `${w.kind} ${w.table}: sets ${w.seen.join(', ')}, but ${w.table}'s ${w.kind} policies read only ${w.expected.join(', ')} — the marker is not a licence for this table`,
+  'policy-not-attributable': (w) => `${w.kind} ${w.table}: no literal CREATE POLICY or literal ARRAY loop names a ${w.kind} policy for it, so only ${TENANT_GUC} can prove the rows are visible`,
+  'restrictive-policy-gate': (w) => `${w.kind} ${w.table}: a RESTRICTIVE policy gates on ${w.expected.join(', ')}, which this file does not set`,
+};
+
+function describeReason(w) {
+  const f = REASON_TEXT[w.why];
+  return f ? f(w) : `${w.kind} ${w.table}: ${w.why}`;
+}
+
 function collect(migrationsDir) {
-  const names = readdirSync(migrationsDir)
-    .filter((f) => f.endsWith('.sql') && !f.endsWith('.down.sql'))
-    .sort();
-  const rawOf = names.map((f) => readFileSync(`${migrationsDir}/${f}`, 'utf8'));
-  const { byPolicy, byColumn, tenantScoped } = collectTenantScoped(rawOf);
-  const policyGucs = collectPolicyGucs(rawOf);
+  const { ordered, journalEntries, unlisted } = orderedCorpus(migrationsDir);
+  const { byPolicy, byColumn, tenantScoped } = collectTenantScoped(ordered.map((o) => o.sql));
+  const policyMap = buildPolicyMap(ordered);
+  const attribution = [...policyMap.byTable.values()];
 
   const violations = { atRisk: [], dynamicTarget: [] };
-  names.forEach((name, i) => {
-    const tag = name.replace(/\.sql$/, '');
-    const a = analyzeFile(rawOf[i], tenantScoped, policyGucs);
-    if (a.mitigated) return;
-    if (a.uncoveredWrites.length > 0) {
-      const listed = [...new Set(a.uncoveredWrites.map((w) => `${w.kind}:${w.table}`))].sort().join(' ');
+  const detail = new Map();
+  const reasons = {};
+  for (const { file, sql } of ordered) {
+    const tag = file.replace(/\.sql$/, '');
+    const a = analyzeFile(sql, tenantScoped, policyMap);
+    if (a.blind.length > 0) {
+      const listed = [...new Set(a.blind.map((w) => `${w.kind}:${w.table}`))].sort().join(' ');
       violations.atRisk.push(`atRisk:${tag}|${listed}`);
-    } else if (a.uncoveredDynamicTables.length > 0) {
+      detail.set(tag, a.blind.map(describeReason));
+      for (const w of a.blind) reasons[w.why] = (reasons[w.why] ?? 0) + 1;
+    } else if (a.dynamicBlind) {
       violations.dynamicTarget.push(`dynamicTarget:${tag}`);
     }
-  });
+  }
 
   for (const k of Object.keys(violations)) violations[k] = [...new Set(violations[k])].sort();
   return {
     counts: {
-      files: names.length,
+      files: ordered.length,
       tenantScoped: tenantScoped.size,
       byPolicy: byPolicy.size,
       byColumn: byColumn.size,
-      policyGucTables: policyGucs.size,
+      journalEntries,
+      unlisted,
+      policyTables: policyMap.byTable.size,
+      policiesAttributed: attribution.reduce((n, p) => n + p.size, 0),
+      ambientLoops: policyMap.ambient.length,
+      reasons,
     },
     violations,
+    detail,
   };
 }
 
@@ -384,12 +458,12 @@ function resolvePaths(argv) {
 
 function main() {
   const { migrationsDir, baselinePath } = resolvePaths(process.argv);
-  const { counts, violations } = collect(migrationsDir);
+  const { counts, violations, detail } = collect(migrationsDir);
   const flat = KINDS.flatMap((k) => violations[k]);
 
   if (process.argv.includes('--update')) {
     const body = {
-      _comment: 'Migrations that write rows into tenant-scoped tables without setting the app.is_super_admin GUC those RLS policies branch on (PP-058). scripts/migrate.ts runs on a bare pool with no app.current_tenant and FORCE RLS removes the owner bypass, so those writes match ZERO rows: the repair is a silent no-op while CREATE UNIQUE INDEX / SET NOT NULL still see the real data, and the deploy aborts. CI cannot catch this — apply-rls-ci.mjs runs the same files as the postgres superuser, which RLS does not filter. Shrink this baseline as files are fixed; the guard fails on any NEW offender. Regenerate: node scripts/check-migration-rls-dml.mjs --update',
+      _comment: 'Migrations that write rows into a tenant-scoped table whose RLS policies no GUC they set can satisfy (PP-058, per-table rule from #2516). scripts/migrate.ts runs on a bare pool with no app.current_tenant and FORCE RLS removes the owner bypass, so those writes match ZERO rows: the repair is a silent no-op while CREATE UNIQUE INDEX / SET NOT NULL still see the real data, and the deploy aborts. Resolved per table against the policies the chain leaves on it: app.current_tenant always counts, app.is_super_admin counts only where a policy of THAT table reads it (webhook_events/0109 yes; custom_entities, custom_entity_data, segment_members no). CI cannot catch this — apply-rls-ci.mjs runs the same files as the postgres superuser, which RLS does not filter. Shrink this baseline as files are fixed; the guard fails on any NEW offender. Regenerate: node scripts/check-migration-rls-dml.mjs --update',
       counts,
       violations,
     };
@@ -416,7 +490,7 @@ function main() {
   console.log([
     `[check-migration-rls-dml] ${counts.files} migration(s) · ${counts.tenantScoped} tenant-scoped table(s)`,
     `                     policy-derived ${counts.byPolicy} ∪ tenant_id-column ${counts.byColumn}`,
-    `                     marker evidence: ${counts.policyGucTables ?? '?'} table(s) with literal policies reading an app.* GUC`,
+    `  policies read per table: ${counts.policiesAttributed} on ${counts.policyTables} table(s) from ${counts.journalEntries} journal entries (${counts.unlisted} file(s) not in the journal), ${counts.ambientLoops} catalogue loop(s) left unattributed`,
     `  baselined: ${(baseline.violations?.atRisk ?? []).length} row-write offender(s), ${(baseline.violations?.dynamicTarget ?? []).length} dynamic-target file(s)`,
   ].join('\n'));
 
@@ -428,7 +502,11 @@ function main() {
 
   if (fresh.length > 0) {
     console.error(`  ${fresh.length} NEW RLS-blind write(s):`);
-    for (const v of fresh) console.error(`   x ${v}`);
+    for (const v of fresh) {
+      console.error(`   x ${v}`);
+      const tag = v.split('|')[0].replace(/^atRisk:/, '').replace(/^dynamicTarget:/, '');
+      for (const line of detail.get(tag) ?? []) console.error(`       ${line}`);
+    }
     console.error([
       '',
       'scripts/migrate.ts runs on a bare pool with no app.current_tenant, and every',
@@ -438,11 +516,16 @@ function main() {
       'data, and the run aborts mid-deploy. CI will not catch it either:',
       'apply-rls-ci.mjs applies these files as the postgres superuser.',
       '',
-      "Set, transaction-locally, a GUC that EACH written table's own policies",
-      "read — or app.current_tenant, which every tenant_isolation policy is",
-      'built on. See 0109_webhook_events_created_at_not_null.sql:',
+      'Set a GUC the policies of the table you write actually read, transaction-',
+      'locally, in the same DO block as the write:',
       '',
-      "    PERFORM set_config('app.is_super_admin', 'true', true);",
+      "    PERFORM set_config('app.current_tenant', <tenant_id>::text, true);",
+      '',
+      'Loop it over the tenants you are repairing, which is what',
+      '0125_declared_not_null_columns.sql does. app.is_super_admin is a second',
+      'option only where a policy of that table ORs on it (0093 webhook_events,',
+      '0100 tenants, 0115 error_logs) — see 0109_webhook_events_created_at_not_null',
+      '.sql for that shape. Naming either one in a comment proves nothing.',
       '',
       'Do NOT add an entry to the baseline without a reason in the PR that does so.',
     ].join('\n'));

@@ -1,10 +1,18 @@
 {
-  "_comment": "Migrations that write rows into tenant-scoped tables without setting the app.is_super_admin GUC those RLS policies branch on (PP-058). scripts/migrate.ts runs on a bare pool with no app.current_tenant and FORCE RLS removes the owner bypass, so those writes match ZERO rows: the repair is a silent no-op while CREATE UNIQUE INDEX / SET NOT NULL still see the real data, and the deploy aborts. CI cannot catch this — apply-rls-ci.mjs runs the same files as the postgres superuser, which RLS does not filter. Shrink this baseline as files are fixed; the guard fails on any NEW offender. Regenerate: node scripts/check-migration-rls-dml.mjs --update",
+  "_comment": "Migrations that write rows into a tenant-scoped table whose RLS policies no GUC they set can satisfy (PP-058, per-table rule from #2516). scripts/migrate.ts runs on a bare pool with no app.current_tenant and FORCE RLS removes the owner bypass, so those writes match ZERO rows: the repair is a silent no-op while CREATE UNIQUE INDEX / SET NOT NULL still see the real data, and the deploy aborts. Resolved per table against the policies the chain leaves on it: app.current_tenant always counts, app.is_super_admin counts only where a policy of THAT table reads it (webhook_events/0109 yes; custom_entities, custom_entity_data, segment_members no). CI cannot catch this — apply-rls-ci.mjs runs the same files as the postgres superuser, which RLS does not filter. Shrink this baseline as files are fixed; the guard fails on any NEW offender. Regenerate: node scripts/check-migration-rls-dml.mjs --update",
   "counts": {
-    "files": 120,
+    "files": 126,
     "tenantScoped": 202,
     "byPolicy": 34,
-    "byColumn": 191
+    "byColumn": 191,
+    "journalEntries": 126,
+    "unlisted": 0,
+    "policyTables": 225,
+    "policiesAttributed": 265,
+    "ambientLoops": 2,
+    "reasons": {
+      "no-guc-set": 38
+    }
   },
   "violations": {
     "atRisk": [
