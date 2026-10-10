@@ -77,7 +77,7 @@ export const sentryConfig = {
   initialScope: {
     tags: {
       service: 'nucrm-app',
-      version: process.env['npm_package_version'] || '1.0.0',
+      version: process.env['npm_package_version'] || 'unknown',
     },
   },
 };
