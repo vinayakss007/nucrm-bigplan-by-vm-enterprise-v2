@@ -65,6 +65,67 @@ jobs:
       # contradicted that and produced an image nothing consumed, so they are
       # removed. Docker is used for local development only.
 
+      # PP-062 pre-flight. This job has gone red on one line — `dial tcp ***:22:
+      # i/o timeout` — on every one of the 778 runs since the last green one, and
+      # that one line cannot separate the things it might be: DEPLOY_HOST unset, a
+      # placeholder, a name whose record moved, or a firewall drop. Classify it
+      # before drone-ssh spends its 30s connect timeout on a masked error.
+      #
+      # Prints NO address and NO digest of one, deliberately. This repo is public
+      # and so are its Actions logs, and an IPv4 is only 2^32 values — a truncated
+      # sha256 of one inverts in seconds, so a digest is not a redaction. Every
+      # value below is a PROPERTY (resolves / public / open / refused / silent),
+      # never an identifier (#2302, PP-053).
+      - name: Pre-flight — can this runner reach the deploy host?
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+        run: |
+          set -uo pipefail
+          if [ -z "${DEPLOY_HOST:-}" ]; then
+            echo "::error::DEPLOY_HOST is unset or empty — drone-ssh would dial an empty host."
+            exit 1
+          fi
+          TARGET="$DEPLOY_HOST"
+          case "$TARGET" in
+            *,*)
+              echo "DEPLOY_HOST lists several hosts; pre-flight checks the first, ssh-action dials all of them."
+              TARGET="${TARGET%%,*}" ;;
+          esac
+          case "$TARGET" in
+            *yourdomain*|*example*|*changeme*|*localhost*|*127.0.0.1*)
+              echo "::error::DEPLOY_HOST is a placeholder or loopback value, not a deploy target."
+              exit 1 ;;
+          esac
+          # Resolver first, shell tools second: tests/unit/deploy-runs-migrations-2233.test.ts
+          # bans `awk` anywhere in this file, which is #2233's rule against scraping CLI
+          # output for state. gethostbyname answers the question directly.
+          ADDR=$(python3 -c 'import socket,sys; print(socket.gethostbyname(sys.argv[1]))' "$TARGET" 2>/dev/null || true)
+          [ -z "$ADDR" ] && ADDR=$(getent ahostsv4 "$TARGET" 2>/dev/null | head -1 | cut -d' ' -f1)
+          if [ -z "$ADDR" ]; then
+            echo "::error::DEPLOY_HOST does not resolve to any IPv4 — the name is unregistered or its record is gone. (This is a DIFFERENT failure from the timeout this job has been printing.)"
+            exit 1
+          fi
+          case "$ADDR" in
+            10.*|192.168.*|172.1[6-9].*|172.2[0-9].*|172.3[01].*|127.*|169.254.*)
+              echo "::error::DEPLOY_HOST resolves to a NON-PUBLIC address, which a GitHub-hosted runner can never reach."
+              exit 1 ;;
+          esac
+          echo "DEPLOY_HOST resolves, and to a public address."
+          START=$(date +%s%N)
+          if timeout 10 bash -c "exec 3<>/dev/tcp/$ADDR/22" 2>/dev/null; then
+            MS=$(( ($(date +%s%N) - START) / 1000000 ))
+            exec 3<&-
+            echo "Port 22 answered in ${MS}ms. From here the failure would be SSH auth or the deploy script — not the network."
+            exit 0
+          fi
+          MS=$(( ($(date +%s%N) - START) / 1000000 ))
+          if [ "$MS" -ge 9000 ]; then
+            echo "::error::TCP :22 to the address DEPLOY_HOST resolves to got NO reply in ${MS}ms. A silent drop means either that address is not the VM you think it is (stale secret / a dynamic record that moved), or a firewall between GitHub and it. Nothing on the VM side can tell those apart: dial the host's CURRENT address and compare."
+          else
+            echo "::error::TCP :22 to the address DEPLOY_HOST resolves to was REFUSED after ${MS}ms — an address that is alive but not serving SSH on 22 (sshd down, or the port moved)."
+          fi
+          exit 1
+
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1
         with:
@@ -80,6 +141,20 @@ jobs:
             # secrets.DEPLOY_USER above, and #2302 removed the deploy user's
             # home directory from this public repo. Same directory on the VM,
             # and it survives the user or path changing there.
+            #
+            # PP-062: fail HERE, with the reason, rather than at `set -e` on this
+            # cd. On the host this job dials today there is no working copy at this
+            # path at all, and no pm2 either, because the app runs as Docker
+            # Compose — so repairing DEPLOY_HOST alone does not produce a deploy,
+            # it produces a different red. Say which defect this is, because it is
+            # a deployment-model mismatch, not a transient path problem.
+            if [ ! -d "$HOME/nucrm-bigplan-by-vm-enterprise-v2/.git" ]; then
+              echo "ABORT: the SSH identity has no git working copy under \$HOME/nucrm-bigplan-by-vm-enterprise-v2."
+              echo "This job deploys a pm2 / git-checkout VM (see the header at lines 5-10). If this host"
+              echo "runs the app from Docker Compose instead, the pm2 steps below cannot work either, so"
+              echo "either point DEPLOY_HOST at the pm2 VM, or move this job to 'compose up -d --build'."
+              exit 1
+            fi
             cd "$HOME/nucrm-bigplan-by-vm-enterprise-v2"
 
             # Non-interactive SSH does not source .bashrc, so the nvm
