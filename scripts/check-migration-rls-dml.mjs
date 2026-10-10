@@ -36,14 +36,45 @@
  * THE RULE
  * --------
  * If a migration file's *executable* scope writes rows into a tenant-scoped
- * table, it must also set the super-admin GUC those policies already branch on
- * (`0088` gates several policies on it — see `rls_bootstrap_and_isolation`):
+ * table, then for EVERY such table the file must do one of:
  *
- *     PERFORM set_config('app.is_super_admin', 'true', true);
+ *   (a) set transaction-locally a GUC that THIS TABLE'S OWN policies read —
+ *       `0088` gates several policies on `app.is_super_admin`, e.g.
  *
- * `true` as the third argument makes it transaction-local, so it cannot leak
- * into later files in the run. `0109_webhook_events_created_at_not_null.sql`
- * is the worked example, and the only one of 120 files that does it.
+ *           PERFORM set_config('app.is_super_admin', 'true', true);
+ *
+ *       (`true` as the third argument makes it transaction-local, so it
+ *       cannot leak into later files in the run); or
+ *   (b) set `app.current_tenant`, which every `tenant_isolation` policy is
+ *       built on.
+ *
+ * `0109_webhook_events_created_at_not_null.sql` is the worked example of (a),
+ * and 0125's repair of (b). The mitigation is resolved PER TABLE, not per
+ * file (#2516). The old rule asked only "does this file mention the marker
+ * anywhere" and `0125`'s first draft proved both ways that question lies:
+ * the mention can sit in the header prose — where the final file now
+ * *describes* the failure it is warning about — and a marker the written
+ * table's policies never read is inert on exactly the evidence `0125`
+ * records for `custom_entities`/`custom_entity_data`/`segment_members`:
+ * "`app.is_super_admin` GUC is **inert** on these three `tenant_isolation`
+ * policies (measured: `UPDATE 0`, then `23502` on the following `SET NOT
+ * NULL`)". `set_config` ran, RLS stayed blind, the write matched zero rows,
+ * and the guard passed.
+ *
+ * WHICH GUCS A TABLE'S POLICIES READ (static, no DB)
+ * --------------------------------------------------
+ * `collectPolicyGucs` unions, per table, every `current_setting('app.<name>')`
+ * that appears in any literal `CREATE POLICY … ON <table>` in the migration
+ * history. Static rather than a live `pg_policies` query deliberately: this
+ * guard exists because the CI context and the migrate context disagree (see
+ * above), and a live query would answer with whichever database it happened
+ * to hit — both are mid-pile (`Applied 99 · Pending 27`), so the policies
+ * visible now are not the set the file under review will meet. The cost, the
+ * same one `collectTenantScoped` already pays below: policies built by
+ * `format()`/`EXECUTE` loops have no literal text here, and the union ignores
+ * later `ALTER`/`DROP POLICY` — so (a) can only ever be accepted on evidence
+ * some policy actually reads the marker, never invented for tables whose
+ * policy text is unseen.
  *
  * WHAT "TENANT-SCOPED" MEANS HERE (static, no DB)
  * -----------------------------------------------
@@ -89,7 +120,10 @@ import { fileURLToPath } from 'node:url';
 
 const DEFAULT_MIGRATIONS_DIR = 'drizzle/migrations';
 const DEFAULT_BASELINE_PATH = 'scripts/migration-rls-dml-baseline.json';
-const MITIGATION = /set_config\(\s*'app\.is_super_admin'/i;
+// Both sides of the rule match the same shape: a GUC named `app.<something>`,
+// read by a policy or written by set_config. One pattern, two call sites.
+const APP_GUC = /current_setting\(\s*'app\.([a-z_]+)'/gi;
+const SET_CONFIG_GUC = /set_config\(\s*'app\.([a-z_]+)'/gi;
 
 /** Strip block and line comments so prose in a migration header cannot match a rule. */
 export function stripComments(sql) {
@@ -230,6 +264,25 @@ export function collectTenantScoped(sqlOfAllFiles) {
   return { byPolicy, byColumn, tenantScoped: new Set([...byPolicy, ...byColumn]) };
 }
 
+/**
+ * Per table, the `app.<name>` GUCs its literal `CREATE POLICY` expressions
+ * read, unioned over the whole migration history. This is the evidence the
+ * per-table mitigation (#2516) accepts a marker against — see THE RULE.
+ */
+export function collectPolicyGucs(sqlOfAllFiles) {
+  const byTable = new Map();
+  for (const sql of sqlOfAllFiles.map(stripComments)) {
+    for (const [table, stmt] of policyStatements(sql)) {
+      const read = [...stmt.matchAll(APP_GUC)].map((m) => m[1]);
+      if (read.length === 0) continue;
+      const acc = byTable.get(table) ?? new Set();
+      byTable.set(table, acc);
+      for (const g of read) acc.add(g);
+    }
+  }
+  return byTable;
+}
+
 const DML_PATTERNS = [
   ['update', /\bUPDATE\s+(?:ONLY\s+)?(?:[\w.]+\.)?"?([a-z_][a-z0-9_]*)"?\s+(?:\w+\s+)?SET\b/gi],
   ['delete', /\bDELETE\s+FROM\s+(?:[\w.]+\.)?"?([a-z_][a-z0-9_]*)"?\b/gi],
@@ -238,11 +291,21 @@ const DML_PATTERNS = [
 
 /**
  * Verdict on one migration file: the rows it writes at migration time, per
- * target table, plus whether it writes through dynamic SQL (no static target).
+ * target table, plus whether it writes through dynamic SQL (no static
+ * target). `mitigated` means every tenant-scoped table the file touches is
+ * covered by a GUC the file sets — `app.current_tenant` covers any table;
+ * any other marker covers only tables whose own policies read that marker
+ * (#2516), and `uncoveredWrites`/`uncoveredDynamicTables` name the ones a
+ * partial mitigation left RLS-blind.
  */
-export function analyzeFile(rawSql, tenantScoped) {
-  const mitigated = MITIGATION.test(rawSql);
+export function analyzeFile(rawSql, tenantScoped, policyGucs = new Map()) {
   const scoped = executableScope(stripComments(rawSql));
+  const gucs = new Set(
+    [...scoped.matchAll(SET_CONFIG_GUC)].map((m) => m[1]),
+  );
+  const covered = (t) =>
+    gucs.has('current_tenant')
+    || [...gucs].some((g) => policyGucs.get(t)?.has(g) === true);
   const writes = [];
   for (const [kind, re] of DML_PATTERNS) {
     for (const m of scoped.matchAll(re)) writes.push({ kind, table: m[1] });
@@ -252,9 +315,21 @@ export function analyzeFile(rawSql, tenantScoped) {
   // doing this is never silently clean.
   const dynamic = /\bEXECUTE\s+(?:format\s*\(\s*)?'[^']*\b(?:UPDATE|DELETE\s+FROM|INSERT\s+INTO)\b/i.test(scoped);
   const tenantWrites = writes.filter((w) => tenantScoped.has(w.table));
-  const dynamicOverTenantTable = dynamic
-    && [...tenantScoped].some((t) => new RegExp(`["']${t}["']`).test(scoped));
-  return { mitigated, writes, tenantWrites, dynamic, dynamicOverTenantTable };
+  const mentioned = [...tenantScoped].filter(
+    (t) => new RegExp(`["']${t}["']`).test(scoped),
+  );
+  const dynamicOverTenantTable = dynamic && mentioned.length > 0;
+  return {
+    mitigated: tenantWrites.every((w) => covered(w.table))
+      && (!dynamicOverTenantTable || mentioned.every(covered)),
+    gucs,
+    writes,
+    tenantWrites,
+    uncoveredWrites: tenantWrites.filter((w) => !covered(w.table)),
+    dynamic,
+    dynamicOverTenantTable,
+    uncoveredDynamicTables: mentioned.filter((t) => !covered(t)),
+  };
 }
 
 function collect(migrationsDir) {
@@ -263,16 +338,17 @@ function collect(migrationsDir) {
     .sort();
   const rawOf = names.map((f) => readFileSync(`${migrationsDir}/${f}`, 'utf8'));
   const { byPolicy, byColumn, tenantScoped } = collectTenantScoped(rawOf);
+  const policyGucs = collectPolicyGucs(rawOf);
 
   const violations = { atRisk: [], dynamicTarget: [] };
   names.forEach((name, i) => {
     const tag = name.replace(/\.sql$/, '');
-    const a = analyzeFile(rawOf[i], tenantScoped);
+    const a = analyzeFile(rawOf[i], tenantScoped, policyGucs);
     if (a.mitigated) return;
-    if (a.tenantWrites.length > 0) {
-      const listed = [...new Set(a.tenantWrites.map((w) => `${w.kind}:${w.table}`))].sort().join(' ');
+    if (a.uncoveredWrites.length > 0) {
+      const listed = [...new Set(a.uncoveredWrites.map((w) => `${w.kind}:${w.table}`))].sort().join(' ');
       violations.atRisk.push(`atRisk:${tag}|${listed}`);
-    } else if (a.dynamicOverTenantTable) {
+    } else if (a.uncoveredDynamicTables.length > 0) {
       violations.dynamicTarget.push(`dynamicTarget:${tag}`);
     }
   });
@@ -284,6 +360,7 @@ function collect(migrationsDir) {
       tenantScoped: tenantScoped.size,
       byPolicy: byPolicy.size,
       byColumn: byColumn.size,
+      policyGucTables: policyGucs.size,
     },
     violations,
   };
@@ -339,6 +416,7 @@ function main() {
   console.log([
     `[check-migration-rls-dml] ${counts.files} migration(s) · ${counts.tenantScoped} tenant-scoped table(s)`,
     `                     policy-derived ${counts.byPolicy} ∪ tenant_id-column ${counts.byColumn}`,
+    `                     marker evidence: ${counts.policyGucTables ?? '?'} table(s) with literal policies reading an app.* GUC`,
     `  baselined: ${(baseline.violations?.atRisk ?? []).length} row-write offender(s), ${(baseline.violations?.dynamicTarget ?? []).length} dynamic-target file(s)`,
   ].join('\n'));
 
@@ -360,8 +438,9 @@ function main() {
       'data, and the run aborts mid-deploy. CI will not catch it either:',
       'apply-rls-ci.mjs applies these files as the postgres superuser.',
       '',
-      "Set the GUC the policies already branch on, transaction-locally, in the",
-      'same DO block as the write — see 0109_webhook_events_created_at_not_null.sql:',
+      "Set, transaction-locally, a GUC that EACH written table's own policies",
+      "read — or app.current_tenant, which every tenant_isolation policy is",
+      'built on. See 0109_webhook_events_created_at_not_null.sql:',
       '',
       "    PERFORM set_config('app.is_super_admin', 'true', true);",
       '',
