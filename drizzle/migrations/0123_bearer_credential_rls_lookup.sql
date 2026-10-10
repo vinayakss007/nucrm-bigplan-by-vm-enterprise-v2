@@ -14,29 +14,49 @@
 -- or a 404 instead of a visible 403, which is why nobody reported it.
 --
 -- Measured on a migrated database (`FORCE ROW LEVEL SECURITY` on) as an ordinary
--- NOSUPERUSER NOBYPASSRLS role with one fixture row per table, tenant A:
+-- NOSUPERUSER NOBYPASSRLS role, against two workspaces' fixture rows:
 --
---   no app.current_tenant            -> 0 of 5 rows visible  (what the pool does)
---   app.current_tenant = tenant A    -> 5 of 5
---   app.current_tenant = tenant B    -> 0
+--   no app.current_tenant -> 0 rows visible in `quotes`, `quote_line_items`,
+--                            `csat_surveys`, `signing_requests`, `documents`,
+--                            `contacts` and `activities`  (what the pool does)
+--   app.current_tenant = A -> 2 quotes, 1 survey, 3 signing requests, 2 documents
+--   app.current_tenant = B -> the same role sees only B's own rows
 --
--- The deparse is `tenant_id = NULLIF(current_setting('app.current_tenant', true),
--- '')::uuid`, so an unset GUC is a silent deny rather than an error. Concretely:
+-- Three deparses of the same `tenant_isolation` policy, all fail-closed; an
+-- unset GUC resolves to NULL, so a read denies silently rather than erroring:
+--   quotes, csat_surveys, signing_requests, documents
+--     (tenant_id IS NULL) OR (tenant_id = CASE WHEN NULLIF(current_setting(
+--       'app.current_tenant', true),'') IS NULL THEN NULL::uuid
+--       ELSE NULLIF(current_setting('app.current_tenant', true),'')::uuid END)
+--   activities, contacts
+--     tenant_id = NULLIF(current_setting('app.current_tenant', true),'')::uuid
+--       OR NULLIF(current_setting('app.is_super_admin', true),'')::boolean = true
+--   quote_line_items                                    (the strictest one)
+--     tenant_id = NULLIF(current_setting('app.current_tenant', true),'')::uuid
+--
+-- Per route, what that produced:
 --
 --   GET /api/public/offers/[token]   reads quotes by metadata->offer->public_token
 --          -> no row -> 404 "Offer not found" on a live offer the buyer was just
---             emailed. The `contacts` read (#2438's strict policy) RAISES rather
---             than denies, so the same missing context aborts the page outright.
+--             emailed. The `contacts` buyer-name read (#2438) has the same
+--             fail-closed shape, so it is an empty result rather than an error —
+--             measured: `SELECT count(*) FROM contacts` as the restricted role
+--             with no context returns 0 and no exception.
 --   POST …/accept and …/decline     write on a bare db.transaction()
 --          -> no tenant GUC either (public routes have no PP-027 carrier to
---             re-apply), so WITH CHECK refuses the status flip and the buyer's
---             answer is discarded with a 500.
+--             re-apply). Measured, the two halves behave differently:
+--             `UPDATE quotes SET status='accepted'` answers UPDATE 0, because
+--             USING filters the target rows and there are none, so the status
+--             flip is a silent no-op; the `activities` event INSERT is the only
+--             part of a buyer's answer that complains at all, as
+--             ERROR: new row violates row-level security policy for table "activities".
 --   GET/POST /api/public/csat/[token] reads csat_surveys by token
 --          -> no row -> 404, so a satisfaction link is dead on arrival.
 --   GET/POST /api/public/sign/[token] resolves signing_requests by a per-signer
 --          token held inside the `signers` jsonb array
 --          -> no rows -> 404, and a document withdrawal (#2380) can no longer be
---             told from a signing request that never existed.
+--             told from a signing request that never existed. `signing_events`
+--             refuses the write the same way `activities` does.
 --
 -- Granted the way 0105 granted the tracking read, 0088 the pre-auth login read
 -- and 0122 the portal credential read: SELECT only, behind the SAME dedicated
