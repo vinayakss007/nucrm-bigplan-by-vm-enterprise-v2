@@ -21,6 +21,7 @@ import { randomBytes } from 'crypto';
 import { db, type DbClient } from '@/drizzle/db';
 import { quotes } from '@/drizzle/schema';
 import { eq, and, sql, isNull } from 'drizzle-orm';
+import { withPortalLookupContext } from '@/lib/db/portal-lookup-context';
 
 export type OfferStatus = 'draft' | 'sent' | 'viewed' | 'accepted' | 'declined' | 'expired' | 'cancelled';
 
@@ -51,16 +52,37 @@ export function publicOfferUrl(publicToken: string): string {
  * Look up a quote by its public token (offer access path).
  * Returns null if no live offer matches — collapses every "no" path so that
  * buyer-facing routes always 404 cleanly without leaking which case hit.
+ *
+ * #2468: this read is what a buyer's link is authenticated by, and the offer has
+ * no workspace to name before it resolves — the same chicken-and-egg #2446
+ * documented for `portal_clients`. `quotes`' only other policy compares
+ * `tenant_id` to `app.current_tenant`, so on the bare pool this was a silent
+ * zero-row read and every offer link answered 404. It now runs inside
+ * `withPortalLookupContext()`, which is what names migration 0123's
+ * `quotes_offer_credential_lookup` arm. The context is SELECT-only and knows no
+ * tenant, so everything after this lookup still needs `withTenantContext()` from
+ * the caller, keyed on the row's own `tenantId`.
+ *
+ * The shape check is the same reasoning as `SURVEY_TOKEN_RE` in the CSAT route:
+ * `generatePublicToken()` is base64url, so anything outside that alphabet — and
+ * anything long enough to trip `requireLookupValue`'s 512-character cap — is not
+ * a link that ever existed. Refusing it here returns the 404 every other "no"
+ * path on this surface returns, instead of throwing through the lookup context
+ * into a 500 that Sentry pages an operator for.
  */
-export async function findOfferByToken(publicToken: string) {
-  if (!publicToken || publicToken.length < 16) return null;
+const OFFER_TOKEN_RE = /^[A-Za-z0-9_-]{16,128}$/;
 
-  const row = await db.query.quotes.findFirst({
-    where: and(
-      sql`(${quotes.metadata}->'offer'->>'public_token') = ${publicToken}`,
-      isNull(quotes.deletedAt),
-    ),
-  });
+export async function findOfferByToken(publicToken: string) {
+  if (!publicToken || !OFFER_TOKEN_RE.test(publicToken)) return null;
+
+  const row = await withPortalLookupContext({ accessToken: publicToken }, (tx) =>
+    tx.query.quotes.findFirst({
+      where: and(
+        sql`(${quotes.metadata}->'offer'->>'public_token') = ${publicToken}`,
+        isNull(quotes.deletedAt),
+      ),
+    }),
+  );
   return row ?? null;
 }
 

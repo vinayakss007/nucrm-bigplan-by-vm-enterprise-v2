@@ -1,13 +1,6 @@
 {
   "entries": [
     {
-      "file": "app/api/public/sign/[token]/route.ts",
-      "table": "documents",
-      "gate": "getInternalSigningByToken",
-      "via": "lib/esignature-internal.ts",
-      "reason": "The route re-reads the document for its name, but the id it reads came out of getInternalSigningByToken(), which 404s the whole signing request when documents.deleted_at is set (#2380). Duplicating the predicate here would guard a value the gate already rejected."
-    },
-    {
       "file": "app/api/public/tickets/route.ts",
       "table": "supportTickets",
       "reason": "Deliberate non-filter: a portal token names ONE ticket, and filtering this token→identity lookup by deleted_at would lock a customer out of their whole remaining ticket history because one old ticket was deleted. The list query below still omits the deleted ticket (#2378).",

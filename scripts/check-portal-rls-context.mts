@@ -341,8 +341,12 @@ const HANDLE_RE = /([A-Za-z_$][\w$]*)\s*\.\s*(?:select|insert|update|delete|quer
  * `const TICKET_PROJECTION = { id: supportTickets.id }` is a column map that
  * some query below uses; flagging the map would report the same read twice and
  * teach whoever hits it to distrust the output.
+ *
+ * `query` is matched on ANY handle: with the old `\bdb\s*\.\s*query\b`, moving a
+ * relational read from `db` onto `tx` dropped it out of the policed set entirely
+ * — measured on the offers route's `contacts` read in #2468.
  */
-const QUERY_RE = /\.(?:select|insert|update|delete|from|where|values|returning|execute|onConflict)\s*[(.<]|\bsql\s*`|\bdb\s*\.\s*query\b/;
+const QUERY_RE = /\.(?:select|insert|update|delete|from|where|values|returning|execute|onConflict)\s*[(.<]|\bsql\s*`|\.\s*query\s*\.\s*[A-Za-z_$]/;
 
 /** The handle a chain hangs off: the last `<ident>.select(` before this offset. */
 export function handleFor(statement: string, refOffset: number): string | undefined {
