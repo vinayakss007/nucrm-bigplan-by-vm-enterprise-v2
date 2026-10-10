@@ -54,9 +54,11 @@
  * ---------------
  * Two tenants and their rows, all named from this run's random suffix, all
  * removed in `afterAll`, which throws rather than swallowing a failed restore.
- * If `0123`'s policies are absent (a `db:sync` database that has not had
- * `scripts/apply-rls-ci.mjs` run over it) the suite applies that file itself and
- * drops precisely the policies it added.
+ * The probe role comes from `tests/helpers/rls-probe-role.ts` (#2474) and is
+ * released by it too, so a run drops only the role it created (#2466) and leaves
+ * no membership row behind. If `0123`'s policies are absent (a `db:sync` database
+ * that has not had `scripts/apply-rls-ci.mjs` run over it) the suite applies that
+ * file itself and drops precisely the policies it added.
  *
  * Self-skips when no database is reachable.
  */
@@ -68,6 +70,12 @@ import { join } from 'node:path';
 import { NextRequest } from 'next/server';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import * as appSchema from '../../drizzle/schema';
+import {
+  ensureRlsProbeRole,
+  probeRoleClientFromPool,
+  releaseRlsProbeRole,
+  type ProbeRoleHandle,
+} from '../helpers/rls-probe-role';
 
 const UP_FILE = '0123_bearer_credential_rls_lookup.sql';
 const MIGRATIONS_DIR = join(__dirname, '..', '..', 'drizzle', 'migrations');
@@ -152,6 +160,8 @@ let originalTrustProxy: string | undefined;
 let originalRedisUrl: string | undefined;
 /** Policies this suite created, so teardown drops exactly these and no others. */
 let addedPolicies: string[] = [];
+/** What `ensureRlsProbeRole` established — undefined if setup never got that far. */
+let probeHandle: ProbeRoleHandle | undefined;
 const restoreFailures: string[] = [];
 
 /**
@@ -324,22 +334,17 @@ d('public bearer-token routes establish a tenant context from the credential (#2
       },
     ]);
 
-    await admin.query(
-      `DO $$ BEGIN
-         IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${ROLE}') THEN
-           CREATE ROLE "${ROLE}" NOSUPERUSER NOBYPASSRLS INHERIT LOGIN PASSWORD '${ROLE_PASSWORD}';
-         ELSE
-           ALTER ROLE "${ROLE}" NOSUPERUSER NOBYPASSRLS INHERIT LOGIN PASSWORD '${ROLE_PASSWORD}';
-         END IF;
-       END $$;`,
-    );
-    // Membership in the two predefined data roles rather than `GRANT … ON SCHEMA
-    // public` / `ON ALL TABLES`: those are catalog UPDATEs on tuples other suites
-    // also write (#2472's `tuple concurrently updated`, and #2474 for the setup
-    // race). Both roles are rolsuper=f / rolbypassrls=f, so RLS binds exactly as
-    // the explicit grants would — privileges are not what is under test here.
-    await admin.query(`GRANT pg_read_all_data TO "${ROLE}"`);
-    await admin.query(`GRANT pg_write_all_data TO "${ROLE}"`);
+    // #2474's shared probe: `NOSUPERUSER NOBYPASSRLS INHERIT`, privileges from
+    // membership in pg_read_all_data / pg_write_all_data rather than a
+    // `GRANT … ON SCHEMA public` that races a hot catalog row other suites write
+    // the same second, and it throws rather than running a probe that could see
+    // through RLS. Privileges are not what is under test here — the policies are.
+    probeHandle = await ensureRlsProbeRole(probeRoleClientFromPool(admin), ROLE, { login: true });
+    // This suite authenticates as the probe over a second pool instead of
+    // `SET ROLE`, because the application's pool is built from DATABASE_URL
+    // (lib/db/pool.ts) and only a connection string can redirect it. The name is
+    // this run's, so this UPDATE touches no row anybody else is writing.
+    await admin.query(`ALTER ROLE "${ROLE}" PASSWORD '${ROLE_PASSWORD}'`);
 
     const restricted = new URL(originalUrl);
     restricted.username = encodeURIComponent(ROLE);
@@ -404,11 +409,19 @@ d('public bearer-token routes establish a tenant context from the credential (#2
       ['contacts', `DELETE FROM contacts WHERE tenant_id = ANY($1::uuid[])`, [[TENANT_A, TENANT_B]]],
       ['users', `DELETE FROM users WHERE id = $1`, [UPLOADER]],
       ['tenants', `DELETE FROM tenants WHERE id = ANY($1::uuid[])`, [[TENANT_A, TENANT_B]]],
-      ['role', `DROP ROLE IF EXISTS "${ROLE}"`, []],
     ] as [string, string, unknown[]][]) {
       try {
         await admin.query(sqlText, params);
       } catch (err) { mark(`cleanup ${label}`, err); }
+    }
+    // #2466: only this run's role may be taken back, and `releaseRlsProbeRole`
+    // returns one string per statement it could not run rather than swallowing it
+    // — a leak here would poison the next run's before-state.
+    if (probeHandle) {
+      for (const failure of await releaseRlsProbeRole(probeRoleClientFromPool(admin), probeHandle)) {
+        mark('release probe role', failure);
+      }
+      probeHandle = undefined;
     }
     await rolePool?.end().catch(() => {});
     await admin?.end().catch(() => {});
@@ -418,15 +431,17 @@ d('public bearer-token routes establish a tenant context from the credential (#2
   }, 60_000);
 
   it('the restricted role really is bound by the shipped policies (the before-state)', async () => {
+    // rolsuper / rolbypassrls / rolinherit are asserted by `ensureRlsProbeRole`
+    // itself, which throws rather than running a blind probe; what is left to
+    // check here is the one thing only this suite needs — that the probe can open
+    // its own connection, since the application's pool authenticates rather than
+    // assuming the role.
     const bound = await admin.query(
-      'SELECT rolsuper, rolbypassrls, rolcanlogin, rolinherit FROM pg_roles WHERE rolname = $1',
+      'SELECT rolcanlogin FROM pg_roles WHERE rolname = $1',
       [ROLE],
     );
     expect(bound.rows[0], `the probe role ${ROLE} was not created`).toBeTruthy();
-    expect(bound.rows[0].rolsuper, 'a superuser bypasses RLS and would prove nothing').toBe(false);
-    expect(bound.rows[0].rolbypassrls, 'BYPASSRLS would prove nothing either').toBe(false);
     expect(bound.rows[0].rolcanlogin).toBe(true);
-    expect(bound.rows[0].rolinherit, 'NOINHERIT would make the membership grants inert').toBe(true);
 
     // The whole defect, measured: every table one of these routes keys a read on
     // is empty for the role the application runs as, with no credential context.
