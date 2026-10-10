@@ -1818,7 +1818,7 @@ NOW() - interval '30 days'`, each followed by `v_count := v_count + 1`, and `RET
   Billing 14 · AI 2**. The other **50** are update/delete-only: `tenant_id = sentinel` matches no row, so they
   answer 404 or a silent no-op and never reach the FK. 116 of the 120 are `/api/tenant/**`, 4 are `/api/v1/**`.
   Examples: `app/api/tenant/roles/route.ts:70`, `custom-fields/route.ts:342`, `webhooks/route.ts:104`,
-  `billing/checkout/route.ts:74`, `billing/dunning/route.ts:109`, `ai/draft/route.ts:147`, `tickets/route.ts:114`,
+  `billing/checkout/route.ts:74`, `billing/dunning/route.ts:109`, `ai/draft/route.ts:147`, `app/api/tenant/tickets/route.ts:113` (re-pinned from the bare `tickets/route.ts:114` on 2026-10-10: the path was ambiguous — `guard:register-drift` read it as the **public** route, whose line 114 said something else entirely — and **#2444** removed a `generatePortalToken` import two lines above),
   `invoices/route.ts:181`, `import/route.ts:72`, `v1/deals/route.ts:148`. `api-keys` is a **positional** pass
   (`app/api/tenant/api-keys/route.ts:91` → `generateApiKey(ctx.tenantId, …)` → `lib/auth/api-key.ts:178`), so
   120 is a **lower bound**, not a ceiling.
