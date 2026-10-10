@@ -492,10 +492,11 @@ describe('check-public-row-projection', () => {
     it('separates the public paths that have a route from the ones that only have an edge rule', () => {
       const scope = resolveScope('.', paths);
       expect(scope.dirs.length).toBeGreaterThan(30);
-      // Measured: the edge opens two doors that nothing is behind. This is the
-      // #2415 class, reported rather than failed — a route that does not exist
-      // cannot leak a row, but it must not stay invisible either.
-      expect(scope.unresolved).toEqual(['/api/lead-capture', '/api/lead-capture/submit']);
+      // The two dead entries (`/api/lead-capture`, `/api/lead-capture/submit`)
+      // were removed from proxy.ts under #2459 — the live lead form posts to
+      // /api/leads/public, which resolves. The #2415 class is still reported
+      // rather than failed; today there is simply nothing to report.
+      expect(scope.unresolved).toEqual([]);
     });
 
     it('walks the derived tree instead of a hardcoded one, and finds the reads the old scope missed', () => {
@@ -579,12 +580,22 @@ describe('the guard as an auditor runs it', () => {
     expect(parsed.problems).toEqual([]);
     expect(parsed.relational).toBeGreaterThanOrEqual(MIN_PUBLIC_RELATIONAL_READ_SITES);
     expect(parsed.waived).toHaveLength(1);
+    // #2459: the two dead entries are gone from proxy.ts, so the real run
+    // reports nothing unresolved.
+    expect(parsed.unresolved).toEqual([]);
   });
 
   it('names the public paths that have no route behind them', () => {
+    // The mechanism, planted rather than borrowed from the repo: an edge entry
+    // with nothing behind it is reported, not failed (#2415 class). The real
+    // proxy.ts now has none, so this is what keeps the reporting covered.
+    const scope = resolveScope('.', ['/api/a-route-nobody-installed']);
+    expect(scope.unresolved).toEqual(['/api/a-route-nobody-installed']);
+    expect(scope.dirs).toEqual([]);
+
     const own = cli([]);
     expect(own.status).toBe(0);
-    expect(own.stdout).toContain('/api/lead-capture is in proxy.ts');
+    expect(own.stdout).not.toContain('is in proxy.ts');
   });
 
   it('still refuses a directory argument that points at no routes', () => {
