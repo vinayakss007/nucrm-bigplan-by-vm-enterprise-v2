@@ -365,26 +365,45 @@ export function analyzeFile(rawSql, tenantScoped, policyMap) {
   const dynamicOverTenantTable = dynamic
     && [...tenantScoped].some((t) => new RegExp(`["']${t}["']`).test(scoped));
   const blind = [];
+  const admitted = [];
   for (const w of tenantWrites) {
     const verdict = policyMap
       ? writeIsVisible(policyMap, w.table, w.kind, gucs)
       : {
         ok: gucs.has(TENANT_GUC),
-        why: gucs.size === 0 ? 'no-guc-set' : 'policy-not-attributable',
+        // Without a map the only thing this can claim is the tenant context, so
+        // it claims that `why` and nothing else — `describeAdmission` prints a
+        // policy name for every other accept.
+        why: gucs.has(TENANT_GUC)
+          ? 'tenant-guc'
+          : gucs.size === 0 ? 'no-guc-set' : 'policy-not-attributable',
         expected: [TENANT_GUC],
         seen: [...gucs],
       };
     if (!verdict.ok) blind.push({ ...w, ...verdict });
+    else admitted.push({ ...w, ...verdict });
   }
   return {
     gucs,
     writes,
     tenantWrites,
     blind,
+    admitted,
     dynamic,
     dynamicOverTenantTable,
     dynamicBlind: dynamicOverTenantTable && !gucs.has(TENANT_GUC),
   };
+}
+
+/**
+ * One resolved write, named. `#2545` AC3: a write the screen excuses has to say
+ * *which* policy excuses it, because "no violation" and "admitted by a policy
+ * that reads nothing" are the same exit code and not the same fact.
+ */
+function describeAdmission(w) {
+  if (w.why === 'tenant-guc') return `${w.kind} ${w.table}: ${TENANT_GUC} is set, which every tenant policy is built on`;
+  if (w.policyGucs.length === 0) return `${w.kind} ${w.table}: admitted by policy "${w.policy}", which reads no GUC at all`;
+  return `${w.kind} ${w.table}: admitted by policy "${w.policy}", which reads ${w.policyGucs.join(', ')}`;
 }
 
 const REASON_TEXT = {
@@ -407,10 +426,12 @@ function collect(migrationsDir) {
 
   const violations = { atRisk: [], dynamicTarget: [] };
   const detail = new Map();
+  const admitted = new Map();
   const reasons = {};
   for (const { file, sql } of ordered) {
     const tag = file.replace(/\.sql$/, '');
     const a = analyzeFile(sql, tenantScoped, policyMap);
+    if (a.admitted.length > 0) admitted.set(tag, [...new Set(a.admitted.map(describeAdmission))].sort());
     if (a.blind.length > 0) {
       const listed = [...new Set(a.blind.map((w) => `${w.kind}:${w.table}`))].sort().join(' ');
       violations.atRisk.push(`atRisk:${tag}|${listed}`);
@@ -437,6 +458,7 @@ function collect(migrationsDir) {
     },
     violations,
     detail,
+    admitted,
   };
 }
 
@@ -444,7 +466,9 @@ const KINDS = ['atRisk', 'dynamicTarget'];
 
 // `--migrations-dir` / `--baseline` exist so the CLI contract — exit 0 clean,
 // exit 1 on a new offender, exit 0 once mitigated — is testable against
-// fixtures instead of only against the 120 real files.
+// fixtures instead of only against the 120 real files. `--explain <tag|all>`
+// names the policy that excuses each resolved write, because exit 0 covers both
+// "the rows are visible" and "a policy reads nothing".
 function resolvePaths(argv) {
   const flag = (name) => {
     const i = argv.indexOf(name);
@@ -453,13 +477,26 @@ function resolvePaths(argv) {
   return {
     migrationsDir: flag('--migrations-dir') ?? DEFAULT_MIGRATIONS_DIR,
     baselinePath: flag('--baseline') ?? DEFAULT_BASELINE_PATH,
+    // Baseline keys drop the extension while every other mention of a migration
+    // in this repo keeps it, so accept both — a `.sql` argument that resolved to
+    // nothing would read as "this file excuses no write" when it excuses two.
+    explain: flag('--explain')?.replace(/\.sql$/, ''),
   };
 }
 
 function main() {
-  const { migrationsDir, baselinePath } = resolvePaths(process.argv);
-  const { counts, violations, detail } = collect(migrationsDir);
+  const { migrationsDir, baselinePath, explain } = resolvePaths(process.argv);
+  const { counts, violations, detail, admitted } = collect(migrationsDir);
   const flat = KINDS.flatMap((k) => violations[k]);
+
+  if (explain) {
+    const tags = explain === 'all' ? [...admitted.keys()] : [explain];
+    for (const tag of tags) {
+      const lines = admitted.get(tag);
+      console.log(`[explain] ${tag}: ${lines ? `${lines.length} resolved write(s)` : 'no resolved tenant write'}`);
+      for (const line of lines ?? []) console.log(`       - ${line}`);
+    }
+  }
 
   if (process.argv.includes('--update')) {
     const body = {

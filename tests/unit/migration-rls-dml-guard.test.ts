@@ -671,6 +671,45 @@ describe('CLI exit codes — the contract CI depends on', () => {
     expect(run(mig, baseline).status).toBe(0);
   });
 
+  it('names the policy that admitted a write it excuses (#2545 AC3)', () => {
+    // Exit 0 is the same byte for "the rows are visible" and "some policy reads
+    // nothing", so the screen has to say which of the two it found — otherwise
+    // an unconditional policy and a resolved marker are indistinguishable in the
+    // log a reviewer reads.
+    const { mig, baseline } = fixture({
+      '0001_a.sql': TABLE + 'CREATE POLICY insert_any ON leads FOR INSERT WITH CHECK (true);\n'
+        + 'CREATE POLICY super_write ON leads FOR UPDATE USING'
+        + " ((NULLIF(current_setting('app.is_super_admin', true), ''))::boolean = true);\n",
+      '0002_ok.sql': 'INSERT INTO leads (id) VALUES (1);\n'
+        + 'DO $$\nBEGIN\n'
+        + "  PERFORM set_config('app.is_super_admin', 'true', true);\n"
+        + '  UPDATE leads SET lead_oid = lower(lead_oid);\nEND $$;\n',
+    });
+    const empty = JSON.stringify({ counts: {}, violations: { atRisk: [], dynamicTarget: [] } });
+    writeFileSync(baseline, empty);
+    const explained = run(mig, baseline, ['--explain', '0002_ok']);
+    expect(explained.status, explained.stderr).toBe(0);
+    expect(explained.stdout).toContain('2 resolved write(s)');
+    expect(explained.stdout).toContain('admitted by policy "insert_any", which reads no GUC at all');
+    expect(explained.stdout).toContain('admitted by policy "super_write", which reads app.is_super_admin');
+
+    // A write nothing admits has nothing to name, and is still a violation:
+    // this file sets no GUC, so `super_write` cannot resolve it.
+    writeFileSync(join(mig, '0003_tenant.sql'), "UPDATE leads SET lead_oid = 'x';\n");
+    writeFileSync(baseline, empty);
+    const blind = run(mig, baseline, ['--explain', '0003_tenant']);
+    expect(blind.status).toBe(1);
+    expect(blind.stdout).toContain('[explain] 0003_tenant: no resolved tenant write');
+
+    // The argument is accepted with the extension too, because that is the
+    // string a reviewer copies out of `drizzle/migrations/`. Reading `.sql` as
+    // an unknown tag would print "no resolved tenant write" for a file that
+    // resolves two.
+    const withExt = run(mig, baseline, ['--explain', '0002_ok.sql']);
+    expect(withExt.stdout).toContain('[explain] 0002_ok: 2 resolved write(s)');
+    expect(withExt.stdout).not.toContain('0002_ok.sql: no resolved');
+  });
+
   it('does not let a policy in a COMMENT decide anything', () => {
     const { mig, baseline } = fixture({
       '0001_a.sql': TABLE,

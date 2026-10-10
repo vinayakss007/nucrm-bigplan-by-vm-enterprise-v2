@@ -391,7 +391,14 @@ export function writeIsVisible(map, table, kind, gucs) {
   const admitted = covering.filter((p) => !p.restrictive);
   const satisfied = admitted.filter((p) => p.gucs.size === 0
     || [...p.gucs].some((g) => gucs.has(g)));
-  if (satisfied.length > 0) return { ok: true, why: 'policy-guc', policy: satisfied[0].name };
+  if (satisfied.length > 0) {
+    return {
+      ok: true,
+      why: 'policy-guc',
+      policy: satisfied[0].name,
+      policyGucs: [...satisfied[0].gucs],
+    };
+  }
   return {
     ok: false,
     why: gucs.size === 0 ? 'no-guc-set' : 'guc-not-gated-here',
