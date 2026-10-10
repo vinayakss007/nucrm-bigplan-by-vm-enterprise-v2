@@ -431,7 +431,7 @@ function collect(migrationsDir) {
   for (const { file, sql } of ordered) {
     const tag = file.replace(/\.sql$/, '');
     const a = analyzeFile(sql, tenantScoped, policyMap);
-    if (a.admitted.length > 0) admitted.set(tag, [...new Set(a.admitted.map(describeAdmission))].sort());
+    if (a.admitted.length > 0) admitted.set(tag, a.admitted);
     if (a.blind.length > 0) {
       const listed = [...new Set(a.blind.map((w) => `${w.kind}:${w.table}`))].sort().join(' ');
       violations.atRisk.push(`atRisk:${tag}|${listed}`);
@@ -492,7 +492,11 @@ function main() {
   if (explain) {
     const tags = explain === 'all' ? [...admitted.keys()] : [explain];
     for (const tag of tags) {
-      const lines = admitted.get(tag);
+      const writes = admitted.get(tag);
+      // Naming the admitting policy only for `--explain` keeps the CI path
+      // read-only over its own verdicts; a 0125-style loop repeats the same
+      // admission once per tenant, so the lines are deduplicated before print.
+      const lines = writes && [...new Set(writes.map(describeAdmission))].sort();
       console.log(`[explain] ${tag}: ${lines ? `${lines.length} resolved write(s)` : 'no resolved tenant write'}`);
       for (const line of lines ?? []) console.log(`       - ${line}`);
     }
