@@ -3840,7 +3840,14 @@ psql -tAc "select count(*) from support_tickets"  # as the app role, with app.po
   environment and are not written here — **#145**'s guard `tests/unit/deploy-host-literals-2302.test.ts` fails
   any public IPv4 in `docs/`, and it has now failed this entry **twice**: once on its first draft, once when the
   re-run above added a third-party address to prove the silent branch. That is the guard working exactly as
-  designed, on the file whose twelve addresses it was written to remove. The **refused** branch has no real
+  designed, on the file whose twelve addresses it was written to remove. **Re-run once more against the exact
+  body shipped on this branch** (extracted from the workflow and diffed against the script that produced the
+  numbers above — identical): the eight offline values land where they did, the box's DDNS name again gives
+  `resolves, and to a public address` then `NO reply in 10055ms`, and its own current address again gives
+  `Port 22 answered in 115ms`. Two details that only show up on a second pass: the timeout figure moves a few
+  milliseconds per run, so the stable claim is *silent, near the 10 s cap* rather than a specific number; and
+  the open case has to be dialed as the IPv4 — `curl -s ifconfig.me` from this box returns an IPv6 first, which
+  the step correctly reads as *does not resolve to any IPv4*, so the re-measurement needs `curl -4`. The **refused** branch has no real
   network path from here (port 22 answers on every public address this box owns), so it was verified on a copy
   of the step with the probe port swapped to a closed local one: rc 1 at **110 ms** → REFUSED. That proves the
   designed split — under 9 s ⇒ refused, at/over 9 s ⇒ silent — and nothing beyond it.
