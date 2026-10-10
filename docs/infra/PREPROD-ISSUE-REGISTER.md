@@ -4,10 +4,21 @@
 > here, with the evidence that proves it and the verification that closed it.
 > Update the status the moment it changes; IDs are never reused.
 >
-> - **Last updated:** 2026-10-10 (UTC) — **#2444** retired `support_tickets.portal_token` as a
+> - **Last updated:** 2026-10-10 (UTC) — **PP-063**: the deploy hop's single failure line is **two**
+>   independent defects (the address in `DEPLOY_HOST` is not this host; the job deploys a pm2 VM this
+>   host is not), measured over the **full** retained history — 1,319 runs, 3 success, 1,009 failure —
+>   which supersedes PP-060's windowed 741/1,282. PP-060/PP-058's `deploy.yml` coordinates re-pinned
+>   (+61 from line 68, +75 from line 83) for the pre-flight step and remote guard this PR adds.
+>   Written as PP-062 and renumbered on rebase: **#2444** had taken that ID for the retired ticket
+>   credential while this entry was open, and IDs are never reused — the earlier merge keeps the
+>   number and the later one moves, the same resolution PP-057 records.
+> - **Previous:** 2026-10-10 (UTC) — **#2444** retired `support_tickets.portal_token` as a
 >   bearer credential (**PP-062**) and landed migration `0124`, making the outstanding pile **26**
 >   entries: `0123` arrived with **#2495** and `0124` with this PR, on top of the 24 PP-060 counted.
 >   `db:status` re-measured today against preprod: `Applied: 99 · Pending: 26 · Total: 125`.
+> - **Previous:** 2026-10-09 (UTC) — **#2446** wired `guard:portal-rls-context` into `ci.yml`
+>   (which moved every `ci.yml`/`package.json` coordinate in PP-059/PP-060 by 1–2 lines) and landed
+>   migration `0122`, the 24th entry in the pending pile.
 > - **Stack under test:** `deploy/docker-compose.production.yml` **overlaid** with
 >   `deploy/docker-compose.preprod.yml` (one compose project, `deploy`) — **18** containers running, measured:
 >   17 from compose (18 services, `minio-init` is an exited one-shot; `realtime` comes only from the preprod
@@ -88,9 +99,10 @@ Severity: **S1** blocks go-live · **S2** broken feature or security weakness ·
 | PP-057 | S2  | Migrations + tooling        | The repo has exactly one "what is applied?" command and it cannot see the ledger: `db:status` queries `__drizzle_migrations(name, applied_at)` — no such table, no such columns — and maps **any** failure to "history table does not exist", so against preprod it printed **`Applied: 0 / Pending: <every journal entry>`** on a database with **99 applied and 18 outstanding**. `db:migrate --dry-run` compounds it: its first line counts journal entries (**`116 pending migration(s)`**) before reading anything, and that number is what the y/N apply prompt offers. Nothing in CI or the runbooks would ever have revealed the 18-behind state, which includes `0091` (the usage-snapshot bypass **#56** shipped), `0059` (**#74**'s still-unstamped entry) and now `0116` (**#2367**, merged while this PR was open)                                                                                                                | 🔧 SCRIPTS FIXED in this PR (verified 99/18 against two instruments) · applying the 18 is an **owner decision** · also measured: `0115`'s absence is **not** a live cross-tenant read                   |
 | PP-058 | S2  | Migrations + tooling        | `db:migrate` connects as the tables' **owner** (`nucrm`) with `FORCE ROW LEVEL SECURITY` active on 48 of the 49 tables the pending set names, and `scripts/migrate.ts:198` sets **no tenant GUC** — so every data-correcting statement in a migration matches **0 rows** and silently corrects nothing, while the DDL built on top of it (`CREATE UNIQUE INDEX`, `SET NOT NULL`) reads the whole heap regardless. Measured on preprod: `0114_leads_tenant_oid_unique` (pending) dedupes `(tenant_id, lead_oid)` before creating the unique index, but its own CTE sees 0 of 25 leads while the truth is **1 duplicate group / 5 rows / 4 losers** (all five soft-deleted, all nine days older than the header's own "measured 0"), so the pending 21-entry run **aborts on 23505** — the exact failure its header says the dedupe exists to prevent                                                                                            | 🚨 OPEN · owner decision · no historical damage demonstrated · `0109` already proves the fix is one `set_config` line                                                                                   |
 | PP-059 | S2  | CHECK vs code               | `guard:vocab` — the only command in the repo that asks the **live database** what it will reject — exits **1** on `main` — measured at `38ae90e2`, re-measured at `f3787f32` — with **2 of 9** constraints disagreeing: `chk_sequence_enrollments_status` (5 values) refuses `'cancelled'`, which `/api/unsubscribe` has written since the repo's first commit `ecbba74e`, and `chk_invoices_status` (8 values) refuses `'void'`, which `INVOICE_STATUSES` offers and `PATCH /api/tenant/invoices/[id]` passes through. Its own fixes, `0120` and `0112`, are two of the **24** entries PP-057 says nobody has agreed to apply (the count was **22** when this row was written; `0121` landed since, then `0122` with **#2446**) — and it is the **only one of the 20 `guard:*` scripts no automation invokes**: workflows call 17 by alias and 2 by direct `node` command (`ci.yml:217`, `:250`), while `grep -rn check-constraint-vocab .github/workflows` returns **0** | 🚨 OPEN · guard wired nowhere · latent **on this DB** (both tables hold 0 rows, measured `--superadmin`) · CI green proves only that the `.sql` text says the right thing                               |
-| PP-060 | S2  | Deploy                      | The 24-entry backlog (23 until `0122` landed with **#2446**) has **no automated apply path that could reach this database**: the only executable migrate in the repo's automation is `deploy.yml:281` (`scripts/deploy-migrate.ts --yes`, which spawns `migrate.ts --yes` at `:96`), inside the single `script:` block opened at `:77` — so it runs over SSH on the **pm2 production VM**, not on this Docker preprod host. That hop has failed every run since the last success (`30748691555`, 2026-08-02T12:51:06Z): **741 runs · 0 success** (639 failure / 54 cancelled / 48 skipped), 15 of 15 sampled recent runs contain `dial tcp ***:22: i/o timeout`, and the retained total is **3 successes in 1,282 runs**. No workflow mentions `db:status` (grep: 0 hits in all 5), `ci.yml` and `backup-drill.yml` build their databases with `db:sync`, and this host has no deploy cron or timer                                                                                    | 🚨 OPEN · owner action (`gh secret set DEPLOY_HOST`, the remedy AGENTS.md already documents) · even a healthy deploy migrates a **different database**, so PP-057's exit (a) has no mechanism behind it |
+| PP-060 | S2  | Deploy                      | The 24-entry backlog (23 until `0122` landed with **#2446**) has **no automated apply path that could reach this database**: the only executable migrate in the repo's automation is `deploy.yml:356` (`scripts/deploy-migrate.ts --yes`, which spawns `migrate.ts --yes` at `:96`), inside the single `script:` block opened at `:138` — so it runs over SSH on the **pm2 production VM**, not on this Docker preprod host. That hop has failed every run since the last success (`30748691555`, 2026-08-02T12:51:06Z): **778 runs · 0 success** (667 failure / 63 cancelled / 48 skipped), 15 of 15 sampled recent runs contain `dial tcp ***:22: i/o timeout`, and the full retained history is **3 successes in 1,319 runs**. No workflow mentions `db:status` (grep: 0 hits in all 5), `ci.yml` and `backup-drill.yml` build their databases with `db:sync`, and this host has no deploy cron or timer                                                                                    | 🚨 OPEN · owner action (`gh secret set DEPLOY_HOST`, the remedy AGENTS.md already documents) · even a healthy deploy migrates a **different database**, so PP-057's exit (a) has no mechanism behind it · **PP-063** measured the hop over the whole history and found a second defect behind this one |
 | PP-061 | S2  | Edge / auth surface         | **Six endpoints that authenticate with something other than a session were unreachable on this host.** `POST` to `/api/auth/oauth/token`, `/api/auth/oauth/revoke`, `/api/webhooks/razorpay`, `/api/webhooks/payu`, `/api/webhooks/telegram/bot` and `/api/tenant/plugins/webhook/<id>` each answered `401 {"error":"Authentication required"}` — the identical byte-for-byte body the middleware itself writes, so **no handler ran** — because none of the six is in `proxy.ts:226`'s public list. The OAuth exchange, **both payment receivers**, the bot and the plugin integrators all had a caller that could never arrive. The same screen then caught what the closed edge had been hiding: `app/api/tenant/plugins/webhook/[id]/route.ts:63` loaded **all 19 columns** of `custom_plugins` — including `drizzle/schema/plugins.ts:20`, whose own comment says it "stores token/username/password/client_id/etc" — and did it **before** verifying the caller at `app/api/tenant/plugins/webhook/[id]/route.ts:106`, on a URL that is itself the credential | 🔧 FIXED in this PR (6 paths opened, row projected to 4 of 19 columns, `tests/unit/proxy.test.ts:158`) · not live until deployed · `/api/tenant/visitors/track` measured as the seventh hit and **deliberately left closed** |
 | PP-062 | S2  | Portal / credential         | `support_tickets.portal_token` was a **second credential living on the header the portal already uses for `portal_clients.access_token`**: `lib/portal-auth.ts:45` reads `x-portal-token` as a client token, and three public ticket routes read the *same* header (plus a POST body field) as a **ticket** token, resolved it to a **contact** and answered with that contact's **whole** ticket history — deliberately, #2378 — so possession of one ticket's string read every ticket that contact ever filed, subjects and bodies included. Permanent and un-revocable by construction: no `expires_at`, no `is_active`, no rotation, no revoke path, unlike `portal_clients` (`drizzle/schema/tokens.ts:202`, `:204`). **Nothing ever delivered it** — 0 references to `portal_token`/`portalToken` in `app/portal/**`, in `components/**`, in any email template or webhook payload — and #2440 had already stopped `POST /api/public/tickets` echoing a freshly minted one, so the only tokens that can still exist are ones handed out **before** that fix. That read was also the *only* thing letting an unauthenticated connection see a `support_tickets` row at all: 0122's `support_tickets_portal_token_lookup` arm. **Latent on this database**, measured: `support_tickets` holds 0 rows for the one tenant `tenants` exposes under `--superadmin`, and the retired grant is not even installed here because **0122 itself is pending** (PP-060) | 🔧 FIXED in this PR (credential retired in code, RLS and nullability by `0124` — the **26th** outstanding entry, `db:status` → `Applied: 99 · Pending: 26 · Total: 125`) · `DROP COLUMN` and `SET portal_token = NULL` stay **owner decisions** · not live until deployed |
+| PP-063 | S2  | Deploy                      | **The deploy hop's one failure line is two independent defects, and neither reads out of the log.** (D1) PP-060's `dial tcp ***:22: i/o timeout` is not "the VM is down": `sshd` answers on `0.0.0.0:22`, `ufw` is **inactive**, and 22 is reached from outside daily — but the only hostname this box is configured with is a **dynamic-DNS name with no updater installed anywhere on it**, and dialing that name from this host reproduces the identical silent timeout (**12,011 ms**) while the address this session actually arrived on answers in **114 ms**. (D2) behind it, the job deploys a runtime this host does not have: `deploy.yml:5` asserts pm2-not-Docker, `deploy.yml:158` `cd`s to a `$HOME` git checkout and `:172-189` drive `pm2` — measured here: no `pm2` binary, no nvm, `/home` **empty**, the app running as 18 Compose containers under `/srv/nucrm`. Re-pointing `DEPLOY_HOST` alone therefore produces a **different red**, not a deploy — and `set -e` at `:139` plus the `cd` mean the abort happens 146 lines **before** the first `git checkout --force` at `:305`, so the compose tree was never at risk | 🔧 DIAGNOSABILITY FIXED in this PR (pre-flight classifies the dial at `deploy.yml:79`; the remote side names the model mismatch at `deploy.yml:151`) · the hop itself is **owner action**: `DEPLOY_HOST` must hold a real address **and** someone must choose between "the pm2 VM" and rewriting this job for `docker compose up -d --build` |
 
 ## Sentry issues → register entries
 
@@ -3095,7 +3107,7 @@ portal_token`, `0037`'s five backfills) ran blind **and were rescued by the loud
   ledger** — and `:171-174` then applies RLS files through `scripts/apply-rls-ci.mjs` (`:172`) under
   `DATABASE_URL=postgresql://postgres:postgres@…` (also the workflow-level default at `:11`). RLS does not filter a superuser and no
   ledger means neither branch of `scripts/migrate.ts` is taken, so in the only context CI can reach, the blindness in this entry
-  cannot manifest. `scripts/migrate.ts` never runs in `ci.yml` at all: the only workflow that invokes it is `deploy.yml:281`, against
+  cannot manifest. `scripts/migrate.ts` never runs in `ci.yml` at all: the only workflow that invokes it is `deploy.yml:356`, against
   a live database — the runner is exercised by failing in preprod, never by a pre-merge check.
   <!-- coordinate corrections at the commit that wired this guard into CI: adding the step moved three of the
        coordinates in the paragraph above. Re-measured after the insertion rather than before it: db:sync 163 →
@@ -3323,24 +3335,24 @@ CONSTRAINT` + `ADD CONSTRAINT` widenings, so they are not exposed to PP-058's RL
   (what applying it would and would not do), **PP-060** (why nothing can), **#2405** (which shipped both the
   guard's registry entry and `0120`).
 
-## PP-060 — 🚨 Nobody applies the pending migrations, and the automation that claims to could not reach this database if it worked: the repo's only executable migrate sits inside `deploy.yml`'s single SSH script block, a hop behind **741 consecutive runs with no success** since the last green one on 2026-08-02 (`3 successes in the 1,282 runs GitHub still retains`, 15 of 15 sampled failures ending `dial tcp ***:22: i/o timeout`) — and that workflow is pm2-shaped end to end, targeting the production VM, so even a green deploy would migrate a different database than the one this Docker app writes to _(S2 · Deploy)_
+## PP-060 — 🚨 Nobody applies the pending migrations, and the automation that claims to could not reach this database if it worked: the repo's only executable migrate sits inside `deploy.yml`'s single SSH script block, a hop behind **778 consecutive runs with no success** since the last green one on 2026-08-02 (`3 successes in the 1,319 runs GitHub still retains`, 15 of 15 sampled failures ending `dial tcp ***:22: i/o timeout`) — and that workflow is pm2-shaped end to end, targeting the production VM, so even a green deploy would migrate a different database than the one this Docker app writes to _(S2 · Deploy)_
 
 - **Found by:** taking PP-057's Exit (a) — _"Apply the 18"_, now **23** — literally, and asking **who**
-  would run it. Not a human reading this file: the deploy workflow's own comment at `:256-260` says the
+  would run it. Not a human reading this file: the deploy workflow's own comment at `:331-335` says the
   pipeline "MUST migrate the schema between checkout and build/restart" (#2233), so the mechanism looked
   already decided. It is not.
 - **Mechanism — where the migrate actually happens.** There are **5** workflow files. Exactly two name
   `migrate` at all: `deploy.yml` (**5** case-insensitive hits) and `backup-drill.yml` (**1** — and that one
   is a comment, see below). Across the whole `.github/workflows` directory `db:migrate` matches **once**, at
-  `deploy.yml:274`, inside the comment that lists what the new helper does ("a deploy and a manual
-  `db:migrate` cannot interleave"); `migrate.ts` matches **twice**, at `:265` (comment) and `:281` — the
+  `deploy.yml:349`, inside the comment that lists what the new helper does ("a deploy and a manual
+  `db:migrate` cannot interleave"); `migrate.ts` matches **twice**, at `:340` (comment) and `:356` — the
   one executable statement in the repo's automation:
   `DEPLOY_SHA="$SHA" npx tsx --import ./scripts/load-env.mjs scripts/deploy-migrate.ts --yes`.
-  That line lives in the `script: |` block opened at `:77`, which belongs to the workflow's only meaningful
-  step: **2 steps total** — `actions/checkout@v7` (`:59`) and `Deploy via SSH` (`:68`,
-  `appleboy/ssh-action@v1` at `:69`, `host`/`username`/`key` from `DEPLOY_HOST`/`DEPLOY_USER`/
-  `DEPLOY_SSH_KEY` at `:71-73`). Everything else the deploy does is inside that remote heredoc: the
-  RLS-privilege gate (`:246`), the migrate (`:281`), `npm run build`, the pm2 restarts.
+  That line lives in the `script: |` block opened at `:138`, which belongs to the workflow's only meaningful
+  step: **2 steps total** — `actions/checkout@v7` (`:59`) and `Deploy via SSH` (`:129`,
+  `appleboy/ssh-action@v1` at `:130`, `host`/`username`/`key` from `DEPLOY_HOST`/`DEPLOY_USER`/
+  `DEPLOY_SSH_KEY` at `:132-134`). Everything else the deploy does is inside that remote heredoc: the
+  RLS-privilege gate (`:321`), the migrate (`:356`), `npm run build`, the pm2 restarts.
   `scripts/deploy-migrate.ts` — the #2404 extraction of ~70 lines of inline bash into one tested call
   (`lib/db/deploy-migration-run.ts`) — is itself a _wrapper_: `:96` spawns
   `npx tsx … scripts/migrate.ts --yes`, i.e. the exact runner PP-058 proved is RLS-blind to every tenant
@@ -3362,12 +3374,15 @@ CONSTRAINT` + `ADD CONSTRAINT` widenings, so they are not exposed to PP-058's RL
   migrated one: the same structural blind spot PP-059 records for `ci.yml` (`ci.yml:122`, `:167`) also
   applies to the tool whose stated purpose is trusting restores.
 - **Measured hop failure.** Full retained history (`gh api …/workflows/deploy.yml/runs`, 2026-06-05T11:45:25Z
-  → 2026-10-08T05:58:59Z, **1,282 runs**): **3 success / 981 failure / 240 cancelled / 58 skipped.** (Not
-  "lifetime": the retained window starts 2.5 weeks after the first commit `ecbba74e`.) The three successes
+  → 2026-10-10T05:56:24Z, **1,319 runs**): **3 success / 1,009 failure / 249 cancelled / 58 skipped.** (Not
+  "lifetime": the retained window starts 2.5 weeks after the first commit `ecbba74e`.) **PP-063 re-measured
+  these numbers over every page of that history** — the figures below had come from the newest-1,000 window
+  (`gh run list --limit 1000`), which silently truncates and undercounts, and the two-day drift is the
+  difference between 741 and 778. The three successes
   are `451872822c` (run `30691421416`, 2026-08-01T08:15:55Z), `d5c3ec254a` (`30692483755`, 08:48:22Z) and
-  `46123b728d` (`30748691555`, 2026-08-02T12:51:06Z). Everything after that timestamp — **741 runs** — splits
-  **639 failure / 54 cancelled / 48 skipped / 0 success**, first failure `30784445875` (2026-08-03T04:26:32Z),
-  newest `37735134900` (2026-10-08T05:58:59Z, head `f3787f32` — main's own tip). Taking the **15 most recent
+  `46123b728d` (`30748691555`, 2026-08-02T12:51:06Z). Everything after that timestamp — **778 runs** — splits
+  **667 failure / 63 cancelled / 48 skipped / 0 success**, first failure `30784445875` (2026-08-03T04:26:32Z),
+  newest `38029205367` (2026-10-10T05:56:24Z, head `254e715b` — main's own tip). Taking the **15 most recent
   failures** and reading each job log through `actions/jobs/{id}/logs`: **15/15** contain
   `2026-…  dial tcp ***:22: i/o timeout` immediately followed by `##[error]Process completed with exit
 code 1` (GitHub masks the host as `***`; the address is deliberately not recorded here either — AGENTS.md
@@ -3391,11 +3406,11 @@ connection refused/timeout`, run `curl -s ifconfig.me`, then `gh secret set DEPL
   `deploy/DEPLOYMENT_PATHS.md:5-13` states it as the canonical decision: **Path A** = production under
   **PM2 on the VM** (git-based update, Docker only for infra/monitoring), **Path B** = Docker for
   development, "Do **not** use it to serve production". `deploy.yml` is Path A line by line: it `cd`s to a
-  checkout under a VM user's home directory (`:83` — `cd "$HOME/nucrm-bigplan-by-vm-enterprise-v2"`; the
-  literal path with the login in it is gone, **#2436** replaced it with `$HOME` and the comment at `:79-82`
+  checkout under a VM user's home directory (`:158` — `cd "$HOME/nucrm-bigplan-by-vm-enterprise-v2"`; the
+  literal path with the login in it is gone, **#2436** replaced it with `$HOME` and the comment at `:140-143`
   says why, so what this entry cites is now the _shape_ of the path, not its owner), probes
   `HEALTH_PORTS: 3099 3000`
-  (`:38`), discovers and restarts a pm2 app (`:97-114`, `:141`). Measured here: `/home` is **empty**
+  (`:38`), discovers and restarts a pm2 app (`:172-189`, `:216`). Measured here: `/home` is **empty**
   (`ls -A /home` prints nothing), `command -v pm2` finds nothing, and nothing listens on 3099
   (`curl -s -o /dev/null -w '%{http_code}' 127.0.0.1:3099/api/health` → `000`). This host is the Docker
   shape instead — **18** running containers (`docker ps -q | wc -l`), the app as `nucrm-app` on image
@@ -3418,18 +3433,21 @@ connection refused/timeout`, run `curl -s ifconfig.me`, then `gh secret set DEPL
   the answer to "which tree does this database match".
 - **The register's own coordinates rot with it.** Main's PP-058 heading still calls the backlog "the pending
   21-entry run" while `db:status` reports **23**, and a correction comment inside that same entry says the
-  deploy's migrate call is "now at `:277`" when the live statement is at `:281` — #2404 moved it once and
+  deploy's migrate call is "now at `:277`" when the live statement was at `:281` — #2404 moved it once and
   **#2445**/#2447 moved it again, and nothing re-read the prose. Neither is catchable by the guard that
   exists: a count has no file to resolve against, and a bare "`:277`" with no path before the colon is not
-  citation-shaped, so `guard:coords` never sees it. That is not a second bug — it is the same one, seen from
+  citation-shaped, so `guard:coords` never sees it. **PP-063 is now the third mover of that same statement**
+  — its pre-flight step and remote guard insert 75 lines above the migrate, so it sits at line 356, and every
+  pointer this entry aimed at the deploy body had to be re-pinned in the same PR that made the claim.
+  That is not a second bug — it is the same one, seen from
   the docs: a deploy path nobody runs also has no reason to keep its own documentation honest. Stale numbers
   are spelled "line N" on purpose: `path:line` is how this file cites live
   targets, so a citation-shaped token aimed at a dead line is indistinguishable from a live citation.
 - **The chain, end to end.** (i) **24** entries are pending (23 at `f3787f32`, `0122` from **#2446** being the
   24th), including `0112`/`0120` (PP-059's fix for a
   live rejection), `0091` (**#56**) and `0059` (**#74**); (ii) the only automated apply path is
-  `deploy.yml:281`,
-  behind an SSH hop that has not opened in 741 runs, pointing at another host; (iii) even when it opens,
+  `deploy.yml:356`,
+  behind an SSH hop that has not opened in 778 runs, pointing at another host; (iii) even when it opens,
   PP-058 applies — the runner connects as the table owner with `FORCE ROW LEVEL SECURITY` on, so the
   row-writing halves of `0109` and `0114` match 0 rows silently, which is decision **#103**, upstream of
   everything here; (iv) nothing re-reads `db:status` to confirm the pile drained. Two of those four links are
@@ -3447,9 +3465,9 @@ connection refused/timeout`, run `curl -s ifconfig.me`, then `gh secret set DEPL
   other side: `db:status` was fixed to tell the truth in #2371 and **nothing asks it**.
   (d) **Decide #103 first** — otherwise (b) applies 24 entries whose row-correcting halves silently do
   nothing, and the register gains a green deploy and a lie.
-- **Files:** `.github/workflows/deploy.yml` (`:38` health ports, `:59`/`:68-77` the two steps, `:83` the VM
-  path, `:97-114`/`:141` pm2, `:246` privilege gate, `:256-287` the migration block with the only executable
-  migrate at `:281`), `scripts/deploy-migrate.ts` (`:96` spawn of `migrate.ts --yes`, `:138-143` and
+- **Files:** `.github/workflows/deploy.yml` (`:38` health ports, `:59`/`:129-138` the two steps, `:158` the VM
+  path, `:172-189`/`:216` pm2, `:321` privilege gate, `:331-362` the migration block with the only executable
+  migrate at `:356`), `scripts/deploy-migrate.ts` (`:96` spawn of `migrate.ts --yes`, `:138-143` and
   `:146-155` preconditions), `lib/db/deploy-migration-run.ts`, `.github/workflows/ci.yml` (services
   `:90`/`:135`, `db:sync` `:122`/`:167`, 15 guards `:45-83`), `.github/workflows/backup-drill.yml` (`:4`
   comment vs `:44-47` `db:sync`), `.github/workflows/nightly-soak.yml` (`:209`/`:255`),
@@ -3713,6 +3731,179 @@ psql -tAc "select count(*) from support_tickets"  # as the app role, with app.po
   like a widening in SQL terms and is a narrowing in effect — it exists because the minting stopped,
   and `.unique()` is kept so a later `SET NOT NULL` remains possible if the owner ever wants the
   credential back.
+
+## PP-063 — 🔧 The deploy hop has printed **one** line for 1,009 red runs and that line is **two independent defects**: (D1) the address GitHub dials is not this host — sshd answers on `0.0.0.0:22`, `ufw` is **inactive**, **112** distinct external addresses reached port 22 in the last 24 h, yet the only hostname this box is configured with is a **dynamic-DNS name with no updater anywhere on the machine**, and dialing it reproduces CI's silent timeout exactly (**12,011 ms** to no reply, while `127.0.0.1:22` on the same box answers **inside a millisecond**); (D2) behind it the job deploys a pm2 + `$HOME`-git-checkout VM this host is not — no `pm2` binary, no nvm, `/home` **empty**, the app running as 18 Compose containers under `/srv/nucrm` — so re-pointing `DEPLOY_HOST` alone buys a **different red**, not a deploy _(S2 · Deploy)_
+
+- **Found by:** **#135**, the first blocker on the 1.0.0 path — which PP-060 had already measured from the
+  log side. This entry exists because the log cannot finish that job. `dial tcp ***:22: i/o timeout` is
+  consistent with at least five different worlds (unset secret, placeholder value, a name whose record moved,
+  a firewalled host, a live host not serving SSH), and the remedy differs in every one of them. So the
+  question was asked of the host instead of the workflow. **The repo has carried an issue for this since
+  2026-10-03 — #2299, labelled `critical` — which reached the same two sites from Actions history alone: the
+  `DEPLOY_HOST` secret, and the `cd` into a home-directory path this machine does not have.** It read the
+  first as *refused* (the log says a silent timeout, and per D1 that means a wrong address rather than a down
+  sshd) and the second as a stale literal path, which **#2436** has since replaced with `$HOME` — pointing the
+  path correctly still leaves the model wrong, which is D2.
+  This entry was written as **PP-062** and renumbered on rebase: **#2444** merged first and took that
+  ID for the retired ticket portal credential, and register IDs are never reused — so the later entry
+  moved, here and in the two `deploy.yml` comments that cite it.
+- **The tally, re-measured over the whole retained history — and the method error it corrects.** PP-060's
+  figures came from `gh run list --workflow=deploy.yml --limit 1000`, which is a **newest-1,000 window**, not
+  a lifetime read. Paginating the same endpoint (`…/workflows/deploy.yml/runs?per_page=100&page=N`, 14 pages,
+  deduplicated on run id) returns the complete retained set: **1,319 runs, 2026-06-05T11:45:25Z →
+  2026-10-10T05:56:24Z — 3 success / 1,009 failure / 249 cancelled / 58 skipped.** The three successes are
+  `30691421416` (2026-08-01T08:15:55Z), `30692483755` (08:48:22Z) and `30748691555` (2026-08-02T12:51:06Z).
+  Everything after the last one is **778 runs — 667 failure / 63 cancelled / 48 skipped / 0 success**, first
+  red `30784445875` (2026-08-03T04:26:32Z). So the sentence that survives is not "741 runs", it is **1,009
+  failures against 3 successes in everything GitHub still retains** — and the truncation itself is the
+  lesson: a capped listing read as a lifetime total understates both numbers and quietly flatters the trend.
+- **The onset date has no evidence behind it, and saying that beats inventing a cause.** The last green
+  run's log is purged (`gh run view --log` returns **0 bytes**), and the host journal starts 2026-09-13
+  against an uptime of 3 weeks 5 days — the machine has not kept one line from the week it broke. Nor was
+  the workflow changed: `deploy.yml` is untouched between `46123b72` (the last green) and the first
+  permanent red; its next edit is `5fd5e059`, **24 days later**. What is knowable is what is true *now*, and
+  it is two separate things.
+- **D1 — measured in the order that rules things out.** `ss -ltn` → sshd on `0.0.0.0:22` **and** `[::]:22`;
+  `ufw status` → `Status: inactive`; `journalctl --since "24 hours ago" -u ssh` → **112** distinct external
+  addresses reached it in a day (counted, never printed). A daemon serving 112 visitors is not the failure.
+  The only hostname this box knows is a dynamic-DNS name — written here as `<DDNS>`, because the repo is
+  **public** and **#145** exists precisely to keep live addresses and names out of it — and resolving and
+  dialing it from the box itself, with the address never echoed:
+  `resolves: yes, to a public address` / `dial 12s: TimeoutError after 12011ms`, re-run twice today with the same result, while `127.0.0.1:22` on the
+  same machine answers **inside a millisecond** (re-measured with the same probe: `0 ms`, i.e. below the
+  resolution of the timer). The first draft of this line said loopback answers in **112 ms**, borrowed from the
+  closed-port REFUSED measurement two bullets below — a number from a different experiment pasted into this
+  one, caught only by going back and dialing it again. The contrast is the point either way: a connection that
+  completes instantly on one side of the kernel and never completes at all through the address the world is
+  given. That is CI's signature, reproduced locally, against a name that
+  resolves. Either the record is stale or it never pointed here. And there is no "the reboot moved it, it
+  will come back" reading available, because **nothing on this host maintains the record**:
+  `systemctl list-unit-files`, `crontab -l`, `/etc/cron.d`, `/etc/cron.daily`, `/etc/systemd/system` and
+  `systemctl list-timers` each return **0** matches for any DDNS updater, and the host's one real cron entry
+  is the Sentry watchdog line PP-060 records.
+- **A claim of mine that was almost written down wrong.** Two different digests for what looked like the same
+  measurement made me conclude *the address is moving under me*. The difference was my own pipeline:
+  `awk '{print $2}' | sha256sum` hashes a **trailing newline**, `printf '%s' | sha256sum` does not.
+  Re-measured five times, the value was stable. The address is not moving; the *record* is unmaintained. This
+  register keeps catching the same mistake from the other direction, which is why it is recorded rather than
+  quietly fixed.
+- **D2 — the job deploys a runtime this host does not have.** Its header, `deploy.yml:5`, states the model
+  outright (production runs under pm2, not from a Docker image), and the body requires that box: `:158`
+  `cd "$HOME/nucrm-bigplan-by-vm-enterprise-v2"`, `:162-163` sourcing nvm, `:172-189` discovering and
+  starting pm2 apps, `:216` `pm2 restart --update-env`, `:321` the RLS-privilege gate and `:356` the only
+  executable migrate in the repo's automation, all gated on `HEALTH_PORTS: 3099 3000` at `:38`. Measured
+  here: `command -v pm2` → nothing, no nvm, `ls -A /home` → **empty**, the tree at `/srv/nucrm` serving as
+  18 Compose containers, those two ports container-internal. `deploy/DEPLOYMENT_PATHS.md:5` is the doc that
+  calls this Path B and says do not serve production from it — so the mismatch is not a typo in the workflow,
+  it is an undecided topology.
+- **Blast radius — the second claim I corrected before shipping it.** I first described D2 as "a repaired
+  address would let `git checkout --force` mutate a compose-mounted working tree". The execution order says
+  otherwise: `set -e` at `:139`, the `cd` at `:158` and the pm2 detection at `:172` all fire **146 lines
+  before** the first mutation at `:304-305`. On this host the job dies at the `cd` having changed nothing.
+  That is why the pre-flight is safe to ship, why the guard below is safe to ship, and why "just fix the
+  secret" would have produced a different red rather than a deploy.
+- **What this PR changes — make the next red run name its defect.** Two additions, no change to any path
+  that works today.
+  1. `deploy.yml:79` — a step **before** `appleboy/ssh-action@v1` that classifies the dial: unset, several
+     hosts (it checks the first; ssh-action dials all), placeholder/loopback, **does not resolve** (`:105`),
+     resolves to a **non-public** address (`:110`), **open** with the milliseconds it took (`:118`),
+     **silent** (`:123`) or **refused** (`:125`). The last pair is the whole point: a silent drop is a wrong
+     or stale address or a firewall between GitHub and it; a refusal is a live host not serving SSH on 22.
+     The job has been printing the first of those for 1,009 runs with no way to tell them apart.
+  2. `deploy.yml:151` — the remote side aborts naming the deployment-model mismatch, instead of `set -e`
+     killing the job on a bare `cd` whose failure reads as a path problem.
+- **What it deliberately does not print.** The first design hashed the resolved address to a short digest so
+  consecutive runs could be compared — *is the record moving?* — and that was **discarded before shipping**:
+  an IPv4 is 2^32 values, so a truncated sha256 of one inverts in seconds, and this repository's Actions logs
+  are public. A digest over a small keyspace is not a redaction; it is the address with extra steps. The step
+  prints **properties only** (public or private, resolves or not, open/silent/refused, milliseconds) and the
+  identity comparison stays where the address already lives — with the owner, on the box.
+- **One probe removed because it lied.** The step briefly read the SSH banner (`head -c 1 <&3`) as extra
+  confirmation. On a **healthy** connection it reported `banner readable: no` — a false negative that would
+  have told a future reader sshd is broken on a machine where it answers 112 hosts a day. Removed; the
+  connect verdict stayed.
+- **Falsified — eight verdicts, twelve crafted values, each landing on its own branch.** empty → the unset
+  error at `:85`, rc 1 · `crm.yourdomain.com` and `crm.example.com` → placeholder, rc 1 · `localhost` →
+  placeholder, rc 1 · `127.0.0.1` → **placeholder, rc 1**: loopback is rejected as a *value* before anything is
+  dialed, so it is not the open case — and the first draft of this entry claimed it was. Re-running the whole
+  set after the resolver rewrite is what caught that, which is the honest order: the code changed, so the
+  results had to be taken again rather than carried over. `127.0.0.1,10.1.2.3` → the several-hosts notice, then
+  placeholder on its first entry, rc 1 · a `.invalid` name → "does not resolve" (`:105`), rc 1 · `10.1.2.3` and
+  `192.168.9.9` → NON-PUBLIC (`:110`), rc 1 · **this box's DDNS name** → `DEPLOY_HOST resolves, and to a public
+  address.` then `::error::TCP :22 … got NO reply in 10039ms` (`:123`), rc 1 — CI's failure reproduced end to
+  end by the step built to detect it · **this box's own current public address** → `Port 22 answered in
+  114ms`, rc 0; that is the open branch, and being reachable on the real host is the only reason its verdict
+  can be trusted · an unrelated public address that silently drops 22 → NO reply, rc 1 — a live host that
+  never answers reads *identically* to a
+  stale record, which is precisely the ambiguity the step exists to name. Every address above is a literal, a
+  private range or a documentation range; the box's own address and its DDNS name were passed through the
+  environment and are not written here — **#145**'s guard `tests/unit/deploy-host-literals-2302.test.ts` fails
+  any public IPv4 in `docs/`, and it has now failed this entry **twice**: once on its first draft, once when the
+  re-run above added a third-party address to prove the silent branch. That is the guard working exactly as
+  designed, on the file whose twelve addresses it was written to remove. **Re-run once more against the exact
+  body shipped on this branch** (extracted from the workflow and diffed against the script that produced the
+  numbers above — identical): the eight offline values land where they did, the box's DDNS name again gives
+  `resolves, and to a public address` then `NO reply in 10055ms`, and its own current address again gives
+  `Port 22 answered in 115ms`. Two details that only show up on a second pass: the timeout figure moves a few
+  milliseconds per run, so the stable claim is *silent, near the 10 s cap* rather than a specific number; and
+  the open case has to be dialed as the IPv4 — `curl -s ifconfig.me` from this box returns an IPv6 first, which
+  the step correctly reads as *does not resolve to any IPv4*, so the re-measurement needs `curl -4`. The **refused** branch has no real
+  network path from here (port 22 answers on every public address this box owns), so it was verified on a copy
+  of the step with the probe port swapped to a closed local one: rc 1 at **110 ms** → REFUSED. That proves the
+  designed split — under 9 s ⇒ refused, at/over 9 s ⇒ silent — and nothing beyond it.
+- **Verified by:** `actionlint` **1.7.12** — CI's exact pin, `docker run --rm -v "$PWD":/repo -w /repo rhysd/actionlint:1.7.12 -no-color`
+  → rc 0; `scripts/check-deploy-trigger.mjs` → OK; PyYAML parse confirms the step order
+  `actions/checkout@v7 → Pre-flight → Deploy via SSH`; `guard:coords`, `guard:register-drift` and
+  `guard:public-projection` re-run on this branch after the re-pin; the two workflow-contract guards
+  (`deploy-runs-migrations-2233`, 13 assertions, and `deploy-host-literals-2302`, 8) both green;
+  `npm run test:unit`. All results are in
+  the PR checks, not asserted here. The 2233 guard is the reason the resolver in the pre-flight is a
+  `gethostbyname` call rather than the `awk` pipeline it was first drafted with: that check failed the branch,
+  rewriting it added three lines above every pointer in this file, and the re-pin at the end of this entry
+  records the second pass rather than leaving a silent correction behind.
+- **What this PR cannot do, and who has to do it. #135 does not close with this entry.**
+  **(D1)** `DEPLOY_HOST` must be set to an address the owner can read *right now* (`curl -s ifconfig.me` on
+  the box → `gh secret set DEPLOY_HOST`), and if the intent is to keep a hostname, the missing updater has to
+  be installed or the record pinned — a name nobody refreshes breaks this again on the next lease change,
+  which is the failure AGENTS.md describes as "EPHEMERAL" and papers over with a manual re-set.
+  **(D2)** someone must pick the deployment model: either there is a pm2 VM to point at, in which case
+  **preprod still has no deploy path** (PP-060's exit (b) stays open), or this job is rewritten around
+  `docker compose up -d --build` — which also relocates `deploy.yml:356`, the only executable migrate in the
+  repo's automation, onto the database anyone is actually running against, and is why **#137** waits behind
+  this one.
+- **Why the fix is shaped like this.** The failure lives in a secret the repository cannot read, on a host the
+  runner cannot see. The only thing the repo owns is **what the job says when it fails**. 1,009 red runs have
+  said one line that permits five worlds; this PR's entire deliverable is that the next one says which world.
+- **Files:** `.github/workflows/deploy.yml` (+75 — the pre-flight step at `:79`, the remote model guard at
+  `:151`), `docs/infra/PREPROD-ISSUE-REGISTER.md` (this entry and its Summary row, plus the re-pin of every
+  pointer PP-060 and PP-058 aimed at the deploy workflow). Read as evidence, not changed: `ss -ltn`,
+  `ufw status`, `journalctl -u ssh`, `systemctl list-unit-files`/`list-timers`, `crontab -l`, `/etc/cron.d`,
+  `/etc/ssh/sshd_config`, `command -v pm2`, `ls -A /home`, `docker ps`, `deploy/DEPLOYMENT_PATHS.md`,
+  `scripts/check-deploy-trigger.mjs`, `actionlint` 1.7.12. Related: **PP-060** (the same hop measured from
+  the log side — its **run** counts are corrected above, while its **pile** count still reads 24 where
+  the **26** **#2444** measured on rebase day (`Applied: 99 · Pending: 26 · Total: 125`, from `0123`
+  with **#2495** and `0124` with itself — a number this PR cites rather than re-measures, because its own
+  subject is the hop); that count is left for the pile's own correction line (#2408 did exactly that for
+  PP-057) instead of being quietly updated by a PR measuring a different thing, **#2299** (the GitHub issue that named both defect sites
+  from run history in 2026-10-03 and could not say which of them fires), **PP-057**/**PP-058**/**#103** (what a green deploy would
+  and would not apply), **#135**→**#137** (the release-path sequence), **#142** (the other secrets still
+  unset), **#145** (why no address or name appears anywhere in this entry).
+
+<!-- coordinate corrections at this PR: the pre-flight step inserts 61 lines above the Deploy-via-SSH step
+     and the remote model guard inserts 14 more, so every pointer at the deploy workflow below line 68 moved
+     by 61 and every pointer below line 83 moved by 75. Re-pinned accordingly in PP-060 (its heading counts,
+     the two-step map, the heredoc internals, the pm2-shaped paragraph and the Files line) and in PP-058's
+     live citation of the migrate call, 281 to 356. Verified by content, not by arithmetic: after the last
+     shift every number this PR re-pins was checked by printing the workflow line it now claims and reading
+     that line's text against the construct the sentence describes — 29 coordinates, every one landing where
+     it says.
+     Two pointers did not move and were left alone: line 38 (the health ports) and line 59
+     (the checkout step). The second pass moved everything above by three lines again, and it was forced rather
+     than chosen: the pre-flight first resolved the hostname by piping getent through awk, and awk is banned
+     outright in this workflow by the contract recorded in the #2233 comment — never scrape human-readable CLI
+     output for state — so the resolver became a gethostbyname call with a plain cut-and-head fallback. Three
+     lines longer, and every number in this file aimed below it moved with it. Recording the move instead of
+     silently re-deriving it is the point: the paragraph above describes exactly what a quiet re-pin costs. -->
 
 ## How to maintain this file
 
