@@ -68,10 +68,12 @@ export type PublicTicketRow = {
  * spread the same row into `evaluateAutomations()`, and the engine persists that
  * payload as `automation_runs.metadata` (`lib/automation/engine.ts:96`, `:109`)
  * and POSTs it to whichever URL a `fire_webhook` action is configured with
- * (`lib/automation/engine.ts:314`). So one create could put `portal_token` — still
- * a working bearer credential until #2444 deploys, measured against the running
- * container — in front of an API client, a second table and an external party,
- * none of which asked for it.
+ * (`lib/automation/engine.ts:324`). So one create moved the whole row to an API
+ * client, a second table and an external party, none of which asked for it —
+ * `portal_token` among them, which was a working bearer credential on the build
+ * this was measured against (`{"error":"Invalid token"}` still answers
+ * `x-portal-token` on the running container). #2444 stopped minting it there;
+ * merged, not deployed, and the column outlives both.
  *
  * The set below is the ticket's own business columns: what the caller just sent,
  * plus the server's identifiers, the pipeline links, the SLA linkage and the two
@@ -83,8 +85,8 @@ export type PublicTicketRow = {
  * checks `res.ok`, toasts and refetches, and the super-admin page has no POST
  * caller at all — so this set is free to be the projection the staff UI will
  * eventually want, and the list handlers already state it: the same business
- * columns as `app/api/tenant/tickets/route.ts:63-76` and
- * `app/api/superadmin/tickets/route.ts:34-49`, less their join-only display
+ * columns as `app/api/tenant/tickets/route.ts:62-76` and
+ * `app/api/superadmin/tickets/route.ts:33-49`, less their join-only display
  * fields (`firstName`, `assignedName`, `tenantName`, `userEmail`) and plus the
  * pipeline and SLA links a detail view resolves. Nothing here is invented for
  * this one route.

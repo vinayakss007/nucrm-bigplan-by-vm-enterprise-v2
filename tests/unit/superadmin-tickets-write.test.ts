@@ -20,7 +20,7 @@
  * its scope is `proxy.ts`'s anonymous surface (#2459) and these are
  * session-authenticated staff routes. A test is the only screen this file has.
  */
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { NextRequest } from 'next/server';
 import { STAFF_TICKET_COLUMNS } from '@/lib/public-ticket-projection';
 
