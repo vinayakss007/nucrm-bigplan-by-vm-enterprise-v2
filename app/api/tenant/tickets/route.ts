@@ -14,6 +14,7 @@ import { supportTickets, contacts, users } from '@/drizzle/schema';
 import { eq, and, desc, sql, isNull } from 'drizzle-orm';
 import { fireWebhooks } from '@/lib/webhooks';
 import { logError } from '@/lib/errors-server';
+import { STAFF_TICKET_COLUMNS } from '@/lib/public-ticket-projection';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 /**
@@ -119,7 +120,11 @@ export const POST = withApiRoute(async (request: NextRequest) => {
         priority: v.priority,
         status: v.status,
       } as typeof supportTickets.$inferInsert)
-      .returning();
+      // #2498: `.returning()` with no list is `RETURNING *`, and this row is both
+      // echoed to the caller and spread into the automation payload below. #2444
+      // stopped minting a `portal_token` here; it did not narrow the echo, and the
+      // deployed build still writes one on every staff create.
+      .returning(STAFF_TICKET_COLUMNS);
 
     if (!row) throw new Error('Failed to create ticket');
 

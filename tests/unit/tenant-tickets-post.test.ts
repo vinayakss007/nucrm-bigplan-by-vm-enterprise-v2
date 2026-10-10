@@ -22,16 +22,58 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { NextRequest } from 'next/server';
+import { STAFF_TICKET_COLUMNS } from '@/lib/public-ticket-projection';
 
 const TENANT_ID = '10000000-0000-4000-8000-000000000001';
 const USER_ID = '20000000-0000-4000-8000-000000000001';
 const PORTAL_TOKEN = 'DZjMXicdnMpyxB1V-qnNWD0RV9D2kLHl';
+
+/**
+ * What `RETURNING *` actually hands the route: every column of
+ * `support_tickets` — **23**, measured against a `db:sync` database through
+ * `information_schema.columns`. The create response and the automation payload
+ * both used to be built from exactly this, which is #2498.
+ */
+const FULL_ROW: Record<string, unknown> = {
+  id: 'ticket-1',
+  tenantId: TENANT_ID,
+  contactId: null,
+  companyId: null,
+  dealId: null,
+  leadId: null,
+  subject: 'probe-ticket',
+  body: 'stored text',
+  status: 'open',
+  priority: 'medium',
+  category: 'general',
+  assignedTo: null,
+  slaPolicyId: null,
+  firstResponseAt: null,
+  resolvedAt: null,
+  portalToken: PORTAL_TOKEN,
+  metadata: { resolution: 'operator prose the caller never asked for' },
+  createdAt: new Date('2026-10-10T00:00:00.000Z'),
+  updatedAt: new Date('2026-10-10T00:00:00.000Z'),
+  createdBy: USER_ID,
+  updatedBy: null,
+  deletedAt: null,
+  deletedBy: null,
+};
+
+/** The columns `STAFF_TICKET_COLUMNS` names — the same 17, in the same order. */
+const STAFF_KEYS = [
+  'assignedTo', 'body', 'category', 'contactId', 'createdAt', 'companyId', 'dealId',
+  'firstResponseAt', 'id', 'leadId', 'priority', 'resolvedAt', 'slaPolicyId',
+  'status', 'subject', 'tenantId', 'updatedAt',
+];
 
 const harness = vi.hoisted(() => {
   const state = {
     insertPayloads: [] as Record<string, unknown>[],
     insertRows: [] as unknown[],
     insertError: null as unknown,
+    /** The column map each `.returning()` call in this run was handed. */
+    returningArgs: [] as (Record<string, unknown> | undefined)[],
   };
   return { state };
 });
@@ -56,7 +98,22 @@ vi.mock('@/drizzle/db', () => ({
           harness.state.insertError = null;
           throw thrown;
         }
-        return { returning: () => Promise.resolve(harness.state.insertRows) };
+        // `.returning(columns)` narrows the row the way the route asks for it and
+        // `.returning()` alone is `RETURNING *`. Applying the list here is the
+        // whole point of the #2498 assertions: a fake that ignored it would
+        // report a clean response no matter what the route asked the database for.
+        return {
+          returning: (columns?: Record<string, unknown>) => {
+            harness.state.returningArgs.push(columns);
+            return Promise.resolve(
+              harness.state.insertRows.map((raw) => {
+                const row = raw as Record<string, unknown>;
+                return columns
+                  ? Object.fromEntries(Object.keys(columns).map((key) => [key, row[key]]))
+                  : row;
+              }));
+          },
+        };
       },
     }),
   },
@@ -142,16 +199,10 @@ describe('POST /api/tenant/tickets — body/description contract (#2285)', () =>
     vi.clearAllMocks();
     harness.state.insertPayloads = [];
     harness.state.insertError = null;
-    harness.state.insertRows = [{
-      id: 'ticket-1',
-      tenantId: TENANT_ID,
-      subject: 'probe-ticket',
-      body: 'stored text',
-      priority: 'medium',
-      status: 'open',
-      contactId: null,
-      portalToken: PORTAL_TOKEN,
-    }];
+    // The row a projection-free `RETURNING *` really hands back, credential and
+    // operator prose included — so the assertions below can only pass by narrowing.
+    harness.state.insertRows = [FULL_ROW];
+    harness.state.returningArgs = [];
     setNodeEnv('production');
   });
 
@@ -220,6 +271,98 @@ describe('POST /api/tenant/tickets — body/description contract (#2285)', () =>
     expect(res.status).toBe(201);
     expect(inserted()).toMatchObject({ body: 'Page jam on floor 3', priority: 'high', category: 'other' });
     expect(fireWebhooks).toHaveBeenCalled();
+  });
+});
+
+describe('the create response carries no credential and no operator prose (#2498)', () => {
+  /**
+   * The keys that must never appear in what this route sends out, in the
+   * camelCase the row actually arrives in. `portalToken` is the live bearer
+   * credential (#2444), `metadata` is where an operator's free-text resolution
+   * note lives, and `createdBy`/`updatedBy`/`deletedAt`/`deletedBy` are audit
+   * columns the caller never sent. All six are in {@link FULL_ROW}, which is what
+   * the fake hands back if the route asks for nothing.
+   */
+  const LEAKED_KEYS = ['portalToken', 'metadata', 'createdBy', 'updatedBy', 'deletedAt', 'deletedBy'];
+  /** Plus the column name, for the serialized checks: a key is text either way. */
+  const FORBIDDEN_TEXT = [...LEAKED_KEYS, 'portal_token'];
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    harness.state.insertPayloads = [];
+    harness.state.insertError = null;
+    harness.state.insertRows = [FULL_ROW];
+    harness.state.returningArgs = [];
+    setNodeEnv('production');
+  });
+
+  afterEach(() => {
+    setNodeEnv('test');
+  });
+
+  it('the fixture itself is leak-capable, so a passing test below means narrowing happened', () => {
+    // Without this, "no credential in the response" could be an artefact of a
+    // fixture that never carried one rather than of a projection. 23 = every
+    // column of the table.
+    expect(Object.keys(FULL_ROW)).toHaveLength(23);
+    for (const key of LEAKED_KEYS) expect(FULL_ROW).toHaveProperty(key);
+  });
+
+  it('asks the database for exactly the staff projection, not for everything', async () => {
+    // The textual pin #2443 uses, in two halves. The map is shared with the route,
+    // so its key set is stated here rather than re-derived from the response the
+    // fake filtered — widening STAFF_TICKET_COLUMNS to add portalToken fails even
+    // before the response is looked at. And the call is checked to have carried
+    // that map, because a route that dropped it back to `RETURNING *` would
+    // otherwise still be caught only by the filtering, not by the asking.
+    expect(Object.keys(STAFF_TICKET_COLUMNS).sort()).toEqual([...STAFF_KEYS].sort());
+    for (const key of LEAKED_KEYS) expect(STAFF_TICKET_COLUMNS).not.toHaveProperty(key);
+
+    const POST = await postHandler();
+    await POST(post({ subject: 'probe-ticket', body: 'probe body' }));
+    expect(harness.state.returningArgs).toHaveLength(1);
+    expect(Object.keys(harness.state.returningArgs[0] ?? {}).sort()).toEqual([...STAFF_KEYS].sort());
+  });
+
+  it('returns 17 ticket fields and nothing else', async () => {
+    const POST = await postHandler();
+    const res = await POST(post({ subject: 'probe-ticket', body: 'probe body' }));
+    const body = await res.json() as { data: Record<string, unknown> };
+
+    expect(res.status).toBe(201);
+    expect(Object.keys(body.data).sort()).toEqual([...STAFF_KEYS].sort());
+    expect(body.data.subject).toBe('probe-ticket');
+  });
+
+  it('the serialized create response carries no credential, prose or audit column', async () => {
+    const POST = await postHandler();
+    const res = await POST(post({ subject: 'probe-ticket', body: 'probe body' }));
+    const text = await res.text();
+
+    expect(text).not.toContain(PORTAL_TOKEN);
+    // The value, not just the key name: `metadata.resolution` is the operator's
+    // note, and an echo of it is what #2443 removed from the customer's detail page.
+    expect(text).not.toContain('operator prose');
+    expect(text).not.toContain('resolution');
+    for (const key of FORBIDDEN_TEXT) expect(text).not.toContain(key);
+  });
+
+  it('the automation payload is the same projected row, so automation_runs stores no credential', async () => {
+    // `evaluateAutomations()` persists `payload.data` as `automation_runs.metadata`
+    // (lib/automation/engine.ts:96, :109) and POSTs it to any `fire_webhook` action
+    // (lib/automation/engine.ts:314). The response was always the smaller audience.
+    const { evaluateAutomations } = await import('@/lib/automation/engine');
+    const POST = await postHandler();
+    await POST(post({ subject: 'probe-ticket', body: 'probe body' }));
+    await flush();
+
+    expect(evaluateAutomations).toHaveBeenCalledTimes(1);
+    const payload = (evaluateAutomations as unknown as { mock: { calls: { data: Record<string, unknown> }[] } }).mock.calls[0]![0];
+    expect(Object.keys(payload.data).sort()).toEqual([...STAFF_KEYS].sort());
+    const serialized = JSON.stringify(payload.data);
+    expect(serialized).not.toContain(PORTAL_TOKEN);
+    expect(serialized).not.toContain('operator prose');
+    for (const key of FORBIDDEN_TEXT) expect(serialized).not.toContain(key);
   });
 });
 

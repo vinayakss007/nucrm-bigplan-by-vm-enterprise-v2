@@ -58,3 +58,63 @@ export type PublicTicketRow = {
   category: string | null;
   created_at: Date;
 };
+
+/**
+ * Every `support_tickets` column a staff ticket write may echo (#2498).
+ *
+ * Both staff create routes called `.returning()` with no argument list, which is
+ * `RETURNING *` — all **23** columns of `support_tickets` (measured against a
+ * `db:sync` database), handed back as `{ data: row }`. The tenant route then
+ * spread the same row into `evaluateAutomations()`, and the engine persists that
+ * payload as `automation_runs.metadata` (`lib/automation/engine.ts:96`, `:109`)
+ * and POSTs it to whichever URL a `fire_webhook` action is configured with
+ * (`lib/automation/engine.ts:314`). So one create could put `portal_token` — still
+ * a working bearer credential until #2444 deploys, measured against the running
+ * container — in front of an API client, a second table and an external party,
+ * none of which asked for it.
+ *
+ * The set below is the ticket's own business columns: what the caller just sent,
+ * plus the server's identifiers, the pipeline links, the SLA linkage and the two
+ * timestamps a list row is rendered from. What it drops is what a create response
+ * has no business carrying — the credential, `metadata` (operator prose, per
+ * #2443), and the who-did-what audit uuids with `deleted_at`/`deleted_by`.
+ *
+ * Neither caller reads the create response today — `app/tenant/tickets/page.tsx`
+ * checks `res.ok`, toasts and refetches, and the super-admin page has no POST
+ * caller at all — so this set is free to be the projection the staff UI will
+ * eventually want, and the list handlers already state it: the same business
+ * columns as `app/api/tenant/tickets/route.ts:63-76` and
+ * `app/api/superadmin/tickets/route.ts:34-49`, less their join-only display
+ * fields (`firstName`, `assignedName`, `tenantName`, `userEmail`) and plus the
+ * pipeline and SLA links a detail view resolves. Nothing here is invented for
+ * this one route.
+ *
+ * Keys stay camelCase because that is what `.returning()` already produced, so the
+ * automation payload keeps exactly the shape its conditions see today. The engine
+ * reads snake_case (`str(enrichedData, 'assigned_to')`), and `getNestedValue`
+ * treats an absent key and a null one identically for `is_empty`/`is_not_empty`,
+ * so removing a column from this map cannot flip a condition from false to true —
+ * only from "value" to "empty", which is the point.
+ *
+ * Adding a field here is a disclosure decision. Adding a column to the table must
+ * never be one.
+ */
+export const STAFF_TICKET_COLUMNS = {
+  id: supportTickets.id,
+  tenantId: supportTickets.tenantId,
+  contactId: supportTickets.contactId,
+  companyId: supportTickets.companyId,
+  dealId: supportTickets.dealId,
+  leadId: supportTickets.leadId,
+  subject: supportTickets.subject,
+  body: supportTickets.body,
+  status: supportTickets.status,
+  priority: supportTickets.priority,
+  category: supportTickets.category,
+  assignedTo: supportTickets.assignedTo,
+  slaPolicyId: supportTickets.slaPolicyId,
+  firstResponseAt: supportTickets.firstResponseAt,
+  resolvedAt: supportTickets.resolvedAt,
+  createdAt: supportTickets.createdAt,
+  updatedAt: supportTickets.updatedAt,
+};

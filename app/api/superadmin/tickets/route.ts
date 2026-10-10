@@ -12,6 +12,7 @@ import { eq, and, sql, desc } from 'drizzle-orm';
 import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { concurrencyGuardById } from '@/lib/api/concurrency';
+import { STAFF_TICKET_COLUMNS } from '@/lib/public-ticket-projection';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { logError } from '@/lib/errors-server';
 
@@ -120,7 +121,10 @@ export const POST = withApiRoute(async (request: NextRequest) => {
         category,
         priority,
       })
-      .returning();
+      // #2498: `{ data: row }` is what this returns, so `RETURNING *` echoed all
+      // 23 columns of a table whose `portal_token` #2444 stopped minting but has
+      // not dropped — `metadata` prose and the audit uuids came along with it.
+      .returning(STAFF_TICKET_COLUMNS);
 
     return NextResponse.json({ data: row }, { status: 201 });
   } catch (err: unknown) {
@@ -174,7 +178,10 @@ export const PATCH = withApiRoute(async (request: NextRequest) => {
       .update(supportTickets)
       .set(updateData)
       .where(and(eq(supportTickets.id, id), eq(supportTickets.updatedAt, expectedUpdatedAt)))
-      .returning();
+      // The row never leaves this route (`{ ok: true }` below), but naming the
+      // columns is the habit #2498 is about: `RETURNING *` is a read of all 23
+      // columns of a table that holds a bearer credential.
+      .returning(STAFF_TICKET_COLUMNS);
 
     if (!row) return NextResponse.json({ error: 'Ticket was modified by another user — please refresh' }, { status: 409 });
     return NextResponse.json({ ok: true });
