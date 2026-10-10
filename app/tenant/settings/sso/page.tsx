@@ -64,7 +64,10 @@ export default function SSOSettingsPage() {
         ssoUrl: str('ssoUrl'),
         certificate: str('certificate'),
         clientId: str('clientId'),
-        clientSecret: str('clientSecret'),
+        // #2520: the API no longer returns the OIDC client secret, so the field
+        // starts empty. An empty value on save means "keep what is stored" —
+        // see `keepStoredSecret` in app/api/tenant/sso/route.ts.
+        clientSecret: '',
         issuer: str('issuer'),
         authorizationEndpoint: str('authorizationEndpoint'),
         tokenEndpoint: str('tokenEndpoint'),
@@ -84,7 +87,10 @@ export default function SSOSettingsPage() {
         config['certificate'] = form.certificate;
       } else {
         config['clientId'] = form.clientId;
-        config['clientSecret'] = form.clientSecret;
+        // Send the secret only when the admin actually typed one. Omitting it lets
+        // the API preserve the stored value (#2520); sending '' would be a no-op
+        // either way, but an explicit key is the clearer contract.
+        if (form.clientSecret.trim()) config['clientSecret'] = form.clientSecret;
         config['issuer'] = form.issuer;
         config['authorizationEndpoint'] = form.authorizationEndpoint;
         config['tokenEndpoint'] = form.tokenEndpoint;
@@ -230,8 +236,13 @@ export default function SSOSettingsPage() {
                   type="password"
                   value={form.clientSecret}
                   onChange={e => setForm(f => ({ ...f, clientSecret: e.target.value }))}
+                  placeholder="Leave blank to keep the current secret"
                   className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-violet-500 focus:ring-violet-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
                 />
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  Stored secrets are never returned to the browser, so this box starts empty.
+                  Type a new value only to replace it.
+                </p>
               </div>
             </div>
             <div>
