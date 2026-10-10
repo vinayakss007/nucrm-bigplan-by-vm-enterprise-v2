@@ -8,9 +8,11 @@
 >   measurement, and it is **0 of 6**. The tree running on this host is `30e9f263`, **103** commits
 >   and four days behind `origin/main` (`92f3582f`) — **98** behind `4dc2ef82` when this was first
 >   measured, the same day, so the gap widened by five while this PR sat open. None of the six paths
->   PP-061 opened is loaded by the live edge. An addendum records the measurement, its two controls
->   and the probe method that had to be corrected first. Report-only: no code, no migration,
->   nothing deployed.
+>   PP-061 opened is loaded by the live edge. An addendum records the measurement, its two controls,
+>   the probe method that had to be corrected first, and one present-tense claim in this very entry
+>   that **#2505** (`e0b909cc`) falsified while this PR was open — it deleted the two phantom
+>   `/api/lead-capture` list entries PP-061 pointed at and left untouched. Report-only: no code,
+>   no migration, nothing deployed.
 >   Written while **#2507** (**PP-065**) was open in review; both docs PRs add a header bullet at this
 >   same place, so whichever merges second takes a one-line conflict — resolve it by keeping both
 >   bullets. **#2503** merged first, so PP-064 keeps ID 064 and this entry stays PP-061-only.
@@ -3606,10 +3608,13 @@ not wired in).
   unbounded anonymous write. `tests/unit/proxy.test.ts:158` asserts that 401 alongside the six
   openings, so a future "make it public for convenience" change fails a test rather than widening
   the surface silently.
-- **Also on main, untouched here:** `/api/lead-capture` and `/api/lead-capture/submit` sit in
-  `PUBLIC_PATHS` with **no route file behind either** — the projection guard still prints them as two
+- **Also on main, untouched here:** `/api/lead-capture` and `/api/lead-capture/submit` sat in
+  `PUBLIC_PATHS` with **no route file behind either** — the projection guard printed them as two
   `NOTE` lines. Dead public surface is a smaller problem than a live one, but it is the same list and
-  should be pruned in the pass that has a reason to touch it.
+  it asked to be pruned in the pass that had a reason to touch it. **That pass has run: #2505
+  (`e0b909cc`, merged 2026-10-10) deleted both entries while this addendum was open**, and re-pinned
+  the guard that had been tolerating them. The tense above is corrected rather than rewritten from
+  scratch because the reasoning was right and only the state of main moved underneath it.
 - **Verified by:** `tests/unit/proxy.test.ts:158` — 67 tests green; reverting **only** the 6-path
   `PUBLIC_PATHS` change fails **exactly** those 6 `it.each` cases (the credential routes) and the
   visitors-track case stays green, which is the falsification that proves the test exercises the edge
@@ -3646,8 +3651,9 @@ not wired in).
 
 - **Addendum, 2026-10-10 — that phrase is now a measurement.** The tree running on this host is
   `30e9f263` (committed 2026-10-06; working tree verified clean, and the commit verified an
-  **ancestor** of `origin/main`, whose tip is `4dc2ef82`). Grepping that commit's own `proxy.ts` for the
-  six paths opened here returns **0 hits each**, where the same grep on main returns **1 hit each** — so
+  **ancestor** of `origin/main`, whose tip was `4dc2ef82` at that moment and is `92f3582f` now).
+  Grepping that commit's own `proxy.ts` for the six paths opened here returns **0 hits each**, where
+  the same grep on main returns **1 hit each** — so
   not one of the six lines this PR introduced is in the file the live edge actually loads. Measured
   through the edge, all six still answer the byte-for-byte `401` body this entry opened with, including
   the sub-path `/api/tenant/plugins/webhook/x` — the prefix match is exactly what the fix relies on, and
@@ -3664,10 +3670,17 @@ not wired in).
   because the naive one fails: port 80 answers `301` for *every* path, including the ones that 404,
   because TLS redirection precedes the edge. The measurement therefore had to be taken against the
   container's own listener, where `proxy.ts` runs.
+- **What #2505 closed, and what it could not.** Deleting a list entry does not create a route: the
+  two paths still answer **404**, they are simply no longer advertised to anonymous visitors — and
+  the deployed tree still carries both, so even that difference is main-only until something deploys.
+  The live half of the cluster is untouched by it: `/lead-capture` renders and its form posts a body
+  `app/api/leads/public/route.ts:32` rejects, which is **PP-065** and still an owner decision. Naming
+  the organization that receives marketing leads is not a thing a list edit can answer.
 - **What the addendum did *not* do.** It did not apply a migration, redeploy, or change
   `Applied: 99 · Pending: 26`. It did not open `/api/tenant/visitors/track`, which remains the seventh
-  hit and is still deliberately left closed. And it adds no new source coordinate, so every cited line
-  number in this entry still points where PP-061 put it.
+  hit and is still deliberately left closed. It adds no new source coordinate **inside this entry**, so
+  every line number PP-061 cites still points where PP-061 put it; the one coordinate this correction
+  does add belongs to **PP-065** and is checked by `guard:coords` like every other.
 
 ## PP-062 — 🔧 Two credentials shared one header: three public ticket routes read `x-portal-token` as `support_tickets.portal_token`, resolved that value to a *contact* rather than a ticket, and it carried no expiry, no `is_active`, no rotation and no revoke path — while nothing in the product ever delivered it _(S2 · Portal / credential)_
 
