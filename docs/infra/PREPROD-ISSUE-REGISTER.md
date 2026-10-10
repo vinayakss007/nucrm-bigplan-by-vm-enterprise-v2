@@ -20,7 +20,7 @@
 > and the later one moves, the resolution PP-057 and PP-063 record; **#2507** still holds 065 open, so this entry
 > lands at 068. This entry also re-pins the one pointer _into_ the register, and found it broken before this
 > PR: `docs/README.md:71` aimed at `:1598` for the keep-the-entry rule, which lived at `:3913` at
-> `4dc2ef82` (**2,315 lines** of drift) and sits at `:4300` now that **PP-064**, **PP-066** and
+> `4dc2ef82` (**2,315 lines** of drift) and sits at `:4331` now that **PP-064**, **PP-066** and
 > **PP-067** have merged — no guard sees any of it, because
 > `scripts/check-register-coords.mjs` scans only the register's own outward citations.
 > - **Previous:** 2026-10-10 (UTC) — **PP-067**: `npm run db:bootstrap` builds **six** columns nullable that `drizzle/schema` declares
