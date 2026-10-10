@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { safeApiError } from '@/lib/api-error';
 import { logError } from '@/lib/errors-server';
 import { acquireLock } from '@/lib/cache';
 import { verifySecret } from '@/lib/crypto';
@@ -76,8 +77,7 @@ export async function POST(req: NextRequest) {
       failed: totalFailed,
     });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Internal error';
     void logError({ error: err, context: 'cron/ai-auto-followup' });
-    return NextResponse.json({ error: message }, { status: 500 });
+    return safeApiError(err); // #2527
   }
 }

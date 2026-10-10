@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { safeApiError } from '@/lib/api-error';
 import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { requireAuth } from '@/lib/auth/middleware';
@@ -73,7 +74,6 @@ export const POST = withApiRoute(async (request: NextRequest) => {
 
     return NextResponse.json(formData);
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Internal server error';
-    return NextResponse.json({ error: message }, { status: 500 });
+    return safeApiError(err); // #2527
   }
 });

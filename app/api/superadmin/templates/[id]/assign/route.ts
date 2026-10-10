@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { safeApiError } from '@/lib/api-error';
 import { z } from 'zod';
 import { uuidIdSchema } from '@/lib/validation/uuid';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
@@ -71,8 +72,7 @@ export const POST = withApiRoute(async (req: NextRequest,
 
     return NextResponse.json({ data: assignment }, { status: 201 });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Internal server error';
     await logError({ error: err, context: 'superadmin/templates/[id]/assign POST', requestMethod: 'POST' });
-    return NextResponse.json({ error: message }, { status: 500 });
+    return safeApiError(err); // #2527
   }
 });

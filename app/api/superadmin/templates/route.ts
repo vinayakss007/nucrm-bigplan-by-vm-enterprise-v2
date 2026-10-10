@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { safeApiError } from '@/lib/api-error';
 import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { requireAuth } from '@/lib/auth/middleware';
@@ -45,9 +46,8 @@ export const GET = withApiRoute(async (req: NextRequest) => {
 
     return NextResponse.json({ data: templates });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Internal server error';
     await logError({ error: err, context: 'superadmin/templates GET', requestMethod: 'GET' });
-    return NextResponse.json({ error: message }, { status: 500 });
+    return safeApiError(err); // #2527
   }
 });
 
@@ -94,11 +94,13 @@ export const POST = withApiRoute(async (req: NextRequest) => {
 
     return NextResponse.json({ data: template }, { status: 201 });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Internal server error';
+    const message = err instanceof Error ? err.message : '';
     await logError({ error: err, context: 'superadmin/templates POST', requestMethod: 'POST' });
+    // The duplicate-slug case keeps its 409 and its friendly text; what must not
+    // survive is the raw driver message in the generic branch (#2527).
     if (message.includes('unique') || message.includes('duplicate')) {
       return NextResponse.json({ error: 'A template with that slug already exists' }, { status: 409 });
     }
-    return NextResponse.json({ error: message }, { status: 500 });
+    return safeApiError(err);
   }
 });
