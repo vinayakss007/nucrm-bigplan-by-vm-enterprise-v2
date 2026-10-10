@@ -375,3 +375,31 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/nucrm_test
           DATABASE_SSL: "false"
+
+      # #2508 — the same chain-built schema, measured COLUMN by COLUMN.
+      # Step B above proves the journal reaches a protected, stamped database;
+      # it counts tables, policies, functions and ledger rows, so a database 26
+      # migrations behind still passes: `portal_token NOT NULL` next to a schema
+      # that declares it nullable is not a missing table, a missing policy or a
+      # missing function, and every screen here was blind to it (#2499). This
+      # step builds the shape step B just proved (empty database + db:bootstrap,
+      # never the CI provisioning's `db:sync`, which would push the schema and
+      # make the comparison tautological) and runs `db:drift-check` against it,
+      # so "the migration chain does not produce the schema the code declares"
+      # fails a pull request. `scripts/schema-drift-allowlist.json` masks drift
+      # a pending migration is already clearing; anything new goes red, and the
+      # nightly half of this guard (#2508 AC3) measures the database we serve:
+      # `.github/workflows/schema-drift.yml`.
+      #
+      # Appended at the end of the last job in the file, which is the only place
+      # in `ci.yml` a step can be added without moving a register coordinate
+      # (`ci.yml:63`, `:86`, `:120`, `:165`, `:215`, `:217`, `:250`).
+      - name: Schema drift check (column-level) against a chain-built database
+        run: |
+          set -euo pipefail
+          export DATABASE_URL=postgresql://postgres:postgres@localhost:5432/nucrm_chain
+          export DATABASE_SSL=false
+          psql "postgresql://postgres:postgres@localhost:5432/nucrm_test" -v ON_ERROR_STOP=1 \
+            -c 'CREATE DATABASE nucrm_chain'
+          npm run db:bootstrap -- --yes
+          npm run db:drift-check
