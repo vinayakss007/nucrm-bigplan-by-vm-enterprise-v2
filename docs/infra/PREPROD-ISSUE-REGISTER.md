@@ -3880,7 +3880,11 @@ psql -tAc "select count(*) from support_tickets"  # as the app role, with app.po
   `ufw status`, `journalctl -u ssh`, `systemctl list-unit-files`/`list-timers`, `crontab -l`, `/etc/cron.d`,
   `/etc/ssh/sshd_config`, `command -v pm2`, `ls -A /home`, `docker ps`, `deploy/DEPLOYMENT_PATHS.md`,
   `scripts/check-deploy-trigger.mjs`, `actionlint` 1.7.12. Related: **PP-060** (the same hop measured from
-  the log side — its counts are corrected above), **#2299** (the GitHub issue that named both defect sites
+  the log side — its **run** counts are corrected above, while its **pile** count still reads 24 where
+  the **26** **#2444** measured on rebase day (`Applied: 99 · Pending: 26 · Total: 125`, from `0123`
+  with **#2495** and `0124` with itself — a number this PR cites rather than re-measures, because its own
+  subject is the hop); that count is left for the pile's own correction line (#2408 did exactly that for
+  PP-057) instead of being quietly updated by a PR measuring a different thing, **#2299** (the GitHub issue that named both defect sites
   from run history in 2026-10-03 and could not say which of them fires), **PP-057**/**PP-058**/**#103** (what a green deploy would
   and would not apply), **#135**→**#137** (the release-path sequence), **#142** (the other secrets still
   unset), **#145** (why no address or name appears anywhere in this entry).
