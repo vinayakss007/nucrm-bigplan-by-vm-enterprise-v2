@@ -7,6 +7,26 @@ Every line below is backed by a file:line citation, a CI result, or a register
 entry (docs/infra/PREPROD-ISSUE-REGISTER.md = "PP-0NN"). Where the evidence is
 only "the code exists", it says UNVERIFIED — that is not the same as working.
 
+  [2026-10-10 — RE-MEASURED at main = 152533ed (package.json version still
+   0.9.0). Nothing below is deleted: a stale reading stays in the file as a
+   correction, marked "RE-MEASURED", so the audit trail cannot be quietly
+   rewritten. Moved: 0.1, 0.2, 0.7, 2.8, 2.9, 2.17, and the LAYER 3 framing
+   (see the owner decision at the top of that layer). Re-confirmed exactly as
+   written: 0.5 (GET branches/main/protection still 404), 0.6 (no bump+tag
+   commit yet), 2.1 (lib/email/service.ts:80-81), 2.2 (22 cron route.ts vs 17
+   crontab lines), 2.14 (no workflow mentions playwright), 2.16 (no
+   release.yml; only nightly-soak.yml; LAUNCH_GATE_STRICT in no workflow),
+   3.1's five 'beta' coordinates (components/tenant/ai/ai-config.ts:63, 72,
+   81, 98, 107). Not re-measured this pass: 2.15. Closed at the tip: 0.3 and
+   0.4's file edit — PR #2469 merged 2026-10-09, and
+   tests/unit/deploy-host-literals-2302.test.ts is green at 152533ed (8
+   tests, including "has no publicly-routable IPv4 in docs, scripts, app
+   source or workflows"), so the 12-occurrence count now describes the
+   pre-#2469 tip, not this one; TEST_PLAN.txt:7-8 is placeholders. What that
+   guard cannot close is stated in 0.3/0.4 themselves: the published password
+   is still in public git history (owner rotation), and
+   deploy/certs/preprod-ca.pem carries its address as base64 subject CN.]
+
 How to read the three layers:
   LAYER 1  STABLE        -> put in 1.0.0 and say it works.
   LAYER 2  TWEAK-FIRST   -> in 1.0.0, but only after the named one-line change.
@@ -15,6 +35,15 @@ How to read the three layers:
                              lib/modules/gate.ts:28 / lib/auth/middleware.ts:444,
                              nav entry removed from components/tenant/layout/sidebar-nav.ts,
                              or the route stays but returns 404 for non-internal callers.
+                             [2026-10-10 — superseded as an action, kept as a
+                              warning: the owner ruled out hiding or disabling
+                              anything for 1.0.0 ("leave it keep all dont
+                              disbale anything this will be 2 times work"), so
+                              nothing below is taken offline. Read LAYER 3 now
+                              as "the code ships, the claim does not". The
+                              items and their reasons are still the list of
+                              what 1.0.0 must not advertise — 3.10 in
+                              particular is fully in force.]
 
 ================================================================================
 LAYER 0 — NOT A SCOPE QUESTION. NOTHING SHIPS UNTIL THESE ARE TRUE.
@@ -24,10 +53,39 @@ LAYER 0 — NOT A SCOPE QUESTION. NOTHING SHIPS UNTIL THESE ARE TRUE.
      "dial tcp <host>:22: i/o timeout" on 12 of 12 runs dated 2026-10-08.
      Cause is outside the repo (host down, cloud firewall, or GitHub runner IPs
      not allowlisted — PP-060 + PP-020). Owner/infra action.
+     RE-MEASURED 2026-10-10: the last 50 deploy.yml runs are 41 failure / 9
+     cancelled / 0 success — the "12 of 12" reading was not pessimistic enough,
+     and PP-060's own whole-history figure is 778 runs with 0 successes (3
+     successes in the 1,319 retained). What changed is the diagnosis: #2501
+     (PP-063) merged, so the job now ships a pre-flight (deploy.yml:68-123,
+     remote-side model hint at :153-155) that reads the failure out of the log
+     instead of leaving it to the reader. Executed verdict on the live failure
+     (run 38038251006, job 114173165456): "TCP :22 to the address DEPLOY_HOST
+     resolves to got NO reply in 10003ms". That eliminates "the VM is down" as
+     the shape of the answer — a refused or unreachable-but-routed host
+     produces a different line — and leaves exactly two candidates the runner
+     cannot separate: the secret holds an address that is not the VM (a stale
+     value, or a dynamic record that moved with no updater on the box), or a
+     firewall between GitHub and it. Both remain owner action; the second half
+     of PP-063 is independent and also owner action: this job deploys a pm2
+     git-checkout VM, while the host this repo ships to runs Docker Compose, so
+     re-pointing DEPLOY_HOST alone produces a different red, not a deploy.
 0.2  The live database is ~23 journal entries behind main.
      drizzle/migrations/meta/_journal.json has 122 entries (newest idx 121 =
      0121_email_tracking_attribution_indexes) and nothing applies the backlog,
      because the only migrate step sits behind 0.1 (PP-057, PP-060).
+     RE-MEASURED 2026-10-10: the journal itself is now 125 entries, newest idx
+     124 = 0124_retire_ticket_portal_token_rls_lookup (123 =
+     0123_bearer_credential_rls_lookup), across 249 .sql files in
+     drizzle/migrations. "~23 behind" is therefore a floor that has already
+     moved, not an estimate to quote. The live number must be re-measured by
+     PP-057's own tooling against the preprod ledger — npm run db:status needs
+     DATABASE_URL, and this session deliberately did not load a live database
+     URL to force an answer, so no count is claimed here. "Nothing applies the
+     backlog" is unchanged and is now sharper than a plumbing complaint: even a
+     healthy 0.1 migrates a *different* database than the one this host serves
+     (PP-060), so the apply path needs its own decision, not just a green
+     deploy.
 0.3  The public repo leaks live infrastructure.  [tip redacted in PR #2469; the
      account in 0.4 still needs rotating — see the caveat there]
      Measured: 12 occurrences of publicly-routable addresses belonging to THIS
@@ -45,6 +103,15 @@ LAYER 0 — NOT A SCOPE QUESTION. NOTHING SHIPS UNTIL THESE ARE TRUE.
      address in this repo. Addresses in RFC-1918/loopback/doc ranges and the
      intentional test fixtures (203.0.113.7, 198.51.100.9, example.com) are NOT
      counted — 224 + 221 such occurrences are correctly in the tree.
+     RE-MEASURED 2026-10-10: 12 is now 0 at the tip. PR #2469 merged 2026-10-09
+     and the widened guard (tests/unit/deploy-host-literals-2302.test.ts, 8
+     tests) passes at 152533ed; recounting by hand agrees — TEST_PLAN.txt and
+     fire-cron.mts carry no dotted-quad host now, and the only remaining
+     octet-shaped value in issues-2026-06-02.txt starts with 0. Do not read this
+     as "the exposure is gone": a merged PR edits the tip, not the history, so
+     the 12 addresses and the customer's IP-plus-ISP name are still published in
+     commits before 2026-10-09, and preprod-ca.pem's base64 subject CN was never
+     a text-scan target. Both halves of that are owner actions.
 0.4  A PLAINTEXT ADMIN PASSWORD IS PUBLISHED.
      docs/planning/TEST_PLAN.txt:7-8 gives a live app URL over plain HTTP plus an
      admin email and its password in the clear. Rotate that account's password
@@ -58,22 +125,56 @@ LAYER 0 — NOT A SCOPE QUESTION. NOTHING SHIPS UNTIL THESE ARE TRUE.
      address as its subject CN inside base64, which no text scan can see — it is
      the trust anchor fire-cron.mts and the backup verifiers pin, so re-issuing
      it against a DNS name is a host-side owner action.
+     RE-MEASURED 2026-10-10: the file no longer says any of it —
+     docs/planning/TEST_PLAN.txt:7-8 is now `http://<TEST_ENV_HOST>:3000` and an
+     explicit "<REDACTED-ADMIN-CREDENTIAL — rotate the account, do not re-add it
+     here>" marker. That is the cheap half of Step 1, done. The incident is
+     still open and this document's own words about it remain true: the password
+     is in public history, so the account must be rotated by an owner, and no
+     future PR can un-publish it.
 0.5  main has no branch protection (GET branches/main/protection -> 404), even
      though docs/runbooks/branch-protection.md exists for #1475 and go-live.md
      lists it. "Merged to main" is therefore not a release-integrity signal.
+     RE-CONFIRMED 2026-10-10: still 404. This is the half of #141 that is not
+     code — it needs the owner to turn it on.
 0.6  A tag does not identify a build. v0.9.0 was tagged at ef6916ae and
      package.json was bumped to 0.9.0 afterwards in d5a43625. Fix the habit
      before any 1.0.0 tag: bump and tag in the same commit.
+     RE-CONFIRMED 2026-10-10: main is still 0.9.0 and nothing has been tagged
+     since, so the habit is untested rather than fixed.
 0.7  Three places fall back to the literal string '1.0.0' when
      npm_package_version is missing: app/api/health/route.ts:92,
      sentry.client.config.ts:80, sentry.server.config.ts:79. A mis-built
      container currently self-reports as 1.0.0. They must say 'unknown'.
+     RE-MEASURED 2026-10-10: all three sites are exactly as written, and the
+     claim is stronger than "a mis-built container". npm exports
+     npm_package_version only to processes it launches, so the fallback is
+     reachable in ordinary, correctly-built production shapes: the app
+     container gets the variable because its CMD is `npm run prod:start:custom`
+     (Dockerfile:110 -> package.json:118), while the worker
+     (["node","--import","tsx","worker.ts"]) and `crond -f` never do. That means
+     /api/health's version field and Sentry's release tag are the *lit* path
+     for those processes, not the broken path — and the string they print,
+     '1.0.0', is one no release package.json has ever carried. The honest
+     precedent already existed in the same file: resolveRelease() in
+     sentry.server.config.ts does not invent a version. Fix is up as PR #2514
+     at a394be74 (three sites -> 'unknown', plus
+     tests/unit/app-version-fallback-guard.test.ts, 9 tests, which locks the
+     shape tree-wide with a planted-violation control and a scan-floor so
+     silence cannot pass as compliance). OPEN, green, unmerged — so 0.7 is
+     fixed-in-review, not fixed.
 
 ================================================================================
 LAYER 1 — STABLE. SHIP IT IN 1.0.0 AND CLAIM IT.
 ================================================================================
 Evidence bar: route wired + covered by tests that pass in CI (Unit Tests and
 Integration Tests are green at 2ac7cc96) + no open register entry against it.
+  [2026-10-10: re-read at main = 152533ed — 8 check runs, 7 completed success
+   (Secret Scan, Lint & Typecheck, Unit Tests, Security Scan/SAST, Integration
+   Tests, Single Lockfile Guard, Fresh Install Sequence) and Build still
+   in_progress at the moment of reading. So the bar this layer is judged
+   against has not moved: CI green means those seven, and it does NOT include
+   any end-to-end run (2.14) or the launch gate (2.16).]
 
 1.1  Core CRM objects: contacts, companies, leads, deals, tasks, activities.
      app/api/tenant/{contacts,companies,leads,deals,tasks}/route.ts with [id],
@@ -159,10 +260,35 @@ LAYER 2 — WORKS AFTER A FEW TWEAKS. SHIP IN 1.0.0 ONLY AFTER THE TWEAK.
      _journal.json is missing 0059_custom_entities + 0091_..._bypass (task #74).
      TWEAK: repair the journal, then either make the check pass or delete it.
      It cannot be a release gate in its current state.
+     RE-MEASURED 2026-10-10: the journal half of this is done — both tags are
+     journalled (0059 at _journal.json:422, 0091 present too) with their .sql
+     and .down.sql on disk, which is what CI's invisible-migration guard enforces.
+     The gate half is not: verify-migration-chain.ts:19 still says "KNOWN TO
+     FAIL TODAY" in the present tense, and the reason it names is structural, not
+     a missing entry — 0000_init and 0037_flat_sir_ram are two overlapping
+     lineages of the same schema and cannot both be applied
+     (docs/migration-chain-state.md). So "repair the journal, then make the
+     check pass" is now only half a plan: the remaining work is choosing between
+     re-cutting those lineages and deleting the check. Do not read 2.8 as
+     closed, and do not gate a release on it. Note that
+     docs/migration-chain-state.md:8 still describes 0059/0091 as missing, so
+     that sentence contradicts main as of today.
 2.9  Billing verification. BILLING-VERIFICATION-PLAN-1477.md:426-429 — all four
      P0 boxes unchecked, every Pass/Fail column blank. go-live.md:241 makes
      Stripe test-mode end-to-end (#1477) a precondition of the launch gate.
      TWEAK: run the P0 list in Stripe test mode and check the boxes with evidence.
+     RE-CONFIRMED 2026-10-10, with two citation fixes: the plan is at the repo
+     root (BILLING-VERIFICATION-PLAN-1477.md), not under docs/, and the
+     precondition line is docs/runbooks/go-live.md:241. That line is slightly
+     wider than this bullet says — it reads "Do not take a paying customer until
+     every box above is checked and the P0 billing items in #1479 are verified
+     end-to-end in Stripe test mode (#1477)", so it names #1479's items and
+     #1477 as the verification plan. Unchecked today: all four boxes at :426-429
+     (#1462 invoice numbering, #1463 Stripe status mapping + terminal guard,
+     #1464 dunning cap + attemptNumber, #1454 lead-to-deal). Nothing in this
+     bullet moved, which means the launch gate's own precondition is still the
+     one thing nobody has run — and it cannot be closed from this session,
+     because it needs real Stripe test keys (an owner action, #142).
 2.10 Dunning. The plan says the retry path records attempts but "does NOT yet
      actually re-charge Stripe (explicit TODO)" at :316-320, and
      billing_events.currency is hard-coded 'usd' against INR paise at :342.
@@ -182,6 +308,11 @@ LAYER 2 — WORKS AFTER A FEW TWEAKS. SHIP IN 1.0.0 ONLY AFTER THE TWEAK.
      (Dockerfile:21,:45) and tasks #84 is open.
      TWEAK: set SENTRY_RELEASE=<git tag> at build, upload maps, put web/worker/
      cron on one release id so a 1.0.0 error is attributable to 1.0.0.
+     [2026-10-10: re-confirmed as written — :21 still defaults to "" and :45
+      still invents build-<epoch>. Read 0.7 and this together, and do not let
+      one excuse the other: #2514 only stops the version field lying when
+      nothing set it. Attributing an error to a release needs SENTRY_RELEASE
+      here plus a tag that identifies a build (0.6), which is #84 and #136.]
 2.14 Browser tests exist but never run: tests/e2e/ has 7 Playwright specs
      (auth, contacts, deals, multi-tenant, notifications, smoke) and no workflow
      in .github/workflows mentions playwright.
@@ -202,6 +333,25 @@ LAYER 2 — WORKS AFTER A FEW TWEAKS. SHIP IN 1.0.0 ONLY AFTER THE TWEAK.
      app/api/public (scripts/check-public-row-projection.mts:422) while the real
      anonymous surface is 79 route files derived from proxy.ts.
      TWEAK: finish the sites, then derive the guard's scope from proxy.ts.
+     CLOSED 2026-10-10 at main = 152533ed (sites via #2459/#2505/#2506, scope
+     derivation via #2505). Both halves of the complaint are gone, measured not
+     asserted: the guard no longer hard-codes app/api/public — its anonymous
+     surface is derived from the edge lists, and check-public-row-projection.mts
+     :38 documents that while :656 fails the run when no /api/ entry matches.
+     Re-running it today prints, verbatim:
+       OK — 31 public write site(s), 80 .select() read site(s) and 42
+       relational read site(s) across 59 route file(s) named by proxy.ts, every
+       one naming the columns it moves except 1 waived by an inline marker
+       waived — app/api/forms/submit/route.ts:284 POST (cited by #2459)
+     Two honest caveats, so 2.17 is not read as a clean sweep. (a) "59 route
+     files named by proxy.ts" is what the guard can see; the earlier "79" was a
+     different count taken a different way, and the two are not evidence against
+     each other — the guard's denominator is whatever proxy.ts routes to /api,
+     so a route that proxy.ts stops naming is silently out of scope. That is why
+     #2513 (PP-065) exists as the prevention guard. (b) The one waiver is an
+     inline marker on a public POST, i.e. a human decided that site may move
+     un-named columns; it is recorded here because an exception list is part of
+     the claim, not a footnote to it.
 2.18 Tenant isolation model. PP-047: a platform account with no workspace gets
      400 "Invalid reference" on ~120 insert routes and join-tenant has no UI
      caller. PP-048: isolation rests on a settable GUC across 49 tables.
@@ -219,7 +369,24 @@ LAYER 3 — DO NOT SHOW IN 1.0.0. KEEP THE CODE, SHIP IT IN A LATER VERSION.
 Hiding is not deleting. Each item below has a mechanical off-switch and a reason
 that is about trust, not about effort.
 
+  [2026-10-10 OWNER DECISION, recorded so nobody re-proposes it: nothing in this
+   layer is hidden, flagged off or 404'd for 1.0.0. The off-switches described
+   below exist and still work, but using them would double the work — every
+   module stays reachable and gets fixed forward. What survives this layer is
+   the half that was always the point: the reason. Each item below is a list of
+   claims 1.0.0 must not make, and 3.10 is the compressed version of that list.
+   Re-verified today, because it is the only part with a testable shape: the
+   five 'beta' strings named in 3.1 are still exactly at
+   components/tenant/ai/ai-config.ts:63, 72, 81, 98, 107.]
+
 3.1  AI module — HIDE ENTIRELY (nav + pages + settings entries).
+     [2026-10-10: "HIDE" and "HOW IT GATES" below are superseded by the owner
+      decision at the top of this layer — the AI module ships in 1.0.0, nav,
+      pages, settings entries and all. Re-measured today, all still exactly
+      where this bullet says: 'beta' at ai-config.ts:63, 72, 81, 98, 107 and
+      "coming soon" at app/tenant/ai/page.tsx:83. What is NOT superseded is the
+      Why: with no ANTHROPIC_API_KEY set, this surface degrades silently, so 1.0
+      may list AI and may not describe it as working.]
      Why: no ANTHROPIC_API_KEY on any host, so every call degrades silently
      (PP-019); "Time saved — coming soon" at app/tenant/ai/page.tsx:83; an
      AiComingSoon stub rendered at app/tenant/settings/ai-activity; FIVE 'beta'
@@ -284,20 +451,51 @@ WHAT I WOULD DO, IN ORDER
   Step 1  Rotate the admin credential in 0.4 and redact 0.3/0.4. Not a debate.
           Redaction is up as PR #2469 (tip clean + the guard widened); rotating
           the account is still open and is an owner action, not a repo edit.
+          [2026-10-10: #2469 MERGED 2026-10-09, so the redaction half is done
+           and the guard proves it on every run. The rotation half is still
+           open, and merging cannot have rotated anything: the password stays in
+           public git history, so the account is burned until an owner resets
+           it. Step 1 is therefore NOT finished.]
   Step 2  Fix the ship path (0.1) and apply the backlog (0.2). Nothing else can
           be proven until code can reach a machine.
   Step 3  Release integrity: branch protection (0.5), bump+tag in one commit
           (0.6), version fallbacks to 'unknown' (0.7), release.yml running
           LAUNCH_GATE_STRICT=1 (2.16).
+          [2026-10-10: 0.7 is the only one of the four with code in review —
+           PR #2514, green, unmerged. 0.5 and 0.6 are owner/repo-settings
+           actions that no PR can perform. 2.16 is #136.]
   Step 4  The seven LAYER 2 items that are credentials or one-line config, not
           code: 2.1, 2.12, 2.15, 2.13.
   Step 5  The LAYER 3 hide pass — flags off, nav entries, 'beta'/'coming soon'
           strings, DPA wording. Small diff, large effect on how 1.0.0 reads.
+          [2026-10-10: SUPERSEDED as written — the owner ruled out hiding or
+           disabling anything, so there is no hide pass and no diff here. What
+           replaces it is a claim pass that touches no product code: the
+           launch/marketing text must not call LAYER 3 items GA. Inverting this
+           step back into "turn the flags off" is explicitly not wanted; do not
+           re-propose it.]
   Step 6  Cut v1.0.0-alpha.1 (prerelease) and bake >= 7 days with 2.14 green.
+          [2026-10-10: still blocked exactly as written — 2.14 re-confirmed
+           today: no workflow anywhere mentions playwright, so there is no
+           "green" for the bake to be measured against.]
   Step 7  1.0.0 GA when Layer 0 is empty, Layer 2 is closed for anything the
           marketing page claims, and Layer 3 is genuinely hidden.
+          [2026-10-10: the third clause is VOID under the owner decision —
+           nothing in Layer 3 will be hidden, so it can never be satisfied and
+           must not be used to veto a release. Read the gate as two clauses plus
+           a claim test: Layer 0 empty, Layer 2 closed for whatever 1.0 claims,
+           and nothing in the release text claiming a Layer 3 item works.]
 
 Open decisions this document needs from you (blocking, one line each):
+  [2026-10-10 — D1 and D2 are answered in the sense this document asked them,
+   and unanswered in the sense that still matters. The owner's no-hide decision
+   says every module ships, so "in 1.0.0 or in 1.1" is settled: 1.0.0, code and
+   all. What is NOT settled is the claim: nothing forces the marketing page, a
+   proposal or a customer to treat AI (no ANTHROPIC_API_KEY anywhere, PP-019) or
+   external e-sign providers as working 1.0.0 features. That is the remaining
+   half of D1/D2, it costs one sentence of positioning, and it is still yours.
+   D3's journal-repair half is done (2.8); the "~23" in it is now a floor
+   (0.2), so approve the apply path against a re-measured count, not this one.]
   D1  Is AI in 1.0.0 or in 1.1?                        -> 3.1
   D2  Do external e-sign providers stay hidden?        -> 3.2
   D3  Approve applying the ~23 migrations + journal repair?  -> 0.2, 2.8

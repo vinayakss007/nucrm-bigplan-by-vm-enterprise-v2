@@ -68,11 +68,11 @@ The bulk of the tree: frozen snapshots of workstreams that ended, most before th
 
 **Why they are kept rather than deleted.** The register states the rule — a fixed entry stays because
 the evidence is what makes it useful as a learning document, and because the companion lessons doc
-references it — at `docs/infra/PREPROD-ISSUE-REGISTER.md:4263`, re-pinned by **PP-067**. The pointer
+references it — at `docs/infra/PREPROD-ISSUE-REGISTER.md:4300`, re-pinned by **PP-068**. The pointer
 it replaced (`:1598`) had drifted 2,315 lines and was still naming a `**Files:**` entry inside PP-040,
 because `guard:coords` reads the citations the register makes _outward_ and never the ones other
-documents make _into_ it; merging PP-064 and then PP-066 moved the rule again before this line was
-committed, so the re-pin ran three times. Same here — these files are cited by PP numbers, ADRs, commit messages and each
+documents make _into_ it; merging PP-064, then PP-066, then PP-067 moved the rule again before this
+line was committed, so the re-pin ran four times. Same here — these files are cited by PP numbers, ADRs, commit messages and each
 other. `MASTER_PLAN.md` and `ISSUES.md`
 read like current state and are not; that is a labelling failure, and the fix is labelling, not `rm`.
 
