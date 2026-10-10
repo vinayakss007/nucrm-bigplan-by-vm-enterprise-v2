@@ -12,7 +12,10 @@ import toast from 'react-hot-toast';
 import { cn } from '@/lib/utils';
 
 interface TelegramSettings {
-  telegram_bot_token: string;
+  // #2523: the API no longer returns the bot token — it reports whether one is
+  // configured plus a `****<last4>` hint. Blank on save means "keep what is stored".
+  telegram_bot_token_configured: boolean;
+  telegram_bot_token_hint: string | null;
   telegram_chat_id: string;
   telegram_enabled: boolean;
   telegram_notify_login: boolean;
@@ -24,7 +27,8 @@ interface TelegramSettings {
 
 export default function TelegramSettingsPage() {
   const [settings, setSettings] = useState<TelegramSettings>({
-    telegram_bot_token: '',
+    telegram_bot_token_configured: false,
+    telegram_bot_token_hint: null,
     telegram_chat_id: '',
     telegram_enabled: false,
     telegram_notify_login: true,
@@ -33,6 +37,11 @@ export default function TelegramSettingsPage() {
     telegram_notify_2fa_change: true,
     telegram_notify_security_alerts: true,
   });
+  // Typed-in token. Deliberately NOT part of `settings`: it is a write-only field
+  // (#2523), so it must never be re-seeded from a response and must be sent only when
+  // the admin actually typed one.
+  const [tokenDraft, setTokenDraft] = useState('');
+  const [clearToken, setClearToken] = useState(false);
   const [seeded, setSeeded] = useState(false);
   const [showToken, setShowToken] = useState(false);
 
@@ -49,15 +58,38 @@ export default function TelegramSettingsPage() {
 
   const saveMutation = useMutation({
     mutationFn: async () => {
+      // The response-only fields (`*_configured`, `*_hint`) are server-derived status,
+      // not input — keep them out of the PATCH body.
+      const { telegram_bot_token_configured: _cfg, telegram_bot_token_hint: _hint, ...fields } = settings;
+      const payload: Record<string, unknown> = { ...fields };
+      // The three token cases the API distinguishes (#2523): typed → replace,
+      // checked-to-remove → explicit null, otherwise omitted → keep stored.
+      if (tokenDraft.trim()) payload.telegram_bot_token = tokenDraft.trim();
+      else if (clearToken) payload.telegram_bot_token = null;
       const res = await fetch('/api/user/telegram', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(settings),
+        body: JSON.stringify(payload),
       });
       const d = await res.json().catch(() => ({}));
       if (!d.ok) throw new Error(d.error || 'Failed to save');
+      return {
+        typed: Boolean(tokenDraft.trim()),
+        cleared: Boolean(clearToken) && !tokenDraft.trim(),
+      };
     },
-    onSuccess: () => toast.success('Telegram settings saved'),
+    onSuccess: ({ typed, cleared }) => {
+      if (typed || cleared) {
+        setTokenDraft('');
+        setClearToken(false);
+        setSettings(s => ({
+          ...s,
+          telegram_bot_token_configured: !cleared,
+          telegram_bot_token_hint: null,
+        }));
+      }
+      toast.success('Telegram settings saved');
+    },
     onError: (e: Error) => toast.error(e.message || 'Failed to save settings'),
   });
   const saving = saveMutation.isPending;
@@ -65,14 +97,15 @@ export default function TelegramSettingsPage() {
 
   const testMutation = useMutation({
     mutationFn: async () => {
+      const payload: Record<string, unknown> = {
+        action: 'test',
+        telegram_chat_id: settings.telegram_chat_id,
+      };
+      if (tokenDraft.trim()) payload.telegram_bot_token = tokenDraft.trim();
       const res = await fetch('/api/user/telegram', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'test',
-          telegram_bot_token: settings.telegram_bot_token,
-          telegram_chat_id: settings.telegram_chat_id,
-        }),
+        body: JSON.stringify(payload),
       });
       const d = await res.json().catch(() => ({}));
       if (!d.ok) throw new Error(d.error || 'Test failed');
@@ -82,8 +115,14 @@ export default function TelegramSettingsPage() {
   });
   const testing = testMutation.isPending;
   const testBot = () => {
-    if (!settings.telegram_bot_token || !settings.telegram_chat_id) {
-      toast.error('Enter bot token and chat ID first');
+    // With no token stored yet there is nothing to test with; with one stored the
+    // server uses it, so the admin does not have to retype their secret (#2523).
+    if (!tokenDraft.trim() && !settings.telegram_bot_token_configured) {
+      toast.error('Enter a bot token first');
+      return;
+    }
+    if (!settings.telegram_chat_id) {
+      toast.error('Enter chat ID first');
       return;
     }
     testMutation.mutate();
@@ -150,9 +189,11 @@ export default function TelegramSettingsPage() {
             <div className="relative">
               <input
                 type={showToken ? 'text' : 'password'}
-                value={settings.telegram_bot_token}
-                onChange={e => setSettings(s => ({ ...s, telegram_bot_token: e.target.value }))}
-                placeholder="123456789:ABCdefGHIjklMNOpqrsTUVwxyz"
+                value={tokenDraft}
+                onChange={e => setTokenDraft(e.target.value)}
+                placeholder={settings.telegram_bot_token_configured
+                  ? `••••${settings.telegram_bot_token_hint?.slice(-4) ?? '••••'} — leave blank to keep`
+                  : '123456789:ABCdefGHIjklMNOpqrsTUVwxyz'}
                 className="w-full rounded-xl border border-input bg-background px-3 py-2 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 font-mono"
               />
               <button
@@ -163,6 +204,31 @@ export default function TelegramSettingsPage() {
                 {showToken ? <EyeOff className="w-4 h-4 text-muted-foreground" /> : <Eye className="w-4 h-4 text-muted-foreground" />}
               </button>
             </div>
+            <div className="mt-1.5 flex items-start gap-1.5 text-xs text-muted-foreground">
+              {settings.telegram_bot_token_configured ? (
+                <>
+                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 mt-1 shrink-0" />
+                  <span>
+                    A bot token is on file{settings.telegram_bot_token_hint ? ` (${settings.telegram_bot_token_hint})` : ''}.
+                    For security the API no longer sends it back to the browser, so this field starts empty:
+                    leave it empty to keep the current token, type a new one to replace it.
+                  </span>
+                </>
+              ) : (
+                <span>No bot configured yet — paste a token from @BotFather to start.</span>
+              )}
+            </div>
+            {settings.telegram_bot_token_configured && (
+              <label className="mt-2 flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={clearToken}
+                  onChange={e => setClearToken(e.target.checked)}
+                  className="rounded border-border"
+                />
+                <span>Remove the stored bot token on save (disconnects Telegram alerts)</span>
+              </label>
+            )}
           </div>
 
           <div>
