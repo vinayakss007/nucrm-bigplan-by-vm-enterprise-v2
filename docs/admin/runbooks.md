@@ -57,7 +57,7 @@ Before go-live, work through the [go-live runbook](../runbooks/go-live.md) and t
 | Scale frontend | `pm2 scale web <n>` (or `NUCRM_INSTANCES`) |
 | Tail logs | `npm run logs:watch` / `npm run logs:errors`, or `pm2 logs` |
 | Apply DB migrations | `npm run db:migrate` (check with `db:status`) |
-| Check schema drift | `npm run db:drift-check` |
+| Check schema drift | `npm run db:drift-check` — compares tables, functions, RLS policies and **every column** (nullability, type, presence) against `drizzle/schema`; it is a read-only survey, so it is safe to run against pre-prod. Scheduled in `.github/workflows/schema-drift.yml`; drift a pending migration is already clearing goes in `scripts/schema-drift-allowlist.json` with that migration named |
 | Verify tenant isolation | `npm run db:verify-isolation` |
 | Verify a backup | `npm run backup:verify` |
 | Restore a backup | `npm run backup:restore` / `npm run dr` |
