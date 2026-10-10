@@ -4453,11 +4453,12 @@ into the column-drift PR. `0125`'s footer names the gap and leaves it here on pu
   migration — v4 uuids make it a practical nullity, and `ADD PRIMARY KEY` (DDL, RLS-blind)
   refuses the table with 23505 if it exists. Same posture as the guard's scope-honesty section.
 - **Measured:** `guard:chain` → 127 up-files · 127 journal entries · 0 defects;
-  `guard:migration-rls` → exit 0 (and once **#2531** lands, `0126` passes its per-table rule on
-  the `app.current_tenant` clause alone — today it passes only because the old per-file regex
-  reads the marker out of the *header prose*, the exact bypass #2516 removes; noted here so the
-  ordering is on the record, not by luck); `tests/unit/segment-members-pk-2515.test.ts` 12/12 —
-  text-level ordering pins on the real file (setter-before-write, dedupe-before-constrain,
+  `guard:migration-rls` → exit 0 on **127** files with **#2531** merged, so `0126` is now checked
+  against the per-table rule and passes on the `app.current_tenant` clause alone — before the merge
+  it passed only because the old per-file regex read the marker out of the *header prose*, the exact
+  bypass **#2516** removes (measured post-merge: 202 tenant-scoped tables, 68 with policy-GUC
+  evidence, 17 + 2 baselined offenders unchanged); `tests/unit/segment-members-pk-2515.test.ts`
+  12/12 — text-level ordering pins on the real file (setter-before-write, dedupe-before-constrain,
   orphan-fix-first, no executable `is_super_admin`, honest down-rollback); schema-drift guard
   2255 green with `idx_segment_members_pk → uq_segment_members_segment_entity` allowlisted as a
   supersession until `0126` applies.
