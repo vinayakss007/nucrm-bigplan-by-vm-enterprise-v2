@@ -12,14 +12,17 @@ import { checkRateLimit } from '@/lib/rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
 import { resolvePortalIdentity, resolvePortalContact } from '@/lib/portal-auth';
 import { withTenantContext, NO_USER_SENTINEL, type RlsTransaction } from '@/lib/db/rls';
-import { withPortalLookupContext } from '@/lib/db/portal-lookup-context';
 
 const replySchema = z.object({
-  // Per-ticket token for anonymous/embed callers. Logged-in portal callers
-  // (session cookie) omit it — ownership is verified from their identity.
-  portalToken: z.string().min(16, 'Valid portal token required').optional(),
   body: z.string().min(1, 'Reply cannot be empty').max(10000),
 });
+
+// #2444 removed the optional `portalToken` this schema used to carry. A reply is
+// now written only by a caller `resolvePortalIdentity()` can name: the session
+// cookie, or an `x-portal-token` that is a `portal_clients` access token. A body
+// that still sends `portalToken` is not read — zod ignores unknown keys — and the
+// request falls through to the identity check, which 401s an anonymous caller the
+// way it always 401s one.
 
 /** The ticket row this handler acts on, as the read below projects it. */
 interface ReplyTicket {
@@ -69,41 +72,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ error: parsed.error.issues[0]?.message || 'Invalid input' }, { status: 400 });
     }
 
-    const { portalToken, body } = parsed.data;
+    const { body } = parsed.data;
     const { id } = await params;
 
-    // Validate token and verify ticket ownership
-    if (portalToken) {
-      // #2446: the per-ticket token in the body is a credential, not a tenant
-      // hint, and `support_tickets` has no policy that can match it — on the bare
-      // pool this read returned nothing and every anonymous reply was a 404. It
-      // now runs in `withPortalLookupContext()`, whose 0122 arm admits exactly the
-      // row whose `portal_token` equals this value; the tenant the write is
-      // scoped to comes out of that row. Same tombstone filter as the guard read
-      // below it (#2378).
-      const owner = await withPortalLookupContext({ accessToken: portalToken }, async (tx) => {
-        const [row] = await tx
-          .select({ tenantId: supportTickets.tenantId })
-          .from(supportTickets)
-          .where(and(
-            eq(supportTickets.id, id),
-            eq(supportTickets.portalToken, portalToken),
-            isNull(supportTickets.deletedAt),
-          ))
-          .limit(1);
-        return row ?? null;
-      });
-
-      if (!owner) return NextResponse.json({ error: 'Ticket not found' }, { status: 404 });
-
-      const outcome = await withTenantContext(owner.tenantId, NO_USER_SENTINEL, (tx) =>
-        replyWithinContext(tx, id, portalToken, body));
-
-      return replyResponse(outcome);
-    }
-
-    // Cookie-session path (portal UI): the ticket must belong to the caller's
-    // own contact — no cross-contact writes (#1982).
+    // The ticket must belong to the caller's own contact — no cross-contact
+    // writes (#1982).
     const identity = await resolvePortalIdentity(request);
     if (!identity) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
@@ -136,26 +109,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   } catch (err) {
     return apiError(err);
   }
-}
-
-async function replyWithinContext(
-  tx: RlsTransaction,
-  id: string,
-  portalToken: string,
-  body: string,
-): Promise<ReplyOutcome> {
-  const [ticket] = await tx
-    .select(TICKET_PROJECTION)
-    .from(supportTickets)
-    .where(and(
-      eq(supportTickets.id, id),
-      eq(supportTickets.portalToken, portalToken),
-      isNull(supportTickets.deletedAt),
-    ))
-    .limit(1);
-
-  if (!ticket) return { kind: 'not_found' };
-  return writeReply(tx, ticket, body);
 }
 
 async function writeReply(

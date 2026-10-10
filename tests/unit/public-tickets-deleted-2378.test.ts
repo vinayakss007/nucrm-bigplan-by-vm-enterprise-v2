@@ -6,7 +6,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { NextRequest } from 'next/server';
 import { inspect } from 'util';
-import { PgDialect } from 'drizzle-orm/pg-core';
 
 // #2378: a soft-deleted ticket must be invisible AND inert through the portal.
 // The tenant DELETE handler only stamps support_tickets.deleted_at, so every
@@ -14,6 +13,13 @@ import { PgDialect } from 'drizzle-orm/pg-core';
 // does (isNull(supportTickets.deletedAt)). These tests pin the rendered
 // predicate per route, because RLS scopes by tenant only — the app role still
 // sees deleted rows unless the query says otherwise.
+//
+// #2444 retired the per-ticket credential, so the token arm of each route is
+// gone and so is the one read this file used to pin as deliberately unfiltered
+// (the token→identity lookup, waived by scripts/portal-softdelete-baseline.json
+// until the branch it exempted was deleted). What is left is the tombstone rule
+// on the session path — plus, in each describe, the assertion that a ticket
+// token now buys its holder nothing.
 
 const mockState: {
   selectCall: number;
@@ -84,8 +90,14 @@ function expectSoftDeleteFilter(where: unknown, label: string) {
   expect(text, label).toMatch(/is null/i);
 }
 
-function getTokenRequest(token: string) {
-  return new Request('http://localhost/api/public/tickets', {
+/**
+ * A request carrying ONLY the retired per-ticket credential (#2444). The header
+ * name is what portal_clients access tokens still use, so this is also the shape
+ * of criterion 6: a ticket token presented on this surface must not be read as a
+ * client token, and it must not be read as anything either.
+ */
+function getTicketTokenRequest(token: string, path = '/api/public/tickets') {
+  return new Request(`http://localhost${path}`, {
     headers: { 'x-portal-token': token },
   }) as unknown as NextRequest;
 }
@@ -131,24 +143,7 @@ beforeEach(() => {
 });
 
 describe('GET /api/public/tickets — list omits soft-deleted tickets (#2378)', () => {
-  // #2446 moved the token arm's credential probe into this file's select stream:
-  // call 0 is now "which ticket does this token name" (still deliberately
-  // unfiltered, the query the baseline exempts) and the tenant-scoped list is
-  // the read after it.
-  const ownerRow = [{ contactId: 'c1', tenantId: TENANT }];
-
-  it('token path filters deleted_at on the list query', async () => {
-    const captured: unknown[] = [];
-    mockState.chainFactory = (call) =>
-      makeChain(() => (call === 0 ? ownerRow : []), (w) => captured.push(w));
-    const { GET } = await import('@/app/api/public/tickets/route');
-    const res = await GET(getTokenRequest('a-token-value'));
-    expect(res.status).toBe(200);
-    expect(captured).toHaveLength(2);
-    expectSoftDeleteFilter(captured[1], 'list query (token path)');
-  });
-
-  it('cookie path filters deleted_at on the list query', async () => {
+  it('filters deleted_at on the list query', async () => {
     mockState.identity = { email: 'a@b.com', tenantId: TENANT };
     mockState.contact = { id: 'c1', tenantId: TENANT };
     const captured: unknown[] = [];
@@ -157,43 +152,34 @@ describe('GET /api/public/tickets — list omits soft-deleted tickets (#2378)', 
     const res = await GET(getCookieRequest());
     expect(res.status).toBe(200);
     expect(captured).toHaveLength(1);
-    expectSoftDeleteFilter(captured[0], 'list query (cookie path)');
+    expectSoftDeleteFilter(captured[0], 'list query (session path)');
   });
 
-  it('keeps the token→identity lookup unfiltered so deleting one ticket does not lock out the rest', async () => {
+  it('issues no query for a per-ticket token, because that credential selects no branch (#2444)', async () => {
+    // The list used to open with an unfiltered `portal_token` → contact lookup and
+    // then widen one ticket's credential to that contact's whole history. 0124
+    // retired the column's not-null contract and dropped its read policy, so this
+    // request has no lookup to make: no session, no queries, 401. This is also the
+    // half of criterion 6 that says a ticket token is not a client token — the
+    // header is read by resolvePortalIdentity() alone, and this value is not in
+    // portal_clients.access_token.
     const captured: unknown[] = [];
-    mockState.chainFactory = (call) =>
-      makeChain(() => (call === 0 ? ownerRow : []), (w) => captured.push(w));
+    mockState.chainFactory = () => makeChain(() => [], (w) => captured.push(w));
     const { GET } = await import('@/app/api/public/tickets/route');
-    const res = await GET(getTokenRequest('a-token-value'));
-    expect(res.status).toBe(200);
-    // This is the query scripts/portal-softdelete-baseline.json exempts: it must
-    // still key on the portal token and still carry NO tombstone predicate.
-    // Rendered, because the node's inspect dump names every column of the table.
-    const rendered = new PgDialect().sqlToQuery(captured[0] as never).sql;
-    expect(rendered).toContain('"portal_token"');
-    expect(rendered).not.toMatch(/deleted_at/);
+    const res = await GET(getTicketTokenRequest('a-ticket-token-value'));
+    expect(res.status).toBe(401);
+    expect(mockState.selectCall, 'the retired branch must not have run its lookup').toBe(0);
+    expect(captured).toHaveLength(0);
   });
 });
 
 describe('GET /api/public/tickets/[id] — soft-deleted ticket is 404 (#2378)', () => {
   const liveTicket = {
     id: 'tick1', tenantId: TENANT, contactId: 'c1', subject: 's', body: 'b',
-    status: 'open', priority: 'low', portalToken: 'token-value',
+    status: 'open', priority: 'low',
   };
 
-  it('token branch filters deleted_at', async () => {
-    const captured: unknown[] = [];
-    // call 0 = credential probe, call 1 = the customer's ticket read.
-    mockState.chainFactory = (call) =>
-      makeChain(() => (call <= 1 ? [liveTicket] : []), (w) => captured.push(w));
-    const { GET } = await import('@/app/api/public/tickets/[id]/route');
-    const res = await GET(getTokenRequest('token-value'), { params: Promise.resolve({ id: 'tick1' }) });
-    expect(res.status).toBe(200);
-    expectSoftDeleteFilter(captured[1], 'ticket read (token branch)');
-  });
-
-  it('cookie branch filters deleted_at', async () => {
+  it('filters deleted_at on the ticket read', async () => {
     mockState.identity = { email: 'a@b.com', tenantId: TENANT };
     mockState.contact = { id: 'c1', tenantId: TENANT };
     const captured: unknown[] = [];
@@ -202,7 +188,22 @@ describe('GET /api/public/tickets/[id] — soft-deleted ticket is 404 (#2378)', 
     const { GET } = await import('@/app/api/public/tickets/[id]/route');
     const res = await GET(getCookieRequest(), { params: Promise.resolve({ id: 'tick1' }) });
     expect(res.status).toBe(200);
-    expectSoftDeleteFilter(captured[0], 'ticket read (cookie branch)');
+    expectSoftDeleteFilter(captured[0], 'ticket read (session path)');
+  });
+
+  it('refuses a per-ticket token outright — the branch that read it is gone (#2444)', async () => {
+    // Used to be two reads here: the unfiltered token probe, then the ticket in
+    // that tenant's context. A holder of a leaked `portal_token` from a
+    // pre-#2442 row now reaches the same 401 as any anonymous caller, on both
+    // routes and on the reply write below.
+    mockState.chainFactory = () => makeChain(() => [liveTicket]);
+    const { GET } = await import('@/app/api/public/tickets/[id]/route');
+    const res = await GET(
+      getTicketTokenRequest('token-value', '/api/public/tickets/tick1'),
+      { params: Promise.resolve({ id: 'tick1' }) },
+    );
+    expect(res.status).toBe(401);
+    expect(mockState.selectCall).toBe(0);
   });
 
   it('returns 404 — and no replies are read — when the ticket is filtered as deleted', async () => {
@@ -218,42 +219,47 @@ describe('GET /api/public/tickets/[id] — soft-deleted ticket is 404 (#2378)', 
 });
 
 describe('POST /api/public/tickets/[id]/replies — deleted ticket is inert (#2378)', () => {
-  const body = { portalToken: 'a-portal-token-value', body: 'please help' };
-  // #2446: the token arm first asks the credential which tenant owns this ticket
-  // (call 0), then runs the guard below in that tenant's context (call 1).
-  const probeRow = [{ id: 'tick1', tenantId: TENANT }];
+  const body = { body: 'please help' };
 
-  it('token guard filters deleted_at', async () => {
-    const captured: unknown[] = [];
-    mockState.chainFactory = (call) => makeChain(() => (call === 0 ? probeRow : []), (w) => captured.push(w));
-    const { POST } = await import('@/app/api/public/tickets/[id]/replies/route');
-    const res = await POST(postReply('tick1', body), { params: Promise.resolve({ id: 'tick1' }) });
-    expect(res.status).toBe(404);
-    expect(captured).toHaveLength(2);
-    expectSoftDeleteFilter(captured[1], 'replies guard (token branch)');
-    expect(mockState.insert).not.toHaveBeenCalled();
-  });
-
-  it('cookie guard filters deleted_at and writes nothing', async () => {
+  it('the guard filters deleted_at and writes nothing', async () => {
     mockState.identity = { email: 'a@b.com', tenantId: TENANT };
     mockState.contact = { id: 'c1', tenantId: TENANT };
     const captured: unknown[] = [];
     mockState.chainFactory = () => makeChain(() => [], (w) => captured.push(w));
     const { POST } = await import('@/app/api/public/tickets/[id]/replies/route');
     const res = await POST(
-      postReply('tick1', { body: 'please help' }),
+      postReply('tick1', body),
       { params: Promise.resolve({ id: 'tick1' }) },
     );
     expect(res.status).toBe(404);
-    expectSoftDeleteFilter(captured[0], 'replies guard (cookie branch)');
+    expectSoftDeleteFilter(captured[0], 'replies guard (session path)');
     expect(mockState.insert).not.toHaveBeenCalled();
   });
 
   it('still accepts a reply on a live ticket', async () => {
+    mockState.identity = { email: 'a@b.com', tenantId: TENANT };
+    mockState.contact = { id: 'c1', tenantId: TENANT };
     mockState.chainFactory = () => makeChain(() => [{ id: 'tick1', status: 'open', contactId: 'c1', tenantId: TENANT }]);
     const { POST } = await import('@/app/api/public/tickets/[id]/replies/route');
     const res = await POST(postReply('tick1', body), { params: Promise.resolve({ id: 'tick1' }) });
     expect(res.status).toBe(201);
     expect(mockState.insert).toHaveBeenCalledTimes(1);
+  });
+
+  it('a portalToken in the body authorises nothing (#2444)', async () => {
+    // The reply schema used to carry an optional `portalToken`, which was the
+    // write-side half of the credential: any caller who could read the string
+    // could post into that ticket. The field is gone from the schema, zod ignores
+    // it, and with no session identity there is nobody to write as — so the
+    // request 401s before the ticket is even looked up.
+    mockState.chainFactory = () => makeChain(() => [{ id: 'tick1', status: 'open', contactId: 'c1', tenantId: TENANT }]);
+    const { POST } = await import('@/app/api/public/tickets/[id]/replies/route');
+    const res = await POST(
+      postReply('tick1', { portalToken: 'a-ticket-token-value', body: 'please help' }),
+      { params: Promise.resolve({ id: 'tick1' }) },
+    );
+    expect(res.status).toBe(401);
+    expect(mockState.insert).not.toHaveBeenCalled();
+    expect(mockState.selectCall).toBe(0);
   });
 });

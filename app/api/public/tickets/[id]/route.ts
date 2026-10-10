@@ -10,7 +10,6 @@ import { eq, and, asc, sql, isNull, type SQL } from 'drizzle-orm';
 import { resolvePortalIdentity, resolvePortalContact } from '@/lib/portal-auth';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { withTenantContext, NO_USER_SENTINEL, type RlsTransaction } from '@/lib/db/rls';
-import { withPortalLookupContext } from '@/lib/db/portal-lookup-context';
 import { PUBLIC_TICKET_COLUMNS, type PublicTicketRow } from '@/lib/public-ticket-projection';
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -20,45 +19,13 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     const { id } = await params;
 
-    const token = request.headers.get('x-portal-token');
-    if (token) {
-      // #2446: the per-ticket token names the ticket, and the ticket names the
-      // tenant. Nothing about this route can be read before that — `support_tickets`
-      // and `ticket_replies` both carry only `tenant_isolation`, so the article and
-      // its replies were silently empty for a valid token on the bare pool. The
-      // probe runs in `withPortalLookupContext()` (0122 admits the one row whose
-      // `portal_token` matches) and its `tenant_id` — never a request field — is
-      // what the reads below are scoped to. It carries the same tombstone filter
-      // as the read after it (#2378): a deleted ticket resolves to nothing here,
-      // exactly as it did when this was one query.
-      const owner = await withPortalLookupContext({ accessToken: token }, async (tx) => {
-        const [row] = await tx
-          .select({ tenantId: supportTickets.tenantId })
-          .from(supportTickets)
-          .where(and(
-            eq(supportTickets.id, id),
-            eq(supportTickets.portalToken, token),
-            isNull(supportTickets.deletedAt),
-          ))
-          .limit(1);
-        return row ?? null;
-      });
-
-      if (!owner) return NextResponse.json({ error: 'Ticket not found' }, { status: 404 });
-
-      const page = await withTenantContext(owner.tenantId, NO_USER_SENTINEL, async (tx) => {
-        const ticket = await readPublicTicket(tx, id, eq(supportTickets.portalToken, token));
-
-        if (!ticket) return null;
-        return { ticket, replies: await readPublicReplies(tx, id) };
-      });
-
-      if (!page) return NextResponse.json({ error: 'Ticket not found' }, { status: 404 });
-      return NextResponse.json({ data: { ticket: page.ticket, replies: page.replies } });
-    }
-
-    // Cookie-session path (portal UI): the ticket must belong to the caller's
-    // own contact — no cross-contact reads (#1982).
+    // The only authority left on this route (#2444): `resolvePortalIdentity()`
+    // accepts the httpOnly portal session cookie or an `x-portal-token` that is a
+    // `portal_clients` access token. The branch that used to sit above it read the
+    // per-ticket `support_tickets.portal_token` and answered for whatever ticket that
+    // string named — a credential with no expiry, no revoke path and no delivery
+    // channel, which #2440 stopped echoing and 0124 stopped being readable. The
+    // ticket must belong to the caller's own contact — no cross-contact reads (#1982).
     const identity = await resolvePortalIdentity(request);
     if (!identity) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });

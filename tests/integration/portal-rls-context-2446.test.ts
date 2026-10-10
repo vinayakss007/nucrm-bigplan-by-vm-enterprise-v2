@@ -38,10 +38,12 @@
  * all removed in `afterAll`, which throws rather than swallowing a failed restore
  * (#2455's lesson: a half-restored shared database is the thing to be loud about).
  * If `0122`'s policies are absent (a `db:sync` database that has not had
- * `scripts/apply-rls-ci.mjs` run over it) the suite applies that file itself and
- * drops precisely the policies it added on the way out; CI's integration job
- * provisions with `db:sync` + `apply-rls-ci.mjs`, whose filename regex already
- * matches `0122_*`, so in CI nothing is added or removed at all.
+ * `scripts/apply-rls-ci.mjs` run over it) the suite applies that file itself, then
+ * `0124`'s retirement of the ticket arm, and drops precisely the policies it added
+ * on the way out; CI's integration job provisions with `db:sync` +
+ * `apply-rls-ci.mjs`, whose filename regex matches both `0122_*` and `0124_*` (they
+ * are named into the sweep, see `0124`'s header), so in CI nothing is added or
+ * removed at all.
  *
  * Self-skips when no database is reachable, like
  * tests/integration/rls-policy-shape-2438.test.ts.
@@ -69,12 +71,20 @@ vi.mock('next/headers', () => ({
 
 const UP_FILE = '0122_portal_credential_rls_lookup.sql';
 const MIGRATIONS_DIR = join(__dirname, '..', '..', 'drizzle', 'migrations');
-/** The three reads `0122` opens, in the order the migration creates them. */
-const LOOKUP_POLICIES = [
-  'portal_clients_credential_lookup',
-  'platform_settings_portal_config_lookup',
-  'support_tickets_portal_token_lookup',
+/** The two credential reads `0122` still opens, with the table each one is on. */
+const LOOKUP_POLICIES: [name: string, table: string][] = [
+  ['portal_clients_credential_lookup', 'portal_clients'],
+  ['platform_settings_portal_config_lookup', 'platform_settings'],
 ];
+/**
+ * #2444 retired `0122`'s third arm — `support_tickets_portal_token_lookup`, the
+ * policy that let an unauthenticated connection find a `support_tickets` row from
+ * the `portal_token` column. Applying `0122` alone would leave this suite
+ * measuring a catalogue a deployed workspace no longer has, so the self-apply
+ * path below runs `0124` immediately after and then asserts the arm stayed down.
+ */
+const RETIRE_FILE = '0124_retire_ticket_portal_token_rls_lookup.sql';
+const RETIRED_POLICY = 'support_tickets_portal_token_lookup';
 
 async function isDatabaseAvailable(): Promise<boolean> {
   const databaseUrl = process.env.DATABASE_URL;
@@ -209,13 +219,20 @@ d('portal tenant context is established for an RLS-bound role (#2446)', () => {
 
     const present = await admin.query<{ policyname: string }>(
       `SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND policyname = ANY($1::text[])`,
-      [LOOKUP_POLICIES],
+      [LOOKUP_POLICIES.map(([name]) => name)],
     );
-    const missing = LOOKUP_POLICIES.filter((n) => !present.rows.some((r) => r.policyname === n));
+    const missing = LOOKUP_POLICIES
+      .map(([name]) => name)
+      .filter((n) => !present.rows.some((r) => r.policyname === n));
     if (missing.length > 0 && !process.env.PORTAL_RLS_2446_NO_SELF_APPLY) {
       // Same text CI applies, so a local `db:sync` database and the CI job measure
       // the same thing. The file is drop-then-create, so re-running is a no-op.
       await admin.query(readFileSync(join(MIGRATIONS_DIR, UP_FILE), 'utf8'));
+      // …and 0124's drop, for the same reason: CI's `apply-rls-ci.mjs` discovers
+      // both by name (`/rls|polic|…/`) and runs them in index order, so CI has
+      // already put the ticket arm back down. Without this a locally pushed
+      // database would still carry a grant the product no longer ships.
+      await admin.query(readFileSync(join(MIGRATIONS_DIR, RETIRE_FILE), 'utf8'));
       addedPolicies = missing;
     }
 
@@ -248,6 +265,9 @@ d('portal tenant context is established for an RLS-bound role (#2446)', () => {
       { id: quoteA.id, tenantId: TENANT_A, contactId: contactA.id, title: `Quote ${QUOTE_A}`, status: 'sent', totalAmount: '500.00' },
     ]);
     await adminDb.insert(appSchema.supportTickets).values([
+      // `portalToken` is written deliberately (#2444): every ticket filed before
+      // that PR stopped minting it still holds the value, and the point of the two
+      // assertions below is that a stored one now grants nothing.
       { id: ticketA.id, tenantId: TENANT_A, contactId: contactA.id, subject: TICKET_SUBJECT_A, body: 'A body', portalToken: TICKET_TOKEN_A, status: 'open' },
       { id: ticketB.id, tenantId: TENANT_B, contactId: contactB.id, subject: TICKET_SUBJECT_B, body: 'B body', portalToken: TICKET_TOKEN_B, status: 'open' },
     ]);
@@ -306,10 +326,11 @@ d('portal tenant context is established for an RLS-bound role (#2446)', () => {
 
     for (const name of addedPolicies) {
       try {
-        // Table is known from the migration; drop by (table, policy) so a same-named
-        // policy on another relation is never touched.
-        const table = LOOKUP_POLICIES.indexOf(name) === 0 ? 'portal_clients'
-          : LOOKUP_POLICIES.indexOf(name) === 1 ? 'platform_settings' : 'support_tickets';
+        // Table comes from LOOKUP_POLICIES by name, so teardown drops precisely
+        // the policy this suite added and never a same-named one on another
+        // relation.
+        const table = LOOKUP_POLICIES.find(([n]) => n === name)?.[1];
+        if (!table) throw new Error(`${name} is not a policy this suite knows`);
         await admin.query(`DROP POLICY IF EXISTS "${name}" ON "${table}"`);
       } catch (err) { mark(`drop policy ${name}`, err); }
     }
@@ -430,12 +451,26 @@ d('portal tenant context is established for an RLS-bound role (#2446)', () => {
     expect((viaToken.data as unknown[]).length, 'tenant B has no quote for this contact').toBe(0);
   });
 
-  it('GET /api/public/tickets answers the per-ticket portal token and the session cookie alike', async () => {
-    const byToken = await H.tickets.GET(req('/api/public/tickets', { headers: { 'x-portal-token': TICKET_TOKEN_A } }));
-    expect(byToken.status, 'a valid per-ticket token must not 401').toBe(200);
-    const rows = (await jsonOf(byToken)).data as { subject: string }[];
-    expect(rows.map((r) => r.subject)).toContain(TICKET_SUBJECT_A);
-    expect(rows.map((r) => r.subject)).not.toContain(TICKET_SUBJECT_B);
+  it('GET /api/public/tickets answers the portal_clients credential and nothing else (#2444)', async () => {
+    // The per-ticket token used to be accepted on this header, and answered with
+    // the whole contact history rather than the one ticket the string named. It is
+    // retired with the credential (0124), so a holder of a pre-#2442 value now gets
+    // what an anonymous caller gets — even while logged in, because the header is
+    // still consulted first and still resolves to nobody. The `portal_clients` token
+    // is the family this header means: it has an expiry, an `isActive` flag and a
+    // revoke path, which is #2444's criterion 6 in one assertion.
+    const byTicketToken = await H.tickets.GET(
+      req('/api/public/tickets', { headers: { 'x-portal-token': TICKET_TOKEN_A } }),
+    );
+    expect(byTicketToken.status, 'a per-ticket token must authorise nothing').toBe(401);
+
+    const byClientToken = await withoutSession(() => H.tickets.GET(
+      req('/api/public/tickets', { headers: { 'x-portal-token': TOKEN_A } }),
+    ));
+    expect(byClientToken.status, 'the client token the header names must still work').toBe(200);
+    const rows = (await jsonOf(byClientToken)).data as { subject: string }[];
+    expect(rows.map((r) => r.subject), 'the credential resolves its own workspace').toContain(TICKET_SUBJECT_A);
+    expect(rows.map((r) => r.subject), 'tenant B must not be reachable from A').not.toContain(TICKET_SUBJECT_B);
 
     const byCookie = (await jsonOf(await H.tickets.GET(req('/api/public/tickets')))).data as { subject: string }[];
     expect(byCookie.map((r) => r.subject)).toContain(TICKET_SUBJECT_A);
@@ -453,14 +488,17 @@ d('portal tenant context is established for an RLS-bound role (#2446)', () => {
     expect(res.status, `ticket POST answered ${res.status}: ${JSON.stringify(body)}`).toBe(201);
     const id = (body.data as { id: string }).id;
     expect(typeof id).toBe('string');
-    // #2440: the minted per-ticket token is a credential and never reaches the caller.
+    // #2440 stopped the response echoing the credential; #2444 stopped the insert
+    // having one, so the shape rule below now has a database half: nothing is
+    // minted, nothing is echoed.
     const raw = JSON.stringify(body);
     expect(raw).not.toMatch(/portal_?[tT]oken/);
 
     const row = await admin.query(
-      'SELECT tenant_id, contact_id FROM support_tickets WHERE id = $1',
+      'SELECT tenant_id, contact_id, portal_token FROM support_tickets WHERE id = $1',
       [id],
     );
+    expect(row.rows[0]?.portal_token, '#2444: a new ticket holds no credential').toBeNull();
     expect(row.rows[0]?.tenant_id).toBe(TENANT_A);
     expect(row.rows[0]?.contact_id).toBe(contactA.id);
     await admin.query('DELETE FROM support_tickets WHERE id = $1', [id]);
@@ -532,6 +570,22 @@ d('portal tenant context is established for an RLS-bound role (#2446)', () => {
       'app.portal_lookup_token': TOKEN_A,
     });
     expect(countOf(ticketsSeen.rows), 'an access_token is not a ticket token').toBe(0);
+
+    // …and the other direction, which is the half #2444 closed. This one used to
+    // return ticketA: 0122's `support_tickets_portal_token_lookup` matched
+    // `portal_token = current_setting('app.portal_lookup_token')`, so possession of
+    // one ticket's string was a read grant on `support_tickets` with no tenant
+    // GUC, no expiry and nothing to revoke. 0124 takes the arm down, so the same
+    // statement now sees nothing — on the catalogue as well as through the routes.
+    const retiredArm = await asRole('SELECT count(*)::int AS n FROM support_tickets', {
+      'app.portal_lookup_token': TICKET_TOKEN_A,
+    });
+    expect(countOf(retiredArm.rows), 'a ticket token must name no row — 0124 is not applied here').toBe(0);
+    const arm = await admin.query<{ policyname: string }>(
+      `SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND policyname = $1`,
+      [RETIRED_POLICY],
+    );
+    expect(arm.rowCount, `${RETIRED_POLICY} must be dropped by 0124`).toBe(0);
     const contactsSeen = await asRole('SELECT count(*)::int AS n FROM contacts', {
       'app.portal_lookup_token': TOKEN_A,
       'app.portal_lookup_tenant': TENANT_A,

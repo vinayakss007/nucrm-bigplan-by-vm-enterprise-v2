@@ -170,10 +170,16 @@ describe('exemptions are re-verified, not trusted (#2382)', () => {
   });
 
   it('a gate-less exemption needs a reason a reviewer can argue with and a test that exists', () => {
+    // The shape rules are what this pins, so the entry is a fixture rather than a
+    // live waiver: #2444 retired the only gate-less exemption the real baseline
+    // ever held (the token→identity lookup in `app/api/public/tickets/route.ts`),
+    // leaving `scripts/portal-softdelete-baseline.json` empty. A path that exists
+    // is still used, because `verifyEntry` says nothing about the file for these
+    // entries and a reader should not have to work out which half is invented.
     const tokenLookup: BaselineEntry = {
       file: 'app/api/public/tickets/route.ts',
       table: 'supportTickets',
-      reason: 'A portal token names one ticket; filtering it would lock the customer out of their whole history, so this lookup is deliberately unfiltered (#2378).',
+      reason: 'A credential lookup names one row; filtering it by the tombstone would lock a customer out of their whole remaining history, so this read is deliberately unfiltered.',
       pinnedBy: 'tests/unit/public-tickets-deleted-2378.test.ts',
     };
     expect(verifyEntry(tokenLookup, ROOT)).toBeNull();

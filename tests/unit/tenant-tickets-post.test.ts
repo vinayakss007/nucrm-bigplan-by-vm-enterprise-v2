@@ -14,6 +14,11 @@
  * 400 with a field-level issue and never reaches the database, and a query the
  * database refuses answers the caller's generic message — the SQLSTATE and
  * constraint go to the server log only, in every environment.
+ *
+ * #2444 stopped minting a portal token on this insert, so the PORTAL_TOKEN below
+ * is no longer "freshly generated" — it is just another bound value standing in
+ * for whatever a legacy row still holds, and the rule it proves is unchanged: the
+ * driver's query text and its parameters never reach the response.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { NextRequest } from 'next/server';
@@ -88,10 +93,6 @@ vi.mock('@/lib/critical-error-alert', () => ({
 }));
 vi.mock('@/lib/webhooks', () => ({ fireWebhooks: vi.fn(async () => undefined) }));
 vi.mock('@/lib/automation/engine', () => ({ evaluateAutomations: vi.fn(async () => undefined) }));
-// The token is exactly the value the leak disclosed, so the route must not be the
-// one that decides its shape here.
-vi.mock('@/lib/ticket-portal', () => ({ generatePortalToken: vi.fn(() => PORTAL_TOKEN) }));
-
 /** Next's generated types freeze NODE_ENV, so set it through Object.assign. */
 function setNodeEnv(value: string) {
   Object.assign(process.env, { NODE_ENV: value });
