@@ -29,11 +29,14 @@
  *     stops calling its gate, or a gate that loses its predicate, fails here
  *     instead of quietly reopening the hole.
  *   - `{ reason, pinnedBy }` with no gate — for a read that is deliberately
- *     unfiltered (the token→identity lookup in app/api/public/tickets/route.ts:
- *     filtering it would lock a customer out of their whole ticket history
- *     because one ticket was deleted). `reason` must be long enough for a
- *     reviewer to disagree with, and `pinnedBy` must name a test file that
- *     exists.
+ *     unfiltered. `reason` must be long enough for a reviewer to disagree with,
+ *     and `pinnedBy` must name a test file that exists. The baseline is empty as
+ *     of #2444, which deleted the only waiver it ever held: the token→identity
+ *     lookup in `app/api/public/tickets/route.ts`, exempted because filtering it
+ *     would lock a customer out of their whole ticket history because one ticket
+ *     was deleted. That branch is gone with the credential it read, so the
+ *     exemption went with it — which is the point of reporting an exemption that
+ *     matches nothing.
  * An exemption that matches nothing is reported so the list ratchets down, like
  * the other baselines in this directory.
  *

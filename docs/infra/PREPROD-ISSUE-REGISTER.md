@@ -4,9 +4,10 @@
 > here, with the evidence that proves it and the verification that closed it.
 > Update the status the moment it changes; IDs are never reused.
 >
-> - **Last updated:** 2026-10-09 (UTC) — **#2446** wired `guard:portal-rls-context` into `ci.yml`
->   (which moved every `ci.yml`/`package.json` coordinate in PP-059/PP-060 by 1–2 lines) and landed
->   migration `0122`, the 24th entry in the pending pile.
+> - **Last updated:** 2026-10-10 (UTC) — **#2444** retired `support_tickets.portal_token` as a
+>   bearer credential (**PP-062**) and landed migration `0124`, making the outstanding pile **26**
+>   entries: `0123` arrived with **#2495** and `0124` with this PR, on top of the 24 PP-060 counted.
+>   `db:status` re-measured today against preprod: `Applied: 99 · Pending: 26 · Total: 125`.
 > - **Stack under test:** `deploy/docker-compose.production.yml` **overlaid** with
 >   `deploy/docker-compose.preprod.yml` (one compose project, `deploy`) — **18** containers running, measured:
 >   17 from compose (18 services, `minio-init` is an exited one-shot; `realtime` comes only from the preprod
@@ -89,6 +90,7 @@ Severity: **S1** blocks go-live · **S2** broken feature or security weakness ·
 | PP-059 | S2  | CHECK vs code               | `guard:vocab` — the only command in the repo that asks the **live database** what it will reject — exits **1** on `main` — measured at `38ae90e2`, re-measured at `f3787f32` — with **2 of 9** constraints disagreeing: `chk_sequence_enrollments_status` (5 values) refuses `'cancelled'`, which `/api/unsubscribe` has written since the repo's first commit `ecbba74e`, and `chk_invoices_status` (8 values) refuses `'void'`, which `INVOICE_STATUSES` offers and `PATCH /api/tenant/invoices/[id]` passes through. Its own fixes, `0120` and `0112`, are two of the **24** entries PP-057 says nobody has agreed to apply (the count was **22** when this row was written; `0121` landed since, then `0122` with **#2446**) — and it is the **only one of the 20 `guard:*` scripts no automation invokes**: workflows call 17 by alias and 2 by direct `node` command (`ci.yml:217`, `:250`), while `grep -rn check-constraint-vocab .github/workflows` returns **0** | 🚨 OPEN · guard wired nowhere · latent **on this DB** (both tables hold 0 rows, measured `--superadmin`) · CI green proves only that the `.sql` text says the right thing                               |
 | PP-060 | S2  | Deploy                      | The 24-entry backlog (23 until `0122` landed with **#2446**) has **no automated apply path that could reach this database**: the only executable migrate in the repo's automation is `deploy.yml:281` (`scripts/deploy-migrate.ts --yes`, which spawns `migrate.ts --yes` at `:96`), inside the single `script:` block opened at `:77` — so it runs over SSH on the **pm2 production VM**, not on this Docker preprod host. That hop has failed every run since the last success (`30748691555`, 2026-08-02T12:51:06Z): **741 runs · 0 success** (639 failure / 54 cancelled / 48 skipped), 15 of 15 sampled recent runs contain `dial tcp ***:22: i/o timeout`, and the retained total is **3 successes in 1,282 runs**. No workflow mentions `db:status` (grep: 0 hits in all 5), `ci.yml` and `backup-drill.yml` build their databases with `db:sync`, and this host has no deploy cron or timer                                                                                    | 🚨 OPEN · owner action (`gh secret set DEPLOY_HOST`, the remedy AGENTS.md already documents) · even a healthy deploy migrates a **different database**, so PP-057's exit (a) has no mechanism behind it |
 | PP-061 | S2  | Edge / auth surface         | **Six endpoints that authenticate with something other than a session were unreachable on this host.** `POST` to `/api/auth/oauth/token`, `/api/auth/oauth/revoke`, `/api/webhooks/razorpay`, `/api/webhooks/payu`, `/api/webhooks/telegram/bot` and `/api/tenant/plugins/webhook/<id>` each answered `401 {"error":"Authentication required"}` — the identical byte-for-byte body the middleware itself writes, so **no handler ran** — because none of the six is in `proxy.ts:226`'s public list. The OAuth exchange, **both payment receivers**, the bot and the plugin integrators all had a caller that could never arrive. The same screen then caught what the closed edge had been hiding: `app/api/tenant/plugins/webhook/[id]/route.ts:63` loaded **all 19 columns** of `custom_plugins` — including `drizzle/schema/plugins.ts:20`, whose own comment says it "stores token/username/password/client_id/etc" — and did it **before** verifying the caller at `app/api/tenant/plugins/webhook/[id]/route.ts:106`, on a URL that is itself the credential | 🔧 FIXED in this PR (6 paths opened, row projected to 4 of 19 columns, `tests/unit/proxy.test.ts:158`) · not live until deployed · `/api/tenant/visitors/track` measured as the seventh hit and **deliberately left closed** |
+| PP-062 | S2  | Portal / credential         | `support_tickets.portal_token` was a **second credential living on the header the portal already uses for `portal_clients.access_token`**: `lib/portal-auth.ts:45` reads `x-portal-token` as a client token, and three public ticket routes read the *same* header (plus a POST body field) as a **ticket** token, resolved it to a **contact** and answered with that contact's **whole** ticket history — deliberately, #2378 — so possession of one ticket's string read every ticket that contact ever filed, subjects and bodies included. Permanent and un-revocable by construction: no `expires_at`, no `is_active`, no rotation, no revoke path, unlike `portal_clients` (`drizzle/schema/tokens.ts:202`, `:204`). **Nothing ever delivered it** — 0 references to `portal_token`/`portalToken` in `app/portal/**`, in `components/**`, in any email template or webhook payload — and #2440 had already stopped `POST /api/public/tickets` echoing a freshly minted one, so the only tokens that can still exist are ones handed out **before** that fix. That read was also the *only* thing letting an unauthenticated connection see a `support_tickets` row at all: 0122's `support_tickets_portal_token_lookup` arm. **Latent on this database**, measured: `support_tickets` holds 0 rows for the one tenant `tenants` exposes under `--superadmin`, and the retired grant is not even installed here because **0122 itself is pending** (PP-060) | 🔧 FIXED in this PR (credential retired in code, RLS and nullability by `0124` — the **26th** outstanding entry, `db:status` → `Applied: 99 · Pending: 26 · Total: 125`) · `DROP COLUMN` and `SET portal_token = NULL` stay **owner decisions** · not live until deployed |
 
 ## Sentry issues → register entries
 
@@ -3602,6 +3604,115 @@ not wired in).
   should look at: the plugin receiver's 60/min limit lives in one process's `Map`, so it does not
   hold across replicas; the PayU receiver has no limiter of its own at all; and the Telegram
   receiver's authorisation is a single header compare before any per-chat budget exists.
+
+## PP-062 — 🔧 Two credentials shared one header: three public ticket routes read `x-portal-token` as `support_tickets.portal_token`, resolved that value to a *contact* rather than a ticket, and it carried no expiry, no `is_active`, no rotation and no revoke path — while nothing in the product ever delivered it _(S2 · Portal / credential)_
+
+- **Found by:** #2444, which asked the question in the open instead of assuming the answer — is
+  `support_tickets.portal_token` *an unexpired per-ticket share link*, or is it *nothing*? It is
+  nothing, and "nothing, with no expiry, that authorises a cross-ticket read" is not a feature worth
+  keeping: it is a credential-shaped liability whose only users were the routes that read it.
+
+- **What made it a credential, one line each.**
+  - **Inbound.** `app/api/public/tickets/route.ts`, `app/api/public/tickets/[id]/route.ts` and
+    `app/api/public/tickets/[id]/replies/route.ts` each accepted the value — as a header, and on POST
+    as a body field — and looked it up in `support_tickets`. A lookup by an unguessable string that
+    returns rows is authentication, whatever the column is called.
+  - **Two families, one header.** `lib/portal-auth.ts:45` reads that same `x-portal-token` as
+    `portal_clients.access_token`. So one header carried two unrelated credential namespaces, and
+    because `resolvePortalIdentity()` deliberately does **not** fall through to the cookie when a
+    token header is present but unmatched (`tests/unit/portal-auth.test.ts:75`), a ticket token could
+    *displace* a valid portal session rather than merely grant its own read. #2444's criterion 6 —
+    "the header means one thing" — is why this PR deletes the ticket family instead of renaming it.
+  - **Contact-wide, never ticket-wide.** The lookup resolved to a contact and the route answered with
+    every ticket that contact had ever filed (#2378, deliberate at the time). Possession of one
+    ticket's string read a whole support history, subjects and bodies included. "Per-ticket link" was
+    never the effect, so "share link" was never a reason to keep it.
+  - **Un-revocable.** No `expires_at`, no `is_active`, no scope, no rotation and no revoke path
+    anywhere in the repo. The other portal credential has both a NOT NULL `expires_at`
+    (`drizzle/schema/tokens.ts:202`) and an `is_active` kill switch (`:204`).
+  - **It was the RLS hole too.** 0122's `support_tickets_portal_token_lookup` is the only policy under
+    which a connection with **no** tenant context can see a `support_tickets` row — `tenant_isolation`
+    cannot be satisfied without one, which is #2446's whole finding. Dropping the arm means the
+    credential cannot authorise a read even if a future route re-adds the comparison by mistake.
+
+- **Nothing delivered it — measured, not inferred.** `portal_token`/`portalToken` appears **0** times
+  in `app/portal/**`, **0** times in `components/**`, and not in any email template or webhook
+  payload: the only readers were the three inbound branches above. And nothing could *receive* one any
+  more either — #2440 stopped `POST /api/public/tickets` echoing the value it minted, by naming the
+  columns in `.returning({...})`. Every token that can still exist is one handed out **before** that
+  fix, which is exactly the population #2444 calls leaked.
+
+- **The branch this PR takes, and the one it refuses.** Retirement in code (the three routes, and
+  `lib/ticket-portal.ts` deleted along with `generatePortalToken()` and its two dead validators), in
+  RLS (`0124` drops the policy) and in nullability (`ALTER COLUMN ... DROP NOT NULL`, and
+  `drizzle/schema/support.ts:132` loses `.notNull()`). All three are reversible. What this PR does
+  **not** do is `DROP COLUMN` or `UPDATE ... SET portal_token = NULL`: the first is one-way over the
+  owner's live data, the second is row DML — which needs 0122/0123's GUC shape and PP-058's
+  `set_config` line to touch anything at all — so both are owner decisions with their own reviewed PR,
+  recorded here as the remaining two steps.
+
+- **Naming is behaviour: a policy migration CI cannot see by name does not exist.** The first draft was
+  tagged `0124_retire_ticket_portal_token`, which does not match the discovery regex in
+  `scripts/apply-rls-ci.mjs:33` (`/rls|isolation|polic|bypass|member_read|tenant_reference|force_/i`).
+  CI provisions its database with `db:sync` plus that sweep and never runs `db:migrate` (PP-060), so a
+  `DROP POLICY` file the sweep skips leaves **the retired grant installed** in every CI and
+  `drizzle-kit push`-provisioned workspace while a migrated production database moved on — the suites
+  would have been measuring a database that does not exist after deploy. Renamed to
+  `0124_retire_ticket_portal_token_rls_lookup`; the sweep log for this branch reads
+  `APPLIED: 0124_retire_ticket_portal_token_rls_lookup`.
+
+- **How it was verified, on a database built the way CI builds one.**
+
+```bash
+# from a clean cluster, exactly the CI provisioning order:
+npm run db:sync                      # CI=true, drizzle-kit push — the schema half
+node scripts/apply-rls-ci.mjs        # then the policy sweep, by file NAME
+psql -c "\d support_tickets"         # portal_token  is_nullable = YES
+psql -tAc "select policyname from pg_policies where tablename='support_tickets'"
+# → tenant_isolation            (one row: the lookup arm is gone)
+psql -tAc "select count(*) from support_tickets"  # as the app role, with app.portal_lookup_token set → 0
+```
+
+  25 integration tests and 212 unit tests across 13 suites pass on that database;
+  `support_tickets_portal_token_unique` survives (Postgres treats NULLs as distinct, so tokenless
+  tickets coexist), which is why `tests/unit/schema-drift-snapshot-2255.json` — column and index
+  *names* only — stays green.
+
+- **Negative control, because a catalogue assertion can be vacuously green.** Re-applying 0122 by hand
+  failed **exactly one** assertion — the catalogue check in
+  `tests/integration/portal-rls-context-2446.test.ts` (`expected 1 to be +0`) — while the route-level
+  401 tests stayed green. The two halves are independently pinned: the routes would answer 401 even
+  with the grant re-installed, and the migration is asserted on its own. State was restored to
+  post-0124 (12/12) before the branch was pushed.
+
+- **`--superadmin` is a permission result, not a population result — recording the near-miss.** An
+  unfiltered `select count(*) from support_tickets` under `probe:sql --superadmin` answered **0**, and
+  the easy read was "the table is empty". It is not that kind of zero: `pg_policy.polqual` shows
+  `tenant_isolation` on `support_tickets` has **no** super-admin escape branch, so the GUC changes
+  nothing for this table (the same GUC does return rows on `tenants`, which is why it looked
+  trustworthy). What this entry does stand on is a `--tenant <uuid>` read against the one tenant
+  `tenants` exposes under super-admin — **0 rows** in `support_tickets`, therefore 0 token-bearing rows
+  on preprod — plus the fact that the arm `0124` drops is *itself* pending here. Future entries that
+  want a population number from a table whose policy lacks that branch must set a tenant GUC, not the
+  super-admin one.
+
+- **Register bookkeeping.** `db:status` re-measured against preprod today:
+  `ledger rows: 99 · Applied: 99 · Pending: 26 · Total: 125`. PP-060 counted 24; `0123` came with
+  **#2495** and `0124` is this PR. The pending list now opens `0059_custom_entities` and ends
+  `0124_retire_ticket_portal_token_rls_lookup`, so the fix is shipped and undeployed like everything
+  since `0101` — the credential stays live until the owner drains the pile (PP-057's exit (a), PP-060's
+  missing mechanism). `scripts/portal-softdelete-baseline.json` is emptied by this PR (its only entry
+  was the `portal_token` → identity lookup) and `scripts/check-portal-soft-delete.mts`,
+  `lib/db/portal-lookup-context.ts` and the gate's own prose now say one credential instead of four.
+
+- **Review posture:** this is a **surface-narrowing** change, the opposite of PP-061, and it deletes no
+  data. Three things a reviewer should actually look at: (a) nothing mints a ticket token any more —
+  `generatePortalToken()` is gone and the tenant/superadmin ticket INSERTs name their columns; (b) a
+  retired-credential request 401s with **zero** queries issued, so it cannot be used to probe for a
+  valid token (pinned in `tests/unit/public-tickets-deleted-2378.test.ts`); (c) `DROP NOT NULL` reads
+  like a widening in SQL terms and is a narrowing in effect — it exists because the minting stopped,
+  and `.unique()` is kept so a later `SET NOT NULL` remains possible if the owner ever wants the
+  credential back.
 
 ## How to maintain this file
 

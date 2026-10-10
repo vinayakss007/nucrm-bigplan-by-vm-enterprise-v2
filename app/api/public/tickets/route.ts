@@ -11,10 +11,8 @@ import { z } from 'zod';
 import { uuidIdSchemaWith } from '@/lib/validation/uuid';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { checkRateLimit } from '@/lib/rate-limit';
-import { generatePortalToken } from '@/lib/ticket-portal';
 import { resolvePortalIdentity, resolvePortalContact } from '@/lib/portal-auth';
 import { withTenantContext, NO_USER_SENTINEL } from '@/lib/db/rls';
-import { withPortalLookupContext } from '@/lib/db/portal-lookup-context';
 import { PUBLIC_TICKET_COLUMNS } from '@/lib/public-ticket-projection';
 
 const publicTicketSchema = z.object({
@@ -24,16 +22,24 @@ const publicTicketSchema = z.object({
   category: z.string().max(100).optional().default('general'),
   priority: z.enum(['low', 'medium', 'high', 'urgent']).optional().default('medium'),
   // Tenant context for ANONYMOUS embeds (#1982). A bare email lookup can match
-  // a contact in another tenant, filing the ticket (and issuing a portal
-  // token) under the wrong workspace. A logged-in portal caller (session
-  // cookie / x-portal-token) never needs this — the tenant is derived from
-  // their server-validated identity and any body value is ignored.
+  // a contact in another tenant, filing the ticket under the wrong workspace. A
+  // logged-in portal caller (session cookie / x-portal-token) never needs this —
+  // the tenant is derived from their server-validated identity and any body
+  // value is ignored.
   tenant_id: uuidIdSchemaWith('tenant_id is required').optional(),
 });
 
 /**
- * Public ticket list — x-portal-token header (per-ticket token) OR the
- * httpOnly portal session cookie (portal UI; sent automatically).
+ * Public ticket list — the httpOnly portal session cookie, or an
+ * `x-portal-token` holding a `portal_clients` access token (both read by
+ * `resolvePortalIdentity()`; portal UI sends the cookie automatically).
+ *
+ * The per-ticket `support_tickets.portal_token` branch that used to sit here is
+ * gone (#2444): it resolved one ticket's credential to that contact's *whole*
+ * ticket history (#2378's deliberate broadening), it was never delivered to
+ * anyone since #2440 stopped echoing it, and nothing could revoke it. What
+ * remains is the credential this product does have a lifecycle for.
+ *
  * The old x-portal-email header auth was spoofable and has been removed.
  */
 export async function GET(request: NextRequest) {
@@ -41,50 +47,11 @@ export async function GET(request: NextRequest) {
     const limited = await checkRateLimit(request, { action: 'public-tickets-list', max: 30, windowMinutes: 1 });
     if (limited) return limited;
 
-    const token = request.headers.get('x-portal-token');
-    if (token) {
-      // Validate the token — find the ticket it belongs to, then list all tickets for that contact
-      // #2378: deliberately NOT filtered on deleted_at. A portal token is
-      // per-ticket; hiding a deleted ticket here would lock the customer out
-      // of their remaining tickets, while the list below still omits it.
-      //
-      // #2446: this is a pre-tenant read (the tenant is what it discovers) and
-      // `support_tickets` carries only `tenant_isolation`, so on the bare pool it
-      // matched nothing and a valid token answered 401. It now runs in
-      // `withPortalLookupContext()`, whose 0122 policy admits exactly the one row
-      // whose `portal_token` equals the presented credential — and the tenant and
-      // contact the list is then scoped to come out of THAT row, never from the
-      // request.
-      const owner = await withPortalLookupContext({ accessToken: token }, async (tx) => {
-        const [row] = await tx
-          .select({ contactId: supportTickets.contactId, tenantId: supportTickets.tenantId })
-          .from(supportTickets)
-          .where(eq(supportTickets.portalToken, token))
-          .limit(1);
-        return row ?? null;
-      });
-
-      if (!owner || !owner.contactId) {
-        return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
-      }
-      const ownerContactId = owner.contactId;
-
-      const data = await withTenantContext(owner.tenantId, NO_USER_SENTINEL, (tx) =>
-        tx.select(PUBLIC_TICKET_COLUMNS)
-          .from(supportTickets)
-          .where(and(
-            eq(supportTickets.tenantId, owner.tenantId),
-            eq(supportTickets.contactId, ownerContactId),
-            isNull(supportTickets.deletedAt),
-          ))
-          .orderBy(desc(supportTickets.createdAt))
-          .limit(50));
-
-      return NextResponse.json({ data });
-    }
-
-    // Cookie-session path (portal UI): identity is server-validated, and the
-    // contact lookup is scoped to (email, tenantId) — no cross-tenant mixing.
+    // The only authority left on this surface (#2444): `resolvePortalIdentity()`
+    // accepts the httpOnly portal session cookie or an `x-portal-token` that is a
+    // `portal_clients` access token — one family, one header, so the overload #2444
+    // documented is gone with the branch above it. Identity is server-validated, and
+    // the contact lookup is scoped to (email, tenantId) — no cross-tenant mixing.
     const identity = await resolvePortalIdentity(request);
     if (!identity) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
@@ -119,11 +86,12 @@ export async function GET(request: NextRequest) {
 /**
  * Public ticket creation — logged-in portal callers are identified by their
  * session (cookie/token); anonymous embeds must pass tenant_id in the body.
- * The response is the new ticket only: it never carries `portal_token`, which
- * is a bearer credential for the customer's ticket history (#2440). Portal
- * access for a real customer comes from /api/tenant/portal/login (httpOnly
- * session) or a `portal_clients` access token, both of which expire and can be
- * deactivated.
+ * The response is the new ticket only, in the columns named on the insert below
+ * (#2440). Since #2444 nothing is minted at all: there is no credential in this
+ * response to leak, because the per-ticket credential that used to be written has
+ * been retired. Portal access for a real customer comes from
+ * /api/tenant/portal/login (httpOnly session) or a `portal_clients` access token,
+ * both of which expire and can be deactivated.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -182,12 +150,16 @@ export async function POST(request: NextRequest) {
 
       if (!contact) return null;
 
-      const portalToken = generatePortalToken();
-
-      // #2440: name the returned columns instead of `.returning()`-ing the whole
-      // row. `portal_token` is the bearer credential the GET handlers accept, and
-      // an anonymous embed caller must not be issued one — the token stays in the
-      // database and never reaches this response.
+      // #2444: no token is minted here any more. This insert used to write a
+      // `portal_token` on every ticket, and the GET handlers read it back as a
+      // bearer credential that expired never, revoked never and — since #2440
+      // stopped echoing it — was delivered to nobody. `support_tickets.portal_token`
+      // is nullable as of 0124, so a ticket is now simply a ticket.
+      //
+      // #2440's other half still applies and is the reason the column list below
+      // is written out: `.returning()`-ing the whole row would ship every column
+      // the table grows, including the retired `portal_token` values that still sit
+      // on pre-#2442 rows.
       const [row] = await tx.insert(supportTickets).values({
         tenantId: contact.tenantId,
         contactId: contact.id,
@@ -196,7 +168,6 @@ export async function POST(request: NextRequest) {
         category,
         priority,
         status: 'open',
-        portalToken,
       }).returning({
         id: supportTickets.id,
         subject: supportTickets.subject,

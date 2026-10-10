@@ -179,6 +179,10 @@ describe('GET /api/public/tickets/[id] (#2217 internal replies, #2443 whole-row 
    * projection to it, so the difference between "asked for seven columns" and
    * "asked for none and stripped one afterwards" is visible here, which is the
    * only reason those two are worth having separate tests for.
+   *
+   * `portal_token` stays in the fixture even though #2444 retired the credential:
+   * every ticket filed before then still carries one, and the projection is the
+   * only thing between that value and the customer's browser.
    */
   const ticketRow = {
     id: 'tick1',
@@ -220,17 +224,9 @@ describe('GET /api/public/tickets/[id] (#2217 internal replies, #2443 whole-row 
     mockContact.current = { id: 'c1', tenantId: '11111111-1111-4111-8111-111111111111' };
   });
 
-  /** Cookie branch: the ticket read is the first select, replies the second. */
+  /** The session read: the ticket is the first select, its replies the second. */
   const detailChain = () => (call: number, projection?: Record<string, unknown>) =>
     makeChain(() => (call === 0 ? [ticketRow] : []), undefined, projection);
-
-  /**
-   * x-portal-token branch (#2446): the token probe — which tenant owns the
-   * ticket this credential names — is now the first read, so the ticket is the
-   * second and the replies the third.
-   */
-  const tokenDetailChain = () => (call: number, projection?: Record<string, unknown>) =>
-    makeChain(() => (call <= 1 ? [ticketRow] : []), undefined, projection);
 
   it('never serializes portal_token in the ticket payload', async () => {
     mockDb.chainFactory = detailChain();
@@ -279,16 +275,22 @@ describe('GET /api/public/tickets/[id] (#2217 internal replies, #2443 whole-row 
     expect(body.data.ticket.createdAt).toBeUndefined();
   });
 
-  it('projects the x-portal-token branch as well as the cookie branch', async () => {
-    // Two reads of the same table, one per auth path; #2443 is about both.
-    mockDb.chainFactory = tokenDetailChain();
+  it('answers the session identity only — a ticket token in the header changes nothing (#2444)', async () => {
+    // This file used to carry a twin of the projection test above for the
+    // `x-portal-token` branch, because that branch read the ticket off a
+    // different predicate. #2444 deleted the branch, so what is worth pinning
+    // here is the query count: the ticket and its replies, with no credential
+    // probe in front of them. A holder of a `support_tickets.portal_token` from a
+    // pre-0124 row gets the same two reads — or, with no session, the same 401 —
+    // as any other caller, because this header means `portal_clients` now.
+    mockDb.chainFactory = detailChain();
     const { GET } = await import('@/app/api/public/tickets/[id]/route');
-    const res = await GET(getTicketRequest('tick1', { 'x-portal-token': 'tok' }), {
+    const res = await GET(getTicketRequest('tick1', { 'x-portal-token': 'a-ticket-token' }), {
       params: Promise.resolve({ id: 'tick1' }),
     });
     expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(Object.keys(body.data.ticket).sort()).toEqual(PUBLIC_KEYS);
+    expect(Object.keys((await res.json()).data.ticket).sort()).toEqual(PUBLIC_KEYS);
+    expect(mockDb.selectCall).toBe(2);
   });
 
   it('lists tickets with exactly the keys the detail route sends', async () => {

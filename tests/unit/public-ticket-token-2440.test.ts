@@ -12,6 +12,12 @@
  * whole ticket history. #2217 had already redacted that column from the
  * customer-facing detail response; the create path was never covered.
  *
+ * #2444 retired the credential itself: nothing is minted on INSERT any more, and
+ * 0124 dropped the RLS arm that let a stored `portal_token` match a row. The
+ * fixture below still carries one, deliberately — pre-#2442 rows hold those
+ * values, and the projection rule that keeps them out of the response is exactly
+ * what this file is for.
+ *
  * These tests emulate drizzle's projection rule rather than asserting on a
  * hand-written response object: `.returning()` with no selection yields the
  * whole row, `.returning({ key: column })` yields exactly those columns. So if
@@ -138,10 +144,6 @@ vi.mock('@/lib/rate-limit', () => ({
   checkRateLimit: vi.fn().mockResolvedValue(null),
 }));
 
-vi.mock('@/lib/ticket-portal', () => ({
-  generatePortalToken: () => TOKEN,
-}));
-
 function postJson(url: string, body: Record<string, unknown>) {
   return new Request(url, {
     method: 'POST',
@@ -165,11 +167,11 @@ describe('POST /api/public/tickets (#2440)', () => {
     email: 'a@b.com', subject: 'help', tenant_id: TENANT,
   });
 
-  it('still mints the credential into the row — the portal link keeps working', async () => {
+  it('mints no credential at all — the column is not written any more (#2444)', async () => {
     const { POST } = await import('@/app/api/public/tickets/route');
     const res = await POST(call());
     expect(res.status).toBe(201);
-    expect(valuesMock.mock.calls[0][0]).toMatchObject({ portalToken: TOKEN });
+    expect(valuesMock.mock.calls[0][0]).not.toHaveProperty('portalToken');
   });
 
   it('names the columns it returns instead of RETURNING *', async () => {

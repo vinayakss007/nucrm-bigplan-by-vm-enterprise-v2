@@ -119,8 +119,17 @@ export const supportTickets = pgTable('support_tickets', {
   slaPolicyId: uuid('sla_policy_id').references(() => slaPolicies.id, { onDelete: 'set null' }),
   firstResponseAt: timestamp('first_response_at', { withTimezone: true }),
   
-  /** Opaque token for unauthenticated public ticket access (email-header auth replaced). */
-  portalToken: text('portal_token').notNull().unique(),
+  /**
+   * Retired as a credential by #2444: nothing mints it any more and nothing reads
+   * it. It was a permanent, contact-wide, un-revocable bearer token with no expiry
+   * and no delivery channel — `0124` dropped the `NOT NULL` that the three mints
+   * required, and with it 0122's `support_tickets_portal_token_lookup` policy, so a
+   * stored value can no longer authorise a read even by code that compares it.
+   * The column stays (dropping it is the owner's data decision, recorded in
+   * `docs/infra/PREPROD-ISSUE-REGISTER.md`), which is why `.unique()` stays too:
+   * Postgres counts NULLs as distinct, so tokenless tickets do not collide.
+   */
+  portalToken: text('portal_token').unique(),
 
   metadata: utils.metadata(),
   ...utils.audit(),

@@ -107,10 +107,10 @@ function portalLookupStatement(
 /**
  * Mark the transaction as resolving a customer-portal credential (#2446).
  *
- * WHY A CONTEXT IS NEEDED AT ALL: the portal has to read `portal_clients`,
- * `platform_settings` or `support_tickets` to learn which tenant the caller
- * belongs to, and those tables' only shipped policy compares `tenant_id` to
- * `app.current_tenant` — a value the request does not have yet, because finding
+ * WHY A CONTEXT IS NEEDED AT ALL: the portal has to read `portal_clients` or
+ * `platform_settings` to learn which tenant the caller belongs to, and those
+ * tables' only shipped policy compares `tenant_id` to `app.current_tenant` — a
+ * value the request does not have yet, because finding
  * it is the point of the query. Under the fail-closed deparse that is a silent
  * zero-row read, which is why the portal returned 403 "Portal not enabled" and
  * empty lists rather than an error (#2446).
@@ -141,7 +141,9 @@ export async function setPortalLookupContext(
 /**
  * Resolve a portal credential with the minimum read it needs — login's config
  * probe and client lookup, `resolvePortalIdentity()`'s token match,
- * `getPortalSession()`'s cookie re-validation, a per-ticket portal token.
+ * `getPortalSession()`'s cookie re-validation. (#2444 retired the fourth user
+ * this list carried, the per-ticket `support_tickets.portal_token`, together with
+ * 0122's arm for it; nothing reads a ticket as a credential any more.)
  *
  * The tenant-scoped work that FOLLOWS still runs in `withTenantContext()`: this
  * context is SELECT-only and knows no tenant, so it cannot read invoices or

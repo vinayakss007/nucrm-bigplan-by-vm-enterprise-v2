@@ -1,10 +1,4 @@
 {
-  "entries": [
-    {
-      "file": "app/api/public/tickets/route.ts",
-      "table": "supportTickets",
-      "reason": "Deliberate non-filter: a portal token names ONE ticket, and filtering this token→identity lookup by deleted_at would lock a customer out of their whole remaining ticket history because one old ticket was deleted. The list query below still omits the deleted ticket (#2378).",
-      "pinnedBy": "tests/unit/public-tickets-deleted-2378.test.ts"
-    }
-  ]
+  "_comment": "Waivers for deliberate non-filtered reads of a soft-deletable table (#2382). Empty as of #2444: the only entry was the `portal_token` → identity lookup in app/api/public/tickets/route.ts, and that branch is retired with the credential (0124), so there is nothing left to waive. Do not add an entry to make a failing screen pass — project the read or filter the tombstone.",
+  "entries": []
 }

@@ -14,7 +14,6 @@ import { supportTickets, contacts, users } from '@/drizzle/schema';
 import { eq, and, desc, sql, isNull } from 'drizzle-orm';
 import { fireWebhooks } from '@/lib/webhooks';
 import { logError } from '@/lib/errors-server';
-import { generatePortalToken } from '@/lib/ticket-portal';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 /**
@@ -119,7 +118,6 @@ export const POST = withApiRoute(async (request: NextRequest) => {
         category: v.category || 'general',
         priority: v.priority,
         status: v.status,
-        portalToken: generatePortalToken(),
       } as typeof supportTickets.$inferInsert)
       .returning();
 
