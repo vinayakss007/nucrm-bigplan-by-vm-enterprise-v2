@@ -8,8 +8,8 @@
     },
     {
       "cite": "docs/README.md:71",
-      "regLines": [63],
-      "reason": "Chronic, not accidental: `docs/README.md:71` is the one pointer INTO the register, and the line it names is the sentence that re-pins itself — so every merge that adds register header text moves the pointer's own content and this cite reads as drift by construction. PP-070 (#2515, PR #2534) moved it again (:4416 -> :4476, the seventh re-pin); PP-069 (#2516) merged first and kept its number, and #2507 re-pins the same sentence from its own tree, so whichever docs PR merges last re-derives this entry. Prune it the day the README points at the rule by heading text instead of a line number."
+      "regLines": [18, 63],
+      "reason": "Chronic, not accidental: `docs/README.md:71` is the one pointer INTO the register, and the line it names is the sentence that re-pins itself — so every merge that adds register header text moves the pointer's own content and this cite reads as drift by construction. PP-070 (#2515, PR #2534) moved it again (:4416 -> :4477, the seventh re-pin); PP-069 (#2516) merged first and kept its number, and #2507 re-pins the same sentence from its own tree, so whichever docs PR merges last re-derives this entry. Prune it the day the README points at the rule by heading text instead of a line number."
     }
   ]
 }
