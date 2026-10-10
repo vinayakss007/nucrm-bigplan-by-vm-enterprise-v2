@@ -883,6 +883,13 @@
       "when": 1788782400041,
       "tag": "0125_declared_not_null_columns",
       "breakpoints": true
+    },
+    {
+      "version": "7",
+      "idx": 126,
+      "when": 1788782400042,
+      "tag": "0126_segment_members_primary_key",
+      "breakpoints": true
     }
   ]
 }
