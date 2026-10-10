@@ -3,13 +3,8 @@
   "entries": [
     {
       "cite": "app/api/cron/auto-backup/route.ts:55",
-      "regLines": [2467],
+      "regLines": [2489],
       "reason": "Read-log, not a pointer: PP-055 lists the auto-backup line set (55, 147, 243, 256-257, 297) as ranges somebody read, and #2441 declined to re-pin it for exactly that reason — re-pinning would invent an intent the entry never stated. Listed here so the decision is on the record instead of silent drift."
-    },
-    {
-      "cite": "app/api/cron/process-sequences/route.ts:33",
-      "regLines": [2169],
-      "reason": "Read-log, not a pointer: PP-051 lists the process-sequences ranges (33-64, 70-108, 118, 285) as what was read, and #2441 declined to re-pin them for that reason. The acquireLock call this line names has moved, but the entry never claimed to point at it — so the screen lists it and nothing re-pins it."
     }
   ]
 }
