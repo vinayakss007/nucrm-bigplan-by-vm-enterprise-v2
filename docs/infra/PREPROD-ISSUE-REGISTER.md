@@ -3770,7 +3770,13 @@ psql -tAc "select count(*) from support_tickets"  # as the app role, with app.po
   hypothetical: nothing applies the pile. The order the owner has to use is **apply `0124`, then
   deploy the build** — not the reverse, and not either alone. Filed as **#2499**, which carries the
   `pg_constraint` output, the three insert sites on `main` and why a `db:sync`-provisioned CI
-  database can never show this.
+  database can never show this. One refinement, measured the same day on the deploy path itself:
+  `.github/workflows/deploy.yml:281` runs `scripts/deploy-migrate.ts --yes` between `git checkout
+  --force "$SHA"` (`:230`) and `npm run build` (`:291`) and aborts if it fails, which is #2233's
+  guarantee — but it guarantees it for the **pm2 VM**, and this host is not that host
+  (`nucrm-app:preprod`, compose project `deploy`, no `pm2` binary on the host, container start
+  command plain `next start`, nothing in `instrumentation.ts` migrating). So on this stack the
+  order is enforced by nobody but the person typing the commands.
 
 - **How it was verified.** `STAFF_TICKET_COLUMNS` (17 named columns, in
   `lib/public-ticket-projection.ts` beside the `PUBLIC_TICKET_COLUMNS` #2443 established) at both
