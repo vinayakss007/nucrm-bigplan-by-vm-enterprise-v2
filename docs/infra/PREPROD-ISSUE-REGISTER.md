@@ -19,7 +19,7 @@
 >   Both docs PRs touch the same two places in this file (the bullet below and the Summary table).
 >   **#2531** merged first carrying **PP-069** — the earlier merge keeps the number and the later one
 >   moves, the resolution **PP-057** and **PP-063** record — so this bullet re-pins the
->   `docs/README.md:71` pointer to the keep-the-entry rule's line on this merged tree (`:0000`);
+>   `docs/README.md:71` pointer to the keep-the-entry rule's line on this merged tree (`:4452`);
 >   **#2534** re-pins the same sentence as **PP-070** from its own tree, and whichever of the two
 >   docs PRs merges last re-measures. IDs are never reused, so this entry stays **PP-065**.
 > - **Previous:** 2026-10-10 (UTC) — **PP-069**: `guard:migration-rls` accepted the `app.is_super_admin`
