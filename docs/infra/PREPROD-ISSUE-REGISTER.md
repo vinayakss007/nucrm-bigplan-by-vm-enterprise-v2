@@ -12,7 +12,7 @@
 > `0126_segment_members_primary_key` adds `PRIMARY KEY (id)` (the key `utils.pk()` always declared), replaces the misleading index with
 > `uq_segment_members_segment_entity` — UNIQUE, same two columns, still the lookup path — and dedupes both shapes **before** constraining,
 > per tenant under `set_config('app.current_tenant', …)`: PP-067 measured `app.is_super_admin` **inert** on this table's loop-built policy,
-> so the repair reuses `0125`'s proven loop, and `guard:migration-rls` (#2516's per-table rule) accepts it on that clause alone. Filed as
+> so the repair reuses `0125`'s proven loop, and `guard:migration-rls` accepts it on that clause alone — under **#2516**'s per-table rule and, since **#2548**, under **PP-071**'s stricter per-write one. Filed as
 > **#2515**; the AC1 decision (both readings enforced) is recorded in the migration header and on the
 > issue. Written as **PP-070** while **#2531** merged carrying **PP-069** and **#2548** carrying **PP-071** —
 > the earlier merge keeps the number and the later one moves, so this entry stays 070 and no ID is
@@ -4542,11 +4542,11 @@ into the column-drift PR. `0125`'s footer names the gap and leaves it here on pu
   migration — v4 uuids make it a practical nullity, and `ADD PRIMARY KEY` (DDL, RLS-blind)
   refuses the table with 23505 if it exists. Same posture as the guard's scope-honesty section.
 - **Measured:** `guard:chain` → 127 up-files · 127 journal entries · 0 defects;
-  `guard:migration-rls` → exit 0 on **127** files with **#2531** merged, so `0126` is now checked
-  against the per-table rule and passes on the `app.current_tenant` clause alone — before the merge
-  it passed only because the old per-file regex read the marker out of the *header prose*, the exact
-  bypass **#2516** removes (measured post-merge: 202 tenant-scoped tables, 68 with policy-GUC
-  evidence, 17 + 2 baselined offenders unchanged); `tests/unit/segment-members-pk-2515.test.ts`
+  `guard:migration-rls` → exit 0 on **127** files, re-measured after **#2548** landed **PP-071**'s
+  per-write rule: `0126` passes on the `app.current_tenant` clause alone under both that and
+  **#2516**'s per-table one — under the pre-#2531 regex it would have passed for the wrong reason
+  (the marker in the *header prose*, the exact bypass **#2516** removes). Measured now: 202
+  tenant-scoped tables, 265 policies read across 225 tables, 17 + 2 baselined offenders unchanged; `tests/unit/segment-members-pk-2515.test.ts`
   12/12 — text-level ordering pins on the real file (setter-before-write, dedupe-before-constrain,
   orphan-fix-first, no executable `is_super_admin`, honest down-rollback); schema-drift guard
   2255 green with `idx_segment_members_pk → uq_segment_members_segment_entity` allowlisted as a
