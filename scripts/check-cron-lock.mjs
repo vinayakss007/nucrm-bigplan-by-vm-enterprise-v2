@@ -101,7 +101,9 @@ function vercelJobs() {
 
 /** `scripts/cron-scheduler.ts` JOBS entries: `{ name: 'trial-check', path: … }` */
 function schedulerJobs() {
-  const names = [...read(SCHEDULER_FILE).matchAll(/\{\s*name:\s*'([a-z-]+)'/g)].map((m) => m[1]);
+  // The class must stay [a-z0-9-]: a name dropped here is invisible to rule 3,
+  // which is the "green while not looking" failure this guard exists to stop.
+  const names = [...read(SCHEDULER_FILE).matchAll(/\{\s*name:\s*'([a-z0-9-]+)'/g)].map((m) => m[1]);
   return [...new Set(names)].sort();
 }
 
