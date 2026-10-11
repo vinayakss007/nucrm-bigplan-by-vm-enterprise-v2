@@ -4,7 +4,33 @@
 > here, with the evidence that proves it and the verification that closed it.
 > Update the status the moment it changes; IDs are never reused.
 >
-> - **Last updated:** 2026-10-11 (UTC) — **PP-073**: six raw-string sinks interpolate a
+> - **Last updated:** 2026-10-11 (UTC) — **PP-074**: **#2526**'s "unauthenticated tracking sink
+>   taking attacker-supplied ids" is closed twice before a request can reach it, and the thing it
+>   actually was is a redirector off the app's own domain. Measured: `proxy.ts` never listed
+>   `/api/tenant/email/track` in `PUBLIC_PATHS` (`:202-244`) or `PUBLIC_PREFIXES` (`:246`), and
+>   `isPublic()` matches exact-or-segment-prefix (`:286-290`), so the anonymous pixel fetch the
+>   route exists to serve was **401**'d at the edge and never reached the handler — the "no auth
+>   required" premise came from two doc comments, not from the config. Even had it been listed,
+>   neither insert could land: the route used the bare `db` pool and
+>   `0031_rls_remaining_tables.sql:47` puts `email_opens`/`email_clicks` under a
+>   `WITH CHECK (tenant_id::text = current_setting('app.current_tenant'))` (`:178-180`) no caller
+>   can satisfy without a tenant context, so the click write was swallowed by its own `catch` and
+>   the open write threw into the `catch` that answers with the GIF — a correct-looking 200 and
+>   zero rows, every time. And nothing ever built the URL: `git log --all -S 'type=click&tid='`
+>   returns **one** commit, `e052172c`, which is #2267's hardening of this route plus its test.
+>   What *was* live: a 302 to any public `?url=` an `ak_` key or a session holder chose
+>   (`API_KEY_ALLOWED_PREFIXES`, `proxy.ts:263`) — screened correctly by `safeRedirectTarget`
+>   (#2267, so not SSRF) but still the phishing-cover shape #2218 closed on `/api/track/click` by
+>   refusing to read `?url=` at all. The route is deleted, its 12-test #2267 suite with it
+>   (`redirect-target.test.ts` keeps the guard's own coverage, and `/api/track/click` still calls
+>   it), the analytics docblock that repeated the false claim is corrected, and
+>   `tests/unit/legacy-email-track-retired-2526.test.ts` (11 tests) pins the deletion against the
+>   edge config and against the two token routes. Filed as **PP-074**: **#2566** edits this file's
+>   header text and the README pointer but mints no entry of its own, so the number is free. This
+>   bullet re-pins the `docs/README.md:75` pointer to the keep-the-entry rule's line on this merged
+>   tree (`:4903`); **#2534** (**PP-070**) and **#2507** (**PP-065**) are still open and each
+>   re-pins it from their own trees, so whichever merges last re-measures.
+> - **Previous:** 2026-10-11 (UTC) — **PP-073**: six raw-string sinks interpolate a
 >   caller-supplied *name* or a typed-number option and none of them escapes it. **PP-069** and
 >   **PP-071** are about what the RLS guard reads; this is the mirror rule — an **identifier position
 >   can never be parameterised**, so quoting is not escaping: a `lib/db/client.ts` column key of
@@ -250,6 +276,7 @@ Severity: **S1** blocks go-live · **S2** broken feature or security weakness ·
 | PP-071 | S2  | Infra / guard correctness | **PP-069's per-table rule never reads the database, and reads the history in the wrong shape.** Measured against a fresh chain build (**274** policies / **226** RLS-enabled tables): the evidence map is built from literal `CREATE POLICY … ON <table>` only, so the **12** tables whose `tenant_isolation` arrives through a `format()`/`EXECUTE` list — `leads` first among them — have no evidence, and the marker is refused where the live policy reads it; the map unions over history and never removes a `DROP POLICY` (**109** execute in the chain, `0088` alone 72 creates / 84 drops), so a deleted policy keeps crediting a marker — which fails **open**; the corpus is walked by `readdirSync().sort()` while `scripts/migrate.ts:143` applies by journal, **20 of 126** positions apart (`0091`/`0092` after `0112`), which decides the last writer of `deal_stages.tenant_isolation` (`0092`, both GUCs) versus the one the guard credits (`0107`, tenant only); and resolution is **kind-blind** — `error_logs_super_admin_write` is `FOR UPDATE` and gates no INSERT while `error_logs_insert_any` is `WITH CHECK (true)`, so **9** writes the guard demanded a GUC for need none, and a marker read only by a `SELECT` policy cleared an UPDATE | 🔧 FIXED in this PR (**#2545**, on top of the merged **#2516**): `scripts/rls-policy-map.mjs` reads the chain as an event log — three generator shapes (literal, template-applied-over-a-list, catalogue-loop kept as unattributed `ambient`), `%I`/`%L` holes, `''`-escaped and adjacent string fragments, `FOR <kind>`, last-writer-wins with `DROP POLICY` deleting — over `meta/_journal.json` order · measured after: **265** keys / **225** tables, **262 of 274** live keys attributed, **0** GUC-set disagreements, **0 unsound / 0 conservative** verdicts over the **229 × 3** `(table, kind)` grid, **0** verdict flips and baseline `violations` byte-identical (17 + 2, exit 0), `0126` (**#2534**, not yet merged) green when dropped into the corpus · six reinstated defects → **6 / 2 / 7 / 4 / 13 / 13** tests red with the guard still printing `OK` · 74 tests in the two suites, tree verdict unchanged · `--explain <tag\|all>` names the policy that admits each resolved write, because exit 0 is one byte for "the rows are visible" and for "this policy reads no GUC at all" (AC3) |
 | PP-072 | S3  | Analytics / data minimisation | **The churn queue never asked whether the contact still exists.** `GET /api/tenant/analytics/churn` filtered `churn_predictions.tenant_id` only, so a soft-deleted contact stayed listed with name, email, risk factors and `recommendedActions`, and `POST` kept scoring them because #2555 matched the neighbouring `GET` instead of fixing both — the deal side of the same feature filters `deleted_at` on both sides | 🔧 FIXED in this PR (`isNull(contacts.deletedAt)` in the `GET` filter and the `POST` ownership probe; the two advertised `.../calculate` routes do not exist and the doc comments now say so · `tests/unit/churn-soft-deleted-2556.test.ts`, 6 tests, asserting the rendered SQL) |
 | PP-073 | S3  | Data access / raw SQL | **Six raw-string sinks interpolate a caller-supplied name or a typed-number option and none of them escapes it.** An identifier position can never be a `$n` parameter, so the builders' `` `"${k}"` `` is not escaping: a `lib/db/client.ts` column key of `x" = '1' OR 1=1 --` closes its own quoted identifier and continues the statement; `SET [LOCAL] statement_timeout` has no parameter slot at all. Table names were already allowlisted, every value already binds as `$n`, and `buildInsert`/`buildUpdate`/`countRows` are re-exported at `lib/db/index.ts:17-19` and imported by **nothing** — so this is the pattern, not an active injection | 🔧 FIXED in this PR (**#2528**): `lib/sql-allowlist.ts` gains `BARE_IDENTIFIER` + `validateIdentifier()` (applied to all three builder key lists — `lib/db/client.ts:142`/`:156`/`:158`/`:170` — and to `verifyAuditChainIntegrity`'s operator-supplied `--audit-table` name at `lib/data-integrity.ts:285`, *before* the `try` because the `catch` at `:342` reports the name back) and `MAX_STATEMENT_TIMEOUT_MS` + `validateTimeoutMs()` at `lib/api/with-transaction.ts:86` / `lib/cron/distributed-lock.ts:72` · **14** new tests + **493** existing across the **17** suites that reach these modules, `tsc --noEmit` exit 0 · **all 1,946** explicitly-named columns in `drizzle/schema` satisfy the lowercase-only rule · **not** #683's per-table column allowlist |
+| PP-074 | S3  | Email / public edge | **#2526** reported `/api/tenant/email/track` as an unauthenticated pixel/click sink taking `tid`/`cid`/`cpid`/`eid` off the query string. Measured: the path was never in `PUBLIC_PATHS`/`PUBLIC_PREFIXES` (anonymous requests die at the edge with **401**), and both inserts were refused by `0031`'s `tenant_isolation` `WITH CHECK` because the handler sets no tenant context — so it had no working behaviour to forge, and the "public, no auth required" wording lived in two doc comments. What it did do is 302 to any caller-chosen public `?url=` off the CRM's own domain (the #2218 shape), and the two tables it names have had exactly that one writer | 🔧 FIXED in this PR (route + its 12-test #2267 suite deleted; `app/api/tenant/email/analytics/route.ts` docblock corrected to name the token pair; `tests/unit/legacy-email-track-retired-2526.test.ts`, **11** tests, reproduces `isPublic()`'s rules from the arrays in `proxy.ts` and pins that `/api/track/open` + `/api/track/click` read only `?t` and write under `withTenantContext(<row>.tenantId)` · the zero-writer consequence for `email_opens`/`email_clicks` is recorded in the section, not fixed here) |
 
 ## Sentry issues → register entries
 
@@ -4766,6 +4793,108 @@ no space, no semicolon, no dash, no `-`-comment, and a length under Postgres's o
   (the RLS reader these guards sit next to — same discipline: validate at the boundary, and assert on
   the rendered statement rather than on a mocked return).
 
+## PP-074 — 🔧 **#2526**: `/api/tenant/email/track` was filed as an unauthenticated tracking sink that trusts attacker-supplied `tid`/`cid`/`cpid`/`eid`; measured, the edge never listed the path and RLS refused both writes, so there was nothing to forge — what was live is a 302 off the app's own domain to any public `?url=` an authenticated caller chose _(S3 · Email / public edge)_
+
+- **Found by** reading the report's four `:NN` citations against `main`, then against the thing
+  the report did not open: `proxy.ts`. The handler's own docblock (`Public endpoints (no auth
+  required)`) and `app/api/tenant/email/analytics/route.ts`'s comment (`the PUBLIC,
+  unauthenticated tracking-pixel / click-redirect ingestion endpoint`) are where the premise
+  came from, and both were wrong in the same direction.
+- **Measurement 1 — the edge, and the premise is false.** `PUBLIC_PATHS` is
+  `proxy.ts:202-244` and `PUBLIC_PREFIXES` is `:246`; neither names
+  `/api/tenant/email/track`, and `isPublic()` (`:286-290`) matches an entry exactly or as a
+  segment prefix (`p + '/'`), so no spelling of the retired path is covered either. The list
+  *does* carry the two successors (`:229`) — and it carries them because #2415 found the
+  opposite bug (public handlers 401'd by an edge that never listed them). Here the edge was
+  right and the comments were the lie. An anonymous mail client therefore never ran a line of
+  this handler; the `checkPublicRateLimit` call inside it was decoration.
+- **Measurement 2 — even reached, it wrote nothing.** The route used the bare pool
+  (`import { db } from '@/drizzle/db'`) and never called `withTenantContext`.
+  `0031_rls_remaining_tables.sql:47` folds `email_clicks` and `email_opens` into the
+  `tenant_isolation` loop whose clause is `WITH CHECK (tenant_id::text =
+  current_setting('app.current_tenant'))` (`:178-180`) — a check no request can pass without a
+  tenant context, which a public pixel by definition does not have. The consequences differ
+  per branch and both hide the failure: the click insert sits in its own `try/catch` that
+  logs a warning and continues (deliberately, so a refused write cannot wedge the redirect),
+  and the open insert is unwrapped, throws to the route-level `catch`, and that `catch`
+  returns the GIF. So every open was a 200 with zero rows. This is the same
+  refuses-without-raising behaviour **PP-070** and **#2530** describe from the write side.
+- **Measurement 3 — nobody ever minted the URL.** `grep -rn "api/tenant/email/track"` over
+  `app/ lib/ components/ scripts/ drizzle/ tests/ docs/ postman/ .github/ deploy/` returns
+  the handler, its own test, the analytics docblock, and two historical docs
+  (`docs/planning/REMAINING_GAPS.txt:176`, `docs/SECURITY-AUDIT-2026-08-07.md:293`).
+  `git log --all -S 'type=click&tid='` → **one** commit, `e052172c`, which is #2267's
+  open-redirect hardening of this route plus the test that exercises it. So no mail this app
+  ever sent carries one of these links, and retiring the route strands no reader — which is
+  the only reason deletion is proportionate here rather than a migration.
+- **What was actually live, and why it still deserved an entry.** `?url=` was validated by
+  `safeRedirectTarget` (#2267: absolute http(s), public host, no credentials, no
+  protocol-relative or smuggled schemes) and only the approved string was persisted and
+  handed to the browser, so this is **not** an SSRF or an unvalidated-redirect report. What
+  remained is the *trust* abuse: any caller holding a session — or an `ak_` API key, since
+  `API_KEY_ALLOWED_PREFIXES` covers `/api/tenant/` (`proxy.ts:263`) — could get a 302 off the
+  CRM's own domain to any public host they named, which is a phishing cover in exactly the
+  shape #1981/#2218 closed on `/api/track/click` by refusing to read `?url=` at all (#2218
+  made the destination come only from the registered row). #2267 screened this sibling
+  instead of retiring it, and it kept the parameter.
+- **What this does.** Deletes `app/api/tenant/email/track/route.ts` and
+  `tests/unit/tenant-email-track.test.ts` (12 tests, every one about a handler that no longer
+  exists; `safeRedirectTarget` keeps its own direct suite at
+  `tests/unit/redirect-target.test.ts`, and `/api/track/click` still calls the guard),
+  corrects the `app/api/tenant/email/analytics/route.ts` docblock so the "PUBLIC,
+  unauthenticated" wording names the token pair instead, and adds
+  `tests/unit/legacy-email-track-retired-2526.test.ts` — 11 tests that re-derive `isPublic()`
+  from the two arrays in `proxy.ts` rather than from a hand-written roster, then assert: the
+  handler is gone; the similarly-named `tracking` and `analytics` routes are not; the tables
+  are still declared; the retired path is not public while `/api/track/open` and
+  `/api/track/click` are; no spelling of the path appears anywhere in `proxy.ts`; both
+  successors read only `?t` and never `tid`/`cid`/`cpid`/`eid`/`url`; the click destination
+  comes from `readClickLinkDestination` behind `safeRedirectTarget`; and both writes run
+  inside `withTenantContext(<row>.tenantId, NO_USER_SENTINEL, …)`.
+- **What this does NOT do — the consequence, recorded not fixed.** With the route gone,
+  `email_opens` and `email_clicks` have **zero writers** in this tree while two readers still
+  aggregate them: `app/api/tenant/email/tracking/route.ts:57-60` (the "Opened" badge on the
+  sent-mail page, joining `email_opens.email_id` against `email_log` ids) and
+  `app/api/tenant/email/analytics/route.ts:53-89` (open/click counts and the recent-events
+  feed). Nothing observable changed — those reads were always empty for the reason in
+  Measurement 2 — but the truth about opens and clicks is on
+  `email_tracking.opened_at`/`.clicked_at`/`open_count`/`click_count`, which the token pair
+  maintains (`app/api/track/open/route.ts:67-72`, `app/api/track/click/route.ts:142-149`), and
+  re-pointing the readers is a join decision, not a rename: `email_opens.email_id` is an
+  **unconstrained** uuid (`drizzle/schema/email-tracking.ts:17`, `:36` — `0020` added FKs for
+  `tenant_id` only) while `email_tracking` is keyed by the server-minted tracking row. That
+  belongs in its own PR per AGENTS.md, and it is the follow-up this entry leaves open.
+- **Not a re-litigation of the report.** The issue's own caveat is correct — "the write
+  currently fails closed under RLS… that is the *only* thing stopping it", and
+  defence-by-RLS on an event sink is fragile. What the report did not have was the
+  unauthenticated half, and the fix it offered ("add a per-message signed token, or retire in
+  favour of the token pair") is the retirement, because the signed-token half already exists
+  at `/api/track/open` and `/api/track/click` with `0105`'s narrow
+  `email_tracking_pixel_lookup` read. Deleting removes the arrangement instead of adding a
+  third way to reach it.
+- **Measured:** 11 new tests, and the 6 suites that touch the route tree or the edge config
+  green together — `proxy.test.ts` (67), `public-api-path-guard-pp065.test.ts` (15),
+  `public-row-projection-guard-2440.test.ts`, `pagination-sla-cron-2229.test.ts`,
+  `counter-increments-atomic.test.ts`, `payu-error-echo-guard-2527.test.ts` — **681** tests,
+  `guard:public-ratelimit`, `guard:public-projection`, `guard:boundaries`, `guard:filesize`,
+  `guard:coords`, `guard:register-drift`. **Not measured live**, and this is the honest gap
+  against **PP-065**: this sandbox has no reachable Docker daemon (`docker info` stops after
+  the client block) and nothing listens on `127.0.0.1:3099`, so the 401-at-the-edge verdict is
+  a reading of `proxy.ts`'s matcher plus the test that re-derives it, not a curl. A pre-prod
+  `curl -i` on the retired path is the first thing to run if anyone reopens this.
+- **Files:** `app/api/tenant/email/track/route.ts` (deleted),
+  `tests/unit/tenant-email-track.test.ts` (deleted),
+  `app/api/tenant/email/analytics/route.ts` (docblock only),
+  `tests/unit/legacy-email-track-retired-2526.test.ts` (new).
+- **Pointers this entry's own edits moved:** the `docs/README.md:75` re-pin in the header
+  bullet above — this bullet list and that bullet are what moved the keep-the-entry rule's
+  line — and the drift allowlist re-derived after this commit.
+- **Related:** **#2526** (the report), **#2267** (this route's open-redirect screen),
+  **#1981**/**#2218** (the same `?url=` abuse closed on the public click route), **#2415**
+  (the edge/handler seam — this is its mirror image), **PP-065** (the same class: a shipped
+  surface that could never work, found by reading the config instead of the comment),
+  **0105** + `withTrackingLookupContext` (the narrow read that makes the token pair safe to
+  publish), **#2530** / **PP-070** (writes RLS refuses in silence).
 ## How to maintain this file
 
 - **New issue** → next free `PP-0NN` id, one section, and a row in the Summary table. Never renumber.
