@@ -4,7 +4,30 @@
 > here, with the evidence that proves it and the verification that closed it.
 > Update the status the moment it changes; IDs are never reused.
 >
-> - **Last updated:** 2026-10-10 (UTC) — **PP-069**: `guard:migration-rls` accepted the `app.is_super_admin`
+> - **Last updated:** 2026-10-10 (UTC) — **PP-071**: **PP-069**'s rule is per table but not per *write*, and three
+> of its four inputs are not what the database holds. Measured against a fresh chain build of this tree — **274**
+> policies over **226** RLS-enabled tables: `collectPolicyGucs` reads only literal `CREATE POLICY … ON <table>`, so
+> the **12** tables whose `tenant_isolation` arrives through a `format()`/`EXECUTE` list (`leads` among them) carry
+> no evidence and the marker is refused where the live policy accepts it; the map is a union over history and never
+> removes a `DROP POLICY` (**109** of them execute in the chain), which fails *open*, not closed as **PP-069**
+> recorded; and the corpus is walked by filename while `scripts/migrate.ts:143` applies it by journal — **20 of 126**
+> positions apart — which moves the *last* writer of `deal_stages.tenant_isolation` from `0107` (tenant GUC only) to
+> `0092` (both GUCs). Resolution was also kind-blind: `error_logs_super_admin_write` is `FOR UPDATE` and gates no
+> INSERT, and `error_logs_insert_any` is `WITH CHECK (true)`, so **9** writes this guard demanded a GUC for are
+> admitted unconditionally, while an `app.is_super_admin` read by a `SELECT`-only policy cleared an UPDATE.
+> `scripts/rls-policy-map.mjs` now reads the chain as an event log — literal, template-applied and
+> catalogue-ambient shapes, `%I` holes and adjacent string fragments, `FOR <kind>`, last-writer-wins with `DROP`
+> deleting — in journal order. Measured after: **265** policy keys over **225** tables, **262 of the build's 274**
+> attributed (the 12 left are `0037`/`0039`'s catalogue loops, recorded as `ambient` and resolvable only through
+> `app.current_tenant`), **0** GUC-set disagreements and **0 unsound / 0 conservative** verdicts across the
+> **229 × 3** `(table, kind)` grid, **0** verdict flips and baseline `violations` byte-identical (17 + 2, exit 0), and
+> the next pending migration — **#2534**'s `0126`, dropped into the corpus — stays green. Watching, not counting: six
+> reinstated defects (file-global marker, raw-text marker, kind-blind, `DROP`-ignored, literal-policies-only,
+> filename order) turn **5, 2, 7, 4, 13 and 13** tests red while `guard:migration-rls` still prints `OK` at exit 0.
+> Filed as **#2545** against the merged **#2516**. Written as **PP-071** while **#2534** sits open claiming
+> **PP-070** for `segment_members` — the earlier merge keeps the number and the later one moves, and both PRs edit
+> this header, the Summary table and the section list, so whichever lands second takes a conflict in all three.
+> - **Previous:** 2026-10-10 (UTC) — **PP-069**: `guard:migration-rls` accepted the `app.is_super_admin`
 > marker **per file**: `analyzeFile()` excused any migration that mentioned it *anywhere* — header prose, or
 > a stored-function body that never runs at migration time — from every write it made, without reading a
 > policy of any table the migration writes. **PP-067** already recorded the bypass in numbers: `0125`'s
@@ -187,6 +210,8 @@ Severity: **S1** blocks go-live · **S2** broken feature or security weakness ·
 | PP-067 | S2  | Migrations + tooling        | **Six columns come out of `npm run db:bootstrap` nullable while `drizzle/schema` declares every one of them NOT NULL** — `custom_entities.fields/.settings/.created_at`, `custom_entity_data.data/.created_at`, `segment_members.id`. `0059` created them loosely; `0071`'s repair is a `CREATE TABLE IF NOT EXISTS`, which on any ordered chain build parses, discards itself and **never executes**, so its NOT NULLs are inert text. `0125` backfills every NULL with the value that column's own DEFAULT already supplies and then adds the six constraints, driven by `set_config('app.current_tenant', …)` per tenant — because `0109`'s `app.is_super_admin` GUC is **inert** on these three `tenant_isolation` policies (measured: `UPDATE 0`, then `23502` on the following `SET NOT NULL`). Both directions measured with #2512's column-level screen: **9 allowlisted → 3 allowlisted, 0 drift**, exit 0 on a chain-built database. | 🔧 FIXED IN TREE                                                                                                                                          |
 | PP-068 | S2  | Schema drift                | **The only screen in this repo that asks the live database what its columns are compared _names_, and nothing ran it.** `scripts/drift-check.ts` checked table presence, function presence, RLS policy presence and row counts of undeclared tables — never a column — so pre-prod measured `No drift ✓` at **exit 0** while `support_tickets.portal_token` was live `NOT NULL` with **no default** against a schema file that declares it nullable (#2499's whole cause), and `super_admin_audit_logs` carried three `text` columns behind three `jsonb` declarations. `grep -rn drift-check .github/workflows` → **0 hits across all five workflow files**, while **five** documents told a human to run it. All three screens that do exist are name-only (`tests/unit/schema-drift-guard-2255.test.ts`, `scripts/check-schema-drift-live.ts`, `scripts/check-schema-drift.mjs` is Zod), and the obvious fix — importing the schema **barrel** — is load-mode-dependent: from a `.ts` entry it yields the same 226 tables the 62 files do, from an `.mts` entry it has **3** own keys and **2** tables, the 236 real exports hidden one level down in `schema.default`, silently | 🔧 FIXED in this PR (columns compared per table, three kinds — presence, nullability, type — behind a ratcheting allowlist that must name a `clearedBy` migration or a `filedAs` issue for every entry, and wired in both shapes **#2508** AC3 asks for: `ci.yml:407` measures a `db:bootstrap` database on every pull request, `.github/workflows/schema-drift.yml` measures pre-prod nightly **and** re-seeds the drift in a throwaway database to prove the screen fires (`:105`)) · measured after: pre-prod **6** findings, chain-built database **9**, **4** in common — the two databases are behind main in **different directions** · the live fixes stay open as **#2509** (nullability, 6 columns), **#2510** (audit types, 3 columns) and `0124`/`0109` for #2499 · the **3,216** are base-table columns; **PP-064**'s 3,231 is the same `nucrm_test` plus the **15** columns of its `deals_by_win_probability` view — both counts measured here |
 | PP-069 | S2  | Infra / guard correctness | **`guard:migration-rls` accepted the `app.is_super_admin` marker without reading the policies of the tables the migration writes.** `MITIGATION.test(rawSql)` excused any file that mentioned the GUC anywhere — and the final `0125` mentions it in header prose to warn that it is **inert** there — for every write it made. `0125`'s first draft is the measured bypass (**PP-067**): marker set, three `tenant_isolation` policies that never read it, `UPDATE 0`, then `23502` on the following `SET NOT NULL` | 🔧 FIXED in this PR (per-table mitigation, **#2516**: a marker counts only where the written table's own literal `CREATE POLICY` statements read it somewhere in the history — `collectPolicyGucs` — otherwise the file must set `app.current_tenant`; evidence is the comment-stripped executable scope, so prose and stored-function bodies no longer excuse a file · `0109` green for the right reason, final `0125` passes through (b), a first-draft-shaped fixture exits 1 · tree verdict unchanged: 126 files · 202 tenant-scoped · 17 + 2 baselined · exit 0) |
+
+| PP-071 | S2  | Infra / guard correctness | **PP-069's per-table rule never reads the database, and reads the history in the wrong shape.** Measured against a fresh chain build (**274** policies / **226** RLS-enabled tables): the evidence map is built from literal `CREATE POLICY … ON <table>` only, so the **12** tables whose `tenant_isolation` arrives through a `format()`/`EXECUTE` list — `leads` first among them — have no evidence, and the marker is refused where the live policy reads it; the map unions over history and never removes a `DROP POLICY` (**109** execute in the chain, `0088` alone 72 creates / 84 drops), so a deleted policy keeps crediting a marker — which fails **open**; the corpus is walked by `readdirSync().sort()` while `scripts/migrate.ts:143` applies by journal, **20 of 126** positions apart (`0091`/`0092` after `0112`), which decides the last writer of `deal_stages.tenant_isolation` (`0092`, both GUCs) versus the one the guard credits (`0107`, tenant only); and resolution is **kind-blind** — `error_logs_super_admin_write` is `FOR UPDATE` and gates no INSERT while `error_logs_insert_any` is `WITH CHECK (true)`, so **9** writes the guard demanded a GUC for need none, and a marker read only by a `SELECT` policy cleared an UPDATE | 🔧 FIXED in this PR (**#2545**, on top of the merged **#2516**): `scripts/rls-policy-map.mjs` reads the chain as an event log — three generator shapes (literal, template-applied-over-a-list, catalogue-loop kept as unattributed `ambient`), `%I`/`%L` holes, `''`-escaped and adjacent string fragments, `FOR <kind>`, last-writer-wins with `DROP POLICY` deleting — over `meta/_journal.json` order · measured after: **265** keys / **225** tables, **262 of 274** live keys attributed, **0** GUC-set disagreements, **0 unsound / 0 conservative** verdicts over the **229 × 3** `(table, kind)` grid, **0** verdict flips and baseline `violations` byte-identical (17 + 2, exit 0), `0126` (**#2534**, not yet merged) green when dropped into the corpus · six reinstated defects → **6 / 2 / 7 / 4 / 13 / 13** tests red with the guard still printing `OK` · 74 tests in the two suites, tree verdict unchanged · `--explain <tag\|all>` names the policy that admits each resolved write, because exit 0 is one byte for "the rows are visible" and for "this policy reads no GUC at all" (AC3) |
 
 ## Sentry issues → register entries
 
@@ -4469,6 +4494,99 @@ marker was inert on the tables it wrote. The guard's own exemption rule reproduc
 - **Related:** **PP-058** (why the guard exists at all), **PP-067** (the register already carried this
   bypass's measurements), **#2516** (its ACs are the rule above), **#2515** (open: `segment_members`
   still has no real primary key — separate defect, separate PR).
+
+## PP-071 — 🔧 **PP-069**'s per-table rule is per *table* but not per *write*, and three of the four things it reads are not what the database holds — 12 loop-built policies unseen, 109 `DROP POLICY`s never applied, 20 of 126 files walked in the wrong order, and 9 writes admitted unconditionally that the guard still demanded a GUC for _(S2 · Guard correctness)_
+
+**Found:** filed as **#2545** against the merged **#2516** fix (`de72cb4f`), by running that reader and
+this tree's chain build side by side. **PP-069** is not withdrawn: its rule is a real narrowing, it is
+sound on every table it can see, and nothing on today's tree got a new verdict from it. What
+**#2545** measures is the distance between "sound" and "watching".
+
+The instrument. `nucrm_2516_check` is a fresh `migrate.ts --bootstrap` build of this tree in the
+container Postgres, so its `pg_policies` is exactly what the guard is trying to predict: **274**
+policies over **226** RLS-enabled tables (**225** of them `rls_forced`), **0** RESTRICTIVE
+(`polpermissive` is true for all 274 — the permissive-OR branch of `writeIsVisible` is therefore
+unexercised by real data and stays pinned by fixture only), `app.current_tenant` read by **200**
+policies, `app.is_super_admin` by **58** across **47** tables, and **20** policies over 20 tables that
+read no GUC at all.
+
+- **Kind-blind.** `collectPolicyGucs` keys evidence by table, so any policy of any command makes the
+  marker "read" there. `error_logs_super_admin_write` is `FOR UPDATE`; an `INSERT` into `error_logs`
+  is gated by `error_logs_insert_any` — `FOR ALL … WITH CHECK (true)`, no GUC anywhere — which means
+  the live database admits that INSERT with **nothing** set, while the guard demanded a GUC. Measured:
+  **9** such unconditional-but-demanded writes. The mirror is worse and is *not* yet measured on a
+  real file: an `app.is_super_admin` read by a `SELECT`-only policy would clear an `UPDATE`, which is
+  the PP-058 failure mode reintroduced with extra steps.
+- **Loop-built policies are invisible.** `leads`, `segment_members`, `notifications`, `meetings` and
+  nine more get `tenant_isolation` from `FOREACH t IN ARRAY ARRAY[…]` + `EXECUTE format('CREATE
+  POLICY … ON %I …', t)`, where the template is written as **adjacent SQL string fragments** Postgres
+  concatenates. A literal `CREATE POLICY … ON <table>` scan finds none of them — **12 live keys** the
+  guard cannot attribute, all of them `app.current_tenant`-only, so their marker verdicts happen to
+  agree with the database today by way of failing closed, and their *tenant* verdicts are only correct
+  because the `tenant_id`-column rule from PP-058 still lists the table.
+- **The union never removes.** `scripts/migrate.ts` executes **109** `DROP POLICY` statements across
+  the chain (`0088` alone: 72 creates and 84 drops of its own). **PP-069** recorded this cost as
+  failing *closed*; it does not — a deleted policy keeps crediting a marker forever, which is an
+  **over-approval**. Measured on this build the exposure is currently 0 unsound accepts, so the claim
+  in **PP-069**'s fourth bullet was right about the direction it had checked and wrong about the only
+  direction that hurts.
+- **Filename order is not apply order.** `collect()` walked `readdirSync().sort()`; `migrate.ts:143`
+  iterates `journal.entries`. They differ at **20 of 126** positions because `0091`/`0092` are journal-ed
+  after `0112`. Under last-writer-wins that is not cosmetic: `deal_stages.tenant_isolation` is written
+  by `0107_rls_null_tenant_revenue_hardening` (tenant GUC only) and again by
+  `0092_metrics_tables_superadmin_bypass` (both GUCs) — filename order says the marker is inert there,
+  apply order says it is not, and only one of those is what the database will hold when the pile runs.
+- **The rule now.** `scripts/rls-policy-map.mjs` treats the corpus as an event log and resolves each
+  `(table, policy)` to its **last** writer, with `drop` **deleting** rather than noting. It reads three
+  generator shapes: literal `CREATE POLICY … ON t FOR <kind> USING (…) WITH CHECK (…)`; a `format()`
+  template applied over a literal table list (including a list declared first as a `text[]` variable,
+  as `0015`/`0019`/`0031`/`0092`/`0093` do), skipping `%I`/`%L`/`%s` holes so a template is never
+  mistaken for a relation; and the catalogue-driven `FOR rec IN SELECT … FROM pg_attribute` loops of
+  `0037`/`0039`, whose target set is a runtime result — those are collected as `ambient` and are never
+  evidence *for* a table. `cmd` is kept, so a policy counts only for the writes it actually gates, and
+  `app.current_tenant` keeps its short-circuit because every `tenant_isolation` policy is built on it.
+  Verdicts are computed per `(table, kind)` from the GUCs the file sets in its **executable scope**.
+- **Static, and honest about being static.** The screen still cannot query the live database, for the
+  reason **PP-069** writes down: the CI and migrate contexts disagree and both are mid-pile. Two costs
+  are named in the guard's header rather than hidden. Catalogue-loop targets stay unattributed (**2**
+  ambient loops, **12** live policy keys) and resolve only through `app.current_tenant`. And the reader
+  tracks `DROP POLICY`, not `DROP TABLE`, so it still credits **3** policies on tables `0078` and `0080`
+  removed — inert in both directions, because a write into a dropped table fails with 42P01 instead of
+  matching 0 rows.
+- **Measured after.** Attribution **265** keys over **225** tables; **262 of the build's 274** live
+  keys matched; **0** GUC-set disagreements on the matched keys; **0 unsound and 0 conservative**
+  super-admin-only verdicts across the **229 × 3** `(table, kind)` grid (**PP-069**'s reader, run through
+  the same harness: **68** attributable tables, **141** conservative rejects, **9** false positives, 0
+  unsound). Blast radius on the tree today: **0** verdict flips between the file-global rule and this
+  per-`(table, kind)` rule, and `scripts/migration-rls-dml-baseline.json` `violations` are
+  **byte-identical** (17 row-write + 2 dynamic-target, exit 0) — the change is in what the guard can
+  see, not in what it says about the 126 files it has already seen. Pre-flight on the next pending
+  migration: `0126` from **#2534** (`segment_members` dedupe + `PRIMARY KEY`), dropped into a copy of
+  the corpus with its journal entry, exits 0 at **127** files, because it loops
+  `set_config('app.current_tenant', t.id::text, true)` — the one form both rules accept.
+- **Watching, not counting (#2545 AC7).** Six defects reinstated one at a time against this tree: file-global
+  marker (**5** tests red), marker read from raw text so comments count (**2**), kind-blind (**7**), `DROP
+  POLICY` ignored (**4**), literal policies only (**13**), filename order (**13**). In all six the guard still
+  printed `OK — no new RLS-blind writes` at exit 0 on the real tree, which is the whole point: the tree cannot
+  detect any of them, and the suite detects every one.
+- **Tests:** `tests/unit/migration-rls-policy-map.test.ts` (new, 25 — string-reader `end` offsets and
+  adjacent fragments, all three shapes, last-writer-wins and `DROP` deleting, permissive-OR and the
+  restrictive-AND branch the build does not exercise, plus real-chain pins including
+  `deal_stages.tenant_isolation` → `0092`) and `tests/unit/migration-rls-dml-guard.test.ts` (48, was 43)
+  — the **#2516** cases ported to the new contract and three tightened: a marker in a stored-function
+  body, one of two writes covered, and `app.current_user` resolved because `users_update_own` names it.
+  One **#2516** expectation is consciously inverted: `EXECUTE format('UPDATE %I …')` now needs
+  `app.current_tenant` whatever a *mentioned* table reads, because crediting a relation the screen never
+  resolved is how the next list entry becomes invisible. 73 passed in the two files; full unit suite
+  **8,166 passed / 2 files failed** (the recorded `@tanstack/react-table ./legacy` baseline), `eslint`
+  0 errors, `tsc --noEmit` at the **125**-error baseline, all CI guards exit 0.
+- **Files:** `scripts/rls-policy-map.mjs` (new), `scripts/check-migration-rls-dml.mjs`,
+  `scripts/migration-rls-dml-baseline.json` (counts only), `tests/unit/migration-rls-policy-map.test.ts`
+  (new), `tests/unit/migration-rls-dml-guard.test.ts`.
+- **Related:** **PP-058** (the runner context this screens for), **PP-067** (the inert-marker
+  measurement), **PP-069** / **#2516** (the rule this extends, and the "fails closed" sentence this
+  corrects), **#2534** (open, claims **PP-070**: `0126` measured green here), **#2515** (the
+  `segment_members` key itself).
 
 ## How to maintain this file
 
