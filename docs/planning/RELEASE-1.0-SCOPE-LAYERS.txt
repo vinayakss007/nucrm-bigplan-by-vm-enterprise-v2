@@ -12,7 +12,8 @@ only "the code exists", it says UNVERIFIED — that is not the same as working.
    correction, marked "RE-MEASURED", so the audit trail cannot be quietly
    rewritten. Moved: 0.1, 0.2, 0.7, 2.8, 2.9, 2.17, and the LAYER 3 framing
    (see the owner decision at the top of that layer). Re-confirmed exactly as
-   written: 0.5 (GET branches/main/protection still 404), 0.6 (no bump+tag
+   written: 0.5 (the 404 is GitHub's answer for "no protection rule" and the
+   second pass below turns it into positive evidence), 0.6 (no bump+tag
    commit yet), 2.1 (lib/email/service.ts:80-81), 2.2 (22 cron route.ts vs 17
    crontab lines), 2.14 (no workflow mentions playwright), 2.16 (no
    release.yml; only nightly-soak.yml; LAUNCH_GATE_STRICT in no workflow),
@@ -25,7 +26,28 @@ only "the code exists", it says UNVERIFIED — that is not the same as working.
    pre-#2469 tip, not this one; TEST_PLAN.txt:7-8 is placeholders. What that
    guard cannot close is stated in 0.3/0.4 themselves: the published password
    is still in public git history (owner rotation), and
-   deploy/certs/preprod-ca.pem carries its address as base64 subject CN.]
+   deploy/certs/preprod-ca.pem carries its address as base64 subject CN.
+   SECOND PASS, same day, at main = b49021db. This file merged as #2517 at
+   90955843, and main then took #2514, #2518 (with register PP-067), #2512 and
+   #2511 inside about an hour — which is itself the reason a planning file
+   should date every number it quotes. Re-read at b49021db: 0.2, 0.5, 0.7,
+   2.13, 2.8, Step 3 and D3 changed (each carries its own dated block);
+   re-confirmed exactly as written: 2.1 (lib/email/service.ts:80-81), 2.2 (22
+   cron route.ts against 17 scheduled lines in deploy/cron/crontab), 2.14 (no
+   workflow mentions playwright), 2.16 (no release.yml; LAUNCH_GATE_STRICT
+   appears only inside scripts/launch-gate.sh's own comments, never in a
+   workflow), and 3.1's five 'beta' coordinates plus page.tsx:83's "coming
+   soon". Two claims went the wrong way and are corrected rather than quietly
+   re-typed: 0.7's health-route coordinate drifted from :92 to :94 under its
+   own merge, and 0.5's evidence was an inference where a read fact was
+   available. Two new defects came out of this pass, both in 2.8: rollback
+   coverage is unpoliced (126 up-files against 125 .down.sql —
+   0036_backup_records_checksum.sql has none, and the chain guard filters
+   .down.sql out, so green cannot see it), and a chain build can finish clean
+   without producing the declared schema (0071's CREATE TABLE IF NOT EXISTS
+   repair parses, discards itself and never executes on an ordered build — that
+   is PP-067/0125). Neither is fixed here. Not re-measured in either pass:
+   2.15.]
 
 How to read the three layers:
   LAYER 1  STABLE        -> put in 1.0.0 and say it works.
@@ -86,6 +108,16 @@ LAYER 0 — NOT A SCOPE QUESTION. NOTHING SHIPS UNTIL THESE ARE TRUE.
      healthy 0.1 migrates a *different* database than the one this host serves
      (PP-060), so the apply path needs its own decision, not just a green
      deploy.
+     RE-MEASURED AGAIN the same day, at main = 6869c0e5: even "125" is
+     historical — the journal is now 126 entries (newest
+     0125_declared_not_null_columns, added by #2518 as register PP-067) across
+     251 .sql files in drizzle/migrations. The count moving three times inside
+     one day (122 → 125 → 126) is precisely why this bullet refuses to state a
+     live pending number: a figure is not a durable reading here, the tooling
+     is. The register does carry a dated one — PP-067 records 27 entries
+     outstanding on the 126-entry journal, after PP-060 counted 24 and #2444
+     counted 26 — and that is what to quote, with its date, rather than
+     re-deriving a number in a planning file.
 0.3  The public repo leaks live infrastructure.  [tip redacted in PR #2469; the
      account in 0.4 still needs rotating — see the caveat there]
      Measured: 12 occurrences of publicly-routable addresses belonging to THIS
@@ -137,6 +169,24 @@ LAYER 0 — NOT A SCOPE QUESTION. NOTHING SHIPS UNTIL THESE ARE TRUE.
      lists it. "Merged to main" is therefore not a release-integrity signal.
      RE-CONFIRMED 2026-10-10: still 404. This is the half of #141 that is not
      code — it needs the owner to turn it on.
+     SECOND PASS the same day, at main = b49021db: the claim above holds, and it
+     deserved better evidence than an inference from a status code. The two
+     endpoints were measured apart. GET branches/main/protection answers 404
+     with the message "Branch not protected" — GitHub's documented answer for a
+     branch with no protection rule, not a token or permissions failure, which
+     is why the 404 here is the finding rather than a dead end. And GET
+     branches/main answers 200 whose body states the same thing positively:
+     "protected": false, with "protection": {"enabled": false,
+     "required_status_checks": {"enforcement_level": "off"}}. So the repo's
+     settings are readable from this account, and main's unprotected state is
+     now a read fact on two endpoints instead of one absence. That changes
+     #141's shape in one practical way: the acceptance test for turning
+     protection on is this pair flipping — 404 "Branch not protected" becomes
+     200, and enforcement_level stops reading "off" — so anyone with read
+     access can verify it, and #136 can make CI verify it if the release path
+     wants the assertion. What did NOT change: this is still owner/repo-settings
+     work no PR can perform, docs/runbooks/branch-protection.md is still written
+     and unwired, and "merged to main" is still not a release-integrity signal.
 0.6  A tag does not identify a build. v0.9.0 was tagged at ef6916ae and
      package.json was bumped to 0.9.0 afterwards in d5a43625. Fix the habit
      before any 1.0.0 tag: bump and tag in the same commit.
@@ -163,6 +213,19 @@ LAYER 0 — NOT A SCOPE QUESTION. NOTHING SHIPS UNTIL THESE ARE TRUE.
      shape tree-wide with a planted-violation control and a scan-floor so
      silence cannot pass as compliance). OPEN, green, unmerged — so 0.7 is
      fixed-in-review, not fixed.
+     STATUS + COORDINATE CORRECTION, same day, at main = b49021db: #2514 is
+     MERGED (merge 5ac36d02), so 0.7 is fixed at the tip and the guard now
+     runs on every CI job rather than in a branch. The bullet's own
+     coordinates moved in the merge, which is exactly the rot guard:coords
+     exists to catch — app/api/health/route.ts's fallback is at **:94**, not
+     :92 (the edit added two lines above it), while sentry.client.config.ts:80
+     and sentry.server.config.ts:79 are still exact, and resolveRelease() is
+     still at sentry.server.config.ts:24. Re-read at b49021db all three now
+     say `|| 'unknown'`. The worker/cron reachability argument above is
+     untouched by the merge — it was the reason this was worth fixing at all,
+     and it still holds: '1.0.0' was never carried by any release
+     package.json (tags stop at v0.9.0), so a process with no
+     npm_package_version was printing a version that does not exist.
 
 ================================================================================
 LAYER 1 — STABLE. SHIP IT IN 1.0.0 AND CLAIM IT.
@@ -262,17 +325,62 @@ LAYER 2 — WORKS AFTER A FEW TWEAKS. SHIP IN 1.0.0 ONLY AFTER THE TWEAK.
      It cannot be a release gate in its current state.
      RE-MEASURED 2026-10-10: the journal half of this is done — both tags are
      journalled (0059 at _journal.json:422, 0091 present too) with their .sql
-     and .down.sql on disk, which is what CI's invisible-migration guard enforces.
+     and .down.sql on disk, and `npm run guard:chain` agrees: "125 up-file(s) ·
+     125 journal entries · 0 defect(s), 0 baselined" — the 0 baselined is the
+     point, nothing is being excused any more. The duplicated idx/when pair that
+     docs/migration-chain-state.md recorded on 2026-10-03 is gone too (all 125
+     entries carry a distinct idx in a clean 0..124 and a distinct when, read out
+     of the manifest rather than inferred from the guard).
      The gate half is not: verify-migration-chain.ts:19 still says "KNOWN TO
      FAIL TODAY" in the present tense, and the reason it names is structural, not
-     a missing entry — 0000_init and 0037_flat_sir_ram are two overlapping
-     lineages of the same schema and cannot both be applied
-     (docs/migration-chain-state.md). So "repair the journal, then make the
-     check pass" is now only half a plan: the remaining work is choosing between
-     re-cutting those lineages and deleting the check. Do not read 2.8 as
-     closed, and do not gate a release on it. Note that
-     docs/migration-chain-state.md:8 still describes 0059/0091 as missing, so
-     that sentence contradicts main as of today.
+     a missing entry — the init migration and the drizzle-kit snapshot lineage
+     overlap and cannot both be applied (docs/migration-chain-state.md). Two
+     cautions found while re-checking that reason: the comment names
+     "0037_flat_sir_ram", and no such file exists on main — the snapshot is
+     0002_flat_sir_ram (journal idx 2, 74 CREATE TABLE) while 0037 is
+     tenant_isolation_hardening; and "KNOWN TO FAIL TODAY" is a comment, so the
+     last empirical fresh-DB run is still 2026-08-29's. The verdict is restated
+     from the record, not re-run today: verifying it needs a scratch database,
+     and this session does not point a migration runner at a live or shared
+     one. So "repair the journal, then make the check pass" is now only half a
+     plan: the remaining work is choosing between re-cutting those lineages and
+     deleting the check. Do not read 2.8 as closed, and do not gate a release on
+     it. The stale sentence this note ended on — that
+     docs/migration-chain-state.md still described 0059/0091 as missing, which
+     contradicted main — is corrected in PR #2519, merged as 6869c0e5: the chain
+     note now carries the same re-measurement as 2.8, and its 2026-10-03 block
+     is left in place beneath it so the sequence of readings stays auditable.
+     RE-MEASURED AGAIN the same day, at main = 6869c0e5: every count in the
+     block above is already historical, and that is the finding rather than an
+     apology. The journal was 122 entries when this bullet was written, 125 at
+     the pass above, and is 126 now — #2518 added
+     0125_declared_not_null_columns (register PP-067) while these two documents
+     were in review. `npm run guard:chain` at 6869c0e5 reads "126 up-file(s) ·
+     126 journal entries · 0 defect(s), 0 baselined", and all 126 entries still
+     carry a distinct idx (contiguous 0..125) and a distinct when, read out of
+     the manifest again rather than inferred from the guard. Two things 2.8
+     must now say that it could not before:
+     (1) a chain build that finishes without error is not a chain build that
+     produces the declared schema. 0071_schema_drift_backfill.sql re-created
+     four tables with the NOT NULLs it needed, as CREATE TABLE IF NOT EXISTS;
+     on any database applying the chain in order 0059 has already created those
+     names, so the statement parses, discards itself and its column list never
+     executes — db:bootstrap built six columns nullable that drizzle/schema
+     declares NOT NULL. PP-067 also records that 0125's first draft reproduced
+     PP-058 by copying 0109's app.is_super_admin GUC, which none of the three
+     tenant_isolation policies on those tables branch on. So re-cutting the two
+     lineages is necessary but NOT sufficient, and db:verify-chain's "does it
+     apply" question has to be paired with a schema-equality screen when it is
+     re-run. That measurement is PP-067's, quoted here, not this session's.
+     (2) rollback coverage is unpoliced and the green guard cannot see it:
+     scripts/check-migration-chain.mjs:47 filters .down.sql out, so it compares
+     up-files against the journal only. Measured by hand: 126 up-files against
+     125 .down.sql — 0036_backup_records_checksum.sql has no down path, so a
+     db:migrate forward is not reversible past 0036 on the statement runner.
+     Recorded, not patched: adding a down migration is a new file an owner
+     should see first. The live pending count is likewise quoted from the
+     register (PP-067: 27 outstanding on a 126-entry journal), because
+     db:status needs DATABASE_URL and this session does not load one.
 2.9  Billing verification. BILLING-VERIFICATION-PLAN-1477.md:426-429 — all four
      P0 boxes unchecked, every Pass/Fail column blank. go-live.md:241 makes
      Stripe test-mode end-to-end (#1477) a precondition of the launch gate.
@@ -310,9 +418,10 @@ LAYER 2 — WORKS AFTER A FEW TWEAKS. SHIP IN 1.0.0 ONLY AFTER THE TWEAK.
      cron on one release id so a 1.0.0 error is attributable to 1.0.0.
      [2026-10-10: re-confirmed as written — :21 still defaults to "" and :45
       still invents build-<epoch>. Read 0.7 and this together, and do not let
-      one excuse the other: #2514 only stops the version field lying when
-      nothing set it. Attributing an error to a release needs SENTRY_RELEASE
-      here plus a tag that identifies a build (0.6), which is #84 and #136.]
+      one excuse the other: #2514, merged as 5ac36d02, only stops the
+      version field lying when nothing set it. Attributing an error to a
+      release needs SENTRY_RELEASE here plus a tag that identifies a build
+      (0.6), which is #84 and #136.]
 2.14 Browser tests exist but never run: tests/e2e/ has 7 Playwright specs
      (auth, contacts, deals, multi-tenant, notifications, smoke) and no workflow
      in .github/workflows mentions playwright.
@@ -464,6 +573,14 @@ WHAT I WOULD DO, IN ORDER
           [2026-10-10: 0.7 is the only one of the four with code in review —
            PR #2514, green, unmerged. 0.5 and 0.6 are owner/repo-settings
            actions that no PR can perform. 2.16 is #136.]
+          [2026-10-10 second pass, at main = b49021db: 0.7 is DONE at the tip —
+           #2514 merged as 5ac36d02 with its guard, so the version field can no
+           longer print a version no release ever carried. 0.5 moved from an
+           inferred 404 to read facts on two endpoints (branches/main answers
+           200 with protected:false and enforcement_level "off"). 0.6 is still
+           an untested habit — tags stop at v0.9.0 and package.json is still
+           0.9.0. 2.16 is still #136: no release.yml, re-verified at b49021db.
+           Three of the four remain; only one of those three is code.]
   Step 4  The seven LAYER 2 items that are credentials or one-line config, not
           code: 2.1, 2.12, 2.15, 2.13.
   Step 5  The LAYER 3 hide pass — flags off, nav entries, 'beta'/'coming soon'
@@ -495,7 +612,17 @@ Open decisions this document needs from you (blocking, one line each):
    external e-sign providers as working 1.0.0 features. That is the remaining
    half of D1/D2, it costs one sentence of positioning, and it is still yours.
    D3's journal-repair half is done (2.8); the "~23" in it is now a floor
-   (0.2), so approve the apply path against a re-measured count, not this one.]
+   (0.2), so approve the apply path against a re-measured count, not this one.
+   Re-measured a second time the same day, at 6869c0e5: that floor moved twice
+   more while this file was in review (journal 122 → 125 → 126, #2518 adding
+   0125_declared_not_null_columns), and the register carries a dated reading —
+   PP-067 records 27 entries outstanding on the 126-entry journal. So D3 is
+   approvable against a number with a date attached, 27 at 6869c0e5, and #137
+   should re-run db:status rather than trust any figure written here. The other
+   half of D3 is not a count at all: db:verify-chain's fate (2.8) is now harder,
+   because 0125/PP-067 proved a chain build can finish clean and still not
+   produce the declared schema, so re-cutting the two lineages is necessary but
+   not sufficient.]
   D1  Is AI in 1.0.0 or in 1.1?                        -> 3.1
   D2  Do external e-sign providers stay hidden?        -> 3.2
   D3  Approve applying the ~23 migrations + journal repair?  -> 0.2, 2.8

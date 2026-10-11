@@ -5,7 +5,7 @@
  */
 import { verifySecret } from '@/lib/crypto';
 import { logError } from '@/lib/errors-server';
-import { acquireLock } from '@/lib/cache';
+import { refuseIfCronLockHeld } from '@/lib/cron/cron-lock';
 import { processWarmUp, type WarmUpResult } from '@/lib/email/warmup';
 import { NextRequest, NextResponse } from 'next/server';
 import { sweepTenants } from '@/lib/cron/tenant-scope';
@@ -16,10 +16,8 @@ export async function POST(req: NextRequest) {
 
   // Distributed dedup guard (#1422): skip when another scheduler
   // instance already fired this job within its interval.
-  const lock = await acquireLock('cron:warmup-emails', 1800);
-  if (!lock.acquired) {
-    return NextResponse.json({ ok: true, skipped: true, reason: 'lock-held' });
-  }
+  const refusal = await refuseIfCronLockHeld('cron:warmup-emails', 1800);
+  if (refusal) return refusal;
 
   try {
     // processWarmUp() keeps its own per-run counters; they are summed across the

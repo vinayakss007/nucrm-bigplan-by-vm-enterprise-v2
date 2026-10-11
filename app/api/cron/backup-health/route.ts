@@ -4,7 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { apiError } from '@/lib/api-error';
-import { acquireLock } from '@/lib/cache';
+import { refuseIfCronLockHeld } from '@/lib/cron/cron-lock';
 import { verifySecret } from '@/lib/crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { alertSuperAdmin } from '@/lib/email/service';
@@ -30,10 +30,8 @@ export async function POST(request: NextRequest) {
 
   // Distributed dedup guard (#1422): skip when another scheduler
   // instance already fired this job within its interval.
-  const lock = await acquireLock('cron:backup-health', 1800);
-  if (!lock.acquired) {
-    return NextResponse.json({ ok: true, skipped: true, reason: 'lock-held' });
-  }
+  const refusal = await refuseIfCronLockHeld('cron:backup-health', 1800);
+  if (refusal) return refusal;
 
   try {
     const lastBackup = await db.query.backupRecords.findFirst({

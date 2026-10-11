@@ -5,7 +5,7 @@
  */
 import { verifySecret } from '@/lib/crypto';
 import { logError } from '@/lib/errors-server';
-import { acquireLock } from '@/lib/cache';
+import { refuseIfCronLockHeld } from '@/lib/cron/cron-lock';
 import { NextRequest, NextResponse } from 'next/server';
 import { retryFailedWebhooks, drainDeletedWebhookQueue } from '@/lib/webhooks';
 import { purgeOldDLQEntries } from '@/lib/webhooks/dlq';
@@ -22,10 +22,8 @@ export const POST = withApiRoute(async (req: NextRequest) => {
 
   // Distributed dedup guard (#1422): skip when another scheduler
   // instance already fired this job within its interval.
-  const lock = await acquireLock('cron:retry-webhooks', 300);
-  if (!lock.acquired) {
-    return NextResponse.json({ ok: true, skipped: true, reason: 'lock-held' });
-  }
+  const refusal = await refuseIfCronLockHeld('cron:retry-webhooks', 300);
+  if (refusal) return refusal;
   try {
     await setSuperAdminContext();
     const retried = await retryFailedWebhooks();

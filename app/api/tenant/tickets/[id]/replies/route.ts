@@ -41,7 +41,14 @@ export const POST = withApiRoute(async (request: NextRequest, { params }: { para
     })
       .from(supportTickets)
       .leftJoin(contacts, eq(contacts.id, supportTickets.contactId))
-      .where(and(eq(supportTickets.id, id), isNull(supportTickets.deletedAt)))
+      // #2525: scoped by tenant. Unscoped, this read leaked another tenant's
+      // subject/status/priority and its contact's name and email into
+      // `mergeVars`, which are then interpolated into the stored reply body.
+      .where(and(
+        eq(supportTickets.tenantId, ctx.tenantId),
+        eq(supportTickets.id, id),
+        isNull(supportTickets.deletedAt),
+      ))
       .limit(1);
 
     if (!ticket) return NextResponse.json({ error: 'Ticket not found' }, { status: 404 });
@@ -72,9 +79,12 @@ export const POST = withApiRoute(async (request: NextRequest, { params }: { para
       });
 
       if (isFirstResponse) {
+        // #2525: the write had the same missing scope as the read — a foreign
+        // id could have another tenant's ticket marked as first-responded,
+        // which is SLA/metric tampering, not just a leak.
         await tx.update(supportTickets)
           .set({ firstResponseAt: new Date() })
-          .where(eq(supportTickets.id, id));
+          .where(and(eq(supportTickets.tenantId, ctx.tenantId), eq(supportTickets.id, id)));
       }
     });
 

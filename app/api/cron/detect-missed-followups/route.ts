@@ -5,7 +5,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { logError } from '@/lib/errors-server';
-import { acquireLock } from '@/lib/cache';
+import { refuseIfCronLockHeld } from '@/lib/cron/cron-lock';
 import { apiError } from '@/lib/api-error';
 import { verifySecret } from '@/lib/crypto';
 import { db } from '@/drizzle/db';
@@ -20,10 +20,8 @@ export async function POST(req: NextRequest) {
 
   // Distributed dedup guard (#1422): skip when another scheduler
   // instance already fired this job within its interval.
-  const lock = await acquireLock('cron:detect-missed-followups', 1200);
-  if (!lock.acquired) {
-    return NextResponse.json({ ok: true, skipped: true, reason: 'lock-held' });
-  }
+  const refusal = await refuseIfCronLockHeld('cron:detect-missed-followups', 1200);
+  if (refusal) return refusal;
 
   try {
     const now = new Date();

@@ -11,6 +11,7 @@ import { billingEvents, subscriptions } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
 import { isStripeConfigured, resumeSubscription } from '@/lib/stripe';
 import { deriveSubscriptionActionIdempotencyKey } from '@/lib/billing-idempotency';
+import { currencyFromProvider } from '@/lib/billing-currency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
@@ -81,7 +82,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       await tx.insert(billingEvents).values({
         tenantId: ctx.tenantId,
         eventType: 'subscription.resumed',
-        currency: 'usd',
+        currency: currencyFromProvider(stripeSub),
         stripeSubscriptionId: currentSub.stripeSubscriptionId,
         metadata: {
           plan_id: currentSub.planId || 'none',

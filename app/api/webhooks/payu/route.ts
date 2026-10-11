@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { safeApiError } from '@/lib/api-error';
 import { logError } from '@/lib/errors-server';
 import { isPayUConfigured, verifyPayUResponse } from '@/lib/payu';
 import { db } from '@/drizzle/db';
@@ -297,7 +298,10 @@ export async function POST(request: NextRequest) {
     });
   } catch (err: unknown) {
     void logError({ error: err, context: 'webhooks/payu callback' });
-    const message = err instanceof Error ? err.message : 'Internal server error';
-    return NextResponse.json({ error: message }, { status: 500 });
+    // #2527: this is a public payment callback, and a DB failure here arrives as
+    // `Failed query: <full SQL> params: <every bound value>` — customer email/phone,
+    // invoice ids, tenant UUIDs. `apiError` scrubs driver text in every environment
+    // (#2285); echoing `err.message` straight into the body bypassed that.
+    return safeApiError(err);
   }
 }

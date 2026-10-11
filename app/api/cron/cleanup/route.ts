@@ -5,7 +5,7 @@
  */
 import { apiError } from '@/lib/api-error';
 import { logError } from '@/lib/errors-server';
-import { acquireLock } from '@/lib/cache';
+import { refuseIfCronLockHeld } from '@/lib/cron/cron-lock';
 import { verifySecret } from '@/lib/crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
@@ -85,10 +85,8 @@ export const POST = withApiRoute(async (request: NextRequest) => {
 
   // Distributed dedup guard (#1422): skip when another scheduler
   // instance already fired this job within its interval.
-  const lock = await acquireLock('cron:cleanup', 3600);
-  if (!lock.acquired) {
-    return NextResponse.json({ ok: true, skipped: true, reason: 'lock-held' });
-  }
+  const refusal = await refuseIfCronLockHeld('cron:cleanup', 3600);
+  if (refusal) return refusal;
   try {
     const r: Record<string, number> = {};
 

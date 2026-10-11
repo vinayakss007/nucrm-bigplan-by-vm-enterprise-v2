@@ -4,7 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { verifySecret } from '@/lib/crypto';
-import { acquireLock } from '@/lib/cache';
+import { refuseIfCronLockHeld } from '@/lib/cron/cron-lock';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { tenants, users, activities } from '@/drizzle/schema';
@@ -21,10 +21,8 @@ export async function POST(request: NextRequest) {
 
   // Distributed dedup guard (#1422): skip when another scheduler
   // instance already fired this job within its interval.
-  const lock = await acquireLock('cron:trial-check', 3600);
-  if (!lock.acquired) {
-    return NextResponse.json({ ok: true, skipped: true, reason: 'lock-held' });
-  }
+  const refusal = await refuseIfCronLockHeld('cron:trial-check', 3600);
+  if (refusal) return refusal;
   try {
     let expired=0, warned=0;
 

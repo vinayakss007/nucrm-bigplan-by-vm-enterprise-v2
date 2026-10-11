@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { safeApiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
 import { createCheckoutSession } from '@/lib/stripe';
 import { BUILTIN_MODULES } from '@/lib/modules/registry';
@@ -79,7 +80,6 @@ export const POST = withApiRoute(async (req: NextRequest) => {
 
     return NextResponse.json({ url: session.url, session_id: session.id });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Internal server error';
-    return NextResponse.json({ error: message }, { status: 500 });
+    return safeApiError(err); // #2527
   }
 });
