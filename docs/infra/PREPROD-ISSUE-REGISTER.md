@@ -17,7 +17,7 @@
 > issue. Written as **PP-070** while **#2531** merged carrying **PP-069** and **#2548** carrying **PP-071** —
 > the earlier merge keeps the number and the later one moves, so this entry stays 070 and no ID is
 > reused; this bullet re-pins the `docs/README.md:75` pointer to the keep-the-entry rule's line on this
-> merged tree (`:4658`), and **#2507** (**PP-065**) re-pins the same sentence from its own tree, so
+> merged tree (`:4662`), and **#2507** (**PP-065**) re-pins the same sentence from its own tree, so
 > whichever of the two docs-adjacent PRs merges last re-derives it.
 > - **Previous:** 2026-10-10 (UTC) — **PP-071**: **PP-069**'s rule is per table but not per *write*, and three
 > of its four inputs are not what the database holds. Measured against a fresh chain build of this tree — **274**
@@ -4550,10 +4550,14 @@ into the column-drift PR. `0125`'s footer names the gap and leaves it here on pu
   12/12 — text-level ordering pins on the real file (setter-before-write, dedupe-before-constrain,
   orphan-fix-first, no executable `is_super_admin`, honest down-rollback); schema-drift guard
   2255 green with `idx_segment_members_pk → uq_segment_members_segment_entity` allowlisted as a
-  supersession until `0126` applies.
+  supersession until `0126` applies; and **#2264**'s own pin — "`KNOWN_REDUNDANT_DUPLICATE_INDEXES`
+  is literally `{}`" — was written for a tree with no pending supersession, so it now asserts what it
+  meant: no `DROPPED` name re-enters the map and every surviving entry names a declared index
+  (`tests/unit/dup-index-drop-2264.test.ts`, red on the first CI run of this PR, green after).
 - **Files:** `drizzle/migrations/0126_segment_members_primary_key.sql` (+ `.down.sql`),
   `drizzle/migrations/meta/_journal.json`, `drizzle/schema/segments.ts`,
-  `tests/unit/segment-members-pk-2515.test.ts`, `tests/unit/schema-drift-guard-2255.test.ts`.
+  `tests/unit/segment-members-pk-2515.test.ts`, `tests/unit/schema-drift-guard-2255.test.ts`,
+  `tests/unit/dup-index-drop-2264.test.ts`.
 - **Related:** **#2515**, **PP-058** (RLS-blind migration writes), **PP-067** (the inert-marker
   measurement this migration obeys), **PP-069** / **#2516** (the per-table rule it satisfies),
   **#2509** / `0125` (the NOT NULL half that stopped short of this on purpose).
