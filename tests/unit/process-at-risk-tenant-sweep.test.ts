@@ -243,7 +243,10 @@ describe('process-at-risk cron — per-tenant sweep', () => {
     const { POST } = await import('@/app/api/cron/process-at-risk/route');
     const body = await (await POST(makeRequest())).json();
 
-    expect(body.skipped).toBe(true);
+    // #2539: a skipped run is not a run. `ok: true` was the mask; the 423 itself
+    // is pinned for all 22 routes in tests/unit/cron-lock-refusal-2539.test.ts.
+    expect(body.ok).toBe(false);
+    expect(body.skipped).toBe('lock-held');
     expect(mockSweepTenants).not.toHaveBeenCalled();
     expect(mockGetAtRiskDeals).not.toHaveBeenCalled();
   });

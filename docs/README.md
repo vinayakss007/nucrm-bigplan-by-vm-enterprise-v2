@@ -43,8 +43,12 @@ preprod database on 2026-10-04. The numbers they carry are reproducible by the c
 "How current is 'current'?" below.
 
 Two files are current by definition, being the implementation rather than a description of it:
-[`.github/workflows/ci.yml`](../.github/workflows/ci.yml) enforces exactly `guard:rls`, `guard:csrf`,
-`guard:schemas`, `guard:boundaries`, `guard:filesize`, `guard:any-suppressions`, `guard:chain`; and
+[`.github/workflows/ci.yml`](../.github/workflows/ci.yml) enforces **16** guards by alias —
+`guard:any-suppressions`, `guard:boundaries`, `guard:chain`, `guard:coords`, `guard:counters`, `guard:cron-lock`,
+`guard:csrf`, `guard:csv`, `guard:filesize`, `guard:migration-rls`, `guard:portal-rls-context`,
+`guard:portal-softdelete`, `guard:public-projection`, `guard:public-ratelimit`, `guard:rls`, `guard:schemas` — plus **2**
+invoked as direct `node` commands (`scripts/check-audit-baseline.mjs`, `scripts/check-semgrep-baseline.mjs`; measured
+2026-10-10, re-measured by this PR, which added `guard:cron-lock`. The list was 7 when this paragraph was first written).
 [`scripts/migration-chain-baseline.json`](../scripts/migration-chain-baseline.json) holds the five
 baselined chain defects. `npm run db:verify-isolation` is **not** in CI — nothing runs it on a push.
 
@@ -68,13 +72,13 @@ The bulk of the tree: frozen snapshots of workstreams that ended, most before th
 
 **Why they are kept rather than deleted.** The register states the rule — a fixed entry stays because
 the evidence is what makes it useful as a learning document, and because the companion lessons doc
-references it — at `docs/infra/PREPROD-ISSUE-REGISTER.md:4452`, re-pinned by **PP-065**. The pointer
+references it — at `docs/infra/PREPROD-ISSUE-REGISTER.md:4631`, re-pinned by **PP-065**. The pointer
 it replaced (`:1598`) had drifted 2,315 lines and was still naming a `**Files:**` entry inside PP-040,
 because `guard:coords` reads the citations the register makes _outward_ and never the ones other
-documents make _into_ it; merging PP-064, PP-066, PP-067, PP-068, **#2511**'s PP-061 bullet and
-**#2531**'s PP-069 bullet (`:4416`) and this entry's each moved the rule again, so the re-pin has now
-run seven times — while **#2534** re-pins the same sentence as **PP-070** from its tree and the last
-docs PR to merge re-measures. Same here — these files are cited by PP numbers, ADRs, commit messages and each
+documents make _into_ it; merging PP-064, PP-066, PP-067 and PP-068, **#2511**'s PP-061 bullet,
+**#2531**'s PP-069 bullet (`:4416`), **#2548**'s PP-071 bullet (`:4534`) and this entry's each moved
+the rule again, so the re-pin has now run eight times — while **#2534** re-pins the same sentence as
+**PP-070** from its tree and the last docs PR to merge re-measures. Same here — these files are cited by PP numbers, ADRs, commit messages and each
 other. `MASTER_PLAN.md` and `ISSUES.md`
 read like current state and are not; that is a labelling failure, and the fix is labelling, not `rm`.
 

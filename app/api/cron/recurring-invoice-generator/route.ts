@@ -27,7 +27,7 @@
  * template and keeps advancing.
  */
 import { verifySecret } from '@/lib/crypto';
-import { acquireLock } from '@/lib/cache';
+import { refuseIfCronLockHeld } from '@/lib/cron/cron-lock';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { invoices, invoiceLineItems } from '@/drizzle/schema';
@@ -107,10 +107,8 @@ export async function POST(request: NextRequest) {
 
   // Distributed dedup guard: skip when another scheduler instance already fired
   // this job within its interval.
-  const lock = await acquireLock('cron:recurring-invoice-generator', 3600);
-  if (!lock.acquired) {
-    return NextResponse.json({ ok: true, skipped: true, reason: 'lock-held' });
-  }
+  const refusal = await refuseIfCronLockHeld('cron:recurring-invoice-generator', 3600);
+  if (refusal) return refusal;
 
   try {
     // The due cutoff is a UTC calendar day. The previous form was local midnight

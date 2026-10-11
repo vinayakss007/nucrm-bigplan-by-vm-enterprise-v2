@@ -5,7 +5,7 @@
  */
 import { apiError } from '@/lib/api-error';
 import { verifySecret } from '@/lib/crypto';
-import { acquireLock } from '@/lib/cache';
+import { refuseIfCronLockHeld } from '@/lib/cron/cron-lock';
 import { NextRequest, NextResponse } from 'next/server';
 import { backupRecords, backupAlerts, errorLogs } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
@@ -26,10 +26,8 @@ export async function POST(request: NextRequest) {
   }
 
   // Distributed dedup guard (#1255): never run two backups concurrently.
-  const lock = await acquireLock('cron:backup', 7200);
-  if (!lock.acquired) {
-    return NextResponse.json({ ok: true, skipped: true, reason: 'lock-held' });
-  }
+  const refusal = await refuseIfCronLockHeld('cron:backup', 7200);
+  if (refusal) return refusal;
 
   const requestedType = new URL(request.url).searchParams.get('type') || 'full';
   // Validated before it reaches either the backup_records enum or the filename:

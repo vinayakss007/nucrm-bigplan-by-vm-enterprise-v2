@@ -18,19 +18,30 @@
  *     that table: measured `rls_enabled`/`rls_forced` on preprod, invisible to
  *     the policy-only rule, found by the `tenant_id`-column rule. If that
  *     union ever degrades to policy-only, PP-058's own case goes blind;
- *   - `analyzeFile` flags an un-mitigated tenant write and does not claim a
- *     dynamic `EXECUTE format('UPDATE %I …')` is clean;
- *   - the mitigation is resolved PER TABLE (#2516): `app.is_super_admin` is
- *     accepted only where a written table's own policies read it — `0125`'s
- *     first draft set the marker over three `tenant_isolation`-only tables
- *     and passed while RLS-blind — so `collectPolicyGucs` and the
- *     partial-mitigation shape are pinned here too;
+ *   - `analyzeFile` flags an unresolved tenant write and does not claim a
+ *     dynamic `EXECUTE format('UPDATE %I …')` is clean. Since **#2516** the
+ *     answer is per *table*: the file-global `app.is_super_admin` regex was
+ *     replaced by reading the policies the chain leaves on each written table,
+ *     so these tests pin both directions of that — the marker helps
+ *     `webhook_events` (`0109`'s real case) and does nothing for
+ *     `custom_entities`/`custom_entity_data`/`segment_members`, and a marker
+ *     that appears only in a comment is not SQL. **#2545** tightens the same
+ *     contract on the axes #2516's merged fix could not see: the resolution is
+ *     per *(table, command)*, the policy text is read through `format()`/`EXECUTE`
+ *     loops and both `current_setting` spellings, the corpus is walked in
+ *     journal order with `DROP POLICY` honoured, a dynamic write needs
+ *     `app.current_tenant` whatever a mentioned table reads, and only SQL in the
+ *     executable scope counts as a marker at all;
+ *   - `orderedCorpus` reads `meta/_journal.json`, because that is the order
+ *     `scripts/migrate.ts:143` applies files in and it differs from the sorted
+ *     filenames at 20 of 126 positions (`0091`/`0092` land after `0112`), which
+ *     decides the *last* writer of `deal_stages.tenant_isolation`;
  *   - `createTableTenantNames` must not let *formatting* decide safety. The
  *     first version required the closing paren on its own line, so a compact
  *     `CREATE TABLE … tenant_id …);` was never derived as tenant-scoped — the
  *     guard's blind spot was the rule itself;
  *   - the CLI's exit codes, because that is the whole CI contract: 0 clean, 1
- *     on a new offender (naming it), 0 once the GUC is set, 1 rather than a
+ *     on a new offender (naming it), 0 once the write resolves, 1 rather than a
  *     silent pass when the baseline is missing.
  */
 import { describe, it, expect, afterAll } from 'vitest';
@@ -43,10 +54,14 @@ import {
   stripComments,
   executableScope,
   collectTenantScoped,
-  collectPolicyGucs,
   createTableTenantNames,
   analyzeFile,
+  orderedCorpus,
+  buildPolicyMap,
 } from '../../scripts/check-migration-rls-dml.mjs';
+import {
+  TENANT_GUC, SUPER_ADMIN_GUC, writeIsVisible, gatingPolicies,
+} from '../../scripts/rls-policy-map.mjs';
 
 const ROOT = join(import.meta.dirname!, '../..');
 const MIGRATIONS_DIR = join(ROOT, 'drizzle/migrations');
@@ -56,7 +71,14 @@ const allSql = readdirSync(MIGRATIONS_DIR)
   .map((f) => readFileSync(join(MIGRATIONS_DIR, f), 'utf8'));
 
 const derived = collectTenantScoped(allSql);
-const derivedGucs = collectPolicyGucs(allSql);
+
+// The real chain, in apply order — the same map the guard builds. Every
+// per-table assertion below is against this, so a policy edit that removes a
+// GUC branch changes the verdict here and nowhere else.
+const corpus = orderedCorpus(MIGRATIONS_DIR);
+const policyMap = buildPolicyMap(corpus.ordered);
+const SUPER_ONLY = new Set([SUPER_ADMIN_GUC]);
+const TENANT_ONLY = new Set([TENANT_GUC]);
 
 describe('executableScope (what actually runs at migration time)', () => {
   it('keeps a DO block body', () => {
@@ -174,36 +196,69 @@ describe('analyzeFile', () => {
   const tenantScoped = new Set(['leads', 'deal_stages']);
 
   it('flags an UPDATE of a tenant table', () => {
-    const a = analyzeFile('UPDATE leads SET lead_oid = \'x\' WHERE lead_oid IS NULL;', tenantScoped);
-    expect(a.mitigated).toBe(false);
+    const a = analyzeFile('UPDATE leads SET lead_oid = \'x\' WHERE lead_oid IS NULL;', tenantScoped, policyMap);
+    expect([...a.gucs]).toEqual([]);
     expect(a.tenantWrites.map((w) => `${w.kind}:${w.table}`)).toEqual(['update:leads']);
+    expect(a.blind.map((w) => `${w.kind}:${w.table}`)).toEqual(['update:leads']);
+    expect(a.blind[0].why).toBe('no-guc-set');
   });
 
   it('flags DELETE and INSERT too', () => {
     const a = analyzeFile(
       'DELETE FROM leads WHERE 1=1; INSERT INTO deal_stages (id) VALUES (1);',
       tenantScoped,
+      policyMap,
     );
     expect(a.tenantWrites.map((w) => w.kind).sort()).toEqual(['delete', 'insert']);
+    expect(a.blind.map((w) => w.kind).sort()).toEqual(['delete', 'insert']);
   });
 
   it('does not flag a table that is not tenant-scoped', () => {
-    const a = analyzeFile('UPDATE drizzle.__drizzle_migrations SET x = 1;', tenantScoped);
+    const a = analyzeFile('UPDATE drizzle.__drizzle_migrations SET x = 1;', tenantScoped, policyMap);
     expect(a.tenantWrites).toEqual([]);
+    expect(a.blind).toEqual([]);
   });
 
-  it('honours the transaction-local super-admin GUC where webhook_events policies read it', () => {
+  it('accepts app.current_tenant on any tenant table, which is the shape 0125 uses', () => {
     const sql = [
+      'DO $$',
+      'DECLARE t record;',
+      'BEGIN',
+      '  FOR t IN SELECT id FROM tenants LOOP',
+      "    PERFORM set_config('app.current_tenant', t.id::text, true);",
+      '    UPDATE custom_entities SET slug = lower(slug) WHERE slug IS NULL;',
+      '  END LOOP;',
+      'END $$;',
+    ].join('\n');
+    const a = analyzeFile(sql, new Set(['custom_entities']), policyMap);
+    expect(a.blind).toEqual([]);
+    expect(a.tenantWrites.map((w) => w.table)).toEqual(['custom_entities']);
+  });
+
+  it('resolves the marker PER TABLE — 0109\'s webhook_events, but not the tables of #2516', () => {
+    // Same two lines of SQL, opposite answers. The old rule (`MITIGATION.test
+    // (rawSql)` over the whole file) called both clean; only one of them is.
+    const webhook = analyzeFile([
       'DO $$',
       'BEGIN',
       "  PERFORM set_config('app.is_super_admin', 'true', true);",
       '  UPDATE webhook_events SET created_at = processed_at WHERE created_at IS NULL;',
       'END $$;',
-    ].join('\n');
-    const policyGucs = new Map([['webhook_events', new Set(['current_tenant', 'is_super_admin'])]]);
-    const a = analyzeFile(sql, new Set(['webhook_events']), policyGucs);
-    expect(a.mitigated).toBe(true);
-    expect(a.tenantWrites.map((w) => w.table)).toEqual(['webhook_events']);
+    ].join('\n'), new Set(['webhook_events']), policyMap);
+    expect(webhook.blind).toEqual([]);
+
+    for (const table of ['custom_entities', 'custom_entity_data', 'segment_members']) {
+      const a = analyzeFile([
+        'DO $$',
+        'BEGIN',
+        "  PERFORM set_config('app.is_super_admin', 'true', true);",
+        `  UPDATE ${table} SET name = lower(name) WHERE name IS NOT NULL;`,
+        'END $$;',
+      ].join('\n'), new Set([table]), policyMap);
+      expect(a.blind.map((w) => `${w.kind}:${w.table}`), table).toEqual([`update:${table}`]);
+      expect(a.blind[0].why, table).toBe('guc-not-gated-here');
+      expect(a.blind[0].expected, table).toEqual([TENANT_GUC]);
+    }
   });
 
   it('treats dynamic EXECUTE format() as an unknown target, not a clean one', () => {
@@ -216,168 +271,259 @@ describe('analyzeFile', () => {
       '  END LOOP;',
       'END $$;',
     ].join('\n');
-    const a = analyzeFile(sql, tenantScoped);
+    const a = analyzeFile(sql, tenantScoped, policyMap);
     expect(a.dynamic).toBe(true);
     expect(a.tenantWrites).toEqual([]);
     expect(a.dynamicOverTenantTable).toBe(true);
+    expect(a.dynamicBlind).toBe(true);
+  });
+
+  it('clears a dynamic write once the tenant context is established', () => {
+    const sql = [
+      'DO $$',
+      'BEGIN',
+      "  PERFORM set_config('app.current_tenant', '00000000-0000-0000-0000-000000000001', true);",
+      "  EXECUTE format('DELETE FROM %I', 'leads');",
+      'END $$;',
+    ].join('\n');
+    const a = analyzeFile(sql, tenantScoped, policyMap);
+    expect(a.dynamicOverTenantTable).toBe(true);
+    expect(a.dynamicBlind).toBe(false);
   });
 
   it('does not claim a dynamic write over no tenant table', () => {
     const a = analyzeFile(
       "DO $$ BEGIN EXECUTE format('DELETE FROM %I', 'some_plain_config'); END $$;",
       tenantScoped,
+      policyMap,
     );
     expect(a.dynamic).toBe(true);
     expect(a.dynamicOverTenantTable).toBe(false);
   });
 
-  it('reads the real 0114 exactly as PP-058 measured it', () => {
-    const raw = readFileSync(join(MIGRATIONS_DIR, '0114_leads_tenant_oid_unique.sql'), 'utf8');
-    const a = analyzeFile(raw, derived.tenantScoped, derivedGucs);
-    expect(a.mitigated).toBe(false);
-    expect(a.tenantWrites.map((w) => `${w.kind}:${w.table}`)).toContain('update:leads');
+  it('reads a marker that exists only in prose as no marker at all (#2516 defect 2)', () => {
+    // The old regex ran against the RAW file, so a header comment describing
+    // the fix was a licence. `--` and /* */ are both stripped before anything
+    // is matched, so this file is judged exactly as if the comment were absent.
+    const withComment = [
+      '/* This repair is done after set_config(\'app.is_super_admin\', \'true\', true). */',
+      '-- (see 0109_webhook_events_created_at_not_null.sql for the set_config pattern)',
+      'UPDATE segment_members SET member_id = lower(member_id);',
+    ].join('\n');
+    expect(/set_config\(\s*'app\.is_super_admin'/i.test(withComment)).toBe(true);
+    const a = analyzeFile(withComment, new Set(['segment_members']), policyMap);
+    expect([...a.gucs]).toEqual([]);
+    expect(a.blind.map((w) => `${w.kind}:${w.table}`)).toEqual(['update:segment_members']);
   });
 
-  it('reads the real 0109 as mitigated for the right reason (#2516)', () => {
+  it('reads the real 0114 exactly as PP-058 measured it', () => {
+    const raw = readFileSync(join(MIGRATIONS_DIR, '0114_leads_tenant_oid_unique.sql'), 'utf8');
+    const a = analyzeFile(raw, derived.tenantScoped, policyMap);
+    expect([...a.gucs]).toEqual([]);
+    expect(a.tenantWrites.map((w) => `${w.kind}:${w.table}`)).toContain('update:leads');
+    expect(a.blind.map((w) => `${w.kind}:${w.table}`)).toContain('update:leads');
+  });
+
+  it('reads the real 0109 as clean for the right reason (#2516 criterion 4)', () => {
+    // Not "the file mentions the marker" — the policy of the table it writes
+    // actually ORs on it. If a future edit drops that branch, this fails and
+    // 0109 must be re-examined, which is precisely the coupling the old guard
+    // did not have.
     const raw = readFileSync(
       join(MIGRATIONS_DIR, '0109_webhook_events_created_at_not_null.sql'),
       'utf8',
     );
-    const a = analyzeFile(raw, derived.tenantScoped, derivedGucs);
-    expect(a.mitigated).toBe(true);
-    // Not a blanket bypass: the marker it sets is one webhook_events' own
-    // policies (0088) read — remove that evidence and the file must fail.
-    expect(a.gucs.has('is_super_admin')).toBe(true);
-    expect(derivedGucs.get('webhook_events')?.has('is_super_admin')).toBe(true);
-    expect(
-      analyzeFile(raw, derived.tenantScoped, new Map()).mitigated,
-    ).toBe(false);
+    const a = analyzeFile(raw, derived.tenantScoped, policyMap);
+    expect(a.tenantWrites.map((w) => w.table)).toEqual(['webhook_events']);
+    expect(a.blind).toEqual([]);
+    expect(a.gucs.has(SUPER_ADMIN_GUC)).toBe(true);
+    const v = writeIsVisible(policyMap, 'webhook_events', 'update', SUPER_ONLY);
+    expect(v.ok).toBe(true);
+    expect(v.why).toBe('policy-guc');
+    const g = gatingPolicies(policyMap, 'webhook_events', 'update');
+    expect(g.covering.some((p) => p.gucs.has(SUPER_ADMIN_GUC)), 'webhook_events update policy must still read the marker').toBe(true);
   });
 
-  it('reads the real 0125 as mitigated through app.current_tenant, not its marker', () => {
-    const raw = readFileSync(
-      join(MIGRATIONS_DIR, '0125_declared_not_null_columns.sql'),
-      'utf8',
-    );
-    const a = analyzeFile(raw, derived.tenantScoped, derivedGucs);
-    expect(a.mitigated).toBe(true);
-    // PP-067 measured the marker inert on these tables: literal policies read
-    // only current_tenant (segment_members' are built by a loop and unseen).
-    // The file therefore passes on clause (b), and its first draft — marker
-    // alone — must fail, which is the next test.
-    expect([...a.gucs].sort()).toEqual(['current_tenant', 'is_super_admin']);
-    for (const t of ['custom_entities', 'custom_entity_data']) {
-      expect(derivedGucs.get(t)?.has('is_super_admin')).toBe(false);
+  it('keeps the real 0125 clean because it loops the tenant GUC, not because of its marker', () => {
+    const raw = readFileSync(join(MIGRATIONS_DIR, '0125_declared_not_null_columns.sql'), 'utf8');
+    const a = analyzeFile(raw, derived.tenantScoped, policyMap);
+    expect(a.tenantWrites.length).toBeGreaterThan(0);
+    expect(a.blind).toEqual([]);
+    expect(a.gucs.has(TENANT_GUC)).toBe(true);
+    // The marker alone would not have saved it — the three tables gate on the
+    // tenant GUC only.
+    for (const t of ['custom_entities', 'custom_entity_data', 'segment_members']) {
+      expect(writeIsVisible(policyMap, t, 'update', SUPER_ONLY).ok, t).toBe(false);
+      expect(writeIsVisible(policyMap, t, 'update', TENANT_ONLY).ok, t).toBe(true);
     }
   });
 });
 
-describe('per-table mitigation (#2516) — the marker is evidence, not a talisman', () => {
-  // The old rule asked only "does this file mention set_config('app.is_super_admin'
-  // anywhere" and 0125's first draft proved both ways that question lies: the
-  // mention can sit in header prose, and a marker the written table's policies
-  // never read is inert — UPDATE 0, then 23502 on the following SET NOT NULL
-  // (PP-067's measurement for custom_entities/custom_entity_data/segment_members).
+describe('per-table mitigation (#2516, #2545) — the marker is evidence, not a talisman', () => {
+  // #2516 killed the file-global `MITIGATION.test(rawSql)`: a mention of the GUC
+  // was a licence whether it sat in header prose, in a body that never runs at
+  // migration time, or on a table whose policies do not branch on it (PP-067
+  // measured 0125's first draft as `UPDATE 0` then 23502 on the following
+  // `SET NOT NULL`). These are the cases that decide the replacement rule, in
+  // both directions.
   const MARKER = "  PERFORM set_config('app.is_super_admin', 'true', true);\n";
-  const write = (table: string) => `DO $$\nBEGIN\n${MARKER}  UPDATE ${table} SET x = 1;\nEND $$;\n`;
-
-  it('fails a marker over a table whose policies do not read it', () => {
-    const policyGucs = new Map([['custom_entities', new Set(['current_tenant'])]]);
-    const a = analyzeFile(write('custom_entities'), new Set(['custom_entities']), policyGucs);
-    expect(a.mitigated).toBe(false);
-    expect(a.uncoveredWrites.map((w) => `${w.kind}:${w.table}`)).toEqual(['update:custom_entities']);
-  });
-
-  it('accepts the same marker where the table’s own policy reads it', () => {
-    const policyGucs = new Map([['custom_entities', new Set(['current_tenant', 'is_super_admin'])]]);
-    expect(analyzeFile(write('custom_entities'), new Set(['custom_entities']), policyGucs).mitigated).toBe(true);
-  });
-
-  it('accepts app.current_tenant even when the policy text is unseen (format()-built loop)', () => {
-    const sql = [
-      'DO $$',
-      'DECLARE t record;',
-      'BEGIN',
-      '  FOR t IN SELECT id FROM tenants LOOP',
-      "    PERFORM set_config('app.current_tenant', t.id::text, true);",
-      '    UPDATE leads SET tenant_id = t.id;',
-      '  END LOOP;',
-      'END $$;',
-    ].join('\n');
-    const a = analyzeFile(sql, new Set(['leads']), new Map());
-    expect(a.mitigated).toBe(true);
-  });
-
-  it('reports the RLS-blind table when a file covers only one of two writes', () => {
-    const sql = [
-      'DO $$',
-      'BEGIN',
-      MARKER +
-        '  UPDATE webhook_events SET x = 1;\n  UPDATE leads SET x = 1;\n',
-      'END $$;',
-    ].join('\n');
-    const tenantScoped = new Set(['webhook_events', 'leads']);
-    const policyGucs = new Map([['webhook_events', new Set(['is_super_admin'])]]);
-    const a = analyzeFile(sql, tenantScoped, policyGucs);
-    expect(a.mitigated).toBe(false);
-    expect(a.uncoveredWrites.map((w) => w.table)).toEqual(['leads']);
-  });
-
-  it('does not treat header prose describing the marker as a mitigation', () => {
-    const sql = [
-      "-- Repair pass. NOTE: on preprod `set_config('app.is_super_admin','true',true)` reports",
-      '-- UPDATE 0 here — the policies do not branch on it.',
-      'UPDATE leads SET x = 1;',
-    ].join('\n');
-    const a = analyzeFile(sql, new Set(['leads']), new Map([['leads', new Set(['is_super_admin'])]]));
-    expect(a.mitigated).toBe(false);
-    expect(a.gucs.size).toBe(0);
-  });
 
   it('does not treat a marker stored inside a CREATE FUNCTION body as run at migration time', () => {
     const sql = [
-      "CREATE OR REPLACE FUNCTION fix_leads() RETURNS void AS $fn$ BEGIN",
-      "  PERFORM set_config('app.is_super_admin', 'true', true);",
-      '  UPDATE leads SET x = 1; END; $fn$ LANGUAGE plpgsql;',
+      'CREATE OR REPLACE FUNCTION fix_leads() RETURNS void AS $fn$',
+      'BEGIN',
+      MARKER + '  UPDATE leads SET x = 1;',
+      'END; $fn$ LANGUAGE plpgsql;',
     ].join('\n');
-    const a = analyzeFile(sql, new Set(['leads']), new Map([['leads', new Set(['is_super_admin'])]]));
-    // The body never executes during the migration, so neither does the marker
-    // — and the write is not in the executable scope either.
-    expect(a.gucs.size).toBe(0);
+    const a = analyzeFile(sql, new Set(['leads']), policyMap);
+    // The body is stored, not executed, so neither the marker nor the write is
+    // in the executable scope. `leads` would have accepted the marker if it ran.
+    expect(writeIsVisible(policyMap, 'leads', 'update', SUPER_ONLY).ok).toBe(true);
+    expect([...a.gucs]).toEqual([]);
     expect(a.tenantWrites).toEqual([]);
+    expect(a.blind).toEqual([]);
   });
 
-  it('fails a dynamic write over a table the marker is inert on, passes over one that reads it', () => {
+  it('does treat the same two lines, in a DO block, as a resolved write', () => {
+    // The mirror of the case above: if the scope filter ever over-drops, the
+    // marker disappears and this file becomes a violation that does not exist.
+    const a = analyzeFile('DO $do$\nBEGIN\n' + MARKER + '  UPDATE leads SET x = 1;\nEND $do$;\n',
+      new Set(['leads']), policyMap);
+    expect([...a.gucs]).toEqual([SUPER_ADMIN_GUC]);
+    expect(a.tenantWrites.map((w) => `${w.kind}:${w.table}`)).toEqual(['update:leads']);
+    expect(a.blind).toEqual([]);
+  });
+
+  it('reports the RLS-blind table when a file covers only one of two writes', () => {
+    // `mitigated` used to be a single bit per file, so a file that fixed one
+    // table and not the other was either wholly clean or wholly dirty. Here the
+    // two writes are one line apart and get opposite verdicts, because
+    // webhook_events' policy ORs on the marker (0088:277) and custom_entities'
+    // reads only app.current_tenant (0088).
+    const sql = 'DO $$\nBEGIN\n' + MARKER
+      + '  UPDATE webhook_events SET x = 1;\n  UPDATE custom_entities SET x = 1;\nEND $$;\n';
+    const a = analyzeFile(sql, new Set(['webhook_events', 'custom_entities']), policyMap);
+    expect(a.tenantWrites.map((w) => w.table)).toEqual(['webhook_events', 'custom_entities']);
+    expect(a.blind.map((w) => `${w.kind}:${w.table}`)).toEqual(['update:custom_entities']);
+    expect(a.blind[0].why).toBe('guc-not-gated-here');
+  });
+
+  it('resolves a third GUC that the written table’s policy actually names', () => {
+    // The rule is "the policy reads the GUC this file sets", not "the policy
+    // reads one of two known GUCs". 0054 gates `users_update_own` on
+    // app.current_user, which neither the old MITIGATION regex nor #2516's
+    // marker list mentions — and the same GUC proves nothing for a DELETE,
+    // whose only policy on `users` (0088, cast form) is super-admin-gated.
+    const sql = [
+      'DO $$',
+      'BEGIN',
+      "  PERFORM set_config('app.current_user', '00000000-0000-0000-0000-000000000002', true);",
+      '  UPDATE users SET email = lower(email);',
+      'END $$;',
+    ].join('\n');
+    const a = analyzeFile(sql, new Set(['users']), policyMap);
+    expect(a.tenantWrites.map((w) => `${w.kind}:${w.table}`)).toEqual(['update:users']);
+    expect(a.blind).toEqual([]);
+    const v = writeIsVisible(policyMap, 'users', 'update', new Set(['app.current_user']));
+    expect(v.ok).toBe(true);
+    expect(v.policy).toBe('users_update_own');
+    expect(writeIsVisible(policyMap, 'users', 'delete', new Set(['app.current_user'])).ok).toBe(false);
+  });
+
+  it('derives the marker evidence from the real history, cast form included', () => {
+    // 0088 writes the condition two ways:
+    //   `NULLIF(current_setting('app.is_super_admin', true), '')::boolean`   (:277)
+    //   `NULLIF(current_setting('app.is_super_admin'::text, true), '')::boolean` (:422)
+    // A reader keyed on one text shape under-approves whichever table uses the
+    // other, so both must resolve — and kind must be honoured while doing it.
+    // `users` is isolated by user rather than tenant, so the real tree never
+    // reaches it; the tests above hand it in as the scope set to exercise the
+    // rule on a table that has both text shapes and per-kind policies.
+    expect(derived.tenantScoped.has('users')).toBe(false);
+    const upd = gatingPolicies(policyMap, 'users', 'update');
+    expect(upd.unknown).toBe(false);
+    expect(upd.covering.map((p) => p.name).sort())
+      .toEqual(['users_super_admin_update', 'users_update_own']);
+    expect(writeIsVisible(policyMap, 'users', 'update', SUPER_ONLY).ok).toBe(true);
+    expect(writeIsVisible(policyMap, 'users', 'delete', SUPER_ONLY).ok).toBe(true);
+    expect(writeIsVisible(policyMap, 'webhook_events', 'update', SUPER_ONLY).ok).toBe(true);
+
+    // The negative half PP-067 measured: these tables' policies read the tenant
+    // GUC only, so no marker resolves a write into them.
+    for (const t of ['custom_entities', 'custom_entity_data', 'segment_members']) {
+      expect(gatingPolicies(policyMap, t, 'update').covering.every((p) => !p.gucs.has(SUPER_ADMIN_GUC)), t)
+        .toBe(true);
+    }
+
+    // And the one shape the screen refuses to guess at: no policy of that kind
+    // exists, so nothing is attributable. Live measurement of a fresh chain
+    // build found this conservative reject alone (tenants has SELECT/INSERT/
+    // UPDATE policies and no DELETE one), which is the cost side of the rule.
+    expect(gatingPolicies(policyMap, 'tenants', 'delete').unknown).toBe(true);
+    expect(writeIsVisible(policyMap, 'tenants', 'delete', SUPER_ONLY).why)
+      .toBe('policy-not-attributable');
+  });
+
+  it('#2545 — a dynamic write needs the tenant context, whatever the marker reads', () => {
+    // #2516's merged rule cleared `EXECUTE format('UPDATE %I …')` as soon as a
+    // policy of a table *mentioned in the loop* branched on the GUC. That
+    // credits a relation the screen never resolved: the list is runtime data, so
+    // the next entry can be a table whose policies read nothing of the sort,
+    // with no change to this file for CI to notice. This guard requires
+    // app.current_tenant for every dynamic write — strictly tighter than the
+    // rule it replaces, and measured as zero-cost: `violations` on the real
+    // tree are unchanged. The table below is deliberately one the marker DOES
+    // resolve statically, so the only reason this fails is the `%I`.
     const sql = [
       'DO $$',
       'DECLARE spec record;',
       'BEGIN',
       MARKER +
-        "  FOR spec IN SELECT * FROM (VALUES ('custom_entities')) AS t(table_name) LOOP",
+        "  FOR spec IN SELECT * FROM (VALUES ('leads')) AS t(table_name) LOOP",
         "    EXECUTE format('UPDATE %I SET x = 1', spec.table_name);",
         '  END LOOP;',
-        'END $$;',
+      'END $$;',
     ].join('\n');
-    const tenantScoped = new Set(['custom_entities']);
-    const blind = analyzeFile(sql, tenantScoped, new Map([['custom_entities', new Set(['current_tenant'])]]));
-    expect(blind.dynamicOverTenantTable).toBe(true);
-    expect(blind.mitigated).toBe(false);
-    expect(blind.uncoveredDynamicTables).toEqual(['custom_entities']);
-    const branching = analyzeFile(
-      sql, tenantScoped, new Map([['custom_entities', new Set(['is_super_admin'])]]),
+    expect(writeIsVisible(policyMap, 'leads', 'update', SUPER_ONLY).ok).toBe(true);
+    const marker = analyzeFile(sql, new Set(['leads']), policyMap);
+    expect(marker.dynamicOverTenantTable).toBe(true);
+    expect(marker.dynamicBlind).toBe(true);
+
+    const tenant = analyzeFile(
+      sql.replace(MARKER, "  PERFORM set_config('app.current_tenant', '00000000-0000-0000-0000-000000000001', true);\n"),
+      new Set(['leads']),
+      policyMap,
     );
-    expect(branching.mitigated).toBe(true);
+    expect(tenant.dynamicOverTenantTable).toBe(true);
+    expect(tenant.dynamicBlind).toBe(false);
+  });
+});
+
+describe('orderedCorpus — the guard must read the chain in the order it runs', () => {
+  it('follows meta/_journal.json, which is not the sorted filenames', () => {
+    const files = corpus.ordered.map((o) => o.file);
+    const sorted = [...files].sort();
+    expect(files.length).toBe(sorted.length);
+    expect(corpus.journalEntries).toBeGreaterThanOrEqual(120);
+    expect(corpus.unlisted).toBe(0);
+    // Measured: 20 of 126 positions differ, all from 0091/0092 being journal-ed
+    // after 0112. If the journal and the filenames ever agree, this is the
+    // assertion to delete — not the one to weaken.
+    const differing = files.filter((f, i) => f !== sorted[i]).length;
+    expect(differing).toBeGreaterThan(0);
+    expect(files.indexOf('0092_metrics_tables_superadmin_bypass.sql'))
+      .toBeGreaterThan(files.indexOf('0107_rls_null_tenant_revenue_hardening.sql'));
   });
 
-  it('derives the marker evidence from the real history, cast form included', () => {
-    // 0088 writes the plain form, a later file the `'app.is_super_admin'::text`
-    // cast — both must register, or the evidence silently under-approves.
-    expect(derivedGucs.get('webhook_events')?.has('is_super_admin')).toBe(true);
-    expect(derivedGucs.get('users')?.has('is_super_admin')).toBe(true);
-    expect(derivedGucs.get('custom_entities')?.has('is_super_admin')).toBe(false);
-    expect(derivedGucs.get('custom_entities')?.has('current_tenant')).toBe(true);
-    // `tenants` is bootstrapped by a super_admin-gated INSERT policy (0088).
-    expect(derivedGucs.get('tenants')?.has('is_super_admin')).toBe(true);
+  it('attributes deal_stages to the journal-last writer, which changes the verdict', () => {
+    // Filename order ends the chain at 0107 (app.current_tenant only) and the
+    // guard would reject the marker; apply order ends it at 0092, which reads
+    // both GUCs. Only one of the two is what the database will actually hold.
+    const live = writeIsVisible(policyMap, 'deal_stages', 'update', SUPER_ONLY);
+    expect(live.ok).toBe(true);
+    const filenameOrdered = [...corpus.ordered].sort((a, b) => a.file.localeCompare(b.file));
+    const wrongOrder = buildPolicyMap(filenameOrdered);
+    expect(writeIsVisible(wrongOrder, 'deal_stages', 'update', SUPER_ONLY).ok).toBe(false);
   });
 });
 
@@ -476,20 +622,10 @@ describe('CLI exit codes — the contract CI depends on', () => {
     expect(r.stderr).toContain('set_config');
   });
 
-  it('passes the same write once it sets app.current_tenant, the one GUC every tenant policy reads', () => {
-    const mitigated = 'DO $$\nBEGIN\n'
-      + "  PERFORM set_config('app.current_tenant', '00000000-0000-0000-0000-000000000000', true);\n"
-      + `  ${OFFENDER}END $$;\n`;
-    const { mig, baseline } = fixture({ '0001_a.sql': TABLE, '0002_ok.sql': mitigated });
-    writeFileSync(baseline, JSON.stringify({ counts: {}, violations: { atRisk: [], dynamicTarget: [] } }));
-    const r = run(mig, baseline);
-    expect(r.status, r.stderr).toBe(0);
-  });
-
-  it('fails a marker-only write over a table whose policies do not read the marker (#2516)', () => {
-    // The 0125-first-draft shape: TABLE declares leads by tenant_id column and
-    // no fixture policy reads app.is_super_admin, so the marker is inert and
-    // the old per-file bypass is exactly what this tree must no longer grant.
+  it('fails the same write when the marker names no policy of that table (#2516)', () => {
+    // The whole point of the per-table rule: the fixture declares `leads` with
+    // a tenant_id column and no policy that reads app.is_super_admin, so the
+    // marker is a sentence about a GUC, not about these rows.
     const markerOnly = 'DO $$\nBEGIN\n'
       + "  PERFORM set_config('app.is_super_admin', 'true', true);\n"
       + `  ${OFFENDER}END $$;\n`;
@@ -498,19 +634,92 @@ describe('CLI exit codes — the contract CI depends on', () => {
     const r = run(mig, baseline);
     expect(r.status).toBe(1);
     expect(r.stderr).toContain('atRisk:0002_bad|update:leads');
+    expect(r.stderr).toContain('no literal CREATE POLICY');
   });
 
-  it('passes the marker once a policy of the written table actually branches on it', () => {
-    const branching = TABLE
-      + 'CREATE POLICY leads_super_write ON "leads" FOR ALL USING ('
-      + "(NULLIF(current_setting('app.is_super_admin', true), ''))::boolean = true);\n";
-    const markerOnly = 'DO $$\nBEGIN\n'
-      + "  PERFORM set_config('app.is_super_admin', 'true', true);\n"
+  it('passes the marker once a policy of THAT table reads it', () => {
+    const gated = 'CREATE POLICY super_write ON leads FOR UPDATE'
+      + " USING ((NULLIF(current_setting('app.is_super_admin', true), ''))::boolean = true);\n";
+    const { mig, baseline } = fixture({
+      '0001_a.sql': TABLE + gated,
+      '0002_ok.sql': 'DO $$\nBEGIN\n'
+        + "  PERFORM set_config('app.is_super_admin', 'true', true);\n"
+        + `  ${OFFENDER}END $$;\n`,
+    });
+    writeFileSync(baseline, JSON.stringify({ counts: {}, violations: { atRisk: [], dynamicTarget: [] } }));
+    expect(run(mig, baseline).status).toBe(0);
+  });
+
+  it('passes the same write once it establishes the tenant context', () => {
+    const mitigated = 'DO $$\nBEGIN\n'
+      + "  PERFORM set_config('app.current_tenant', '00000000-0000-0000-0000-000000000001', true);\n"
       + `  ${OFFENDER}END $$;\n`;
-    const { mig, baseline } = fixture({ '0001_a.sql': branching, '0002_ok.sql': markerOnly });
+    const { mig, baseline } = fixture({ '0001_a.sql': TABLE, '0002_ok.sql': mitigated });
     writeFileSync(baseline, JSON.stringify({ counts: {}, violations: { atRisk: [], dynamicTarget: [] } }));
     const r = run(mig, baseline);
     expect(r.status, r.stderr).toBe(0);
+  });
+
+  it('passes an unconditional policy on the table, which needs no GUC at all', () => {
+    // Measured shape: 0115's `error_logs_insert_any WITH CHECK (true)`. A write
+    // into a table RLS admits regardless of context is not the PP-058 bug.
+    const { mig, baseline } = fixture({
+      '0001_a.sql': TABLE + 'CREATE POLICY insert_any ON leads FOR INSERT WITH CHECK (true);\n',
+      '0002_ok.sql': 'INSERT INTO leads (id) VALUES (1);\n',
+    });
+    writeFileSync(baseline, JSON.stringify({ counts: {}, violations: { atRisk: [], dynamicTarget: [] } }));
+    expect(run(mig, baseline).status).toBe(0);
+  });
+
+  it('names the policy that admitted a write it excuses (#2545 AC3)', () => {
+    // Exit 0 is the same byte for "the rows are visible" and "some policy reads
+    // nothing", so the screen has to say which of the two it found — otherwise
+    // an unconditional policy and a resolved marker are indistinguishable in the
+    // log a reviewer reads.
+    const { mig, baseline } = fixture({
+      '0001_a.sql': TABLE + 'CREATE POLICY insert_any ON leads FOR INSERT WITH CHECK (true);\n'
+        + 'CREATE POLICY super_write ON leads FOR UPDATE USING'
+        + " ((NULLIF(current_setting('app.is_super_admin', true), ''))::boolean = true);\n",
+      '0002_ok.sql': 'INSERT INTO leads (id) VALUES (1);\n'
+        + 'DO $$\nBEGIN\n'
+        + "  PERFORM set_config('app.is_super_admin', 'true', true);\n"
+        + '  UPDATE leads SET lead_oid = lower(lead_oid);\nEND $$;\n',
+    });
+    const empty = JSON.stringify({ counts: {}, violations: { atRisk: [], dynamicTarget: [] } });
+    writeFileSync(baseline, empty);
+    const explained = run(mig, baseline, ['--explain', '0002_ok']);
+    expect(explained.status, explained.stderr).toBe(0);
+    expect(explained.stdout).toContain('2 resolved write(s)');
+    expect(explained.stdout).toContain('admitted by policy "insert_any", which reads no GUC at all');
+    expect(explained.stdout).toContain('admitted by policy "super_write", which reads app.is_super_admin');
+
+    // A write nothing admits has nothing to name, and is still a violation:
+    // this file sets no GUC, so `super_write` cannot resolve it.
+    writeFileSync(join(mig, '0003_tenant.sql'), "UPDATE leads SET lead_oid = 'x';\n");
+    writeFileSync(baseline, empty);
+    const blind = run(mig, baseline, ['--explain', '0003_tenant']);
+    expect(blind.status).toBe(1);
+    expect(blind.stdout).toContain('[explain] 0003_tenant: no resolved tenant write');
+
+    // The argument is accepted with the extension too, because that is the
+    // string a reviewer copies out of `drizzle/migrations/`. Reading `.sql` as
+    // an unknown tag would print "no resolved tenant write" for a file that
+    // resolves two.
+    const withExt = run(mig, baseline, ['--explain', '0002_ok.sql']);
+    expect(withExt.stdout).toContain('[explain] 0002_ok: 2 resolved write(s)');
+    expect(withExt.stdout).not.toContain('0002_ok.sql: no resolved');
+  });
+
+  it('does not let a policy in a COMMENT decide anything', () => {
+    const { mig, baseline } = fixture({
+      '0001_a.sql': TABLE,
+      '0002_bad.sql': '/* CREATE POLICY super_write ON leads FOR UPDATE USING'
+        + " (current_setting('app.is_super_admin', true)::boolean); */\n" + OFFENDER,
+    });
+    writeFileSync(baseline, JSON.stringify({ counts: {}, violations: { atRisk: [], dynamicTarget: [] } }));
+    const r = run(mig, baseline);
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain('atRisk:0002_bad|update:leads');
   });
 
   it('baselines an offender under --update, then reports it healed when it is fixed', () => {

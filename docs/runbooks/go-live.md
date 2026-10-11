@@ -227,15 +227,53 @@ force-push/deletion on `main`).
 
 ---
 
+## 9. #2541 — Cut the release (tag == version == one commit)
+
+`.github/workflows/release.yml` is what makes "we released vX.Y.Z" a verifiable
+statement. It fires on a `v*.*.*` / `v*.*.*-*` tag push (or a `workflow_dispatch`
+naming a tag), and before it creates anything it fails the run unless all of
+these hold:
+
+- the tag exists and is semver-shaped;
+- the tagged commit is an **ancestor of `main`** (no releasing an unmerged branch);
+- that commit's own `package.json` version **equals the tag** — this is the check
+  that would have failed `v0.9.0`, whose version bump was committed separately;
+- CI already went green for exactly that SHA;
+- `LAUNCH_GATE_STRICT=1 npm run launch-gate` passes against a database built from
+  the migration chain (`npm run db:bootstrap`), which makes a SKIP a failure
+  instead of a shrug.
+
+Two habits, and the workflow is the reason they are not optional:
+
+1. **Bump and tag in the same commit.** Land the `package.json` version bump on
+   `main`, let CI pass, then tag the commit that carries it. Never tag an older
+   commit and bump afterwards.
+2. **No GA tag while any P0 in the go-live tracker is open.** A `-alpha`/`-beta`
+   tag is a prerelease and is not a stability claim; `v1.0.0` is, and its entry
+   criteria are listed in #2543.
+
+**This workflow does not deploy.** `deploy.yml` updates the VM from `main` by
+git + pm2 and, per #1425, deliberately never consumes a tag, a release asset or
+an image. The release is the audit record; the ship path stays
+merge → CI green → `deploy.yml`.
+
+---
+
 ## Final go/no-go gate
 
-Run the shipped preflight + smoke gate and confirm health before onboarding a
-paying customer:
+Run the shipped gate in **strict** mode (the mode `release.yml` runs — stages 4-6
+must actually execute, not skip) and confirm health before onboarding a paying
+customer:
 
 ```bash
-npm run launch-gate      # scripts/launch-gate.sh (preflight + smoke + health)
+# Needs a reachable database and a running server, exactly like the workflow:
+#   npm run db:bootstrap -- --yes && npm run db:seed && npm run build && npm run start
+LAUNCH_GATE_STRICT=1 npm run launch-gate   # scripts/launch-gate.sh, 6 stages
 curl -sS https://crm.yourdomain.com/api/health | jq .
 ```
+
+Without `LAUNCH_GATE_STRICT=1`, stages 4-6 SKIP silently, and a skipped stage is
+never a passed stage.
 
 **Do not take a paying customer until every box above is checked** and the P0
 billing items in #1479 are verified end-to-end in Stripe test mode (#1477).

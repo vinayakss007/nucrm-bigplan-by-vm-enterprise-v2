@@ -355,11 +355,14 @@ describe('POST /api/cron/task-reminders', () => {
     expect(res.body).toMatchObject({ ok: false, notified: 0, notify_failed: 2 });
   });
 
-  it('does not sweep when the dedup lock is held', async () => {
+  it('answers 423, not ok:true, when the dedup lock is held', async () => {
     mockAcquireLock.mockResolvedValue({ acquired: false });
     const res = await runCron();
     expect(mockSweepTenants).not.toHaveBeenCalled();
-    expect(res.body).toEqual({ ok: true, skipped: true, reason: 'lock-held' });
+    // #2539: this branch used to answer `{ ok: true, skipped: true }`, which is
+    // how a job that did nothing looked identical to one that ran.
+    expect(res.status).toBe(423);
+    expect(res.body).toMatchObject({ ok: false, skipped: 'lock-held', reason: 'lock-held' });
   });
 });
 

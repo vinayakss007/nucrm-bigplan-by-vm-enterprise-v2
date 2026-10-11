@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { logError } from '@/lib/errors-server';
 import { errorText, truncateForStore } from '@/lib/error-redaction';
-import { acquireLock } from '@/lib/cache';
+import { refuseIfCronLockHeld } from '@/lib/cron/cron-lock';
 import { db } from '@/drizzle/db';
 import { sql } from 'drizzle-orm';
 import { setSuperAdminContext, setTenantContext } from '@/lib/db/rls';
@@ -49,10 +49,8 @@ export const POST = withApiRoute(async (req: NextRequest) => {
 
   // Distributed dedup guard (#1422): skip when another scheduler
   // instance already fired this job within its interval.
-  const lock = await acquireLock('cron:auto-backup', 3600);
-  if (!lock.acquired) {
-    return NextResponse.json({ ok: true, skipped: true, reason: 'lock-held' });
-  }
+  const refusal = await refuseIfCronLockHeld('cron:auto-backup', 3600);
+  if (refusal) return refusal;
 
   // Platform maintenance runs cross-tenant (all schedules, all tenants), so
   // it cannot use a tenant context. The super-admin GUC is set on the pinned

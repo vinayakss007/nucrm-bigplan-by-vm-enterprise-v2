@@ -1,0 +1,373 @@
+name: Release
+
+# Release identity + enforced launch gate (issue #2541; the gate itself is #1478).
+#
+# What was broken, measured 2026-10-10 at main=b49021db:
+#   - `.github/workflows/` held backup-drill, ci, deploy, nightly-soak,
+#     schema-drift, workflow-lint. No release workflow existed.
+#   - `LAUNCH_GATE_STRICT` appeared in NO workflow — only in the comments of
+#     scripts/launch-gate.sh. The gate had an author, a contract and no executor.
+#   - Tags stopped at `v0.9.0` and `package.json` said `0.9.0`, with the version
+#     bump committed apart from the tag — so "we released v0.9.0" was not a
+#     verifiable statement, and Sentry's release identity fell back to
+#     `build-$(date -u +%s)` (Dockerfile:45), which cannot be tied to a tag.
+#
+# What this workflow does:
+#   verify  — the tag exists, is semver-shaped, points at a commit that is an
+#             ancestor of main, that commit's own `package.json` version equals the
+#             tag, and CI already went green for exactly that SHA.
+#   gate    — build that commit, run it the way the VM runs it, and execute
+#             `LAUNCH_GATE_STRICT=1 npm run launch-gate`, where SKIP is a failure.
+#   release — create the GitHub release with a generated changelog plus an
+#             auditable metadata asset.
+#
+# This workflow DOES NOT DEPLOY, and that is deliberate. `.github/workflows/deploy.yml`
+# names main as the only deploy source: a git-based pm2 update of the exact commit CI
+# verified, and #1425 removed the image build/push. A release here is a certification
+# record — "this commit passed the gate" — not a deploy input. Deploying from a release
+# artifact would mean reversing #1425, which is a separate owner decision.
+#
+# Why the gate provisions with the migration chain instead of CI's `db:sync`:
+# `db:sync` is `drizzle-kit push`, which syncs table structure only — which is why
+# ci.yml has to call `scripts/apply-rls-ci.mjs` afterwards. Rehearsed 2026-10-10 against
+# a throwaway postgres:16: `npm run db:bootstrap -- --yes` applied the 126-entry journal
+# to an empty database cleanly (226 tables, 274 policies), `npm run db:seed` then created
+# a complete loginable identity, and `npm run test:unit` against that schema passed 8125
+# tests. The gate therefore runs against a schema that actually contains its RLS policies.
+#
+# The two habits #2541 asks for, encoded as failures instead of prose:
+#   bump and tag in the same commit -> the version-equals-tag check
+#   no GA tag while a P0 is open   -> not mechanically checkable here; that is the
+#                                     entry-criteria list in #2543, and an alpha tag is
+#                                     not a GA claim.
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+      - "v*.*.*-*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to release (e.g. v1.0.0-alpha.1). Must point at a commit on main."
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.event.inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Is this tag a release?
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      sha: ${{ steps.resolve.outputs.sha }}
+      tag: ${{ steps.resolve.outputs.tag }}
+      version: ${{ steps.shape.outputs.version }}
+      prerelease: ${{ steps.shape.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Resolve the tag to one commit
+        id: resolve
+        env:
+          INPUT_TAG: ${{ github.event.inputs.tag }}
+        run: |
+          set -euo pipefail
+          # A dispatch names the tag in an input; a tag push names it in the ref.
+          TAG="${INPUT_TAG:-$GITHUB_REF_NAME}"
+          if [ -z "$TAG" ]; then
+            echo "::error::No tag to release. For workflow_dispatch, fill in the tag input."
+            exit 1
+          fi
+          git fetch --force --tags origin >/dev/null
+          if ! git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            echo "::error::Tag '$TAG' does not exist in this repository."
+            exit 1
+          fi
+          SHA="$(git rev-parse "refs/tags/$TAG^{commit}")"
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Tag $TAG -> commit $SHA"
+
+          # Never release a commit main does not contain: a tag on an unmerged
+          # branch would certify code that CI never ran alongside main.
+          MAIN_SHA="$(git rev-parse origin/main)"
+          if ! git merge-base --is-ancestor "$SHA" "$MAIN_SHA"; then
+            echo "::error::Commit $SHA is not an ancestor of main ($MAIN_SHA)."
+            echo "::error::Merge it, let CI run, then tag the commit that landed."
+            exit 1
+          fi
+          # Work in the tagged tree from here, so every later check reads the files
+          # the tag actually names.
+          git checkout --detach "$SHA" >/dev/null
+
+      - name: Assert tag == package version == one commit
+        id: shape
+        env:
+          TAG: ${{ steps.resolve.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if ! printf '%s\n' "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
+            echo "::error::'$TAG' is not semver. Use vMAJOR.MINOR.PATCH, optionally with a -prerelease."
+            exit 1
+          fi
+          VERSION="$(node -p "require('./package.json').version")"
+          if [ "v$VERSION" != "$TAG" ]; then
+            echo "::error::The tag is '$TAG' but this commit's package.json says '$VERSION'."
+            echo "::error::That is exactly the #2541 defect: bump and tag were committed apart."
+            echo "::error::Land the version bump on main, then re-tag that commit."
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          case "$TAG" in
+            *-*) echo "prerelease=true" >> "$GITHUB_OUTPUT"; echo "$TAG is a prerelease." ;;
+            *) echo "prerelease=false" >> "$GITHUB_OUTPUT"; echo "$TAG is a full release." ;;
+          esac
+
+      - name: Require CI green for exactly this commit
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SHA: ${{ steps.resolve.outputs.sha }}
+        run: |
+          set -euo pipefail
+          # Workflows are addressable by their declared name or their file path;
+          # ci.yml declares `name: CI` and scripts/check-deploy-trigger.mjs keeps
+          # that name from drifting out of deploy.yml's trigger.
+          RUNS="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/runs" \
+            -X GET -f head_sha="$SHA" -f status=completed -f per_page=20)"
+          TOTAL="$(printf '%s' "$RUNS" | jq '.workflow_runs | length')"
+          if [ "$TOTAL" = "0" ]; then
+            echo "::error::No completed CI run exists for commit $SHA."
+            echo "::error::Release only what CI verified: push to main, wait for CI, then tag."
+            exit 1
+          fi
+          printf '%s' "$RUNS" | jq -r '.workflow_runs[] | "  CI run \(.run_number): \(.event) -> \(.conclusion)"'
+          GREEN="$(printf '%s' "$RUNS" | jq '[.workflow_runs[] | select(.conclusion=="success")] | length')"
+          if [ "$GREEN" = "0" ]; then
+            echo "::error::Commit $SHA has $TOTAL completed CI run(s) and none of them passed."
+            exit 1
+          fi
+          echo "OK: $GREEN of $TOTAL completed CI run(s) for $SHA passed."
+
+  gate:
+    name: Strict launch gate on the tagged commit
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      # Mirrors ci.yml's env block so the gate exercises the configuration CI
+      # certified, with two deliberate differences: the build and the running server
+      # use NODE_ENV=production (what deploy/docker-compose.production.yml and the
+      # Dockerfile actually run), and the Sentry release identity is the tag.
+      # These literals are the repo's existing non-secret CI fallbacks — the same
+      # strings ci.yml already publishes — against a database that dies with the
+      # runner. Real deployments override them with repository secrets.
+      NODE_ENV: test
+      NODE_OPTIONS: --max-old-space-size=8192
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/nucrm_release
+      DATABASE_SSL: "false"
+      REDIS_URL: redis://localhost:6379
+      JWT_SECRET: ${{ secrets.JWT_SECRET || 'ci-jwt-secret-not-weak-at-all-32chars-long-enough' }}
+      SESSION_SECRET: ${{ secrets.SESSION_SECRET || 'ci-session-secret-safe-value-32chars-long-enough' }}
+      CRON_SECRET: ${{ secrets.CRON_SECRET || 'ci-cron-secret-safe-value-that-is-32chars-long' }}
+      ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY || 'a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2' }}
+      METRICS_SECRET: ${{ secrets.METRICS_SECRET || 'ci-metrics-secret-value-safe-32chars-long-enough' }}
+      SETUP_KEY: ${{ secrets.SETUP_KEY || 'ci-setup-key-safe-value-that-is-32characters-long' }}
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+      ALLOWED_ORIGINS: http://localhost:3000
+      LAUNCH_GATE_SERVER_URL: http://localhost:3000
+      # Stage 5 signs in, so it needs an identity that exists in the database it is
+      # pointed at. admin@test.com is the account scripts/seed-dev.ts creates. The
+      # account scripts/smoke-test.sh defaulted to before #2541 is created by nothing
+      # in this repository, so a strict gate could never have passed on a fresh
+      # database — and the credential here is already committed in seed-dev.ts.
+      SMOKE_LOGIN_EMAIL: admin@test.com
+      SMOKE_LOGIN_PASSWORD: password123
+      LAUNCH_GATE_STRICT: "1"
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: nucrm_release
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.verify.outputs.sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - run: npm ci
+
+      - name: Build the schema from the migration chain, then seed it
+        run: |
+          set -euo pipefail
+          npm run db:bootstrap -- --yes
+          npm run db:seed
+          # Loud evidence for #2537: a release database is, by construction, at the
+          # head of the journal. This is the state the live database is not in.
+          npm run db:status
+
+      - name: Restore the Next.js build cache
+        uses: actions/cache@v4
+        with:
+          path: .next/cache
+          key: ${{ runner.os }}-next-cache-${{ hashFiles('package-lock.json', 'app/fonts/**', 'next.config.mjs') }}
+          restore-keys: ${{ runner.os }}-next-cache-
+
+      - name: Build the tagged commit as the tag
+        run: npm run build
+        env:
+          NODE_ENV: production
+          SENTRY_RELEASE: ${{ needs.verify.outputs.tag }}
+          NEXT_PUBLIC_SENTRY_RELEASE: ${{ needs.verify.outputs.tag }}
+
+      - name: Start the built app and wait for it to answer
+        run: |
+          set -euo pipefail
+          nohup npm run start >"$RUNNER_TEMP/next-start.log" 2>&1 &
+          READY=0
+          for _ in $(seq 1 60); do
+            if curl -sf --max-time 3 "${LAUNCH_GATE_SERVER_URL}/api/health/live" >/dev/null 2>&1; then
+              READY=1
+              break
+            fi
+            sleep 2
+          done
+          if [ "$READY" != "1" ]; then
+            echo "::error::The built app never answered ${LAUNCH_GATE_SERVER_URL}/api/health/live."
+            echo "--- next start log ---"
+            cat "$RUNNER_TEMP/next-start.log"
+            exit 1
+          fi
+          echo "Server is live: $(curl -s --max-time 5 "${LAUNCH_GATE_SERVER_URL}/api/health/live")"
+
+      - name: Launch gate, strict (a SKIP is a failure)
+        # Stages: typecheck, lint, unit tests, migrate dry-run, smoke test, health
+        # readiness. With LAUNCH_GATE_STRICT=1 the three stages that normally SKIP on
+        # a box without a database or a server become hard failures, so a green run
+        # here means all six actually ran — which is what #1478 asked for and nothing
+        # in the repo enforced before now.
+        run: |
+          set -euo pipefail
+          npm run launch-gate 2>&1 | tee "$RUNNER_TEMP/launch-gate.log"
+
+      - name: Upload gate evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: launch-gate-${{ needs.verify.outputs.tag }}
+          path: |
+            ${{ runner.temp }}/launch-gate.log
+            ${{ runner.temp }}/next-start.log
+          if-no-files-found: warn
+          retention-days: 90
+
+  release:
+    name: Cut the GitHub release
+    needs: [verify, gate]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.verify.outputs.sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+
+      - name: Create the release, or top up an existing one
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REL_TAG: ${{ needs.verify.outputs.tag }}
+          REL_SHA: ${{ needs.verify.outputs.sha }}
+          REL_VERSION: ${{ needs.verify.outputs.version }}
+          REL_PRERELEASE: ${{ needs.verify.outputs.prerelease }}
+          GATE_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          # The changelog is GitHub's own generated note: the merged PR list since
+          # the previous tag (#2541 step 4). The metadata asset is the part a human
+          # cannot reconstruct later — which commit, which version, which gate run.
+          node -e '
+            const fs = require("fs");
+            const meta = {
+              tag: process.env.REL_TAG,
+              commit: process.env.REL_SHA,
+              version: process.env.REL_VERSION,
+              prerelease: process.env.REL_PRERELEASE === "true",
+              sentry_release: process.env.REL_TAG,
+              schema: "database built from drizzle/migrations via npm run db:bootstrap",
+              gate: {
+                command: "LAUNCH_GATE_STRICT=1 npm run launch-gate",
+                result: "green",
+                run: process.env.GATE_RUN_URL,
+                evidence_artifact: "launch-gate-" + process.env.REL_TAG
+              },
+              deployed: false,
+              deployed_note: "This release certifies a commit; it is not a deploy input. deploy.yml deploys main by git+pm2 and never consumes a tag or an image (#1425)."
+            };
+            fs.writeFileSync(process.env.RUNNER_TEMP + "/release-metadata.json", JSON.stringify(meta, null, 2) + "\n");
+          '
+          if gh release view "$REL_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            # Re-running must not mint a second release, and must not fail on a tag
+            # that already has one. Only the metadata asset is refreshed; the notes
+            # generated on the first pass are left alone rather than clobbered.
+            echo "Release $REL_TAG already exists — refreshing its metadata asset only."
+            gh release upload "$REL_TAG" "$RUNNER_TEMP/release-metadata.json" \
+              --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            ARGS=(--target "$REL_SHA" --generate-notes)
+            if [ "$REL_PRERELEASE" = "true" ]; then
+              ARGS+=(--prerelease)
+            fi
+            gh release create "$REL_TAG" "$RUNNER_TEMP/release-metadata.json" \
+              --repo "$GITHUB_REPOSITORY" "${ARGS[@]}"
+          fi
+          gh release view "$REL_TAG" --repo "$GITHUB_REPOSITORY" \
+            --json tagName,targetCommitish,isPrerelease,assets \
+            --jq '{tag: .tagName, commit: .targetCommitish, prerelease: .isPrerelease, assets: [.assets[].name]}'
+
+      - name: What this release does NOT do
+        run: |
+          echo "No deploy was triggered by this release, and none should be expected."
+          echo "deploy.yml is a git-based pm2 update gated on a green CI run on main;"
+          echo "it never deploys a tag, a release asset or a Docker image (#1425)."
+          echo "The ship path stays: merge to main -> CI green -> deploy.yml runs."

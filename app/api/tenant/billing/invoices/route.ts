@@ -38,8 +38,11 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     const formatted = events.map(e => ({
       id: e.id,
       type: e.eventType,
-      amount: e.amount ? `$${Number(e.amount).toFixed(2)}` : '—',
-      currency: e.currency || 'usd',
+      // #2551: raw numeric string + the row's real currency (NULL when the
+      // write path never learned one). This route used to prefix '$' and
+      // coalesce the currency to 'usd', inventing both on the way out.
+      amount: e.amount,
+      currency: e.currency,
       invoiceId: e.stripeInvoiceId,
       subscriptionId: e.stripeSubscriptionId,
       date: e.createdAt,
