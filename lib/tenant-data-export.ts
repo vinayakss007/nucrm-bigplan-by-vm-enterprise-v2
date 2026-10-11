@@ -7,6 +7,7 @@ import { db } from '@/drizzle/db';
 import { TABLE_REGISTRY, TableName } from '@/drizzle/schema/_registry';
 import { sql } from 'drizzle-orm';
 import { logger } from '@/lib/logger';
+import { quoteIdentifier } from '@/lib/db/identifier';
 import { isJunctionTable, junctionScope, PLATFORM_TABLES } from '@/lib/tenant-restore-wipe';
 
 /**
@@ -325,9 +326,9 @@ export class TenantDataExporter {
           return `'${escaped}'`;
         });
 
-        const colList = columns.map(c => `"${c}"`).join(', ');
+        const colList = columns.map(c => quoteIdentifier(c)).join(', ');
         const valList = values.join(', ');
-        sqlParts.push(`INSERT INTO "${tableName}" (${colList}) VALUES (${valList}) ON CONFLICT DO NOTHING;`);
+        sqlParts.push(`INSERT INTO ${quoteIdentifier(tableName)} (${colList}) VALUES (${valList}) ON CONFLICT DO NOTHING;`);
       }
       sqlParts.push('');
     }

@@ -32,6 +32,7 @@
 
 import { NextResponse } from 'next/server';
 import { getPool } from '@/lib/db/pool';
+import { statementTimeoutSql } from '@/lib/db/query-timeout';
 
 export interface CronLockOptions {
   /** Maximum execution time before force-releasing the lock (ms). Default: 300_000 (5min). */
@@ -75,7 +76,7 @@ export async function withCronLock(
 
   try {
     // Set a statement timeout to prevent infinite hangs
-    await client.query(`SET statement_timeout = '${timeoutMs}'`);
+    await client.query(statementTimeoutSql(timeoutMs));
 
     // Try to acquire the lock (non-blocking)
     const { rows } = await client.query<{ acquired: boolean }>(

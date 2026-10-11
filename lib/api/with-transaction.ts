@@ -42,6 +42,7 @@
 import { NextResponse } from 'next/server';
 import type { DbClient } from '@/drizzle/db';
 import { apiError } from '@/lib/api-error';
+import { statementTimeoutSql } from '@/lib/db/query-timeout';
 import { sql } from 'drizzle-orm';
 
 export interface TransactionOptions {
@@ -87,7 +88,7 @@ export async function withTransaction(
     try {
       const result = await dbClient.transaction(async (tx) => {
         // Set per-transaction timeout (scoped — doesn't leak to pool)
-        await tx.execute(sql.raw(`SET LOCAL statement_timeout = '${timeoutMs}'`));
+        await tx.execute(sql.raw(statementTimeoutSql(timeoutMs, { local: true })));
 
         return handler(tx as unknown as DbClient);
       });

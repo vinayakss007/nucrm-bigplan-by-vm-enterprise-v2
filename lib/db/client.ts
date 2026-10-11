@@ -7,6 +7,7 @@ import { PoolClient, QueryResult, QueryResultRow } from 'pg';
 import { devLogger } from '@/lib/dev-logger';
 import { AsyncLocalStorage } from 'async_hooks';
 import { getPool as _getPool } from './pool';
+import { quoteIdentifier } from './identifier';
 
 // Re-export getPool from the new location
 export const getPool = _getPool;
@@ -105,6 +106,10 @@ export async function withTransaction<T>(fn: (c: PoolClient) => Promise<T>): Pro
 // '@/lib/db'). It is intentionally not re-defined here to avoid a second,
 // unprotected copy of the cache.
 
+// Names a caller may never set through these builders. Matched on the raw key,
+// so before #2528 the key `is_super_admin" = true, "email` sailed past this filter
+// and then wrote is_super_admin anyway — quoteIdentifier is what makes the
+// filter's exact-match assumption true.
 const PROTECTED = new Set(['id','created_at','is_super_admin',
   'password_hash','totp_secret','totp_backup_codes','totp_enabled','email_verified','role_slug']);
 
@@ -135,7 +140,7 @@ export function buildInsert(table: string, data: Record<string, unknown>) {
   const keys = Object.keys(data).filter(k => !PROTECTED.has(k));
   if (!keys.length) throw new Error('buildInsert: no fields');
   return {
-    sql: `INSERT INTO public.${validTable} (${keys.map(k=>`"${k}"`).join(',')}) VALUES (${keys.map((_,i)=>`$${i+1}`).join(',')}) RETURNING *`,
+    sql: `INSERT INTO public.${validTable} (${keys.map(k=>quoteIdentifier(k)).join(',')}) VALUES (${keys.map((_,i)=>`$${i+1}`).join(',')}) RETURNING *`,
     values: keys.map(k=>data[k]),
   };
 }
@@ -149,7 +154,7 @@ export function buildUpdate(table: string, data: Record<string, unknown>, where:
   const wk = Object.keys(where);
   let i = 1;
   return {
-    sql: `UPDATE public.${validTable} SET ${dk.map(k=>`"${k}"=$${i++}`).join(',')}, updated_at=now() WHERE ${wk.map(k=>`"${k}"=$${i++}`).join(' AND ')} RETURNING *`,
+    sql: `UPDATE public.${validTable} SET ${dk.map(k=>`${quoteIdentifier(k)}=$${i++}`).join(',')}, updated_at=now() WHERE ${wk.map(k=>`${quoteIdentifier(k)}=$${i++}`).join(' AND ')} RETURNING *`,
     values: [...dk.map(k=>data[k]), ...wk.map(k=>where[k])],
   };
 }
@@ -159,6 +164,12 @@ export async function countRows(table: string, where: Record<string, unknown>): 
   // FIX CRITICAL-06: Add table name validation (was missing unlike buildInsert/buildUpdate)
   const validTable = validateTableName(table);
   const keys = Object.keys(where);
-  const r = await query<{count:string}>(`SELECT count(*)::int as count FROM public.${validTable} WHERE ${keys.map((k,i)=>`"${k}"=$${i+1}`).join(' AND ')}`, keys.map(k=>where[k]));
+  // Empty predicate means "count the table". Emitting `WHERE ` with nothing
+  // after it was a 42601 syntax error at end of input, so an unfiltered count
+  // could not be taken at all.
+  const predicate = keys.length
+    ? ` WHERE ${keys.map((k,i)=>`${quoteIdentifier(k)}=$${i+1}`).join(' AND ')}`
+    : '';
+  const r = await query<{count:string}>(`SELECT count(*)::int as count FROM public.${validTable}${predicate}`, keys.map(k=>where[k]));
   return parseInt(r.rows[0]?.count ?? '0', 10);
 }

@@ -13,6 +13,7 @@
  */
 
 import { getPool } from '@/lib/db/pool';
+import { quoteIdentifier } from '@/lib/db/identifier';
 import type { Pool } from 'pg';
 
 // -------------------------------------------------------------------
@@ -133,11 +134,11 @@ export async function verifyReferentialIntegrity(
   for (const rel of rels) {
     try {
       const query = `
-        SELECT s."${rel.sourceColumn}"::text AS orphaned_id
-        FROM "${rel.sourceTable}" s
-        LEFT JOIN "${rel.targetTable}" t ON s."${rel.sourceColumn}" = t."${rel.targetColumn}"
-        WHERE s."${rel.sourceColumn}" IS NOT NULL
-          AND t."${rel.targetColumn}" IS NULL
+        SELECT s.${quoteIdentifier(rel.sourceColumn)}::text AS orphaned_id
+        FROM ${quoteIdentifier(rel.sourceTable)} s
+        LEFT JOIN ${quoteIdentifier(rel.targetTable)} t ON s.${quoteIdentifier(rel.sourceColumn)} = t.${quoteIdentifier(rel.targetColumn)}
+        WHERE s.${quoteIdentifier(rel.sourceColumn)} IS NOT NULL
+          AND t.${quoteIdentifier(rel.targetColumn)} IS NULL
         LIMIT $1
       `;
       const result = await pool.query(query, [limit]);
@@ -225,8 +226,8 @@ export async function verifyTenantBoundaries(
       // Find records where the FK references a record in a different tenant
       const query = `
         SELECT DISTINCT s.id::text AS record_id, s.tenant_id::text AS source_tenant
-        FROM "${check.table}" s
-        INNER JOIN "${check.foreignTable}" t ON s."${check.foreignColumn}" = t."${targetCol}"
+        FROM ${quoteIdentifier(check.table)} s
+        INNER JOIN ${quoteIdentifier(check.foreignTable)} t ON s.${quoteIdentifier(check.foreignColumn)} = t.${quoteIdentifier(targetCol)}
         WHERE s.tenant_id IS NOT NULL
           AND t.tenant_id IS NOT NULL
           AND s.tenant_id != t.tenant_id
@@ -286,13 +287,13 @@ export async function verifyAuditChainIntegrity(
 
   try {
     // Get total count
-    const countResult = await pool.query(`SELECT COUNT(*)::int AS total FROM "${tableName}"`);
+    const countResult = await pool.query(`SELECT COUNT(*)::int AS total FROM ${quoteIdentifier(tableName)}`);
     totalRecords = countResult.rows[0]?.total ?? 0;
 
     // Fetch the chain ordered by creation
     const rows = await pool.query(
       `SELECT id::text, previous_hash, hash, created_at
-       FROM "${tableName}"
+       FROM ${quoteIdentifier(tableName)}
        ORDER BY created_at ASC, id ASC
        LIMIT $1`,
       [limit]
