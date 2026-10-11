@@ -119,3 +119,56 @@ export function validateTableName(table: string): string {
 export function isValidTableName(table: string): boolean {
   return VALID_TABLES.has(table);
 }
+
+/**
+ * A bare Postgres identifier — the only shape that is safe to wrap in `"` and
+ * interpolate into a raw string. #2528: six sinks quoted a caller-supplied
+ * *name* or *number* (`lib/db/client.ts` buildInsert / buildUpdate / countRows,
+ * `lib/data-integrity.ts`'s audit-chain table, and the two
+ * `SET [LOCAL] statement_timeout` sites). Wrapping in `"` is not escaping: a key
+ * of `x" = '1' OR 1=1 --` closes the quote and continues the statement.
+ * Rejecting every character outside this set removes the breakout at the source,
+ * which is what an identifier position needs — values go through `$n` binding
+ * instead and are not this helper's business.
+ */
+export const BARE_IDENTIFIER = /^[a-z_][a-z0-9_]{0,62}$/;
+
+/**
+ * @throws Error if `name` cannot be safely quoted into a raw statement.
+ */
+export function validateIdentifier(name: string, kind = 'column'): string {
+  if (!BARE_IDENTIFIER.test(name)) {
+    throw new Error(
+      `Invalid ${kind} name: ${JSON.stringify(name)} is not a bare Postgres identifier.`,
+    );
+  }
+  return name;
+}
+
+/**
+ * A milliseconds value destined for `SET [LOCAL] statement_timeout = '<x>'`,
+ * which has no parameter slot at all. #2528: `timeoutMs` is declared `number`
+ * and every caller today passes a literal, but a type is a compile-time
+ * guarantee feeding a runtime concatenation that `sql.raw` does not escape.
+ * Rounding makes the rendered text digits-only; the cap is Postgres's own int
+ * maximum, which also keeps a value like `1e21` from rendering as `1e+21`.
+ */
+export const MAX_STATEMENT_TIMEOUT_MS = 2_147_483_647;
+
+export function validateTimeoutMs(timeoutMs: number): number {
+  // Widened on purpose: the whole point is that the runtime value may not match
+  // the declared type.
+  const raw: unknown = timeoutMs;
+  // A numeric string is tolerated (it is what `body.x`-style sloppiness looks
+  // like, and it coerces cleanly); every other stray shape — null, boolean,
+  // object, empty string — is rejected rather than allowed to coerce into a
+  // silent 1 ms timeout.
+  if (typeof raw !== 'number' && (typeof raw !== 'string' || !raw.trim())) {
+    throw new Error(`Invalid statement timeout: ${JSON.stringify(raw)} is not a number.`);
+  }
+  const ms = Number(raw);
+  if (!Number.isFinite(ms)) {
+    throw new Error(`Invalid statement timeout: ${JSON.stringify(raw)} is not a number.`);
+  }
+  return Math.min(MAX_STATEMENT_TIMEOUT_MS, Math.max(1, Math.round(ms)));
+}

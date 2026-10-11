@@ -4,7 +4,33 @@
 > here, with the evidence that proves it and the verification that closed it.
 > Update the status the moment it changes; IDs are never reused.
 >
-> - **Last updated:** 2026-10-10 (UTC) — **PP-071**: **PP-069**'s rule is per table but not per *write*, and three
+> - **Last updated:** 2026-10-11 (UTC) — **PP-073**: six raw-string sinks interpolate a
+>   caller-supplied *name* or a typed-number option — three builders, two `SET statement_timeout` sites, one audit-chain table — and none of them escapes it. **PP-069** and
+>   **PP-071** are about what the RLS guard reads; this is the mirror rule — an **identifier position
+>   can never be parameterised**, so wrapping a key in `"` is not escaping: a `lib/db/client.ts`
+>   column key of `x" = '1' OR 1=1 --` closes the quote and continues the statement. Table names were
+>   already allowlisted and every **value** already binds as `$n`, and
+>   `buildInsert`/`buildUpdate`/`countRows` have **zero production callers** (re-exported at
+>   `lib/db/index.ts:17-19`, never imported anywhere), which is the only reason this is hardening and
+>   not an injection. `lib/sql-allowlist.ts` now owns the shape rule — `BARE_IDENTIFIER` +
+>   `validateIdentifier()`, mapped over all three builders' key lists and over
+>   `verifyAuditChainIntegrity`'s operator-supplied `--audit-table` name
+>   (`lib/data-integrity.ts:285`, *before* the `try`, because the `catch` at `:346` folds the
+>   function would otherwise fold the payload into a reported message) — and `validateTimeoutMs()`
+>   clamps the two `SET [LOCAL] statement_timeout` sites, which have no parameter slot at all. Of the
+>   **12** live `sql.raw(` sites in `app/ lib/ scripts/ drizzle/` (**13** matches — one is the word
+>   inside a comment at `lib/tenant-data-import.ts:232`), only **two** interpolate a variable at all:
+>   this entry's `timeoutMs`, and `tokenHash` at `scripts/preprod-api-e2e.ts:568`, which is a
+>   `sha256…digest('hex')` — quoting cannot break it, and it is recorded here only so the pattern is
+>   not copied into server code. Filed as **#2528**. Measured: **14** new tests, **493** existing
+>   tests across the **17** suites that reach these modules green, `tsc --noEmit` clean, and **all
+>   1,946** explicitly-named columns in `drizzle/schema` satisfy the lowercase-only rule — so it
+>   rejects nothing legal. This does **not** implement **#683**'s per-table column allowlist:
+>   `password_hash` is a perfectly legal identifier, and only `PROTECTED` stands between it and an
+>   `INSERT`. Written as **PP-073** while **#2558** holds **PP-072** open — the earlier merge keeps
+>   the number and the later one moves, and both PRs edit this header, the Summary table and the
+>   section list.
+> - **Previous:** 2026-10-10 (UTC) — **PP-071**: **PP-069**'s rule is per table but not per *write*, and three
 > of its four inputs are not what the database holds. Measured against a fresh chain build of this tree — **274**
 > policies over **226** RLS-enabled tables: `collectPolicyGucs` reads only literal `CREATE POLICY … ON <table>`, so
 > the **12** tables whose `tenant_isolation` arrives through a `format()`/`EXECUTE` list (`leads` among them) carry
@@ -212,6 +238,7 @@ Severity: **S1** blocks go-live · **S2** broken feature or security weakness ·
 | PP-069 | S2  | Infra / guard correctness | **`guard:migration-rls` accepted the `app.is_super_admin` marker without reading the policies of the tables the migration writes.** `MITIGATION.test(rawSql)` excused any file that mentioned the GUC anywhere — and the final `0125` mentions it in header prose to warn that it is **inert** there — for every write it made. `0125`'s first draft is the measured bypass (**PP-067**): marker set, three `tenant_isolation` policies that never read it, `UPDATE 0`, then `23502` on the following `SET NOT NULL` | 🔧 FIXED in this PR (per-table mitigation, **#2516**: a marker counts only where the written table's own literal `CREATE POLICY` statements read it somewhere in the history — `collectPolicyGucs` — otherwise the file must set `app.current_tenant`; evidence is the comment-stripped executable scope, so prose and stored-function bodies no longer excuse a file · `0109` green for the right reason, final `0125` passes through (b), a first-draft-shaped fixture exits 1 · tree verdict unchanged: 126 files · 202 tenant-scoped · 17 + 2 baselined · exit 0) |
 
 | PP-071 | S2  | Infra / guard correctness | **PP-069's per-table rule never reads the database, and reads the history in the wrong shape.** Measured against a fresh chain build (**274** policies / **226** RLS-enabled tables): the evidence map is built from literal `CREATE POLICY … ON <table>` only, so the **12** tables whose `tenant_isolation` arrives through a `format()`/`EXECUTE` list — `leads` first among them — have no evidence, and the marker is refused where the live policy reads it; the map unions over history and never removes a `DROP POLICY` (**109** execute in the chain, `0088` alone 72 creates / 84 drops), so a deleted policy keeps crediting a marker — which fails **open**; the corpus is walked by `readdirSync().sort()` while `scripts/migrate.ts:143` applies by journal, **20 of 126** positions apart (`0091`/`0092` after `0112`), which decides the last writer of `deal_stages.tenant_isolation` (`0092`, both GUCs) versus the one the guard credits (`0107`, tenant only); and resolution is **kind-blind** — `error_logs_super_admin_write` is `FOR UPDATE` and gates no INSERT while `error_logs_insert_any` is `WITH CHECK (true)`, so **9** writes the guard demanded a GUC for need none, and a marker read only by a `SELECT` policy cleared an UPDATE | 🔧 FIXED in this PR (**#2545**, on top of the merged **#2516**): `scripts/rls-policy-map.mjs` reads the chain as an event log — three generator shapes (literal, template-applied-over-a-list, catalogue-loop kept as unattributed `ambient`), `%I`/`%L` holes, `''`-escaped and adjacent string fragments, `FOR <kind>`, last-writer-wins with `DROP POLICY` deleting — over `meta/_journal.json` order · measured after: **265** keys / **225** tables, **262 of 274** live keys attributed, **0** GUC-set disagreements, **0 unsound / 0 conservative** verdicts over the **229 × 3** `(table, kind)` grid, **0** verdict flips and baseline `violations` byte-identical (17 + 2, exit 0), `0126` (**#2534**, not yet merged) green when dropped into the corpus · six reinstated defects → **6 / 2 / 7 / 4 / 13 / 13** tests red with the guard still printing `OK` · 74 tests in the two suites, tree verdict unchanged · `--explain <tag\|all>` names the policy that admits each resolved write, because exit 0 is one byte for "the rows are visible" and for "this policy reads no GUC at all" (AC3) |
+| PP-073 | S3  | Data access / raw SQL | **Six raw-string sinks interpolate a caller-supplied name or a typed-number option and none of them escapes it.** An identifier position can never be a `$n` parameter, so the builders' `` `"${k}"` `` is not escaping: a `lib/db/client.ts` column key of `x" = '1' OR 1=1 --` closes its own quoted identifier and continues the statement; `SET [LOCAL] statement_timeout` has no parameter slot at all. Table names were already allowlisted, every value already binds as `$n`, and `buildInsert`/`buildUpdate`/`countRows` are re-exported at `lib/db/index.ts:17-19` and imported by **nothing** — so this is the pattern, not an active injection | 🔧 FIXED in this PR (**#2528**): `lib/sql-allowlist.ts` gains `BARE_IDENTIFIER` + `validateIdentifier()` (applied to all three builder key lists — `lib/db/client.ts:142`/`:156`/`:158`/`:170` — and to `verifyAuditChainIntegrity`'s operator-supplied `--audit-table` name at `lib/data-integrity.ts:285`, *before* the `try` because the `catch` at `:342` reports the name back) and `MAX_STATEMENT_TIMEOUT_MS` + `validateTimeoutMs()` at `lib/api/with-transaction.ts:86` / `lib/cron/distributed-lock.ts:72` · **14** new tests + **493** existing across the **17** suites that reach these modules, `tsc --noEmit` exit 0 · **all 1,946** explicitly-named columns in `drizzle/schema` satisfy the lowercase-only rule · **not** #683's per-table column allowlist |
 
 ## Sentry issues → register entries
 
@@ -2045,7 +2072,7 @@ from pg_policies where schemaname='public' and (qual like '%app.is_super_admin%'
   request data into SQL: the template-literal sinks in `app/` are compile-time identifiers or regex-gated numerics
   (`app/api/cron/backup-verify/route.ts:239-241` gates `nucrm_verify_${Date.now()}` through `^[a-z0-9_]+$` before
   `CREATE DATABASE`; `app/api/tenant/sla/route.ts:36` is drizzle identifiers — the coordinate did not move but the text under it did: **#2482** rewrote that line on 2026-10-10 from `sql.raw('"sla_policies"."id"')`, a compile-time constant, to the `slaPolicies.id` identifier it is now, so the claim this sentence makes became literally true only with that PR). Library-level splices are not reachable from
-  `app/` (`lib/data-integrity.ts:289` has zero importers under `app/`; `lib/db/query-timeout.ts:63` is `Math.round`ed).
+  `app/` (`lib/data-integrity.ts:294` has zero importers under `app/`; `lib/db/query-timeout.ts:63` is `Math.round`ed).
   **So this is (i) a credential-handling problem — a leaked `DATABASE_URL` _is_ a full cross-tenant read grant over 49
   tables — and not (ii) an app-security one**: flipping the GUC over HTTP would need an injection point this sweep did not
   find.
@@ -2118,7 +2145,7 @@ destructive-cleanup schedule, both owner decisions; (c) `registerCronRun` still 
   them is not. All three literals are gone from the tree — `lib/cron/cron-lock.ts` answers
   `423 { ok:false, skipped:'lock-held' }`, and rule 1/2/3 of `scripts/check-cron-lock.mjs` hold all 22 routes to
   it.)_
-- **Why there is no central site to fix — every candidate checked.** `withCronLock` (`lib/cron/distributed-lock.ts:64`)
+- **Why there is no central site to fix — every candidate checked.** `withCronLock` (`lib/cron/distributed-lock.ts:65`)
   _is_ an honest shared skip site — it returns **409** when not acquired — but it has **zero route consumers** (only its own
   tests reference it), it is built on a PG advisory lock rather than the Redis one, and it carries no `LOCK_FAIL_OPEN`.
   `withApiRoute` wraps only **3 of the 22** (auto-backup, cleanup, retry-webhooks); the other **19 export bare handlers**,
@@ -2155,12 +2182,12 @@ destructive-cleanup schedule, both owner decisions; (c) `registerCronRun` still 
   `npx eslint --max-warnings=0 lib/cache/index.ts app/api/cron/*/route.ts` → exit 0; `tsc --noEmit` → `TSC_EXIT=0`;
   `npx vitest run tests/unit` → 6429 passed / 0 failed (426 files); `npm run -s guard:filesize` → OK.
 - **Files:** none changed. Evidence read: `lib/cache/index.ts:93,97,309-327,368,418,458`; all 22 `app/api/cron/*/route.ts`
-  skip sites; `lib/cron/distributed-lock.ts:64`; `lib/auth/cron.ts`; `deploy/cron/run-cron.sh`; `deploy/cron/crontab`
+  skip sites; `lib/cron/distributed-lock.ts:65`; `lib/auth/cron.ts`; `deploy/cron/run-cron.sh`; `deploy/cron/crontab`
   (read-only); `tests/unit/cron-lock.test.ts`; `tests/unit/scan7-system-resilience.test.ts`.
 - **What shipped instead of the 23-file batch, and why it is not the shape specified above (#2539, 2026-10-10).** A guard
   call, not a callback: `refuseIfCronLockHeld(key, ttl) → NextResponse | null` and `cronLockRefusalResponse(key)`, both in
   **`lib/cron/cron-lock.ts`**. The issue asked for a `withCronLock()` wrapper; that name is already taken by the Postgres
-  advisory helper at `lib/cron/distributed-lock.ts:64` (used by no route), and a callback form re-indents all 22 job bodies —
+  advisory helper at `lib/cron/distributed-lock.ts:65` (used by no route), and a callback form re-indents all 22 job bodies —
   which collides with every in-flight cron branch. The guard keeps each body at its own indentation, centralises both the
   decision and the response, and does **not** release the lock: for 20 of the 22 the TTL *is* the minimum interval between
   runs, so releasing on exit would let the same fire re-enter. `process-sequences` and `scheduled-report-delivery` keep their
@@ -2266,8 +2293,8 @@ connection setup (~400–600 ms) and bounds the 50-statement loop rather than pr
   returned 0 policies referencing `app.is_super_admin` on that table, and `tenant_members_visible = 0`).
 - **Would a real leak surface today? No — two independent reasons.** (1) Registration is single-site: `trackClient` has exactly
   **one** call site, `lib/db/request-connection.ts:217`, while **six** other checkout sites never register and are therefore
-  invisible to the detector — `lib/db/client.ts:77`, `lib/db/safe-connection.ts:207`, `lib/db/query-timeout.ts:58`,
-  `lib/db/migration-safety.ts:214`, `lib/db/warmup.ts:65`, `lib/cron/distributed-lock.ts:74` — including `safe-connection`,
+  invisible to the detector — `lib/db/client.ts:78`, `lib/db/safe-connection.ts:207`, `lib/db/query-timeout.ts:58`,
+  `lib/db/migration-safety.ts:214`, `lib/db/warmup.ts:65`, `lib/cron/distributed-lock.ts:77` — including `safe-connection`,
   the very wrapper the detector's own header (:27-29) says "should integrate this automatically so individual call sites don't
   need to remember". So the leak class it was written for (`pool.connect()` then throw before `release()`) is mostly
   unmonitored. (2) For the part it does see, the base rate is 13 identical warnings/hour with an unreadable stack, leaving
@@ -2785,6 +2812,13 @@ tests/unit/tenant-restore-atomic-2225.test.ts tests/unit/restore` → **8 files 
   primary-key conflict on re-insert makes that loud. That asymmetry (`pipelines` has the escape, the other
   eleven do not) is **#7**/**#90** and remains an owner decision; **#7**'s "six tables" should now be read as
   **eleven**, counting the six parent-isolated ones.
+- **Pointers this entry's own edits moved.** Every sink gained at least an import line, and six
+  citations into these four files drifted with it. All six are re-pinned here:
+  `lib/db/client.ts:78` (was `:77`), `lib/cron/distributed-lock.ts:65` (was `:64`, cited by three
+  separate entries) and the same file's `:77` (was `:74`), and `lib/data-integrity.ts:294` (was
+  `:289`). `guard:coords` caught **one** of the six — the only one that landed on a blank line — and
+  the other five kept resolving at the wrong content, which is the class
+  `scripts/check-register-drift.mjs` reads; it runs *after* the code commit for exactly that reason.
 - **Files:** `lib/sql-allowlist.ts`, `lib/restore/backup-parser.ts` (one word: `TENANT_SCOPED_TABLES` becomes
   `export const`, no behaviour change), `tests/unit/tenant-junction-scoping.test.ts`, this register.
   Evidence read: `lib/tenant-data-import.ts:86,138,142,164-169,195,283`,
@@ -4587,6 +4621,97 @@ read no GUC at all.
   measurement), **PP-069** / **#2516** (the rule this extends, and the "fails closed" sentence this
   corrects), **#2534** (open, claims **PP-070**: `0126` measured green here), **#2515** (the
   `segment_members` key itself).
+
+
+## PP-073 — 🔧 Six raw-string sinks interpolate a caller-supplied **name** or a **typed-number option** and none of them escapes it — an identifier position can never be a `$n` parameter, so wrapping a column key in `"` is not escaping: `x" = '1' OR 1=1 --` closes the quote and continues the statement, and `SET [LOCAL] statement_timeout` has no parameter slot at all _(S3 · Data access / raw SQL)_
+
+**Found:** filed as **#2528**, which traced every `sql.raw`, `db.execute(...)` and `pool.query("…")`
+site in the app and concluded the tree is **not** exploitable from a request param today. That
+conclusion is the finding, and it is also the reason to fix it now: every one of the five sinks here
+is a helper "one refactor away from becoming direct SQLi the moment a route spreads JSON body keys
+into it" — `buildInsert`/`buildUpdate`/`countRows` are re-exported by `lib/db/index.ts:17-19` and
+imported by **nothing**, and `--audit-table` is an operator flag.
+
+The shape of the bug. Values go through `$n` binding and table names through `VALID_TABLES`, so the
+only unprotected position is the *identifier* — and Postgres gives a parameterised query no way to
+name a column. Quoting is the habit that fills that gap and it does not work: the builders wrote
+`` `"${k}"` `` over `Object.keys(data)`, and a key containing `"` ends its own quoted identifier and
+starts a new expression. `lib/db/client.ts:142` therefore validates the **shape** before it renders,
+and `BARE_IDENTIFIER` (`/^[a-z_][a-z0-9_]{0,62}$/`) is the set of names that cannot do that: no quote,
+no space, no semicolon, no dash, no `-`-comment, and a length under Postgres's own 63-byte limit.
+
+- **Why not `sql.identifier()`.** The issue offers either, and the repo already uses
+  `sql.identifier()` where the value is trusted-but-quoted (`lib/tenant-data-import.ts:183`, both
+  data-explorers). It doubles embedded quotes, which makes the breakout *inert* — and leaves a
+  request-shaped key like `x" = '1' OR 1=1 --` reaching the planner as a 17-character column named
+  `x = '1' OR 1=1 --`. Reaching the planner is not the failure the register records: silently
+  addressing a different column is. Shape rejection also matches what the sibling sinks already do
+  (`validateTableName`, the `^[a-z0-9_]+$` guard at `app/api/cron/backup-verify/route.ts:248`), so
+  the codebase has one rule for "a name in a string" instead of two.
+- **Three sinks, one rule.** `buildInsert` (`lib/db/client.ts:142`), `buildUpdate` — which has two
+  separate key lists, `dk` mapped at `:156` and `wk` at `:158`, and both interpolate — and
+  `countRows` (`:170`). `countRows` is the one that shows how the pattern spreads: it was added later and had no
+  table validation at all until the `FIX CRITICAL-06` comment's own fix; the column keys were still
+  unvalidated.
+- **The timeout is not a name but has the same hole.** `TransactionOptions.timeoutMs` and
+  `CronLockOptions.timeoutMs` are declared `number` and land in
+  `SET LOCAL statement_timeout = '${timeoutMs}'` / `SET statement_timeout = '${timeoutMs}'`, which
+  `sql.raw` passes through with **no** escaping. A type is a compile-time guarantee feeding a
+  runtime concatenation, so the value is clamped at the boundary instead: `validateTimeoutMs()`
+  rounds, floors at 1, and caps at `2_147_483_647` — Postgres's own int maximum, which is also what
+  keeps `1e21` from rendering as the text `1e+21`. A non-number that is not a numeric string
+  (`null`, `{}`, `''`, `NaN`, `Infinity`) throws rather than coercing into a silent 1 ms timeout.
+- **The audit table name fails *outside* the `try`.** `verifyAuditChainIntegrity` interpolates
+  `tableName` twice (`lib/data-integrity.ts:294` and `:300`) and its `catch` at `:346` reports the
+  name back inside a message — so validating inside the block would have turned an injection attempt
+  into a *recorded* string. The check sits before the `try`, so a bad name is a thrown error and never
+  reaches either statement.
+- **Not a re-litigation of the safe sites (#2528 lists them).** Of the **12** live `sql.raw(` sites
+  under `app/ lib/ scripts/ drizzle/` (**13** matches — one is the word inside a comment at
+  `lib/tenant-data-import.ts:232`), exactly **three** take a variable at all: `timeoutMs`, and the two
+  `statement` parameters at `scripts/preprod-api-e2e.ts:170` / `:184`, whose call sites are literals
+  everywhere except `:568` / `:578` — and those interpolate `tokenHash`, a `sha256…digest('hex')`, so
+  quoting cannot break a hex string and it is written here only so the pattern is not copied into
+  server code. The other **9** are constants in their own file: `REQUIRED_EXTENSIONS` at
+  `scripts/migrate.ts:328` plus four static strings at `:364-394`, the literal `idx.sql` array at
+  `scripts/add-indexes.ts:57`, and the three `…IN (${list})` checks built from module-level arrays at
+  `drizzle/schema/record-links.ts:117-119`.
+- **What this does NOT do.** It is not **#683**'s per-table column allowlist. `password_hash`,
+  `totp_secret` and `tenant_id` are all perfectly legal bare identifiers; `validateIdentifier` lets
+  every one of them through, and only the hard-coded `PROTECTED` set at `lib/db/client.ts:109` stands
+  between them and an `INSERT`. #683 stays open, and this entry does not claim it. Nor does it touch
+  the two discovery loops at `lib/data-integrity.ts:138-142` / `:229-230`, whose names come from
+  `pg_constraint` — the database's own catalog, not a caller — unless a caller passes
+  `relationships` explicitly, which no code in this repo does.
+- **Measured.** **14** new tests in `tests/unit/raw-sql-identifier-hardening-2528.test.ts`: the
+  breakout key is rejected at each of the five sinks, and every sink keeps a **positive** assertion
+  (the exact rendered `INSERT`/`UPDATE`/`SELECT count` string and the exact bound `values`), because a
+  "fix" that rejected every identifier would otherwise pass this file green. The timeout tests assert
+  on the **rendered** statement (`SET statement_timeout = '30001'` from `'30000.7'`, matched against
+  `^SET statement_timeout = '\d+'$`), and the two hostile-option cases assert that nothing downstream
+  ran — `dbClient.transaction` not called, pool `connect` never reached, `pool.query` not called for
+  the audit table. Existing: **493** tests green across the **17** unit suites that import these
+  modules (three `db-client*`, `cron-lock`, `with-transaction`, `query-timeout`, `sql-allowlist`,
+  `data-integrity`, `tenant-junction-scoping`, `db-ensure-schema`, `auth-middleware`,
+  `complete-backend`, `massive-push`, `modules`, `push-coverage`, two `restore/*`), plus
+  `tests/integration/critical-coverage` and `calculated-fields` (**57** passed).
+  `tests/integration/vulnerability-security` is **4 red with `connect ECONNREFUSED 127.0.0.1:5432`** —
+  there is no Postgres on this box's loopback for it, not a regression; CI's `db:bootstrap` job has
+  one. `tsc --noEmit` exit 0. Lowercase-only is safe on this schema: **all 1,946** column names
+  declared with an explicit name under `drizzle/schema/` match `BARE_IDENTIFIER` and **0** carry an
+  uppercase letter.
+- **Files:** `lib/sql-allowlist.ts` (`BARE_IDENTIFIER`, `validateIdentifier()`, `MAX_STATEMENT_TIMEOUT_MS`,
+  `validateTimeoutMs()`), `lib/db/client.ts`, `lib/api/with-transaction.ts`,
+  `lib/cron/distributed-lock.ts`, `lib/data-integrity.ts`,
+  `tests/unit/raw-sql-identifier-hardening-2528.test.ts` (new).
+- **Related:** **#2528** (the finding, and the list of sites verified safe), **#683** (the per-table
+  column allowlist this deliberately does not implement, still open in `AGENTS.md`'s Agent-1 table),
+  **PP-072** / **#2556** (the same file family, one layer up: correct SQL, wrong rows), **#2524**
+  (fixed by the merged **#2555**; its `tests/unit/analytics-post-tenant-scope-2524.test.ts` renders a
+  mocked `where` through `PgDialect` and this entry's tests reuse that harness — a body-supplied id
+  used without asking whose it was), **PP-069** / **PP-071**
+  (the RLS reader these guards sit next to — same discipline: validate at the boundary, and assert on
+  the rendered statement rather than on a mocked return).
 
 ## How to maintain this file
 
