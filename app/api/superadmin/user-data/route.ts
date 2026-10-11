@@ -430,7 +430,11 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       results['tasks'] = { restored, errors };
     }
 
-    console.log(`[User Data Restore] user=${user.email}, tenant=${tenant_id}, source=${source}, results=`, results);
+    // #2529: `user.email` here went to stdout/Loki, outside the erasure boundary this
+    // same endpoint implements. `user_id`+`tenant_id` are exactly what the DELETE path
+    // already logs (`:507`), and `results` is per-table `{restored, errors}` counters
+    // (`:355`, `:393`, `:430`) — counts, not records — so the line loses no debug value.
+    console.log(`[User Data Restore] user=${user_id}, tenant=${tenant_id}, source=${source}, results=`, results);
 
     return NextResponse.json({
       success: true,

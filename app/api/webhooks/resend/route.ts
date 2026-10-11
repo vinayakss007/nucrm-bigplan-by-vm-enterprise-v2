@@ -270,7 +270,10 @@ async function handleHardBounce(scope: AttributedScope, email: string, eventType
   });
 
   if (affectedContacts.length > 0) {
-    console.log(`[resend-webhook] ${eventType} (hard): ${affectedContacts.length} contact(s) marked DNC for ${email}`);
+    // #2529: domain-only, matching the DROP line at `:162`. The full address plus the
+    // fact that this contact went DNC is GDPR-relevant behaviour, and stdout here is
+    // shipped to Loki — retained outside the erasure boundary this repo implements.
+    console.log(`[resend-webhook] ${eventType} (hard): ${affectedContacts.length} contact(s) marked DNC for ${email.split('@')[1] ?? 'no-domain'}`);
 
     // Activity logging is deliberately AFTER the commit and non-fatal.
     // The activities table requires event_type (NOT NULL); using the wrong
@@ -329,7 +332,8 @@ async function handleReply(scope: AttributedScope, email: string): Promise<void>
     .returning({ id: sequenceEnrollments.id });
 
   if (cancelled.length > 0) {
-    console.log(`[resend-webhook] email.replied: cancelled ${cancelled.length} active sequence enrollment(s) for ${email}`);
+    // #2529: domain-only, as above.
+    console.log(`[resend-webhook] email.replied: cancelled ${cancelled.length} active sequence enrollment(s) for ${email.split('@')[1] ?? 'no-domain'}`);
   }
 
   // Activity logging is deliberately AFTER the update and non-fatal.
