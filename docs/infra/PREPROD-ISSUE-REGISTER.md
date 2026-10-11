@@ -2141,7 +2141,7 @@ destructive-cleanup schedule, both owner decisions; (c) `registerCronRun` still 
   runs, so releasing on exit would let the same fire re-enter. `process-sequences` and `scheduled-report-delivery` keep their
   own `acquireLock`/`releaseLock` pair and only borrow the response. **22 route files, 64 insertions / 102 deletions**, plus
   `scripts/check-cron-lock.mjs` (5 rules: lock module present, refusal answered, no local `ok:true` mask, every scheduled
-  name has a route, and a **shrinking** allowlist of the 5 unscheduled routes) and
+  name has a route, and a **shrinking** allowlist of the 5 routes with no crontab line) and
   `tests/unit/cron-lock-refusal-2539.test.ts` (48 tests: per route `423` + `ok:false` + `skipped/reason:'lock-held'` +
   `error` naming the job, `acquireLock` called exactly once with `cron:<dir>` and a positive TTL, and 401 ordered **before**
   423). **14 pre-existing test files pinned the mask and now pin 423** — 4 asserted the whole body
@@ -2150,12 +2150,12 @@ destructive-cleanup schedule, both owner decisions; (c) `registerCronRun` still 
   captured the `Response` also pinned `status` 200. Those 14 are why the change is safe to land: the mask had
   tests, and the tests were the specification.
 - **Three schedule sources, measured at `2d037d6a` — the entry above names only one.** `deploy/cron/crontab` **17** jobs,
-  `vercel.json` crons **18**, `scripts/cron-scheduler.ts` **18**, and they are three different sets, not one set with three
-  spellings: crontab has no `recurring-invoice-generator` while `vercel.json` does (so the Vercel build schedules a job the
-  VM never runs, and the VM's `backup` schedule is absent from Vercel), and the in-process scheduler fires none of
-  `process-lead-scoring`, `scheduled-report-delivery`, `sla-check`, `subscription-renewal-check`. #1422 allows exactly one
-  active per environment, so the guard reports these as notes rather than failures — but they are divergence, not parity, and
-  `scripts/check-cron-lock.mjs` is the place that has to say so out loud.
+  `vercel.json` crons **18**, `scripts/cron-scheduler.ts` **18** — three different sets, not one set with three spellings.
+  Narrowing "the 5 with no live line" above: **3** of them are reachable from another scheduler (`recurring-invoice-generator`
+  on Vercel *and* in-process; `backup` and `lead-warming` in-process only) and **2** — `process-lead-scoring`, `sla-check` —
+  are scheduled nowhere at all. The in-process scheduler fires none of `process-lead-scoring`, `scheduled-report-delivery`,
+  `sla-check`, `subscription-renewal-check`. #1422 allows exactly one source active per environment, so the guard reports
+  this divergence as a note rather than a failure — but it is divergence, not parity, and has to be said out loud.
 - **`registerCronRun` has no caller at all (measured here, 2026-10-10).** `grep -rn "registerCronRun" --include=*.ts` over
   the repo returns the definition and its tests but **zero production call sites**, so `/api/system/cron-health` reports an
   empty set whatever status code a refusal carries. This PR makes a skipped run loud to the scheduler and to the response
