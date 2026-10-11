@@ -13,7 +13,7 @@
  */
 
 import { getPool } from '@/lib/db/pool';
-import { quoteIdentifier } from '@/lib/db/identifier';
+import { validateIdentifier } from '@/lib/sql-allowlist';
 import type { Pool } from 'pg';
 
 // -------------------------------------------------------------------
@@ -133,14 +133,25 @@ export async function verifyReferentialIntegrity(
 
   for (const rel of rels) {
     try {
+      // #2528: `relationships` is a caller-supplied argument and these four names
+      // land in an identifier position, so they are validated before rendering.
+      // Inside the try on purpose: a catalog entry this regex does not accept is
+      // reported in `errors` like any other per-relationship failure, instead of
+      // aborting the whole sweep.
+      const srcTable = validateIdentifier(rel.sourceTable, 'table');
+      const srcColumn = validateIdentifier(rel.sourceColumn, 'column');
+      const tgtTable = validateIdentifier(rel.targetTable, 'table');
+      const tgtColumn = validateIdentifier(rel.targetColumn, 'column');
+      // raw-sql-guard: begin allow — the four consts immediately above (#2528)
       const query = `
-        SELECT s.${quoteIdentifier(rel.sourceColumn)}::text AS orphaned_id
-        FROM ${quoteIdentifier(rel.sourceTable)} s
-        LEFT JOIN ${quoteIdentifier(rel.targetTable)} t ON s.${quoteIdentifier(rel.sourceColumn)} = t.${quoteIdentifier(rel.targetColumn)}
-        WHERE s.${quoteIdentifier(rel.sourceColumn)} IS NOT NULL
-          AND t.${quoteIdentifier(rel.targetColumn)} IS NULL
+        SELECT s."${srcColumn}"::text AS orphaned_id
+        FROM "${srcTable}" s
+        LEFT JOIN "${tgtTable}" t ON s."${srcColumn}" = t."${tgtColumn}"
+        WHERE s."${srcColumn}" IS NOT NULL
+          AND t."${tgtColumn}" IS NULL
         LIMIT $1
       `;
+      // raw-sql-guard: end allow
       const result = await pool.query(query, [limit]);
 
       if (result.rows.length > 0) {
@@ -224,15 +235,24 @@ export async function verifyTenantBoundaries(
 
     try {
       // Find records where the FK references a record in a different tenant
+      // #2528: same argument-trust problem as verifyReferentialIntegrity — these
+      // four names are interpolated, so they are validated, inside the try, so an
+      // odd name is reported per-check rather than aborting the sweep.
+      const srcTable = validateIdentifier(check.table, 'table');
+      const tgtTable = validateIdentifier(check.foreignTable, 'table');
+      const tgtColumn = validateIdentifier(check.foreignColumn, 'column');
+      const targetColName = validateIdentifier(targetCol, 'column');
+      // raw-sql-guard: begin allow — the four consts immediately above (#2528)
       const query = `
         SELECT DISTINCT s.id::text AS record_id, s.tenant_id::text AS source_tenant
-        FROM ${quoteIdentifier(check.table)} s
-        INNER JOIN ${quoteIdentifier(check.foreignTable)} t ON s.${quoteIdentifier(check.foreignColumn)} = t.${quoteIdentifier(targetCol)}
+        FROM "${srcTable}" s
+        INNER JOIN "${tgtTable}" t ON s."${tgtColumn}" = t."${targetColName}"
         WHERE s.tenant_id IS NOT NULL
           AND t.tenant_id IS NOT NULL
           AND s.tenant_id != t.tenant_id
         LIMIT $1
       `;
+      // raw-sql-guard: end allow
       const result = await pool.query(query, [sampleSize]);
 
       if (result.rows.length > 0) {
@@ -278,7 +298,11 @@ export async function verifyAuditChainIntegrity(
   options: { tableName?: string; limit?: number } = {}
 ): Promise<AuditChainResult> {
   const pool: Pool = getPool();
-  const { tableName = 'audit_logs', limit = 1000 } = options;
+  const { tableName: rawTableName = 'audit_logs', limit = 1000 } = options;
+  // #2528: quoted into two raw `FROM "${tableName}"` statements below, and the catch
+  // at the bottom of this function would otherwise fold the injected text into a
+  // reported message — so this runs before the try, and fails loud.
+  const tableName = validateIdentifier(rawTableName, 'table');
 
   const gaps: AuditChainEntry[] = [];
   let totalRecords = 0;
@@ -287,17 +311,19 @@ export async function verifyAuditChainIntegrity(
 
   try {
     // Get total count
-    const countResult = await pool.query(`SELECT COUNT(*)::int AS total FROM ${quoteIdentifier(tableName)}`);
+    const countResult = await pool.query(`SELECT COUNT(*)::int AS total FROM "${tableName}"`); // raw-sql-guard: allow — tableName validated by validateIdentifier above (#2528)
     totalRecords = countResult.rows[0]?.total ?? 0;
 
     // Fetch the chain ordered by creation
+    // raw-sql-guard: begin allow — same validated tableName; a `//` cannot sit inside this template (#2528)
     const rows = await pool.query(
       `SELECT id::text, previous_hash, hash, created_at
-       FROM ${quoteIdentifier(tableName)}
+       FROM "${tableName}"
        ORDER BY created_at ASC, id ASC
        LIMIT $1`,
       [limit]
     );
+    // raw-sql-guard: end allow
 
     let previousHash: string | null = null;
     let isFirstRecord = true;

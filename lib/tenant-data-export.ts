@@ -7,7 +7,7 @@ import { db } from '@/drizzle/db';
 import { TABLE_REGISTRY, TableName } from '@/drizzle/schema/_registry';
 import { sql } from 'drizzle-orm';
 import { logger } from '@/lib/logger';
-import { quoteIdentifier } from '@/lib/db/identifier';
+import { validateIdentifier } from '@/lib/sql-allowlist';
 import { isJunctionTable, junctionScope, PLATFORM_TABLES } from '@/lib/tenant-restore-wipe';
 
 /**
@@ -326,9 +326,14 @@ export class TenantDataExporter {
           return `'${escaped}'`;
         });
 
-        const colList = columns.map(c => quoteIdentifier(c)).join(', ');
+        // #2528: this stream is a `psql`-able script, so these names sit in an
+        // identifier position that cannot be parameterised. They come from
+        // TABLE_REGISTRY and row keys rather than the caller, but validating them
+        // here is what turns a future quoted column into a loud failure instead of
+        // a dump that aborts on restore.
+        const colList = columns.map(c => `"${validateIdentifier(c)}"`).join(', ');
         const valList = values.join(', ');
-        sqlParts.push(`INSERT INTO ${quoteIdentifier(tableName)} (${colList}) VALUES (${valList}) ON CONFLICT DO NOTHING;`);
+        sqlParts.push(`INSERT INTO "${validateIdentifier(tableName)}" (${colList}) VALUES (${valList}) ON CONFLICT DO NOTHING;`);
       }
       sqlParts.push('');
     }

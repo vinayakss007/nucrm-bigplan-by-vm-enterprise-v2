@@ -32,7 +32,7 @@
 
 import { NextResponse } from 'next/server';
 import { getPool } from '@/lib/db/pool';
-import { statementTimeoutSql } from '@/lib/db/query-timeout';
+import { validateTimeoutMs } from '@/lib/sql-allowlist';
 
 export interface CronLockOptions {
   /** Maximum execution time before force-releasing the lock (ms). Default: 300_000 (5min). */
@@ -67,7 +67,9 @@ export async function withCronLock(
   handler: () => Promise<NextResponse>,
   options: CronLockOptions = {},
 ): Promise<NextResponse> {
-  const { timeoutMs = 300_000 } = options;
+  const { timeoutMs: rawTimeoutMs = 300_000 } = options;
+  // #2528: `SET statement_timeout` has no parameter slot, so the value is clamped.
+  const timeoutMs = validateTimeoutMs(rawTimeoutMs);
   const lockId = jobNameToLockId(jobName);
   const pool = getPool();
 
@@ -76,7 +78,7 @@ export async function withCronLock(
 
   try {
     // Set a statement timeout to prevent infinite hangs
-    await client.query(statementTimeoutSql(timeoutMs));
+    await client.query(`SET statement_timeout = '${timeoutMs}'`); // raw-sql-guard: allow — clamped by validateTimeoutMs (#2528)
 
     // Try to acquire the lock (non-blocking)
     const { rows } = await client.query<{ acquired: boolean }>(

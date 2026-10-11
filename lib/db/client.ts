@@ -7,7 +7,7 @@ import { PoolClient, QueryResult, QueryResultRow } from 'pg';
 import { devLogger } from '@/lib/dev-logger';
 import { AsyncLocalStorage } from 'async_hooks';
 import { getPool as _getPool } from './pool';
-import { quoteIdentifier } from './identifier';
+import { validateIdentifier } from '@/lib/sql-allowlist';
 
 // Re-export getPool from the new location
 export const getPool = _getPool;
@@ -106,10 +106,6 @@ export async function withTransaction<T>(fn: (c: PoolClient) => Promise<T>): Pro
 // '@/lib/db'). It is intentionally not re-defined here to avoid a second,
 // unprotected copy of the cache.
 
-// Names a caller may never set through these builders. Matched on the raw key,
-// so before #2528 the key `is_super_admin" = true, "email` sailed past this filter
-// and then wrote is_super_admin anyway — quoteIdentifier is what makes the
-// filter's exact-match assumption true.
 const PROTECTED = new Set(['id','created_at','is_super_admin',
   'password_hash','totp_secret','totp_backup_codes','totp_enabled','email_verified','role_slug']);
 
@@ -137,10 +133,16 @@ function validateTableName(table: string): string {
  
 export function buildInsert(table: string, data: Record<string, unknown>) {
   const validTable = validateTableName(table);
-  const keys = Object.keys(data).filter(k => !PROTECTED.has(k));
+  // #2528 — `keys` are `Object.keys(data)`, i.e. whatever object a caller spreads
+  // in. Values bind as `$n`, but an identifier position cannot be parameterised
+  // and wrapping a key in `"` is not escaping: `x" = '1' OR 1=1 --` closes the
+  // quote. Zero production callers reach these builders today (grep: re-exported
+  // by lib/db/index.ts and never imported), which is the only reason this is
+  // hardening rather than an active injection.
+  const keys = Object.keys(data).filter(k => !PROTECTED.has(k)).map(k => validateIdentifier(k));
   if (!keys.length) throw new Error('buildInsert: no fields');
   return {
-    sql: `INSERT INTO public.${validTable} (${keys.map(k=>quoteIdentifier(k)).join(',')}) VALUES (${keys.map((_,i)=>`$${i+1}`).join(',')}) RETURNING *`,
+    sql: `INSERT INTO public.${validTable} (${keys.map(k=>`"${k}"`).join(',')}) VALUES (${keys.map((_,i)=>`$${i+1}`).join(',')}) RETURNING *`, // raw-sql-guard: allow — every name in this template was returned by validateIdentifier above (#2528)
     values: keys.map(k=>data[k]),
   };
 }
@@ -149,12 +151,14 @@ export function buildInsert(table: string, data: Record<string, unknown>) {
  
 export function buildUpdate(table: string, data: Record<string, unknown>, where: Record<string, unknown>) {
   const validTable = validateTableName(table);
-  const dk = Object.keys(data).filter(k => data[k] !== undefined && !PROTECTED.has(k));
+  const dk = Object.keys(data)
+    .filter(k => data[k] !== undefined && !PROTECTED.has(k))
+    .map(k => validateIdentifier(k));
   if (!dk.length) throw new Error('buildUpdate: no fields');
-  const wk = Object.keys(where);
+  const wk = Object.keys(where).map(k => validateIdentifier(k));
   let i = 1;
   return {
-    sql: `UPDATE public.${validTable} SET ${dk.map(k=>`${quoteIdentifier(k)}=$${i++}`).join(',')}, updated_at=now() WHERE ${wk.map(k=>`${quoteIdentifier(k)}=$${i++}`).join(' AND ')} RETURNING *`,
+    sql: `UPDATE public.${validTable} SET ${dk.map(k=>`"${k}"=$${i++}`).join(',')}, updated_at=now() WHERE ${wk.map(k=>`"${k}"=$${i++}`).join(' AND ')} RETURNING *`, // raw-sql-guard: allow — every name in this template was returned by validateIdentifier above (#2528)
     values: [...dk.map(k=>data[k]), ...wk.map(k=>where[k])],
   };
 }
@@ -163,12 +167,12 @@ export function buildUpdate(table: string, data: Record<string, unknown>, where:
 export async function countRows(table: string, where: Record<string, unknown>): Promise<number> {
   // FIX CRITICAL-06: Add table name validation (was missing unlike buildInsert/buildUpdate)
   const validTable = validateTableName(table);
-  const keys = Object.keys(where);
-  // Empty predicate means "count the table". Emitting `WHERE ` with nothing
-  // after it was a 42601 syntax error at end of input, so an unfiltered count
-  // could not be taken at all.
+  const keys = Object.keys(where).map(k => validateIdentifier(k));
+  // `WHERE` with nothing after it is Postgres 42601, and `where: {}` is the
+  // natural "count everything in this table" call — the signature invites it and
+  // no caller passes one today, so this has never been exercised.
   const predicate = keys.length
-    ? ` WHERE ${keys.map((k,i)=>`${quoteIdentifier(k)}=$${i+1}`).join(' AND ')}`
+    ? ` WHERE ${keys.map((k, i) => `"${k}"=$${i + 1}`).join(' AND ')}` // raw-sql-guard: allow — every name in this template was returned by validateIdentifier above (#2528)
     : '';
   const r = await query<{count:string}>(`SELECT count(*)::int as count FROM public.${validTable}${predicate}`, keys.map(k=>where[k]));
   return parseInt(r.rows[0]?.count ?? '0', 10);

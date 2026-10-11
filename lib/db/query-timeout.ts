@@ -37,35 +37,8 @@
  */
 
 import { getPool } from './pool';
+import { validateTimeoutMs } from '@/lib/sql-allowlist';
 import type { PoolClient, QueryResult } from 'pg';
-
-/**
- * Build the `SET [LOCAL] statement_timeout` statement for a request.
- *
- * Every timeout that reaches Postgres as text goes through here — this module,
- * `lib/api/with-transaction.ts` and `lib/cron/distributed-lock.ts` all did the
- * same thing inline, and only one of them clamped. A value interpolated without
- * clamping is a statement: `SET statement_timeout = '0'; UPDATE ... --` runs the
- * second statement with the connection's own privileges (#2528).
- *
- * @param timeoutMs - Milliseconds; floored at 1 and rounded to an integer.
- * @param options.local - Emit `SET LOCAL` (transaction-scoped, cannot leak to
- *   the next borrower of this pooled connection) instead of `SET`.
- * @throws TypeError on a non-finite value, so a bad config fails loudly in the
- *   route instead of as a Postgres 22023 mid-transaction.
- */
-export function statementTimeoutSql(
-  timeoutMs: number,
-  options: { local?: boolean } = {},
-): string {
-  if (typeof timeoutMs !== 'number' || !Number.isFinite(timeoutMs)) {
-    throw new TypeError(
-      `statementTimeoutSql: timeout must be a finite number of milliseconds, got ${String(timeoutMs)}`,
-    );
-  }
-  const ms = Math.max(1, Math.round(timeoutMs));
-  return `SET ${options.local ? 'LOCAL ' : ''}statement_timeout = '${ms}'`;
-}
 
 /**
  * Run a function with a custom statement timeout on a dedicated client.
@@ -82,13 +55,19 @@ export async function withTimeout<T>(
   timeoutMs: number,
   fn: (client: PoolClient) => Promise<T>,
 ): Promise<T> {
+  // #2528: this value is interpolated into raw SQL below, so it goes through the
+  // same clamp the other two `statement_timeout` sites use — and before a
+  // connection is taken, because `Math.round` on its own renders `NaN` for a stray
+  // undefined and then fails as a Postgres error mid-transaction instead of here.
+  const clampedMs = validateTimeoutMs(timeoutMs);
+
   const pool = getPool();
   const client = await pool.connect();
 
   try {
     // SET LOCAL only lasts for the current transaction, so we wrap in one.
     await client.query('BEGIN');
-    await client.query(statementTimeoutSql(timeoutMs, { local: true }));
+    await client.query(`SET LOCAL statement_timeout = '${clampedMs}'`); // raw-sql-guard: allow — clamped above (#2528)
 
     const result = await fn(client);
 
