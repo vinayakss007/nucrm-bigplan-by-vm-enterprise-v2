@@ -335,12 +335,15 @@ describe('POST /api/cron/contract-renewal-check', () => {
     });
   });
 
-  it('does not sweep when the dedup lock is held', async () => {
+  it('answers 423, not ok:true, when the dedup lock is held', async () => {
     mockAcquireLock.mockResolvedValue({ acquired: false });
 
     const res = await runCron();
 
     expect(mockSweepTenants).not.toHaveBeenCalled();
-    expect(res.body).toEqual({ ok: true, skipped: true, reason: 'lock-held' });
+    // #2539: a skipped run is a run that did not happen, so it is no longer
+    // reported as `ok: true`.
+    expect(res.status).toBe(423);
+    expect(res.body).toMatchObject({ ok: false, skipped: 'lock-held', reason: 'lock-held' });
   });
 });

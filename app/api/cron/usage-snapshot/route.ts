@@ -6,7 +6,7 @@
 import { apiError } from '@/lib/api-error';
 import { logError } from '@/lib/errors-server';
 import { verifySecret } from '@/lib/crypto';
-import { acquireLock } from '@/lib/cache';
+import { refuseIfCronLockHeld } from '@/lib/cron/cron-lock';
 import { NextRequest, NextResponse } from 'next/server';
 import { sql } from 'drizzle-orm';
 import { db } from '@/drizzle/db';
@@ -66,10 +66,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   // Distributed dedup guard (#1255): skip if another scheduler already ran it.
-  const lock = await acquireLock('cron:usage-snapshot', 3600);
-  if (!lock.acquired) {
-    return NextResponse.json({ ok: true, skipped: true, reason: 'lock-held' });
-  }
+  const refusal = await refuseIfCronLockHeld('cron:usage-snapshot', 3600);
+  if (refusal) return refusal;
   try {
     // The function call MUST go through the same transaction that carries
     // app.is_super_admin — a bare `db.execute` would check out a different

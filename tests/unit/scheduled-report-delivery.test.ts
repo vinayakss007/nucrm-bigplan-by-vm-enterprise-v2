@@ -359,9 +359,12 @@ describe('scheduled report delivery cron', () => {
     const { POST } = await import('@/app/api/cron/scheduled-report-delivery/route');
     const res = await POST(makeRequest());
 
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(423);
     const body = await res.json();
-    expect(body.skipped).toBe(true);
+    // #2539: a skipped run is not a run. `ok: true` was the mask; the 423 itself
+    // is pinned for all 22 routes in tests/unit/cron-lock-refusal-2539.test.ts.
+    expect(body.ok).toBe(false);
+    expect(body.skipped).toBe('lock-held');
     expect(mockSelectResult).not.toHaveBeenCalled();
     expect(mockSweepTenants).not.toHaveBeenCalled();
   });

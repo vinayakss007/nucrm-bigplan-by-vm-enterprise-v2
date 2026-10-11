@@ -13,6 +13,7 @@ import { sequenceEnrollments, tasks, sequenceStepLogs } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
 import { sendEmail } from '@/lib/email/service';
 import { acquireLock, releaseLock } from '@/lib/cache';
+import { cronLockRefusalResponse } from '@/lib/cron/cron-lock';
 import { sweepTenants } from '@/lib/cron/tenant-scope';
 import {
   activeStepWhere,
@@ -37,7 +38,7 @@ export async function POST(req: NextRequest) {
   // Acquire distributed lock to prevent concurrent cron runs
   const lock = await acquireLock(SEQUENCE_LOCK_KEY, SEQUENCE_LOCK_TTL);
   if (!lock.acquired) {
-    return NextResponse.json({ ok: true, skipped: true, reason: 'Another instance running' });
+    return cronLockRefusalResponse(SEQUENCE_LOCK_KEY);
   }
 
   try {

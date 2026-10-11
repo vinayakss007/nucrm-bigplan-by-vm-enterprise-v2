@@ -16,7 +16,7 @@ import { tenants } from '@/drizzle/schema/core';
 import { eq } from 'drizzle-orm';
 import { bulkScoreLeads } from '@/lib/ai/scoring';
 import { verifyCronSecret } from '@/lib/auth/cron';
-import { acquireLock } from '@/lib/cache';
+import { refuseIfCronLockHeld } from '@/lib/cron/cron-lock';
 import { sweepTenants } from '@/lib/cron/tenant-scope';
 
 
@@ -26,10 +26,8 @@ export async function POST(req: NextRequest) {
   }
 
   // Distributed dedup guard (#1255): skip if another scheduler already ran it.
-  const lock = await acquireLock('cron:process-lead-scoring', 3600);
-  if (!lock.acquired) {
-    return NextResponse.json({ ok: true, skipped: true, reason: 'lock-held' });
-  }
+  const refusal = await refuseIfCronLockHeld('cron:process-lead-scoring', 3600);
+  if (refusal) return refusal;
 
   try {
     // `tenants` carries tenants_read_all (USING true), so this enumeration works

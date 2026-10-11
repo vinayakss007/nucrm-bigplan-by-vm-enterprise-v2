@@ -40,7 +40,7 @@
 > three `jsonb` declarations. It now compares 3,216 columns across 226 tables
 > (`scripts/drift-check.ts:166`), masks only what a named pending migration is already clearing
 > (`scripts/schema-drift-allowlist.json`), and is wired in both places #2508 AC3 asks for:
-> `.github/workflows/ci.yml:405` (a `db:bootstrap` database, so the chain itself is measured on every
+> `.github/workflows/ci.yml:407` (a `db:bootstrap` database, so the chain itself is measured on every
 > pull request) and `.github/workflows/schema-drift.yml:162` (pre-prod, nightly, with a negative
 > control at `:105` that re-seeds the drift to prove the screen fires). Filed as **#2508**; the two
 > defect classes it found on its first run are **#2509** and **#2510**. Written as PP-064 and moved
@@ -167,7 +167,7 @@ Severity: **S1** blocks go-live · **S2** broken feature or security weakness ·
 | PP-046 | S3  | CHECK vs code               | The compliance dropdown offered `notes` and `tasks` as retention entity types; the table's CHECK accepts five values and neither of those, so two options could never be saved                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | 🔧 FIXED IN TREE · enforcement is the open half (#60)                                                                                                                                                   |
 | PP-047 | S2  | Auth context + panel        | The platform account has no workspace, so `ctx.tenantId` is the nil-UUID sentinel and ~120 insert routes answer `400 Invalid reference` instead of a reason — and the route that fixes it (`join-tenant`) has no UI caller                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | ⏸️ BLOCKED · owner decision: guard in `withApiRoute` or give the account a workspace                                                                                                                    |
 | PP-048 | S1  | Security / RLS boundary     | Tenant isolation rests on `app.is_super_admin`, a placeholder GUC any session can `SET`: a leaked `DATABASE_URL` opens 49 tables / 60 policies cross-tenant (measured 191 users, 162 contacts) — no HTTP path can reach it                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | ⏸️ BLOCKED · owner decision: role-based policies or per-purpose GUCs                                                                                                                                    |
-| PP-049 | S3  | Cron + observability        | PP-030's fix has nowhere central to live: 22 of 22 cron routes hand-roll `ok:true/skipped`, and `lib/cache/index.ts` has a **second** site (:323-327) that masks a Redis error as a held lock and ignores `LOCK_FAIL_OPEN`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | 🚨 OPEN · 23-file batch (additive `outcome` + 22 sites)                                                                                                                                                 |
+| PP-049 | S3  | Cron + observability        | PP-030's fix has nowhere central to live: 22 of 22 cron routes hand-roll `ok:true/skipped`, and `lib/cache/index.ts` has a **second** site (:323-327) that masks a Redis error as a held lock (`LOCK_FAIL_OPEN` is honoured on that path too, since #2373)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | 🔧 FIXED in this PR (#2539) — `lib/cron/cron-lock.ts` is the central site, all 22 routes answer `423 { ok:false }`, `guard:cron-lock` runs at `ci.yml:84-85`. **Still open:** the additive `outcome: 'held' \| 'unavailable'` split (a refusal cannot yet tell Redis-down from held) and the 5 routes with no crontab line, both owner decisions |
 | PP-050 | S2  | Performance + observability | A cron sweep pins 1 of 10 pool connections for ~75 s to do literally zero work, and the leak detector's 30 s threshold now fires 13×/hour — 311 of 311 holds in 24 h are cron, so a real leak would be invisible                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | 🚨 OPEN · four exits (upstream / threshold / code / server-side batching), none chosen                                                                                                                  |
 | PP-051 | S2  | Scheduling + DR             | Three schedule sources disagree about cron and the live one runs 17 of 22 routes, so 5 never fire — including `/api/cron/backup`, the only pg_dump+offsite path, whose last 4 attempts all failed                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | 🚨 OPEN · owner decision (#53, #54, #50, #79)                                                                                                                                                           |
 | PP-052 | S2  | Disk / observability        | PP-033's build-cache cap has fired once, exited 0 and reclaimed 0 B at 151.3 GB used against a 40 GB cap — `docker builder du` says 114.9 GB is reclaimable, `docker system df` says 0 B, and the bytes live in containerd, not `/var/lib/docker`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | 🚨 OPEN · three exits (command / daemon GC / accept), none chosen; disk at 41 % so no emergency                                                                                                         |
@@ -177,7 +177,7 @@ Severity: **S1** blocks go-live · **S2** broken feature or security weakness ·
 | PP-056 | S3  | Host / tooling              | `/tmp` is a **3.9 GB tmpfs** and vitest leaves a ~22 MB temp dir on **every** run: 88 of them held **1.9 GB**, which filled it. `npx vitest run` then exited **1 with no `Test Files`/`Tests` summary at all** — a scratch-space outage is indistinguishable from a red suite. Sweeping the suite after fixing it found **three assertions that only pass when `.env.local` is absent** (2 × CSRF + rate-limit) — and a fourth that turned out to be a **stale-clone-base artifact**, which is its own harness lesson                                                                                                                                                                                                                                                                                                                                                                                                                          | 🔧 MITIGATED (1.5 GB of stale clones moved off tmpfs, `TMPDIR` pinned to the root fs) · CSRF pair in PR **#2359**, rate-limit + this entry in **#2365** · four exits, all owner's call                  |
 | PP-057 | S2  | Migrations + tooling        | The repo has exactly one "what is applied?" command and it cannot see the ledger: `db:status` queries `__drizzle_migrations(name, applied_at)` — no such table, no such columns — and maps **any** failure to "history table does not exist", so against preprod it printed **`Applied: 0 / Pending: <every journal entry>`** on a database with **99 applied and 18 outstanding**. `db:migrate --dry-run` compounds it: its first line counts journal entries (**`116 pending migration(s)`**) before reading anything, and that number is what the y/N apply prompt offers. Nothing in CI or the runbooks would ever have revealed the 18-behind state, which includes `0091` (the usage-snapshot bypass **#56** shipped), `0059` (**#74**'s still-unstamped entry) and now `0116` (**#2367**, merged while this PR was open)                                                                                                                | 🔧 SCRIPTS FIXED in this PR (verified 99/18 against two instruments) · applying the 18 is an **owner decision** · also measured: `0115`'s absence is **not** a live cross-tenant read                   |
 | PP-058 | S2  | Migrations + tooling        | `db:migrate` connects as the tables' **owner** (`nucrm`) with `FORCE ROW LEVEL SECURITY` active on 48 of the 49 tables the pending set names, and `scripts/migrate.ts:198` sets **no tenant GUC** — so every data-correcting statement in a migration matches **0 rows** and silently corrects nothing, while the DDL built on top of it (`CREATE UNIQUE INDEX`, `SET NOT NULL`) reads the whole heap regardless. Measured on preprod: `0114_leads_tenant_oid_unique` (pending) dedupes `(tenant_id, lead_oid)` before creating the unique index, but its own CTE sees 0 of 25 leads while the truth is **1 duplicate group / 5 rows / 4 losers** (all five soft-deleted, all nine days older than the header's own "measured 0"), so the pending 21-entry run **aborts on 23505** — the exact failure its header says the dedupe exists to prevent                                                                                            | 🚨 OPEN · owner decision · no historical damage demonstrated · `0109` already proves the fix is one `set_config` line                                                                                   |
-| PP-059 | S2  | CHECK vs code               | `guard:vocab` — the only command in the repo that asks the **live database** what it will reject — exits **1** on `main` — measured at `38ae90e2`, re-measured at `f3787f32` — with **2 of 9** constraints disagreeing: `chk_sequence_enrollments_status` (5 values) refuses `'cancelled'`, which `/api/unsubscribe` has written since the repo's first commit `ecbba74e`, and `chk_invoices_status` (8 values) refuses `'void'`, which `INVOICE_STATUSES` offers and `PATCH /api/tenant/invoices/[id]` passes through. Its own fixes, `0120` and `0112`, are two of the **24** entries PP-057 says nobody has agreed to apply (the count was **22** when this row was written; `0121` landed since, then `0122` with **#2446**) — and it is the **only one of the 20 `guard:*` scripts no automation invokes**: workflows call 17 by alias and 2 by direct `node` command (`ci.yml:217`, `:250`), while `grep -rn check-constraint-vocab .github/workflows` returns **0** | 🚨 OPEN · guard wired nowhere · latent **on this DB** (both tables hold 0 rows, measured `--superadmin`) · CI green proves only that the `.sql` text says the right thing                               |
+| PP-059 | S2  | CHECK vs code               | `guard:vocab` — the only command in the repo that asks the **live database** what it will reject — exits **1** on `main` — measured at `38ae90e2`, re-measured at `f3787f32` — with **2 of 9** constraints disagreeing: `chk_sequence_enrollments_status` (5 values) refuses `'cancelled'`, which `/api/unsubscribe` has written since the repo's first commit `ecbba74e`, and `chk_invoices_status` (8 values) refuses `'void'`, which `INVOICE_STATUSES` offers and `PATCH /api/tenant/invoices/[id]` passes through. Its own fixes, `0120` and `0112`, are two of the **24** entries PP-057 says nobody has agreed to apply (the count was **22** when this row was written; `0121` landed since, then `0122` with **#2446**) — and it is the **only one of the 22 `guard:*` scripts no automation invokes** (22 measured at this PR, which adds `guard:cron-lock` **with** a runner: 19 called by `npm run guard:*` alias, 2 by direct `node` command): workflows call 19 by alias — 16 in `ci.yml` at `:45` through `:85` and 3 in `nightly-soak.yml` — and 2 by direct `node` command (`ci.yml:219`, `:252` — re-pinned from `:217`/`:250` on 2026-10-10 by **#2539**), while `grep -rn check-constraint-vocab .github/workflows` returns **0** | 🚨 OPEN · guard wired nowhere · latent **on this DB** (both tables hold 0 rows, measured `--superadmin`) · CI green proves only that the `.sql` text says the right thing                               |
 | PP-060 | S2  | Deploy                      | The 24-entry backlog (23 until `0122` landed with **#2446**) has **no automated apply path that could reach this database**: the only executable migrate in the repo's automation is `deploy.yml:356` (`scripts/deploy-migrate.ts --yes`, which spawns `migrate.ts --yes` at `:96`), inside the single `script:` block opened at `:138` — so it runs over SSH on the **pm2 production VM**, not on this Docker preprod host. That hop has failed every run since the last success (`30748691555`, 2026-08-02T12:51:06Z): **778 runs · 0 success** (667 failure / 63 cancelled / 48 skipped), 15 of 15 sampled recent runs contain `dial tcp ***:22: i/o timeout`, and the full retained history is **3 successes in 1,319 runs**. No workflow mentions `db:status` (grep: 0 hits in all 5), `ci.yml` and `backup-drill.yml` build their databases with `db:sync`, and this host has no deploy cron or timer                                                                                    | 🚨 OPEN · owner action (`gh secret set DEPLOY_HOST`, the remedy AGENTS.md already documents) · even a healthy deploy migrates a **different database**, so PP-057's exit (a) has no mechanism behind it · **PP-063** measured the hop over the whole history and found a second defect behind this one |
 | PP-061 | S2  | Edge / auth surface         | **Six endpoints that authenticate with something other than a session were unreachable on this host.** `POST` to `/api/auth/oauth/token`, `/api/auth/oauth/revoke`, `/api/webhooks/razorpay`, `/api/webhooks/payu`, `/api/webhooks/telegram/bot` and `/api/tenant/plugins/webhook/<id>` each answered `401 {"error":"Authentication required"}` — the identical byte-for-byte body the middleware itself writes, so **no handler ran** — because none of the six is in `proxy.ts:226`'s public list. The OAuth exchange, **both payment receivers**, the bot and the plugin integrators all had a caller that could never arrive. The same screen then caught what the closed edge had been hiding: `app/api/tenant/plugins/webhook/[id]/route.ts:63` loaded **all 19 columns** of `custom_plugins` — including `drizzle/schema/plugins.ts:20`, whose own comment says it "stores token/username/password/client_id/etc" — and did it **before** verifying the caller at `app/api/tenant/plugins/webhook/[id]/route.ts:106`, on a URL that is itself the credential | 🔧 FIXED in this PR (6 paths opened, row projected to 4 of 19 columns, `tests/unit/proxy.test.ts:158`) · **0 of 6 live**, re-measured 2026-10-10 against the deployed tree `30e9f263` — **103** commits behind main, and the count rose while this PR was open · `/api/tenant/visitors/track` measured as the seventh hit and **deliberately left closed** |
 | PP-062 | S2  | Portal / credential         | `support_tickets.portal_token` was a **second credential living on the header the portal already uses for `portal_clients.access_token`**: `lib/portal-auth.ts:45` reads `x-portal-token` as a client token, and three public ticket routes read the *same* header (plus a POST body field) as a **ticket** token, resolved it to a **contact** and answered with that contact's **whole** ticket history — deliberately, #2378 — so possession of one ticket's string read every ticket that contact ever filed, subjects and bodies included. Permanent and un-revocable by construction: no `expires_at`, no `is_active`, no rotation, no revoke path, unlike `portal_clients` (`drizzle/schema/tokens.ts:202`, `:204`). **Nothing ever delivered it** — 0 references to `portal_token`/`portalToken` in `app/portal/**`, in `components/**`, in any email template or webhook payload — and #2440 had already stopped `POST /api/public/tickets` echoing a freshly minted one, so the only tokens that can still exist are ones handed out **before** that fix. That read was also the *only* thing letting an unauthenticated connection see a `support_tickets` row at all: 0122's `support_tickets_portal_token_lookup` arm. **Latent on this database**, measured: `support_tickets` holds 0 rows for the one tenant `tenants` exposes under `--superadmin`, and the retired grant is not even installed here because **0122 itself is pending** (PP-060) | 🔧 FIXED in this PR (credential retired in code, RLS and nullability by `0124` — the **26th** outstanding entry, `db:status` → `Applied: 99 · Pending: 26 · Total: 125`) · `DROP COLUMN` and `SET portal_token = NULL` stay **owner decisions** · not live until deployed |
@@ -185,7 +185,7 @@ Severity: **S1** blocks go-live · **S2** broken feature or security weakness ·
 | PP-064 | S2  | Infra / security boundary   | **The only Postgres Compose does not declare is the only publish on this box that is not the front door yet bound to every interface.** `nucrm-test-db` (`postgres:16`, up since 2026-09-26, `Config.Labels {}`, `Binds null`, `RestartPolicy=no`) publishes `5432/tcp` on `0.0.0.0` **and** `[::]`, with `listen_addresses` = `*` and a `pg_hba.conf` line admitting any host to any database as any user; the superuser password is **8 characters** and is not printed here. The chain was completed, not inferred: dialing the box's own public address returned `AUTH OK` with `rolsuper = t`, over **33 databases / 32 app-shaped, 31 of them the full schema, 1,089 rows**, each carrying the whole production schema (263 policies, 3,231 columns, 1,119 indexes, 532 CHECK constraints). Nothing on the host restricts it — `iptables -S INPUT` is the single line `-P INPUT ACCEPT`, `DOCKER-USER` holds **0** rules, `ufw` is inactive, and the public IPv4 is bound to the box's own NIC (no NAT in front) | 🚨 OPEN · **report-only** - no compose file declares it, so no PR can re-bind it, and re-binding it means destroying 31 schema-bearing undocumented databases — one per PR/issue number, no manifest behind any of them · **owner action**: publish on `127.0.0.1` or drop the publish, turn on `log_connections`, rotate the credential · **not** tenant data (the app reaches an external managed database through PgBouncer on loopback, and the running metrics exporter was verified to point there too) · off-box reachability **unproven**, and the box keeps no record that could prove or disprove it · **S1** if the owner confirms nothing filters inbound above the NIC |
 | PP-066 | S3  | Staff API / credential      | **#2498's projection stopped one column short.** **#2500** named the columns both staff ticket *creates* return (`app/api/tenant/tickets/route.ts:126` → 10 columns, `app/api/superadmin/tickets/route.ts:126` → 9) and its test covers the response *and* the automation payload — but the third `.returning()` in that second file, the PATCH at `app/api/superadmin/tickets/route.ts:190`, was still argument-less: `RETURNING *` over all **23** columns of `support_tickets`, `portal_token` (still `NOT NULL` on the target database — 1 of its 8 NOT NULL constraints in `pg_constraint` — and still a working bearer credential on the deployed build: `401 {"error":"Invalid token"}` answers `x-portal-token`) and `metadata` (#2443's operator prose) among them. Nothing ever left: `if (!row)` at `:192` is the row's only consumer and the handler answers `{ ok: true }` at `:193`, so this is the **read**, not a disclosure — and `guard:public-projection` cannot see it by design, its file set is `proxy.ts`'s anonymous surface (#2459) and this is a session-authenticated staff route | 🔧 FIXED in this PR (`.returning({ id: supportTickets.id })` — one column is the whole requirement, and a map with a single consumer would be a second source of truth · `tests/unit/superadmin-tickets-patch-projection-2498.test.ts`, 6 tests through a fake that **applies** the column map, negative control **2 failed / 4 passed**) · **the copies #2500 and this PR do not undo:** `lib/automation/engine.ts:96` and `:109` persist the tenant create's payload into `automation_runs.metadata`, which is `jsonb`, so `DROP COLUMN` cannot reach what is already there — emptying it is an `UPDATE`, an owner step alongside the drop, not after it — and `fire_webhook` (`:311`) posts `data: enrichedData` (`:324`) onward · **#2499** stays open until `0124` is applied: **#2501** made the deploy hop *diagnosable* (`deploy.yml:79`, `:151`), it did not repair it, so PP-060's finding stands and `db:status` still reads **Applied 99 · Pending 26 · Total 125** |
 | PP-067 | S2  | Migrations + tooling        | **Six columns come out of `npm run db:bootstrap` nullable while `drizzle/schema` declares every one of them NOT NULL** — `custom_entities.fields/.settings/.created_at`, `custom_entity_data.data/.created_at`, `segment_members.id`. `0059` created them loosely; `0071`'s repair is a `CREATE TABLE IF NOT EXISTS`, which on any ordered chain build parses, discards itself and **never executes**, so its NOT NULLs are inert text. `0125` backfills every NULL with the value that column's own DEFAULT already supplies and then adds the six constraints, driven by `set_config('app.current_tenant', …)` per tenant — because `0109`'s `app.is_super_admin` GUC is **inert** on these three `tenant_isolation` policies (measured: `UPDATE 0`, then `23502` on the following `SET NOT NULL`). Both directions measured with #2512's column-level screen: **9 allowlisted → 3 allowlisted, 0 drift**, exit 0 on a chain-built database. | 🔧 FIXED IN TREE                                                                                                                                          |
-| PP-068 | S2  | Schema drift                | **The only screen in this repo that asks the live database what its columns are compared _names_, and nothing ran it.** `scripts/drift-check.ts` checked table presence, function presence, RLS policy presence and row counts of undeclared tables — never a column — so pre-prod measured `No drift ✓` at **exit 0** while `support_tickets.portal_token` was live `NOT NULL` with **no default** against a schema file that declares it nullable (#2499's whole cause), and `super_admin_audit_logs` carried three `text` columns behind three `jsonb` declarations. `grep -rn drift-check .github/workflows` → **0 hits across all five workflow files**, while **five** documents told a human to run it. All three screens that do exist are name-only (`tests/unit/schema-drift-guard-2255.test.ts`, `scripts/check-schema-drift-live.ts`, `scripts/check-schema-drift.mjs` is Zod), and the obvious fix — importing the schema **barrel** — is load-mode-dependent: from a `.ts` entry it yields the same 226 tables the 62 files do, from an `.mts` entry it has **3** own keys and **2** tables, the 236 real exports hidden one level down in `schema.default`, silently | 🔧 FIXED in this PR (columns compared per table, three kinds — presence, nullability, type — behind a ratcheting allowlist that must name a `clearedBy` migration or a `filedAs` issue for every entry, and wired in both shapes **#2508** AC3 asks for: `ci.yml:405` measures a `db:bootstrap` database on every pull request, `.github/workflows/schema-drift.yml` measures pre-prod nightly **and** re-seeds the drift in a throwaway database to prove the screen fires (`:105`)) · measured after: pre-prod **6** findings, chain-built database **9**, **4** in common — the two databases are behind main in **different directions** · the live fixes stay open as **#2509** (nullability, 6 columns), **#2510** (audit types, 3 columns) and `0124`/`0109` for #2499 · the **3,216** are base-table columns; **PP-064**'s 3,231 is the same `nucrm_test` plus the **15** columns of its `deals_by_win_probability` view — both counts measured here |
+| PP-068 | S2  | Schema drift                | **The only screen in this repo that asks the live database what its columns are compared _names_, and nothing ran it.** `scripts/drift-check.ts` checked table presence, function presence, RLS policy presence and row counts of undeclared tables — never a column — so pre-prod measured `No drift ✓` at **exit 0** while `support_tickets.portal_token` was live `NOT NULL` with **no default** against a schema file that declares it nullable (#2499's whole cause), and `super_admin_audit_logs` carried three `text` columns behind three `jsonb` declarations. `grep -rn drift-check .github/workflows` → **0 hits across all five workflow files**, while **five** documents told a human to run it. All three screens that do exist are name-only (`tests/unit/schema-drift-guard-2255.test.ts`, `scripts/check-schema-drift-live.ts`, `scripts/check-schema-drift.mjs` is Zod), and the obvious fix — importing the schema **barrel** — is load-mode-dependent: from a `.ts` entry it yields the same 226 tables the 62 files do, from an `.mts` entry it has **3** own keys and **2** tables, the 236 real exports hidden one level down in `schema.default`, silently | 🔧 FIXED in this PR (columns compared per table, three kinds — presence, nullability, type — behind a ratcheting allowlist that must name a `clearedBy` migration or a `filedAs` issue for every entry, and wired in both shapes **#2508** AC3 asks for: `ci.yml:407` measures a `db:bootstrap` database on every pull request, `.github/workflows/schema-drift.yml` measures pre-prod nightly **and** re-seeds the drift in a throwaway database to prove the screen fires (`:105`)) · measured after: pre-prod **6** findings, chain-built database **9**, **4** in common — the two databases are behind main in **different directions** · the live fixes stay open as **#2509** (nullability, 6 columns), **#2510** (audit types, 3 columns) and `0124`/`0109` for #2499 · the **3,216** are base-table columns; **PP-064**'s 3,231 is the same `nucrm_test` plus the **15** columns of its `deals_by_win_probability` view — both counts measured here |
 | PP-069 | S2  | Infra / guard correctness | **`guard:migration-rls` accepted the `app.is_super_admin` marker without reading the policies of the tables the migration writes.** `MITIGATION.test(rawSql)` excused any file that mentioned the GUC anywhere — and the final `0125` mentions it in header prose to warn that it is **inert** there — for every write it made. `0125`'s first draft is the measured bypass (**PP-067**): marker set, three `tenant_isolation` policies that never read it, `UPDATE 0`, then `23502` on the following `SET NOT NULL` | 🔧 FIXED in this PR (per-table mitigation, **#2516**: a marker counts only where the written table's own literal `CREATE POLICY` statements read it somewhere in the history — `collectPolicyGucs` — otherwise the file must set `app.current_tenant`; evidence is the comment-stripped executable scope, so prose and stored-function bodies no longer excuse a file · `0109` green for the right reason, final `0125` passes through (b), a first-draft-shaped fixture exits 1 · tree verdict unchanged: 126 files · 202 tenant-scoped · 17 + 2 baselined · exit 0) |
 
 ## Sentry issues → register entries
@@ -1044,7 +1044,7 @@ running=120s` with exit 1 and the `--force-recreate app` command to fix it.
 
 - `drizzle/schema/infra.ts:159` binds `backupRecords` to **`backup_records`**, which is what every
   panel route (list, `[id]`, download, restore) reads and what `lib/backups/backup-service.ts:244`
-  inserts into. `app/api/cron/auto-backup/route.ts:263` writes **`tenant_backup_records`** with raw
+  inserts into. `app/api/cron/auto-backup/route.ts:261` writes **`tenant_backup_records`** with raw
   SQL. Nothing joins the two.
 - **Measured.** `backup_records` = 4 rows, `status` all `failed`, 0 `completed`;
   `tenant_backup_records` = 144 rows, 138 `completed`. The nightly run therefore produces 138
@@ -1788,8 +1788,8 @@ NOW() - interval '30 days'`, each followed by `v_count := v_count + 1`, and `RET
   items, and the six types the same endpoint lists (`TRASH_TABLES`: contact, deal, task, company,
   **lead**, **project**) meant two of them were never purged by it at all. The confirm dialog's promise
   ("permanently purge **all** trash items older than 30 days") was wider than the code behind it.
-- **The leads half was already partly handled.** `app/api/cron/cleanup/route.ts:153` deletes >30-day
-  leads itself, with a comment naming this exact gap and a test pinning it (`cleanup-tenant-sweep.test.ts:369`),
+- **The leads half was already partly handled.** `app/api/cron/cleanup/route.ts:151` deletes >30-day
+  leads itself, with a comment naming this exact gap and a test pinning it (`cleanup-tenant-sweep.test.ts:372`),
   so nightly retention does cover leads. The manual "purge now" path did not — which is the path an admin
   reaches for when they want the trash gone _now_, and the path that reports the number.
 - **Accumulation measured, and it is latent, not live.** Under `app.is_super_admin='true'`
@@ -2018,7 +2018,7 @@ from pg_policies where schemaname='public' and (qual like '%app.is_super_admin%'
   lists extended by **#2446** with the three `app.portal_lookup_*` GUCs, so a portal-credential read cannot
   outlive its transaction either). No route splices
   request data into SQL: the template-literal sinks in `app/` are compile-time identifiers or regex-gated numerics
-  (`app/api/cron/backup-verify/route.ts:241-243` gates `nucrm_verify_${Date.now()}` through `^[a-z0-9_]+$` before
+  (`app/api/cron/backup-verify/route.ts:239-241` gates `nucrm_verify_${Date.now()}` through `^[a-z0-9_]+$` before
   `CREATE DATABASE`; `app/api/tenant/sla/route.ts:36` is drizzle identifiers — the coordinate did not move but the text under it did: **#2482** rewrote that line on 2026-10-10 from `sql.raw('"sla_policies"."id"')`, a compile-time constant, to the `slaPolicies.id` identifier it is now, so the claim this sentence makes became literally true only with that PR). Library-level splices are not reachable from
   `app/` (`lib/data-integrity.ts:289` has zero importers under `app/`; `lib/db/query-timeout.ts:63` is `Math.round`ed).
   **So this is (i) a credential-handling problem — a leaked `DATABASE_URL` _is_ a full cross-tenant read grant over 49
@@ -2051,14 +2051,22 @@ from pg_policies where schemaname='public' and (qual like '%app.is_super_admin%'
   `lib/db/request-connection.ts:88-94` (both reset lists gained the `app.portal_lookup_*` names with
   **#2446**, which is why their text moved while the cited construct did not), `lib/auth/middleware.ts:297,391`,
   `drizzle/migrations/0088_rls_bootstrap_and_isolation.sql:344-360`, `drizzle/migrations/0099_api_keys_auth_lookup.sql`,
-  `drizzle/migrations/0105_email_tracking_pixel_lookup.sql`, `app/api/cron/backup-verify/route.ts:241-243`,
+  `drizzle/migrations/0105_email_tracking_pixel_lookup.sql`, `app/api/cron/backup-verify/route.ts:239-241`,
   `deploy/docker-compose.preprod.yml`, `deploy/docker-compose.production.yml`.
 
-## PP-049 — 🚨 PP-030's honest 503 has no central place to live: 22 of 22 cron routes hand-roll their own skip, so the fix is a 23-file design batch, not a narrow change _(S3 · Cron + observability)_
+## PP-049 — 🔧 PP-030's honest 503 has no central place to live: 22 of 22 cron routes hand-roll their own skip, so the fix is a 23-file design batch, not a narrow change _(S3 · Cron + observability · #2539)_
 
 **Found:** 2026-10-04 (UTC), verifying PP-030 against the tree before implementing its fix as a narrow behaviour change.
-**Status:** 🚨 OPEN — defect re-confirmed with two corrections; **no code shipped**, because the honest fix spans 23 files,
-which is a design decision (a shared skip site), not an edit.
+**Status:** 🔧 FIXED IN THIS PR (#2539, 2026-10-10 UTC) — one shared refusal site (`lib/cron/cron-lock.ts`), all **22** routes
+converted, a CI guard (`npm run guard:cron-lock`, wired at `ci.yml:84-85` + `package.json:68`) and 48 refusal tests. The
+**200 `ok:true` mask is gone from the tree**: a held lock is now `423 { ok:false }`. _Written 2026-10-04 as:_ 🚨 OPEN —
+defect re-confirmed with two corrections; **no code shipped**, because the honest fix spans 23 files, which is a design
+decision (a shared skip site), not an edit.
+**Still open, and deliberately not shipped here:** (a) the `outcome: 'acquired' | 'held' | 'unavailable'` split below — a
+refusal still cannot distinguish "another instance holds it" from "Redis is down", so #2539's step 1 (distinguishing
+unavailable from held) is **not** done by this PR; (b) the **5** routes with no crontab line (#2539 step 3) and the
+destructive-cleanup schedule, both owner decisions; (c) `registerCronRun` still has **zero callers** (measured below), so
+`/api/system/cron-health` remains empty whatever this PR does to the response codes.
 
 - **Mechanism, re-verified line by line.** `lib/cache/index.ts:309` returns a two-state `{ acquired, value }`, and **two**
   separate sites collapse "backend unavailable" into "held":
@@ -2066,16 +2074,25 @@ which is a design decision (a shared skip site), not an edit.
      `redisPermanentlyDisconnected` at :97) → `{ acquired: process.env['LOCK_FAIL_OPEN'] === 'true', value: '' }`, carrying
      no reason. Exactly what PP-030 describes.
   2. `lib/cache/index.ts:323-327` — **the correction PP-030 missed**: if the client is `ready` but the `SET` itself throws,
-     the catch returns `{ acquired: false, value: '' }`, so a Redis _error_ also masquerades as a held lock — and this path
-     **ignores `LOCK_FAIL_OPEN`** (the variable is read only at :316). One operator config, two different wrong answers:
-     "not ready" runs, "SET errors" skips.
-- **Blast radius, measured not inherited.** `app/api/cron/` holds **22** route dirs and **22 of 22** call
-  `acquireLock('cron:<name>', …)` and hand-roll the skip: **20** answer HTTP 200
-  `{ok:true,skipped:true,reason:'lock-held'}` (`auto-backup/route.ts:52-54`, `cleanup/route.ts:88-90`,
-  `backup-verify/route.ts:135-137`) and **2** tell the same lie with a different string,
-  `reason:'Another instance running'` (`process-sequences/route.ts:38-40`, `scheduled-report-delivery/route.ts:158-160`).
-  PP-030's "20 of 22" is right about the string and short by two about the behaviour: **all 22 misreport `unavailable` as a
-  benign skip.**
+     the catch returns `{ acquired: process.env['LOCK_FAIL_OPEN'] === 'true', value: '' }` (:326), so a Redis _error_
+     also masquerades as a held lock. The asymmetry this entry used to record here — the flag read at :316 only, so
+     "not ready" ran and "SET errors" skipped — was **closed by #2373** (`355d1326`, 2026-10-06, whose message cites PP-049).
+- **Blast radius, measured not inherited.** `app/api/cron/` holds **22** route dirs and **22 of 22** took their
+  dedup lock with `acquireLock('cron:<name>', …)` and hand-rolled the skip. What each answered when the lock was
+  already held, at the coordinates this entry still names: **20** returned HTTP 200
+  `{ok:true,skipped:true,reason:'lock-held'}` (the three coordinates are read at `2d037d6a`: `auto-backup/route.ts:52-54`,
+  `cleanup/route.ts:88-90`, `backup-verify/route.ts:135-137` — each the acquire line plus its `if (!lock.acquired)` block, and **#2539** later replaced all three with one shared-module call on the same lines) and **2** told the
+  same lie with a different string, `reason:'Another instance running'`
+  (`process-sequences/route.ts:39-41`, `scheduled-report-delivery/route.ts:159-161`).
+  PP-030's "20 of 22" is right about the string and short by two about the behaviour: **all 22 misreported
+  `unavailable` as a benign skip.** _(measured at the found revision; re-pinned 2026-10-10 by this PR — the two
+  `Another instance running` sites each gained one import line, so `process-sequences` moved `:38-40` → `:39-41`
+  and `scheduled-report-delivery` `:158-160` → `:159-161`. The 20 `lock-held` coordinates still name the lock site
+  for a reason the content-drift screen will report and a reviewer should see: `refuseIfCronLockHeld('cron:<name>',
+  …)` replaced the `acquireLock` call on the very line it occupied, so the numbers are unchanged and the text on
+  them is not. All three literals are gone from the tree — `lib/cron/cron-lock.ts` answers
+  `423 { ok:false, skipped:'lock-held' }`, and rule 1/2/3 of `scripts/check-cron-lock.mjs` hold all 22 routes to
+  it.)_
 - **Why there is no central site to fix — every candidate checked.** `withCronLock` (`lib/cron/distributed-lock.ts:64`)
   _is_ an honest shared skip site — it returns **409** when not acquired — but it has **zero route consumers** (only its own
   tests reference it), it is built on a PG advisory lock rather than the Redis one, and it carries no `LOCK_FAIL_OPEN`.
@@ -2097,8 +2114,8 @@ which is a design decision (a shared skip site), not an edit.
   { acquired: boolean; value: string; outcome: 'acquired' | 'held' | 'unavailable'; degraded?: boolean }
   ```
   `ready` + `SET NX` OK → `acquired`; `ready` + `SET NX` nil → `held`; client not ready **or** `SET` throws →
-  `unavailable` (which also fixes the :323-327 inconsistency, since `LOCK_FAIL_OPEN` then means the same thing on both
-  unavailable paths). Route side, all 22 sites: `unavailable` + fail-closed → **503**
+  `unavailable`. Nothing here repairs a `LOCK_FAIL_OPEN` inconsistency — #2373 already did — the split is about carrying
+  a _reason_, which the two-state shape still cannot express. Route side, all 22 sites: `unavailable` + fail-closed → **503**
   `{ ok:false, ran:false, error:'lock_backend_unavailable' }` — which alone makes `run-cron.sh`'s existing `CRON FAILED`
   path fire; `unavailable` + `LOCK_FAIL_OPEN=true` → run, and the response says `lockDegraded: true` instead of claiming the
   lock was real; genuine `held` → **byte-identical to today**. With Redis healthy nothing changes: every difference lives
@@ -2115,6 +2132,34 @@ which is a design decision (a shared skip site), not an edit.
 - **Files:** none changed. Evidence read: `lib/cache/index.ts:93,97,309-327,368,418,458`; all 22 `app/api/cron/*/route.ts`
   skip sites; `lib/cron/distributed-lock.ts:64`; `lib/auth/cron.ts`; `deploy/cron/run-cron.sh`; `deploy/cron/crontab`
   (read-only); `tests/unit/cron-lock.test.ts`; `tests/unit/scan7-system-resilience.test.ts`.
+- **What shipped instead of the 23-file batch, and why it is not the shape specified above (#2539, 2026-10-10).** A guard
+  call, not a callback: `refuseIfCronLockHeld(key, ttl) → NextResponse | null` and `cronLockRefusalResponse(key)`, both in
+  **`lib/cron/cron-lock.ts`**. The issue asked for a `withCronLock()` wrapper; that name is already taken by the Postgres
+  advisory helper at `lib/cron/distributed-lock.ts:64` (used by no route), and a callback form re-indents all 22 job bodies —
+  which collides with every in-flight cron branch. The guard keeps each body at its own indentation, centralises both the
+  decision and the response, and does **not** release the lock: for 20 of the 22 the TTL *is* the minimum interval between
+  runs, so releasing on exit would let the same fire re-enter. `process-sequences` and `scheduled-report-delivery` keep their
+  own `acquireLock`/`releaseLock` pair and only borrow the response. **22 route files, 64 insertions / 102 deletions**, plus
+  `scripts/check-cron-lock.mjs` (5 rules: lock module present, refusal answered, no local `ok:true` mask, every scheduled
+  name has a route, and a **shrinking** allowlist of the 5 routes with no crontab line) and
+  `tests/unit/cron-lock-refusal-2539.test.ts` (48 tests: per route `423` + `ok:false` + `skipped/reason:'lock-held'` +
+  `error` naming the job, `acquireLock` called exactly once with `cron:<dir>` and a positive TTL, and 401 ordered **before**
+  423). **14 pre-existing test files pinned the mask and now pin 423** — 4 asserted the whole body
+  (`toEqual({ ok: true, skipped: true, reason: 'lock-held' })`: contract-renewal, cron-ai-auto-followup,
+  cron-task-reminders, follow-up-cron) and 10 asserted `expect(body.skipped).toBe(true)`, of which the three that
+  captured the `Response` also pinned `status` 200. Those 14 are why the change is safe to land: the mask had
+  tests, and the tests were the specification.
+- **Three schedule sources, measured at `2d037d6a` — the entry above names only one.** `deploy/cron/crontab` **17** jobs,
+  `vercel.json` crons **18**, `scripts/cron-scheduler.ts` **18** — three different sets, not one set with three spellings.
+  Narrowing "the 5 with no live line" above: **3** of them are reachable from another scheduler (`recurring-invoice-generator`
+  on Vercel *and* in-process; `backup` and `lead-warming` in-process only) and **2** — `process-lead-scoring`, `sla-check` —
+  are scheduled nowhere at all. The in-process scheduler fires none of `process-lead-scoring`, `scheduled-report-delivery`,
+  `sla-check`, `subscription-renewal-check`. #1422 allows exactly one source active per environment, so the guard reports
+  this divergence as a note rather than a failure — but it is divergence, not parity, and has to be said out loud.
+- **`registerCronRun` has no caller at all (measured here, 2026-10-10).** `grep -rn "registerCronRun" --include=*.ts` over
+  the repo returns the definition and its tests but **zero production call sites**, so `/api/system/cron-health` reports an
+  empty set whatever status code a refusal carries. This PR makes a skipped run loud to the scheduler and to the response
+  consumer; it does **not** make it visible in the panel's health endpoint, which needs its own write site.
 
 ## PP-050 — 🚨 A cron sweep pins one pool connection for ~75 s — 7 client round trips per tenant at a ~200 ms RTT — to do literally nothing, and the leak detector has never reported a non-cron hold: 311 of 311 acquisitions in 24 h land on a 5-minute boundary _(S2 · Performance + observability)_
 
@@ -2162,7 +2207,7 @@ connection setup (~400–600 ms) and bounds the 50-statement loop rather than pr
 - **Statements per tenant iteration, counted from the current tree** (empty-work path): `setTenantContext`
   `lib/cron/tenant-scope.ts:151` → `lib/db/rls.ts:88` (one statement, two `set_config`s) · `resolveActingUser` `:154` →
   `:122-127` · a second `setTenantContext` `:161` (0–1, data-dependent) · the Phase-1 `db.transaction`
-  `app/api/cron/process-sequences/route.ts:54` = `BEGIN` + the carrier re-apply `drizzle/db.ts:79` + the due-enrollments
+  `app/api/cron/process-sequences/route.ts:55` = `BEGIN` + the carrier re-apply `drizzle/db.ts:79` + the due-enrollments
   `SELECT … FOR UPDATE SKIP LOCKED` (called at `:57`; #2392 moved the SQL itself out of the route into
   `lib/cron/sequence-steps.ts:145`) + `COMMIT` · `clearTenantContext` in the per-iteration `finally` `:173` →
   `rls.ts:107`. Fixed per sweep (5): `BEGIN` + `setSuperAdminContext` (`rls.ts:169`) + the tenants `SELECT`
@@ -2248,8 +2293,8 @@ connection setup (~400–600 ms) and bounds the 50-statement loop rather than pr
   Same shape at `tenant-scope.ts:158/166/174` (`void logError(...)`, which inserts into `error_logs`,
   `lib/errors-server.ts:228`). **Neither can fire on the measured sweeps**: both sit behind a non-empty `dueEnrollments`
   (`route.ts:126`) or a throw, and every run is `processed:0 / tenants_failed:0`. Sibling detached DB calls on other sweep
-  paths: `app/api/cron/subscription-renewal-check/route.ts:147`, `contract-renewal-check/route.ts:161`,
-  `backup-verify/route.ts:279,313,331`. So this is a **latent multiplier** on the pin — it bites the first time a tenant has
+  paths: `app/api/cron/subscription-renewal-check/route.ts:145`, `contract-renewal-check/route.ts:159`,
+  `backup-verify/route.ts:277,311,329`. So this is a **latent multiplier** on the pin — it bites the first time a tenant has
   real work — not part of the 75.3 s.
 - **Config-drift footnote for the owner.** The repo's `deploy/pgbouncer/pgbouncer.ini` is not what runs: the repo file says
   `* = host=host.docker.internal port=5432` (`:2`), `pool_mode = transaction` (`:10`) and `query_timeout = 30` (`:20`), while
@@ -2273,7 +2318,8 @@ connection setup (~400–600 ms) and bounds the 50-statement loop rather than pr
   checkout sites confirmed by grep).
 - **Files (all read-only):** `lib/cron/tenant-scope.ts:81,122-127,139,145-178`, `lib/db/rls.ts:7-16,72-107,165-169,181-189`,
   `lib/db/request-connection.ts:31-42,136-181,202-249`, `lib/db/leak-detector.ts:27-29,41-42,50-57,100-122`,
-  `lib/db/pool.ts:168,183,190`, `drizzle/db.ts:69-81`, `app/api/cron/process-sequences/route.ts:33-64,70-116,126,295`,
+  `lib/db/pool.ts:168,183,190`, `drizzle/db.ts:69-81`, `app/api/cron/process-sequences/route.ts:35-66,72-118,128,297`
+  (re-pinned 2026-10-10: **#2539** added one import line above `POST`, shifting every coordinate in this file by 1),
   `lib/email/tracking.ts:39-41`, `lib/ai/sentiment.ts:165-176`, `lib/errors-server.ts:228`,
   `lib/api/with-api-route.ts:106-162`, `deploy/cron/crontab`, `deploy/cron/run-cron.sh`,
   `deploy/pgbouncer/pgbouncer.ini:2,10,20`, `deploy/docker-compose.preprod.yml:36,47,144,152`. Related: **PP-028** (the 200 ms
@@ -2318,7 +2364,7 @@ entry ships nothing.
   `lead-warming/route.ts:12` "Schedule: Daily at 9:00 AM", `backup/route.ts:20` "Called daily by cron — runs pg_dump",
   `sla-check/route.ts:21` "Runs periodically (e.g., every 5-10 minutes)", `process-lead-scoring/route.ts:8` "Cron: Nightly
   Lead Scoring Recompute". And nothing else calls them: `checkSLABreach`'s only non-test consumer is
-  `app/api/cron/sla-check/route.ts:152`; `bulkScoreLeads`'s only non-test consumer is `process-lead-scoring`;
+  `app/api/cron/sla-check/route.ts:150`; `bulkScoreLeads`'s only non-test consumer is `process-lead-scoring`;
   `processLeadWarming` is reached only through `lib/lead-warming/index.ts` and its own route. A repo-wide grep for
   `/api/cron/<name>` across these five returns tests, the dead scheduler and `postman/full-test-suite.sh` — **no UI caller, no
   worker, no second scheduler**.
@@ -3186,11 +3232,12 @@ portal_token`, `0037`'s five backfills) ran blind **and were rescued by the loud
   (the runner is _not_ superuser — measured), **#74** (the journal gap still hiding `0059`/`0091`),
   **#2234**, **#2228**, **#2237**, **#2259**, **#2343**.
 - **No CI path can validate any of the exits above, and that should shape the #103 decision.** CI's RLS job is not a proxy for
-  a migration run. `.github/workflows/ci.yml:167` (re-pinned from `:161` on 2026-10-08 — the #2440
+  a migration run. `.github/workflows/ci.yml:169` (re-pinned from `:161` on 2026-10-08 — the #2440
   projection guard step added two lines above it, and the coordinate guard step recorded in the comment below
   added two more; re-pinned again to `:167` by **#2446**, whose portal-RLS-context guard step added two more
-  above it) provisions with `npm run db:sync` — which is `drizzle-kit push` and writes **no
-  ledger** — and `:171-174` then applies RLS files through `scripts/apply-rls-ci.mjs` (`:172`) under
+  above it; re-pinned a third time to `:169` on 2026-10-10 by **#2539**, whose `guard:cron-lock` step added two more)
+  provisions with `npm run db:sync` — which is `drizzle-kit push` and writes **no
+  ledger** — and `:173-176` then applies RLS files through `scripts/apply-rls-ci.mjs` (`:174`) under
   `DATABASE_URL=postgresql://postgres:postgres@…` (also the workflow-level default at `:11`). RLS does not filter a superuser and no
   ledger means neither branch of `scripts/migrate.ts` is taken, so in the only context CI can reach, the blindness in this entry
   cannot manifest. `scripts/migrate.ts` never runs in `ci.yml` at all: the only workflow that invokes it is `deploy.yml:356`, against
@@ -3338,29 +3385,35 @@ database`, and exactly two FAILs:
   `:217`/`:250`), and once more when **#2474** wired `guard:catalog-grants` into the nightly (which moved
   the `package.json` guard block from `:47-66` to `:47-67` and `db:deploy-migrate` from `:84` to `:85`, and
   in `nightly-soak.yml` moved the running-config line from `:209` to `:216`, the register-drift line from
-  `:255` to `:262` and its job from `:241` to `:248`): `package.json:47-67` defines **21** `guard:*`
-  scripts. Workflows invoke **18** by alias — `ci.yml` runs 15 (`rls`, `csrf`, `schemas`, `boundaries`,
+  `:255` to `:262` and its job from `:241` to `:248`), and once more when **#2539** wired
+  `guard:cron-lock` into the `ci.yml` guard battery — the first re-enumeration where the new guard moved
+  coordinates in a file the entry does not otherwise touch, because the battery is near the top: `ci.yml`
+  went from 15 aliases at `:45-83` to 16 at `:45-85`, and everything below shifted two lines
+  (`db:sync` `:122`/`:167` → `:124`/`:169`, the two SAST `node` calls `:217`/`:250` → `:219`/`:252`, the
+  `test-unit` services block `:88-101` → `:90-103`, `test-integration` `:133-146` → `:135-148`, the
+  schema-drift step `:397` → `:399`): `package.json:47-68` defines **22** `guard:*`
+  scripts. Workflows invoke **19** by alias — `ci.yml` runs 16 (`rls`, `csrf`, `schemas`, `boundaries`,
   `filesize`, `any-suppressions`, `chain`, `migration-rls`, `counters`, `csv`, `portal-softdelete`,
-  `public-ratelimit`, `public-projection`, `portal-rls-context`,
-  `coords`, at `:45` through
-  `:83`) and `nightly-soak.yml` runs 3 (`guard:running-config --allow-empty` at `:216`, `guard:register-drift`
+  `public-ratelimit`, `public-projection`, `portal-rls-context`, `coords`, `cron-lock`, at `:45` through
+  `:85`) and `nightly-soak.yml` runs 3 (`guard:running-config --allow-empty` at `:216`, `guard:register-drift`
   in the `register-drift-screen` job at `:248`/`:262`, and `guard:catalog-grants` in the
   `catalog-grants-screen` job at `:291`/`:303`) — and invoke **2** more as bare `node`
   commands inside `ci.yml`'s SAST job: `npm audit --audit-level=high --json | node scripts/check-audit-baseline.mjs`
-  (`:217`) and `node scripts/check-semgrep-baseline.mjs semgrep.sarif` (`:250`). That is 20 of 21. The twenty-first is
+  (`:219`) and `node scripts/check-semgrep-baseline.mjs semgrep.sarif` (`:252`). That is 21 of 22. The twenty-second is
   `guard:vocab`: `grep -rn check-constraint-vocab .github/workflows` returns **0**, and so does
   `grep -rn constraint-vocab .github/workflows`, so no automation runs it under its alias _or_ its filename.
   It is not merely failing-quiet — it is unfailing-quiet, because nobody calls it, and it is the only guard in
   the repo in that condition. Two of the four guards added since this entry was written — `coords` and
   `register-drift` — are the ones that read _this file_, which is why the re-count is in the entry rather than
   in a follow-up.
-  (The 18/2/1 split is itself worth recording. A wiring audit that greps for `npm run guard:` reports
-  **18 of 21** and mis-files `audit` and `semgrep` as unrun, because those two are called as direct `node`
+  (The 19/2/1 split is itself worth recording. A wiring audit that greps for `npm run guard:` reports
+  **19 of 22** and mis-files `audit` and `semgrep` as unrun, because those two are called as direct `node`
   invocations rather than through their aliases. This entry said exactly that until its own PR's CI run
   printed `✖ npm audit baseline guard failed (#2301)` — a baseline rotting _loudly_, on the first try — and
   the count was then taken from the workflows rather than from the alias list.)
 - **Why CI's database could not answer this even if it did.** CI _has_ Postgres —
-  `ci.yml:88-101` and `:133-146` start `postgres:16-alpine` services (`:90`, `:135`) — but it provisions them
+  `ci.yml:90-103` and `:135-148` start `postgres:16-alpine` services (`:92`, `:137` — `ci.yml` lines re-pinned
+  from `:88-101`/`:133-146`, two lines lower, by **#2539**) — but it provisions them
   with `npm run db:sync` (`:122`, `:167`), i.e. `drizzle-kit push` from `drizzle/schema/**`. Those CHECKs
   are migration-only artifacts: across **63** schema files there are exactly **4** `check(...)`
   declarations, all in `record-links.ts` (`record_links_from_type_valid`, `_to_type_valid`,
@@ -3392,7 +3445,7 @@ database`, and exactly two FAILs:
   PP-057 records as undecided and PP-060 records as unreachable. `0112`/`0120` are pure `ALTER TABLE … DROP
 CONSTRAINT` + `ADD CONSTRAINT` widenings, so they are not exposed to PP-058's RLS blindness at all — this
   is the cheapest half of the backlog to drain and the one with a named consequence.
-  (c) **Make the wiring greppable** — route `ci.yml:217` and `:250` through `npm run guard:audit` /
+  (c) **Make the wiring greppable** — route `ci.yml:219` and `:252` (re-pinned from `:217`/`:250` on 2026-10-10 by **#2539**) through `npm run guard:audit` /
   `npm run guard:semgrep` (the same two commands, already aliases in `package.json:62`/`:63`) so "which
   guards run?" has one answer instead of two syntaxes, and so adding `guard:vocab` to the set is a one-line
   change rather than a third convention — **#2445** and **#2447** proved that half by wiring `coords` and
@@ -3402,9 +3455,10 @@ CONSTRAINT` + `ADD CONSTRAINT` widenings, so they are not exposed to PP-058's RL
   `db:migrate` build the same constraint, or the CI/preprod divergence this entry depends on stays a
   permanent fixture of the tooling.
 - **Files:** `scripts/check-constraint-vocab.mts`, `scripts/constraint-vocab.json` (9 entries; its
-  `sequence_enrollments.status` writers were rewritten by **#2392**), `.github/workflows/ci.yml` (15 guards
-  by alias at `:45-83`, 2 more by direct `node` call at `:217`/`:250`, `db:sync` at `:122`/`:167`, services
-  at `:88-101`/`:133-146`),
+  `sequence_enrollments.status` writers were rewritten by **#2392**), `.github/workflows/ci.yml` (16 guards
+  by alias at `:45-85`, 2 more by direct `node` call at `:219`/`:252`, `db:sync` at `:124`/`:169`, services
+  at `:90-103`/`:135-148` — all four re-pinned on 2026-10-10 by **#2539** from `:45-83`, `:217`/`:250`,
+  `:122`/`:167` and `:88-101`/`:133-146`),
   `.github/workflows/nightly-soak.yml` (`:209`, `:255`),
   `tests/unit/schema/invoice-status-vocab-migration.test.ts`,
   `tests/unit/constraint-vocab-registry.test.ts`, `drizzle/migrations/0112_invoice_status_vocab.sql`,
@@ -3445,8 +3499,9 @@ CONSTRAINT` + `ADD CONSTRAINT` widenings, so they are not exposed to PP-058's RL
   row. It refuses before that when `BACKUP_LOCAL_DIR` is ephemeral (`:138-143`) or `pg_dump` is not on
   PATH (`:146-155`) — both satisfiable here (this host's app image **does** ship `pg_dump` and `psql`:
   `docker exec nucrm-app command -v pg_dump` → `/usr/bin/pg_dump`), so neither refusal is this entry's
-  point. `package.json:85` now also defines `db:deploy-migrate` as a hand-run alias (re-pinned 2026-10-09
-  from `:84`, which **#2474**'s `guard:catalog-grants` script line pushed down by one); **no workflow
+  point. `package.json:86` now also defines `db:deploy-migrate` as a hand-run alias (re-pinned 2026-10-09
+  from `:84`, which **#2474**'s `guard:catalog-grants` script line pushed down by one, and again on
+  2026-10-10 to `:86` by **#2539**'s `guard:cron-lock` line); **no workflow
   invokes it** (grep: 0 hits across `.github/workflows`).
 - **The one workflow that could re-read the ledger never does.** Grepping all 5 files for `db:status` or
   `migration-status` returns **0 hits in every file**. So the pipeline that owns the sentence "the deploy
@@ -3457,7 +3512,8 @@ CONSTRAINT` + `ADD CONSTRAINT` widenings, so they are not exposed to PP-058's RL
   schema (#2124)", but the step that builds that schema (`:44-47`) runs `npm run db:sync` (drizzle-kit
   **push** from `drizzle/schema/**`) plus `node scripts/apply-rls-ci.mjs` — never `db:migrate`, never the
   `drizzle/migrations/**` directory. So the weekly backup drill verifies the pushed schema, not the
-  migrated one: the same structural blind spot PP-059 records for `ci.yml` (`ci.yml:122`, `:167`) also
+  migrated one: the same structural blind spot PP-059 records for `ci.yml` (`ci.yml:124`, `:169` — re-pinned from `:122`/`:167`
+  on 2026-10-10, when the cron-lock guard step this register's PP-049 records added two lines above them) also
   applies to the tool whose stated purpose is trusting restores.
 - **Measured hop failure.** Full retained history (`gh api …/workflows/deploy.yml/runs`, 2026-06-05T11:45:25Z
   → 2026-10-10T05:56:24Z, **1,319 runs**): **3 success / 1,009 failure / 249 cancelled / 58 skipped.** (Not
@@ -3555,10 +3611,12 @@ connection refused/timeout`, run `curl -s ifconfig.me`, then `gh secret set DEPL
   path, `:172-189`/`:216` pm2, `:321` privilege gate, `:331-362` the migration block with the only executable
   migrate at `:356`), `scripts/deploy-migrate.ts` (`:96` spawn of `migrate.ts --yes`, `:138-143` and
   `:146-155` preconditions), `lib/db/deploy-migration-run.ts`, `.github/workflows/ci.yml` (services
-  `:90`/`:135`, `db:sync` `:122`/`:167`, 15 guards `:45-83`), `.github/workflows/backup-drill.yml` (`:4`
+  `:92`/`:137`, `db:sync` `:124`/`:169`, 16 guards `:45-85`), `.github/workflows/backup-drill.yml` (`:4`
   comment vs `:44-47` `db:sync`), `.github/workflows/nightly-soak.yml` (`:209`/`:255`),
-  `deploy/DEPLOYMENT_PATHS.md`, `scripts/deploy-vm.sh`, `package.json` (`:83` `db:migrate`, `:84`
-  `db:deploy-migrate`, `:88` `db:status`), `AGENTS.md` (ephemeral IP + `gh secret set` remedy + the two-path
+  `deploy/DEPLOYMENT_PATHS.md`, `scripts/deploy-vm.sh`, `package.json` (`:85` `db:migrate`, `:86`
+  `db:deploy-migrate`, `:90` `db:status` — these nine pointers re-pinned 2026-10-10 by **#2539**, which put
+  a line in `package.json` and two in `ci.yml`; the `package.json` ones were already a line short of the
+  tree before that, from **#2474**), `AGENTS.md` (ephemeral IP + `gh secret set` remedy + the two-path
   correction). Evidence read: the retained Deploy run list (1,282 rows) and per-job logs via
   `actions/jobs/{id}/logs` for the 15 most recent failures plus `30748691555`, `30784445875` and
   `37735134900`; `gh api …/actions/secrets` (names + `updated_at` only — no values are readable through
@@ -4194,7 +4252,7 @@ psql -tAc "select count(*) from support_tickets"  # as the app role, with app.po
 - **The fix, and the one dependency it takes on.** Each of the three `DO` blocks loops `FOR t IN SELECT id FROM public.tenants` and sets `app.current_tenant` per tenant, because that is the GUC these policies do read; every `UPDATE` also carries `WHERE "tenant_id" = t.id` so it cannot write outside the tenant it has just selected. The tenant list cannot come from the target tables — measured in the same session, `SELECT count(*) FROM custom_entities` with no tenant GUC is **0** while `SELECT count(*) FROM tenants` is **2** (`tenants_read_all USING (true)`). That is the assumption this migration takes on, written into its header: the runner may read `public.tenants`. It fails loudly if it may not — measured by leaving `tenants` owned by another role, the first block aborts with `42501 permission denied for table tenants`, it does not quietly fix zero rows. `app.is_super_admin` is still set once per block, solely because `guard:migration-rls` recognises that statement as the marker for a write that is not RLS-blind; on these three policies it is inert, and the header says so rather than leaving it for the next author to re-discover.
 - **End-to-end proof on the damaged database** (`nucrm_2509_proof`, `0125` applied as `m2509_owner`, `/srv/tmp-scratch/2509-proof-0125b.log`): all six `is_nullable = NO`; `remaining_nulls=0`; the rows are repaired rather than exempted — `ce1 fields=[] settings={} created_at_set=true`, `ce2` likewise, `ced data={} created_at_set=true`, `sm id=40483d7e-…` (the column's own DEFAULT value). Re-running the file is `exit=0` (catalogue guard skips, `SET NOT NULL` is a no-op). The `.down.sql` relaxes exactly the six and **deliberately does not** reverse the backfill: after it, 6 nullable and still `0` NULL fields.
 - **Guards.** `check-migration-chain`: `126 up-file(s) · 126 journal entries · 0 defect(s), 0 baselined` (the #2262 `idx === position` invariant holds for `idx: 125`, `when` incremented from `0124`'s). `check-migration-rls-dml`: `OK — no new RLS-blind writes`. The tag `0125_declared_not_null_columns` is outside `apply-rls-ci.mjs`'s `RLS_TAG_RE`, so no `RLS:`-tagged job is claimed. `tests/unit/schema/declared-not-null-columns-2509.test.ts` **10 passed**, with its own negative control: deleting the `current_tenant` loop from the migration turns it red (`1 failed | 9 passed`), so the suite is watching the design, not the file's existence.
-- **What this PR cannot prove in CI, stated up front.** The Integration job builds its schema with `npm run db:sync` (`ci.yml:131-180`), which pushes the *declared* shape — it enforces these six NOT NULLs whether or not the chain ever did, so an end-state assertion placed there would be green for the wrong reason. Only the `fresh-install` job runs `db:bootstrap`, and the column-drift step that would have caught this lives in **#2512**, still unmerged. Hence the runtime evidence above is a local chain build, and the durable evidence is the shape test.
+- **What this PR cannot prove in CI, stated up front.** The Integration job builds its schema with `npm run db:sync` (`ci.yml:133-183`, re-pinned from `:131-180` on 2026-10-10 — **#2539**'s guard step added two lines above the job), which pushes the *declared* shape — it enforces these six NOT NULLs whether or not the chain ever did, so an end-state assertion placed there would be green for the wrong reason. Only the `fresh-install` job runs `db:bootstrap`, and the column-drift step that would have caught this lives in **#2512**, still unmerged. Hence the runtime evidence above is a local chain build, and the durable evidence is the shape test.
 - **Two defects this entry records and does not smuggle.** **(1)** `segment_members` has **no PRIMARY KEY in any build this repo can produce**, while `utils.pk()` declares `.primaryKey()` — `pg_constraint` for that table returns two FKs and nothing for `contype = 'p'` — and the index named `idx_segment_members_pk` is a plain **non-unique** btree on `(segment_id, entity_id)`, a name that asserts a constraint the database does not enforce. Making `id` a real primary key needs a uniqueness decision that `SET NOT NULL` does not; `0125`'s tail comment says so and leaves it: filed as **#2515**. **(2)** `guard:migration-rls` accepts `set_config('app.is_super_admin', …)` as proof that a migration's writes are not RLS-blind, **without reading which policies the tables it writes actually have**. `0109` is the existing case where that is correct; `0125` is the case where the same marker would have been satisfied by a GUC nothing branches on, and the screen would have waved it through red. That is a screen defect, not a migration defect, and it is filed as **#2516** rather than fixed here — changing the marker contract is not a column-drift PR.
 - **Pile arithmetic.** **PP-066** re-measured `db:status` today at `Applied 99 · Pending 26 · Total 125`. This adds `0125`, so it is **27 pending on a 126-entry journal** by the time it merges. Nothing here can be applied by hand either: PP-060's point stands until an apply path exists.
 - **Register coordinates.** Re-measured after the rebase onto `origin/main` (which brought in **PP-066**): this PR inserts **36** lines before `## How to maintain this file`, moving it from `:4076` to `:4112`. **#2512** pins that heading at `:4131` on its own branch and calls its own entry PP-066, which **#2506** has since taken — whoever merges second re-pins by this entry's line count and renumbers its own. No file on main cites a line number *into* this register (grepped: `PREPROD-ISSUE-REGISTER.md:[0-9]` → **0** hits outside the register itself), which is why this paragraph, and not a guard, is the record.
@@ -4291,14 +4349,15 @@ was which screen in this repo owns column attributes. Answer: none, and the clos
   and `new_data` NULL in all of them and all 141 `metadata` values parsing as JSON objects — so the
   conversion is safe and pending, which is exactly what an allowlist entry is for.
 
-- **AC3 — it runs somewhere, in both shapes.** `package.json:104` is the alias; before this entry
+- **AC3 — it runs somewhere, in both shapes.** `package.json:105` (re-pinned from `:104` on 2026-10-10 by
+  **#2539**'s `guard:cron-lock` script line) is the alias; before this entry
   `grep -rn drift-check .github/workflows` returned **0** hits across all five workflow files while
   **five** documents told a human to run it (`docs/admin/runbooks.md:60`, `docs/admin/deployment.md:135`,
   `docs/reference/data-model.md:105`, `docs/migration-recovery.md:63`,
   `docs/agent-plans/MAINTENANCE_PLAN.md:87`) — all five now say what it compares and where it is
   scheduled. The pull-request half is a step appended to the `fresh-install` job,
-  `.github/workflows/ci.yml:397`: `psql -c 'CREATE DATABASE nucrm_chain'` (`:403`),
-  `npm run db:bootstrap -- --yes` (`:404`), `npm run db:drift-check` (`:405`). It is the chain and not
+  `.github/workflows/ci.yml:399` (re-pinned from `:397` on 2026-10-10 by **#2539**): `psql -c 'CREATE DATABASE nucrm_chain'` (`:405`),
+  `npm run db:bootstrap -- --yes` (`:406`), `npm run db:drift-check` (`:407`). It is the chain and not
   `db:sync`, because a pushed schema is `drizzle/schema` by construction and the comparison would be
   tautological — the same reasoning #2450's job is built on. The scheduled half is
   `.github/workflows/schema-drift.yml`, two jobs: `synthetic` (`:50`) builds the chain in CI, asserts
@@ -4335,7 +4394,7 @@ was which screen in this repo owns column attributes. Answer: none, and the clos
   control had to seed a column the database will actually re-type. Assertion counts are not evidence
   here; the four exits above are.
 
-- **The CI sequence was run for real, then run by CI.** The whole `ci.yml:397` step body, executed locally
+- **The CI sequence was run for real, then run by CI.** The whole `ci.yml:399` step body, executed locally
   against a throwaway database: `CREATE DATABASE` → `db:bootstrap` → `3,156 statements · 125 ledger rows ·
   274 RLS policies over 226 RLS-enabled tables` → `db:drift-check` → `exit 0`, `3216 compared across 226
   tables — 0 drift, 9 allowlisted, 1 info`; then the same step inside GitHub Actions (run `38040012824`),

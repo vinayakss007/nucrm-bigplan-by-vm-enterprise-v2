@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { safeApiError } from '@/lib/api-error';
 import { logError } from '@/lib/errors-server';
-import { acquireLock } from '@/lib/cache';
+import { refuseIfCronLockHeld } from '@/lib/cron/cron-lock';
 import { verifySecret } from '@/lib/crypto';
 import { db } from '@/drizzle/db';
 import { tenants } from '@/drizzle/schema/core';
@@ -21,10 +21,8 @@ export async function POST(req: NextRequest) {
 
   // Distributed dedup guard (#1422): skip when another scheduler
   // instance already fired this job within its interval.
-  const lock = await acquireLock('cron:ai-auto-followup', 1800);
-  if (!lock.acquired) {
-    return NextResponse.json({ ok: true, skipped: true, reason: 'lock-held' });
-  }
+  const refusal = await refuseIfCronLockHeld('cron:ai-auto-followup', 1800);
+  if (refusal) return refusal;
 
   try {
     // `tenants` is readable from any context (tenants_read_all USING true), so

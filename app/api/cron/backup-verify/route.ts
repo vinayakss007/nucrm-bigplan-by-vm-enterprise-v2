@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { verifySecret } from '@/lib/crypto';
-import { acquireLock } from '@/lib/cache';
+import { refuseIfCronLockHeld } from '@/lib/cron/cron-lock';
 import { db } from '@/drizzle/db';
 import { backupRecords, backupAlerts } from '@/drizzle/schema';
 import { eq, desc } from 'drizzle-orm';
@@ -132,10 +132,8 @@ export async function POST(request: NextRequest) {
 
   // Distributed dedup guard (#1255): the verify restore is expensive (spins up
   // a scratch DB) — never run two concurrently.
-  const lock = await acquireLock('cron:backup-verify', 7200);
-  if (!lock.acquired) {
-    return NextResponse.json({ ok: true, skipped: true, reason: 'lock-held' });
-  }
+  const refusal = await refuseIfCronLockHeld('cron:backup-verify', 7200);
+  if (refusal) return refusal;
 
   // The restore has to create a scratch database and load a dump that was taken
   // outside RLS, so it runs with the same privileged connection as the dump

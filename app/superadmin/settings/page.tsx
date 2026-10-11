@@ -267,6 +267,8 @@ export default function SuperAdminSettingsPage() {
                   // #1087: authenticated as super admin via the session cookie —
                   // do NOT send a (blank) cron secret from the browser.
                   const r = await fetch('/api/cron/cleanup',{method:'POST',credentials:'same-origin'});
+                  // 423 is #2539's lock refusal: the job is running elsewhere, not broken.
+                  if (r.status === 423) { toast('Cleanup is already running — this request was skipped'); return; }
                   if (!r.ok) { toast.error('Cleanup failed'); return; }
                   toast.success('Cleanup triggered');
                 });

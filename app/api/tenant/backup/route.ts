@@ -105,6 +105,13 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       });
     } else {
       const cronError = await cronRes.json().catch((err) => { void logError({ error: err, context: 'backup cron response parse failed', tenantId: ctx.tenantId, userId: ctx.userId, requestMethod: 'POST' }); return { error: `HTTP ${cronRes.status}` }; });
+      // #2539: 423 is the dedup lock refusing, so a backup is already running — not a failed one.
+      if (cronRes.status === 423) {
+        return NextResponse.json(
+          { error: cronError.error ?? 'A backup is already running' },
+          { status: 423 },
+        );
+      }
       return NextResponse.json({ error: cronError.error || 'Backup failed' }, { status: 500 });
     }
  

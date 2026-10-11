@@ -16,7 +16,7 @@
 
 import { verifySecret } from '@/lib/crypto';
 import { logError } from '@/lib/errors-server';
-import { acquireLock } from '@/lib/cache';
+import { refuseIfCronLockHeld } from '@/lib/cron/cron-lock';
 import { NextRequest, NextResponse } from 'next/server';
 import { processLeadWarming, resetMonthlyCounters, type WarmingResult } from '@/lib/lead-warming/engine';
 import { analyzeUnprocessedReplies } from '@/lib/lead-warming/reply-analyzer';
@@ -30,10 +30,8 @@ export async function POST(req: NextRequest) {
   }
 
   // Distributed dedup guard (#1255): skip if another scheduler already ran it.
-  const lock = await acquireLock('cron:lead-warming', 1800);
-  if (!lock.acquired) {
-    return NextResponse.json({ ok: true, skipped: true, reason: 'lock-held' });
-  }
+  const refusal = await refuseIfCronLockHeld('cron:lead-warming', 1800);
+  if (refusal) return refusal;
 
   try {
     // Engine counters are per run, so they are summed across the sweep and the
