@@ -24,7 +24,7 @@
 >   refusing to read `?url=` at all. The route is deleted, its 12-test #2267 suite with it
 >   (`redirect-target.test.ts` keeps the guard's own coverage, and `/api/track/click` still calls
 >   it), the analytics docblock that repeated the false claim is corrected, and
->   `tests/unit/legacy-email-track-retired-2526.test.ts` (11 tests) pins the deletion against the
+>   `tests/unit/legacy-email-track-retired-2526.test.ts` (11 tests, PR **#2568**) pins the deletion against the
 >   edge config and against the two token routes. Filed as **PP-074**: **#2566** edits this file's
 >   header text and the README pointer but mints no entry of its own, so the number is free. This
 >   bullet re-pins the `docs/README.md:75` pointer to the keep-the-entry rule's line on this merged
@@ -4793,7 +4793,7 @@ no space, no semicolon, no dash, no `-`-comment, and a length under Postgres's o
   (the RLS reader these guards sit next to — same discipline: validate at the boundary, and assert on
   the rendered statement rather than on a mocked return).
 
-## PP-074 — 🔧 **#2526**: `/api/tenant/email/track` was filed as an unauthenticated tracking sink that trusts attacker-supplied `tid`/`cid`/`cpid`/`eid`; measured, the edge never listed the path and RLS refused both writes, so there was nothing to forge — what was live is a 302 off the app's own domain to any public `?url=` an authenticated caller chose _(S3 · Email / public edge)_
+## PP-074 — 🔧 **#2526**: `/api/tenant/email/track` was filed as an unauthenticated tracking sink that trusts attacker-supplied `tid`/`cid`/`cpid`/`eid`; measured, the edge never listed the path and RLS refused both writes, so there was nothing to forge — what was live is a 302 off the app's own domain to any public `?url=` an authenticated caller chose _(S3 · Email / public edge · PR **#2568**)_
 
 - **Found by** reading the report's four `:NN` citations against `main`, then against the thing
   the report did not open: `proxy.ts`. The handler's own docblock (`Public endpoints (no auth
