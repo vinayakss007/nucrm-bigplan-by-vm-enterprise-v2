@@ -4,7 +4,18 @@
 > here, with the evidence that proves it and the verification that closed it.
 > Update the status the moment it changes; IDs are never reused.
 >
-> - **Last updated:** 2026-10-10 (UTC) — **PP-071**: **PP-069**'s rule is per table but not per *write*, and three
+> - **Last updated:** 2026-10-11 (UTC) — **PP-072**: the churn queue lists people who no longer exist.
+>   `GET /api/tenant/analytics/churn` joined `contacts` for name/email and filtered only
+>   `churn_predictions.tenant_id`, so a soft-deleted contact stayed in the to-do list with full name,
+>   email, risk factors and `recommendedActions` — and `POST` in the same file kept scoring them,
+>   because #2555's ownership probe deliberately matched the `GET` beside it rather than fixing both
+>   (#2556's own caveat). Every other contact read excludes them: **37** files query `from(contacts)`,
+>   **2** omit `deletedAt` and both are explained below, and the deal side of this same feature filters
+>   on both sides (`0115_rls_view_hardening.sql:57`, `analytics/forecast/route.ts:84`) — churn was the
+>   outlier. Both handlers now carry `isNull(contacts.deletedAt)`; the two doc comments advertising
+>   `.../analytics/{churn,forecast}/calculate` named routes that do not exist, and this entry's
+>   re-pin of the `docs/README.md:75` pointer is what found the number stale (`:4534` -> `:4651`).
+> - **Previous:** 2026-10-10 (UTC) — **PP-071**: **PP-069**'s rule is per table but not per *write*, and three
 > of its four inputs are not what the database holds. Measured against a fresh chain build of this tree — **274**
 > policies over **226** RLS-enabled tables: `collectPolicyGucs` reads only literal `CREATE POLICY … ON <table>`, so
 > the **12** tables whose `tenant_isolation` arrives through a `format()`/`EXECUTE` list (`leads` among them) carry
@@ -212,6 +223,7 @@ Severity: **S1** blocks go-live · **S2** broken feature or security weakness ·
 | PP-069 | S2  | Infra / guard correctness | **`guard:migration-rls` accepted the `app.is_super_admin` marker without reading the policies of the tables the migration writes.** `MITIGATION.test(rawSql)` excused any file that mentioned the GUC anywhere — and the final `0125` mentions it in header prose to warn that it is **inert** there — for every write it made. `0125`'s first draft is the measured bypass (**PP-067**): marker set, three `tenant_isolation` policies that never read it, `UPDATE 0`, then `23502` on the following `SET NOT NULL` | 🔧 FIXED in this PR (per-table mitigation, **#2516**: a marker counts only where the written table's own literal `CREATE POLICY` statements read it somewhere in the history — `collectPolicyGucs` — otherwise the file must set `app.current_tenant`; evidence is the comment-stripped executable scope, so prose and stored-function bodies no longer excuse a file · `0109` green for the right reason, final `0125` passes through (b), a first-draft-shaped fixture exits 1 · tree verdict unchanged: 126 files · 202 tenant-scoped · 17 + 2 baselined · exit 0) |
 
 | PP-071 | S2  | Infra / guard correctness | **PP-069's per-table rule never reads the database, and reads the history in the wrong shape.** Measured against a fresh chain build (**274** policies / **226** RLS-enabled tables): the evidence map is built from literal `CREATE POLICY … ON <table>` only, so the **12** tables whose `tenant_isolation` arrives through a `format()`/`EXECUTE` list — `leads` first among them — have no evidence, and the marker is refused where the live policy reads it; the map unions over history and never removes a `DROP POLICY` (**109** execute in the chain, `0088` alone 72 creates / 84 drops), so a deleted policy keeps crediting a marker — which fails **open**; the corpus is walked by `readdirSync().sort()` while `scripts/migrate.ts:143` applies by journal, **20 of 126** positions apart (`0091`/`0092` after `0112`), which decides the last writer of `deal_stages.tenant_isolation` (`0092`, both GUCs) versus the one the guard credits (`0107`, tenant only); and resolution is **kind-blind** — `error_logs_super_admin_write` is `FOR UPDATE` and gates no INSERT while `error_logs_insert_any` is `WITH CHECK (true)`, so **9** writes the guard demanded a GUC for need none, and a marker read only by a `SELECT` policy cleared an UPDATE | 🔧 FIXED in this PR (**#2545**, on top of the merged **#2516**): `scripts/rls-policy-map.mjs` reads the chain as an event log — three generator shapes (literal, template-applied-over-a-list, catalogue-loop kept as unattributed `ambient`), `%I`/`%L` holes, `''`-escaped and adjacent string fragments, `FOR <kind>`, last-writer-wins with `DROP POLICY` deleting — over `meta/_journal.json` order · measured after: **265** keys / **225** tables, **262 of 274** live keys attributed, **0** GUC-set disagreements, **0 unsound / 0 conservative** verdicts over the **229 × 3** `(table, kind)` grid, **0** verdict flips and baseline `violations` byte-identical (17 + 2, exit 0), `0126` (**#2534**, not yet merged) green when dropped into the corpus · six reinstated defects → **6 / 2 / 7 / 4 / 13 / 13** tests red with the guard still printing `OK` · 74 tests in the two suites, tree verdict unchanged · `--explain <tag\|all>` names the policy that admits each resolved write, because exit 0 is one byte for "the rows are visible" and for "this policy reads no GUC at all" (AC3) |
+| PP-072 | S3  | Analytics / data minimisation | **The churn queue never asked whether the contact still exists.** `GET /api/tenant/analytics/churn` filtered `churn_predictions.tenant_id` only, so a soft-deleted contact stayed listed with name, email, risk factors and `recommendedActions`, and `POST` kept scoring them because #2555 matched the neighbouring `GET` instead of fixing both — the deal side of the same feature filters `deleted_at` on both sides | 🔧 FIXED in this PR (`isNull(contacts.deletedAt)` in the `GET` filter and the `POST` ownership probe; the two advertised `.../calculate` routes do not exist and the doc comments now say so · `tests/unit/churn-soft-deleted-2556.test.ts`, 6 tests, asserting the rendered SQL) |
 
 ## Sentry issues → register entries
 
@@ -4587,6 +4599,49 @@ read no GUC at all.
   measurement), **PP-069** / **#2516** (the rule this extends, and the "fails closed" sentence this
   corrects), **#2534** (open, claims **PP-070**: `0126` measured green here), **#2515** (the
   `segment_members` key itself).
+
+## PP-072 — 🔧 The churn queue lists and scores contacts who were soft-deleted: `GET /api/tenant/analytics/churn` joined `contacts` for their name and email and filtered only `churn_predictions.tenant_id`, while the deal side of the same feature — and 35 of the 37 contact reads in `app/api/` — filter `deleted_at`, so this was the outlier rather than the design _(S3 · Analytics / data minimisation)_
+
+**Found:** while implementing **#2555**, whose ownership probe for `POST /api/tenant/analytics/churn`
+deliberately left `deletedAt` out — "making the POST stricter than the GET beside it would have created
+a fresh inconsistency inside one file". Filed separately as **#2556**, which asks for both halves in one
+commit; that is what this is.
+
+- **The defect, in one line each.** `GET` built `filters = [eq(churn_predictions.tenant_id, …)]` and
+  `innerJoin(contacts, …)` without ever asking whether the joined contact was live; `POST` proved the
+  body's `contact_id` was in-tenant (#2555) but not that it was undeleted, so `calculate_churn_risk()`
+  still ran and the handler still returned a prediction row for someone the CRM has erased.
+- **Why it is a correctness bug, not a cross-tenant one.** Scoping is clean — every predicate carried
+  the tenant. What leaks is retention: a GDPR-erasure or duplicate-merge soft-delete leaves the person
+  in a CS to-do list with their email attached and `isActioned`/`recommendedActions` still actionable.
+- **The comparison that makes it the outlier.** `grep -rl 'from(contacts)' app/api` → **37** files;
+  **2** of them never mention `deletedAt`: `app/api/tenant/contacts/duplicates/route.ts:113` (an
+  enrichment fetch whose three upstream scans each end `AND deleted_at IS NULL` at `:32`, `:46`, `:61`
+  — so it can only be handed live ids; not a leak, recorded here so nobody re-litigates it) and
+  `app/api/superadmin/selective-restore/scope/route.ts:75`, which is *supposed* to see deleted rows.
+  The forecast pair excludes them on both sides: `0115_rls_view_hardening.sql:57` and
+  `app/api/tenant/analytics/forecast/route.ts:84`.
+- **What this does NOT do.** `churn_predictions` keeps its rows — nothing in the repo deletes them (the
+  only in-repo writer is this file's own `PATCH`, which flips `isActioned`), so this changes queue
+  visibility, not stored data, and a purge of predictions for erased contacts stays an owner decision
+  alongside the erasure itself. The `PATCH` is untouched: marking a stale row actioned is harmless.
+- **The second finding, found by the doc comments.** Both POSTs advertised
+  `POST /api/tenant/analytics/{churn,forecast}/calculate`, and there is no `calculate` directory under
+  `app/api/tenant/analytics/` — a client following the comment 404s. **#2556** asks for the comments to
+  be corrected in the same pass and for someone to check whether an external caller is doing exactly
+  that; the repo cannot answer the second half (no in-repo caller exists — `grep -rn
+  '"tenant/analytics"'` hits only `/usage` and `/overview`), so it stays an owner check against real
+  traffic. The comments now name the paths they are served from, and a test pins the absence.
+- **Measured:** `tests/unit/churn-soft-deleted-2556.test.ts` **6** tests — the filter is asserted on the
+  SQL drizzle renders (`"contacts"."deleted_at" is null` in the `GET`'s predicate and in the `POST`'s
+  probe), because a mocked db would pass a canned row with no clause at all, and `IS NULL` binds no
+  parameter, so the parameter lists stay exactly `[…tenant…]` — a regression into `= NULL` would show
+  up as a new binding; `tests/unit/analytics-post-tenant-scope-2524.test.ts` **8** tests still green
+  against the modified probe; `tsc --noEmit` unchanged.
+- **Files:** `app/api/tenant/analytics/churn/route.ts`, `app/api/tenant/analytics/forecast/route.ts`,
+  `tests/unit/churn-soft-deleted-2556.test.ts` (new).
+- **Related:** **#2556** (this issue), **#2524** / **#2555** (the probe whose caveat deferred it),
+  **PP-071**, **PP-069**.
 
 ## How to maintain this file
 

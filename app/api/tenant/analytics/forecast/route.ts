@@ -55,8 +55,12 @@ export const GET = withApiRoute(async (request: NextRequest) => {
 });
 
 /**
- * POST /api/tenant/analytics/forecast/calculate
- * Calculate win probability for a deal
+ * POST /api/tenant/analytics/forecast
+ * Calculate win probability for a deal.
+ *
+ * The comment here used to advertise `.../forecast/calculate`; no such route
+ * exists under `app/api/tenant/analytics/`, and #2556 found it by following the
+ * comment rather than the tree.
  */
 export const POST = withApiRoute(async (request: NextRequest) => {
   try {
