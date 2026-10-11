@@ -430,7 +430,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       results['tasks'] = { restored, errors };
     }
 
-    console.log(`[User Data Restore] user=${user.email}, tenant=${tenant_id}, source=${source}, results=`, results);
+    console.log(`[User Data Restore] user=${user_id}, tenant=${tenant_id}, source=${source}, results=`, results); // #2529: id, not email — stdout reaches Loki
 
     return NextResponse.json({
       success: true,
