@@ -13,23 +13,7 @@ import { integrations } from '@/drizzle/schema';
 import { eq, desc } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
-
-/**
- * `integrations.config` is a JSONB bag that demonstrably holds live credentials, not
- * just settings:
- *   - webhook signing secrets — `app/api/tenant/webhooks/route.ts:108`
- *   - Google/Outlook `accessToken` + `refreshToken` — `lib/calendar-sync/service.ts:49-50`
- * Neither may leave this API. `config` is still needed for the non-secret settings the
- * connectors show (`url`, `events`, `chat_id`), so secret *keys* are removed and only
- * their names reported back via `credentialKeys`.
- *
- * Matched by name pattern rather than an exact key list, so the usual casing and
- * underscore variants of the same credential (`SigningSecret`, `api_key`,
- * `ACCESS_TOKEN`) are all caught. A connector that invents a wholly unrecognisable
- * key name would still slip through — which is why this pattern sits directly above
- * the two writers of those keys, not in some shared module far away from them.
- */
-const SECRET_CONFIG_KEY = /(secret|token|password|passwd|api[_-]?key|credential|access[_-]?key)/i;
+import { splitConfigCredentials } from '@/lib/integrations/config-credentials';
 
 interface IntegrationRow {
   id: string;
@@ -43,13 +27,15 @@ interface IntegrationRow {
   createdAt: Date;
 }
 
+/**
+ * #2521: `integrations.config` holds live credentials (webhook signing secrets, OAuth
+ * access/refresh tokens), so none of them may reach a response. The key pattern and the
+ * strip-and-report behaviour live in `lib/integrations/config-credentials.ts`, shared
+ * with `app/api/tenant/plugin-engine/route.ts`, because two copies of a secret-name
+ * regex drift and the second copy is the one that leaks.
+ */
 function maskIntegration(row: IntegrationRow) {
-  const credentialKeys: string[] = [];
-  const publicConfig: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries((row.config ?? {}) as Record<string, unknown>)) {
-    if (SECRET_CONFIG_KEY.test(key)) credentialKeys.push(key);
-    else publicConfig[key] = value;
-  }
+  const { publicConfig, credentialKeys } = splitConfigCredentials(row.config);
   return { ...row, config: publicConfig, credentialKeys };
 }
 
@@ -58,7 +44,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
     // Deliberately NOT `isAdmin`-gated here, even though POST on this resource is: the
-    // leak this PR fixes is the credential material in `config`, and masking closes it
+    // leak #2535 fixed is the credential material in `config`, and masking closes it
     // for every member. Tightening *read access* is a behaviour change `POST`'s own
     // route already assumes, but `postman/full-test-suite.sh:1131` asserts this GET
     // returns 200 as `a@a.com` — an identity no seed in this repo creates
