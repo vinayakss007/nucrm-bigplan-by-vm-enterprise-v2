@@ -13,6 +13,7 @@
  */
 
 import { getPool } from '@/lib/db/pool';
+import { validateIdentifier } from '@/lib/sql-allowlist';
 import type { Pool } from 'pg';
 
 // -------------------------------------------------------------------
@@ -277,7 +278,11 @@ export async function verifyAuditChainIntegrity(
   options: { tableName?: string; limit?: number } = {}
 ): Promise<AuditChainResult> {
   const pool: Pool = getPool();
-  const { tableName = 'audit_logs', limit = 1000 } = options;
+  const { tableName: rawTableName = 'audit_logs', limit = 1000 } = options;
+  // #2528: quoted into two raw `FROM "${tableName}"` statements below, and the catch
+  // at the bottom of this function would otherwise fold the injected text into a
+  // reported message — so this runs before the try, and fails loud.
+  const tableName = validateIdentifier(rawTableName, 'table');
 
   const gaps: AuditChainEntry[] = [];
   let totalRecords = 0;

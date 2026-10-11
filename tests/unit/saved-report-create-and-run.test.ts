@@ -39,29 +39,37 @@ let insertResult: any[] = [];
 let lookupRows: unknown[] = [];
 const updated: unknown[][] = [];
 
-vi.mock('@/drizzle/db', () => ({
-  db: {
-    select: () => ({
-      from: () => ({
-        where: () => ({
-          limit: () => lookupRows,
-        }),
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const dbDouble: any = {
+  select: () => ({
+    from: () => ({
+      where: () => ({
+        limit: () => lookupRows,
       }),
     }),
-    insert: (table: unknown) => ({
-      values: (value: unknown) => {
-        insertValues = { table, value };
-        return { returning: () => insertResult };
-      },
-    }),
-    update: () => ({
-      set: (value: unknown) => {
-        updated.push(value);
-        return { where: () => ({ returning: () => [] }) };
-      },
-    }),
-  },
-}));
+  }),
+  insert: (table: unknown) => ({
+    values: (value: unknown) => {
+      insertValues = { table, value };
+      return { returning: () => insertResult };
+    },
+  }),
+  update: () => ({
+    set: (value: unknown) => {
+      updated.push(value);
+      return { where: () => ({ returning: () => [] }) };
+    },
+  }),
+};
+
+// #2530: the run route now commits its two writes as one transaction, so the
+// double has to offer `transaction` — the real drizzle `db` always had it, and a
+// double that lacks it only proves the route can run outside a transaction. It
+// hands back itself, so every assertion below still sees the same recorded
+// statements; what the seam changes is that both writes arrive on one connection.
+dbDouble.transaction = async (fn: (tx: unknown) => Promise<unknown>) => fn(dbDouble);
+
+vi.mock('@/drizzle/db', () => ({ db: dbDouble }));
 
 const { POST: CREATE } = await import('@/app/api/tenant/reports/saved/route');
 const { POST: RUN } = await import('@/app/api/tenant/reports/[id]/route');

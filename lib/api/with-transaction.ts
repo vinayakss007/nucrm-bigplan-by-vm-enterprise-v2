@@ -43,6 +43,7 @@ import { NextResponse } from 'next/server';
 import type { DbClient } from '@/drizzle/db';
 import { apiError } from '@/lib/api-error';
 import { sql } from 'drizzle-orm';
+import { validateTimeoutMs } from '@/lib/sql-allowlist';
 
 export interface TransactionOptions {
   /** Maximum retries on serialization failure (default: 2) */
@@ -79,7 +80,10 @@ export async function withTransaction(
   handler: (tx: DbClient) => Promise<NextResponse>,
   options: TransactionOptions = {},
 ): Promise<NextResponse> {
-  const { maxRetries = 2, timeoutMs = 15_000, label = 'api-transaction' } = options;
+  const { maxRetries = 2, timeoutMs: rawTimeoutMs = 15_000, label = 'api-transaction' } = options;
+  // #2528: interpolated into `SET LOCAL statement_timeout` below, so it is clamped
+  // to digits here rather than at the SQL.
+  const timeoutMs = validateTimeoutMs(rawTimeoutMs);
 
   let lastError: unknown;
 

@@ -3,7 +3,7 @@
  * Copyright (c) 2026 abetworks.in. All Rights Reserved.
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
-import { db } from '@/drizzle/db';
+import { db, type DbClient } from '@/drizzle/db';
 import { subscriptions } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
 
@@ -26,8 +26,17 @@ export async function syncSubscriptionRow(
   subscription: SyncableStripeSubscription,
   planId: string | null,
   nuCrmStatus: string,
+  // #2530: a caller that is already inside a transaction must be able to keep
+  // this write in it. Without this the webhook's `tenants` update and this
+  // `subscriptions` update committed separately, so a throw here left the
+  // tenant moved and the billing row stale — the exact drift #2228 exists to
+  // prevent. Optional: a caller that passes nothing falls back to the pool and
+  // behaves exactly as before.
+  dbOrTx?: DbClient,
 ): Promise<void> {
   if (!subscription.id) return;
+
+  const client = dbOrTx ?? db;
 
   // subscriptions.status vocabulary in this app is 'canceled' (one L) — the
   // tenants mapping in the webhook uses 'cancelled'; normalize before persisting.
@@ -57,15 +66,19 @@ export async function syncSubscriptionRow(
     updates.currentPeriodEnd = new Date(subscription.current_period_end * 1000);
   }
 
-  await db.update(subscriptions)
+  await client.update(subscriptions)
     .set(updates)
     .where(eq(subscriptions.stripeSubscriptionId, subscription.id));
 }
 
 /** #2228 — subscription.deleted must retire the row, not just the tenant. */
-export async function markSubscriptionCanceled(subscriptionId?: string | null): Promise<void> {
+export async function markSubscriptionCanceled(
+  subscriptionId?: string | null,
+  // #2530: same reason as syncSubscriptionRow — see that comment.
+  dbOrTx?: DbClient,
+): Promise<void> {
   if (!subscriptionId) return;
-  await db.update(subscriptions)
+  await (dbOrTx ?? db).update(subscriptions)
     .set({
       status: 'canceled',
       cancelAtPeriodEnd: false,
