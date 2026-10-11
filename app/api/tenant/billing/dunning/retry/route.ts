@@ -13,6 +13,7 @@ import { z } from 'zod';
 import { uuidIdSchemaWith } from '@/lib/validation/uuid';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { isStripeConfigured } from '@/lib/stripe';
+import { currencyFromProvider } from '@/lib/billing-currency';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 const retrySchema = z.object({
@@ -67,16 +68,14 @@ export const POST = withApiRoute(async (request: NextRequest) => {
 
     // #1909: record the event with the subscription's REAL currency and amount
     // instead of hardcoded usd/'0' — the latter corrupts revenue reporting and
-    // reconciliation for every non-USD tenant. On lookup failure fall back to
-    // the previous constants (an attempt is still worth recording).
+    // reconciliation for every non-USD tenant. #2551: a failed lookup leaves
+    // currency NULL (unknown) instead of guessing usd again.
     let billingAmount = '0';
-    let billingCurrency = 'usd';
+    let billingCurrency: string | null = null;
     try {
       const { getSubscription } = await import('@/lib/stripe');
       const stripeSub = await getSubscription(subscription.stripeSubscriptionId);
-      if (typeof stripeSub.currency === 'string' && stripeSub.currency) {
-        billingCurrency = stripeSub.currency.toLowerCase();
-      }
+      billingCurrency = currencyFromProvider(stripeSub);
       const cents = (stripeSub.items?.data ?? []).reduce((sum, item) => {
         const unit = (item.price as { unit_amount?: unknown } | undefined)?.unit_amount;
         return sum + (typeof unit === 'number' ? unit : 0);

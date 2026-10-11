@@ -116,7 +116,9 @@ export const POST = withApiRoute(async (request: NextRequest) => {
         tenantId: ctx.tenantId,
         eventType: 'subscription.downgrade_scheduled',
         amount: String(newPlan.priceMonthly || '0'),
-        currency: 'usd',
+        // #2551: a scheduled downgrade never talks to the PSP, so no currency is
+        // known at this point — NULL beats an asserted 'usd'.
+        currency: null,
         stripeSubscriptionId: currentSub.stripeSubscriptionId,
         metadata: {
           previous_plan_id: currentSub.planId || 'none',

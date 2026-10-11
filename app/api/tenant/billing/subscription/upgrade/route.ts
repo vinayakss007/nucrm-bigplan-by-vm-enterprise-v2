@@ -13,6 +13,7 @@ import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { updateSubscription, getPriceId, isStripeConfigured, getSubscriptionPeriodStart, getSubscriptionPeriodEnd } from '@/lib/stripe';
 import { deriveUpgradeIdempotencyKey } from '@/lib/billing-idempotency';
+import { currencyFromProvider } from '@/lib/billing-currency';
 import { logError } from '@/lib/errors-server';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
@@ -27,18 +28,25 @@ const upgradeSchema = z.object({
  * rows are forensics (#2228), and a dead DB would also take down the write
  * half of the flow anyway — silently swallowing the marker insert error is
  * the correct trade here, the Stripe idempotency key is the real guard.
+ *
+ * `currency` is a required argument, not a defaulted one: this table has no
+ * currency column on `plans` or `subscriptions`, so the caller is the only
+ * place that knows whether the provider has answered yet. Markers written
+ * before the Stripe call pass `null` (unknown), the one after it passes the
+ * currency Stripe returned.
  */
 async function recordUpgradeMarker(
   tenantId: string,
   stripeSubscriptionId: string,
   eventType: string,
+  currency: string | null,
   metadata: Record<string, unknown>,
 ): Promise<void> {
   try {
     await db.insert(billingEvents).values({
       tenantId,
       eventType,
-      currency: 'usd',
+      currency,
       stripeSubscriptionId,
       metadata,
     });
@@ -141,7 +149,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       interval,
     });
 
-    await recordUpgradeMarker(ctx.tenantId, currentSub.stripeSubscriptionId, 'subscription.upgrade_attempted', {
+    await recordUpgradeMarker(ctx.tenantId, currentSub.stripeSubscriptionId, 'subscription.upgrade_attempted', null, {
       idempotency_key: idempotencyKey,
       previous_plan_id: currentSub.planId || 'none',
       new_plan_id: planId,
@@ -163,7 +171,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
         idempotencyKey,
       });
     } catch (err) {
-      await recordUpgradeMarker(ctx.tenantId, currentSub.stripeSubscriptionId, 'subscription.upgrade_failed', {
+      await recordUpgradeMarker(ctx.tenantId, currentSub.stripeSubscriptionId, 'subscription.upgrade_failed', null, {
         idempotency_key: idempotencyKey,
         new_plan_id: planId,
         interval,
@@ -199,7 +207,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
           tenantId: ctx.tenantId,
           eventType: 'subscription.upgraded',
           amount: String(newPlan.priceMonthly || '0'),
-          currency: 'usd',
+          currency: currencyFromProvider(stripeSub),
           stripeSubscriptionId: currentSub.stripeSubscriptionId,
           metadata: {
             previous_plan_id: currentSub.planId || 'none',
@@ -218,16 +226,22 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       // re-runs — no second charge, and the drift heals. The
       // customer.subscription.updated webhook reconciliation is the backstop
       // even if no retry ever comes (#2228).
-      await recordUpgradeMarker(ctx.tenantId, currentSub.stripeSubscriptionId, 'subscription.upgrade_desynced', {
-        idempotency_key: idempotencyKey,
-        previous_plan_id: currentSub.planId || 'none',
-        new_plan_id: planId,
-        interval,
-        stripe_period_start: periodStart ?? null,
-        stripe_period_end: periodEnd ?? null,
-        stripe_status: stripeSub.status ?? null,
-        error: err instanceof Error ? err.message : String(err),
-      });
+      await recordUpgradeMarker(
+        ctx.tenantId,
+        currentSub.stripeSubscriptionId,
+        'subscription.upgrade_desynced',
+        currencyFromProvider(stripeSub),
+        {
+          idempotency_key: idempotencyKey,
+          previous_plan_id: currentSub.planId || 'none',
+          new_plan_id: planId,
+          interval,
+          stripe_period_start: periodStart ?? null,
+          stripe_period_end: periodEnd ?? null,
+          stripe_status: stripeSub.status ?? null,
+          error: err instanceof Error ? err.message : String(err),
+        },
+      );
       throw err;
     }
 

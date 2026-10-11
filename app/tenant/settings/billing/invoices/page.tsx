@@ -8,14 +8,26 @@ import type { ComponentType } from 'react';
 import { useApiQuery } from '@/lib/query/client';
 import { FileText, ExternalLink, ArrowLeft, AlertCircle, CheckCircle, Clock } from 'lucide-react';
 import { formatDate, cn } from '@/lib/utils';
+import { isRenderableCurrencyCode } from '@/lib/billing-currency';
 
 interface Invoice {
   id: string;
   date: string;
   type: string;
-  amount: string;
+  amount: string | null;
+  currency: string | null;
   status: string;
   invoiceUrl?: string | null;
+}
+
+// #2551: the amounts come out of billing_events as a numeric string and a
+// currency that may be NULL (the write path could not learn one). Only render
+// a currency symbol when the code actually exists.
+function formatAmount(amount: string | null, currency: string | null): string {
+  const value = Number(amount);
+  if (amount === null || !Number.isFinite(value)) return '—';
+  if (!isRenderableCurrencyCode(currency)) return value.toFixed(2);
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(value);
 }
 
 const STATUS_ICONS: Record<string, ComponentType<{ className?: string }>> = {
@@ -81,7 +93,7 @@ export default function InvoicesPage() {
                   <tr key={inv.id} className="border-t border-border hover:bg-accent/30 transition-colors">
                     <td className="px-4 py-3 text-xs">{formatDate(inv.date)}</td>
                     <td className="px-4 py-3 text-xs font-medium capitalize">{inv.type.replace(/_/g, ' ')}</td>
-                    <td className="px-4 py-3 text-xs font-semibold">{inv.amount}</td>
+                    <td className="px-4 py-3 text-xs font-semibold">{formatAmount(inv.amount, inv.currency)}</td>
                     <td className="px-4 py-3">
                       <span className={cn('inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold capitalize', STATUS_COLORS[inv.status])}>
                         <StatusIcon className="w-3 h-3" />{inv.status}

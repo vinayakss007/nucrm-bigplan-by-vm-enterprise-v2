@@ -13,6 +13,7 @@ import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { cancelSubscription, isStripeConfigured } from '@/lib/stripe';
 import { deriveSubscriptionActionIdempotencyKey } from '@/lib/billing-idempotency';
+import { currencyFromProvider } from '@/lib/billing-currency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
@@ -105,7 +106,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
         tenantId: ctx.tenantId,
         eventType: cancelAtPeriodEnd ? 'subscription.cancel_scheduled' : 'subscription.cancelled',
         amount: currentSub.planId ? '0' : undefined,
-        currency: 'usd',
+        currency: currencyFromProvider(stripeSub),
         stripeSubscriptionId: currentSub.stripeSubscriptionId,
         metadata: {
           plan_id: currentSub.planId || 'none',
