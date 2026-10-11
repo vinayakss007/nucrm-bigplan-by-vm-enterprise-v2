@@ -9,7 +9,7 @@
  *   - `config.api_key` / `config.bot_token` on provider rows (`lib/integrations/providers/*.ts:16`)
  *
  * The read is reachable by any authenticated member, not only an admin: `GET` calls
- * `requireAuth` at `route.ts:20-21` and has no `isAdmin` check, unlike `POST`.
+ * `requireAuth` at `route.ts:21` and has no `isAdmin` check, unlike `POST`.
  *
  * Two properties make this suite bite:
  *   1. the `db` fake ignores every projection and ALWAYS returns whole rows including
@@ -287,7 +287,7 @@ describe('plugin-engine keeps integrations.config credentials out of its respons
 
   it('test_only still short-circuits without writing or echoing a credential', async () => {
     // `page.tsx` posts with `test_only: true` from the add-integration modal; the route
-    // answers before the insert (`route.ts:80-82`). Pinning it keeps the mask honest on
+    // answers before the insert (`route.ts:93-94`). Pinning it keeps the mask honest on
     // the branch that never touches the database.
     const { POST } = await routeMethods();
     const res = await POST(

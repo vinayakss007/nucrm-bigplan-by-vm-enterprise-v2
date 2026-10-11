@@ -41,7 +41,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       // (`config.accessToken`/`refreshToken`) — see the writer citations in
       // lib/integrations/config-credentials.ts. `GET /api/tenant/webhooks` proves it
       // knows that bag holds a credential: it filters `type='webhook'`
-      // (`app/api/tenant/webhooks/route.ts:31`) and projects only `config->>'url'` and
+      // (`app/api/tenant/webhooks/route.ts:32`) and projects only `config->>'url'` and
       // `config->'events'` out of it (`:53-55`). The same discipline has to apply here,
       // because `requireAuth` above is not an admin gate.
       const { publicConfig, credentialKeys } = splitConfigCredentials(inst.config);
