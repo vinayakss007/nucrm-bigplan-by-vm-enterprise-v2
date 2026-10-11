@@ -3630,9 +3630,10 @@ not wired in).
   are the same pair. `app/api/webhooks/razorpay/route.ts:57` returns 503 unless the provider is
   configured and `:71` HMACs the **raw** body before parsing it — with no
   `RAZORPAY_WEBHOOK_SECRET` set, `lib/razorpay.ts:131` throws inside that call and the route's own
-  catch turns it into a 400, so it fails **closed**. `app/api/webhooks/payu/route.ts:52` is the same
-  503 gate for `PAYU_MERCHANT_KEY`/`_SALT` and `:77` verifies the posted hash **before** any
-  invoice/payment query, with `lib/payu.ts:116` throwing if the salt is absent.
+  catch turns it into a 400, so it fails **closed**. `app/api/webhooks/payu/route.ts:53` is the same
+  503 gate for `PAYU_MERCHANT_KEY`/`_SALT` and `:78` verifies the posted hash **before** any
+  invoice/payment query, with `lib/payu.ts:116` throwing if the salt is absent. Both re-pinned from `:52` and
+  `:77` on 2026-10-11 — **#2527** (`5ef259f1`) inserted one line above each of them here.
   `app/api/webhooks/telegram/bot/route.ts:77`
   answers 403 with no `TELEGRAM_WEBHOOK_SECRET`, and `:87` timing-safe-compares the
   `secret_token` header *before* reading the body. `app/api/tenant/plugins/webhook/[id]/route.ts:101`
@@ -3661,7 +3662,9 @@ not wired in).
   would exfiltrate it. Now projected to the 4 it uses (`id`, `tenantId`, `status`, `webhookSecret`).
   Measured totals for the guard: **28 → 30** public write sites, **68 → 85** `.select()` read sites,
   **54 → 59** route files, same single waiver. PayU contributed 3 of those read sites and needed no
-  change — `app/api/webhooks/payu/route.ts:121`, `:138` and `:171` already name their columns, which
+  change — `app/api/webhooks/payu/route.ts:122`, `:139` and `:172` already name their columns (re-pinned from
+  121/138/171 on 2026-10-11 — **#2527**'s same +1 shift; the bare `:139` and `:172` had rotted silently, because
+  `guard:register-drift` only resolves a citation that carries its path), which
   is the pattern the projection guard exists to enforce and, on this route, had already been followed.
   Nothing on `custom_plugins` was exposed in a response or a log on main, so this is a
   defence-in-depth fix, not a live leak.
