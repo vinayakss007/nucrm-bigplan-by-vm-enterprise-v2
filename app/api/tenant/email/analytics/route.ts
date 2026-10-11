@@ -17,9 +17,22 @@ import { withApiRoute } from '@/lib/api/with-api-route';
  * GET /api/tenant/email/analytics
  *
  * Aggregated email engagement metrics for the current tenant. This is the
- * reporting endpoint the Email Analytics page consumes. It is distinct from
- * /api/tenant/email/track, which is the PUBLIC, unauthenticated tracking-pixel
- * / click-redirect ingestion endpoint (that one returns a GIF, not JSON).
+ * reporting endpoint the Email Analytics page consumes. Ingestion is not here
+ * and no longer lives at `/api/tenant/email/track` either — **#2526** retired
+ * that route, and this comment's claim that it was "the PUBLIC, unauthenticated
+ * tracking-pixel / click-redirect ingestion endpoint" is what the issue quoted:
+ * the edge never listed the path, so no anonymous reader could reach it, and its
+ * inserts were refused by `0031`'s `tenant_isolation` because the handler set no
+ * tenant context. The live ingestion pair is `/api/track/open` and
+ * `/api/track/click`, keyed by a server-minted tracking id (0105).
+ *
+ * Measured while retiring it: `email_opens` / `email_clicks`, which this handler
+ * aggregates below and which `/api/tenant/email/tracking` joins for its "Opened"
+ * badge, have had exactly one writer — the route #2526 deleted. The token pair
+ * records onto `email_tracking.opened_at` / `.clicked_at` and the
+ * `open_count` / `click_count` counters instead. So the open and click counts
+ * this endpoint reports were always zero, and still are; that is a separate
+ * finding, recorded under **PP-074**, not something this deletion changes.
  *
  * Query params:
  *   - days: look-back window in days (default 30, max 365)
