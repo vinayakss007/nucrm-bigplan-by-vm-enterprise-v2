@@ -129,27 +129,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: true, message: 'Thank you! We will be in touch.' });
     }
 
-    // Look up or create company
+    // Look up or create company. #2530: this ran on the pool BEFORE the capture
+    // transaction below, so a lead that never got written still left a
+    // `companies` row behind — a company record for a lead that was never
+    // captured. The lookup+insert now happens inside that transaction (see
+    // below), and it sits before the advisory lock so the lock is not held
+    // across two extra statements.
     let company_id: string | null = null;
-    if (safeCompany.trim()) {
-      const existingCo = await db.query.companies.findFirst({
-        where: and(
-          eq(companies.tenantId, tenant_id),
-          ilike(companies.name, escapeLike(safeCompany.trim()))
-        ),
-        columns: { id: true }
-      });
-
-      if (existingCo) {
-        company_id = existingCo.id;
-      } else {
-        const [newCo] = await db.insert(companies).values({
-          tenantId: tenant_id,
-          name: safeCompany.trim(),
-        }).returning({ id: companies.id });
-        company_id = newCo?.id ?? null;
-      }
-    }
 
     // #1061: the duplicate-email check and the insert must be atomic, or two
     // concurrent submissions with the same email both pass the check and
@@ -162,6 +148,26 @@ export async function POST(request: NextRequest) {
     let leadId!: string;
 
     await db.transaction(async (tx) => {
+      if (safeCompany.trim()) {
+        const existingCo = await tx.query.companies.findFirst({
+          where: and(
+            eq(companies.tenantId, tenant_id),
+            ilike(companies.name, escapeLike(safeCompany.trim()))
+          ),
+          columns: { id: true }
+        });
+
+        if (existingCo) {
+          company_id = existingCo.id;
+        } else {
+          const [newCo] = await tx.insert(companies).values({
+            tenantId: tenant_id,
+            name: safeCompany.trim(),
+          }).returning({ id: companies.id });
+          company_id = newCo?.id ?? null;
+        }
+      }
+
       // Serialize concurrent submissions for the same (tenant, email). The lock
       // is held until the transaction commits/rolls back.
       await tx.execute(

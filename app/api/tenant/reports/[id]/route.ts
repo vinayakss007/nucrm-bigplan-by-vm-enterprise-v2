@@ -255,18 +255,25 @@ export const POST = withApiRoute(async (request: NextRequest,
       return NextResponse.json({ error: result.error }, { status: result.status });
     }
 
-    await db.update(savedReports)
-      .set({ lastRunAt: new Date(), updatedAt: new Date() })
-      .where(and(eq(savedReports.id, id), eq(savedReports.tenantId, ctx.tenantId)));
+    // #2530: these two writes describe one fact — "this report ran, and here is
+    // what it returned". Committed separately, a failure on the insert left
+    // `lastRunAt` already stamped, so the report looked freshly run while its
+    // execution history had no row for that run. The read above deliberately
+    // stays outside: a transaction must not be held open across the query.
+    await db.transaction(async (tx) => {
+      await tx.update(savedReports)
+        .set({ lastRunAt: new Date(), updatedAt: new Date() })
+        .where(and(eq(savedReports.id, id), eq(savedReports.tenantId, ctx.tenantId)));
 
-    // The stub recorded nothing either, which is why the report's execution
-    // history was always empty rather than merely short.
-    await db.insert(reportExecutions).values({
-      tenantId: ctx.tenantId,
-      userId: ctx.userId,
-      reportId: id,
-      status: 'completed',
-      resultCount: result.rows.length,
+      // The stub recorded nothing either, which is why the report's execution
+      // history was always empty rather than merely short.
+      await tx.insert(reportExecutions).values({
+        tenantId: ctx.tenantId,
+        userId: ctx.userId,
+        reportId: id,
+        status: 'completed',
+        resultCount: result.rows.length,
+      });
     });
 
     return NextResponse.json({
