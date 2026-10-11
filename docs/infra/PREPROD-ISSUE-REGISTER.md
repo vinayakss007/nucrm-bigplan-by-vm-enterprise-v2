@@ -5,31 +5,42 @@
 > Update the status the moment it changes; IDs are never reused.
 >
 > - **Last updated:** 2026-10-11 (UTC) — **PP-073**: six raw-string sinks interpolate a
->   caller-supplied *name* or a typed-number option — three builders, two `SET statement_timeout` sites, one audit-chain table — and none of them escapes it. **PP-069** and
+>   caller-supplied *name* or a typed-number option and none of them escapes it. **PP-069** and
 >   **PP-071** are about what the RLS guard reads; this is the mirror rule — an **identifier position
->   can never be parameterised**, so wrapping a key in `"` is not escaping: a `lib/db/client.ts`
->   column key of `x" = '1' OR 1=1 --` closes the quote and continues the statement. Table names were
->   already allowlisted and every **value** already binds as `$n`, and
+>   can never be parameterised**, so quoting is not escaping: a `lib/db/client.ts` column key of
+>   `x" = '1' OR 1=1 --` closes its own quoted identifier and continues the statement. Table names
+>   were already allowlisted and every **value** already binds as `$n`, and
 >   `buildInsert`/`buildUpdate`/`countRows` have **zero production callers** (re-exported at
 >   `lib/db/index.ts:17-19`, never imported anywhere), which is the only reason this is hardening and
 >   not an injection. `lib/sql-allowlist.ts` now owns the shape rule — `BARE_IDENTIFIER` +
 >   `validateIdentifier()`, mapped over all three builders' key lists and over
->   `verifyAuditChainIntegrity`'s operator-supplied `--audit-table` name
->   (`lib/data-integrity.ts:285`, *before* the `try`, because the `catch` at `:346` folds the
->   function would otherwise fold the payload into a reported message) — and `validateTimeoutMs()`
->   clamps the two `SET [LOCAL] statement_timeout` sites, which have no parameter slot at all. Of the
->   **12** live `sql.raw(` sites in `app/ lib/ scripts/ drizzle/` (**13** matches — one is the word
->   inside a comment at `lib/tenant-data-import.ts:232`), only **two** interpolate a variable at all:
->   this entry's `timeoutMs`, and `tokenHash` at `scripts/preprod-api-e2e.ts:568`, which is a
->   `sha256…digest('hex')` — quoting cannot break it, and it is recorded here only so the pattern is
->   not copied into server code. Filed as **#2528**. Measured: **14** new tests, **493** existing
->   tests across the **17** suites that reach these modules green, `tsc --noEmit` clean, and **all
->   1,946** explicitly-named columns in `drizzle/schema` satisfy the lowercase-only rule — so it
->   rejects nothing legal. This does **not** implement **#683**'s per-table column allowlist:
->   `password_hash` is a perfectly legal identifier, and only `PROTECTED` stands between it and an
->   `INSERT`. Written as **PP-073** while **#2558** holds **PP-072** open — the earlier merge keeps
->   the number and the later one moves, and both PRs edit this header, the Summary table and the
->   section list.
+>   `verifyAuditChainIntegrity`'s operator-supplied `--audit-table` name (`lib/data-integrity.ts:285`,
+>   *before* the `try`, because the `catch` at `:346` folds the name back into a reported message) —
+>   and `validateTimeoutMs()` clamps the two `SET [LOCAL] statement_timeout` sites, which have no
+>   parameter slot at all. Of the **12** live `sql.raw(` sites in `app/ lib/ scripts/ drizzle/`
+>   (**13** matches — one is the word inside a comment at `lib/tenant-data-import.ts:232`), only
+>   **three** take a variable: this entry's `timeoutMs`, and the two `statement` parameters at
+>   `scripts/preprod-api-e2e.ts:170` / `:184`, whose call sites are literals except `:568` / `:578` —
+>   those interpolate `tokenHash`, a `sha256…digest('hex')`, so quoting cannot break it and it is
+>   recorded here only so the pattern is not copied into server code. Filed as **#2528**. Measured:
+>   **14** new tests, **493** existing tests across the **17** suites that reach these modules green,
+>   `tsc --noEmit` clean, and **all 1,946** explicitly-named columns in `drizzle/schema` satisfy the
+>   lowercase-only rule — so it rejects nothing legal. This does **not** implement **#683**'s
+>   per-table column allowlist: `password_hash` is a perfectly legal identifier, and only `PROTECTED`
+>   stands between it and an `INSERT`. Written as **PP-073** while **#2558** held **PP-072** open;
+>   **#2558** merged first, so 072 keeps its number and this lands at 073 — and this entry re-pins
+>   the `docs/README.md:75` pointer again, because **PP-072**'s own section moved the rule it names.
+> - **Previous:** 2026-10-11 (UTC) — **PP-072**: the churn queue lists people who no longer exist.
+>   `GET /api/tenant/analytics/churn` joined `contacts` for name/email and filtered only
+>   `churn_predictions.tenant_id`, so a soft-deleted contact stayed in the to-do list with full name,
+>   email, risk factors and `recommendedActions` — and `POST` in the same file kept scoring them,
+>   because #2555's ownership probe deliberately matched the `GET` beside it rather than fixing both
+>   (#2556's own caveat). Every other contact read excludes them: **37** files query `from(contacts)`,
+>   **2** omit `deletedAt` and both are explained below, and the deal side of this same feature filters
+>   on both sides (`0115_rls_view_hardening.sql:57`, `analytics/forecast/route.ts:84`) — churn was the
+>   outlier. Both handlers now carry `isNull(contacts.deletedAt)`; the two doc comments advertising
+>   `.../analytics/{churn,forecast}/calculate` named routes that do not exist, and this entry's
+>   re-pin of the `docs/README.md:75` pointer is what found the number stale (`:4534` -> `:4651`).
 > - **Previous:** 2026-10-10 (UTC) — **PP-071**: **PP-069**'s rule is per table but not per *write*, and three
 > of its four inputs are not what the database holds. Measured against a fresh chain build of this tree — **274**
 > policies over **226** RLS-enabled tables: `collectPolicyGucs` reads only literal `CREATE POLICY … ON <table>`, so
@@ -236,8 +247,8 @@ Severity: **S1** blocks go-live · **S2** broken feature or security weakness ·
 | PP-067 | S2  | Migrations + tooling        | **Six columns come out of `npm run db:bootstrap` nullable while `drizzle/schema` declares every one of them NOT NULL** — `custom_entities.fields/.settings/.created_at`, `custom_entity_data.data/.created_at`, `segment_members.id`. `0059` created them loosely; `0071`'s repair is a `CREATE TABLE IF NOT EXISTS`, which on any ordered chain build parses, discards itself and **never executes**, so its NOT NULLs are inert text. `0125` backfills every NULL with the value that column's own DEFAULT already supplies and then adds the six constraints, driven by `set_config('app.current_tenant', …)` per tenant — because `0109`'s `app.is_super_admin` GUC is **inert** on these three `tenant_isolation` policies (measured: `UPDATE 0`, then `23502` on the following `SET NOT NULL`). Both directions measured with #2512's column-level screen: **9 allowlisted → 3 allowlisted, 0 drift**, exit 0 on a chain-built database. | 🔧 FIXED IN TREE                                                                                                                                          |
 | PP-068 | S2  | Schema drift                | **The only screen in this repo that asks the live database what its columns are compared _names_, and nothing ran it.** `scripts/drift-check.ts` checked table presence, function presence, RLS policy presence and row counts of undeclared tables — never a column — so pre-prod measured `No drift ✓` at **exit 0** while `support_tickets.portal_token` was live `NOT NULL` with **no default** against a schema file that declares it nullable (#2499's whole cause), and `super_admin_audit_logs` carried three `text` columns behind three `jsonb` declarations. `grep -rn drift-check .github/workflows` → **0 hits across all five workflow files**, while **five** documents told a human to run it. All three screens that do exist are name-only (`tests/unit/schema-drift-guard-2255.test.ts`, `scripts/check-schema-drift-live.ts`, `scripts/check-schema-drift.mjs` is Zod), and the obvious fix — importing the schema **barrel** — is load-mode-dependent: from a `.ts` entry it yields the same 226 tables the 62 files do, from an `.mts` entry it has **3** own keys and **2** tables, the 236 real exports hidden one level down in `schema.default`, silently | 🔧 FIXED in this PR (columns compared per table, three kinds — presence, nullability, type — behind a ratcheting allowlist that must name a `clearedBy` migration or a `filedAs` issue for every entry, and wired in both shapes **#2508** AC3 asks for: `ci.yml:407` measures a `db:bootstrap` database on every pull request, `.github/workflows/schema-drift.yml` measures pre-prod nightly **and** re-seeds the drift in a throwaway database to prove the screen fires (`:105`)) · measured after: pre-prod **6** findings, chain-built database **9**, **4** in common — the two databases are behind main in **different directions** · the live fixes stay open as **#2509** (nullability, 6 columns), **#2510** (audit types, 3 columns) and `0124`/`0109` for #2499 · the **3,216** are base-table columns; **PP-064**'s 3,231 is the same `nucrm_test` plus the **15** columns of its `deals_by_win_probability` view — both counts measured here |
 | PP-069 | S2  | Infra / guard correctness | **`guard:migration-rls` accepted the `app.is_super_admin` marker without reading the policies of the tables the migration writes.** `MITIGATION.test(rawSql)` excused any file that mentioned the GUC anywhere — and the final `0125` mentions it in header prose to warn that it is **inert** there — for every write it made. `0125`'s first draft is the measured bypass (**PP-067**): marker set, three `tenant_isolation` policies that never read it, `UPDATE 0`, then `23502` on the following `SET NOT NULL` | 🔧 FIXED in this PR (per-table mitigation, **#2516**: a marker counts only where the written table's own literal `CREATE POLICY` statements read it somewhere in the history — `collectPolicyGucs` — otherwise the file must set `app.current_tenant`; evidence is the comment-stripped executable scope, so prose and stored-function bodies no longer excuse a file · `0109` green for the right reason, final `0125` passes through (b), a first-draft-shaped fixture exits 1 · tree verdict unchanged: 126 files · 202 tenant-scoped · 17 + 2 baselined · exit 0) |
-
 | PP-071 | S2  | Infra / guard correctness | **PP-069's per-table rule never reads the database, and reads the history in the wrong shape.** Measured against a fresh chain build (**274** policies / **226** RLS-enabled tables): the evidence map is built from literal `CREATE POLICY … ON <table>` only, so the **12** tables whose `tenant_isolation` arrives through a `format()`/`EXECUTE` list — `leads` first among them — have no evidence, and the marker is refused where the live policy reads it; the map unions over history and never removes a `DROP POLICY` (**109** execute in the chain, `0088` alone 72 creates / 84 drops), so a deleted policy keeps crediting a marker — which fails **open**; the corpus is walked by `readdirSync().sort()` while `scripts/migrate.ts:143` applies by journal, **20 of 126** positions apart (`0091`/`0092` after `0112`), which decides the last writer of `deal_stages.tenant_isolation` (`0092`, both GUCs) versus the one the guard credits (`0107`, tenant only); and resolution is **kind-blind** — `error_logs_super_admin_write` is `FOR UPDATE` and gates no INSERT while `error_logs_insert_any` is `WITH CHECK (true)`, so **9** writes the guard demanded a GUC for need none, and a marker read only by a `SELECT` policy cleared an UPDATE | 🔧 FIXED in this PR (**#2545**, on top of the merged **#2516**): `scripts/rls-policy-map.mjs` reads the chain as an event log — three generator shapes (literal, template-applied-over-a-list, catalogue-loop kept as unattributed `ambient`), `%I`/`%L` holes, `''`-escaped and adjacent string fragments, `FOR <kind>`, last-writer-wins with `DROP POLICY` deleting — over `meta/_journal.json` order · measured after: **265** keys / **225** tables, **262 of 274** live keys attributed, **0** GUC-set disagreements, **0 unsound / 0 conservative** verdicts over the **229 × 3** `(table, kind)` grid, **0** verdict flips and baseline `violations` byte-identical (17 + 2, exit 0), `0126` (**#2534**, not yet merged) green when dropped into the corpus · six reinstated defects → **6 / 2 / 7 / 4 / 13 / 13** tests red with the guard still printing `OK` · 74 tests in the two suites, tree verdict unchanged · `--explain <tag\|all>` names the policy that admits each resolved write, because exit 0 is one byte for "the rows are visible" and for "this policy reads no GUC at all" (AC3) |
+| PP-072 | S3  | Analytics / data minimisation | **The churn queue never asked whether the contact still exists.** `GET /api/tenant/analytics/churn` filtered `churn_predictions.tenant_id` only, so a soft-deleted contact stayed listed with name, email, risk factors and `recommendedActions`, and `POST` kept scoring them because #2555 matched the neighbouring `GET` instead of fixing both — the deal side of the same feature filters `deleted_at` on both sides | 🔧 FIXED in this PR (`isNull(contacts.deletedAt)` in the `GET` filter and the `POST` ownership probe; the two advertised `.../calculate` routes do not exist and the doc comments now say so · `tests/unit/churn-soft-deleted-2556.test.ts`, 6 tests, asserting the rendered SQL) |
 | PP-073 | S3  | Data access / raw SQL | **Six raw-string sinks interpolate a caller-supplied name or a typed-number option and none of them escapes it.** An identifier position can never be a `$n` parameter, so the builders' `` `"${k}"` `` is not escaping: a `lib/db/client.ts` column key of `x" = '1' OR 1=1 --` closes its own quoted identifier and continues the statement; `SET [LOCAL] statement_timeout` has no parameter slot at all. Table names were already allowlisted, every value already binds as `$n`, and `buildInsert`/`buildUpdate`/`countRows` are re-exported at `lib/db/index.ts:17-19` and imported by **nothing** — so this is the pattern, not an active injection | 🔧 FIXED in this PR (**#2528**): `lib/sql-allowlist.ts` gains `BARE_IDENTIFIER` + `validateIdentifier()` (applied to all three builder key lists — `lib/db/client.ts:142`/`:156`/`:158`/`:170` — and to `verifyAuditChainIntegrity`'s operator-supplied `--audit-table` name at `lib/data-integrity.ts:285`, *before* the `try` because the `catch` at `:342` reports the name back) and `MAX_STATEMENT_TIMEOUT_MS` + `validateTimeoutMs()` at `lib/api/with-transaction.ts:86` / `lib/cron/distributed-lock.ts:72` · **14** new tests + **493** existing across the **17** suites that reach these modules, `tsc --noEmit` exit 0 · **all 1,946** explicitly-named columns in `drizzle/schema` satisfy the lowercase-only rule · **not** #683's per-table column allowlist |
 
 ## Sentry issues → register entries
@@ -4622,12 +4633,54 @@ read no GUC at all.
   corrects), **#2534** (open, claims **PP-070**: `0126` measured green here), **#2515** (the
   `segment_members` key itself).
 
+## PP-072 — 🔧 The churn queue lists and scores contacts who were soft-deleted: `GET /api/tenant/analytics/churn` joined `contacts` for their name and email and filtered only `churn_predictions.tenant_id`, while the deal side of the same feature — and 35 of the 37 contact reads in `app/api/` — filter `deleted_at`, so this was the outlier rather than the design _(S3 · Analytics / data minimisation)_
+
+**Found:** while implementing **#2555**, whose ownership probe for `POST /api/tenant/analytics/churn`
+deliberately left `deletedAt` out — "making the POST stricter than the GET beside it would have created
+a fresh inconsistency inside one file". Filed separately as **#2556**, which asks for both halves in one
+commit; that is what this is.
+
+- **The defect, in one line each.** `GET` built `filters = [eq(churn_predictions.tenant_id, …)]` and
+  `innerJoin(contacts, …)` without ever asking whether the joined contact was live; `POST` proved the
+  body's `contact_id` was in-tenant (#2555) but not that it was undeleted, so `calculate_churn_risk()`
+  still ran and the handler still returned a prediction row for someone the CRM has erased.
+- **Why it is a correctness bug, not a cross-tenant one.** Scoping is clean — every predicate carried
+  the tenant. What leaks is retention: a GDPR-erasure or duplicate-merge soft-delete leaves the person
+  in a CS to-do list with their email attached and `isActioned`/`recommendedActions` still actionable.
+- **The comparison that makes it the outlier.** `grep -rl 'from(contacts)' app/api` → **37** files;
+  **2** of them never mention `deletedAt`: `app/api/tenant/contacts/duplicates/route.ts:113` (an
+  enrichment fetch whose three upstream scans each end `AND deleted_at IS NULL` at `:32`, `:46`, `:61`
+  — so it can only be handed live ids; not a leak, recorded here so nobody re-litigates it) and
+  `app/api/superadmin/selective-restore/scope/route.ts:75`, which is *supposed* to see deleted rows.
+  The forecast pair excludes them on both sides: `0115_rls_view_hardening.sql:57` and
+  `app/api/tenant/analytics/forecast/route.ts:84`.
+- **What this does NOT do.** `churn_predictions` keeps its rows — nothing in the repo deletes them (the
+  only in-repo writer is this file's own `PATCH`, which flips `isActioned`), so this changes queue
+  visibility, not stored data, and a purge of predictions for erased contacts stays an owner decision
+  alongside the erasure itself. The `PATCH` is untouched: marking a stale row actioned is harmless.
+- **The second finding, found by the doc comments.** Both POSTs advertised
+  `POST /api/tenant/analytics/{churn,forecast}/calculate`, and there is no `calculate` directory under
+  `app/api/tenant/analytics/` — a client following the comment 404s. **#2556** asks for the comments to
+  be corrected in the same pass and for someone to check whether an external caller is doing exactly
+  that; the repo cannot answer the second half (no in-repo caller exists — `grep -rn
+  '"tenant/analytics"'` hits only `/usage` and `/overview`), so it stays an owner check against real
+  traffic. The comments now name the paths they are served from, and a test pins the absence.
+- **Measured:** `tests/unit/churn-soft-deleted-2556.test.ts` **6** tests — the filter is asserted on the
+  SQL drizzle renders (`"contacts"."deleted_at" is null` in the `GET`'s predicate and in the `POST`'s
+  probe), because a mocked db would pass a canned row with no clause at all, and `IS NULL` binds no
+  parameter, so the parameter lists stay exactly `[…tenant…]` — a regression into `= NULL` would show
+  up as a new binding; `tests/unit/analytics-post-tenant-scope-2524.test.ts` **8** tests still green
+  against the modified probe; `tsc --noEmit` unchanged.
+- **Files:** `app/api/tenant/analytics/churn/route.ts`, `app/api/tenant/analytics/forecast/route.ts`,
+  `tests/unit/churn-soft-deleted-2556.test.ts` (new).
+- **Related:** **#2556** (this issue), **#2524** / **#2555** (the probe whose caveat deferred it),
+  **PP-071**, **PP-069**.
 
 ## PP-073 — 🔧 Six raw-string sinks interpolate a caller-supplied **name** or a **typed-number option** and none of them escapes it — an identifier position can never be a `$n` parameter, so wrapping a column key in `"` is not escaping: `x" = '1' OR 1=1 --` closes the quote and continues the statement, and `SET [LOCAL] statement_timeout` has no parameter slot at all _(S3 · Data access / raw SQL)_
 
 **Found:** filed as **#2528**, which traced every `sql.raw`, `db.execute(...)` and `pool.query("…")`
 site in the app and concluded the tree is **not** exploitable from a request param today. That
-conclusion is the finding, and it is also the reason to fix it now: every one of the five sinks here
+conclusion is the finding, and it is also the reason to fix it now: every one of the six sinks here
 is a helper "one refactor away from becoming direct SQLi the moment a route spreads JSON body keys
 into it" — `buildInsert`/`buildUpdate`/`countRows` are re-exported by `lib/db/index.ts:17-19` and
 imported by **nothing**, and `--audit-table` is an operator flag.

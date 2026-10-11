@@ -5,7 +5,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyWebhookSignature, isStripeConfigured, StripeError, type StripeWebhookEvent } from '@/lib/stripe';
-import { db } from '@/drizzle/db';
+import { db, type DbClient } from '@/drizzle/db';
 import { tenants } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
 import { syncSubscriptionRow, markSubscriptionCanceled } from '@/lib/stripe-subscription-sync';
@@ -306,30 +306,39 @@ async function handleSubscriptionUpdated(subscription: StripeSubscriptionLike) {
   const terminalStatuses = new Set(['suspended', 'deleted', 'cancelled']);
   if (existing && terminalStatuses.has(existing.status) && nuCrmStatus === 'active') {
     logger.info(`[Stripe] Tenant ${tenantId} is '${existing.status}'; not re-activating from subscription.updated`);
-    await db.update(tenants)
-      .set({ planId: planId || undefined, updatedAt: new Date() })
-      .where(eq(tenants.id, tenantId));
-    // #2228: still reconcile the subscriptions ROW from Stripe truth (the
-    // tenant-level terminal guard above is about ACCESS, not about the
-    // billing record), otherwise the row stays on the pre-upgrade plan
-    // forever when the upgrade route's local tx failed after charging.
-    await syncSubscriptionRow(subscription, planId, nuCrmStatus);
+    // #2530: these two writes are one statement about the world — "this
+    // tenant's plan moved, and the billing row reflects it". Committed
+    // separately, a throw below left the tenant moved with a stale
+    // `subscriptions` row, which is the permanent drift #2228 exists to remove.
+    await db.transaction(async (tx) => {
+      await tx.update(tenants)
+        .set({ planId: planId || undefined, updatedAt: new Date() })
+        .where(eq(tenants.id, tenantId));
+      // #2228: still reconcile the subscriptions ROW from Stripe truth (the
+      // tenant-level terminal guard above is about ACCESS, not about the
+      // billing record), otherwise the row stays on the pre-upgrade plan
+      // forever when the upgrade route's local tx failed after charging.
+      await syncSubscriptionRow(subscription, planId, nuCrmStatus, tx as DbClient);
+    });
     return;
   }
 
-  await db.update(tenants)
-    .set({
-      planId: planId || undefined,
-      status: nuCrmStatus,
-      updatedAt: new Date(),
-    })
-    .where(eq(tenants.id, tenantId));
+  // #2530: same pair, same reason — see the comment above.
+  await db.transaction(async (tx) => {
+    await tx.update(tenants)
+      .set({
+        planId: planId || undefined,
+        status: nuCrmStatus,
+        updatedAt: new Date(),
+      })
+      .where(eq(tenants.id, tenantId));
 
-  // #2228: the subscriptions row used to be touched ONLY by app routes — the
-  // webhook synced tenants.status/planId but never subscriptions, so any
-  // Stripe-first/DB-second drift in the upgrade flow was permanent. Re-sync
-  // it from the event payload (Stripe is the source of truth here).
-  await syncSubscriptionRow(subscription, planId, nuCrmStatus);
+    // #2228: the subscriptions row used to be touched ONLY by app routes — the
+    // webhook synced tenants.status/planId but never subscriptions, so any
+    // Stripe-first/DB-second drift in the upgrade flow was permanent. Re-sync
+    // it from the event payload (Stripe is the source of truth here).
+    await syncSubscriptionRow(subscription, planId, nuCrmStatus, tx as DbClient);
+  });
 
   logger.info(`[Stripe] Tenant ${tenantId} subscription updated: stripeStatus=${status} -> status=${nuCrmStatus}, plan=${planId}`);
 }
@@ -344,20 +353,25 @@ async function handleSubscriptionDeleted(subscription: StripeSubscriptionLike) {
     return;
   }
 
-  // Downgrade to free plan
-  await db.update(tenants)
-    .set({
-      planId: 'free',
-      status: 'active', // Don't suspend — just downgrade
-      stripeSubscriptionId: null,
-      billingType: 'trial',
-      updatedAt: new Date(),
-    })
-    .where(eq(tenants.id, tenantId));
+  // #2530: the downgrade and the row retirement commit together, or a throw
+  // between them leaves the tenant on 'free' with a `subscriptions` row still
+  // saying otherwise — which is what the upgrade/cancel routes then read.
+  await db.transaction(async (tx) => {
+    // Downgrade to free plan
+    await tx.update(tenants)
+      .set({
+        planId: 'free',
+        status: 'active', // Don't suspend — just downgrade
+        stripeSubscriptionId: null,
+        billingType: 'trial',
+        updatedAt: new Date(),
+      })
+      .where(eq(tenants.id, tenantId));
 
-  // #2228: close the loop — the subscriptions row must reach 'canceled' too,
-  // otherwise the upgrade/cancel routes keep operating on a stale row.
-  await markSubscriptionCanceled(subscription.id);
+    // #2228: close the loop — the subscriptions row must reach 'canceled' too,
+    // otherwise the upgrade/cancel routes keep operating on a stale row.
+    await markSubscriptionCanceled(subscription.id, tx as DbClient);
+  });
 
   logger.info(`[Stripe] Tenant ${tenantId} subscription cancelled — downgraded to free`);
 }

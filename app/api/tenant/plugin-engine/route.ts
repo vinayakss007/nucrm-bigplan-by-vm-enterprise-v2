@@ -14,6 +14,7 @@ import { concurrencyGuard } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { splitConfigCredentials } from '@/lib/integrations/config-credentials';
 
 export const GET = withApiRoute(async (request: NextRequest) => {
   try {
@@ -34,26 +35,38 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       .orderBy(integrations.createdAt);
 
     // Enrich with provider definition
-    const enriched = data.map(inst => ({
-      id: inst.id,
-      tenantId: inst.tenantId,
-      providerId: inst.type,
-      label: inst.name,
-      config: inst.config as Record<string, string>,
-      enabled: inst.isActive,
-      lastUsedAt: inst.lastUsedAt?.toISOString(),
-      createdAt: inst.createdAt.toISOString(),
-      provider: getProviderDef(inst.type) || {
-        id: inst.type,
-        name: inst.type.charAt(0).toUpperCase() + inst.type.slice(1),
-        description: 'Custom integration',
-        category: 'custom' as const,
-        icon: 'Plug',
-        configFields: [],
-        capabilities: [],
-        builtIn: false,
-      },
-    }));
+    const enriched = data.map(inst => {
+      // #2521: this query has no `type` filter, so it also returns the tenant's
+      // `webhook` rows (`config.secret`) and its `google`/`outlook` rows
+      // (`config.accessToken`/`refreshToken`) — see the writer citations in
+      // lib/integrations/config-credentials.ts. `GET /api/tenant/webhooks` proves it
+      // knows that bag holds a credential: it filters `type='webhook'`
+      // (`app/api/tenant/webhooks/route.ts:32`) and projects only `config->>'url'` and
+      // `config->'events'` out of it (`:53-55`). The same discipline has to apply here,
+      // because `requireAuth` above is not an admin gate.
+      const { publicConfig, credentialKeys } = splitConfigCredentials(inst.config);
+      return {
+        id: inst.id,
+        tenantId: inst.tenantId,
+        providerId: inst.type,
+        label: inst.name,
+        config: publicConfig,
+        credentialKeys,
+        enabled: inst.isActive,
+        lastUsedAt: inst.lastUsedAt?.toISOString(),
+        createdAt: inst.createdAt.toISOString(),
+        provider: getProviderDef(inst.type) || {
+          id: inst.type,
+          name: inst.type.charAt(0).toUpperCase() + inst.type.slice(1),
+          description: 'Custom integration',
+          category: 'custom' as const,
+          icon: 'Plug',
+          configFields: [],
+          capabilities: [],
+          builtIn: false,
+        },
+      };
+    });
 
     return NextResponse.json({ data: enriched });
  
@@ -94,12 +107,17 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       return NextResponse.json({ error: 'Failed to create integration' }, { status: 500 });
     }
 
+    // The caller just typed these credentials, so echoing them back is not a new
+    // disclosure to *it* — but the response is logged, cached and kept by the browser
+    // like any other, and `GET` above no longer answers them. One shape for both.
+    const { publicConfig, credentialKeys } = splitConfigCredentials(row.config);
     return NextResponse.json({
       data: {
         id: row.id,
         providerId: row.type,
         label: row.name,
-        config: row.config,
+        config: publicConfig,
+        credentialKeys,
         enabled: row.isActive,
         createdAt: row.createdAt.toISOString(),
       }
