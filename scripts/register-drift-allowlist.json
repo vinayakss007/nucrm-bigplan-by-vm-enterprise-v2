@@ -3,18 +3,18 @@
   "entries": [
     {
       "cite": "app/api/cron/auto-backup/route.ts:55",
-      "regLines": [2735],
+      "regLines": [2745],
       "reason": "Read-log, not a pointer: PP-055 lists the auto-backup line set (55, 147, 243, 256-257, 297) as ranges somebody read, and #2441 declined to re-pin it for exactly that reason \u2014 re-pinning would invent an intent the entry never stated. Listed here so the decision is on the record instead of silent drift."
     },
     {
       "cite": "docs/README.md:71",
-      "regLines": [146],
+      "regLines": [156],
       "reason": "History, not a live pointer: the register's PP-068 bullet reports the coordinate as it found it \u2014 `docs/README.md:71` was where the README's kept-rather-than-deleted paragraph sat then, and the sentence it named now sits at `docs/README.md:75`, whose own re-pin chain has run PP-071 -> PP-072 (rule at :4651) -> PP-073 (:4774) -> PP-065 (#2507, now :4810). Re-writing PP-068's sentence would falsify the measurement it reports. #2534 (PP-070) re-pins the same live cite from its own tree, so whichever docs PR merges last re-derives this entry; prune it the day the README names the rule by heading text instead of a line number."
     },
     {
       "cite": "docs/README.md:75",
-      "regLines": [38, 67, 78],
-      "reason": "Chronic, not accidental: the register's header bullets and its entry sections both quote this README sentence, and that sentence is the README's own re-pin of a pointer INTO the register \u2014 so any entry that adds register header text moves the line the pointer names, and this cite reads as drift by construction. PP-072 (#2558, merged) minted it with the rule at :4651, PP-073 (#2567, merged) moved it to :4774, PP-065 (#2507, merged) re-pinned it to :4810, and PP-070 (this PR, #2534) re-pins it to :4879 because PP-065's own bullet and section are what moved it \u2014 the twelfth time. #2526 (PP-074, PR #2568) is still open re-pinning it from its own tree, so whichever docs PR merges last re-derives this entry. Prune it the day the README points at the rule by heading text instead of a line number."
+      "regLines": [48, 77, 88, 4926],
+      "reason": "Chronic, not accidental: the register's header bullets and its PP-074 section both quote this README sentence, and that sentence is the README's own re-pin of a pointer INTO the register \u2014 so any entry that adds register header text moves the line the pointer names, and this cite reads as drift by construction. PP-072 (#2558, merged) minted it with the rule at :4651, PP-073 (#2567, merged) moved it to :4774, PP-065 (#2507, merged) re-pinned it to :4810, and PP-074 (#2526) re-pins it to :4940 because PP-065's own bullet and section are what moved it \u2014 the twelfth time. #2534 (PP-070) is still open with a register section of its own and re-derives this entry on whichever side merges last. Prune it the day the README points at the rule by heading text instead of a line number."
     }
   ]
 }
