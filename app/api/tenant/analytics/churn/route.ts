@@ -10,11 +10,14 @@ import { db } from '@/drizzle/db';
 import { churnPredictions } from '@/drizzle/schema';
 import { contacts } from '@/drizzle/schema';
 import { eq, and, desc, sql } from 'drizzle-orm';
+import { z } from 'zod';
 import { concurrencyGuard } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
-import { readJsonBody } from '@/lib/api/validate';
+import { readJsonBody, validateBody, uuidField } from '@/lib/api/validate';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { logError } from '@/lib/errors-server';
+
+const calculateSchema = z.object({ contact_id: uuidField });
 
 /**
  * GET /api/tenant/analytics/churn
@@ -83,10 +86,20 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     }
 
     const body = await readJsonBody(request);
-    const { contact_id } = body;
+    const validated = validateBody(calculateSchema, body);
+    if (validated instanceof NextResponse) return validated;
+    const { contact_id } = validated.data;
 
-    if (!contact_id) {
-      return NextResponse.json({ error: 'contact_id is required' }, { status: 400 });
+    // #2524 — contact_id arrives from the body. Prove it belongs to the calling
+    // tenant before the RPC runs and before the prediction row is read: RLS is
+    // this repo's backstop, never its primary filter.
+    const [ownedContact] = await db
+      .select({ id: contacts.id })
+      .from(contacts)
+      .where(and(eq(contacts.id, contact_id), eq(contacts.tenantId, ctx.tenantId)))
+      .limit(1);
+    if (!ownedContact) {
+      return NextResponse.json({ error: 'Contact not found' }, { status: 404 });
     }
 
     const result = await db.execute(sql`SELECT public.calculate_churn_risk(${contact_id}) as probability`);
@@ -94,7 +107,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
 
     const [prediction] = await db.select()
       .from(churnPredictions)
-      .where(eq(churnPredictions.contactId, contact_id))
+      .where(and(eq(churnPredictions.contactId, contact_id), eq(churnPredictions.tenantId, ctx.tenantId)))
       .limit(1);
 
     return NextResponse.json({

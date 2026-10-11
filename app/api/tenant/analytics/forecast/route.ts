@@ -10,10 +10,14 @@ import { requireAuth, can } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { dealForecasts } from '@/drizzle/schema';
 import { revenueForecastSummary } from '@/drizzle/schema';
-import { eq, desc, sql } from 'drizzle-orm';
-import { readJsonBody } from '@/lib/api/validate';
+import { deals } from '@/drizzle/schema';
+import { and, eq, desc, sql } from 'drizzle-orm';
+import { z } from 'zod';
+import { readJsonBody, validateBody, uuidField } from '@/lib/api/validate';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { rateLimitRead } from '@/lib/api/read-rate-limit';
+
+const calculateSchema = z.object({ deal_id: uuidField });
 
 /**
  * GET /api/tenant/analytics/forecast
@@ -63,10 +67,20 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     }
 
     const body = await readJsonBody(request);
-    const { deal_id } = body;
+    const validated = validateBody(calculateSchema, body);
+    if (validated instanceof NextResponse) return validated;
+    const { deal_id } = validated.data;
 
-    if (!deal_id) {
-      return NextResponse.json({ error: 'deal_id is required' }, { status: 400 });
+    // #2524 — deal_id arrives from the body, so it is only ever as trusted as
+    // the tenant gate below. Both the RPC and the forecast read must be proven
+    // in-tenant first: RLS is this repo's backstop, never its primary filter.
+    const [ownedDeal] = await db
+      .select({ id: deals.id })
+      .from(deals)
+      .where(and(eq(deals.id, deal_id), eq(deals.tenantId, ctx.tenantId), sql`${deals.deletedAt} IS NULL`))
+      .limit(1);
+    if (!ownedDeal) {
+      return NextResponse.json({ error: 'Deal not found' }, { status: 404 });
     }
 
     const result = await db.execute(sql`SELECT public.calculate_deal_win_probability(${deal_id}) as probability`);
@@ -74,7 +88,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
 
     const [forecast] = await db.select()
       .from(dealForecasts)
-      .where(eq(dealForecasts.dealId, deal_id))
+      .where(and(eq(dealForecasts.dealId, deal_id), eq(dealForecasts.tenantId, ctx.tenantId)))
       .limit(1);
 
     return NextResponse.json({
