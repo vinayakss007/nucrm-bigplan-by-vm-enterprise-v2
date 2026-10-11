@@ -196,10 +196,21 @@ export const PATCH = withApiRoute(async (request: NextRequest, { params }: { par
     let surveyContactName: string | undefined;
     let ticketSubject: string | undefined;
 
+    let notFound = false;
     await db.transaction(async (tx) => {
-      await tx.update(supportTickets)
+      // #2525: this UPDATE was already tenant-scoped, but its result was never
+      // checked — so a foreign `id` matched 0 rows and execution continued into
+      // the CSAT branch below. `.returning()` makes "did I own this row?" a
+      // fact instead of an assumption.
+      const [updated] = await tx.update(supportTickets)
         .set(updates)
-        .where(and(eq(supportTickets.tenantId, ctx.tenantId), eq(supportTickets.id, id)));
+        .where(and(eq(supportTickets.tenantId, ctx.tenantId), eq(supportTickets.id, id)))
+        .returning({ id: supportTickets.id });
+
+      if (!updated) {
+        notFound = true;
+        return;
+      }
 
       if (v.status === 'resolved') {
         const [ticket] = await tx.select({
@@ -207,16 +218,19 @@ export const PATCH = withApiRoute(async (request: NextRequest, { params }: { par
           subject: supportTickets.subject,
         })
         .from(supportTickets)
-        .where(eq(supportTickets.id, id))
+        // #2525: scoped, like the UPDATE above and every other read in this route.
+        .where(and(eq(supportTickets.tenantId, ctx.tenantId), eq(supportTickets.id, id)))
         .limit(1);
 
         if (ticket?.contactId) {
-          const [contact] = await db.select({
+          const [contact] = await tx.select({
             email: contacts.email,
             firstName: contacts.firstName,
           })
           .from(contacts)
-          .where(eq(contacts.id, ticket.contactId))
+          // #2525: was a bare `db` read of another tenant's contact by id; now
+          // inside this transaction and scoped to this tenant.
+          .where(and(eq(contacts.tenantId, ctx.tenantId), eq(contacts.id, ticket.contactId)))
           .limit(1);
 
           if (contact?.email) {
@@ -236,6 +250,12 @@ export const PATCH = withApiRoute(async (request: NextRequest, { params }: { par
         }
       }
     });
+
+    // #2525: a foreign id matched no row, so this is the honest answer — and it
+    // stops before the survey insert and the outbound email.
+    if (notFound) {
+      return NextResponse.json({ error: 'Ticket not found' }, { status: 404 });
+    }
 
     // Send CSAT survey email after transaction commits
     if (surveyToken && surveyContactEmail && ticketSubject) {
