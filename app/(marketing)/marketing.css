@@ -928,7 +928,7 @@
 .mk-root:has(.mk-home) > header.mk-glass { background: rgba(248, 244, 235, .94); border-color: rgba(49,45,37,.1); box-shadow: 0 4px 18px rgba(52,43,30,.04); }
 .mk-root:has(.mk-home) > header .text-slate-400,.mk-root:has(.mk-home) > header .text-slate-300 { color: #625d52; }
 .mk-root:has(.mk-home) > header .text-white { color: #26251f; }
-.mk-root:has(.mk-home) > header .border-white/\[0\.1\] { border-color: rgba(49,45,37,.16); }
+.mk-root:has(.mk-home) > header .border-white\/\[0\.1\] { border-color: rgba(49,45,37,.16); }
 .mk-root:has(.mk-home) > footer { border-color: rgba(49,45,37,.14); background: #e9e2d6; color: #514c41; }
 .mk-root:has(.mk-home) > footer [class*='text-slate-'] { color: #625d52 !important; }
 .mk-root:has(.mk-home) > footer [class*='border-white/'] { border-color: rgba(49,45,37,.12) !important; }
