@@ -72,14 +72,14 @@ The bulk of the tree: frozen snapshots of workstreams that ended, most before th
 
 **Why they are kept rather than deleted.** The register states the rule — a fixed entry stays because
 the evidence is what makes it useful as a learning document, and because the companion lessons doc
-references it — at `docs/infra/PREPROD-ISSUE-REGISTER.md:5013`, re-pinned by **PP-070**. The pointer
+references it — at `docs/infra/PREPROD-ISSUE-REGISTER.md:5131`, re-pinned by **PP-078**. The pointer
 it replaced (`:1598`) had drifted 2,315 lines and was still naming a `**Files:**` entry inside PP-040,
 because `guard:coords` reads the citations the register makes _outward_ and never the ones other
 documents make _into_ it; merging PP-064, then PP-066, PP-067 and PP-068, then **#2511**'s own
 PP-061 bullet, then **#2531**'s PP-069, **#2548**'s PP-071, **#2558**'s PP-072, **#2567**'s PP-073
-and this **#2507**/PP-065, **#2526**/PP-074 and **#2534**/PP-070 entry, each moved the rule again
-before this line was committed, so the re-pin has now run thirteen times. **#2566** is the only
-other docs-adjacent PR still open, and it re-pins this sentence from its own tree, so whoever
+and this **#2507**/PP-065, **#2526**/PP-074, **#2534**/PP-070 and the new **PP-078** entry — each moved it
+again before this line was committed, so the re-pin has now run fourteen times. **#2566**, **#2569**,
+**#2578** and **#2581** are all still open, and each re-pins this sentence from its own tree, so whoever
 merges last re-measures. Same here — these files are cited by PP numbers, ADRs, commit messages and each
 other. `MASTER_PLAN.md` and `ISSUES.md`
 read like current state and are not; that is a labelling failure, and the fix is labelling, not `rm`.
