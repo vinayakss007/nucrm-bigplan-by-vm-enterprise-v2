@@ -154,8 +154,24 @@ describe('DB snapshot reflects the drops (#2264)', () => {
     expect(Object.values(PAIRS).filter((keep) => !live.has(keep))).toEqual([]);
   });
 
-  it('#2255 duplicate allowlist is emptied — its members only existed as duplicates', () => {
+  it('#2255 duplicate allowlist holds no #2264 duplicate — its members only existed as duplicates', () => {
     const guard = readFileSync(join(ROOT, 'tests/unit/schema-drift-guard-2255.test.ts'), 'utf8');
-    expect(guard).toMatch(/const KNOWN_REDUNDANT_DUPLICATE_INDEXES: Record<string, string> = \{\s*\};/);
+    const block = guard.match(
+      /const KNOWN_REDUNDANT_DUPLICATE_INDEXES: Record<string, string> = \{([\s\S]*?)\};/,
+    );
+    expect(block, 'the guard lost its duplicate allowlist entirely').not.toBeNull();
+    // The map opened at #2264 with 20 `dup → keep` entries, all of them pairs this
+    // repo dropped, and #2264 emptied it. It is no longer required to be *literally*
+    // empty: a supersession that a pending migration performs (#2515: `0126` replaces
+    // the non-unique `idx_segment_members_pk` with a UNIQUE one) has to be listed or
+    // the guard reads the live-DB name as an undeclared index. What must stay true is
+    // that none of #2264's own duplicates came back, and that every surviving entry
+    // names an index the schema really declares.
+    const keys = [...block![1].matchAll(/(\w+)\s*:\s*'/g)].map((m) => m[1]);
+    expect(keys.filter((k) => DROPPED.includes(k))).toEqual([]);
+    const declared = declaredIndexNames();
+    for (const [dup, keep] of [...block![1].matchAll(/(\w+)\s*:\s*'(\w+)'/g)].map((m) => [m[1], m[2]])) {
+      expect(declared.has(keep), `${dup} is superseded by ${keep}, which is not declared`).toBe(true);
+    }
   });
 });

@@ -4,7 +4,25 @@
 > here, with the evidence that proves it and the verification that closed it.
 > Update the status the moment it changes; IDs are never reused.
 >
-> - **Last updated:** 2026-10-11 (UTC) — **PP-074**: **#2526**'s "unauthenticated tracking sink
+> - **Last updated:** 2026-10-11 (UTC) — **PP-070**: `segment_members` has been keyed by nothing since `0000_init` created it without
+> an `id` at all: `0071` added the column nullable-with-default, `0125` made it NOT NULL and *deliberately stopped short*, and the only
+> index shaped like a key — `idx_segment_members_pk` — is a **non-unique** btree over `(segment_id, entity_id)` (`pg_index.indisunique = f`),
+> so `pg_constraint` answers `pk=0` on the chain build *and* on preprod, and the bulk-enroll callers' `onConflictDoNothing()`
+> (`app/api/tenant/leads/bulk/route.ts:326` +2 siblings) have **nothing to conflict with** — duplicate memberships accumulate silently.
+> `0126_segment_members_primary_key` adds `PRIMARY KEY (id)` (the key `utils.pk()` always declared), replaces the misleading index with
+> `uq_segment_members_segment_entity` — UNIQUE, same two columns, still the lookup path — and dedupes both shapes **before** constraining,
+> per tenant under `set_config('app.current_tenant', …)`: PP-067 measured `app.is_super_admin` **inert** on this table's loop-built policy,
+> so the repair reuses `0125`'s proven loop, and `guard:migration-rls` accepts it on that clause alone — under **#2516**'s per-table rule and, since **#2548**, under **PP-071**'s stricter per-write one. Filed as
+> **#2515**; the AC1 decision (both readings enforced) is recorded in the migration header and on the
+> issue. Written as **PP-070** while **#2531** merged carrying **PP-069** and **#2548** carrying
+> **PP-071** — the earlier merge keeps the number and the later one moves, so this entry stays 070.
+> **#2558** (**PP-072**), **#2567** (**PP-073**), **#2507** (**PP-065**) and **#2526** (**PP-074**, PR
+> **#2568**) all landed on `main` while this PR sat open, each touching the same two places in this
+> file; so this bullet re-pins the `docs/README.md:75` pointer to the keep-the-entry rule's line on
+> this merged tree (`:5013`) — the thirteenth such re-pin — and **#2566** is the only other
+> docs-adjacent PR still open, re-pinning the same sentence from its own tree. IDs are never reused,
+> so this entry stays **PP-070**.
+> - **Previous:** 2026-10-11 (UTC) — **PP-074**: **#2526**'s "unauthenticated tracking sink
 >   taking attacker-supplied ids" is closed twice before a request can reach it, and the thing it
 >   actually was is a redirector off the app's own domain. Measured: `proxy.ts` never listed
 >   `/api/tenant/email/track` in `PUBLIC_PATHS` (`:202-244`) or `PUBLIC_PREFIXES` (`:246`), and
@@ -48,7 +66,10 @@
 >   one sat open — same rule, same outcome. So this bullet re-pins the `docs/README.md:75` pointer to
 >   the keep-the-entry rule's line on this merged tree (`:4810`); **#2534** re-pins the same sentence
 >   as **PP-070** from its own tree, and whichever of the two docs PRs merges last re-measures. IDs
->   are never reused,so this entry stays **PP-065**. **PP-074** (**#2526**) merged after this one and re-pins the same sentence again, so the `:4810` here is where the rule sat on the tree **#2507** merged into, not where it sits now.
+>   are never reused, so this entry stays **PP-065**. **PP-074** (**#2526**, PR **#2568**) merged
+>   after this one and re-pinned the same sentence, and **PP-070** (**#2534**) re-pins it once more
+>   on top of that, so the `:4810` here is where the rule sat on the tree **#2507** merged into,
+>   not where it sits now.
 > - **Previous:** 2026-10-11 (UTC) — **PP-073**: six raw-string sinks interpolate a
 >   caller-supplied *name* or a typed-number option and none of them escapes it. **PP-069** and
 >   **PP-071** are about what the RLS guard reads; this is the mirror rule — an **identifier position
@@ -293,6 +314,7 @@ Severity: **S1** blocks go-live · **S2** broken feature or security weakness ·
 | PP-067 | S2  | Migrations + tooling        | **Six columns come out of `npm run db:bootstrap` nullable while `drizzle/schema` declares every one of them NOT NULL** — `custom_entities.fields/.settings/.created_at`, `custom_entity_data.data/.created_at`, `segment_members.id`. `0059` created them loosely; `0071`'s repair is a `CREATE TABLE IF NOT EXISTS`, which on any ordered chain build parses, discards itself and **never executes**, so its NOT NULLs are inert text. `0125` backfills every NULL with the value that column's own DEFAULT already supplies and then adds the six constraints, driven by `set_config('app.current_tenant', …)` per tenant — because `0109`'s `app.is_super_admin` GUC is **inert** on these three `tenant_isolation` policies (measured: `UPDATE 0`, then `23502` on the following `SET NOT NULL`). Both directions measured with #2512's column-level screen: **9 allowlisted → 3 allowlisted, 0 drift**, exit 0 on a chain-built database. | 🔧 FIXED IN TREE                                                                                                                                          |
 | PP-068 | S2  | Schema drift                | **The only screen in this repo that asks the live database what its columns are compared _names_, and nothing ran it.** `scripts/drift-check.ts` checked table presence, function presence, RLS policy presence and row counts of undeclared tables — never a column — so pre-prod measured `No drift ✓` at **exit 0** while `support_tickets.portal_token` was live `NOT NULL` with **no default** against a schema file that declares it nullable (#2499's whole cause), and `super_admin_audit_logs` carried three `text` columns behind three `jsonb` declarations. `grep -rn drift-check .github/workflows` → **0 hits across all five workflow files**, while **five** documents told a human to run it. All three screens that do exist are name-only (`tests/unit/schema-drift-guard-2255.test.ts`, `scripts/check-schema-drift-live.ts`, `scripts/check-schema-drift.mjs` is Zod), and the obvious fix — importing the schema **barrel** — is load-mode-dependent: from a `.ts` entry it yields the same 226 tables the 62 files do, from an `.mts` entry it has **3** own keys and **2** tables, the 236 real exports hidden one level down in `schema.default`, silently | 🔧 FIXED in this PR (columns compared per table, three kinds — presence, nullability, type — behind a ratcheting allowlist that must name a `clearedBy` migration or a `filedAs` issue for every entry, and wired in both shapes **#2508** AC3 asks for: `ci.yml:407` measures a `db:bootstrap` database on every pull request, `.github/workflows/schema-drift.yml` measures pre-prod nightly **and** re-seeds the drift in a throwaway database to prove the screen fires (`:105`)) · measured after: pre-prod **6** findings, chain-built database **9**, **4** in common — the two databases are behind main in **different directions** · the live fixes stay open as **#2509** (nullability, 6 columns), **#2510** (audit types, 3 columns) and `0124`/`0109` for #2499 · the **3,216** are base-table columns; **PP-064**'s 3,231 is the same `nucrm_test` plus the **15** columns of its `deals_by_win_probability` view — both counts measured here |
 | PP-069 | S2  | Infra / guard correctness | **`guard:migration-rls` accepted the `app.is_super_admin` marker without reading the policies of the tables the migration writes.** `MITIGATION.test(rawSql)` excused any file that mentioned the GUC anywhere — and the final `0125` mentions it in header prose to warn that it is **inert** there — for every write it made. `0125`'s first draft is the measured bypass (**PP-067**): marker set, three `tenant_isolation` policies that never read it, `UPDATE 0`, then `23502` on the following `SET NOT NULL` | 🔧 FIXED in this PR (per-table mitigation, **#2516**: a marker counts only where the written table's own literal `CREATE POLICY` statements read it somewhere in the history — `collectPolicyGucs` — otherwise the file must set `app.current_tenant`; evidence is the comment-stripped executable scope, so prose and stored-function bodies no longer excuse a file · `0109` green for the right reason, final `0125` passes through (b), a first-draft-shaped fixture exits 1 · tree verdict unchanged: 126 files · 202 tenant-scoped · 17 + 2 baselined · exit 0) |
+| PP-070 | S2  | Migrations / data integrity | **`segment_members` is keyed by nothing on any build this repo can produce**: `0000_init` created it with no `id`, `0071` added the column nullable, `0125` made it NOT NULL and stopped short of the key by design — and the index named `idx_segment_members_pk` is a **non-unique** btree over `(segment_id, entity_id)`, so `pk=0` in `pg_constraint` while the bulk-enroll callers' `onConflictDoNothing()` has nothing to conflict with and duplicate memberships accumulate silently | 🔧 FIXED IN TREE (`0126_segment_members_primary_key`: `PRIMARY KEY (id)` + `uq_segment_members_segment_entity` UNIQUE over the pair — the misleading name retired, the lookup role kept; dedupe of pair-dupes, id-remints and orphan tenant-adoption runs **before** any constraint, per tenant under `app.current_tenant` because `app.is_super_admin` is inert on this loop-built policy (**PP-067**); `guard:migration-rls` and `guard:chain` green with 127 entries; 12 new text-level pins in `tests/unit/segment-members-pk-2515.test.ts`; the supersession rides `KNOWN_REDUNDANT_DUPLICATE_INDEXES` until `0126` applies) · **#2515** |
 | PP-071 | S2  | Infra / guard correctness | **PP-069's per-table rule never reads the database, and reads the history in the wrong shape.** Measured against a fresh chain build (**274** policies / **226** RLS-enabled tables): the evidence map is built from literal `CREATE POLICY … ON <table>` only, so the **12** tables whose `tenant_isolation` arrives through a `format()`/`EXECUTE` list — `leads` first among them — have no evidence, and the marker is refused where the live policy reads it; the map unions over history and never removes a `DROP POLICY` (**109** execute in the chain, `0088` alone 72 creates / 84 drops), so a deleted policy keeps crediting a marker — which fails **open**; the corpus is walked by `readdirSync().sort()` while `scripts/migrate.ts:143` applies by journal, **20 of 126** positions apart (`0091`/`0092` after `0112`), which decides the last writer of `deal_stages.tenant_isolation` (`0092`, both GUCs) versus the one the guard credits (`0107`, tenant only); and resolution is **kind-blind** — `error_logs_super_admin_write` is `FOR UPDATE` and gates no INSERT while `error_logs_insert_any` is `WITH CHECK (true)`, so **9** writes the guard demanded a GUC for need none, and a marker read only by a `SELECT` policy cleared an UPDATE | 🔧 FIXED in this PR (**#2545**, on top of the merged **#2516**): `scripts/rls-policy-map.mjs` reads the chain as an event log — three generator shapes (literal, template-applied-over-a-list, catalogue-loop kept as unattributed `ambient`), `%I`/`%L` holes, `''`-escaped and adjacent string fragments, `FOR <kind>`, last-writer-wins with `DROP POLICY` deleting — over `meta/_journal.json` order · measured after: **265** keys / **225** tables, **262 of 274** live keys attributed, **0** GUC-set disagreements, **0 unsound / 0 conservative** verdicts over the **229 × 3** `(table, kind)` grid, **0** verdict flips and baseline `violations` byte-identical (17 + 2, exit 0), `0126` (**#2534**, not yet merged) green when dropped into the corpus · six reinstated defects → **6 / 2 / 7 / 4 / 13 / 13** tests red with the guard still printing `OK` · 74 tests in the two suites, tree verdict unchanged · `--explain <tag\|all>` names the policy that admits each resolved write, because exit 0 is one byte for "the rows are visible" and for "this policy reads no GUC at all" (AC3) |
 | PP-072 | S3  | Analytics / data minimisation | **The churn queue never asked whether the contact still exists.** `GET /api/tenant/analytics/churn` filtered `churn_predictions.tenant_id` only, so a soft-deleted contact stayed listed with name, email, risk factors and `recommendedActions`, and `POST` kept scoring them because #2555 matched the neighbouring `GET` instead of fixing both — the deal side of the same feature filters `deleted_at` on both sides | 🔧 FIXED in this PR (`isNull(contacts.deletedAt)` in the `GET` filter and the `POST` ownership probe; the two advertised `.../calculate` routes do not exist and the doc comments now say so · `tests/unit/churn-soft-deleted-2556.test.ts`, 6 tests, asserting the rendered SQL) |
 | PP-073 | S3  | Data access / raw SQL | **Six raw-string sinks interpolate a caller-supplied name or a typed-number option and none of them escapes it.** An identifier position can never be a `$n` parameter, so the builders' `` `"${k}"` `` is not escaping: a `lib/db/client.ts` column key of `x" = '1' OR 1=1 --` closes its own quoted identifier and continues the statement; `SET [LOCAL] statement_timeout` has no parameter slot at all. Table names were already allowlisted, every value already binds as `$n`, and `buildInsert`/`buildUpdate`/`countRows` are re-exported at `lib/db/index.ts:17-19` and imported by **nothing** — so this is the pattern, not an active injection | 🔧 FIXED in this PR (**#2528**): `lib/sql-allowlist.ts` gains `BARE_IDENTIFIER` + `validateIdentifier()` (applied to all three builder key lists — `lib/db/client.ts:142`/`:156`/`:158`/`:170` — and to `verifyAuditChainIntegrity`'s operator-supplied `--audit-table` name at `lib/data-integrity.ts:285`, *before* the `try` because the `catch` at `:342` reports the name back) and `MAX_STATEMENT_TIMEOUT_MS` + `validateTimeoutMs()` at `lib/api/with-transaction.ts:86` / `lib/cron/distributed-lock.ts:72` · **14** new tests + **493** existing across the **17** suites that reach these modules, `tsc --noEmit` exit 0 · **all 1,946** explicitly-named columns in `drizzle/schema` satisfy the lowercase-only rule · **not** #683's per-table column allowlist |
@@ -4604,6 +4626,57 @@ marker was inert on the tables it wrote. The guard's own exemption rule reproduc
   bypass's measurements), **#2516** (its ACs are the rule above), **#2515** (open: `segment_members`
   still has no real primary key — separate defect, separate PR).
 
+## PP-070 — 🔧 `segment_members` has carried no key since `0000_init` created it without an `id`: `0071` added the column nullable, `0125` made it NOT NULL and *deliberately stopped short*, and the index named `idx_segment_members_pk` is a **non-unique** btree over `(segment_id, entity_id)` — `pk=0` in `pg_constraint` on the chain build **and** on preprod, and the bulk-enroll callers' `onConflictDoNothing()` silently accumulates duplicate memberships _(S2 · Migrations / data integrity)_
+
+**Found:** while writing `0125` for #2509 — `SET NOT NULL` was the easy half; asking whether
+`id` is a *key* at all produced this issue (**#2515**), filed separately rather than smuggled
+into the column-drift PR. `0125`'s footer names the gap and leaves it here on purpose.
+
+- **What the database actually says.** `pg_constraint` for the table: two FKs, `contype='p'`
+  → nothing. `pg_index.indisunique` → `false` for all three indexes, including the one whose
+  *name* asserts a primary key over two columns that are not the key. Drafting this finding
+  produced its own near-miss: reading `NOT indisunique` as unique printed a false
+  "unique=true" — the commands in **#2515** quote `indexdef`/`contype` directly for that reason.
+- **AC1 — the decision, both readings enforced.** `id` is the declared key
+  (`utils.pk()` → `.primaryKey().defaultRandom()`, codebase-wide convention), so `0126` adds
+  `PRIMARY KEY (id)`; `(segment_id, entity_id)` is the identity **in practice** — no code path
+  addresses a member by `id` (the members routes query and delete by segment/tenant only) and
+  three bulk callers (`leads/bulk/route.ts:326`, `contacts/bulk/route.ts:414`,
+  `deals/bulk/route.ts:446`) already assume the pair is unique — so the misleading
+  `idx_segment_members_pk` is replaced by `uq_segment_members_segment_entity`, a UNIQUE btree
+  over the same two columns, which keeps AC4's lookup role in the same object.
+- **AC2 — dedupe before constraint, in the right RLS context.** The repair runs per tenant
+  under `set_config('app.current_tenant', t.id::text, true)` — `0125`'s proven loop — because
+  **PP-067** measured `app.is_super_admin` **inert** on this table's policy (built in the
+  `0031` `format()`/`EXECUTE` loop): a marker set here would make the dedupe a silent `UPDATE 0`
+  / `DELETE 0` and the constraint then aborts on real rows, which is exactly the `0114` failure
+  **PP-058** documented. Inside the loop, in order: orphan rows adopt their segment's tenant;
+  duplicate pairs are deleted keeping the earliest `added_at`; duplicate `id`s are re-minted
+  `gen_random_uuid()` except the earliest. Then — and only then — `ADD CONSTRAINT … PRIMARY KEY`.
+- **What the loop cannot reach, stated in the file's own header.** an `id` shared by rows of
+  *two different tenants* is invisible to both tenant contexts and unrepairable by any
+  migration — v4 uuids make it a practical nullity, and `ADD PRIMARY KEY` (DDL, RLS-blind)
+  refuses the table with 23505 if it exists. Same posture as the guard's scope-honesty section.
+- **Measured:** `guard:chain` → 127 up-files · 127 journal entries · 0 defects;
+  `guard:migration-rls` → exit 0 on **127** files, re-measured after **#2548** landed **PP-071**'s
+  per-write rule: `0126` passes on the `app.current_tenant` clause alone under both that and
+  **#2516**'s per-table one — under the pre-#2531 regex it would have passed for the wrong reason
+  (the marker in the *header prose*, the exact bypass **#2516** removes). Measured now: 202
+  tenant-scoped tables, 265 policies read across 225 tables, 17 + 2 baselined offenders unchanged; `tests/unit/segment-members-pk-2515.test.ts`
+  12/12 — text-level ordering pins on the real file (setter-before-write, dedupe-before-constrain,
+  orphan-fix-first, no executable `is_super_admin`, honest down-rollback); schema-drift guard
+  2255 green with `idx_segment_members_pk → uq_segment_members_segment_entity` allowlisted as a
+  supersession until `0126` applies; and **#2264**'s own pin — "`KNOWN_REDUNDANT_DUPLICATE_INDEXES`
+  is literally `{}`" — was written for a tree with no pending supersession, so it now asserts what it
+  meant: no `DROPPED` name re-enters the map and every surviving entry names a declared index
+  (`tests/unit/dup-index-drop-2264.test.ts`, red on the first CI run of this PR, green after).
+- **Files:** `drizzle/migrations/0126_segment_members_primary_key.sql` (+ `.down.sql`),
+  `drizzle/migrations/meta/_journal.json`, `drizzle/schema/segments.ts`,
+  `tests/unit/segment-members-pk-2515.test.ts`, `tests/unit/schema-drift-guard-2255.test.ts`,
+  `tests/unit/dup-index-drop-2264.test.ts`.
+- **Related:** **#2515**, **PP-058** (RLS-blind migration writes), **PP-067** (the inert-marker
+  measurement this migration obeys), **PP-069** / **#2516** (the per-table rule it satisfies),
+  **#2509** / `0125` (the NOT NULL half that stopped short of this on purpose).
 ## PP-071 — 🔧 **PP-069**'s per-table rule is per *table* but not per *write*, and three of the four things it reads are not what the database holds — 12 loop-built policies unseen, 109 `DROP POLICY`s never applied, 20 of 126 files walked in the wrong order, and 9 writes admitted unconditionally that the guard still demanded a GUC for _(S2 · Guard correctness)_
 
 **Found:** filed as **#2545** against the merged **#2516** fix (`de72cb4f`), by running that reader and
