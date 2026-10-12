@@ -169,14 +169,42 @@ export async function POST(request: NextRequest) {
       .limit(1);
 
     if (!backup) {
-      // Nothing to verify is not the same alarm as a corrupt backup. It means the
-      // platform `backup` job has never produced an artefact in backup_records, so
-      // there is no dump to restore — reporting it as "an unrestorable backup is not
-      // a backup, investigate immediately" pointed at the wrong thing. Keep the 5xx
-      // (run-cron.sh only pages on a non-2xx) but name the real cause and record it.
-      const reason = 'No completed backup in backup_records: the platform backup job has never produced an artefact, so restore verification has nothing to check.';
+      // Nothing to verify is not the same alarm as a corrupt backup, so this
+      // used to say "the platform backup job has never produced an artefact".
+      // That was false on the live host: backup_records held 4 rows, every one
+      // status='failed' with a precise error (pg_dump role lacks BYPASSRLS →
+      // PP-014/PP-015). "Never produced an artefact" sent the operator looking
+      // for a scheduler that was in fact running and failing loudly. Look up
+      // the most recent attempt whatever its status and name *its* error —
+      // the real reason there is nothing to restore. Keep the 5xx
+      // (run-cron.sh only pages on a non-2xx).
+      const [lastAttempt] = await db
+        .select({
+          backupType: backupRecords.backupType,
+          status: backupRecords.status,
+          errorMessage: backupRecords.errorMessage,
+          createdAt: backupRecords.createdAt,
+        })
+        .from(backupRecords)
+        .orderBy(desc(backupRecords.createdAt))
+        .limit(1);
+
+      const reason = !lastAttempt
+        ? 'No backup records at all: the platform backup job has never written to backup_records, so restore verification has nothing to check.'
+        : 'No completed backup in backup_records. Most recent attempt ' +
+          `(${lastAttempt.backupType}, ${lastAttempt.createdAt?.toISOString() ?? 'unknown time'}) ended as "${lastAttempt.status}"` +
+          (lastAttempt.errorMessage ? `: ${lastAttempt.errorMessage}` : '.');
+
       await recordFailure('no_backup_to_verify', reason);
-      return NextResponse.json({ ok: false, cause: 'no_backup_to_verify', failures: [reason] }, { status: 500 });
+      return NextResponse.json(
+        {
+          ok: false,
+          cause: 'no_backup_to_verify',
+          ...(lastAttempt ? { last_attempt: { status: lastAttempt.status, at: lastAttempt.createdAt } } : {}),
+          failures: [reason],
+        },
+        { status: 500 }
+      );
     }
     if (!backup.storagePath) {
       failures.push('Backup record has no storage_path — artefact is unlocatable');

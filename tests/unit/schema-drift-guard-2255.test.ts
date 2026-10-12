@@ -33,7 +33,15 @@ const SNAPSHOT: {
  * Re-add an entry ONLY for a new live undeclared duplicate (the cleanup
  * itself still belongs to a #2264-style migration, never to this file).
  */
-const KNOWN_REDUNDANT_DUPLICATE_INDEXES: Record<string, string> = {};
+const KNOWN_REDUNDANT_DUPLICATE_INDEXES: Record<string, string> = {
+  // Not a duplicate pair but a supersession, which this allowlist's shape also
+  // expresses: the live index is still there because 0126 (#2515) has not been
+  // applied, while the schema now declares its UNIQUE successor —
+  // `uq_segment_members_segment_entity` — over the same (segment_id, entity_id).
+  // `idx_segment_members_pk` asserted a key it never enforced; the entry dies
+  // the day 0126 applies (delete it then, along with the DROP in that file).
+  idx_segment_members_pk: 'uq_segment_members_segment_entity',
+};
 
 interface DeclaredTable {
   columns: Set<string>;
