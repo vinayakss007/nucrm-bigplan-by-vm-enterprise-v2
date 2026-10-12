@@ -4,7 +4,35 @@
 > here, with the evidence that proves it and the verification that closed it.
 > Update the status the moment it changes; IDs are never reused.
 >
-> - **Last updated:** 2026-10-11 (UTC) — **PP-070**: `segment_members` has been keyed by nothing since `0000_init` created it without
+> - **Last updated:** 2026-10-12 (UTC) — **PP-076**: **#2561**'s "no CSRF check on
+>   `/api/tenant/plugin-engine`" was measured through the one file its evidence list never opened.
+>   `proxy.ts` **is** the root Next.js middleware, and validates the double-submit token for every
+>   `/api/` mutation that carries one (`:530-540`), so the **289** mutating route files that
+>   `guard:csrf` passed on the strength of `requireAuth()` were covered — but by the proxy, not by
+>   `requireAuth()`, whose cited backstop is `CSRF_ENFORCE_CENTRAL` (`lib/auth/middleware.ts:220`), a
+>   flag nothing in this repository sets (**3** hits, all code or comments). The guard's header said
+>   "There is no root Next.js middleware", which is the sentence that let it credit the dead flag
+>   instead of naming the file doing the work. What is genuinely exposed sits above that block: the
+>   `Bearer ak_*` pass-through returns at `proxy.ts:466` for any `isApiKeyAllowedPath()` route — which
+>   includes `/api/tenant` — and a key that is not in `api_keys` falls through to `requireAuth()`'s
+>   own cookie path (`lib/auth/middleware.ts:241` → `:262`), i.e. a cookie-authenticated mutation no
+>   CSRF check has ever inspected; reachability is bounded by `setCORS` echoing only listed
+>   `ALLOWED_ORIGINS` (`proxy.ts:307-319`, fail-closed and `*`-fatal in production at `:282-284`), not
+>   by anything the request itself controls. This PR puts the in-handler check on the three
+>   plugin-engine writers — exempt on the verified `ctx.authMethod`, never on the client-settable
+>   `x-auth-method` header — and rewrites `guard:csrf` from a guard that asserted blanket coverage
+>   into one that **verifies** the load-bearing edge check, its ungatedness, and its agreement with
+>   `needsCsrfValidation()`'s own literals, reporting **14** in-handler / **288** proxy-covered /
+>   **34** baseline instead of a claim. No ratchet on the requireAuth-only count, deliberately: those
+>   routes are covered by assertion 2, so a growing count is not a growing hole, and a cap would buy
+>   in-handler calls chosen for the number rather than for the pass-through that needs one. Filed as
+>   **PP-076** because **#2578** and **#2569** both mint **PP-075** in their own trees and the earlier
+>   merge keeps the number; whoever moves next takes **PP-077**. The pass-through is **#2579** and the
+>   dead-flag decision is **#2580**, both left open on purpose; the retraction of the "no token at all
+>   cross-origin" impact line is posted on **#2561**. This bullet re-pins the `docs/README.md:75`
+>   pointer to the keep-the-entry rule's line here (`:5128`) — it overtakes **PP-070**'s `:5013`,
+>   which moved because this entry added a header bullet, a summary row and a section above it.
+> - **Previous:** 2026-10-11 (UTC) — **PP-070**: `segment_members` has been keyed by nothing since `0000_init` created it without
 > an `id` at all: `0071` added the column nullable-with-default, `0125` made it NOT NULL and *deliberately stopped short*, and the only
 > index shaped like a key — `idx_segment_members_pk` — is a **non-unique** btree over `(segment_id, entity_id)` (`pg_index.indisunique = f`),
 > so `pg_constraint` answers `pk=0` on the chain build *and* on preprod, and the bulk-enroll callers' `onConflictDoNothing()`
@@ -319,6 +347,7 @@ Severity: **S1** blocks go-live · **S2** broken feature or security weakness ·
 | PP-072 | S3  | Analytics / data minimisation | **The churn queue never asked whether the contact still exists.** `GET /api/tenant/analytics/churn` filtered `churn_predictions.tenant_id` only, so a soft-deleted contact stayed listed with name, email, risk factors and `recommendedActions`, and `POST` kept scoring them because #2555 matched the neighbouring `GET` instead of fixing both — the deal side of the same feature filters `deleted_at` on both sides | 🔧 FIXED in this PR (`isNull(contacts.deletedAt)` in the `GET` filter and the `POST` ownership probe; the two advertised `.../calculate` routes do not exist and the doc comments now say so · `tests/unit/churn-soft-deleted-2556.test.ts`, 6 tests, asserting the rendered SQL) |
 | PP-073 | S3  | Data access / raw SQL | **Six raw-string sinks interpolate a caller-supplied name or a typed-number option and none of them escapes it.** An identifier position can never be a `$n` parameter, so the builders' `` `"${k}"` `` is not escaping: a `lib/db/client.ts` column key of `x" = '1' OR 1=1 --` closes its own quoted identifier and continues the statement; `SET [LOCAL] statement_timeout` has no parameter slot at all. Table names were already allowlisted, every value already binds as `$n`, and `buildInsert`/`buildUpdate`/`countRows` are re-exported at `lib/db/index.ts:17-19` and imported by **nothing** — so this is the pattern, not an active injection | 🔧 FIXED in this PR (**#2528**): `lib/sql-allowlist.ts` gains `BARE_IDENTIFIER` + `validateIdentifier()` (applied to all three builder key lists — `lib/db/client.ts:142`/`:156`/`:158`/`:170` — and to `verifyAuditChainIntegrity`'s operator-supplied `--audit-table` name at `lib/data-integrity.ts:285`, *before* the `try` because the `catch` at `:342` reports the name back) and `MAX_STATEMENT_TIMEOUT_MS` + `validateTimeoutMs()` at `lib/api/with-transaction.ts:86` / `lib/cron/distributed-lock.ts:72` · **14** new tests + **493** existing across the **17** suites that reach these modules, `tsc --noEmit` exit 0 · **all 1,946** explicitly-named columns in `drizzle/schema` satisfy the lowercase-only rule · **not** #683's per-table column allowlist |
 | PP-074 | S3  | Email / public edge | **#2526** reported `/api/tenant/email/track` as an unauthenticated pixel/click sink taking `tid`/`cid`/`cpid`/`eid` off the query string. Measured: the path was never in `PUBLIC_PATHS`/`PUBLIC_PREFIXES` (anonymous requests die at the edge with **401**), and both inserts were refused by `0031`'s `tenant_isolation` `WITH CHECK` because the handler sets no tenant context — so it had no working behaviour to forge, and the "public, no auth required" wording lived in two doc comments. What it did do is 302 to any caller-chosen public `?url=` off the CRM's own domain (the #2218 shape), and the two tables it names have had exactly that one writer | 🔧 FIXED in this PR (route + its 12-test #2267 suite deleted; `app/api/tenant/email/analytics/route.ts` docblock corrected to name the token pair; `tests/unit/legacy-email-track-retired-2526.test.ts`, **11** tests, reproduces `isPublic()`'s rules from the arrays in `proxy.ts` and pins that `/api/track/open` + `/api/track/click` read only `?t` and write under `withTenantContext(<row>.tenantId)` · the zero-writer consequence for `email_opens`/`email_clicks` is recorded in the section, not fixed here) |
+| PP-076 | S2  | Auth / CSRF | **#2561** reported `/api/tenant/plugin-engine` POST/PATCH/DELETE as having no CSRF check. Measured, the *coverage* half of that is wrong and the *guard* is the real defect: `proxy.ts:530-540` validates the double-submit pair for **every** `/api/` mutation that carries a token and answers the 403 itself, so of **302** non-exempt mutating route files **289** were covered after all — by the proxy, not by the `requireAuth()` backstop the guard cites (`CSRF_ENFORCE_CENTRAL`, set nowhere: **3** repo-wide hits, all code or comments) — while the guard's own header asserted "There is no root Next.js middleware". The hole that is real sits upstream: the `Bearer ak_*` pass-through returns at `proxy.ts:466`, **above** that block, and a junk key then falls through to `requireAuth()`'s cookie path (`lib/auth/middleware.ts:241` → `:262`), producing a cookie-authenticated mutation no CSRF check ever inspected | 🔧 FIXED in this PR (**#XXXX**): in-handler `requireCsrf()` on all three mutating handlers, exempt only when `ctx.authMethod === 'api_key'` — the credential `requireAuth()` actually verified (`lib/auth/middleware.ts:252`), not `requireCsrf()`'s **client-settable** `x-auth-method` header (`:482`, which nothing in this repo ever sends) · `scripts/check-csrf-coverage.mjs` rewritten to three assertions (the edge call exists, is not behind a `process.env` test, and its exempt lists agree with the literals inside `needsCsrfValidation()` in both directions) plus honest populations (**14** in-handler / **288** proxy-covered / **34** baseline) and **deliberately no ratchet** · `tests/unit/plugin-engine-csrf-2561.test.ts`, **12** tests, **4** red at `79cc642f` against the real `requireCsrf` (only `requireAuth` stubbed, via `importOriginal`) · the pass-through itself is **#2579** and the dead-flag call is **#2580**, both left open on purpose |
 
 ## Sentry issues → register entries
 
@@ -5005,6 +5034,92 @@ no space, no semicolon, no dash, no `-`-comment, and a length under Postgres's o
   surface that could never work, found by reading the config instead of the comment),
   **0105** + `withTrackingLookupContext` (the narrow read that makes the token pair safe to
   publish), **#2530** / **PP-070** (writes RLS refuses in silence).
+## PP-076 — 🔧 **#2561**: `/api/tenant/plugin-engine` had no in-handler CSRF check on POST/PATCH/DELETE and `guard:csrf` counted it as covered — measured, the report's *coverage* claim was the wrong half and the *guard* is the real defect: 289 mutating route files pass that guard on the strength of `requireAuth()`, whose cited backstop is a flag nothing in this repository sets, while the thing that actually protects them is the edge proxy, which the guard's own header said did not exist _(S2 · Auth / CSRF · PR **#XXXX**)_
+
+- **Found by** taking #2561's own evidence list and opening the one file it did not cite. The
+  report is right that `app/api/tenant/plugin-engine/route.ts` never calls `requireCsrf()`
+  (`grep -c requireCsrf` → **0**) and right that `CSRF_ENFORCE_CENTRAL`
+  (`lib/auth/middleware.ts:220`) is set nowhere — 3 repo-wide hits, all code or comments, none
+  in `.env.example`, a workflow, or a deploy config. It is wrong about the consequence. Its
+  impact line — "a logged-in admin's browser can be made to POST/PATCH/DELETE cross-origin with
+  no token at all" — assumes the only CSRF defense is the one behind that flag. There is
+  another, and it is unconditional.
+- **Measurement 1 — where the coverage actually is.** `proxy.ts:530-540` validates the
+  double-submit pair for **every** `/api/` request whose method is unsafe and that carries a
+  token, and answers the 403 itself. Counting with `guard:csrf`'s own regexes on this tree
+  (`79cc642f`): **302** non-exempt mutating route files, of which **13** call `requireCsrf()`
+  in-handler and **289** rely on authentication alone — and those 289 are covered by the proxy,
+  not by `requireAuth()`. So the guard's conclusion was right while its stated reason was doubly
+  false: `scripts/check-csrf-coverage.mjs` opened with "There is no root Next.js middleware",
+  which is exactly what let it credit `requireAuth()` instead of naming the file doing the work.
+  The retraction is posted on **#2561**. The number that is true after this PR is the one the
+  guard now prints (14 in-handler / 288 proxy-covered), not a number in prose.
+- **Measurement 2 — the hole the report was circling.** The proxy's `Bearer ak_*` pass-through
+  returns at `proxy.ts:466`, **above** the block above, for any path
+  `isApiKeyAllowedPath()` accepts — which includes the `/api/tenant` data routes. A junk key does
+  not stop there: `requireAuth()` tries the key first (`lib/auth/middleware.ts:241`) and, when it
+  is not in `api_keys`, falls through to `extractToken(request)` (`:262`), which reads the
+  ambient `nucrm_session` cookie. That request is a cookie-authenticated mutation no CSRF check
+  has ever inspected. Reachability is bounded, not zero: a cross-site page cannot set the header
+  without a preflight, and the preflight only succeeds for an origin `setCORS` echoes
+  (`proxy.ts:307-319`, from a fail-closed `ALLOWED_ORIGINS` that `proxy.ts:282-284` makes fatal as
+  `*` in production) — so the reachable set is origins the deployment itself trusts, plus
+  anything running on the site's own origin. Filed as **#2579** with the one-line fix; an
+  in-handler check is what closes it per route, which is what #2561 asked for.
+- **What this does.** `POST` / `PATCH` / `DELETE` in
+  `app/api/tenant/plugin-engine/route.ts` now call `requireCsrf(request)` immediately after
+  `requireAuth()` — the placement and comment `app/api/tenant/integrations/route.ts:74` (#1835)
+  established for the same table. The exemption is keyed on `ctx.authMethod`, the credential
+  `requireAuth()` actually verified and stamped at `lib/auth/middleware.ts:252`, rather than on
+  `requireCsrf()`'s own signal, because that signal is the **client-settable** `x-auth-method`
+  request header (`lib/auth/middleware.ts:482`, read into `lib/auth/csrf.ts:136`). Two
+  consequences, both tested: a `curl` or SDK caller presenting a real `ak_` key keeps its write —
+  it would otherwise start 403ing, since nothing in this repo ever sets that header
+  (`grep -rn "x-auth-method"` → the CORS list in `proxy.ts:318` and two reads) — and a caller
+  cannot talk itself out of the check by volunteering it.
+- **What the guard does now.** Three assertions instead of one, plus an honest summary. It still
+  fails a mutating route that neither authenticates nor calls `requireCsrf()`; it now **also**
+  fails if `proxy.ts` stops calling `needsCsrfValidation()`, or calls it from behind a
+  `process.env` test — which is precisely how the middleware backstop became dead code while this
+  guard printed OK — or if its exempt lists drift from the literals inside
+  `needsCsrfValidation()`, read back out of `lib/auth/csrf.ts` in both directions. The success
+  line reports both populations instead of asserting "all mutating handlers are CSRF-protected".
+  Deliberately **not** included: a ratchet capping the requireAuth-only count. Those routes are
+  covered (assertion 2 is what covers them), so a growing count is not a growing hole, and a cap
+  would push authors toward an in-handler call chosen for the number rather than for the
+  pass-through that needs one.
+- **Measured so the next reader does not re-derive it:** the in-app browser is not what this
+  could break. `components/shared/csrf-provider.tsx` patches `globalThis.fetch` to attach
+  `X-CSRF-Token` to every same-origin `/api/` mutation, and is mounted at `app/layout.tsx:121`,
+  so every caller this route already has carries the token. Adding the check therefore changes
+  behaviour only for callers that never had a CSRF defense to begin with.
+- **Verification.** `tests/unit/plugin-engine-csrf-2561.test.ts`, **12** tests. **4** are red with
+  the route at `79cc642f` and green after it (POST/PATCH/DELETE refused with no token, plus the
+  mismatched cookie/header pair refused); the other 8 pin what must *not* change — a matching
+  double-submit still writes, a verified API key still writes, `GET` stays 200 — and the guard's
+  own fixtures. `requireCsrf` is the **real** one (only `requireAuth` is stubbed, through
+  `importOriginal`), so every assertion travels through the actual constant-time comparison at
+  `lib/auth/csrf.ts:92` instead of a mock that would pass whether or not the handler called it.
+  The five guard tests plant each failure in a throwaway fixture tree, then run the script against
+  this repository and assert the summary reports populations rather than blanket coverage.
+  `npx eslint` exit **0** on all three changed files. `tsc --noEmit` reports **125** errors in
+  **10** files, none of them in these three: all of them are `components/**/*data-table*.tsx` from
+  `@tanstack/react-table` **8.21.3** against a `^9.2.6` pin in a symlinked-`node_modules` tree,
+  which CI's `npm ci` does not reproduce.
+  `tests/unit/{csrf,csrf-unit,proxy,security-fixes,auth-modules,plugin-engine-config-mask-2521}.test.ts`
+  re-run green alongside. **Not run:** `postman/full-test-suite.sh`, and no live request.
+- **Collision, recorded rather than discovered later.** **#2569** edits this same route file for
+  **#2560** (its `PATCH` guards on `body.enabled` and assigns `body.isActive`), and **#2578** and
+  **#2569** both mint **PP-075** in their own trees. The earlier merge keeps the number and the
+  later one moves — the rule **PP-057**/**PP-063** record — which is why this entry takes
+  **PP-076** rather than waiting: **#2578** is already published claiming 075. Whoever moves next
+  takes **PP-077**.
+- **Left open on purpose.** **#2579** (the edge pass-through — a `proxy.ts` change that would
+  affect all 289, not one route) and **#2580** (owner decision: delete the dead
+  `CSRF_ENFORCE_CENTRAL` branch, or turn it on — the latter is a silent-403 risk for any
+  cookie-authenticated caller outside `csrf-provider.tsx`, which is not a call to make inside a
+  security PR). Both are cited from this entry; neither is fixed by it.
+
 ## How to maintain this file
 
 - **New issue** → next free `PP-0NN` id, one section, and a row in the Summary table. Never renumber.
