@@ -4,7 +4,21 @@
 > here, with the evidence that proves it and the verification that closed it.
 > Update the status the moment it changes; IDs are never reused.
 >
-> - **Last updated:** 2026-10-11 (UTC) — **PP-070**: `segment_members` has been keyed by nothing since `0000_init` created it without
+> - **Last updated:** 2026-10-12 (UTC) — **PP-077**: **#2530**'s second half. Both compliance routes
+>   wrote a `processing` row, did the work, then wrote a terminal marker, and every death between those
+>   two writes left the row saying `processing` forever — including the marker `UPDATE` itself throwing,
+>   which is the path that mattered, because the marker sat *inside* the work `try` whose `catch` writes
+>   the *other* marker: an Article 17 erasure that ran and whose `completed` write threw was recorded as
+>   `failed`. `lib/compliance/request-lifecycle.ts` now reads a `processing` row older than 15 min as
+>   `failed` + `stale`, best-effort persists that behind a CAS `WHERE … status = 'processing'`, never
+>   mints `completed_at`, and issues both markers outside the work `try` so a marker that throws cannot
+>   change the outcome it records. Deliberately **not** part 1's single transaction (rolling an erasure
+>   back also deletes the row that says it was attempted), **not** a new status (**0050**'s CHECK is a
+>   closed vocabulary), and **not** a cron (**PP-051**, **PP-049**). Filed as **PP-077** (**#2569** was the earliest claimant of 075, so this moves; **#2581** holds 076), on the issue **#2530**, measured on the
+>   tree **#2568** merged into. This bullet re-pins the `docs/README.md:75` pointer to the keep-the-entry
+>   rule's line on this merged tree (`:5108`); **#2534** (**PP-070**) has since merged and **#2566**,
+>   **#2569** and **#2581** re-pin it from their own trees, so whoever merges last re-measures.
+> - **Previous:** 2026-10-11 (UTC) — **PP-070**: `segment_members` has been keyed by nothing since `0000_init` created it without
 > an `id` at all: `0071` added the column nullable-with-default, `0125` made it NOT NULL and *deliberately stopped short*, and the only
 > index shaped like a key — `idx_segment_members_pk` — is a **non-unique** btree over `(segment_id, entity_id)` (`pg_index.indisunique = f`),
 > so `pg_constraint` answers `pk=0` on the chain build *and* on preprod, and the bulk-enroll callers' `onConflictDoNothing()`
@@ -319,6 +333,7 @@ Severity: **S1** blocks go-live · **S2** broken feature or security weakness ·
 | PP-072 | S3  | Analytics / data minimisation | **The churn queue never asked whether the contact still exists.** `GET /api/tenant/analytics/churn` filtered `churn_predictions.tenant_id` only, so a soft-deleted contact stayed listed with name, email, risk factors and `recommendedActions`, and `POST` kept scoring them because #2555 matched the neighbouring `GET` instead of fixing both — the deal side of the same feature filters `deleted_at` on both sides | 🔧 FIXED in this PR (`isNull(contacts.deletedAt)` in the `GET` filter and the `POST` ownership probe; the two advertised `.../calculate` routes do not exist and the doc comments now say so · `tests/unit/churn-soft-deleted-2556.test.ts`, 6 tests, asserting the rendered SQL) |
 | PP-073 | S3  | Data access / raw SQL | **Six raw-string sinks interpolate a caller-supplied name or a typed-number option and none of them escapes it.** An identifier position can never be a `$n` parameter, so the builders' `` `"${k}"` `` is not escaping: a `lib/db/client.ts` column key of `x" = '1' OR 1=1 --` closes its own quoted identifier and continues the statement; `SET [LOCAL] statement_timeout` has no parameter slot at all. Table names were already allowlisted, every value already binds as `$n`, and `buildInsert`/`buildUpdate`/`countRows` are re-exported at `lib/db/index.ts:17-19` and imported by **nothing** — so this is the pattern, not an active injection | 🔧 FIXED in this PR (**#2528**): `lib/sql-allowlist.ts` gains `BARE_IDENTIFIER` + `validateIdentifier()` (applied to all three builder key lists — `lib/db/client.ts:142`/`:156`/`:158`/`:170` — and to `verifyAuditChainIntegrity`'s operator-supplied `--audit-table` name at `lib/data-integrity.ts:285`, *before* the `try` because the `catch` at `:342` reports the name back) and `MAX_STATEMENT_TIMEOUT_MS` + `validateTimeoutMs()` at `lib/api/with-transaction.ts:86` / `lib/cron/distributed-lock.ts:72` · **14** new tests + **493** existing across the **17** suites that reach these modules, `tsc --noEmit` exit 0 · **all 1,946** explicitly-named columns in `drizzle/schema` satisfy the lowercase-only rule · **not** #683's per-table column allowlist |
 | PP-074 | S3  | Email / public edge | **#2526** reported `/api/tenant/email/track` as an unauthenticated pixel/click sink taking `tid`/`cid`/`cpid`/`eid` off the query string. Measured: the path was never in `PUBLIC_PATHS`/`PUBLIC_PREFIXES` (anonymous requests die at the edge with **401**), and both inserts were refused by `0031`'s `tenant_isolation` `WITH CHECK` because the handler sets no tenant context — so it had no working behaviour to forge, and the "public, no auth required" wording lived in two doc comments. What it did do is 302 to any caller-chosen public `?url=` off the CRM's own domain (the #2218 shape), and the two tables it names have had exactly that one writer | 🔧 FIXED in this PR (route + its 12-test #2267 suite deleted; `app/api/tenant/email/analytics/route.ts` docblock corrected to name the token pair; `tests/unit/legacy-email-track-retired-2526.test.ts`, **11** tests, reproduces `isPublic()`'s rules from the arrays in `proxy.ts` and pins that `/api/track/open` + `/api/track/click` read only `?t` and write under `withTenantContext(<row>.tenantId)` · the zero-writer consequence for `email_opens`/`email_clicks` is recorded in the section, not fixed here) |
+| PP-077 | S2  | Compliance / data integrity | **#2530**'s two compliance routes still had a path that never resolves: `POST` writes a `processing` row, does the work, then writes a terminal marker, and anything dying between those writes — SIGTERM past the drain (**PP-029**), an OOM kill, a redeploy, or the marker `UPDATE` itself throwing — left the row saying `processing` forever. Because the marker sat *inside* the work `try` whose `catch` writes the *other* marker, the failure was not a stuck row but a false record: an Article 17 erasure that ran, and whose `completed` write threw, was logged as `failed`. **2** sites in `app/` mint `processing` and nothing else in the tree writes the table | 🔧 FIXED in this PR: `lib/compliance/request-lifecycle.ts` — `isStaleProcessing` (a `processing` row strictly older than 15 min, sized from **8** parallel SELECTs + **5** sequential UPDATEs at **PP-028**'s ~200 ms/statement) · `reapStaleProcessing` answers it as `failed` + `stale`/`staleReason` and best-effort persists behind a CAS `WHERE id AND tenant_id AND status='processing'` · both markers moved out of the work `try` and return `false` instead of throwing, surfaced as `recordUpdateFailed` · deliberately **not** part 1's transaction (a rollback deletes the evidence that the erasure was attempted), **not** a new status (**0050**'s `chk_compliance_requests_status` is closed), `completed_at` never minted, reap-on-read not cron (**PP-051**/**PP-049**) · `tests/unit/compliance-processing-reaper-2530.test.ts`, **26** tests, **8** of them red with the routes at `11802dcc` · how many rows are stuck today is **not** measured here |
 
 ## Sentry issues → register entries
 
@@ -5005,6 +5020,86 @@ no space, no semicolon, no dash, no `-`-comment, and a length under Postgres's o
   surface that could never work, found by reading the config instead of the comment),
   **0105** + `withTrackingLookupContext` (the narrow read that makes the token pair safe to
   publish), **#2530** / **PP-070** (writes RLS refuses in silence).
+
+## PP-077 — 🔧 **#2530**'s second half: both compliance routes could still leave a row saying `processing` **forever** — the POST writes the row, does the work, then writes a terminal marker, and every death between those two writes left the record unresolved. The marker sat *inside* the work `try` whose `catch` writes the *other* marker, so the worst path was not a stuck row but a compliance log that actively **lied**: an Article 17 erasure that ran and whose `completed` UPDATE threw was recorded as `failed` _(S2 · Compliance / data integrity)_
+
+- **Found by** finishing part 1 (**#2557**), which folded **#2530**'s three *split write pairs* into
+  transactions and deliberately did **not** wrap this one. This entry records why leaving it was the
+  right call, and what makes the non-atomicity recoverable instead of permanent.
+- **The whole surface is two routes.** `grep -rn "status: 'processing'" app/` → **2** hits,
+  `app/api/tenant/compliance/gdpr/route.ts:105` and `app/api/tenant/compliance/soc2/route.ts:74`.
+  `grep -rln complianceRequests app/ lib/ components/ scripts/` → **3** files: those two routes and the
+  new `lib/compliance/request-lifecycle.ts`. Nothing else in the tree can write this table.
+- **What strands a row.** The insert lands (`gdpr/route.ts:102-108`, `soc2/route.ts:71-77`), and then
+  either the process dies — **PP-029**'s drain deadline, an OOM kill, a redeploy — or the work throws and
+  the `failed` write throws as well, or the work *succeeds* and the `completed` write throws. The last two
+  leave a row saying `processing` about work that has already happened.
+- **The inversion is the reason this was S2 and not cosmetic.** Until this PR both markers were issued
+  from inside the `try` their own `catch` serves, so a request whose erasure ran and whose marker UPDATE
+  then threw fell into that `catch` and wrote `failed`. `markRequestCompleted` (`:192`) and
+  `markRequestFailed` (`:226`) are now called *outside* the work `try` and swallow their own failure,
+  returning `false`; the 201 body reports that as `recordUpdateFailed` (`gdpr/route.ts:148`,
+  `soc2/route.ts:112`). The response says what the work did, the record says what the record could take,
+  and the two are never allowed to overwrite each other.
+- **The rule.** `isStaleProcessing` (`:108`) is true for a `processing` row strictly older than
+  `PROCESSING_DEADLINE_MS` (`:66`, 15 minutes). The number is sized from the work, not picked:
+  `exportTenantData` issues **8** parallel `SELECT`s (`lib/compliance/gdpr.ts:66-83`) and
+  `anonymizeTenantData` issues **5** sequential `UPDATE`s (`lib/compliance/gdpr.ts:118`, `:133`, `:147`,
+  `:161`, `:175`), each statement costing **PP-028**'s measured flat ~200 ms — so a whole request is
+  seconds, and only a large tenant on a loaded pool could cross 15 minutes legitimately. A row whose
+  `created_at` cannot be parsed is treated as stale rather than eternal.
+- **Why reap on read instead of in a cron.** The console is the only audience for the word `processing`,
+  so a read is the only moment this status is consumed — and the cron house is measurably the weaker one:
+  **5** cron routes are on no live schedule at all (**PP-051**), and the scheduled ones needed
+  **#2539**/**PP-049** to be taught to report a refused lock rather than answer `ok:true`. A reaper that
+  silently never fires is exactly how a row stays stuck.
+- **Why not one transaction.** Part 1's tool is right for a billing row and wrong here: rolling an
+  erasure back also removes the row that says an erasure was **attempted**. A compliance log has to
+  outlive the operation it describes, so these two writes stay non-atomic and the deadline is what makes
+  that survivable.
+- **Why not a new status.** `chk_compliance_requests_status`
+  (`drizzle/migrations/0050_data_validation_checks.sql:173`) is the only definition of a closed
+  four-value vocabulary — `pending`, `processing`, `completed`, `failed` — anywhere in the chain, so a
+  fifth value is a migration, and no migration is proposed or needed: `reapStaleProcessing` (`:125`)
+  persists `failed` and puts the mechanism in `error_message` (`:73`), leaving `completed_at` NULL.
+  Minting a completion timestamp for a request that never completed would be the more damaging fiction.
+- **Why the write is legal where it runs.** `0031_rls_remaining_tables.sql:28` puts
+  `compliance_requests` in the loop whose generated policy is `CREATE POLICY tenant_isolation …` with no
+  `FOR` clause (`:178-180`) — therefore `FOR ALL`, so a tenant-scoped UPDATE is permitted — and the GUC
+  that policy reads is held for the whole handler by `withApiRoute`'s
+  `runWithTenantCarrier(() => withPinnedConnection(fn))` (`lib/api/with-api-route.ts:199`,
+  `lib/db/tenant-carrier.ts:11`). The reaper's `UPDATE` pins `id` + `tenant_id` + `status = 'processing'`,
+  so it is CAS-guarded against a marker that landed during the read and cannot move another tenant's row
+  even if a future caller handed it one; the two markers pin `id` + `tenant_id` and hold **no** status
+  guard, on purpose — a request that outlived the deadline must still be able to replace the reaper's
+  `failed` with its real result. The tenant half of that filter is the **#2525** convention, not an
+  invention of this PR.
+- **What the console does with a reaped row, with no client change.**
+  `app/tenant/settings/compliance/page.tsx:285` and `:332` render `r.status`, coloured by the two-way test
+  at `:282-283` / `:329-330`, so a reaped row turns yellow→red on its own. `staleReason` is **not**
+  displayed: the row now says *failed* where it should say *failed, and this is why*. That is a UI
+  follow-up, not a correctness gap, and it is left open here.
+- **Measured:** `tests/unit/compliance-processing-reaper-2530.test.ts`, **26** tests. The evidence is the
+  **8 route-level tests that are red with the two routes at `11802dcc`** and green after it (3 of the 4
+  gdpr GET cases, 1 soc2 GET, 3 gdpr POST, 1 soc2 POST); the other 18 exercise the helper directly and
+  pass at either revision, so they are guards on the rule, not proof of the fix. **49** tests green
+  across the three files that own this surface (this one, `write-atomicity-2530.test.ts` 14,
+  `compliance.test.ts` 9), asserting **rendered SQL** and statement identity rather than source text.
+  `npx eslint` exit **0** on all four changed files. `tsc --noEmit` reports **125 errors in 10 files** in
+  this worktree, **none** of them in these four — every one is in `components/**/*data-table*.tsx` from
+  `@tanstack/react-table` **8.21.3** against a `^9.2.6` pin, the symlinked-`node_modules` skew, and CI's
+  `npm ci` does not reproduce it. **Not run:** `postman/full-test-suite.sh`, and no live request.
+- **The honest gap, recorded rather than guessed:** how many rows are *actually* sitting in `processing`
+  on the deployed database is not measurable from this session — it is one `SELECT` behind a live database
+  this session does not probe, on a chain **PP-060** records as still pending. Whoever deploys this can
+  answer it in one query.
+- **Files:** `lib/compliance/request-lifecycle.ts` (new), `app/api/tenant/compliance/gdpr/route.ts`,
+  `app/api/tenant/compliance/soc2/route.ts`, `tests/unit/compliance-processing-reaper-2530.test.ts` (new).
+- **Related:** **#2530** (the report; part 1 landed as **#2557**), **PP-029** (the drain deadline that
+  kills a request mid-flight), **PP-028** (the flat ~200 ms that sizes the deadline), **PP-051** and
+  **PP-049**/**#2539** (why the cron path is the weaker house), **PP-027** (the pinned tenant carrier),
+  **#2525** (id-only writes must pin the tenant too).
+
 ## How to maintain this file
 
 - **New issue** → next free `PP-0NN` id, one section, and a row in the Summary table. Never renumber.
