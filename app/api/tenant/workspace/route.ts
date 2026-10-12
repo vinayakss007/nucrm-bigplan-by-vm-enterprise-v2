@@ -7,7 +7,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { tenants, users, plans, subscriptions } from '@/drizzle/schema';
+import { setTenantContext } from '@/lib/db/rls';
+import { tenants, users, plans, subscriptions, roles, tenantMembers } from '@/drizzle/schema';
 import { and, eq } from 'drizzle-orm';
 import { dbCache, invalidateCache } from '@/lib/db/cache';
 import { checkRateLimit } from '@/lib/rate-limit';
@@ -84,6 +85,36 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       }).returning();
 
       if (!t) throw new Error('Failed to create workspace');
+
+      // Without an owner membership + admin role the new workspace is
+      // unreachable: requireAuth resolves the request's role through
+      // tenant_members, so the creator would loop back to the workspace
+      // setup screen forever. Mirror the bootstrap in create-admin, scoped
+      // to this same transaction (a nested transaction could not see the
+      // not-yet-committed tenant row).
+      await setTenantContext(t.id, ctx.userId, tx);
+      const [adminRole] = await tx.insert(roles).values({
+        tenantId: t.id,
+        slug: 'admin',
+        name: 'Administrator',
+        permissions: { all: true },
+        isSystem: true,
+      }).onConflictDoUpdate({
+        target: [roles.tenantId, roles.slug],
+        set: { permissions: { all: true }, updatedAt: new Date() },
+      }).returning();
+      if (!adminRole) throw new Error('Failed to create workspace admin role');
+      await tx.insert(tenantMembers).values({
+        tenantId: t.id,
+        userId: ctx.userId,
+        roleSlug: 'admin',
+        roleId: adminRole.id,
+        status: 'active',
+        joinedAt: new Date(),
+      }).onConflictDoUpdate({
+        target: [tenantMembers.tenantId, tenantMembers.userId],
+        set: { status: 'active', roleSlug: 'admin', roleId: adminRole.id, updatedAt: new Date() },
+      });
 
       await tx.update(users)
         .set({ lastTenantId: t.id })

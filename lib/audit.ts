@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { db, type DbClient } from '@/drizzle/db';
+import { withTenantContext } from '@/lib/db/rls';
 import { auditLogs } from '@/drizzle/schema';
 import { logger } from '@/lib/logger';
 import { eq, desc } from 'drizzle-orm';
@@ -115,6 +116,45 @@ async function getPreviousHash(tenantId: string, dbOrTx?: DbClient): Promise<str
   return latest[0]?.hash ?? null;
 }
 
+type AuditEntryOpts = {
+  tenantId?: string;
+  userId?: string;
+  action: string;
+  entityType: string;
+  entityId?: string;
+  oldData?: unknown;
+  newData?: unknown;
+  metadata?: Record<string, unknown>;
+  ipAddress?: string;
+  userAgent?: string;
+  dbOrTx?: DbClient;
+};
+
+async function writeAuditEntry(client: DbClient, opts: AuditEntryOpts): Promise<void> {
+  const previousHash = await getPreviousHash(opts.tenantId as string, client);
+
+  const entry = {
+    tenantId: opts.tenantId as string,
+    userId: opts.userId ?? null,
+    action: opts.action,
+    entityType: opts.entityType,
+    entityId: opts.entityId ?? null,
+    oldData: opts.oldData ?? null,
+    newData: opts.newData ?? null,
+    metadata: opts.metadata ?? {},
+    ipAddress: opts.ipAddress ?? null,
+    userAgent: opts.userAgent ?? null,
+    previousHash,
+  };
+
+  const hash = computeEntryHash(entry);
+
+  await client.insert(auditLogs).values({
+    ...entry,
+    hash,
+  });
+}
+
 export async function logAudit(opts: {
   tenantId?: string;
   userId?: string;
@@ -135,29 +175,25 @@ export async function logAudit(opts: {
   try {
     if (!opts.tenantId) return;
 
-    const client = opts.dbOrTx ?? db;
-    const previousHash = await getPreviousHash(opts.tenantId, opts.dbOrTx);
+    // Standalone (fire-and-forget) path runs after the caller's transaction
+    // has committed, so a bare pool connection carries no tenant GUC and RLS
+    // rejects both the hash-chain read and the insert — every such audit row
+    // was silently lost. Run both inside one tenant-scoped transaction.
+    // (Callers that pass dbOrTx keep the all-or-nothing behaviour below.)
+    if (!opts.dbOrTx) {
+      if (!opts.userId) {
+        // System action with no acting user: no identity to scope a tenant
+        // context to, so keep the legacy best-effort direct write.
+        await writeAuditEntry(db, opts);
+        return;
+      }
+      await withTenantContext(opts.tenantId, opts.userId, async (tx) => {
+        await writeAuditEntry(tx, opts);
+      });
+      return;
+    }
 
-    const entry = {
-      tenantId: opts.tenantId,
-      userId: opts.userId ?? null,
-      action: opts.action,
-      entityType: opts.entityType,
-      entityId: opts.entityId ?? null,
-      oldData: opts.oldData ?? null,
-      newData: opts.newData ?? null,
-      metadata: opts.metadata ?? {},
-      ipAddress: opts.ipAddress ?? null,
-      userAgent: opts.userAgent ?? null,
-      previousHash,
-    };
-
-    const hash = computeEntryHash(entry);
-
-    await client.insert(auditLogs).values({
-      ...entry,
-      hash,
-    });
+    await writeAuditEntry(opts.dbOrTx, opts);
   } catch (err) {
     logger.error('[audit] Failed to write audit log', {
       tenantId: opts.tenantId,

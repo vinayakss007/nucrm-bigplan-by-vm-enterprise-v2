@@ -196,8 +196,8 @@ export async function recordSuccessfulLogin(
  * commit with the attempt count that triggered it rather than on a separate
  * connection where that context would not exist.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function blockIdentifier(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   client: any,
   identifier: string,
   type: 'ip' | 'email',

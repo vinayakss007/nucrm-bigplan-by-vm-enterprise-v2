@@ -5,9 +5,9 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { logError } from '@/lib/errors-server';
-import { db } from '@/drizzle/db';
 import { users } from '@/drizzle/schema';
 import { eq, count } from 'drizzle-orm';
+import { withSecurityContext } from '@/lib/db/rls';
 import { checkRateLimit } from '@/lib/rate-limit';
 
 // Public endpoint — checks if any SUPER ADMIN users exist yet
@@ -17,11 +17,17 @@ export async function GET(request: NextRequest) {
   if (limited) return limited;
 
   try {
-    const [row] = await db.select({ 
-      count: count() 
-    })
-    .from(users)
-    .where(eq(users.isSuperAdmin, true));
+    // PP-027: this pre-auth COUNT runs with no identity, so no SELECT policy
+    // on `users` admits it and RLS always returned 0 — the endpoint reported
+    // `setup_done: false` forever, even with a super admin present (while
+    // create-admin correctly 403'd). Same security-context read as the guard.
+    const [row] = await withSecurityContext(async (tx) =>
+      await tx.select({
+        count: count()
+      })
+      .from(users)
+      .where(eq(users.isSuperAdmin, true))
+    );
 
     return NextResponse.json({ setup_done: (row?.count ?? 0) > 0 });
   } catch (err) {

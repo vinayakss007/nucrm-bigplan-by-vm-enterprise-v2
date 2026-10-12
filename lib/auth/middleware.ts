@@ -9,7 +9,7 @@ import { db } from '@/drizzle/db';
 import { tenants, users, sessions, tenantMembers, roles } from '@/drizzle/schema';
 import { eq, and, gt, or, sql, desc, asc } from 'drizzle-orm';
 import { verifyToken, hashToken } from '@/lib/auth/session';
-import { setTenantContext } from '@/lib/db/rls';
+import { setTenantContext, withAuthResolutionContext } from '@/lib/db/rls';
 import { tryApiKeyAuth } from '@/lib/auth/api-key';
 import { requestContext, withRequestId } from '@/lib/tenant/request-context';
 import { withPinnedConnection } from '@/lib/db/request-connection';
@@ -131,16 +131,22 @@ async function isCachedContextStillAuthorized(
   tokenHash: string,
   cached: AuthContext
 ): Promise<boolean> {
-  const sessionExists = await db.select({ count: sql`count(*)` })
+  // PP-026: this re-validation runs before any identity context exists, so it
+  // needs the same auth-resolution scope as the cold path below; the userId is
+  // taken from the already-token-verified cached context.
+  const sessionExists = await withAuthResolutionContext(cached.userId, async (tx) =>
+    await tx.select({ count: sql`count(*)` })
     .from(sessions)
-    .where(and(eq(sessions.tokenHash, tokenHash), gt(sessions.expiresAt, new Date())));
+    .where(and(eq(sessions.tokenHash, tokenHash), gt(sessions.expiresAt, new Date())))
+  );
 
   if (!(Number(sessionExists[0]?.count) > 0)) return false;
 
   // Super admins have no tenant_members row to validate against.
   if (cached.isSuperAdmin) return true;
 
-  const [membership] = await db.select({
+  const [membership] = await withAuthResolutionContext(cached.userId, async (tx) =>
+    await tx.select({
     status: tenantMembers.status,
     roleSlug: tenantMembers.roleSlug,
     roleId: tenantMembers.roleId,
@@ -150,7 +156,8 @@ async function isCachedContextStillAuthorized(
       eq(tenantMembers.userId, cached.userId),
       eq(tenantMembers.tenantId, cached.tenantId)
     ))
-    .limit(1);
+    .limit(1)
+  );
 
   if (!membership || membership.status !== 'active') return false;
 
@@ -268,10 +275,18 @@ export async function requireAuth(request: NextRequest): Promise<AuthContext | N
       await requestContext.invalidate(tokenHash);
     }
 
-    // Cache miss - fetch from database
-    const session = await db.query.sessions.findFirst({
+    // Cache miss - fetch from database.
+    //
+    // PP-026: every read from here to the membership lookup happens *before* an
+    // identity/tenant context exists, which is precisely what RLS denies —
+    // sessions_user_own keys off app.current_user and tenant_members/roles key
+    // off app.current_tenant, and these reads are what discover both. The id
+    // comes from the verified session token (payload), never from client input,
+    // so withAuthResolutionContext admits only this principal's own rows.
+    const session = await withAuthResolutionContext(payload.userId, async (tx) =>
+      await tx.query.sessions.findFirst({
       where: and(eq(sessions.tokenHash, tokenHash), gt(sessions.expiresAt, new Date()))
-    });
+    }));
     
     if (!session) {
       return NextResponse.json(
@@ -281,7 +296,8 @@ export async function requireAuth(request: NextRequest): Promise<AuthContext | N
     }
 
     // First check if user is a super admin
-    const [userRecord] = await db.select({
+    const [userRecord] = await withAuthResolutionContext(payload.userId, async (tx) =>
+      await tx.select({
       id: users.id,
       email: users.email,
       fullName: users.fullName,
@@ -290,7 +306,8 @@ export async function requireAuth(request: NextRequest): Promise<AuthContext | N
     })
     .from(users)
     .where(eq(users.id, payload.userId))
-    .limit(1);
+    .limit(1)
+    );
 
     if (!userRecord) {
       return NextResponse.json(
@@ -316,7 +333,8 @@ export async function requireAuth(request: NextRequest): Promise<AuthContext | N
     }
 
     // Fetch tenant membership for non-super-admin users
-    const results = await db.select({
+    const results = await withAuthResolutionContext(payload.userId, async (tx) =>
+      await tx.select({
       id: users.id,
       email: users.email,
       fullName: users.fullName,
@@ -335,7 +353,8 @@ export async function requireAuth(request: NextRequest): Promise<AuthContext | N
       desc(sql`(${tenantMembers.tenantId} = ${users.lastTenantId})::int`), 
       asc(tenantMembers.createdAt)
     )
-    .limit(1);
+    .limit(1)
+    );
 
     const userWithMember = results[0];
 

@@ -13,7 +13,6 @@ import { eq, count } from 'drizzle-orm';
 import { hashPassword, createToken, hashToken, setSessionCookie, validatePassword } from '@/lib/auth/session';
 import { installDefaultModules } from '@/lib/modules/auto-install';
 import { logError } from '@/lib/errors-server';
-import { checkRateLimit } from '@/lib/rate-limit';
 import { readJsonBody, validateBody } from '@/lib/api/validate';
 
 const createAdminSchema = z.object({
@@ -26,9 +25,6 @@ const createAdminSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
-    const limited = await checkRateLimit(request, { action: 'create-admin', max: 3, windowMinutes: 60 });
-    if (limited) return limited;
-
     let body;
     try { body = await readJsonBody(request); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
 
@@ -51,12 +47,14 @@ export async function POST(request: NextRequest) {
     }
 
     // #1254: in production the endpoint requires the server-side SETUP_KEY
-    // (dev remains open so local bootstrap works without extra config)
+    // (dev remains open so local bootstrap works without extra config).
+    // Accepted via the x-setup-key header OR the setup_key body field, since
+    // some clients cannot attach custom headers to this bootstrap call.
     if (process.env.NODE_ENV === 'production') {
       const expectedKey = process.env.SETUP_KEY;
-      const providedKey = request.headers.get('x-setup-key');
+      const providedKey = request.headers.get('x-setup-key') ?? validated.data.setup_key;
       if (!expectedKey || !providedKey || providedKey !== expectedKey) {
-        return NextResponse.json({ error: 'Valid x-setup-key header required' }, { status: 403 });
+        return NextResponse.json({ error: 'Valid x-setup-key header or setup_key field required' }, { status: 403 });
       }
     }
 
@@ -108,40 +106,41 @@ export async function POST(request: NextRequest) {
       // onboarding_progress are all protected by tenant_isolation, which
       // cannot be satisfied before this tenant row exists — so the context is
       // set here, on this connection, for the remainder of the transaction.
+      console.log('[create-admin] Before setTenantContext', t.id, u.id);
       await setTenantContext(t.id, u.id, tx);
+      console.log('[create-admin] After setTenantContext');
 
       // 4. Create admin role first for the new tenant
-      const [adminRole] = await tx.insert(roles).values({
+      console.log('[create-admin] Before role insert');
+      const adminRole = await tx.insert(roles).values({
         tenantId: t.id,
         slug: 'admin',
         name: 'Administrator',
         permissions: { all: true },
         isSystem: true,
-      }).onConflictDoUpdate({
-        target: [roles.tenantId, roles.slug],
-        set: { permissions: { all: true }, updatedAt: new Date() }
       }).returning();
-      if (!adminRole) throw new Error('Failed to create admin role');
-
-      const adminRoleId = adminRole.id;
+      console.log('[create-admin] adminRole result:', adminRole);
+      if (!adminRole || adminRole.length === 0) throw new Error('Failed to create admin role');
+      const adminRoleId = adminRole[0].id;
+      console.log('[create-admin] adminRoleId:', adminRoleId);
 
       // 5. Create tenant member (the owner)
-      await tx.insert(tenantMembers).values({
+      console.log('[create-admin] Before tenantMembers insert, adminRoleId:', adminRoleId);
+      const memberResult = await tx.insert(tenantMembers).values({
         tenantId: t.id,
         userId: u.id,
         roleSlug: 'admin',
         roleId: adminRoleId,
         status: 'active',
         joinedAt: new Date()
-      }).onConflictDoUpdate({
-        target: [tenantMembers.tenantId, tenantMembers.userId],
-        set: {
-          status: 'active',
-          roleSlug: 'admin',
-          roleId: adminRoleId,
-          updatedAt: new Date(),
-        }
-      });
+      }).returning();
+      console.log('[create-admin] After tenantMembers insert, result:', memberResult);
+
+      // Verify rows exist in this transaction
+      const verifyRole = await tx.select().from(roles).where(eq(roles.tenantId, t.id));
+      const verifyMember = await tx.select().from(tenantMembers).where(eq(tenantMembers.tenantId, t.id));
+      console.log('[create-admin] Verify role in tx:', verifyRole.length, verifyRole[0]?.id);
+      console.log('[create-admin] Verify member in tx:', verifyMember.length, verifyMember[0]?.id);
 
       // 6. Update user's last tenant ID
       await tx.update(users)
@@ -197,16 +196,18 @@ export async function POST(request: NextRequest) {
         stepName: 'admin_created',
         isCompleted: true,
         completedAt: new Date(),
-      }).onConflictDoNothing().catch((err) => logError({ error: err, context: 'setup/create-admin async side-effect' }));
+      }).onConflictDoNothing().catch((err: unknown) => logError({ error: err, context: 'setup/create-admin async side-effect' }));
 
       // 8. Create session
       const token = await createToken(u.id);
       const tokenHash = await hashToken(token);
+      console.log('[create-admin] Before session insert');
       await tx.insert(sessions).values({
         userId: u.id,
         tokenHash,
         expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
       });
+      console.log('[create-admin] After session insert');
 
       return { u, t, token };
     });

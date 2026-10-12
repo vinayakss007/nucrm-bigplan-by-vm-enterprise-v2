@@ -32,6 +32,12 @@ const mockDb = {
 };
 
 vi.mock('@/drizzle/db', () => ({ db: mockDb }));
+vi.mock('@/lib/db/rls', () => ({
+  // PP-010: the route wraps the super-admin guard in withSecurityContext; in
+  // unit tests there is no RLS, so run the callback directly on the mock db.
+  withSecurityContext: (fn: (tx: unknown) => Promise<unknown>) => fn(mockDb),
+  setTenantContext: vi.fn(),
+}));
 vi.mock('@/drizzle/schema', () => ({
   users: { isSuperAdmin: 'is_super_admin' },
   tenants: {}, tenantMembers: {}, plans: {}, roles: {},

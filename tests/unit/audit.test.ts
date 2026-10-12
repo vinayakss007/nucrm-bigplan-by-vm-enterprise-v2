@@ -4,22 +4,27 @@ import { logAudit, verifyAuditChain } from '../../lib/audit';
 const mockInsertValues = vi.fn();
 const mockWhereResult = vi.fn();
 
-vi.mock('@/drizzle/db', () => ({
-  db: {
-    insert: vi.fn(() => ({
-      values: mockInsertValues,
-    })),
-    select: vi.fn(() => ({
-      from: vi.fn(() => ({
-        where: vi.fn(() => ({
-          orderBy: vi.fn(() => ({
-            limit: mockWhereResult,
-          })),
+vi.mock('@/drizzle/db', () => {
+  const mockDb: Record<string, unknown> = {};
+  mockDb['insert'] = vi.fn(() => ({
+    values: mockInsertValues,
+  }));
+  mockDb['select'] = vi.fn(() => ({
+    from: vi.fn(() => ({
+      where: vi.fn(() => ({
+        orderBy: vi.fn(() => ({
+          limit: mockWhereResult,
         })),
       })),
     })),
-  },
-}));
+  }));
+  // logAudit's standalone path wraps the write in withTenantContext, which
+  // opens a transaction: run the callback against this same mock. execute
+  // covers the set_config call inside the context setup.
+  mockDb['execute'] = vi.fn().mockResolvedValue({ rows: [] });
+  mockDb['transaction'] = vi.fn(async (fn: (tx: unknown) => Promise<unknown>): Promise<unknown> => fn(mockDb));
+  return { db: mockDb };
+});
 
 vi.mock('@/drizzle/schema', () => ({
   auditLogs: {},

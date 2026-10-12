@@ -6,6 +6,12 @@ vi.mock('@/drizzle/db', () => ({
     insert: vi.fn(),
     transaction: vi.fn((cb: (tx: unknown) => Promise<unknown>) => cb({
       insert: vi.fn(() => ({ values: vi.fn(() => ({ returning: vi.fn().mockResolvedValue([{ id: 'user-1' }]) })) })),
+      // PP-026: SSO lookup runs under withAuthLookupContext (tx.select) and
+      // withTenantContext issues a SET LOCAL via tx.execute.
+      select: vi.fn(() => ({
+        from: vi.fn(() => ({ where: vi.fn().mockResolvedValue([]) })),
+      })),
+      execute: vi.fn().mockResolvedValue(undefined),
     })),
     query: {
       users: { findFirst: vi.fn() },
@@ -26,6 +32,7 @@ vi.mock('@/drizzle/schema/core', () => ({
 vi.mock('drizzle-orm', () => ({
   eq: vi.fn((...args) => args),
   and: vi.fn((...args) => args),
+  sql: (strings: TemplateStringsArray, ...values: unknown[]) => ({ strings, values }),
 }));
 
 vi.mock('@/lib/auth/session', () => ({

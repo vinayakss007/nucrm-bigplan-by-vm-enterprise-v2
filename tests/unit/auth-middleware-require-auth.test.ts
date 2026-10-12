@@ -105,7 +105,13 @@ vi.mock('@/lib/auth/session', () => ({
   hashToken: m.hashToken,
 }));
 
-vi.mock('@/lib/db/rls', () => ({ setTenantContext: m.setTenantContext }));
+vi.mock('@/lib/db/rls', () => ({
+  setTenantContext: m.setTenantContext,
+  // PP-026: requireAuth redeems the presented session via
+  // withAuthResolutionContext; in unit tests there is no RLS, so run the
+  // callback directly against the mocked db.
+  withAuthResolutionContext: async (_userId: string, fn: (tx: unknown) => Promise<unknown>) => fn(m.db),
+}));
 
 vi.mock('@/lib/auth/api-key', () => ({ tryApiKeyAuth: m.tryApiKeyAuth }));
 

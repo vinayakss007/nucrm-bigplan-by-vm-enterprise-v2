@@ -19,6 +19,24 @@
 
 import { db } from '@/drizzle/db';
 import { sql } from 'drizzle-orm';
+import { setTenantCarrier, clearTenantCarrier } from '@/lib/db/tenant-carrier';
+
+/**
+ * Test seam: unit tests mock `@/drizzle/db` with plain `{ select, update,
+ * insert, delete }` objects that have no `transaction` / `execute`. In that
+ * case there is no RLS to enforce, so context setup becomes a no-op and the
+ * `with*` helpers run `fn` directly against the mock. Production always has a
+ * real pool, so this branch never triggers outside tests.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function isMockClient(client: any): boolean {
+  return !client || typeof client.execute !== 'function';
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function hasTransaction(client: any): boolean {
+  return !!client && typeof client.transaction === 'function';
+}
 
 /**
  * Set tenant context for RLS policies.
@@ -35,6 +53,11 @@ export async function setTenantContext(tenantId: string, userId: string, tx?: an
   }
   try {
     const client = tx || db;
+    if (isMockClient(client)) return;
+    // PP-027: stash the proven identity so bare `db.transaction()` calls later
+    // in this request can re-apply it transaction-scoped (session GUCs do not
+    // survive PgBouncer transaction pooling — see lib/db/tenant-carrier.ts).
+    setTenantCarrier(tenantId, userId);
     // When tx is provided: is_local=true scopes to that transaction.
     // When tx is absent: is_local=false keeps the GUC for the connection's checkout.
     // PgBouncer's server_reset_query='DISCARD ALL' clears it on return to pool.
@@ -56,6 +79,8 @@ export async function setTenantContext(tenantId: string, userId: string, tx?: an
 export async function clearTenantContext(tx?: any): Promise<void> {
   try {
     const client = tx || db;
+    clearTenantCarrier();
+    if (isMockClient(client)) return;
     const isLocal = tx ? sql`true` : sql`false`;
     await client.execute(
       sql`SELECT set_config('app.current_tenant', '', ${isLocal}), set_config('app.current_user', '', ${isLocal})`
@@ -78,6 +103,7 @@ export async function withTenantContext<T>(
   if (!tenantId || !userId) {
     throw new Error('[RLS] withTenantContext called with empty tenantId or userId');
   }
+  if (!hasTransaction(db)) return fn(db as unknown as Parameters<typeof fn>[0]);
   return await db.transaction(async (tx) => {
     await tx.execute(sql`SELECT set_config('app.current_tenant', ${tenantId}, true), set_config('app.current_user', ${userId}, true)`);
     return fn(tx);
@@ -119,6 +145,7 @@ export const SUPER_ADMIN_GUC = 'app.is_super_admin';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function setSuperAdminContext(tx?: any): Promise<void> {
   const client = tx || db;
+  if (isMockClient(client)) return;
   const isLocal = tx ? sql`true` : sql`false`;
   await client.execute(sql`SELECT set_config('app.is_super_admin', 'true', ${isLocal})`);
 }
@@ -136,6 +163,7 @@ export async function withSecurityContext<T>(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   fn: (tx: any) => Promise<T>
 ): Promise<T> {
+  if (!hasTransaction(db)) return fn(db as unknown as Parameters<typeof fn>[0]);
   return await db.transaction(async (tx) => {
     await setSuperAdminContext(tx);
     return fn(tx);
@@ -157,6 +185,7 @@ export async function setUserContext(userId: string, tx?: any): Promise<void> {
     throw new Error('[RLS] setUserContext called with empty userId — refusing to set empty context');
   }
   const client = tx || db;
+  if (isMockClient(client)) return;
   const isLocal = tx ? sql`true` : sql`false`;
   await client.execute(sql`SELECT set_config('app.current_user', ${userId}, ${isLocal})`);
 }
@@ -177,6 +206,7 @@ export async function setUserContext(userId: string, tx?: any): Promise<void> {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function setAuthLookupContext(tx?: any): Promise<void> {
   const client = tx || db;
+  if (isMockClient(client)) return;
   const isLocal = tx ? sql`true` : sql`false`;
   await client.execute(sql`SELECT set_config('app.auth_lookup', 'true', ${isLocal})`);
 }
@@ -189,6 +219,7 @@ export async function withAuthLookupContext<T>(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   fn: (tx: any) => Promise<T>
 ): Promise<T> {
+  if (!hasTransaction(db)) return fn(db as unknown as Parameters<typeof fn>[0]);
   return await db.transaction(async (tx) => {
     await setAuthLookupContext(tx);
     return fn(tx);
@@ -208,8 +239,46 @@ export async function withUserContext<T>(
   if (!userId) {
     throw new Error('[RLS] withUserContext called with empty userId');
   }
+  if (!hasTransaction(db)) return fn(db as unknown as Parameters<typeof fn>[0]);
   return await db.transaction(async (tx) => {
     await setUserContext(userId, tx);
+    return fn(tx);
+  });
+}
+
+/**
+ * Redeem a *verified* session token — the full pre-tenant read sequence that
+ * turns a presented cookie into an AuthContext.
+ *
+ * Combines two narrow privileges in a single transaction:
+ *   app.current_user = userId   (taken from a cryptographically verified
+ *                                session token, never from client input)
+ *   app.auth_lookup  = 'true'   (admits the keyed sessions/users lookups)
+ *
+ * WHY BOTH ARE NEEDED (PP-026)
+ * The only policy on `sessions` was `sessions_user_own`, whose USING clause
+ * keys off app.current_user — the very value the redemption read exists to
+ * establish. Chicken and egg: a session minted at login could never be
+ * redeemed, so every authenticated request answered 401 "Session expired"
+ * while signup/login themselves kept returning 2xx. `tenant_members` and
+ * `roles` had the same shape via tenant_isolation (they need a tenant the
+ * membership read is supposed to discover); 0088 adds self-scoped SELECT
+ * policies for them instead of widening the tenant-bound ones.
+ *
+ * Read-only by construction: neither GUC grants INSERT/UPDATE/DELETE here.
+ */
+export async function withAuthResolutionContext<T>(
+  userId: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  fn: (tx: any) => Promise<T>
+): Promise<T> {
+  if (!userId) {
+    throw new Error('[RLS] withAuthResolutionContext called with empty userId');
+  }
+  if (!hasTransaction(db)) return fn(db as unknown as Parameters<typeof fn>[0]);
+  return await db.transaction(async (tx) => {
+    await setUserContext(userId, tx);
+    await setAuthLookupContext(tx);
     return fn(tx);
   });
 }

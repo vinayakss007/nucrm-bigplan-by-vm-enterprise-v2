@@ -54,6 +54,7 @@
 
 import type { NextRequest } from 'next/server';
 import { withPinnedConnection } from '@/lib/db/request-connection';
+import { runWithTenantCarrier } from '@/lib/db/tenant-carrier';
 import { trackRequestStart, trackRequestEnd } from '@/lib/db/graceful-shutdown';
 
 /**
@@ -94,7 +95,15 @@ export function withApiRoute<C = unknown>(
     // decremented in finally so it can never leak on error/early-return.
     trackRequestStart();
     try {
-      return await withPinnedConnection(async () => handler(request, context));
+      // PP-027: open the tenant-carrier scope for the whole handler so the
+      // identity requireAuth() proves (via setTenantContext) stays visible to
+      // bare `db.transaction()` calls later in this request. Without this,
+      // session-scoped GUCs do not survive PgBouncer transaction pooling and
+      // every transactional write is denied by RLS. No-op cost on the
+      // non-PgBouncer path (the pinned connection already carries the GUCs).
+      return await runWithTenantCarrier(() =>
+        withPinnedConnection(async () => handler(request, context))
+      );
     } finally {
       trackRequestEnd();
     }
@@ -123,5 +132,7 @@ export function withApiRoute<C = unknown>(
  * errors (including Next.js redirect()/notFound() control-flow throws).
  */
 export function withTenantScope<T>(fn: () => Promise<T>): Promise<T> {
-  return withPinnedConnection(fn);
+  // PP-027: same carrier scope as withApiRoute, for Server Components that
+  // run `db.transaction()` after requireTenantCtx() returns.
+  return runWithTenantCarrier(() => withPinnedConnection(fn));
 }
