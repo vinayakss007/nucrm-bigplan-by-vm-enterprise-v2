@@ -78,7 +78,7 @@ export async function withCronLock(
 
   try {
     // Set a statement timeout to prevent infinite hangs
-    await client.query(`SET statement_timeout = '${timeoutMs}'`);
+    await client.query(`SET statement_timeout = '${timeoutMs}'`); // raw-sql-guard: allow — clamped by validateTimeoutMs (#2528)
 
     // Try to acquire the lock (non-blocking)
     const { rows } = await client.query<{ acquired: boolean }>(
