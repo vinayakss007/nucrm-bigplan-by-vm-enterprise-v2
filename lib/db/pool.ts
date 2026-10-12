@@ -189,6 +189,14 @@ export function getPool(): Pool {
       // while the pool drains instead of piling on doomed requests.
       connectionTimeoutMillis: parseIntEnv(process.env['DATABASE_CONNECTION_TIMEOUT_MS'], 5_000),
       allowExitOnIdle: true,
+      // TCP keepalive (Sentry 7786045318/7786045342): without it a peer-dropped
+      // socket stays invisible in the idle pool until the NEXT borrower's first
+      // query dies with "Client has encountered a connection error and is not
+      // queryable" — seen killing the process-sequences cron on its tenant-GUC
+      // set_config. With it the kernel probes idle connections, pg emits
+      // 'error' on the dead client, and pg-pool removes it before reuse.
+      keepAlive: true,
+      keepAliveInitialDelayMillis: 10_000,
       statement_timeout: parseIntEnv(process.env['DATABASE_STATEMENT_TIMEOUT'], 10000),
     };
 

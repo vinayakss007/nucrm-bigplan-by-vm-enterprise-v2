@@ -61,6 +61,21 @@ describe('db/pool', () => {
     }));
   });
 
+  it('enables TCP keepAlive so peer-dropped idle clients die in the pool, not at next borrow', async () => {
+    // Sentry 7786045318/7786045342: a dead idle client was handed to the
+    // process-sequences cron and threw "not queryable" on its first statement
+    // (the tenant-GUC set_config). keepAlive makes the kernel detect the dead
+    // peer so pg emits 'error' and pg-pool removes the client.
+    process.env['DATABASE_URL'] = 'postgresql://nucrm@localhost:5432/nucrm';
+    const { Pool } = await import('pg');
+    const { getPool } = await import('@/lib/db/pool');
+    getPool();
+    expect(Pool).toHaveBeenCalledWith(expect.objectContaining({
+      keepAlive: true,
+      keepAliveInitialDelayMillis: 10_000,
+    }));
+  });
+
   it('enables SSL without rejectUnauthorized in development', async () => {
     process.env['DATABASE_URL'] = 'postgresql://nucrm@localhost:5432/nucrm';
     process.env['NODE_ENV'] = 'development';
