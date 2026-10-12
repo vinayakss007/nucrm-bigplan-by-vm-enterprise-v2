@@ -39,7 +39,7 @@ export async function checkLimit(
   opts: CheckLimitOptions = {},
 ): Promise<NextResponse | null> {
   if (ctx.isSuperAdmin) return null;
-  if (!ctx.tenantId || ctx.tenantId === '__superadmin_no_tenant__') return null;
+  if (!ctx.tenantId || ctx.tenantId === NO_TENANT_SENTINEL) return null;
 
   const report = await getUsageReport(ctx.tenantId, kind);
   if (!report.exceeded) return null;

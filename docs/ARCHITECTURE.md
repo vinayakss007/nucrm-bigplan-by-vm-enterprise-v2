@@ -1,161 +1,332 @@
-# Architecture: Modules vs Integrations vs Plugins
+# NuCRM Architecture Overview
 
-NuCRM uses a three-tier extensibility model. Each tier serves a different purpose and audience.
-
----
-
-## Overview
-
-| Aspect            | Modules                          | Integrations                      | Plugins                            |
-| ----------------- | -------------------------------- | --------------------------------- | ---------------------------------- |
-| **What**          | Internal feature packs           | First-party curated providers     | User-created custom connectors     |
-| **Built by**      | NuCRM team                       | NuCRM team                        | End users (tenants)                |
-| **Gating**        | Plan-gated (Free/Pro/Enterprise) | Plan-gated + provider credentials | Always available (any plan)        |
-| **Location**      | `lib/modules/`                   | `lib/integrations/`               | `lib/plugins/`                     |
-| **Schema**        | `drizzle/schema/modules.ts`      | `drizzle/schema/comm.ts`          | `drizzle/schema/plugins.ts`        |
-| **API routes**    | Various `/api/tenant/*`          | `/api/tenant/integrations/`       | `/api/tenant/plugins/`             |
-| **UI**            | Various `/tenant/*` pages        | `/tenant/integrations`            | `/tenant/plugins`                  |
-| **Config stored** | Feature flags in plans table     | Integration credentials table     | `custom_plugins` table             |
-| **Execution**     | Native application code          | Provider SDK / HTTP calls         | Generic HTTP engine with auth      |
-
----
-
-## Modules (`lib/modules/`)
-
-Modules are internal feature packs built and maintained by the NuCRM team. They represent core CRM functionality that is gated by the tenant's subscription plan.
-
-Examples:
-- Pipeline management
-- Contact management
-- Activity tracking
-- Reporting and analytics
-- Workflow automation
-
-Modules are not user-configurable beyond plan-level on/off. They integrate deeply with the database schema and application logic.
-
-### Key files
-
-- `lib/modules/` - Module business logic
-- `drizzle/schema/modules.ts` - Module-related database tables
-- Plan gating configured in the `plans` table
-
----
-
-## Integrations (`lib/integrations/`)
-
-Integrations are first-party connections to well-known external services. They are curated, tested, and maintained by the NuCRM team with provider-specific logic.
-
-Supported providers:
-- **SendGrid** - Transactional email
-- **Mailgun** - Email delivery
-- **Slack** - Team notifications
-- **OpenAI** - AI-powered features
-- **Twilio** - SMS and voice
-
-### Key files
-
-> **Note:** Integrations has been removed from the main sidebar navigation. The page remains accessible at `/tenant/integrations` for admin users who need it. For user-created custom connectors, see Plugins below.
-
-- `lib/integrations/types.ts` - `ProviderDefinition` interface and related types
-- `lib/integrations/registry.ts` - Provider registry with all available integrations
-- `lib/integrations/providers/` - Individual provider implementations (e.g., `sendgrid.ts`)
-- `lib/integrations/ai-connector.ts` - AI provider abstraction layer
-- `drizzle/schema/comm.ts` - Integration credentials and configuration tables
-- `app/api/tenant/integrations/route.ts` - Integration CRUD API
-- `app/api/tenant/plugin-engine/route.ts` - Integration execution engine (legacy naming)
-- `app/tenant/integrations/page.tsx` - Integration management UI
-
-### How it works
-
-1. Admin enables an integration and provides credentials (API keys, tokens)
-2. Credentials are stored encrypted in the database
-3. Application code calls provider-specific methods through the registry
-4. Each provider has a typed definition with supported actions and configuration schema
-
----
-
-## Plugins (`lib/plugins/`)
-
-Plugins are user-created custom connectors. Any tenant can create a plugin to connect to any HTTP API, with no involvement from the NuCRM team.
-
-### Key files
-
-- `lib/plugins/types.ts` - Plugin type definitions (PluginDefinition, PluginAction, PluginAuthConfig, etc.)
-- `lib/plugins/engine.ts` - Generic HTTP execution engine
-- `lib/plugins/webhook-handler.ts` - Inbound webhook processing with HMAC verification
-- `lib/plugins/crypto.ts` - AES-256-GCM encryption for stored credentials
-- `drizzle/schema/plugins.ts` - `custom_plugins` and `plugin_execution_logs` tables
-- `app/api/tenant/plugins/` - Full CRUD + execute + webhook API routes
-- `app/tenant/plugins/page.tsx` - Plugin management UI with create wizard
-
-### How it works
-
-1. User creates a plugin via the UI wizard:
-   - Sets base URL and authentication method
-   - Defines one or more actions (HTTP method, path template, body template)
-   - Optionally configures a webhook secret for inbound calls
-2. Credentials are encrypted with AES-256-GCM before storage
-3. When executing an action:
-   - Engine resolves authentication (builds headers/query params)
-   - Interpolates `{{variables}}` in path and body templates
-   - Makes the HTTP call with a 10-second timeout
-   - Logs execution result to `plugin_execution_logs`
-4. For inbound webhooks:
-   - External service POSTs to `/api/tenant/plugins/webhook/[id]/`
-   - Signature is verified using HMAC-SHA256 (if secret configured)
-   - Rate limited to 60 requests/minute per plugin
-   - Payload is logged and can trigger downstream actions
-
-### Auth types supported
-
-| Type                         | How it works                                         |
-| ---------------------------- | ---------------------------------------------------- |
-| `bearer`                     | Adds `Authorization: Bearer <token>` header          |
-| `basic`                      | Adds `Authorization: Basic <base64(user:pass)>` header |
-| `api_key_header`             | Adds custom header with API key value                |
-| `api_key_query`              | Appends API key as URL query parameter               |
-| `oauth2_client_credentials`  | Fetches access token from token URL, then uses it    |
-| `none`                       | No authentication applied                            |
-
----
-
-## When to use which
-
-- **Need a new CRM feature?** Build it as a Module (requires code change, plan gating).
-- **Want to add a well-known provider (e.g., HubSpot)?** Add it as an Integration with a typed provider definition.
-- **User wants to connect their own API?** They create a Plugin through the UI - no code changes needed.
-
----
-
-## Directory structure summary
+## High-Level Architecture
 
 ```
-lib/
-  modules/           # Internal feature packs (plan-gated)
-  integrations/      # First-party curated providers
-    types.ts
-    registry.ts
-    providers/
-      sendgrid.ts
-      ...
-    ai-connector.ts
-  plugins/           # User-created custom connectors
-    types.ts
-    engine.ts
-    webhook-handler.ts
-    crypto.ts
-
-drizzle/schema/
-  modules.ts         # Module-related tables
-  comm.ts            # Integration/communication tables
-  plugins.ts         # Plugin system tables
-
-app/api/tenant/
-  integrations/      # Integration API routes
-  plugins/           # Plugin API routes
-  plugin-engine/     # Integration execution (legacy naming)
-
-app/tenant/
-  integrations/      # Integration management UI
-  plugins/           # Plugin management UI
+┌─────────────────────────────────────────────────────────────────────┐
+│                        Load Balancer (nginx)                        │
+│                    TLS Termination + Rate Limiting                  │
+└─────────────────────────────────────────────────────────────────────┘
+                                 │
+        ┌────────────────────────┼────────────────────────┐
+        ▼                        ▼                        ▼
+┌───────────────┐      ┌───────────────┐      ┌───────────────┐
+│   Next.js     │      │   Next.js     │      │   Next.js     │
+│   App Server  │      │   App Server  │      │   App Server  │
+│   (Port 3000) │      │   (Port 3000) │      │   (Port 3000) │
+└───────┬───────┘      └───────┬───────┘      └───────┬───────┘
+        │                      │                      │
+        └──────────────────────┼──────────────────────┘
+                               ▼
+                    ┌───────────────────────┐
+                    │   PgBouncer (6432)    │
+                    │  Session Pooling Mode │
+                    └───────────┬───────────┘
+                                ▼
+                    ┌───────────────────────┐
+                    │  UpCloud PostgreSQL   │
+                    │   (Managed, TLS)      │
+                    └───────────────────────┘
 ```
+
+## Core Components
+
+### 1. Next.js Application (App Router)
+- **Framework**: Next.js 15 with App Router
+- **Language**: TypeScript (strict mode)
+- **Rendering**: Server Components by default, Client Components where needed
+- **Authentication**: JWT-based with HttpOnly cookies + CSRF protection
+- **State Management**: React Server Components + Server Actions
+
+### 2. Database Layer
+- **ORM**: Drizzle ORM (type-safe SQL)
+- **Database**: PostgreSQL 16 (UpCloud Managed)
+- **Connection Pooling**: PgBouncer (session pooling mode)
+- **Multi-tenancy**: Row Level Security (RLS) on all tenant tables
+- **Migrations**: 93 migrations (versioned, reversible)
+
+### 3. Caching & Sessions
+- **Redis**: Caching, rate limiting, BullMQ queues, session store
+- **Session**: JWT in HttpOnly cookies + Redis-backed session store
+- **Cache Invalidation**: Tag-based with `cache.delByPattern()`
+
+### 4. Background Processing
+- **BullMQ**: Email sending, webhook delivery, automation engine
+- **Cron Jobs**: Backup, usage snapshots, lead warming, sequence processing
+- **Workers**: Separate worker process for queue processing
+
+### 5. Real-time
+- **Socket.io**: Real-time notifications, live updates
+- **Separate process**: Port 4001
+
+---
+
+## Data Model Overview
+
+### Core Entities
+```
+Tenant (workspace) ──┬── Users (members)
+                     ├── Contacts
+                     ├── Leads
+                     ├── Deals
+                     ├── Companies
+                     ├── Tasks
+                     ├── Meetings
+                     ├── Activities
+                     ├── Pipelines/Stages
+                     ├── Custom Fields
+                     └── Automations
+```
+
+### Key Design Decisions
+1. **RLS-first**: Every tenant table has `tenant_id` + RLS policy
+2. **Soft deletes**: `deleted_at` timestamp, never hard delete
+3. **Audit trail**: `created_at`, `updated_at`, `created_by`, `deleted_by`
+3. **Extensibility**: JSONB `metadata` + `custom_fields` on all entities
+4. **Optimistic locking**: `updated_at` for concurrency control
+
+---
+
+## API Design
+
+### Conventions
+- **Naming**: snake_case for all JSON keys (request/response)
+- **Pagination**: `limit` (default 50, max 200) + `offset`
+- **Filtering**: `q` for search, specific fields for exact match
+- **Sorting**: `sort_by` + `sort_order` (asc/desc)
+- **Errors**: Standardized envelope `{ error: string, code?: string }`
+
+### Authentication
+```
+POST /api/auth/signup          # Self-serve workspace creation
+POST /api/auth/login           # Email/password
+POST /api/auth/logout          # Session destruction
+POST /api/auth/forgot-password # Password reset request
+POST /api/auth/reset-password  # Password reset with token
+GET  /api/auth/csrf-token      # CSRF token for forms
+```
+
+### Tenant-scoped Resources
+```
+GET    /api/tenant/contacts
+POST   /api/tenant/contacts
+GET    /api/tenant/contacts/:id
+PATCH  /api/tenant/contacts/:id
+DELETE /api/tenant/contacts/:id
+
+GET    /api/tenant/leads
+POST   /api/tenant/leads
+...
+
+GET    /api/tenant/deals
+POST   /api/tenant/deals
+...
+
+GET    /api/tenant/tasks
+POST   /api/tenant/tasks
+...
+
+GET    /api/tenant/meetings
+POST   /api/tenant/meetings
+...
+
+GET    /api/tenant/companies
+POST   /api/tenant/companies
+...
+```
+
+### Search & Analytics
+```
+GET /api/tenant/search?q=term&limit=20
+GET /api/tenant/analytics/overview
+GET /api/tenant/analytics/stats
+GET /api/tenant/dashboard/stats
+GET /api/tenant/dashboard/widgets/*
+```
+
+### Webhooks
+```
+POST /api/tenant/webhooks              # Register webhook
+GET  /api/tenant/webhooks              # List webhooks
+POST /api/tenant/webhooks/:id/test     # Test webhook
+GET  /api/tenant/webhooks/:id/deliveries  # Delivery history
+```
+
+---
+
+## Authentication & Authorization
+
+### JWT Structure
+```typescript
+interface JWTPayload {
+  userId: string;
+  tenantId?: string;
+  isSuperAdmin: boolean;
+  iat: number;
+  exp: number;
+}
+```
+
+### Session Management
+- Access token: 15 min (JWT in HttpOnly cookie)
+- Refresh token: 30 days (rotating, stored in DB)
+- CSRF: Double-submit cookie pattern
+- TRUST_PROXY: Required for rate limiting behind nginx
+
+### RBAC Model
+```
+Super Admin (platform) ─────────────────────────────► All tenants, all actions
+    │
+    └── Tenant Admin ────────────────────────────────► Own tenant, all actions
+            │
+            ├── Sales Rep ──────────────────────────► Own + assigned records
+            ├── Member ─────────────────────────────► Own records only
+            └── Viewer ─────────────────────────────► Read only
+```
+
+### Permission Keys
+```
+contacts: read, write, delete, import, export, assign
+leads:    read, write, delete, convert, assign
+deals:    read, write, delete, close, assign
+tasks:    read, write, delete, assign
+meetings: read, write, delete
+companies: read, write, delete
+settings: read, write
+reports:  read, export
+admin:    users, roles, billing, integrations, webhooks
+```
+
+---
+
+## Background Jobs
+
+### Queue Structure
+```
+Queue: send-email          # Transactional emails
+Queue: send-notification   # In-app notifications
+Queue: send-bulk-emails    # Marketing campaigns
+Queue: run-automation      # Workflow execution
+Queue: send-lead-warming   # Drip campaigns
+Queue: webhooks            # Webhook delivery
+Queue: run-sequences       # Sequence steps
+Queue: process-sequences   # Sequence processing
+```
+
+### Cron Schedule
+| Schedule | Job | Purpose |
+|----------|-----|---------|
+| `*/5 * * * *` | process-sequences | Execute due sequence steps |
+| `*/10 * * * *` | retry-webhooks | Retry failed webhooks |
+| `*/30 * * * *` | detect-missed-followups | Create follow-up tasks |
+| `0 * * * *` | task-reminders | Send task reminders |
+| `0 0 * * *` | trial-check | Check trial expirations |
+| `0 0 * * 0` | usage-snapshot | Weekly usage snapshot |
+| `0 2 * * *` | auto-backup | Daily backups |
+| `0 3 * * 0` | backup-health | Backup monitoring |
+| `0 4 * * *` | backup-verify | Verify backup integrity |
+| `0 4 * * 0` | cleanup | Remove expired data |
+| `0 5 * * *` | subscription-check | Billing checks |
+| `0 7 * * *` | contract-renewal-check | Contract alerts |
+| `0 8 * * *` | process-at-risk | At-risk deal alerts |
+| `0 9,13,17 * * *` | warmup-emails | Email warmup |
+| `0 8 * * *` | ai-auto-followup | AI follow-up generation |
+
+---
+
+## Deployment Architecture
+
+### Docker Compose (Production)
+```
+Services:
+├── nginx              # Reverse proxy, TLS, rate limiting
+├── app                # Next.js app (3 replicas)
+├── worker             # BullMQ workers
+├── realtime           # Socket.io server
+├── cron               # Cron job runner
+├── pgbouncer          # Connection pooler
+├── redis              # Cache + queues
+├── postgres-exporter  # Prometheus metrics
+├── redis-exporter     # Prometheus metrics
+├── node-exporter      # Host metrics
+├── prometheus         # Metrics collection
+├── alertmanager       # Alert routing
+├── grafana            # Dashboards
+├── loki               # Log aggregation
+├── promtail           # Log shipping
+├── minio              # S3-compatible storage
+└── certbot            # Let's Encrypt SSL
+```
+
+### Network
+- Internal network: `nucrm-net`
+- Published ports: 80, 443 (nginx), 3100 (Loki)
+- Internal only: 3000 (app), 4001 (realtime), 5432 (pgbouncer), 6379 (redis)
+
+---
+
+## Security Implementation
+
+### RLS Policies (93 tables)
+- All tenant tables: `tenant_id = current_setting('app.current_tenant')`
+- Super admin bypass: `current_setting('app.is_super_admin') = 'true'`
+- Self-read: `id = current_setting('app.current_user')`
+- Cross-tenant: Blocked by default
+
+### Connection Pinning (#1615)
+- `withPinnedConnection()` wraps request handlers
+- Single PgBouncer connection per request
+- Tenant GUC persists across all queries in request
+- Automatic cleanup on scope exit
+
+### Rate Limiting
+- Edge: nginx `limit_req_zone` (60r/s API, 5r/s auth, 20r/s public)
+- Application: Redis-backed sliding window per action
+- Per-IP and per-email limits on auth endpoints
+
+---
+
+## Monitoring Stack
+
+### Metrics (Prometheus)
+- **Application**: Request latency, error rate, active requests
+- **Database**: Active connections, query latency, pool utilization
+- **Redis**: Memory, connected clients, hit rate, queue depths
+- **System**: CPU, memory, disk, network
+
+### Key Dashboards (Grafana)
+- **API Overview**: Latency p50/p95/p99, error rate, throughput
+- **Database**: Connection pool, query latency, slow queries
+- **Queue Health**: Job throughput, failure rate, retry rate
+- **Business**: Signups, workspace creation, lead conversion
+
+### Alerting Rules
+| Alert | Condition | Severity |
+|-------|-----------|----------|
+| HighErrorRate | error_rate > 1% for 5m | critical |
+| HighLatency | p95_latency > 2s for 5m | warning |
+| DBPoolExhausted | pool_usage > 90% | critical |
+| QueueBacklog | queue_depth > 1000 | warning |
+| DiskSpace | disk_usage > 85% | warning |
+| BackupFailed | backup_status = failed | critical |
+
+---
+
+## Disaster Recovery
+
+### Backup Strategy
+- **Frequency**: Daily at 02:00 UTC
+- **Retention**: 90 days
+- **Storage**: MinIO (S3-compatible) + offsite replication
+- **Verification**: Daily integrity check + monthly test restore
+
+### RTO/RPO Targets
+| Scenario | RTO | RPO |
+|----------|-----|-----|
+| Database failure | 15 min | 24 hours |
+| App server failure | 5 min | 0 |
+| Redis failure | 5 min | 0 |
+| Region outage | 60 min | 24 hours |
+
+### Recovery Procedures
+See `docs/RUNBOOKS.md` for detailed procedures.

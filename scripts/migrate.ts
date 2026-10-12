@@ -249,9 +249,10 @@ async function main() {
   }
 
   const cleanUrl = databaseUrl.replace(/[?&]sslmode=[^&]+/, '');
+  const useSsl = process.env['DATABASE_SSL'] !== 'false';
   const pool = new Pool({
     connectionString: cleanUrl,
-    ssl: { rejectUnauthorized: false },
+    ssl: useSsl ? { rejectUnauthorized: false } : undefined,
     connectionTimeoutMillis: 10_000,
   });
 

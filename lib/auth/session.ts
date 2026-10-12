@@ -6,9 +6,9 @@
 import { SignJWT, jwtVerify } from 'jose';
 import { cookies } from 'next/headers';
 import bcrypt from 'bcryptjs';
-import { db } from '@/drizzle/db';
 import { users, sessions } from '@/drizzle/schema';
 import { eq, and, gt } from 'drizzle-orm';
+import { withAuthLookupContext } from '@/lib/db/rls';
 
 // Lazy-initialise so that importing this module at build time (Next.js static
 // analysis) does not throw. The check is deferred to the first call that
@@ -30,6 +30,7 @@ function getJwtSecret(): Uint8Array {
   return _jwtSecret;
 }
 const SESSION_COOKIE = 'nucrm_session';
+const IMPERSONATION_COOKIE = 'nucrm_impersonation';
 const SESSION_EXPIRES_DAYS = 30;
 
 // ── Password validation ──────────────────────────────────────
@@ -119,6 +120,37 @@ export async function clearSessionCookie() {
   cookieStore.delete(SESSION_COOKIE);
 }
 
+// ── Impersonation cookie ─────────────────────────────────────
+export const IMPERSONATION_COOKIE_NAME = IMPERSONATION_COOKIE;
+
+/**
+ * Park the super admin's own credential while `nucrm_session` carries the
+ * impersonated tenant user's token. Without this, starting an impersonation
+ * would log the admin out of the console with no way back: the stop endpoint
+ * needs a super admin, and the only session the browser still presents is the
+ * target user's.
+ *
+ * The value is a separate short-lived token, never a copy of the admin's
+ * login cookie, so it can be revoked with the impersonation record that
+ * created it, and it only ever reaches the browser that started the
+ * impersonation.
+ */
+export async function setImpersonationTokenCookie(token: string, maxAgeDays = 1) {
+  const cookieStore = await cookies();
+  cookieStore.set(IMPERSONATION_COOKIE, token, {
+    httpOnly: true,
+    secure: process.env['NODE_ENV'] === 'production' ? true : process.env['COOKIE_SECURE'] !== 'false',
+    sameSite: 'strict',
+    maxAge: maxAgeDays * 24 * 60 * 60,
+    path: '/',
+  });
+}
+
+export async function clearImpersonationTokenCookie() {
+  const cookieStore = await cookies();
+  cookieStore.delete(IMPERSONATION_COOKIE);
+}
+
 // ── Get current user from session ────────────────────────────
  
 export interface CurrentUser {
@@ -130,17 +162,24 @@ export interface CurrentUser {
   lastTenantId: string | null;
 }
 
-export async function getCurrentUser(): Promise<CurrentUser | null> {
-  const token = await getSessionToken();
-  if (!token) return null;
-
+/**
+ * Resolve the account a token belongs to.
+ *
+ * `getCurrentUser()` is the normal path (the request's own session cookie).
+ * Impersonation stop needs the same check for a *different* cookie — the
+ * admin's parked credential — so the lookup is shared rather than duplicated.
+ *
+ * It runs in the pre-auth lookup context: this resolves an identity *from* a
+ * token, so no user or tenant GUC can be trusted to be set yet, and the only
+ * rows reachable are the session's own user.
+ */
+export async function getCurrentUserForToken(token: string): Promise<CurrentUser | null> {
   const payload = await verifyToken(token);
   if (!payload) return null;
 
   const tokenHash = await hashToken(token);
 
-  // Verify session still exists in DB
-  const results = await db.select({
+  const results = await withAuthLookupContext<CurrentUser[]>(tx => tx.select({
     id: users.id,
     email: users.email,
     fullName: users.fullName,
@@ -148,13 +187,20 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
     avatarUrl: users.avatarUrl,
     lastTenantId: users.lastTenantId,
   })
-  .from(sessions)
-  .innerJoin(users, eq(users.id, sessions.userId))
-  .where(and(
-    eq(sessions.tokenHash, tokenHash),
-    gt(sessions.expiresAt, new Date())
-  ))
-  .limit(1);
+    .from(sessions)
+    .innerJoin(users, eq(users.id, sessions.userId))
+    .where(and(
+      eq(sessions.tokenHash, tokenHash),
+      gt(sessions.expiresAt, new Date())
+    ))
+    .limit(1));
 
   return results[0] ?? null;
+}
+
+export async function getCurrentUser(): Promise<CurrentUser | null> {
+  const token = await getSessionToken();
+  if (!token) return null;
+
+  return getCurrentUserForToken(token);
 }

@@ -51,6 +51,10 @@ vi.mock('@/drizzle/db', () => {
     limitArg = n;
     return Promise.resolve(sessionRows);
   });
+  // The lookup runs inside withAuthLookupContext, which opens a transaction and
+  // SETs the pre-auth GUC on it before handing it to the query.
+  chain.execute = vi.fn(async () => ({ rows: [] }));
+  chain.transaction = vi.fn(async (fn: any) => fn(chain));
   return { db: chain };
 });
 

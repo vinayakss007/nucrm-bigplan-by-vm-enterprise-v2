@@ -7,9 +7,11 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { X, ArrowLeft, ShieldAlert } from 'lucide-react';
+import { apiFetch } from '@/lib/utils';
 
 export default function ImpersonationBanner() {
   const [visible, setVisible] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const _router = useRouter();
 
   useEffect(() => {
@@ -19,20 +21,20 @@ export default function ImpersonationBanner() {
   }, []);
 
   const stopImpersonation = async () => {
-    const sessionId = sessionStorage.getItem('impersonateSessionId');
-    if (sessionId) {
-      await fetch('/api/superadmin/impersonate/stop', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId }),
-      });
+    // The session id is resolved server-side from the admin's own cookie; it is
+    // cleared locally here so a stale value cannot outlive the session.
+    setError(null);
+    const res = await apiFetch('/api/superadmin/impersonate/stop', { method: 'POST' });
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      setError(body?.error || 'Could not end the impersonation — sign out to drop the tenant session');
+      return;
     }
+    // apiFetch reloads nothing: the response already swapped the httpOnly session
+    // cookie back to the super admin's own token, so a navigation reloads the
+    // console with that identity.
     sessionStorage.removeItem('isImpersonating');
     sessionStorage.removeItem('impersonateSessionId');
-    // Clear session cookie
-    document.cookie = 'session=; Path=/; Max-Age=0';
-    // #1267: intentional full reload — the impersonation session cookie was
-    // just cleared, so reload to restore the superadmin session context.
     window.location.href = '/superadmin/tenants';
   };
 
@@ -59,6 +61,9 @@ export default function ImpersonationBanner() {
           <X className="w-3 h-3" /> Stop Impersonation
         </button>
       </div>
+      {error && (
+        <div className="w-full text-xs font-medium text-red-900 pt-1">{error}</div>
+      )}
     </div>
   );
 }

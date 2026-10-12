@@ -55,6 +55,7 @@ const m = vi.hoisted(() => {
     verifyToken: vi.fn(),
     hashToken: vi.fn(),
     setTenantContext: vi.fn(),
+    setSuperAdminContext: vi.fn(),
     withUserContext: vi.fn(async (_userId: string, fn: (tx: any) => Promise<any>) => fn(m.mockTx)),
     withSecurityContext: vi.fn(async (fn: (tx: any) => Promise<any>) => fn(m.mockTx)),
     tryApiKeyAuth: vi.fn(),
@@ -121,6 +122,7 @@ vi.mock('@/lib/auth/session', () => ({
 
 vi.mock('@/lib/db/rls', () => ({
   setTenantContext: m.setTenantContext,
+  setSuperAdminContext: m.setSuperAdminContext,
   withUserContext: m.withUserContext,
   withSecurityContext: m.withSecurityContext,
 }));
@@ -769,14 +771,31 @@ describe('requireAuth — cached context path', () => {
     m.rc.getCached.mockResolvedValue(
       cachedCtx({ isSuperAdmin: true, isAdmin: true, roleSlug: 'superadmin', tenantId: 'tenant-sa', userId: 'sa-1' }),
     );
-    queueSelects([{ count: 1 }]); // session only — no membership lookup expected
+    queueSelects([{ count: 1 }], [{ isSuperAdmin: true }]); // session, then the live flag — no membership lookup
 
     const result = await requireAuth(makeRequest({ token: TOKEN }));
 
     expect(isContext(result)).toBe(true);
     expect((result as AuthContext).isSuperAdmin).toBe(true);
-    expect(m.db.select).toHaveBeenCalledTimes(1);
+    expect(m.db.select).toHaveBeenCalledTimes(2);
     expect(m.setTenantContext).toHaveBeenCalledWith('tenant-sa', 'sa-1');
+    // A cache hit must grant the same platform RLS context as a cache miss, or
+    // the console goes empty once the context is cached.
+    expect(m.setSuperAdminContext).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects a cached super admin context once the flag has been revoked in the database', async () => {
+    m.rc.getCached.mockResolvedValue(
+      cachedCtx({ isSuperAdmin: true, isAdmin: true, roleSlug: 'superadmin', tenantId: 'tenant-sa', userId: 'sa-1' }),
+    );
+    queueSelects([{ count: 1 }], [{ isSuperAdmin: false }]); // session live, but no longer a super admin
+
+    const result = await requireAuth(makeRequest({ token: TOKEN }));
+
+    // The stale privilege must not be honoured: no platform RLS bypass.
+    expect(isContext(result)).toBe(false);
+    expect(m.setSuperAdminContext).not.toHaveBeenCalled();
+    expect(m.rc.invalidate).toHaveBeenCalledWith(TOKEN_HASH);
   });
 
   it('invalidates the cache entry and does not succeed on the cached value when the session is revoked', async () => {
@@ -864,6 +883,9 @@ describe('requireAuth — setTenantContext propagation on every successful path'
     expect(isContext(result)).toBe(true);
     expect(m.setTenantContext).toHaveBeenCalledTimes(1);
     expect(m.setTenantContext).toHaveBeenCalledWith('tenant-sa', 'sa-1');
+    // Platform-wide console reads match zero rows under fail-closed RLS unless
+    // the request's pinned connection carries this GUC.
+    expect(m.setSuperAdminContext).toHaveBeenCalledTimes(1);
   });
 
   it('sets tenant context with the sentinel for a super admin without a workspace', async () => {
@@ -875,6 +897,7 @@ describe('requireAuth — setTenantContext propagation on every successful path'
     expect(isContext(result)).toBe(true);
     expect(m.setTenantContext).toHaveBeenCalledTimes(1);
     expect(m.setTenantContext).toHaveBeenCalledWith('__superadmin_no_tenant__', 'sa-1');
+    expect(m.setSuperAdminContext).toHaveBeenCalledTimes(1);
   });
 
   it('sets tenant context with the resolved membership tenantId for a normal member', async () => {
@@ -886,6 +909,8 @@ describe('requireAuth — setTenantContext propagation on every successful path'
     expect(isContext(result)).toBe(true);
     expect((result as AuthContext).tenantId).toBe('tenant-9');
     expect(m.setTenantContext).toHaveBeenCalledTimes(1);
+    // The platform RLS bypass is reserved for verified super admins.
+    expect(m.setSuperAdminContext).not.toHaveBeenCalled();
     expect(m.setTenantContext).toHaveBeenCalledWith('tenant-9', 'user-9');
   });
 

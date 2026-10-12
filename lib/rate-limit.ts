@@ -402,9 +402,12 @@ export default rateLimiter;
  * Accepts max/windowMinutes but fetches from DB when available
  */
 export async function checkRateLimit(
-  request: Request,
+  request: Request | null | undefined,
   options: { action?: string; max?: number; windowMinutes?: number } = {}
 ) {
+  // Handle null/undefined request gracefully (for backwards compatibility)
+  if (!request) return null;
+
   const { action = 'api', max: fallbackMax, windowMinutes: fallbackWindow } = options;
 
   // #1249: header values only honored when TRUST_PROXY=true (see getClientIp)

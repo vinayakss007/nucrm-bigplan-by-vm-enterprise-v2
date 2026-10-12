@@ -21,6 +21,16 @@ import { db } from '@/drizzle/db';
 import { sql } from 'drizzle-orm';
 
 /**
+ * Value carried by `app.current_tenant` for a platform console session with no
+ * workspace selected. It has to parse as a uuid: every tenant-isolated policy
+ * casts the setting (`NULLIF(current_setting('app.current_tenant'),'')::uuid`),
+ * so a text sentinel made Postgres abort with `invalid input syntax for type
+ * uuid` and the whole super admin console 500ed as soon as an admin had no
+ * `users.last_tenant_id`. The nil UUID casts and matches no tenant row.
+ */
+export const NO_TENANT_SENTINEL = '00000000-0000-0000-0000-000000000000';
+
+/**
  * Set tenant context for RLS policies.
  *
  * Call sites:

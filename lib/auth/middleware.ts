@@ -9,7 +9,7 @@ import { db } from '@/drizzle/db';
 import { tenants, users, sessions, tenantMembers, roles } from '@/drizzle/schema';
 import { eq, and, gt, or, sql, desc, asc } from 'drizzle-orm';
 import { verifyToken, hashToken } from '@/lib/auth/session';
-import { setTenantContext, withUserContext } from '@/lib/db/rls';
+import { setTenantContext, setSuperAdminContext, withUserContext, NO_TENANT_SENTINEL } from '@/lib/db/rls';
 import { tryApiKeyAuth } from '@/lib/auth/api-key';
 import { requestContext, withRequestId } from '@/lib/tenant/request-context';
 import { withPinnedConnection } from '@/lib/db/request-connection';
@@ -142,8 +142,17 @@ async function isCachedContextStillAuthorized(
 
     if (!(Number(sessionExists[0]?.count) > 0)) return false;
 
-    // Super admins have no tenant_members row to validate against.
-    if (cached.isSuperAdmin) return true;
+    // Super admins have no tenant_members row to validate against, but the
+    // flag itself must still be re-read: requireAuth grants this connection the
+    // platform RLS bypass from cached.isSuperAdmin, so a cached truth would let
+    // a demoted admin keep platform-wide access for the rest of the TTL.
+    if (cached.isSuperAdmin) {
+      const [liveAdmin] = await tx.select({ isSuperAdmin: users.isSuperAdmin })
+        .from(users)
+        .where(eq(users.id, cached.userId))
+        .limit(1);
+      return liveAdmin?.isSuperAdmin === true;
+    }
 
     const [membership] = await tx.select({
       status: tenantMembers.status,
@@ -267,6 +276,10 @@ export async function requireAuth(request: NextRequest): Promise<AuthContext | N
     if (cached) {
       if (await isCachedContextStillAuthorized(tokenHash, cached as AuthContext)) {
         await setTenantContext((cached as AuthContext).tenantId, (cached as AuthContext).userId);
+        // Cached sessions must carry the same RLS privilege as fresh ones, or
+        // the platform console works on a cache miss and comes back empty on a
+        // hit. See the note in the superadmin branch below.
+        if ((cached as AuthContext).isSuperAdmin) await setSuperAdminContext();
         requestContext.set(requestId, cached);
         return cached as AuthContext;
       }
@@ -346,7 +359,7 @@ export async function requireAuth(request: NextRequest): Promise<AuthContext | N
     if (loaded.member === 'superadmin') {
       const ctx: AuthContext = {
         userId: userRecord.id,
-        tenantId: userRecord.lastTenantId || '__superadmin_no_tenant__',
+        tenantId: userRecord.lastTenantId || NO_TENANT_SENTINEL,
         roleSlug: 'superadmin',
         permissions: { all: true },
         isAdmin: true,
@@ -354,6 +367,13 @@ export async function requireAuth(request: NextRequest): Promise<AuthContext | N
         noWorkspace: !userRecord.lastTenantId,
       };
       await setTenantContext(ctx.tenantId, ctx.userId);
+      // Platform console reads (all tenants, all users, global error log) match
+      // zero rows under fail-closed RLS unless this connection carries
+      // app.is_super_admin. requireAuth runs inside the connection that
+      // withApiRoute pins for the whole request, so this SESSION GUC also
+      // reaches the handler's own bare `db` queries; it is reset when that
+      // outer scope drains and releases the client.
+      await setSuperAdminContext();
       await requestContext.cache(tokenHash, { ...ctx, cachedAt: Date.now() });
       return ctx;
     }
