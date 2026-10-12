@@ -17,9 +17,10 @@ import { withApiRoute } from '@/lib/api/with-api-route';
  * GET /api/tenant/email/analytics
  *
  * Aggregated email engagement metrics for the current tenant. This is the
- * reporting endpoint the Email Analytics page consumes. It is distinct from
- * /api/tenant/email/track, which is the PUBLIC, unauthenticated tracking-pixel
- * / click-redirect ingestion endpoint (that one returns a GIF, not JSON).
+ * reporting endpoint the Email Analytics page consumes. Ingestion lives
+ * elsewhere: /api/track/open and /api/track/click are the public, token-bearing
+ * pixel / redirect endpoints that write the rows read here. The legacy
+ * /api/tenant/email/track is retired (#2526) and answers 410.
  *
  * Query params:
  *   - days: look-back window in days (default 30, max 365)

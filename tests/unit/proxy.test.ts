@@ -195,6 +195,29 @@ describe('proxy middleware', () => {
       expect(res._isNext).toBeFalsy();
       expect(res.status).toBe(401);
     });
+
+    // #2526 measures the OTHER legacy tracking surface. /api/tenant/email/track has
+    // never appeared in proxy.ts's public lists (`git log -S"email/track" -- proxy.ts`
+    // returns no commit), so a mail client fetching the pixel with no session is
+    // answered at the edge and the handler never runs — which is also why retiring
+    // that route's write path loses no behaviour a recipient could observe today.
+    // The token-based successors ARE public, deliberately, because they carry a
+    // per-message credential (`/api/track/open`, `/api/track/click` at :229).
+    it('keeps GET /api/tenant/email/track behind the session check', async () => {
+      const { proxy } = await import('@/proxy');
+      const res = await proxy(makeReq(
+        '/api/tenant/email/track?type=open&tid=00000000-0000-4000-8000-000000000001'));
+      expect(res._isNext).toBeFalsy();
+      expect(res.status).toBe(401);
+    });
+
+    it.each(['/api/track/open?t=x', '/api/track/click?t=x&l=y'])(
+      '#2526: the token-based successor %s stays public',
+      async (pathname) => {
+        const { proxy } = await import('@/proxy');
+        const res = await proxy(makeReq(pathname));
+        expect(res._isNext).toBe(true);
+      });
   });
 
   // #1992: CSP/nonce work belongs on HTML document responses only — RSC

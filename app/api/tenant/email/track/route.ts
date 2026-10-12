@@ -4,142 +4,76 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/drizzle/db';
-import { emailOpens, emailClicks } from '@/drizzle/schema/email-tracking';
-import { tenants } from '@/drizzle/schema/core';
-import { eq } from 'drizzle-orm';
-import { checkPublicRateLimit } from '@/lib/rate-limit-simple';
-import { safeRedirectTarget } from '@/lib/security/redirect-target';
-import { logError } from '@/lib/errors-server';
 
 /**
- * Email Open/Click Tracking Endpoints
+ * RETIRED — `GET /api/tenant/email/track` (#2526).
  *
- * Public endpoints (no auth required) - called from tracking pixel and link redirects.
- * IDs are passed via query parameters.
+ * This was the original open/click ingestion endpoint: it took `tid`, `cid`,
+ * `cpid`, `eid` and (for a click) the redirect target `url` straight from the
+ * query string and wrote `email_opens` / `email_clicks` from them. Nothing
+ * about those values was ever proven — not that the caller belonged to `tid`,
+ * not that `cid`/`cpid`/`eid` existed, not that the caller was anyone at all.
+ * The successor pair does the same job with a credential instead of a claim:
+ * `/api/track/open?t=` and `/api/track/click?t=&l=` resolve one
+ * `email_tracking` row from the unguessable id the sending side minted for
+ * that recipient (`lib/email/tracking.ts:86`, `:106`), take the tenant from
+ * that row rather than from the query string, and reads the click destination
+ * out of the registered link (`app/api/track/click/route.ts:125-126`) instead
+ * of accepting one.
  *
- * Open-redirect hardening (#2267, same class as #2218): the `?url=` of a click
- * request is the only caller-controlled redirect input this route has, so it is
- * validated through the shared `safeRedirectTarget()` guard (absolute http(s),
- * public host, no credentials, no protocol-relative/relative/smuggled schemes)
- * BEFORE it is persisted to `emailClicks.linkUrl` and again implicitly at
- * redirect time — the `Location` handed to the browser is byte-for-byte the
- * validated string, never the raw parameter. The old hand-rolled host blocklist
- * is gone; it missed whole private ranges, embedded credentials and
- * whitespace-smuggled schemes, and it duplicated logic that now lives in one
- * place (`lib/security/redirect-target.ts` + `lib/security/ssrf`).
+ * Three measurements are why this file is a tombstone and not a hardening:
  *
- * A failed click-tracking write must never wedge the redirect: the insert runs
- * in its own try/catch, reports through `logError`, and the 302 still happens.
+ * 1. **No caller can reach it as intended.** `/api/tenant/email/track` has
+ *    never appeared in `proxy.ts`'s public lists — `git log -S"email/track"
+ *    -- proxy.ts` returns no commit — so the mail client that renders a
+ *    tracking pixel is answered `401 {"error":"Authentication required"}` at
+ *    the edge (`proxy.ts:498`) and the handler never runs. Pinned by
+ *    `tests/unit/proxy.test.ts` (#2526), next to the equivalent
+ *    `/api/tenant/visitors/track` pin from #2415.
+ * 2. **Nothing builds these URLs.** The only two `db.insert(emailOpens)` /
+ *    `db.insert(emailClicks)` statements in the tree were in this file, and no
+ *    generator, template, doc, Postman step or script anywhere produced a
+ *    `/api/tenant/email/track?…` link. Retiring it therefore removes a write
+ *    surface, not a feature.
+ * 3. **Even when reached, it recorded nothing.** The handler never called
+ *    `requireAuth` or `withApiRoute`, so it ran on the bare pool with no
+ *    `app.current_tenant`. Measured on a table built from the verbatim
+ *    `tenant_isolation` expression read out of `pg_policy.polqual` for the live
+ *    `email_opens`: with no GUC the insert is refused — `42501 new row violates
+ *    row-level security policy` — and a caller who did get here was handed a
+ *    GIF and a 302 out of a write that had already failed. Give the same table
+ *    a real tenant context and the shape #2526 describes appears: the policy
+ *    checks `tenant_id` and nothing else, so a row landed carrying **another
+ *    tenant's `contact_id`** (foreign-key valid, tenant-blind) plus a
+ *    `campaign_id` and `email_id` that exist nowhere —
+ *    `drizzle/schema/email-tracking.ts:16-17` declares those two with no
+ *    reference at all.
+ *
+ * So the endpoint could not be used by its intended caller, was not used by
+ * any caller in the tree, and did not record anything for the callers who did
+ * reach it. That is a surface to delete, not a bug to fix.
+ *
+ * 410 (Gone) rather than deleting the file: it answers a stale link with a
+ * terminal status instead of Next's 404 page, and it points a caller at the
+ * endpoint that does record the event. **No response here ever carries a
+ * `Location`** — a retired redirector must not become a live one, and the
+ * `?url=` a caller supplies is never echoed back. The write path is gone, so
+ * `?type=click&url=javascript:…` and a plain `https://example.com/deal/1` get
+ * the same 410 as the pixel, with no database call in front of it — both
+ * measured in `tests/unit/email-track-retirement-2526.test.ts`.
  */
-
-// 1x1 transparent GIF pixel (base64 decoded)
-const TRACKING_PIXEL = Buffer.from(
-  'R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7',
-  'base64'
-);
-
-export async function GET(req: NextRequest) {
-  try {
-    // Rate limit public endpoint
-    const rateLimited = checkPublicRateLimit(req, { max: 100, windowMs: 60_000, prefix: 'email-track' });
-    if (rateLimited) return rateLimited;
-
-    const { searchParams } = new URL(req.url);
-    const type = searchParams.get('type'); // 'open' or 'click'
-    const tenantId = searchParams.get('tid');
-    const contactId = searchParams.get('cid');
-    const campaignId = searchParams.get('cpid');
-    const emailId = searchParams.get('eid');
-
-    if (!tenantId) {
-      // Return pixel anyway to avoid broken images
-      return new NextResponse(TRACKING_PIXEL, {
-        status: 200,
-        headers: { 'Content-Type': 'image/gif', 'Cache-Control': 'no-store, no-cache' },
-      });
-    }
-
-    // Validate that the tenant exists before writing tracking records
-    const tenantRows = await db
-      .select({ id: tenants.id })
-      .from(tenants)
-      .where(eq(tenants.id, tenantId));
-
-    if (tenantRows.length === 0) {
-      // Return pixel anyway to avoid broken images but don't record data
-      return new NextResponse(TRACKING_PIXEL, {
-        status: 200,
-        headers: { 'Content-Type': 'image/gif', 'Cache-Control': 'no-store, no-cache' },
-      });
-    }
-
-    if (type === 'click') {
-      const linkUrl = searchParams.get('url');
-      if (!linkUrl) {
-        return NextResponse.json({ error: 'url parameter required' }, { status: 400 });
-      }
-
-      // #2267: validate at WRITE time with the shared guard. Only the validated
-      // destination is ever persisted to `emailClicks.linkUrl` or handed to the
-      // browser, so a hostile `?url=` can neither become a stored redirect nor
-      // a live 302. Unsafe targets get the same plain 4xx this route already
-      // used for malformed ones — never a redirect to the attacker's URL.
-      const destination = safeRedirectTarget(linkUrl);
-      if (destination === null) {
-        console.warn('[email-track] click refused unsafe redirect target');
-        return NextResponse.json({ error: 'Invalid redirect target' }, { status: 400 });
-      }
-
-      // Log click — best effort. A failing write (RLS refusal, DB blip) must
-      // not wedge the redirect: catch it, report through the repo logger, and
-      // still send the reader to the validated destination below.
-      try {
-        await db.insert(emailClicks).values({
-          tenantId,
-          contactId: contactId || null,
-          campaignId: campaignId || null,
-          emailId: emailId || null,
-          linkUrl: destination,
-          ipAddress: req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || null,
-        });
-      } catch (err) {
-        void logError({ error: err, context: 'tenant/email/track click-log', level: 'warning' });
-      }
-
-      // 302 redirect to destination — `destination` is the exact string
-      // `safeRedirectTarget()` approved (absolute http(s), public host).
-      return NextResponse.redirect(destination, 302);
-    }
-
-    // Default: tracking pixel (open tracking)
-    const ipAddress = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || null;
-    const userAgent = req.headers.get('user-agent') || null;
-
-    await db.insert(emailOpens).values({
-      tenantId,
-      contactId: contactId || null,
-      campaignId: campaignId || null,
-      emailId: emailId || null,
-      ipAddress,
-      userAgent,
-    });
-
-    return new NextResponse(TRACKING_PIXEL, {
-      status: 200,
-      headers: {
-        'Content-Type': 'image/gif',
-        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
-        'Pragma': 'no-cache',
-        'Expires': '0',
+export async function GET(_request: NextRequest) {
+  return NextResponse.json(
+    {
+      error: 'This email-tracking endpoint was retired (#2526).',
+      use: {
+        open: '/api/track/open?t=<per-message tracking id>',
+        click: '/api/track/click?t=<per-message tracking id>&l=<registered link id>',
       },
-    });
-  } catch (err) {
-    // Even on error, return the pixel to avoid broken images
-    void logError({ error: err, context: 'tenant/email/track', level: 'warning' });
-    return new NextResponse(TRACKING_PIXEL, {
-      status: 200,
-      headers: { 'Content-Type': 'image/gif', 'Cache-Control': 'no-store' },
-    });
-  }
+    },
+    {
+      status: 410,
+      headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate, private' },
+    },
+  );
 }
