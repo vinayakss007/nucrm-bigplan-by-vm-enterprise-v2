@@ -12,12 +12,23 @@ import { cn, formatDate } from '@/lib/utils';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import toast from 'react-hot-toast';
 
+// Keys are the values chk_announcements_type accepts; anything else 500s on
+// INSERT, so the select below offers exactly these four.
 const TYPE_CFG: Record<string,{badge:string;border:string}> = {
-  info:        { badge:'bg-blue-500/15 text-blue-400',    border:'border-blue-500/20' },
-  warning:     { badge:'bg-amber-500/15 text-amber-400',  border:'border-amber-500/20' },
-  maintenance: { badge:'bg-orange-500/15 text-orange-400',border:'border-orange-500/20' },
-  critical:    { badge:'bg-red-500/15 text-red-400',      border:'border-red-500/20' },
+  info:    { badge:'bg-blue-500/15 text-blue-400',    border:'border-blue-500/20' },
+  warning: { badge:'bg-amber-500/15 text-amber-400',  border:'border-amber-500/20' },
+  update:  { badge:'bg-violet-500/15 text-violet-400',border:'border-violet-500/20' },
+  feature: { badge:'bg-emerald-500/15 text-emerald-400',border:'border-emerald-500/20' },
 };
+
+// chk_announcements_target accepts exactly these five audiences.
+const TARGET_LABELS: [string, string][] = [
+  ['all', 'Everyone'],
+  ['plans', 'Specific plans'],
+  ['tenants', 'Specific tenants'],
+  ['users', 'Specific users'],
+  ['super_admins', 'Super admins only'],
+];
 
 interface Announcement {
   id: string;
@@ -111,13 +122,13 @@ export default function AnnouncementsPage() {
             <div>
               <label className="block text-xs font-medium text-white/50 mb-1">Type</label>
               <select value={form.type} onChange={e=>setForm(f=>({...f,type:e.target.value}))} className={inp}>
-                {['info','warning','maintenance','critical'].map(t=><option key={t} value={t} className="bg-slate-900 capitalize">{t}</option>)}
+                {Object.keys(TYPE_CFG).map(t=><option key={t} value={t} className="bg-slate-900 capitalize">{t}</option>)}
               </select>
             </div>
             <div>
               <label className="block text-xs font-medium text-white/50 mb-1">Target</label>
               <select value={form.target} onChange={e=>setForm(f=>({...f,target:e.target.value}))} className={inp}>
-                {['all','admins','trialing','paid'].map(t=><option key={t} value={t} className="bg-slate-900">{t}</option>)}
+                {TARGET_LABELS.map(([t,label])=><option key={t} value={t} className="bg-slate-900">{label}</option>)}
               </select>
             </div>
             <div>

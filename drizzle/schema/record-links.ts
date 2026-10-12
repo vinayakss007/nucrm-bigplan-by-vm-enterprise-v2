@@ -95,6 +95,8 @@ export const recordLinks = pgTable('record_links', {
 
   ...utils.audit(),
 }, (table) => ({
+    deletedByFk2261Idx: index("record_links_deleted_by_fk_idx").on(table.deletedBy),
+    updatedByFk2261Idx: index("record_links_updated_by_fk_idx").on(table.updatedBy),
   // Look-ups always start from one end and ask for everything attached to it.
   fromIdx: index('idx_record_links_from').on(table.tenantId, table.fromType, table.fromId),
   toIdx: index('idx_record_links_to').on(table.tenantId, table.toType, table.toId),
@@ -121,7 +123,9 @@ export const recordLinks = pgTable('record_links', {
     'record_links_not_self',
     sql`NOT (from_type = to_type AND from_id = to_id)`
   ),
-}));
+
+                                                                              
+  drz2255_idx_record_links_created_by: index('idx_record_links_created_by').on(table.createdBy),}));
 
 export type RecordLink = typeof recordLinks.$inferSelect;
 export type NewRecordLink = typeof recordLinks.$inferInsert;

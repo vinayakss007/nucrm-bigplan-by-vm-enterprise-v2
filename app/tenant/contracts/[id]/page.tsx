@@ -13,6 +13,7 @@ import { ArrowLeft, Edit2, Trash2, Save, X, Calendar, DollarSign, FileText, User
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
+import { CONTRACT_TYPES, CONTRACT_TYPE_LABELS } from '@/lib/api/schemas/billing';
 
 interface Contract {
   id: string;
@@ -209,11 +210,7 @@ export default function ContractDetailPage() {
               <label className="block text-sm font-medium mb-1">Type</label>
               <select value={form.contractType || ''} onChange={(e) => setForm({ ...form, contractType: e.target.value })}
                 className="w-full px-3 py-2 border border-border rounded-lg bg-card text-sm">
-                <option value="service">Service</option>
-                <option value="sales">Sales</option>
-                <option value="nda">NDA</option>
-                <option value="partnership">Partnership</option>
-                <option value="other">Other</option>
+                {CONTRACT_TYPES.map(t => <option key={t} value={t}>{CONTRACT_TYPE_LABELS[t]}</option>)}
               </select>
             </div>
             <div>

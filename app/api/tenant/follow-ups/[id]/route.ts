@@ -18,8 +18,7 @@ import { withApiRoute } from '@/lib/api/with-api-route';
 
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const PATCH = withApiRoute(async (req: NextRequest, { params }: any) => {
+export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
   const limited = await rateLimitMutating(req, 'followUps', 'patch');
   if (limited) return limited;
@@ -39,14 +38,14 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: any) => {
 
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const updateData: any = {
+    const updateData: Partial<typeof followUps.$inferInsert> = {
       updatedAt: new Date(),
     };
 
     if (v.title !== undefined) updateData.title = v.title;
     if (v.description !== undefined) updateData.description = v.description;
-    if (v.due_date !== undefined) updateData.dueDate = v.due_date ? new Date(v.due_date) : null;
+    // due_date is NOT NULL — a null clear would violate the column constraint
+    if (v.due_date) updateData.dueDate = new Date(v.due_date);
     if (v.status !== undefined) updateData.status = v.status;
     if (v.lead_id !== undefined) updateData.leadId = v.lead_id;
     if (v.contact_id !== undefined) updateData.contactId = v.contact_id;
@@ -81,8 +80,7 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: any) => {
 
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const DELETE = withApiRoute(async (req: NextRequest, { params }: any) => {
+export const DELETE = withApiRoute(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
   const limited = await rateLimitMutating(req, 'followUps', 'delete');
   if (limited) return limited;

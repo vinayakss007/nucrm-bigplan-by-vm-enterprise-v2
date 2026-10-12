@@ -11,11 +11,12 @@ import { sessions } from '@/drizzle/schema';
 import { eq, and, gt, ne, desc } from 'drizzle-orm';
 import { hashToken } from '@/lib/auth/session';
 import { z } from 'zod';
+import { uuidIdSchema } from '@/lib/validation/uuid';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 const deleteSessionSchema = z.object({
-  sessionId: z.string().uuid().optional(),
+  sessionId: uuidIdSchema.optional(),
   revokeAll: z.boolean().optional(),
 });
 

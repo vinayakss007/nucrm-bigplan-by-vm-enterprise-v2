@@ -158,11 +158,27 @@ groups:
           summary: "Host memory > 90%"
           description: "Server memory usage has exceeded 90% for 5 minutes."
 
+      # PP-033: this rule existed with `> 90` and stayed silent while the root
+      # filesystem filled to 84% (79 GB free). 90% was never a usable warning
+      # level here: a single `docker compose build app` writes ~10 GB of BuildKit
+      # cache, so the gap between "warn" and "the build fails mid-layer" was
+      # smaller than one build. Two tiers now — react at 80, page at 90.
+      # NOTE: `docker system df` under-reports this cache on the containerd
+      # snapshotter (it said 0B reclaimable while `docker buildx du` said 114.9GB).
       - alert: HostDiskFull
-        expr: (1 - node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) * 100 > 90
-        for: 5m
+        expr: (1 - node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) * 100 > 80
+        for: 15m
         labels:
           severity: warning
         annotations:
+          summary: "Disk > 80% full"
+          description: "Root filesystem usage has exceeded 80% for 15 minutes. Measure with `docker buildx du` — BuildKit cache in /var/lib/containerd is the usual cause on this host, and `docker system df` reports it as 0B reclaimable. The host timer nucrm-builder-prune.timer caps it at 40GB daily."
+
+      - alert: HostDiskCritical
+        expr: (1 - node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) * 100 > 90
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
           summary: "Disk > 90% full"
-          description: "Root filesystem usage has exceeded 90%."
+          description: "Root filesystem usage has exceeded 90%. Postgres, Prometheus TSDB and deploys all fail on a full root disk; prune the builder cache before it gets here."

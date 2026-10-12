@@ -9,11 +9,12 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { requireModule } from '@/lib/modules/gate';
 import { db } from '@/drizzle/db';
 import { chatSessions } from '@/drizzle/schema/chat';
-import { eq, and, desc, ne, sql } from 'drizzle-orm';
+import { eq, and, desc, ne, sql, type SQL } from 'drizzle-orm';
 import { createChatSession } from '@/lib/chat';
 import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { parseLimitOffset } from '@/lib/api/query-params';
 
 const createSessionSchema = z.object({
   visitorId: z.string().min(1),
@@ -32,13 +33,11 @@ export const GET = withApiRoute(async (req: NextRequest) => {
 
     const { searchParams } = new URL(req.url);
     const status = searchParams.get('status');
-    const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') ?? '50')));
-    const offset = Math.max(0, parseInt(searchParams.get('offset') ?? '0'));
+    const { limit, offset } = parseLimitOffset(searchParams, { defaultLimit: 50, maxLimit: 100 });
 
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const filters: any[] = [eq(chatSessions.tenantId, ctx.tenantId)];
+    const filters: SQL[] = [eq(chatSessions.tenantId, ctx.tenantId)];
     if (status) {
       filters.push(eq(chatSessions.status, status));
     } else {

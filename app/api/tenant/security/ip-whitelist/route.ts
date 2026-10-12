@@ -10,11 +10,13 @@ import { ipWhitelistSchema } from '@/lib/api/schemas';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { platformSettings } from '@/drizzle/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { concurrencyGuard } from '@/lib/api/concurrency';
 import { logError } from '@/lib/errors-server';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { decodeSettingValue } from '@/lib/api/setting-value';
+import { invalidateIpWhitelistCache } from '@/lib/ip-whitelist';
 
 const IP_WHITELIST_KEY = 'ip_whitelist';
 
@@ -35,7 +37,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       ))
       .limit(1);
 
-    const ips = setting?.value ? JSON.parse(String(setting.value)) : [];
+    const ips = decodeSettingValue<string[]>(setting?.value, [], 'array');
 
     return NextResponse.json({ data: { ips, enabled: ips.length > 0 } });
  
@@ -87,8 +89,14 @@ export const PUT = withApiRoute(async (request: NextRequest) => {
       })
       .onConflictDoUpdate({
         target: [platformSettings.tenantId, platformSettings.key],
+        // partial index: the predicate must be restated for conflict inference
+        targetWhere: sql`${platformSettings.tenantId} is not null`,
         set: { value, updatedAt: new Date() },
       });
+
+    // #76: checkLoginIpAllowed caches this row briefly; a save must be visible
+    // to the very next sign-in, not after the TTL.
+    invalidateIpWhitelistCache(ctx.tenantId);
 
     return NextResponse.json({ ok: true, ips: ipArray, enabled: enabled && ipArray.length > 0 });
  
@@ -115,6 +123,8 @@ export const DELETE = withApiRoute(async (request: NextRequest) => {
         eq(platformSettings.tenantId, ctx.tenantId),
         eq(platformSettings.key, IP_WHITELIST_KEY)
       ));
+
+    invalidateIpWhitelistCache(ctx.tenantId);
 
     return NextResponse.json({ ok: true });
  

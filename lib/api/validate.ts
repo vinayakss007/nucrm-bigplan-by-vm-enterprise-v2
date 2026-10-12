@@ -6,8 +6,9 @@
 import { NextResponse } from 'next/server';
 import { logError } from '@/lib/errors-server';
 import { InvalidJsonBodyError } from '@/lib/errors-shared';
-import { ZodError, ZodSchema, z } from 'zod';
+import { ZodError, ZodSchema } from 'zod';
 import { logger } from '@/lib/logger';
+import { uuidIdSchemaWith } from '@/lib/validation/uuid';
 
 /**
  * Permissive UUID validator that matches PostgreSQL's uuid type.
@@ -15,12 +16,11 @@ import { logger } from '@/lib/logger';
  * PostgreSQL accepts any 32 hex chars with dashes (no version/variant check),
  * while Zod's built-in `.uuid()` enforces RFC 4122 (version 1-5, variant 89ab).
  * Seed data and some legacy records use non-RFC UUIDs (e.g. version 0), so we
- * need a validator that accepts them.
+ * need a validator that accepts them. #2286: the shape rule now lives in one
+ * place (`@/lib/validation/uuid`); this is a thin alias kept for existing
+ * importers, preserving its historical error message.
  */
-export const uuidField = z.string().regex(
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
-  'must be a valid UUID',
-);
+export const uuidField = uuidIdSchemaWith('must be a valid UUID');
 
 /**
  * Validate request body against a Zod schema.
@@ -90,8 +90,7 @@ export function withValidation<T>(
     request: Request,
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ctx: any,
+    ctx: Record<string, unknown>,
     body: T
   ) => Promise<NextResponse> | NextResponse
 ) {
@@ -132,6 +131,11 @@ export { InvalidJsonBodyError } from '@/lib/errors-shared';
  * untagged `SyntaxError`, which every route's catch block turned into a 500 —
  * telling the caller the server broke when in fact their request was malformed.
  */
+// The one deliberate `any` in the source tree. `request.json()` is `any` at the
+// DOM boundary and 158 route files unpack the body without narrowing first, so
+// tightening this to `unknown` is a 906-error change in its own right (#1341
+// tracks it). The ratchet in scripts/check-any-suppressions.mjs counts this
+// line so it cannot grow while that migration is open.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function readJsonBody(request: Request): Promise<any> {
   try {
@@ -148,8 +152,7 @@ export async function readJsonBody(request: Request): Promise<any> {
  * `apiError()` — it keeps the happy path free of response plumbing. This variant
  * suits routes that want to branch on the failure inline.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function safeJson(request: Request): Promise<{ data: any } | NextResponse> {
+export async function safeJson(request: Request): Promise<{ data: unknown } | NextResponse> {
   try {
     return { data: await readJsonBody(request) };
   } catch (e) {

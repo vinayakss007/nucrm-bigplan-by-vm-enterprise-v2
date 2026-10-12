@@ -5,13 +5,16 @@
  */
 "use client"
 
-import { useState, useCallback, useMemo, useEffect } from 'react'
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useOpenCreateParam } from '@/hooks/use-open-create-param'
 import { Plus, MoreHorizontal, Edit, Trash2, DollarSign, Tag, UserPlus, ArrowRightLeft, Trophy, Layers, Archive, RotateCcw } from 'lucide-react'
 import { cn, formatCurrency, formatDate, toSnakeCase } from '@/lib/utils'
+import { fetchJsonSafe } from '@/lib/fetch-json'
+import InlineErrorState from '@/components/shared/inline-error-state'
 import { clientLogWarn, clientLogError } from '@/lib/client-logger'
-import { DataTable, ColumnDef, createSortableHeader } from '@/components/ui/data-table'
+import { DataTable, ColumnDef, createSortableHeader, type BulkAction } from '@/components/ui/data-table'
+import { useSubmitLock } from '@/hooks/use-submit-lock'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -89,26 +92,26 @@ export default function DealsDataTable({ initialDeals, contacts: initialContacts
     close_date: '',
     description: '',
   })
-  const [saving, setSaving] = useState(false)
   const [selectAllMatching, setSelectAllMatching] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const loadAbort = useRef<AbortController | null>(null); const filterDebounce = useRef<ReturnType<typeof setTimeout>>(undefined)
 
+  // #2231: explicit error state keeps the previous rows; aborted superseded requests never write state.
   const loadData = useCallback(async (page = 0, filterOverride?: string, pageSizeOverride?: number) => {
     setLoading(true)
     const size = pageSizeOverride ?? pagination.pageSize
-    const params = new URLSearchParams({
-      limit: String(size),
-      offset: String(page * size),
-    })
+    const params = new URLSearchParams({ limit: String(size), offset: String(page * size) })
     const q = filterOverride !== undefined ? filterOverride : globalFilter
     if (q) params.set('q', q)
-    try {
-      const res = await fetch(`/api/tenant/deals?${params}`)
-      const data = await res.json()
-      setDeals((data.data ?? []).map((d: Record<string, unknown>) => toSnakeCase(d)))
-      setTotal(data.total ?? 0)
-    } catch (error) {
-      clientLogError('deals:load', error)
-    }
+    loadAbort.current?.abort()
+    const controller = new AbortController(); loadAbort.current = controller
+    const result = await fetchJsonSafe<{ data?: Deal[]; total?: number }>(`/api/tenant/deals?${params}`, { signal: controller.signal })
+    if (result.status === 'aborted') return
+    if (result.status === 'ok') {
+      setDeals((result.data.data ?? []).map((d) => toSnakeCase(d)))
+      setTotal(typeof result.data.total === 'number' ? result.data.total : 0)
+      setLoadError(null)
+    } else { setLoadError(result.message) }
     setSelectAllMatching(false)
     setLoading(false)
   }, [pagination.pageSize, globalFilter])
@@ -127,31 +130,27 @@ export default function DealsDataTable({ initialDeals, contacts: initialContacts
 
   const handleGlobalFilterChange = useCallback((filter: string) => {
     setGlobalFilter(filter)
-    loadData(0, filter)
+    // #2231: debounce (was one fetch per keystroke); with the abort in loadData, stale responses can't win.
+    clearTimeout(filterDebounce.current)
+    filterDebounce.current = setTimeout(() => loadData(0, filter), 350)
   }, [loadData])
 
-  // Load pipelines/stages once for the bulk-stage selector
+  // Load pipelines/stages once for the bulk-stage selector (#2231: failures log instead of faking zero stages).
   useEffect(() => {
-    let cancelled = false
-    fetch('/api/tenant/pipelines')
-      .then(r => r.ok ? r.json() : { data: [] })
-      .then((d: { data?: { id: string; name: string; stages: { id: string; name: string }[] }[] }) => {
-        if (cancelled) return
+    const controller = new AbortController()
+    fetchJsonSafe<{ data?: { id: string; name: string; stages?: { id: string; name: string }[] }[] }>('/api/tenant/pipelines', { signal: controller.signal })
+      .then(d => {
+        if (d.status !== 'ok') { if (d.status === 'error') clientLogError('deals:stages-fetch', new Error(d.message)); return }
         const flat: { id: string; name: string; pipeline: string }[] = []
-        for (const p of d.data ?? []) {
-          for (const s of p.stages ?? []) {
-            flat.push({ id: s.id, name: s.name, pipeline: p.name })
-          }
-        }
+        for (const p of d.data.data ?? []) for (const s of p.stages ?? []) flat.push({ id: s.id, name: s.name, pipeline: p.name })
         setStages(flat)
       })
-      .catch((e) => clientLogError('deals:stages-fetch', e))
-    return () => { cancelled = true }
+    return () => { controller.abort() }
   }, [])
 
-  const addDeal = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setSaving(true)
+  // #2230 — in-flight lock + error toast; a throwing fetch used to leave
+  // `saving` stuck true and wedge the dialog at "Creating…".
+  const { isPending: saving, run: submitDeal } = useSubmitLock(async () => {
     const res = await fetch('/api/tenant/deals', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -163,19 +162,15 @@ export default function DealsDataTable({ initialDeals, contacts: initialContacts
         assigned_to: form.assigned_to || null,
       }),
     })
-    const data = await res.json()
-    if (!res.ok) {
-      toast.error(data.error)
-      setSaving(false)
-      return
-    }
+    const data = await res.json().catch(() => ({}) as { error?: string })
+    if (!res.ok) throw new Error(data.error || 'Failed to create deal')
     track('feature_used', { feature: 'deal.create' })
     toast.success('Deal created')
     setShowAdd(false)
     setForm({ title: '', amount: '', stage_name: 'lead', contact_id: '', company_id: '', assigned_to: '', close_date: '', description: '' })
     loadData(pagination.pageIndex)
-    setSaving(false)
-  }
+  })
+  const addDeal = (e: React.FormEvent) => { e.preventDefault(); void submitDeal() }
 
   const columns: ColumnDef<Deal>[] = useMemo(() => [
     {
@@ -278,7 +273,6 @@ export default function DealsDataTable({ initialDeals, contacts: initialContacts
   ], [deleteEntity, router])
 
   // ── Bulk actions ──────────────────────────────────────────
-  const [_bulkBusy, setBulkBusy] = useState(false)
   const [customFields, setCustomFields] = useState<{ fieldKey: string; fieldLabel: string }[]>([])
   const [segments, setSegments] = useState<{ id: string; name: string }[]>([])
 
@@ -299,34 +293,24 @@ export default function DealsDataTable({ initialDeals, contacts: initialContacts
       .catch((err) => { if (err?.name !== 'AbortError') clientLogWarn('deals-data-table', 'Failed to load segments', err); });
     return () => abort.abort();
   }, [])
-  const callBulk = useCallback(async (action: string, ids: string[], payload: Record<string, unknown> = {}, isSelectAll = false) => {
-    setBulkBusy(true)
-    try {
-      const body = isSelectAll
-        ? (() => {
-            const filters: Record<string, string> = {};
-            if (globalFilter) filters.q = globalFilter;
-            return { action, selectAll: true, filters, ...(Object.keys(payload).length ? { payload } : {}) };
-          })()
-        : { action, deal_ids: ids, ...(Object.keys(payload).length ? { payload } : {}) };
-      const res = await fetch('/api/tenant/deals/bulk', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      })
-      const data = await res.json()
-      if (res.ok) {
-        toast.success(`${data.action}: ${data.affected} deal(s)`)
-        loadData(pagination.pageIndex)
-      } else {
-        toast.error(data.error || `Failed to ${action} deals`)
-      }
-    } finally {
-      setBulkBusy(false)
-    }
-  }, [loadData, pagination.pageIndex, globalFilter])
+  // #2230 — shared lock: double-clicking a bulk button used to POST twice,
+  // and a network/HTML-502 error escaped silently.
+  const { isPending: bulkBusy, run: runBulk } = useSubmitLock(async (action: string, ids: string[], payload: Record<string, unknown> = {}, isSelectAll = false) => {
+    const body = isSelectAll
+      ? { action, selectAll: true, filters: globalFilter ? { q: globalFilter } : {}, ...(Object.keys(payload).length ? { payload } : {}) }
+      : { action, deal_ids: ids, ...(Object.keys(payload).length ? { payload } : {}) };
+    const res = await fetch('/api/tenant/deals/bulk', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    const data = await res.json().catch(() => ({}) as { affected?: number; error?: string })
+    if (!res.ok) throw new Error(data.error || `Failed to ${action} deals`)
+    toast.success(`${action}: ${data.affected} deal(s)`)
+    loadData(pagination.pageIndex)
+  })
 
-  const bulkActions = useMemo(() => {
+  const bulkActions = useMemo<BulkAction[]>(() => {
     return [
     {
       id: 'assign',
@@ -336,7 +320,7 @@ export default function DealsDataTable({ initialDeals, contacts: initialContacts
       selectOptions: teamMembers.map((m) => ({ value: m.user_id, label: m.full_name })),
       onClick: async (ids: string[], input?: string, isSelectAllMatching?: boolean) => {
         if (!input) return toast.error('Pick a teammate')
-        await callBulk('assign', ids, { assigned_to: input }, isSelectAllMatching)
+        await runBulk('assign', ids, { assigned_to: input }, isSelectAllMatching)
       },
     },
     {
@@ -347,7 +331,7 @@ export default function DealsDataTable({ initialDeals, contacts: initialContacts
       selectOptions: teamMembers.map((m) => ({ value: m.user_id, label: m.full_name })),
       onClick: async (ids: string[], input?: string, isSelectAllMatching?: boolean) => {
         if (!input) return toast.error('Pick a teammate')
-        await callBulk('transfer', ids, { assigned_to: input }, isSelectAllMatching)
+        await runBulk('transfer', ids, { assigned_to: input }, isSelectAllMatching)
       },
     },
     {
@@ -361,7 +345,7 @@ export default function DealsDataTable({ initialDeals, contacts: initialContacts
       })),
       onClick: async (ids: string[], input?: string, isSelectAllMatching?: boolean) => {
         if (!input) return toast.error('Pick a stage')
-        await callBulk('stage', ids, { stage_id: input }, isSelectAllMatching)
+        await runBulk('stage', ids, { stage_id: input }, isSelectAllMatching)
       },
     },
     {
@@ -372,7 +356,7 @@ export default function DealsDataTable({ initialDeals, contacts: initialContacts
       inputPlaceholder: 'Tag name',
       onClick: async (ids: string[], input?: string, isSelectAllMatching?: boolean) => {
         if (!input?.trim()) return toast.error('Tag name required')
-        await callBulk('tag', ids, { tag: input.trim() }, isSelectAllMatching)
+        await runBulk('tag', ids, { tag: input.trim() }, isSelectAllMatching)
       },
     },
     {
@@ -388,7 +372,7 @@ export default function DealsDataTable({ initialDeals, contacts: initialContacts
         const reason = (textInput ?? '').trim() || null
         const stage = stages.find(s => s.id === input)
         const outcome = stage && (/lost/i.test(stage.name) ? 'lost' : /won/i.test(stage.name) ? 'won' : undefined)
-        await callBulk('close', ids, { stage_id: input, reason, outcome }, isSelectAllMatching)
+        await runBulk('close', ids, { stage_id: input, reason, outcome }, isSelectAllMatching)
       },
     },
     {
@@ -403,7 +387,7 @@ export default function DealsDataTable({ initialDeals, contacts: initialContacts
         if (!fieldKey) return toast.error('Select a field')
         const value = (textInput ?? '').trim()
         if (!value) return toast.error('Enter a value for the field')
-        await callBulk('update_field', ids, { field_key: fieldKey, field_value: value }, isSelectAllMatching)
+        await runBulk('update_field', ids, { field_key: fieldKey, field_value: value }, isSelectAllMatching)
       },
     },
     {
@@ -413,7 +397,7 @@ export default function DealsDataTable({ initialDeals, contacts: initialContacts
       requiresConfirmation: true,
       confirmationMessage: 'Archive the selected deals? They will be hidden from active views.',
       onClick: async (ids: string[], _input?: string, isSelectAllMatching?: boolean) => {
-        await callBulk('archive', ids, {}, isSelectAllMatching)
+        await runBulk('archive', ids, {}, isSelectAllMatching)
       },
     },
     {
@@ -423,7 +407,7 @@ export default function DealsDataTable({ initialDeals, contacts: initialContacts
       requiresConfirmation: true,
       confirmationMessage: 'Restore the selected deals from archive?',
       onClick: async (ids: string[], _input?: string, isSelectAllMatching?: boolean) => {
-        await callBulk('restore', ids, {}, isSelectAllMatching)
+        await runBulk('restore', ids, {}, isSelectAllMatching)
       },
     },
     {
@@ -433,7 +417,7 @@ export default function DealsDataTable({ initialDeals, contacts: initialContacts
       requiresConfirmation: true,
       confirmationMessage: 'Soft-delete the selected deals? They can be restored from Trash.',
       onClick: async (ids: string[], _input?: string, isSelectAllMatching?: boolean) => {
-        await callBulk('delete', ids, {}, isSelectAllMatching)
+        await runBulk('delete', ids, {}, isSelectAllMatching)
       },
     },
     ...(segments.length > 0 ? [{
@@ -443,11 +427,13 @@ export default function DealsDataTable({ initialDeals, contacts: initialContacts
       selectOptions: segments.map(s => ({ value: s.id, label: s.name })),
       onClick: async (ids: string[], input?: string, isSelectAllMatching?: boolean) => {
         if (!input) return toast.error('Select a segment')
-        await callBulk('add_to_segment', ids, { segment_id: input }, isSelectAllMatching)
+        await runBulk('add_to_segment', ids, { segment_id: input }, isSelectAllMatching)
       },
     }] : []),
-  ];
-  }, [teamMembers, stages, callBulk, customFields, segments])
+  // #2230 — thread the busy flag into every action's `disabled` so bulk buttons
+  // can't be re-clicked mid-POST (data-table.tsx honors only action.disabled).
+  ].map((a: BulkAction) => ({ ...a, disabled: a.disabled || bulkBusy }));
+  }, [teamMembers, stages, runBulk, customFields, segments, bulkBusy])
 
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
 
@@ -458,6 +444,7 @@ export default function DealsDataTable({ initialDeals, contacts: initialContacts
         <div>
           <h1 className="text-lg font-bold">Deals</h1>
           <p className="text-sm text-muted-foreground">{total.toLocaleString()} total</p>
+          {loadError && <InlineErrorState className="mt-1" message={`Failed to load deals — showing previous results. ${loadError}`} onRetry={() => void loadData(pagination.pageIndex)} />}
         </div>
         {permissions.canCreate && (
           <Button onClick={() => setShowAdd(!showAdd)}>

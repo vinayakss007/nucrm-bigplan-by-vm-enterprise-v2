@@ -59,7 +59,19 @@ export async function POST(request: NextRequest, context: RouteContext) {
     }
 
     // Fetch the plugin (no tenant auth needed - webhook URL acts as authentication)
-    const [plugin] = await db.select()
+    const [plugin] = await db
+      .select({
+        // 4 of `custom_plugins`' 19 columns (16 declared in drizzle/schema/plugins.ts
+        // plus the 3 lifecycle() adds): id and status for the disable gate, tenantId
+        // for the scope the event lands in, webhookSecret for the HMAC. authConfig,
+        // customHeaders and baseUrl hold this plugin's own upstream credentials and
+        // have no reader here — and this row is fetched before the signature is
+        // checked, on a route anyone holding the webhook URL can reach.
+        id: customPlugins.id,
+        tenantId: customPlugins.tenantId,
+        status: customPlugins.status,
+        webhookSecret: customPlugins.webhookSecret,
+      })
       .from(customPlugins)
       .where(and(
         eq(customPlugins.id, id),

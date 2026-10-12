@@ -10,9 +10,14 @@ import { eq, sql, and, gte } from 'drizzle-orm';
 import { requireAuth } from '@/lib/auth/middleware';
 import { readJsonBody } from '@/lib/api/validate';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { getFieldIdentity } from '@/lib/forms/field-shape';
 
 interface FormField {
-  key: string;
+  // #2287: fields are persisted either with `key` (legacy/builder) or `id`
+  // (API `createFormSchema`); lib/forms/field-shape resolves the identity.
+  key?: string;
+  id?: string;
+  name?: string;
   label: string;
   type: string;
   options?: string[];
@@ -36,8 +41,14 @@ export function computeFieldAnalytics(
 ): FieldAnalytics[] {
   const total = submissionsData.length;
   return fields.map((field) => {
+    // #2287: submitted data is keyed by the field identity (`key ?? id ??
+    // name`), not by `key` alone — same resolution as the submit validator.
+    const identity = getFieldIdentity(field);
+    if (!identity) {
+      return { key: '', label: field.label, type: field.type, total, filled: 0, completionRate: 0 };
+    }
     const filled = submissionsData.filter((s) => {
-      const val = s[field.key];
+      const val = s[identity];
       if (val === null || val === undefined || val === '') return false;
       if (Array.isArray(val) && val.length === 0) return false;
       return true;
@@ -55,7 +66,7 @@ export function computeFieldAnalytics(
       const counts: Record<string, number> = {};
       field.options.forEach((opt) => { counts[opt] = 0; });
       submissionsData.forEach((s) => {
-        const val = s[field.key];
+        const val = s[identity];
         if (val !== null && val !== undefined && val !== '') {
           const values = Array.isArray(val) ? val : [val];
           values.forEach((v: string) => {
@@ -67,7 +78,7 @@ export function computeFieldAnalytics(
       valueDistribution = Object.entries(counts).map(([value, count]) => ({ value, count }));
     } else if (isNumeric) {
       const nums = submissionsData
-        .map((s) => s[field.key])
+        .map((s) => s[identity])
         .filter((v) => v !== null && v !== undefined && v !== '' && !isNaN(Number(v)))
         .map(Number);
       if (nums.length > 0) {
@@ -79,7 +90,7 @@ export function computeFieldAnalytics(
       }
     }
 
-    return { key: field.key, label: field.label, type: field.type, total, filled, completionRate, valueDistribution, numericStats };
+    return { key: identity, label: field.label, type: field.type, total, filled, completionRate, valueDistribution, numericStats };
   });
 }
 

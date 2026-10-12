@@ -5,9 +5,10 @@
  */
 import { createHash } from 'crypto';
 import { cookies } from 'next/headers';
-import { db } from '@/drizzle/db';
+import { resolveCookieSecure } from '@/lib/auth/cookie-security';
 import { portalClients } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
+import { withPortalLookupContext } from '@/lib/db/portal-lookup-context';
 import { logger } from '@/lib/logger';
 
 export const PORTAL_SESSION_COOKIE = 'nucrm_portal_session';
@@ -47,10 +48,11 @@ export function encodePortalSessionCookie(email: string, tenantId: string, acces
   }), 'utf8').toString('base64url');
 }
 
-export function portalSessionCookieOptions(expiresAt: Date) {
+export function portalSessionCookieOptions(expiresAt: Date, requestHttps = false) {
   return {
     httpOnly: true,
-    secure: process.env['NODE_ENV'] === 'production',
+    // #2275: central Secure resolution (COOKIE_SECURE > prod fail-closed > https).
+    secure: resolveCookieSecure(requestHttps),
     sameSite: 'lax' as const,
     path: '/',
     expires: expiresAt,
@@ -83,22 +85,34 @@ export async function getPortalSession(): Promise<PortalSessionInfo | null> {
     const tokenHash = typeof parsed.tokenHash === 'string' ? parsed.tokenHash : '';
     if (!email || !tenantId || !tokenHash) return null;
 
-    const [client] = await db
-      .select({
-        id: portalClients.id,
-        tenantId: portalClients.tenantId,
-        name: portalClients.name,
-        email: portalClients.email,
-        accessToken: portalClients.accessToken,
-        isActive: portalClients.isActive,
-        expiresAt: portalClients.expiresAt,
-      })
-      .from(portalClients)
-      .where(and(
-        eq(portalClients.email, email),
-        eq(portalClients.tenantId, tenantId)
-      ))
-      .limit(1);
+    // #2446: this is a pre-tenant read — `portal_clients` carries only
+    // `tenant_isolation`, whose USING clause compares tenant_id to
+    // app.current_tenant, and a portal session has no tenant context yet because
+    // establishing one is what this read is for. On the bare pool it matched zero
+    // rows and every cookie-session caller got 401 "Authentication required".
+    // 0122's other arm keys on the (tenant, email) pair this cookie claims, so
+    // the read can return at most this account's row — and the credential check
+    // below is unchanged: the hash of the row's access token still has to match
+    // the hash the cookie carries (#1179), which is what actually authenticates.
+    const client = await withPortalLookupContext({ tenantId, email }, async (tx) => {
+      const [row] = await tx
+        .select({
+          id: portalClients.id,
+          tenantId: portalClients.tenantId,
+          name: portalClients.name,
+          email: portalClients.email,
+          accessToken: portalClients.accessToken,
+          isActive: portalClients.isActive,
+          expiresAt: portalClients.expiresAt,
+        })
+        .from(portalClients)
+        .where(and(
+          eq(portalClients.email, email),
+          eq(portalClients.tenantId, tenantId)
+        ))
+        .limit(1);
+      return row ?? null;
+    });
 
     if (!client) return null;
     if (client.isActive === false) return null;

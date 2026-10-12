@@ -34,23 +34,30 @@ ARG NEXT_PUBLIC_APP_URL="http://localhost:3000"
 ARG NODE_OPTIONS=""
 # Sensitive values passed via BuildKit secret mounts (not in image history)
 # --mount=type=secret requires: DOCKER_BUILDKIT=1 or docker buildx build
+#
+# RELEASE is generated here rather than left to the caller: NEXT_PUBLIC_* values
+# are inlined into the browser bundle at build time, so an empty SENTRY_RELEASE
+# means every frontend error is filed with no release and cannot be attributed to
+# a deploy. Writing the same string to .next/BUILD_ID keeps the server fallback
+# (sentry.server.config.ts reads it) on the exact same release as the client.
 RUN --mount=type=secret,id=jwt_secret \
     --mount=type=secret,id=sentry_auth_token \
+    export RELEASE="${SENTRY_RELEASE:-build-$(date -u +%s)}" && \
     DATABASE_URL=$DATABASE_URL \
     JWT_SECRET=$(cat /run/secrets/jwt_secret 2>/dev/null || echo "build-only-not-runtime") \
     SENTRY_DSN=$SENTRY_DSN \
     NEXT_PUBLIC_SENTRY_DSN=$NEXT_PUBLIC_SENTRY_DSN \
     SENTRY_ENVIRONMENT="$SENTRY_ENVIRONMENT" \
     NEXT_PUBLIC_SENTRY_ENVIRONMENT="$SENTRY_ENVIRONMENT" \
-    SENTRY_RELEASE="$SENTRY_RELEASE" \
-    NEXT_PUBLIC_SENTRY_RELEASE="$SENTRY_RELEASE" \
+    SENTRY_RELEASE="$RELEASE" \
+    NEXT_PUBLIC_SENTRY_RELEASE="$RELEASE" \
     SENTRY_ORG=$SENTRY_ORG \
     SENTRY_PROJECT=$SENTRY_PROJECT \
     SENTRY_AUTH_TOKEN=$(cat /run/secrets/sentry_auth_token 2>/dev/null) \
     NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL \
     NODE_OPTIONS="$NODE_OPTIONS" \
     npm run build && \
-    echo "build-$(date +%s)" > /app/.next/BUILD_ID
+    echo "$RELEASE" > /app/.next/BUILD_ID
 
 # Stage 3: Runner (minimal)
 FROM node:26-alpine AS runner
@@ -61,6 +68,15 @@ ENV NEXT_TELEMETRY_DISABLED=1
 # Create a dedicated non-root user and group
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nextjs
+
+# PostgreSQL client tools. The backup subsystem shells out to them — lib/backups/
+# backup-service.ts spawns pg_dump, and app/api/cron/backup-verify/route.ts restores
+# with pg_restore/psql — and this base image shipped none of them, so every "Create
+# backup" click in Super Admin -> Backups died with `spawn pg_dump ENOENT` behind a
+# bare 500. 18.x matches the preprod/production server (PostgreSQL 18.6); pg_dump
+# refuses a server newer than itself, so the major version has to track it.
+# Installed before the COPY layers below so a source change never re-downloads it.
+RUN apk add --no-cache postgresql18-client
 
 COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/node_modules ./node_modules

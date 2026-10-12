@@ -42,7 +42,7 @@ export default function TenantRolesPage() {
   );
   const rolesQuery = useApiQuery<{ data?: Role[] }>(
     ['superadmin', 'tenant-roles', tenantId],
-    `/api/tenant/roles`,
+    `/api/superadmin/tenants/${tenantId}/roles`,
     { enabled: !!tenantId },
   );
   const loading = tenantQuery.isLoading || rolesQuery.isLoading;
@@ -57,7 +57,7 @@ export default function TenantRolesPage() {
 
   const saveRoleMutation = useMutation({
     mutationFn: async ({ roleId, permissions }: { roleId: string; permissions: Record<string, boolean> }) => {
-      const res = await fetch(`/api/tenant/roles/${roleId}`, {
+      const res = await fetch(`/api/superadmin/tenants/${tenantId}/roles/${roleId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ permissions }),
@@ -71,11 +71,19 @@ export default function TenantRolesPage() {
   });
 
   const createRoleMutation = useMutation({
-    mutationFn: async ({ name, description }: { name: string; description: string }) => {
-      const res = await fetch('/api/superadmin/tenants/roles', {
+    mutationFn: async ({
+      name,
+      description,
+      permissions,
+    }: {
+      name: string;
+      description: string;
+      permissions: Record<string, boolean>;
+    }) => {
+      const res = await fetch(`/api/superadmin/tenants/${tenantId}/roles`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tenantId, name, description }),
+        body: JSON.stringify({ name, description, permissions }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Failed to create');
@@ -87,10 +95,8 @@ export default function TenantRolesPage() {
 
   const deleteRoleMutation = useMutation({
     mutationFn: async (roleId: string) => {
-      const res = await fetch(`/api/superadmin/tenants/roles/${roleId}`, {
+      const res = await fetch(`/api/superadmin/tenants/${tenantId}/roles/${roleId}`, {
         method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tenantId }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Failed to delete');
@@ -104,8 +110,8 @@ export default function TenantRolesPage() {
     saveRoleMutation.mutate({ roleId, permissions });
   };
 
-  const createRole = (name: string, description: string) => {
-    createRoleMutation.mutate({ name, description });
+  const createRole = (name: string, description: string, permissions: Record<string, boolean>) => {
+    createRoleMutation.mutate({ name, description, permissions });
   };
 
   const deleteRole = async (roleId: string, roleName: string) => {
@@ -219,7 +225,7 @@ export default function TenantRolesPage() {
             if (editRole) {
               saveRole(editRole.id, roleData.permissions);
             } else {
-              createRole(roleData.name ?? "", roleData.description ?? "");
+              createRole(roleData.name ?? "", roleData.description ?? "", roleData.permissions);
             }
             setShowEditor(false);
           }}

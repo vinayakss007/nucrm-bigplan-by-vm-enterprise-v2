@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 
 describe('auth/csrf', () => {
   it('generateCsrfToken returns a 64-char hex string', async () => {
@@ -21,7 +21,15 @@ describe('auth/csrf', () => {
     expect(cookie).toContain('Path=/');
     expect(cookie).toContain('SameSite=Strict');
     expect(cookie).toContain('Max-Age=2592000');
-    expect(cookie).not.toContain('Secure');
+    // #2275: with no explicit argument the Secure flag is RESOLVED, not
+    // hard-coded. vitest.setup.ts folds .env.local into process.env, so
+    // asserting "no Secure" here only passed on a machine whose env file left
+    // COOKIE_SECURE/NODE_ENV unset — pin both branches instead.
+    vi.stubEnv('COOKIE_SECURE', 'true');
+    expect(setCsrfCookie('test-token')).toContain('Secure');
+    vi.stubEnv('COOKIE_SECURE', 'false');
+    expect(setCsrfCookie('test-token')).not.toContain('Secure');
+    vi.unstubAllEnvs();
   });
 
   it('setCsrfCookie adds Secure flag in production', async () => {
@@ -126,7 +134,13 @@ describe('auth/csrf', () => {
     expect(needsCsrfValidation('POST', '/api/forms/submit')).toBe(false);
     expect(needsCsrfValidation('POST', '/api/leads/public/capture')).toBe(false);
     expect(needsCsrfValidation('POST', '/api/setup/init')).toBe(false);
-    expect(needsCsrfValidation('POST', '/api/tenant/onboarding/step')).toBe(false);
+  });
+
+  // #2220: the pre-auth wizard exemption was removed — /api/tenant/onboarding*
+  // are requireAuth state-changers and must validate.
+  it('needsCsrfValidation returns TRUE for tenant onboarding (#2220)', async () => {
+    const { needsCsrfValidation } = await import('@/lib/auth/csrf');
+    expect(needsCsrfValidation('POST', '/api/tenant/onboarding/step')).toBe(true);
   });
 
   it('needsCsrfValidation returns false for auth pre-auth routes', async () => {

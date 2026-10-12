@@ -129,11 +129,11 @@ function softDeletesOn(table: unknown) {
 beforeEach(() => {
   vi.clearAllMocks();
   h.selectQueue = [];
-  // updatePipelineSchema is createPipelineSchema.partial(), and `.partial()` does
-  // NOT remove `.default()` — so `is_active` always resolves to true and the
-  // handler always takes its `tx.update(pipelines).returning()` branch. The
-  // `findFirst` fallback beside it is therefore unreachable. See the
-  // 'documents the is_active side effect' test below.
+  // The handler always takes its `tx.update(pipelines).returning()` branch:
+  // it used to gate on Object.keys(updateData).length > 1, which was inflated
+  // to always-true by a dead isActive key (pipelines has no such column and
+  // drizzle drops unknown set keys). The #1341 any-cleanup removed the key
+  // and made the update unconditional, preserving that real-DB behavior.
   h.returningQueue = [[{ id: PIPELINE_ID, name: 'Pipeline', isDefault: false }]];
   h.ops = [];
   h.findFirstPipeline = null;
@@ -337,19 +337,19 @@ describe('PATCH stages — reconciliation instead of delete-and-reinsert', () =>
     expect(opsOn(pipelines).filter((o) => o.op === 'update')).toHaveLength(1);
   });
 
-  it('documents the is_active side effect (pre-existing, not fixed here)', async () => {
+  it('stage-only PATCH touches updated_at without the dead isActive key', async () => {
     h.selectQueue = [EXISTING];
     const { PATCH } = await import('@/app/api/tenant/pipelines/[id]/route');
     // Body carries only `stages` — no is_active anywhere.
     await PATCH(req({ stages: [{ id: 'stage-a' }, { id: 'stage-b' }] }), params);
 
     const update = opsOn(pipelines).find((o) => o.op === 'update');
-    // Because updatePipelineSchema keeps createPipelineSchema's
-    // `.default(true)` through `.partial()`, a stage-only PATCH still writes
-    // isActive: true. So editing stages silently re-activates a pipeline that
-    // an admin had deactivated. Captured here rather than changed: it is
-    // pre-existing and orthogonal to the FK fix, and belongs in its own PR.
-    expect(update?.payload).toMatchObject({ isActive: true });
+    // The pipeline row is still updated (updated_at touched) on every PATCH.
+    // The old payload also carried isActive: true — pipelines has no such
+    // column and drizzle drops unknown set keys at SQL-build time, so it was
+    // never written; the #1341 any-cleanup removed that dead key.
+    expect(update?.payload).toBeDefined();
+    expect(update?.payload).not.toHaveProperty('isActive');
   });
 });
 

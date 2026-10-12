@@ -59,7 +59,10 @@ async function validateTarget(
     where: and(
       eq(customFieldDefs.tenantId, tenantId),
       eq(customFieldDefs.entityType, entityType),
-      eq(customFieldDefs.fieldKey, targetKey)
+      eq(customFieldDefs.fieldKey, targetKey),
+      // #2385: a mapping must not target a deleted field definition — the
+      // integration would keep writing to a field the tenant removed.
+      isNull(customFieldDefs.deletedAt)
     ),
   });
 

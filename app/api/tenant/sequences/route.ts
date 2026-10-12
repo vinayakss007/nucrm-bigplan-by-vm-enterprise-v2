@@ -97,8 +97,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
 
       if (steps.length > 0) {
   
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const stepValues = steps.map((step: any, index: number) => ({
+        const stepValues = steps.map((step, index) => ({
           sequenceId: seq.id,
           tenantId: ctx.tenantId,
           stepNumber: index + 1,

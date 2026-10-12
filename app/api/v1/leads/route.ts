@@ -14,16 +14,23 @@ import { db } from '@/drizzle/db';
 import { leads, contacts, companies } from '@/drizzle/schema';
 import { eq, and, sql, desc, count } from 'drizzle-orm';
 import { requireAuth } from '@/lib/auth/require-auth';
+import { requireApiKeyScope } from '@/lib/auth/api-key';
 import { limiters } from '@/lib/rate-limit';
 import { handleError, ValidationError } from '@/lib/errors';
 import { devLogger } from '@/lib/dev-logger';
 import { syncCalculatedFields } from '@/lib/formula/sync';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { parseLimitOffset } from '@/lib/api/query-params';
 
 export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+
+    // #2215: an `ak_` key must actually carry the leads:read scope — before
+    // this, no v1 data route consulted the key's scopes at all.
+    const scopeDenied = requireApiKeyScope(ctx, 'leads:read');
+    if (scopeDenied) return scopeDenied;
 
     const rateCheck = await limiters.contacts.check(`leads:${ctx.tenantId}`);
     if (!rateCheck.allowed) {
@@ -34,8 +41,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     }
 
     const { searchParams } = new URL(request.url);
-    const limit = Math.min(parseInt(searchParams.get('limit') || '50'), 100);
-    const offset = parseInt(searchParams.get('offset') || '0');
+    const { limit, offset } = parseLimitOffset(searchParams, { defaultLimit: 50, maxLimit: 100 });
     const status = searchParams.get('status') || '';
 
     const whereClauses = [
@@ -102,6 +108,10 @@ export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+
+    // #2215: writes through an `ak_` key require the leads:write scope.
+    const scopeDenied = requireApiKeyScope(ctx, 'leads:write');
+    if (scopeDenied) return scopeDenied;
 
     const rateCheck = await limiters.contacts.check(`leads:${ctx.tenantId}`);
     if (!rateCheck.allowed) {

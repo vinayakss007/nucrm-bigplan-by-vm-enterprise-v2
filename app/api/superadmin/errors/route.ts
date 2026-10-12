@@ -13,6 +13,7 @@ import { errorLogs, tenants, users } from '@/drizzle/schema';
 import { eq, and, sql, desc } from 'drizzle-orm';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { logError } from '@/lib/errors-server';
+import { parseLimitOffset } from '@/lib/api/query-params';
 
 export const GET = withApiRoute(async (request: NextRequest) => {
   try {
@@ -23,7 +24,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     const { searchParams } = new URL(request.url);
     const level = searchParams.get('level');
     const resolved = searchParams.get('resolved');
-    const limit = Math.min(200, parseInt(searchParams.get('limit') || '50'));
+    const { limit } = parseLimitOffset(searchParams, { defaultLimit: 50, maxLimit: 200 });
 
     const filters = [];
     if (level) {

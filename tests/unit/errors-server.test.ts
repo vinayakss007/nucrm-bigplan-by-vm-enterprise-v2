@@ -67,6 +67,51 @@ describe('logError (server)', () => {
     expect(db.insert).toHaveBeenCalled();
   });
 
+  // ── #44: the DB reason has to survive into error_logs ─────────────────────
+  // drizzle's pg driver rethrows as QueryFailedError: the SQL text becomes
+  // `message` and the pg error — the only object carrying the SQLSTATE — moves
+  // to `cause`. Before this, an RLS refusal was stored as "Failed query: …" and
+  // the part that named the policy was nowhere in the row.
+  function wrappedDbError(top: string, inner: string, code: string, constraint?: string): Error {
+    const cause = Object.assign(new Error(inner), { code, ...(constraint ? { constraint } : {}) });
+    const err = new Error(top);
+    (err as Error & { cause?: unknown }).cause = cause;
+    return err;
+  }
+
+  it('appends the root SQLSTATE + reason to the stored message', async () => {
+    const { logError } = await import('@/lib/errors-server');
+    await logError({
+      error: wrappedDbError('Failed query: insert into "roles" …', 'new row violates row-level security policy for table "roles"', '42501'),
+      context: 'rls',
+    });
+
+    const row = lastInsertedRow();
+    expect(row.message).toContain('Failed query:');
+    expect(row.message).toContain('caused by 42501: new row violates row-level security policy');
+  });
+
+  it('keeps the cause chain structured, including the constraint that fired', async () => {
+    const { logError } = await import('@/lib/errors-server');
+    await logError({
+      error: wrappedDbError('Failed query: update "invoices" …', 'violates check constraint "invoices_status_check"', '23514', 'invoices_status_check'),
+      context: 'check',
+    });
+
+    expect(lastInsertedRow().context.errorCauses).toEqual([
+      { code: '23514', message: 'violates check constraint "invoices_status_check"', constraint: 'invoices_status_check' },
+    ]);
+  });
+
+  it('leaves a plain error message untouched', async () => {
+    const { logError } = await import('@/lib/errors-server');
+    await logError({ error: new Error('boom'), context: 'plain' });
+
+    const row = lastInsertedRow();
+    expect(row.message).toBe('boom');
+    expect(row.context.errorCauses).toBeUndefined();
+  });
+
   // ── Observability: requestId correlation ──────────────────────────────────
   it('stores the ambient requestId in the DB context for correlation', async () => {
     getCurrentRequestIdMock.mockReturnValue('req-abc-123');

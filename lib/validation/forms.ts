@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { z } from 'zod';
+import { getFieldIdentity } from '@/lib/forms/field-shape';
 
 // ──────────────────────────────────────────────────────────────────────────
 // Shared primitives
@@ -195,7 +196,11 @@ export type CreateUserInput = z.infer<typeof createUserSchema>;
 // string, keyed by field.key.
 // ──────────────────────────────────────────────────────────────────────────
 export interface PublicFormFieldDef {
-  key: string;
+  // #2287: `key` (legacy/builder shape) or `id` (API shape) — resolved by
+  // getFieldIdentity, same rule as the public submit validator.
+  key?: string;
+  id?: string;
+  name?: string;
   label?: string;
   required?: boolean;
 }
@@ -205,14 +210,16 @@ export function buildPublicFormSchema(
 ): z.ZodType<Record<string, unknown>> {
   const shape: Record<string, z.ZodTypeAny> = {};
   for (const field of fields) {
+    const identity = getFieldIdentity(field);
+    if (!identity) continue;
     if (field.required) {
-      const label = field.label || field.key;
-      shape[field.key] = z
+      const label = field.label || identity;
+      shape[identity] = z
         .string({ message: `${label} is required` })
         .trim()
         .min(1, `${label} is required`);
     } else {
-      shape[field.key] = z.string().optional();
+      shape[identity] = z.string().optional();
     }
   }
   return z.object(shape).passthrough() as z.ZodType<Record<string, unknown>>;

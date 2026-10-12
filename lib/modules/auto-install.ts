@@ -17,6 +17,8 @@
  */
 import { db } from '@/drizzle/db';
 import { modules, tenantModules } from '@/drizzle/schema/modules';
+
+type DbTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 import { BUILTIN_MODULES } from '@/lib/modules/registry';
 import { INDUSTRY_TEMPLATES } from '@/lib/modules/industry-templates';
 import { logger } from '@/lib/logger';
@@ -28,6 +30,13 @@ import { logger } from '@/lib/logger';
  */
 const PLAN_DEFAULT_MODULES: Record<string, string[]> = {
   free: ['core-crm', 'automation-basic'],
+  essential: [
+    'core-crm',
+    'automation-basic',
+    'sales-quotes',
+    'email-sync',
+    'forms-builder',
+  ],
   starter: [
     'core-crm',
     'automation-basic',
@@ -52,7 +61,7 @@ const PLAN_DEFAULT_MODULES: Record<string, string[]> = {
     'calculated-fields',
     'analytics-pro',
   ],
-  enterprise: [
+  business: [
     'core-crm',
     'automation-basic',
     'automation-pro',
@@ -64,9 +73,12 @@ const PLAN_DEFAULT_MODULES: Record<string, string[]> = {
     'ai-assistant',
     'forms-builder',
     'calculated-fields',
-    'industry-templates',
     'analytics-pro',
+    'industry-templates',
   ],
+  // Enterprise is the full catalogue, not a hand-list: anything added to
+  // BUILTIN_MODULES is included by default, which is the promise the plan makes.
+  enterprise: BUILTIN_MODULES.map(m => m.id),
 };
 
 /**
@@ -169,8 +181,7 @@ export async function installDefaultModules(
   tenantId: string,
   planId: string,
   industryTemplate?: string,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  tx?: any
+  tx?: DbTransaction
 ): Promise<void> {
   // Bootstrap callers must pass their transaction. This writes `modules`
   // (registry INSERT gated on app.is_super_admin) and `tenant_modules`

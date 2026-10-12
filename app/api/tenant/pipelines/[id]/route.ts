@@ -26,10 +26,7 @@ class StageInUseError extends Error {
   }
 }
 
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const PATCH = withApiRoute(async (req: NextRequest, { params }: any) => {
+export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
   const limited = await rateLimitMutating(req, 'deals', 'patch');
   if (limited) return limited;
@@ -59,23 +56,19 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: any) => {
       // 1. Update pipeline basic info
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const updateData: any = { updatedAt: new Date() };
+      const updateData: Partial<typeof pipelines.$inferInsert> = { updatedAt: new Date() };
       if (v.name !== undefined) updateData.name = v.name;
       if (v.description !== undefined) updateData.description = v.description;
-      if (v.is_active !== undefined) updateData.isActive = v.is_active;
-      
-      let pipelineRow;
-      if (Object.keys(updateData).length > 1) {
-        [pipelineRow] = await tx.update(pipelines)
-          .set(updateData)
-          .where(and(eq(pipelines.id, id), eq(pipelines.tenantId, ctx.tenantId)))
-          .returning();
-      } else {
-        pipelineRow = await tx.query.pipelines.findFirst({
-          where: and(eq(pipelines.id, id), eq(pipelines.tenantId, ctx.tenantId))
-        });
-      }
+      // v.is_active is intentionally not mapped: pipelines has no is_active
+      // column, and drizzle silently drops unknown set keys, so the old
+      // `updateData.isActive = ...` assignment was a runtime no-op.
+      // The old `Object.keys(updateData).length > 1` branch was always taken
+      // because that dead key inflated the count; every PATCH touched
+      // updated_at, so the update runs unconditionally to keep that.
+      const [pipelineRow] = await tx.update(pipelines)
+        .set(updateData)
+        .where(and(eq(pipelines.id, id), eq(pipelines.tenantId, ctx.tenantId)))
+        .returning();
 
       if (!pipelineRow) return null;
 
@@ -167,8 +160,7 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: any) => {
     return NextResponse.json({ data: result });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) { 
+  } catch (err) {
     if (err instanceof StageInUseError) {
       // 409, not 500: the request is understood and the data is intact, the
       // caller just has to move the deals first.
@@ -187,10 +179,7 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: any) => {
   }
 });
 
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const DELETE = withApiRoute(async (req: NextRequest, { params }: any) => {
+export const DELETE = withApiRoute(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
   const limited = await rateLimitMutating(req, 'deals', 'delete');
   if (limited) return limited;

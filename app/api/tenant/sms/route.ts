@@ -9,18 +9,20 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { requireModule } from '@/lib/modules/gate';
 import { db } from '@/drizzle/db';
 import { smsMessages } from '@/drizzle/schema/sms';
-import { eq, and, desc, sql } from 'drizzle-orm';
+import { eq, and, desc, sql , type SQL} from 'drizzle-orm';
 import { sendSMS, sendTemplateSMS } from '@/lib/sms';
 import { z } from 'zod';
+import { uuidIdSchema } from '@/lib/validation/uuid';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { parseLimitOffset } from '@/lib/api/query-params';
 
 const sendSMSSchema = z.object({
   to: z.string().min(1),
   body: z.string().min(1).optional(),
-  templateId: z.string().uuid().optional(),
+  templateId: uuidIdSchema.optional(),
   variables: z.record(z.string(), z.string()).optional(),
-  contactId: z.string().uuid().optional(),
+  contactId: uuidIdSchema.optional(),
 });
 
 export const GET = withApiRoute(async (req: NextRequest) => {
@@ -32,14 +34,12 @@ export const GET = withApiRoute(async (req: NextRequest) => {
     if (moduleGate) return moduleGate;
 
     const { searchParams } = new URL(req.url);
-    const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') ?? '50')));
-    const offset = Math.max(0, parseInt(searchParams.get('offset') ?? '0'));
+    const { limit, offset } = parseLimitOffset(searchParams, { defaultLimit: 50, maxLimit: 100 });
     const status = searchParams.get('status');
 
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const filters: any[] = [eq(smsMessages.tenantId, ctx.tenantId)];
+    const filters: SQL[] = [eq(smsMessages.tenantId, ctx.tenantId)];
     if (status) {
       filters.push(eq(smsMessages.status, status));
     }

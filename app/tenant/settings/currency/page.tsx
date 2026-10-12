@@ -13,7 +13,10 @@ import toast from 'react-hot-toast';
 
 interface CurrencyData {
   currencies: CurrencyInfo[];
+  /** Currency the rates are expressed against — the API always uses USD. */
   baseCurrency: string;
+  /** The tenant's own default, persisted in tenants.settings. */
+  defaultCurrency?: string;
   rates: Record<string, number>;
 }
 
@@ -37,7 +40,7 @@ const DEFAULT_CURRENCIES: CurrencyInfo[] = [
 ];
 
 const CURRENCY_QUERY = ['tenant', 'currency'] as const;
-const EMPTY_CURRENCY: CurrencyData = { currencies: [], baseCurrency: 'USD', rates: {} };
+const EMPTY_CURRENCY: CurrencyData = { currencies: [], baseCurrency: 'USD', defaultCurrency: 'USD', rates: {} };
 
 export default function CurrencySettingsPage() {
   const queryClient = useQueryClient();
@@ -62,8 +65,13 @@ export default function CurrencySettingsPage() {
   );
   const currencyData: CurrencyData = data?.data ?? EMPTY_CURRENCY;
 
+  // The tenant's choice, not the rate basis. baseCurrency is always USD, and
+  // comparing the highlight against it made the picker jump back to USD on
+  // every revalidation, so a saved default looked like it had not taken.
+  const defaultCurrency = currencyData.defaultCurrency ?? 'USD';
+
   const setDefault = async (code: string) => {
-    if (code === currencyData.baseCurrency) return;
+    if (code === defaultCurrency) return;
     setSaving(true);
     try {
       const res = await fetch('/api/tenant/currency', {
@@ -72,9 +80,9 @@ export default function CurrencySettingsPage() {
         body: JSON.stringify({ currency: code }),
       });
       if (res.ok) {
-        // Optimistically update the cached base currency, then revalidate.
+        // Optimistically update the cached default, then revalidate.
         queryClient.setQueryData<{ data?: CurrencyData }>(CURRENCY_QUERY, (prev) =>
-          prev?.data ? { data: { ...prev.data, baseCurrency: code } } : prev,
+          prev?.data ? { data: { ...prev.data, defaultCurrency: code } } : prev,
         );
         queryClient.invalidateQueries({ queryKey: CURRENCY_QUERY });
         toast.success(`Default currency set to ${code}`);
@@ -98,7 +106,7 @@ export default function CurrencySettingsPage() {
         </div>
         <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-violet-50 dark:bg-violet-950/30 border border-violet-200 dark:border-violet-800">
           <DollarSign className="w-4 h-4 text-violet-600" />
-          <span className="text-sm font-semibold text-violet-700 dark:text-violet-300">Base: {currencyData.baseCurrency}</span>
+          <span className="text-sm font-semibold text-violet-700 dark:text-violet-300">Default: {defaultCurrency}</span>
         </div>
       </div>
 
@@ -113,14 +121,14 @@ export default function CurrencySettingsPage() {
           {/* Currency Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {currencies.map(c => {
-              const isBase = c.code === currencyData.baseCurrency;
+              const isDefault = c.code === defaultCurrency;
               const rate = currencyData.rates[c.code];
               return (
                 <div key={c.code} className={cn(
                   'admin-card p-4 relative transition-all',
-                  isBase && 'ring-2 ring-violet-500 dark:ring-violet-400'
+                  isDefault && 'ring-2 ring-violet-500 dark:ring-violet-400'
                 )}>
-                  {isBase && (
+                  {isDefault && (
                     <span className="absolute top-2 right-2 text-xs font-bold px-2 py-0.5 rounded-full bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-400">
                       Default
                     </span>
@@ -134,13 +142,13 @@ export default function CurrencySettingsPage() {
                       <p className="text-xs text-muted-foreground">{c.name}</p>
                     </div>
                   </div>
-                  {rate !== undefined && !isBase && (
+                  {rate !== undefined && !isDefault && (
                     <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1">
                       <ArrowRightLeft className="w-3 h-3" />
                       1 {currencyData.baseCurrency} = {rate} {c.code}
                     </p>
                   )}
-                  {!isBase && (
+                  {!isDefault && (
                     <button
                       onClick={() => setDefault(c.code)}
                       disabled={saving}

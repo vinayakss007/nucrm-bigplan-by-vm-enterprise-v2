@@ -12,7 +12,9 @@ import { confirmThen } from '@/components/ui/confirm-dialog';
 import { cn, formatDate, formatRelativeTime, apiFetch } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
-const SCOPES = ['contacts:read','contacts:write','deals:read','deals:write','tasks:read','tasks:write','companies:read'];
+// #2215: v1 data routes now enforce these scopes, so leads:* had to become
+// grantable — a key without leads:read/write is denied /api/v1/leads* now.
+const SCOPES = ['leads:read','leads:write','contacts:read','contacts:write','deals:read','deals:write','tasks:read','tasks:write','companies:read'];
 
 interface ApiKey {
   id: string;

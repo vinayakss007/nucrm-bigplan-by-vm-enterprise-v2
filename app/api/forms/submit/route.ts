@@ -14,6 +14,9 @@ import { createNotification } from '@/lib/notifications';
 import { fireWebhooks } from '@/lib/webhooks';
 import { syncCalculatedFields } from '@/lib/formula/sync';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
+import { findMissingRequiredFields } from '@/lib/forms/field-shape';
+import { isEntityId } from '@/lib/id';
+import { clientDbErrorResponse } from '@/lib/api/db-client-error';
 
 const formSubmitSchema = z.object({
   form_id: z.string().min(1, 'Form ID is required'),
@@ -21,26 +24,11 @@ const formSubmitSchema = z.object({
   values: z.record(z.string(), z.unknown()).optional().default({}),
 });
 
-/**
- * #1160: given a form's field definitions and the submitted data, return the
- * labels of any required fields that are missing/empty. Pure + exported so it
- * can be unit-tested without the route's DB machinery.
- */
-export function findMissingRequiredFields(
-  fields: unknown,
-  formData: Record<string, unknown>
-): string[] {
-  const defs = Array.isArray(fields)
-    ? (fields as Array<{ key?: string; label?: string; required?: boolean }>)
-    : [];
-  return defs
-    .filter((f) => f && f.required === true && typeof f.key === 'string' && f.key.length > 0)
-    .filter((f) => {
-      const val = formData[f.key as string];
-      return val === undefined || val === null || (typeof val === 'string' && val.trim() === '');
-    })
-    .map((f) => (f.label as string) || (f.key as string));
-}
+// #1160: required-field checker. #2287: the implementation now lives in
+// lib/forms/field-shape so every consumer (submit, embed widget, analytics,
+// public render paths) honors BOTH stored field shapes — legacy `{ key }` and
+// API-created `{ id }`. Re-exported for the existing #1160 unit tests/callers.
+export { findMissingRequiredFields };
 
 /**
  * Escape HTML entities in a string to prevent XSS when values are rendered.
@@ -98,6 +86,17 @@ export async function POST(req: NextRequest) {
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;
     const { form_id, data: d1, values: d2 } = v;
+
+    // #2288: form_id is cast to a Postgres uuid by the query below, and a
+    // shape that cannot name one (e.g. "abc", quoted or path-ish strings)
+    // raised `invalid input syntax for type uuid` and surfaced as a 500 on
+    // this public endpoint. isEntityId accepts classic uuids AND the app's
+    // legacy 5/6-prefixed seeded ids (same permissive shape Postgres
+    // itself accepts — no RFC-9562 version/variant check, see #2286).
+    if (!isEntityId(form_id)) {
+      return NextResponse.json({ error: 'Invalid form id' }, { status: 400 });
+    }
+
     const rawFormData = Object.keys(d1).length > 0 ? d1 : d2;
     const formData = sanitizeFormData(rawFormData as Record<string, unknown>);
 
@@ -145,7 +144,13 @@ export async function POST(req: NextRequest) {
         // existence check and the insert below see a consistent snapshot and
         // concurrent submissions with the same email don't create duplicates.
         const existing = await tx.query.contacts.findFirst({
-          where: and(eq(contacts.tenantId, form.tenantId), eq(contacts.email, email), isNull(contacts.deletedAt))
+          where: and(eq(contacts.tenantId, form.tenantId), eq(contacts.email, email), isNull(contacts.deletedAt)),
+          // #2459: only these two are read below (`existing.id`, `existing.tags`).
+          // Without the projection this ran `SELECT *` over the 55 columns
+          // `drizzle/schema/crm.ts` declares for `contacts` — `ownerNotes` and
+          // `customFields` among them — inside a handler the edge lets through
+          // with no session at all (#2459).
+          columns: { id: true, tags: true },
         });
 
         if (existing) {
@@ -215,24 +220,6 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // Save message as a separate note if present
-      if (contactId && message) {
-        await tx.insert(activities).values({
-          tenantId: form.tenantId,
-          contactId: contactId,
-          eventType: 'note',
-          metadata: {
-            message: message,
-            form_id: form.id,
-            form_name: form.name
-          },
-          entityType: 'contact',
-          entityId: contactId,
-          action: 'form_message',
-          description: `Sent message via form "${form.name}"`
-        }).catch(err => void logError({ error: err, context: 'forms/submit save-note', tenantId: form.tenantId, level: 'warning' }));
-      }
-
       // 4. Record the submission
       await tx.insert(formSubmissions).values({
         tenantId: form.tenantId,
@@ -243,18 +230,57 @@ export async function POST(req: NextRequest) {
       });
 
       // 5. Update submission count
+      // #2222: no .catch() inside the transaction — in Postgres ANY
+      // failed statement aborts the whole tx, so a swallowed error here
+      // either poisoned the statements before it or turned the eventual
+      // COMMIT into a silent ROLLBACK while the caller still answered
+      // ok:true. A counter update failing now fails the submission loudly.
       await tx.update(forms)
         .set({ submissionsCount: sql`${forms.submissionsCount} + 1` })
-        .where(eq(forms.id, form.id))
-        .catch(async (err) => {
-          console.warn('[FormsSubmit] failed to update submissionsCount:', err.message);
-        });
+        .where(eq(forms.id, form.id));
     });
+
+    // Save message as a separate note if present — non-critical, so it runs
+    // AFTER commit on the regular pool (#2222): its failure must not abort
+    // the transaction that carries the lead itself.
+    if (contactId && message) {
+      await db.insert(activities).values({
+        tenantId: form.tenantId,
+        contactId: contactId,
+        eventType: 'note',
+        metadata: {
+          message: message,
+          form_id: form.id,
+          form_name: form.name
+        },
+        entityType: 'contact',
+        entityId: contactId,
+        action: 'form_message',
+        description: `Sent message via form "${form.name}"`
+      }).catch(err => void logError({ error: err, context: 'forms/submit save-note', tenantId: form.tenantId, level: 'warning' }));
+    }
 
 
     // 6. Trigger Calculations & Automations
     if (contactId) {
-      // Recalculate formula fields for the contact
+      // Recalculate formula fields for the contact.
+      //
+      // #2459: WHOLE ROW BY DESIGN — do not "fix" this into a column projection.
+      // `fullContact` is not a candidate for a response (nothing in this handler
+      // serializes it); it is the *input* to a tenant-authored formula engine:
+      // syncCalculatedFields (lib/formula/sync.ts:18) takes `recordData:
+      // Record<string, unknown>` and at :43 evaluates every `custom_field_defs`
+      // row with is_calculated against it, referencing arbitrary contact columns
+      // by name. Narrowing this read does not throw and does not fail typecheck —
+      // `Record<string, unknown>` accepts any object — the engine just reads
+      // `undefined` for whatever was left out, `evaluate` returns null, the field
+      // is skipped, and this contact's stored calculated values quietly go stale.
+      // Silent data corruption, which is worse than the leak this rule exists to
+      // prevent. See #2459 for the inventory of the anonymous-surface reads and
+      // why this one is the only exception.
+      //
+      // row-projection-exempt: #2459 whole-row by design — `fullContact` feeds
+      //   syncCalculatedFields, which reads arbitrary contact columns by name.
       const fullContact = await db.query.contacts.findFirst({
         where: eq(contacts.id, contactId)
       });
@@ -291,6 +317,11 @@ export async function POST(req: NextRequest) {
  
  
   } catch (err) {
+    // #2288: residual DB client errors (22P02 uuid cast, FK, unique, check)
+    // map to 4xx via the shared classifier before this route's literal 500;
+    // only the message is exposed, never the driver/SQL detail.
+    const clientErr = clientDbErrorResponse(err, 'POST');
+    if (clientErr) return clientErr;
     void logError({ error: err, context: 'forms/submit' });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }

@@ -14,6 +14,7 @@ import {
   Edit2, Trash2, Loader2, ArrowUpDown, Database,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { csvRow } from '@/lib/csv';
 import toast from 'react-hot-toast';
 import { ErrorBoundary } from '@/components/ui/error-boundary';
 
@@ -168,15 +169,11 @@ function DataExplorerInner() {
     }
 
     const headers = columns.map(c => c.label);
-    const rows = results.data.map(row =>
-      columns.map(c => {
-        const val = row[c.key];
-        const str = val == null ? '' : String(val);
-        return `"${str.replace(/"/g, '""')}"`;
-      })
-    );
+    // #2340: shared pure escaper — formula-prefixed cells are neutralised and
+    // object/JSONB values survive as JSON instead of "[object Object]".
+    const rows = results.data.map((row) => csvRow(columns.map((c) => row[c.key])));
 
-    const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const csv = [csvRow(headers), ...rows].join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');

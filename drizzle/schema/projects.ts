@@ -25,11 +25,14 @@ export const projects = pgTable('projects', {
   ...utils.audit(),
 }, (table) => {
   return {
+    deletedByFk2261Idx: index("projects_deleted_by_fk_idx").on(table.deletedBy),
+    updatedByFk2261Idx: index("projects_updated_by_fk_idx").on(table.updatedBy),
     tenantIdx: utils.tenantIdx(table),
     statusIdx: index('idx_projects_status').on(table.tenantId, table.status),
     ownerIdx: index('idx_projects_owner').on(table.ownerId),
     activeIdx: utils.activeIdx(table),
-  };
+  
+  drz2255_idx_projects_created_by: index('idx_projects_created_by').on(table.createdBy),};
 });
 
 // ── 2. MILESTONES ─────────────────────────────────────
@@ -66,5 +69,6 @@ export const projectTasks = pgTable('project_tasks', {
   return {
     uniqueProjectTask: uniqueIndex('idx_project_tasks_unique').on(table.projectId, table.taskId),
     tenantIdx: utils.tenantIdx(table),
-  };
+  
+  drz2255_idx_project_tasks_added_by: index('idx_project_tasks_added_by').on(table.addedBy),};
 });

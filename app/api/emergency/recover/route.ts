@@ -5,7 +5,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { logError } from '@/lib/errors-server';
-import { db } from '@/drizzle/db';
+import { withSecurityContext } from '@/lib/db/rls';
 import { users, sessions } from '@/drizzle/schema';
 import { eq, sql } from 'drizzle-orm';
 import bcrypt from 'bcryptjs';
@@ -93,17 +93,17 @@ export async function POST(request: NextRequest) {
   }
 
   // 3. Parse and validate body
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let body: any;
+  let body: Record<string, unknown>;
   try {
     body = await readJsonBody(request);
   } catch {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  const { emergency_key, email, new_password, disable_2fa = false } = body;
+  const { disable_2fa = false } = body;
+  const emergency_key = typeof body.emergency_key === 'string' ? body.emergency_key : '';
+  const email = typeof body.email === 'string' ? body.email : '';
+  const new_password = typeof body.new_password === 'string' ? body.new_password : '';
 
   if (!emergency_key || !email || !new_password) {
     return NextResponse.json(
@@ -135,10 +135,15 @@ export async function POST(request: NextRequest) {
   }
 
   // 6. Find the user (must be super admin)
-  const user = await db.query.users.findFirst({
+  //
+  // `users` is protected by fail-closed RLS, so a bare `db` read returns zero
+  // rows and recovery silently reported success for a user it could never see.
+  // The super-admin context is what makes both this lookup and the write below
+  // actually match the target row.
+  const user = await withSecurityContext(async (tx) => await tx.query.users.findFirst({
     where: eq(sql`lower(${users.email})`, email.toLowerCase().trim()),
     columns: { id: true, email: true, isSuperAdmin: true, fullName: true },
-  });
+  }));
 
   if (!user) {
     void logError({ error: new Error('Emergency recovery user not found'), context: 'emergency/recover user-not-found', level: 'warning', metadata: { ip, email } });
@@ -158,10 +163,7 @@ export async function POST(request: NextRequest) {
   // 7. Reset password
   const hashedPassword = await bcrypt.hash(new_password, 12);
 
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const updateFields: any = {
+  const updateFields: Partial<typeof users.$inferInsert> = {
     passwordHash: hashedPassword,
     updatedAt: new Date(),
   };
@@ -178,10 +180,15 @@ export async function POST(request: NextRequest) {
   // password update, stolen cookies would survive the "revocation" while the
   // caller was told recovery succeeded. One transaction makes reset + revoke
   // all-or-nothing.
-  await db.transaction(async (tx) => {
-    await tx.update(users)
+  await withSecurityContext(async (tx) => {
+    const updated = await tx.update(users)
       .set(updateFields)
-      .where(eq(users.id, user.id));
+      .where(eq(users.id, user.id))
+      .returning({ id: users.id });
+
+    if (updated.length !== 1) {
+      throw new Error('Emergency recovery wrote zero rows — password not changed');
+    }
 
     // CRITICAL: Invalidate all existing sessions so stolen cookies are immediately revoked
     await tx.delete(sessions).where(eq(sessions.userId, user.id));

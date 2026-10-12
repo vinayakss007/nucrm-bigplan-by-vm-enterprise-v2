@@ -80,6 +80,11 @@ async function resolveApiKey(rawKey: string) {
   const keyHash = createHash('sha256').update(rawKey).digest('hex');
 
   const row = await db.query.apiKeys.findFirst({
+    // #2459: `api_keys` is 16 columns (drizzle/schema/core.ts:281) and one is
+    // `key_hash` — the credential this route exists to check, read here on a
+    // proxy.ts public path with no session. These five are what both callers
+    // touch; `key_hash` stays a WHERE predicate. tsc proves five is enough.
+    columns: { id: true, tenantId: true, userId: true, name: true, prefix: true },
     where: and(
       eq(apiKeys.keyHash, keyHash),
       eq(apiKeys.isActive, true),
@@ -389,20 +394,19 @@ async function handleContact(
   const firstName = sanitizeString(d['firstName'] as string, 100);
   if (!firstName) throw new Error('first_name is required');
 
-  // Check duplicate email
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let existing: any = null;
+  // Both reads answer "is there a row, and what is its id" — so neither may put a
+  // whole contact (55 columns, measured via getTableColumns) in scope.
+  let existing: { id: string } | null = null;
   if (email) {
-    existing = await tx.query.contacts.findFirst({
+    existing = (await tx.query.contacts.findFirst({
+      columns: { id: true },
       where: and(
         eq(contacts.tenantId, tenantId),
         eq(contacts.email, email),
         eq(contacts.isArchived, false),
         isNull(contacts.deletedAt)
       )
-    });
+    })) ?? null;
   }
 
   // On plain "create" with a duplicate, reject
@@ -435,6 +439,7 @@ async function handleContact(
   if (action === 'update' && !existing) {
     // Try by ID if provided
     const byId = d['id'] ? await tx.query.contacts.findFirst({
+      columns: { id: true },
       where: and(
         eq(contacts.id, d['id'] as string),
         eq(contacts.tenantId, tenantId)
@@ -458,7 +463,7 @@ async function handleContact(
     tenantId,
     createdBy: userId,
     createdAt: new Date(),
-  }).returning();
+  }).returning({ id: contacts.id });
 
   return { id: newContact?.id ?? null, action: 'created' };
 }
@@ -479,18 +484,18 @@ async function handleLead(
   const firstName = sanitizeString(d['firstName'] as string, 100);
   if (!firstName) throw new Error('first_name is required for lead');
 
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let existing: any = null;
+  // Same shape as the contact reads above: `leads` is 62 columns and every use
+  // of this row is `existing.id`, so the declaration narrows with the projection.
+  let existing: { id: string } | null = null;
   if (email) {
-    existing = await tx.query.leads.findFirst({
+    existing = (await tx.query.leads.findFirst({
+      columns: { id: true },
       where: and(
         eq(leads.tenantId, tenantId),
         eq(leads.email, email),
         isNull(leads.deletedAt)
       )
-    });
+    })) ?? null;
   }
 
   if (action === 'create' && existing) {
@@ -520,6 +525,7 @@ async function handleLead(
     if (!targetId) throw new Error('Lead id is required for update');
     
     const check = await tx.query.leads.findFirst({
+      columns: { id: true },
       where: and(
         eq(leads.id, targetId),
         eq(leads.tenantId, tenantId)
@@ -543,7 +549,7 @@ async function handleLead(
     createdBy: userId,
     ownerId: (d['ownerId'] as string) || userId,
     createdAt: new Date(),
-  }).returning();
+  }).returning({ id: leads.id });
 
   return { id: newLead?.id ?? null, action: 'created' };
 }
@@ -703,6 +709,7 @@ async function handleDeal(
     const dealId = d['id'] as string | null;
     if (dealId) {
       const check = await tx.query.deals.findFirst({
+        columns: { id: true },
         where: and(
           eq(deals.id, dealId),
           eq(deals.tenantId, tenantId),
@@ -738,7 +745,7 @@ async function handleDeal(
     stageEnteredAt: new Date(),
     createdBy: userId,
     createdAt: new Date(),
-  }).returning();
+  }).returning({ id: deals.id });
 
   return { id: newDeal?.id ?? null, action: 'created' };
 }
@@ -773,6 +780,7 @@ async function handleCompany(
     const companyId = d['id'] as string | null;
     if (companyId) {
       const check = await tx.query.companies.findFirst({
+        columns: { id: true },
         where: and(
           eq(companies.id, companyId),
           eq(companies.tenantId, tenantId)
@@ -791,7 +799,7 @@ async function handleCompany(
     tenantId,
     createdBy: userId,
     createdAt: new Date(),
-  }).returning();
+  }).returning({ id: companies.id });
 
   return { id: newCompany?.id ?? null, action: 'created' };
 }
@@ -828,6 +836,7 @@ async function handleTask(
     if (!taskId) throw new Error('id is required to update a task');
     
     const check = await tx.query.tasks.findFirst({
+      columns: { id: true },
       where: and(
         eq(tasks.id, taskId),
         eq(tasks.tenantId, tenantId),
@@ -845,7 +854,7 @@ async function handleTask(
     tenantId,
     createdBy: userId,
     createdAt: new Date(),
-  }).returning();
+  }).returning({ id: tasks.id });
 
   return { id: newTask?.id ?? null, action: 'created' };
 }
@@ -876,6 +885,14 @@ async function processItem(
 
 // ── Route handler ──────────────────────────────────────────────────────
 
+/** Accepted payload shapes: a single { action, entity, data } or { batch: [...] }. */
+type InboundRequestBody = {
+  batch?: Array<{ action: string; entity: string; data: Record<string, unknown> }>;
+  action?: string;
+  entity?: string;
+  data?: Record<string, unknown>;
+};
+
 export async function POST(request: NextRequest) {
   const startTime = Date.now();
   let apiKeyRow: Awaited<ReturnType<typeof resolveApiKey>> = null;
@@ -883,8 +900,7 @@ export async function POST(request: NextRequest) {
   // Hoisted so the outer catch can still persist whatever body it received.
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let body: any;
+  let body: InboundRequestBody | undefined;
 
   try {
     // 1. Extract API key — header ONLY. ?api_key= query params leak into
@@ -937,7 +953,7 @@ export async function POST(request: NextRequest) {
           { status: 413 }
         );
       }
-      body = JSON.parse(text);
+      body = JSON.parse(text) as InboundRequestBody;
     } catch {
       logRequest(keyPrefix, 400, request.nextUrl.pathname);
       return NextResponse.json({ error: 'Invalid JSON payload.' }, { status: 400 });
@@ -1050,8 +1066,7 @@ export async function POST(request: NextRequest) {
 
  
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } catch (err: any) {
+      } catch (err) {
         hasError = true;
         results.push({
           entity: item.entity,
@@ -1071,7 +1086,7 @@ export async function POST(request: NextRequest) {
           entity: item.entity,
           status: 'error',
           statusCode: 400,
-          errorMessage: err.message,
+          errorMessage: err instanceof Error ? err.message : String(err),
           recordId: null,
           payloadSize: contentLength || 0,
           body,
@@ -1113,8 +1128,7 @@ export async function POST(request: NextRequest) {
     );
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     const duration = Date.now() - startTime;
     void logError({ error: err, context: 'webhooks/inbound POST' });
 
@@ -1126,7 +1140,7 @@ export async function POST(request: NextRequest) {
         entity: 'unknown',
         status: 'error',
         statusCode: 500,
-        errorMessage: err.message,
+        errorMessage: err instanceof Error ? err.message : String(err),
         recordId: null,
         payloadSize: 0,
         body,

@@ -10,17 +10,41 @@ import { logger } from '@/lib/logger';
 import { eq, and, ne, sql, ilike, or } from 'drizzle-orm';
 import { withTenantContext } from '@/lib/db/rls';
 
-export type NotificationType =
-  | 'task_assigned'    | 'task_due'       | 'task_overdue'
-  | 'deal_stage'       | 'deal_assigned'  | 'deal_won'
-  | 'contact_assigned' | 'mention'
-  | 'invite_accepted'  | 'team_joined'
-  | 'limit_warning'    | 'trial_expiring'
-  | 'lead_warming'
-  | 'sla_breach'       | 'sla_escalation'
-  | 'contract_renewal' | 'subscription_renewal'
-  | 'ai_followup_sent'
-  | 'system';
+/**
+ * The one copy of the notification vocabulary. Declared as a runtime tuple for
+ * the same reason as NOTIFICATION_ENTITY_TYPES below: a test can enumerate it
+ * instead of restating it.
+ *
+ * `info` is a member because it is the column default — a raw insert that omits
+ * `type` lands on it — even though no caller names it explicitly.
+ *
+ * tests/unit/notification-type-vocabulary.test.ts pins this tuple against
+ * chk_notifications_type, which is what the drift below is prevented by.
+ */
+export const NOTIFICATION_TYPES = [
+  'info',
+  'task_assigned',    'task_due',        'task_overdue',
+  'deal_stage',       'deal_assigned',   'deal_won',
+  'contact_assigned', 'mention',
+  'invite_accepted',  'team_joined',
+  'limit_warning',    'trial_expiring',
+  'lead_warming',
+  'sla_breach',       'sla_escalation',
+  'contract_renewal', 'subscription_renewal',
+  'ai_followup_sent',
+  'system',
+] as const;
+
+/**
+ * WHY 0101 EXISTS — this union used to be 19 members while chk_notifications_type
+ * (added in 0050, when only four notification kinds existed) still allowed just
+ * ('info','mention','deal_stage','deal_won'). Every other type failed with
+ * check_violation, and because createNotification reports failure by returning
+ * false rather than throwing, callers counted those writes as delivered: task
+ * reminders logged `notified:4` while `notifications` held zero rows in pre-prod.
+ * The constraint now matches this tuple exactly.
+ */
+export type NotificationType = typeof NOTIFICATION_TYPES[number];
 
 /**
  * Every entity a notification can point at. Declared as a runtime tuple rather

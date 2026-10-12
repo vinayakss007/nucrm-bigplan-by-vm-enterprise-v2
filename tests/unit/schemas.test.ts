@@ -273,6 +273,57 @@ describe('api/schemas', () => {
     expect(result.target).toBe('all');
   });
 
+  // The schema must not accept anything the database will refuse: a value that
+  // passes zod reaches the INSERT and comes back as 23514 → 500. These sets are
+  // chk_announcements_type / chk_announcements_target as they exist in preprod.
+  it('announcement enums stay inside the DB check constraints', async () => {
+    const { createAnnouncementSchema } = await import('@/lib/api/schemas');
+    const DB_TYPES = ['info', 'warning', 'update', 'feature'];
+    const DB_TARGETS = ['all', 'plans', 'tenants', 'users', 'super_admins'];
+
+    for (const type of DB_TYPES) {
+      expect(createAnnouncementSchema.parse({ title: 'T', type }).type).toBe(type);
+    }
+    for (const target of DB_TARGETS) {
+      expect(createAnnouncementSchema.parse({ title: 'T', target }).target).toBe(target);
+    }
+    expect(() => createAnnouncementSchema.parse({ title: 'T', type: 'maintenance' })).toThrow();
+    expect(() => createAnnouncementSchema.parse({ title: 'T', type: 'critical' })).toThrow();
+    expect(() => createAnnouncementSchema.parse({ title: 'T', target: 'trialing' })).toThrow();
+  });
+
+  /**
+   * `contracts.contract_type` is NOT NULL behind a CHECK listing 13 values, and
+   * the create route used to fill it with 'other' — a value the database has
+   * never accepted — so the plainest create failed for every caller. The picker
+   * in app/tenant/contracts offered `sales` and `other` too.
+   *
+   * Both assertions run against two modules because createContractSchema is
+   * defined in lib/api/schemas.ts AND lib/api/schemas/billing.ts, and '@/lib/api/schemas'
+   * resolves to the file rather than the directory: fixing only one of them
+   * leaves the route validating against the other.
+   */
+  it('contract types stay inside chk_contracts_contract_type', async () => {
+    const legacy = await import('@/lib/api/schemas');
+    const split = await import('@/lib/api/schemas/billing');
+    const DB_TYPES = ['service', 'nda', 'sla', 'partnership', 'employment', 'vendor',
+      'non_compete', 'licensing', 'consulting', 'master_service', 'statement_of_work',
+      'amendment', 'end_user_license'];
+
+    for (const mod of [legacy, split]) {
+      for (const type of DB_TYPES) {
+        expect(mod.createContractSchema.parse({ title: 'T', type }).type).toBe(type);
+      }
+      expect(mod.createContractSchema.parse({ title: 'T' }).type).toBeUndefined();
+      for (const rejected of ['other', 'sales', 'SALES', '']) {
+        expect(() => mod.createContractSchema.parse({ title: 'T', type: rejected })).toThrow();
+      }
+    }
+    // The picker renders this list, so an entry without a label would show blank.
+    expect(Object.keys(split.CONTRACT_TYPE_LABELS).sort())
+      .toEqual([...split.CONTRACT_TYPES].sort());
+  });
+
   it('createWebhookSchema requires at least one event', async () => {
     const { createWebhookSchema } = await import('@/lib/api/schemas');
     expect(() => createWebhookSchema.parse({ name: 'Webhook', url: 'https://example.com/hook', events: [] })).toThrow();

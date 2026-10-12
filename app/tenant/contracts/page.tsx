@@ -11,6 +11,7 @@ import { useSearchParams } from 'next/navigation';
 import { Plus, Search, FileText, X, Calendar, DollarSign, User, Loader2, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
+import { CONTRACT_TYPES, CONTRACT_TYPE_LABELS } from '@/lib/api/schemas/billing';
 
 interface Contact { id: string; firstName: string; lastName: string; email: string | null; }
 interface Contract {
@@ -73,9 +74,26 @@ function ContractsPageInner() {
     mutationFn: async () => {
       const res = await fetch('/api/tenant/contracts', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
+        // createContractSchema is snake_case like every other collection route,
+        // while `form` is camelCase — posting the form directly sent nothing but
+        // the title, and each dropped field silently took its schema default.
+        body: JSON.stringify({
+          title: form.title,
+          contact_id: form.contactId || undefined,
+          type: form.contractType,
+          start_date: form.startDate || undefined,
+          end_date: form.endDate || undefined,
+          value: form.totalValue === '' ? undefined : Number(form.totalValue),
+          terms: form.terms || undefined,
+          description: form.notes || undefined,
+        }),
       });
-      if (!res.ok) throw new Error('Failed');
+      if (!res.ok) {
+        const detail: unknown = await res.json().catch(() => null);
+        const msg = typeof (detail as { error?: unknown })?.error === 'string'
+          ? (detail as { error: string }).error : 'Failed';
+        throw new Error(msg);
+      }
     },
     onSuccess: () => {
       toast.success('Contract created');
@@ -83,7 +101,10 @@ function ContractsPageInner() {
       setForm({ contactId: '', title: '', contractType: 'service', startDate: '', endDate: '', totalValue: '', terms: '', notes: '' });
       queryClient.invalidateQueries({ queryKey: CONTRACTS_QUERY });
     },
-    onError: () => toast.error('Failed to create contract'),
+    // A rejected value and a server fault read the same here otherwise, so a
+    // vocabulary mismatch between this form and the table just looked like
+    // "the create button is flaky".
+    onError: (err: Error) => toast.error(err.message || 'Failed to create contract'),
   });
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -236,11 +257,7 @@ function ContractsPageInner() {
                   <label className="block text-sm font-medium mb-1">Type</label>
                   <select value={form.contractType} onChange={(e) => setForm({ ...form, contractType: e.target.value })}
                     className="w-full px-3 py-2 border border-border rounded-lg bg-card text-sm">
-                    <option value="service">Service</option>
-                    <option value="sales">Sales</option>
-                    <option value="nda">NDA</option>
-                    <option value="partnership">Partnership</option>
-                    <option value="other">Other</option>
+                    {CONTRACT_TYPES.map(t => <option key={t} value={t}>{CONTRACT_TYPE_LABELS[t]}</option>)}
                   </select>
                 </div>
                 <div>

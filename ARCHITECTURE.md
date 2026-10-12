@@ -9,12 +9,12 @@
 │                                                                      │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐              │
 │  │   Tenant      │  │   Super      │  │   Customer   │              │
-│  │   App (103    │  │   Admin      │  │   Portal     │              │
-│  │   pages)      │  │   (19 pages) │  │   (5 pages)  │              │
+│  │   App (149    │  │   Admin      │  │   Portal     │              │
+│  │   pages)      │  │   (31 pages) │  │   (9 pages)  │              │
 │  └──────────────┘  └──────────────┘  └──────────────┘              │
 │                                                                      │
 │  ┌────────────────────────────────────────────────────────────────┐  │
-│  │              API Layer (223 endpoints)                           │  │
+│  │              API Layer (507 endpoints)                           │  │
 │  │  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐ │  │
 │  │  │ Auth    │ │ Tenant  │ │ Super   │ │ Public  │ │ Cron    │ │  │
 │  │  │ (16)   │ │ (100+)  │ │ Admin   │ │ (6)     │ │ (10)    │ │  │
@@ -32,7 +32,7 @@
 │  └────────────────────────────────────────────────────────────────┘  │
 │                                                                      │
 │  ┌────────────────────────────────────────────────────────────────┐  │
-│  │              Database Layer (163 tables)                         │  │
+│  │              Database Layer (224 tables)                         │  │
 │  │  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐ │  │
 │  │  │ Core    │ │ CRM     │ │ Billing │ │ Auto-   │ │ Support │ │  │
 │  │  │ (20)    │ │ (40+)   │ │ (10)    │ │ mation  │ │ (5)     │ │  │
@@ -47,15 +47,21 @@
 ## Multi-Tenant Architecture
 
 ### App-Level Isolation
+
 Every tenant-scoped table has a `tenant_id` column. All API routes filter by `ctx.tenantId`:
+
 ```ts
-const ctx = await requireAuth(request);  // Sets tenant context
-const data = await db.select().from(contacts)
-  .where(eq(contacts.tenantId, ctx.tenantId));  // Scoped
+const ctx = await requireAuth(request); // Sets tenant context
+const data = await db
+  .select()
+  .from(contacts)
+  .where(eq(contacts.tenantId, ctx.tenantId)); // Scoped
 ```
 
 ### Database-Level RLS
+
 PostgreSQL Row-Level Security policies enforce tenant isolation:
+
 ```sql
 ALTER TABLE contacts ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON contacts
@@ -63,7 +69,9 @@ CREATE POLICY tenant_isolation ON contacts
 ```
 
 ### Session Context
+
 The `requireAuth()` middleware:
+
 1. Validates JWT from cookie or Bearer header
 2. Looks up user + tenant membership
 3. Sets `app.current_tenant` and `app.current_user` PG session variables
@@ -80,6 +88,7 @@ Contacts/Deals/...      WhatsApp          WhatsApp Automation
 ```
 
 Each module declares:
+
 - Pages (routes + nav items)
 - Permissions (RBAC)
 - Settings schema (auto-generated UI)
@@ -110,11 +119,11 @@ User adds API Key + Base URL
 
 ## Key Design Decisions
 
-| Decision | Rationale |
-|---|---|
-| **Next.js 16 App Router** | SSR, streaming, server components, Turbopack |
-| **Drizzle ORM** | Type-safe SQL, no magic, excellent Postgres support |
-| **JWT + Cookies** | Stateless auth, httpOnly cookies prevent XSS |
-| **RLS for tenancy** | Defense-in-depth: app + database enforce isolation |
-| **SSE for real-time** | Simpler than WebSocket, works through all proxies |
-| **In-memory cache fallback** | Graceful degradation when Redis is unavailable |
+| Decision                     | Rationale                                           |
+| ---------------------------- | --------------------------------------------------- |
+| **Next.js 16 App Router**    | SSR, streaming, server components, Turbopack        |
+| **Drizzle ORM**              | Type-safe SQL, no magic, excellent Postgres support |
+| **JWT + Cookies**            | Stateless auth, httpOnly cookies prevent XSS        |
+| **RLS for tenancy**          | Defense-in-depth: app + database enforce isolation  |
+| **SSE for real-time**        | Simpler than WebSocket, works through all proxies   |
+| **In-memory cache fallback** | Graceful degradation when Redis is unavailable      |

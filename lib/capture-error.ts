@@ -7,8 +7,7 @@
 
 import { useEffect, useRef } from 'react';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let sentryPromise: Promise<any> | null = null;
+let sentryPromise: Promise<typeof import("@sentry/nextjs") | null> | null = null;
 
 function getSentry() {
   if (!sentryPromise) {

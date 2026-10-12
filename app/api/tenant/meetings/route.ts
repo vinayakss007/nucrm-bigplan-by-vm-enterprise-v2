@@ -13,6 +13,7 @@ import { db } from '@/drizzle/db';
 import { meetings, contacts } from '@/drizzle/schema';
 import { eq, and, isNull, gte, lte, sql, asc } from 'drizzle-orm';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { parseLimitOffset } from '@/lib/api/query-params';
 
 export const GET = withApiRoute(async (request: NextRequest) => {
   try {
@@ -26,8 +27,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     const start = searchParams.get('start');
     const end = searchParams.get('end');
     const status = searchParams.get('status');
-    const limit = Math.min(500, Math.max(1, parseInt(searchParams.get('limit') ?? '100')));
-    const offset = Math.max(0, parseInt(searchParams.get('offset') ?? '0'));
+    const { limit, offset } = parseLimitOffset(searchParams, { defaultLimit: 100, maxLimit: 500 });
 
     const filters = [
       eq(meetings.tenantId, ctx.tenantId),
@@ -35,10 +35,18 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     ];
 
     if (start) {
-      filters.push(gte(meetings.startTime, new Date(start)));
+      const startDate = new Date(start);
+      if (Number.isNaN(startDate.getTime())) {
+        return NextResponse.json({ error: 'Invalid "start" date' }, { status: 400 });
+      }
+      filters.push(gte(meetings.startTime, startDate));
     }
     if (end) {
-      filters.push(lte(meetings.startTime, new Date(end + 'T23:59:59')));
+      const endDate = new Date(`${end}T23:59:59`);
+      if (Number.isNaN(endDate.getTime())) {
+        return NextResponse.json({ error: 'Invalid "end" date' }, { status: 400 });
+      }
+      filters.push(lte(meetings.startTime, endDate));
     }
     if (status) {
       filters.push(eq(meetings.status, status));

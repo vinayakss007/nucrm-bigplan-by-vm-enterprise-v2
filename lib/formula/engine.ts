@@ -19,8 +19,7 @@ import { create, all } from 'mathjs';
 import { logger } from '@/lib/logger';
 
 // Create a restricted mathjs instance — no dangerous functions
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const math = create(all as any);
+const math = create(all!);
 
 // Remove dangerous functions that could be abused
 const BLOCKED_FUNCTIONS = [
@@ -47,16 +46,14 @@ export class FormulaEngine {
    */
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  evaluate(formula: string, data: Record<string, any>): any {
+  evaluate(formula: string, data: Record<string, unknown>): number | string | null | undefined {
     if (!formula) return null;
 
     try {
       // 1. Pre-process: replace {{field}} with clean variable names
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const variables: Record<string, any> = {};
+      const variables: Record<string, unknown> = {};
       let cleanFormula = formula;
 
       const matches = formula.match(/\{\{([\w\.]+)\}\}/g);
@@ -67,7 +64,7 @@ export class FormulaEngine {
 
           cleanFormula = cleanFormula.replace(match, safeKey);
           const value = this.getNestedValue(data, rawKey);
-          variables[safeKey] = typeof value === 'number' ? value : (parseFloat(value) || 0);
+          variables[safeKey] = typeof value === 'number' ? value : (parseFloat(String(value ?? '')) || 0);
         }
       }
 
@@ -105,7 +102,8 @@ export class FormulaEngine {
         return Math.round(result * 100) / 100;
       }
 
-      return result;
+      // mathjs yields undefined for an empty/whitespace expression — preserve that
+      return result as number | string | null | undefined;
     } catch (err) {
       logger.error('[FormulaEngine] Evaluation failed', { formula, error: err instanceof Error ? err.message : String(err) });
       return null;
@@ -114,9 +112,8 @@ export class FormulaEngine {
 
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private getNestedValue(obj: Record<string, any>, path: string): any {
-    return path.split('.').reduce((acc, key) => acc?.[key], obj);
+  private getNestedValue(obj: Record<string, unknown>, path: string): unknown {
+    return path.split('.').reduce<unknown>((acc, key) => (acc as Record<string, unknown> | undefined)?.[key], obj);
   }
 }
 

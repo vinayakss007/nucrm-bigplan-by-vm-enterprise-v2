@@ -217,3 +217,35 @@ describe('withApiRoute pins the whole handler body (#1615)', () => {
     expect(await res!.json()).toEqual({ error: 'Service temporarily overloaded, please retry' });
   });
 });
+
+/**
+ * PP-029: the shutdown drain counted only `withApiRoute` handlers, so a Server
+ * Component that was still holding a connection looked like an idle process and
+ * the pool was closed underneath it. withTenantScope now reports the same way.
+ */
+describe('withTenantScope counts a render as in-flight work', () => {
+  it('the counter is raised for the whole body and back to zero after', async () => {
+    const { withTenantScope } = await import('../../lib/api/with-api-route');
+    const { getInFlightCount, resetShutdownState } = await import('../../lib/db/graceful-shutdown');
+    resetShutdownState();
+
+    let inside = -1;
+    await withTenantScope(async () => {
+      inside = getInFlightCount();
+      return 'rendered';
+    });
+
+    expect(inside).toBe(1);
+    expect(getInFlightCount()).toBe(0);
+  });
+
+  it('still decrements when the body throws, which redirect() and notFound() do on purpose', async () => {
+    const { withTenantScope } = await import('../../lib/api/with-api-route');
+    const { getInFlightCount, resetShutdownState } = await import('../../lib/db/graceful-shutdown');
+    resetShutdownState();
+
+    const boom = new Error('NEXT_REDIRECT');
+    await expect(withTenantScope(async () => { throw boom; })).rejects.toBe(boom);
+    expect(getInFlightCount()).toBe(0);
+  });
+});

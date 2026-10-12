@@ -21,7 +21,11 @@
 import { readFileSync, writeFileSync, readdirSync, existsSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
-const ROOTS = ['app', 'lib', 'components', 'hooks', 'workers'];
+// Every directory eslint actually lints. The old list stopped at app/lib/
+// components/hooks/(a nonexistent workers), which left 37 suppressions in
+// drizzle/, types/, tests/ and scripts/ outside the ratchet — a file could grow
+// there unchecked while the guard reported "1 suppression".
+const ROOTS = ['app', 'components', 'drizzle', 'hooks', 'lib', 'scripts', 'tests', 'types'];
 const BASELINE_FILE = 'scripts/any-suppression-baseline.json';
 const UPDATE = process.argv.includes('--update');
 // Matches file/block `eslint-disable` and inline `eslint-disable-next-line` /
@@ -51,6 +55,16 @@ for (const root of ROOTS) {
     const n = (readFileSync(file, 'utf8').match(RE) || []).length;
     if (n > 0) counts[file] = n;
   }
+}
+
+// Root-level sources — worker.ts and the Sentry configs — are linted like any
+// other file but sit outside every ROOTS entry, so 14 suppressions were
+// invisible to the ratchet until now.
+for (const name of readdirSync('.')) {
+  if (!/\.(ts|tsx)$/.test(name) || name === 'next-env.d.ts') continue;
+  if (/\.(test|spec)\.(ts|tsx)$/.test(name) || /\.stories\.tsx$/.test(name)) continue;
+  const n = (readFileSync(name, 'utf8').match(RE) || []).length;
+  if (n > 0) counts[name] = n;
 }
 
 if (UPDATE) {

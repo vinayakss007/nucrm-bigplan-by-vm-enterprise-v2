@@ -53,7 +53,7 @@ const SOURCE_LABELS: Record<string,string> = {
 
 export interface CompanyOpt { id: string; name: string }
 export interface TeamMemberOpt { user_id: string; full_name: string; avatar_url?: string | null }
-export interface ContactInput { id: string; first_name?: string; last_name?: string; email?: string; phone?: string; company_name?: string; lead_status?: string; lead_source?: string; assigned_name?: string; created_at?: string; score?: number; [key: string]: unknown }
+export interface ContactInput { id: string; first_name?: string; last_name?: string; email?: string; phone?: string; company_name?: string; lead_status?: string; lead_source?: string; assigned_name?: string; created_at?: string; score?: number; title?: string; lifecycle_stage?: string; last_activity_at?: string; [key: string]: unknown }
 
 interface Props {
   initialContacts: ContactInput[];
@@ -172,7 +172,7 @@ function AddContactModal({ companies, teamMembers, onClose, onSuccess }: { compa
 }
 
 export default function TenantContactsClient({ initialContacts, companies, teamMembers, permissions, _tenantId, _userId, totalCount, initialOffset, initialQ, initialStatus, defaultView }: Props) {
-  const normalize = (data: Record<string, unknown>[]) => (data || []).map((c) => toSnakeCase(c));
+  const normalize = (data: ContactInput[]) => (data || []).map((c) => toSnakeCase(c));
   const [contacts, setContacts] = useState(normalize(initialContacts));
   const [total, setTotal]       = useState(totalCount ?? initialContacts.length);
   const [offset, setOffset]     = useState(initialOffset ?? 0);
@@ -479,9 +479,9 @@ export default function TenantContactsClient({ initialContacts, companies, teamM
                 </td></tr>
               )}
               {contacts.map(c=>{
-                const status=STATUS_CONFIG[c['lead_status']]||STATUS_CONFIG['new'];
+                const status=STATUS_CONFIG[c['lead_status'] ?? '']||STATUS_CONFIG['new'];
                 const StatusIcon=status!.icon;
-                const lifecycleColor=LIFECYCLE_COLORS[c['lifecycle_stage']]||'bg-slate-100 text-slate-600';
+                const lifecycleColor=LIFECYCLE_COLORS[c['lifecycle_stage'] ?? '']||'bg-slate-100 text-slate-600';
                 return (
                   <tr key={c['id']} className={cn(
                     "border-b border-border last:border-0 hover:bg-accent/30 transition-colors cursor-pointer group",
@@ -538,8 +538,8 @@ export default function TenantContactsClient({ initialContacts, companies, teamM
                     </td>
                     {/* Score */}
                     <td className="px-4 py-3">
-                      {c['score'] > 0 ? (() => {
-                        const tier = getScoreTier(c['score']);
+                      {(c['score'] ?? 0) > 0 ? (() => {
+                        const tier = getScoreTier(c['score'] ?? 0);
                         const cfg = getScoreTierConfig(tier);
                         return (
                           <div className="flex items-center gap-2">
@@ -585,7 +585,7 @@ export default function TenantContactsClient({ initialContacts, companies, teamM
           <EmptyState type={search||statusFilter!=='all' ? 'search' : 'contacts'} className="py-12" />
         )}
         {contacts.map(c=>{
-          const status=STATUS_CONFIG[c['lead_status']]||STATUS_CONFIG['new'];
+          const status=STATUS_CONFIG[c['lead_status'] ?? '']||STATUS_CONFIG['new'];
           const _StatusIcon=status!.icon;
           return (
             <Swipeable
@@ -617,9 +617,9 @@ export default function TenantContactsClient({ initialContacts, companies, teamM
                     </div>
                     <div className="flex items-center gap-3 mt-1">
                       {c['company_name']&&<div className="flex items-center gap-1 text-xs text-muted-foreground/80"><Building2 className="w-3.5 h-3.5 shrink-0"/><span className="truncate">{c['company_name']}</span></div>}
-                      {c['lifecycle_stage']&&<span className={cn('inline-flex px-1.5 py-0.5 rounded-full text-xs font-bold capitalize',LIFECYCLE_COLORS[c['lifecycle_stage']]||'bg-slate-100 text-slate-600')}>{c['lifecycle_stage']?.replace(/_/g,' ')}</span>}
-                      {c['score'] > 0 && (() => {
-                        const tier = getScoreTier(c['score']);
+                      {c['lifecycle_stage']&&<span className={cn('inline-flex px-1.5 py-0.5 rounded-full text-xs font-bold capitalize',LIFECYCLE_COLORS[c['lifecycle_stage'] ?? '']||'bg-slate-100 text-slate-600')}>{c['lifecycle_stage']?.replace(/_/g,' ')}</span>}
+                      {(c['score'] ?? 0) > 0 && (() => {
+                        const tier = getScoreTier(c['score'] ?? 0);
                         const cfg = getScoreTierConfig(tier);
                         return <span className={cn('inline-flex px-1.5 py-0.5 rounded-full text-xs font-bold', cfg.bg, cfg.color)}>{c['score']} Score</span>;
                       })()}
@@ -641,7 +641,7 @@ export default function TenantContactsClient({ initialContacts, companies, teamM
           )}
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
             {contacts.map(c=>{
-              const status=STATUS_CONFIG[c['lead_status']]||STATUS_CONFIG['new'];
+              const status=STATUS_CONFIG[c['lead_status'] ?? '']||STATUS_CONFIG['new'];
               const _StatusIcon=status!.icon;
               return (
                 <Link key={c['id']} href={`/tenant/contacts/${c['id']}`} className="group bg-card border border-border rounded-xl p-4 hover:border-violet-400/50 hover:shadow-sm transition-all block">
@@ -652,8 +652,8 @@ export default function TenantContactsClient({ initialContacts, companies, teamM
                     <span className={cn('inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs font-bold',status!.color)}>
                       <div className={cn('w-1.5 h-1.5 rounded-full',status!.dot)}/>{status!.label}
                     </span>
-                    {c['score'] > 0 && (() => {
-                      const tier = getScoreTier(c['score']);
+                    {(c['score'] ?? 0) > 0 && (() => {
+                      const tier = getScoreTier(c['score'] ?? 0);
                       const cfg = getScoreTierConfig(tier);
                       return <span className={cn('absolute -top-1 -right-1 w-6 h-6 flex items-center justify-center rounded-full text-xs font-bold border-2 border-background shadow-sm', cfg.bg, cfg.color)} title={`Score: ${c['score']}`}>{c['score']}</span>;
                     })()}

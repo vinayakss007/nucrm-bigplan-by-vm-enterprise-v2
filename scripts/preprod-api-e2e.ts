@@ -20,6 +20,7 @@
  *   isolation  POST /api/tenant/contacts        GET  /api/tenant/contacts/[id]
  *   lockout    bad passwords -> 429 + login_attempts/blocks
  *   password   POST /api/user/password          forgot -> reset -> login
+ *   ip-allowlist PUT/GET/DELETE /api/tenant/security/ip-whitelist -> sign-in 403/200
  *
  * Requests never leave the process: `next/server`'s NextRequest is constructed
  * per call and the Set-Cookie headers are replayed by hand, so this validates
@@ -197,8 +198,12 @@ function gateCreateAdminWithoutKey(): { status: number; out: string } {
   // scripts/tsconfig.gate.json maps the `server-only` marker (stripped by the
   // Next compiler in real builds, unresolvable under plain tsx) to the empty
   // test shim so the route module can be imported outside Next.
+  // The child must run against the SAME tree this harness was loaded from.
+  // Hardcoding '/app' made it exec the image's own copy of scripts/ and
+  // node_modules even when the working tree is mounted elsewhere, so the gate
+  // died on MODULE_NOT_FOUND and A2 reported a harness bug as an app failure.
   const r = spawnSync('node_modules/.bin/tsx', ['--tsconfig', 'scripts/tsconfig.gate.json', 'scripts/preprod-api-e2e-gate.ts'], {
-    cwd: '/app',
+    cwd: process.cwd(),
     encoding: 'utf8',
     env: { ...process.env, NODE_ENV: 'production' },
     timeout: 150_000,
@@ -454,8 +459,16 @@ async function phaseE(): Promise<void> {
   const persisted = await withSecurityContext(async (tx) =>
     await tx.execute(sql`SELECT count(*)::int AS c FROM login_attempts WHERE email = ${email}`));
   const seen = Number(rowsOf(persisted)[0]?.['c'] ?? 0);
+  // E1 passing while E2 sees nothing has two very different meanings, so tell
+  // them apart: rows that exist but are invisible to this context, versus a
+  // 429 that came from the in-memory/IP limiter and never touched login_attempts.
+  const blockRows = await withSecurityContext(async (tx) =>
+    await tx.execute(sql`SELECT identifier_type AS t, count(*)::int AS c FROM login_blocks WHERE identifier IN (${email}, ${client.ip}) GROUP BY identifier_type`));
+  const attemptsAllTime = await withSecurityContext(async (tx) =>
+    await tx.execute(sql`SELECT count(*)::int AS c FROM login_attempts`));
   check('E2  every failed attempt landed in login_attempts',
-    seen >= Math.min(attempts, 5), `rows=${seen} (attempts made=${attempts})`);
+    seen >= Math.min(attempts, 5),
+    `rows=${seen} (attempts made=${attempts}) · rows_all_time=${Number(rowsOf(attemptsAllTime)[0]?.['c'] ?? 0)} · blocks=[${rowsOf(blockRows).map((r) => `${r['t']}:${r['c']}`).join(' ')}]`);
 
   const otherIp = await call(new Client(mkIp()), '/api/auth/login', { body: { email, password: 'WrongPassword!1x' } });
   check('E3  blocked email stays blocked from a different IP',
@@ -546,10 +559,27 @@ async function phaseG(s: RunState): Promise<void> {
   if (s.b.client.session) stale.prime('nucrm_session', s.b.client.session);
   if (s.b.client.csrf) stale.prime('nucrm_csrf_token', s.b.client.csrf);
 
+  // Sessions are keyed by sha256(token), the same way lib/auth/session.hashToken
+  // stores them, so the row can be counted without ever logging the token.
+  const tokenHash = s.b.client.session
+    ? createHash('sha256').update(s.b.client.session).digest('hex')
+    : '';
+  const rowsLive = await countOf(
+    `SELECT count(*)::int AS c FROM sessions WHERE token_hash = '${tokenHash}'`
+  );
+  check('G2a  the live session has a sessions row to revoke',
+    rowsLive === 1, `sessions_by_token_hash=${rowsLive}`);
+
   const out = await call(s.b.client, '/api/auth/logout', { withCsrf: true, body: {} });
   check('G2  POST /api/auth/logout -> 2xx and clears the session cookie',
     out.status >= 200 && out.status < 300 && !s.b.client.session,
     `HTTP ${out.status} · local cookie dropped=${!s.b.client.session}`);
+
+  const rowsAfter = await countOf(
+    `SELECT count(*)::int AS c FROM sessions WHERE token_hash = '${tokenHash}'`
+  );
+  check('G2b  logout deleted the sessions row (RLS cannot match zero rows here)',
+    rowsAfter === 0, `sessions_left=${rowsAfter}`);
 
   const replay = await call(stale, '/api/tenant/me', { method: 'GET' });
   check('G3  replaying the revoked session -> 401 (killed in DB, not just client-side)',
@@ -627,6 +657,18 @@ async function phaseH(s: RunState): Promise<void> {
   const usersN = await countOf('SELECT count(*)::int AS c FROM users');
   const tenantsN = await countOf('SELECT count(*)::int AS c FROM tenants');
   const superAdmins = await countOf('SELECT count(*)::int AS c FROM users WHERE is_super_admin');
+  // Delete exactly what this run wrote, then prove it is gone. Every address it
+  // signs up is `<role>.<nonce>@<domain>`, so the nonce scopes its own rows and
+  // nobody else's. Phase E only ever deleted the `brute` address, so the
+  // wrong-password probes in A and the rotation logins in F stayed behind — the
+  // table grew a little on every generation, which is what this check now catches.
+  // The absolute table size is NOT assertable: `cleanup_login_data` keeps 30 days
+  // of history and pre-prod is shared, so it is reported, never required.
+  const runEmails = `%${NONCE.toLowerCase()}@${EMAIL_DOMAIN}`;
+  await withSecurityContext(async (tx) =>
+    await tx.execute(sql`DELETE FROM login_attempts WHERE email LIKE ${runEmails}`));
+  const ownAttempts = await withSecurityContext(async (tx) =>
+    await tx.execute(sql`SELECT count(*)::int AS c FROM login_attempts WHERE email LIKE ${runEmails}`));
   const attemptsLeft = await countOf('SELECT count(*)::int AS c FROM login_attempts');
   console.log(`  per-workspace rows read: ${per.length}`);
   console.log(`  totals: ${JSON.stringify(totals)}`);
@@ -646,8 +688,9 @@ async function phaseH(s: RunState): Promise<void> {
     (totals.verifications ?? 0) >= 1, `email_verifications=${totals.verifications}`);
   check('H5  seeded contact survives as the isolation fixture',
     (totals.contacts ?? 0) >= 1, `contacts=${totals.contacts} id=${s.contactId}`);
-  check('H6  brute-force rows for this run were cleaned up',
-    attemptsLeft < 50, `login_attempts_left=${attemptsLeft}`);
+  check('H6  every login_attempts row this run created is gone',
+    Number(rowsOf(ownAttempts)[0]?.['c'] ?? -1) === 0,
+    `this_run_rows_left=${rowsOf(ownAttempts)[0]?.['c']} · table_total=${attemptsLeft} (30-day retention trigger)`);
 
   const blind = await rawRows('SELECT count(*)::int AS c FROM users');
   const blindContacts = await rawRows('SELECT count(*)::int AS c FROM contacts');
@@ -678,7 +721,150 @@ async function phaseH(s: RunState): Promise<void> {
   try { chmodSync('/tmp/nucrm-e2e-credentials.txt', 0o600); } catch { /* best effort */ }
 }
 
+// ── Phase J — tenant IP allow list actually gates sign-in (#15) ───────────
+/**
+ * The settings page has always accepted an IP allow list and answered
+ * `{ok:true}`, but nothing read it back, so a tenant could believe it had
+ * restricted sign-in while any address on the internet could authenticate.
+ * This phase drives the real customer-settings endpoints — never a direct row
+ * write — and then proves the login route is the one that refuses:
+ *
+ *   no list          -> sign-in allowed            (empty list = unrestricted)
+ *   list without me  -> 403 ERR_IP_NOT_ALLOWED     (the row is enforced)
+ *   list with me     -> sign-in allowed            (and the entry is accurate)
+ *
+ * The address asserted on is read back out of `login_attempts`, i.e. the IP the
+ * *server* attributed to the request, not the one this harness claimed in
+ * `x-forwarded-for`. TRUST_PROXY decides whether those two agree, and the test
+ * must not depend on that.
+ *
+ * Scope note: this reaches the app directly, so it proves the gate evaluates the
+ * same IP the brute-force limiter and the audit row already use. What a real
+ * visitor presents is nginx's job (`$remote_addr` since #2116) and is verified
+ * there, not here.
+ */
+async function phaseJ(s: RunState): Promise<void> {
+  phase('J · Tenant IP allow list enforced at sign-in');
+  if (!s.a.tenantId || !s.a.userId) {
+    skip('J1-J6  IP allow list', 'no workspace-A ids captured — nothing to restrict');
+    return;
+  }
+
+  // TEST-NET-3 (203.0.113.0/24) is reserved for documentation, so this entry can
+  // never accidentally match a real client of the harness.
+  const NOT_MY_IP = '203.0.113.200';
+  const admin = new Client(mkIp());
+  const probe = new Client(mkIp());
+  let authed = admin;
+  const body = { email: s.a.email, password: RESET_PASSWORD };
+
+  const boot = await call(admin, '/api/auth/login', { body });
+  check('J0  sign-in is unrestricted while no list exists',
+    boot.status === 200, `HTTP ${boot.status} · ${boot.text.slice(0, 120)}`);
+  if (boot.status !== 200) return;
+
+  const runEmails = `%${NONCE.toLowerCase()}@${EMAIL_DOMAIN}`;
+  // Login issues exactly one session per user (the old rows are deleted first),
+  // so whichever client last signed in is the only one that can still reach the
+  // settings API. That matters here: the list can only be removed by a session
+  // that is already on it, since re-authenticating from a fresh harness IP is
+  // now precisely what the gate refuses.
+  try {
+    const saved = await call(admin, '/api/tenant/security/ip-whitelist', {
+      method: 'PUT', withCsrf: true, body: { ips: [NOT_MY_IP], enabled: true },
+    });
+    check('J1  workspace admin saves an allow list through the settings API',
+      saved.status >= 200 && saved.status < 300 && field(saved.json, 'enabled') === true,
+      `HTTP ${saved.status} · ${saved.text.slice(0, 140)}`);
+
+    const readback = await call(admin, '/api/tenant/security/ip-whitelist');
+    const data = (field(readback.json, 'data') ?? {}) as Record<string, unknown>;
+    const ips = Array.isArray(data['ips']) ? (data['ips'] as string[]) : [];
+    check('J2  GET reads the list back through the same policy (jsonb, not a joined string)',
+      ips.length === 1 && ips[0] === NOT_MY_IP, `HTTP ${readback.status} · ips=${JSON.stringify(ips)}`);
+
+    const denied = await call(probe, '/api/auth/login', { body });
+    check('J3  sign-in from an address off the list -> 403 ERR_IP_NOT_ALLOWED',
+      denied.status === 403 && str(denied.json, 'code') === 'ERR_IP_NOT_ALLOWED',
+      `HTTP ${denied.status} · ${denied.text.slice(0, 140)}`);
+
+    // The password was correct, so a denial here can only have come from the
+    // list. Prove the refusal is auditable and capture the server-side IP.
+    const seen = await withSecurityContext(async (tx) =>
+      await tx.execute(sql`SELECT ip_address FROM login_attempts
+        WHERE email = ${s.a.email} AND failure_reason = 'IP not in tenant allow list'
+        ORDER BY attempted_at DESC LIMIT 1`));
+    const serverIp = String(rowsOf(seen)[0]?.['ip_address'] ?? '');
+    check('J4  the refusal is recorded in login_attempts with the server-attributed IP',
+      serverIp !== '', `ip_address=${serverIp || 'no row'}`);
+
+    if (serverIp) {
+      const widened = await call(admin, '/api/tenant/security/ip-whitelist', {
+        method: 'PUT', withCsrf: true, body: { ips: [NOT_MY_IP, serverIp], enabled: true },
+      });
+      const allowed = await call(probe, '/api/auth/login', { body });
+      if (allowed.status === 200) authed = probe;
+      check('J5  the same client is admitted once its own address is on the list',
+        widened.status < 300 && allowed.status === 200,
+        `PUT HTTP ${widened.status} · login HTTP ${allowed.status} for ${serverIp}`);
+    } else {
+      skip('J5  admitted once listed', 'no attributed IP to add (J4 failed)');
+    }
+  } finally {
+    // A leftover list would lock out every later run of this workspace (and this
+    // row is the only tenant-owned state the phase creates), so removal is
+    // asserted, not assumed.
+    const off = await call(authed, '/api/tenant/security/ip-whitelist', { method: 'DELETE', withCsrf: true });
+    const cleared = await call(authed, '/api/tenant/security/ip-whitelist');
+    const cd = (field(cleared.json, 'data') ?? {}) as Record<string, unknown>;
+    const left = Array.isArray(cd['ips']) ? (cd['ips'] as string[]) : [];
+    check('J6  removing the list restores unrestricted sign-in (delete really deletes)',
+      off.status >= 200 && off.status < 300 && left.length === 0 && cd['enabled'] === false,
+      `DELETE HTTP ${off.status} · ips=${JSON.stringify(left)}`);
+
+    await call(authed, '/api/auth/logout', { withCsrf: true, body: {} });
+    // J's own attempts (one denial, several successes) would otherwise age into
+    // the 30-day retention window and skew H6's per-run accounting on the next gen.
+    await withSecurityContext(async (tx) =>
+      await tx.execute(sql`DELETE FROM login_attempts WHERE email LIKE ${runEmails}`));
+    const residue = await withSecurityContext(async (tx) =>
+      await tx.execute(sql`SELECT count(*)::int AS c FROM login_attempts WHERE email LIKE ${runEmails}`));
+    note(`J hygiene: login_attempts rows left by this run = ${rowsOf(residue)[0]?.['c']}`);
+  }
+}
+
 // ── Runner ────────────────────────────────────────────────────────────────
+/**
+ * Limiter buckets are keyed `v1_rate:<action>:<ip>`, and the synthetic
+ * addresses above come off a per-process counter, so every run presents the
+ * same 198.51.100.10, .11, … Within a 60-minute window the fourth
+ * forgot-password call is therefore legitimately limited — gen-15's F4 FAIL was
+ * the limiter working correctly against a bucket an earlier run had filled.
+ * Clear only this harness's own TEST-NET-2 keys (a range reserved for
+ * documentation, which no real visitor can present), so a genuine user's
+ * bucket is never released and the assertion below tests the endpoint again.
+ */
+async function resetOwnRateBuckets(): Promise<void> {
+  const url = process.env.REDIS_URL;
+  if (!url) { note('rate buckets: REDIS_URL unset, limits may carry over from an earlier run'); return; }
+  const { default: Redis } = await import('ioredis');
+  const redis = new Redis(url, { maxRetriesPerRequest: 2, lazyConnect: true });
+  try {
+    let cleared = 0;
+    let cursor = '0';
+    do {
+      const [next, keys] = await redis.scan(cursor, 'MATCH', '*rate:v1_rate:*:198.51.100.*', 'COUNT', 200);
+      cursor = next;
+      if (keys.length > 0) cleared += await redis.del(...keys);
+    } while (cursor !== '0');
+    note(`rate buckets cleared for this harness's TEST-NET-2 addresses: ${cleared}`);
+  } catch (err) {
+    note(`rate buckets NOT cleared — limiter-sensitive checks may inherit an earlier run: ${err instanceof Error ? err.message : String(err)}`);
+  } finally {
+    redis.disconnect();
+  }
+}
+
 async function main(): Promise<void> {
   const s: RunState = {
     sa: { email: mkEmail('platform-admin'), client: new Client(mkIp()), userId: '', tenantId: '' },
@@ -693,10 +879,15 @@ async function main(): Promise<void> {
   console.log(`║  run=${NONCE}  target=${BASE_URL}  x-setup-key=${SETUP_KEY ? 'loaded' : 'MISSING'}`);
   console.log('╚════════════════════════════════════════════════════════════════════════');
 
+  await resetOwnRateBuckets();
+
   const started = Date.now();
   const phases: [string, (st: RunState) => Promise<void>][] = [
     ['A', phaseA], ['B', phaseB], ['C', phaseC], ['D', phaseD],
     ['E', phaseE], ['F', phaseF], ['G', phaseG], ['I', phaseI], ['H', phaseH],
+    // Last: it writes a tenant setting and deliberately fails one login, so it
+    // must not be able to perturb any phase that counts those rows.
+    ['J', phaseJ],
   ];
   for (const [label, fn] of phases) {
     try {

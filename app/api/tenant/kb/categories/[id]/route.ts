@@ -29,8 +29,7 @@ export const PATCH = withApiRoute(async (request: NextRequest, { params }: { par
     if (guard) return guard;
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const updates: Record<string, any> = { updatedAt: new Date() };
+    const updates: Partial<typeof kbCategories.$inferInsert> = { updatedAt: new Date() };
     if (body['name']) updates['name'] = body['name'];
     if (body['description'] !== undefined) updates['description'] = body['description'];
     if (body['icon']) updates['icon'] = body['icon'];

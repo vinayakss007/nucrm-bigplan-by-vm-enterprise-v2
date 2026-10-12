@@ -9,6 +9,10 @@
  * body: { to_email?, message? }
  *
  * Sends the invoice PDF link to the customer via email.
+ *
+ * #2227: status:'sent' + sentAt are persisted only after the email is
+ * delivered. On delivery failure the invoice keeps its old status and the
+ * route answers 502 so the UI can retry honestly.
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, requireCsrf } from '@/lib/auth/middleware';
@@ -56,30 +60,13 @@ export const POST = withApiRoute(async (req: NextRequest, { params }: { params: 
       return NextResponse.json({ error: 'Email required (provide to_email or attach a contact)' }, { status: 400 });
     }
 
-    // Update status to sent + activity row atomically
-    await db.transaction(async (tx) => {
-      await tx.update(invoices).set({ status: 'sent', sentAt: new Date(), updatedAt: new Date() }).where(eq(invoices.id, id));
-
-      if (invoice.contactId) {
-        await tx.insert(activities).values({
-          tenantId: ctx.tenantId,
-          userId: ctx.userId,
-          entityType: 'invoice',
-          entityId: id,
-          contactId: invoice.contactId,
-          eventType: 'invoice_sent',
-          description: `Invoice "${invoice.title}" sent to ${toEmail}`,
-          metadata: {
-            invoice_id: id,
-            invoice_number: invoice.invoiceNumber,
-            total_amount: invoice.totalAmount,
-            to_email: toEmail,
-          },
-        });
-      }
-    });
-
-    // Send email
+    // #2227: the email is attempted FIRST and the status write happens only
+    // after a successful delivery. The old order (commit status:'sent' in a tx,
+    // then try SMTP, console.warn on failure, still answer ok:true) meant a
+    // provider outage permanently marked the invoice sent although the customer
+    // never received anything, and downstream logic treats 'sent' as "issued".
+    // Lesson from #2222 also applies in reverse: SMTP must never run INSIDE the
+    // db.transaction — network waits would hold a Postgres transaction open.
     const pdfUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/tenant/invoices/${id}/pdf`;
     const safeContactName = sanitizeHTMLServer(contactName || '');
     const safeInvoiceTitle = sanitizeHTMLServer(invoice.title || '');
@@ -103,6 +90,55 @@ export const POST = withApiRoute(async (req: NextRequest, { params }: { params: 
       console.warn('[invoices/send] email send threw:', (err as Error).message);
       emailResult = { success: false, error: (err as Error).message };
     }
+
+    // Delivery failed → keep the invoice in its current status and answer a
+    // non-ok 502 (same honest-failure shape as email/test-send) so the UI can
+    // surface the error and the user can retry.
+    if (!emailResult?.success) {
+      await logAudit({
+        tenantId: ctx.tenantId,
+        userId: ctx.userId,
+        action: 'invoice_send_failed',
+        entityType: 'invoice',
+        entityId: id,
+        newData: { to_email: toEmail, email_result: emailResult },
+      });
+      return NextResponse.json(
+        {
+          error: 'Email delivery failed — the invoice was NOT marked as sent. Please retry.',
+          ok: false,
+          status: invoice.status,
+          email: emailResult,
+        },
+        { status: 502 },
+      );
+    }
+
+    // Delivery succeeded — persist status:'sent' + activity row atomically.
+    // If this write fails the handler 500s via the outer catch: the customer
+    // has the email, and a retry may duplicate it — the honest-failure
+    // direction we prefer (#2227).
+    await db.transaction(async (tx) => {
+      await tx.update(invoices).set({ status: 'sent', sentAt: new Date(), updatedAt: new Date() }).where(eq(invoices.id, id));
+
+      if (invoice.contactId) {
+        await tx.insert(activities).values({
+          tenantId: ctx.tenantId,
+          userId: ctx.userId,
+          entityType: 'invoice',
+          entityId: id,
+          contactId: invoice.contactId,
+          eventType: 'invoice_sent',
+          description: `Invoice "${invoice.title}" sent to ${toEmail}`,
+          metadata: {
+            invoice_id: id,
+            invoice_number: invoice.invoiceNumber,
+            total_amount: invoice.totalAmount,
+            to_email: toEmail,
+          },
+        });
+      }
+    });
 
     await logAudit({
       tenantId: ctx.tenantId,

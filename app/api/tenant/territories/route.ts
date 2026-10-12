@@ -12,6 +12,7 @@ import { territories } from '@/drizzle/schema/territories';
 import { eq, and } from 'drizzle-orm';
 import { getTerritoryTree } from '@/lib/territories';
 import { z } from 'zod';
+import { uuidIdSchema, uuidIdSchemaWith } from '@/lib/validation/uuid';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { concurrencyGuard, checkStaleUpdate } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
@@ -20,17 +21,17 @@ import { withApiRoute } from '@/lib/api/with-api-route';
 const createTerritorySchema = z.object({
   name: z.string().min(1, 'name is required'),
   type: z.enum(['country', 'state', 'city', 'region', 'custom']).or(z.string().min(1)),
-  parentId: z.string().uuid().optional().nullable(),
+  parentId: uuidIdSchema.optional().nullable(),
   geoConfig: z.record(z.string(), z.unknown()).optional().default({}),
 });
 
 const updateTerritorySchema = z.object({
-  id: z.string().uuid('id is required'),
+  id: uuidIdSchemaWith('id is required'),
   name: z.string().optional(),
   type: z.enum(['country', 'state', 'city', 'region', 'custom']).or(z.string()).optional(),
-  parentId: z.string().uuid().optional().nullable(),
+  parentId: uuidIdSchema.optional().nullable(),
   geoConfig: z.record(z.string(), z.unknown()).optional(),
-  assignedTo: z.string().uuid().optional(),
+  assignedTo: uuidIdSchema.optional(),
   expectedUpdatedAt: z.coerce.date().optional(),
 });
 

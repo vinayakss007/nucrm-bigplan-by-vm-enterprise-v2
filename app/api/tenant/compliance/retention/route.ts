@@ -11,20 +11,24 @@ import { db } from '@/drizzle/db';
 import { dataRetentionPolicies } from '@/drizzle/schema/compliance';
 import { eq, and } from 'drizzle-orm';
 import { z } from 'zod';
+import { uuidIdSchema } from '@/lib/validation/uuid';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { concurrencyGuard, checkStaleUpdate } from '@/lib/api/concurrency';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 const retentionPolicySchema = z.object({
-  entityType: z.enum(['contacts', 'deals', 'activities', 'emails', 'audit_logs', 'notes', 'tasks']),
+  // Must match chk_data_retention_policies_entity_type exactly — the table's
+  // CHECK refuses anything else, so a wider list here is a UI option that can
+  // never be saved.
+  entityType: z.enum(['contacts', 'deals', 'activities', 'emails', 'audit_logs']),
   retentionDays: z.number().int().min(1).max(3650),
   action: z.enum(['archive', 'delete', 'anonymize']),
   isActive: z.boolean().optional().default(true),
 });
 
 const updateRetentionPolicySchema = z.object({
-  id: z.string().uuid(),
+  id: uuidIdSchema,
   retentionDays: z.number().int().min(1).max(3650).optional(),
   action: z.enum(['archive', 'delete', 'anonymize']).optional(),
   isActive: z.boolean().optional(),
@@ -116,8 +120,7 @@ export const PUT = withApiRoute(async (req: NextRequest) => {
 
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const updateData: Record<string, any> = { updatedAt: new Date() };
+    const updateData: Partial<typeof dataRetentionPolicies.$inferInsert> = { updatedAt: new Date() };
     if (v.retentionDays !== undefined) updateData['retentionDays'] = v.retentionDays;
     if (v.action !== undefined) updateData['action'] = v.action;
     if (v.isActive !== undefined) updateData['isActive'] = v.isActive;

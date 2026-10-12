@@ -8,6 +8,7 @@ import { contacts, companies, deals, tasks } from '@/drizzle/schema';
 import { eq, and, isNull, ilike, or, sql } from 'drizzle-orm';
 import { addJob } from '@/lib/queue';
 import { escapeLike } from '@/lib/api/sanitize-like';
+import { csvEscapeValue } from '@/lib/csv';
 
 export type ExportEntityType = 'contacts' | 'deals' | 'tasks' | 'companies';
 
@@ -59,35 +60,14 @@ export class ImportLimitError extends Error {
 
 /**
  * Characters that can trigger formula execution in spreadsheet applications.
+ * Lives in the pure lib/csv module (#2340) so client components can share the
+ * exact same guard without importing this server-only module.
  */
-const FORMULA_PREFIXES = ['=', '+', '-', '@', '\t', '\r'];
+ 
+ 
 
-/**
- * Escapes a value for CSV, neutralizing formula injection attacks.
- * Cells starting with formula-triggering characters are prefixed with a single quote.
- * Values that are valid numbers (e.g. -500, +1.5) are exempted from the prefix
- * since they are legitimate numeric data, not formula payloads.
- */
- 
- 
 export function escapeCSV(val: unknown): string {
-  if (val === null || val === undefined) return '';
-  let str = String(val);
-
-  // Neutralize formula injection by prefixing dangerous characters with a single quote.
-  // Skip the prefix if the value is a valid number (e.g. -500, +1.5, -0.3) to avoid
-  // mangling legitimate negative amounts, phone numbers like +1-555..., etc.
-  if (str.length > 0 && FORMULA_PREFIXES.includes(str[0]!)) {
-    const trimmed = str.trim();
-    if (!/^[+-]?\d/.test(trimmed)) {
-      str = "'" + str;
-    }
-  }
-
-  if (str.includes(',') || str.includes('"') || str.includes('\n')) {
-    return `"${str.replace(/"/g, '""')}"`;
-  }
-  return str;
+  return csvEscapeValue(val);
 }
 
 /**

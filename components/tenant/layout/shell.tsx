@@ -205,7 +205,7 @@ export default function TenantShell({ tenant, profile, roleSlug, permissions, is
       </div>
 
       {/* Command Palette (⌘K) */}
-      <CommandPalette open={openCommandPalette} onOpenChange={setOpenCommandPalette} />
+      <CommandPalette open={openCommandPalette} onOpenChange={setOpenCommandPalette} isSuperAdmin={isSuperAdmin} />
       
       {/* Keyboard Shortcuts Modal (?) */}
       <ShortcutsModal open={openShortcutsModal} onOpenChange={setOpenShortcutsModal} />

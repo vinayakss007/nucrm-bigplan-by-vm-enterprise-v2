@@ -15,6 +15,7 @@ import { db } from '@/drizzle/db';
 import { leads } from '@/drizzle/schema';
 import { eq, and, sql } from 'drizzle-orm';
 import { requireAuth } from '@/lib/auth/require-auth';
+import { requireApiKeyScope } from '@/lib/auth/api-key';
 import { handleError, NotFoundError, ValidationError } from '@/lib/errors';
 import { devLogger } from '@/lib/dev-logger';
 import { withApiRoute } from '@/lib/api/with-api-route';
@@ -23,6 +24,10 @@ export const GET = withApiRoute(async (request: NextRequest, { params }: { param
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+
+    // #2215: an `ak_` key must actually carry the leads:read scope.
+    const scopeDenied = requireApiKeyScope(ctx, 'leads:read');
+    if (scopeDenied) return scopeDenied;
 
     const { id } = await params;
 
@@ -74,6 +79,10 @@ export const PUT = withApiRoute(async (request: NextRequest, { params }: { param
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+
+    // #2215: writes through an `ak_` key require the leads:write scope.
+    const scopeDenied = requireApiKeyScope(ctx, 'leads:write');
+    if (scopeDenied) return scopeDenied;
 
     const { id } = await params;
     const body = await readJsonBody(request);
@@ -140,6 +149,10 @@ export const DELETE = withApiRoute(async (request: NextRequest, { params }: { pa
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+
+    // #2215: writes through an `ak_` key require the leads:write scope.
+    const scopeDenied = requireApiKeyScope(ctx, 'leads:write');
+    if (scopeDenied) return scopeDenied;
 
     const { id } = await params;
 

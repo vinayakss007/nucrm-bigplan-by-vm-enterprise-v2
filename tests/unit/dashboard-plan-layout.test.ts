@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { getPlanDefaultLayout } from '@/lib/dashboard/layout-defaults';
 import { getWidgetsForPlan } from '@/components/tenant/dashboard/widget-registry';
+import type { WidgetConfig } from '@/types/dashboard';
 
 vi.mock('@/components/tenant/dashboard/widget-registry', () => ({
   getWidgetsForPlan: vi.fn(),
@@ -12,6 +13,20 @@ vi.mock('@/lib/modules/industry-templates', () => ({
   INDUSTRY_TEMPLATES: {},
 }));
 
+// getPlanDefaultLayout reads id and defaultSize only, but the mock has to hand
+// back something that is a WidgetConfig, so the unused fields are filled rather
+// than the object being cast — the previous `component: {} as any` named a
+// field the type does not have.
+const widget = (id: string, defaultSize: WidgetConfig['defaultSize']): WidgetConfig => ({
+  id,
+  name: `Widget ${id}`,
+  description: `Desc ${id}`,
+  category: 'core',
+  defaultSize,
+  minPlan: 'free',
+  refreshInterval: 60_000,
+  apiEndpoint: `/api/tenant/dashboard/${id}`,
+});
 
 describe('getPlanDefaultLayout', () => {
   beforeEach(() => {
@@ -19,10 +34,7 @@ describe('getPlanDefaultLayout', () => {
   });
 
   it('generates layout based on widgets and caches the result', () => {
-    vi.mocked(getWidgetsForPlan).mockReturnValue([
-      { id: 'widget-1', defaultSize: '2x2', component: {} as any, name: 'Widget 1', description: 'Desc 1', category: 'stats' },
-      { id: 'widget-2', defaultSize: '1x1', component: {} as any, name: 'Widget 2', description: 'Desc 2', category: 'stats' },
-    ]);
+    vi.mocked(getWidgetsForPlan).mockReturnValue([widget('widget-1', '2x2'), widget('widget-2', '1x1')]);
 
     const planName = 'Premium';
 

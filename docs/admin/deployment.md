@@ -127,11 +127,12 @@ allowlisting / HMAC signing). See [Jobs & Realtime](./jobs-and-realtime.md).
 | Command | Purpose |
 | --- | --- |
 | `npm run db:migrate` | Apply pending migrations (canonical) |
+| `npm run db:bootstrap` | Build an **empty** database from the journal and verify RLS + ledger by query |
 | `npm run db:status` | Show migration status |
 | `npm run db:generate` | Generate a new migration |
 | `npm run db:rollback` | Roll back the last migration |
 | `npm run db:verify-chain` | Verify the migration chain integrity |
-| `npm run db:drift-check` | Detect schema drift |
+| `npm run db:drift-check` | Detect schema drift (tables, functions, RLS, and per-column nullability/type/presence). Runs in CI against a `db:bootstrap` database and nightly against pre-prod — see `.github/workflows/schema-drift.yml` |
 | `npm run db:verify-isolation` | Verify tenant isolation (RLS) |
 | `npm run db:verify-integrity` | Verify data integrity |
 

@@ -85,12 +85,13 @@ export function getPinnedClient(): PoolClient | undefined {
  * SQL that resets the tenant GUCs to empty (fail-closed) on a client. Kept in
  * sync with the pool.on('release') reset in lib/db/pool.ts.
  */
-// app.is_super_admin and app.auth_lookup are reset here too: both are meant to
-// be transaction-local (SET LOCAL via withSecurityContext/withAuthLookupContext)
-// but the helpers accept a bare client, and a privilege GUC that survives a
-// checkout would be handed to an unrelated request under PgBouncer.
+// app.is_super_admin, app.auth_lookup, app.tracking_lookup and the three
+// app.portal_lookup_* GUCs are reset here too: all are transaction-local by
+// intent (SET LOCAL via with*Context) but the helpers accept a bare client, and
+// a privilege GUC that survives a checkout is handed to an unrelated request under
+// PgBouncer — #2446: the portal ones name a bearer credential, not a workspace.
 const RESET_TENANT_GUCS_SQL =
-  "SELECT set_config('app.current_tenant', '', false), set_config('app.current_user', '', false), set_config('app.is_super_admin', 'false', false), set_config('app.auth_lookup', '', false)";
+  "SELECT set_config('app.current_tenant', '', false), set_config('app.current_user', '', false), set_config('app.is_super_admin', 'false', false), set_config('app.auth_lookup', '', false), set_config('app.tracking_lookup', '', false), set_config('app.portal_lookup_token', '', false), set_config('app.portal_lookup_tenant', '', false), set_config('app.portal_lookup_email', '', false)";
 
 /**
  * Per-pinned-client query serialization (#pinned-client-query-serialization).
@@ -136,15 +137,14 @@ function serializeClientQueries(client: PoolClient): PoolClient {
   return new Proxy(client, {
     get(target, prop, receiver) {
       if (prop === 'query') {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        return (...args: any[]) => {
+        type QueryArgs = Parameters<PoolClient['query']>;
+        return (...args: QueryArgs) => {
           const prior = clientQueryTail.get(target) ?? Promise.resolve();
           // Chain on the SETTLED prior query (success OR failure) so one
           // rejected query never poisons the queue for later ones.
           const run = prior
             .catch(() => undefined)
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            .then(() => (target.query as (...a: any[]) => Promise<unknown>)(...args));
+            .then(() => (target.query as (...a: QueryArgs) => Promise<unknown>)(...args));
           // The tail tracks completion (settled) so the next query waits for
           // this one; swallow here to avoid an unhandled rejection on the tail
           // itself — the real result/rejection is returned to the caller via

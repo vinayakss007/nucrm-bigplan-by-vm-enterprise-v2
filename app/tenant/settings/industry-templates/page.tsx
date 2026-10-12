@@ -6,6 +6,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useMutation } from '@tanstack/react-query';
 import { 
   Home, Laptop, Handshake, Check, ArrowRight, Loader2, 
   Sparkles, ShieldCheck, Zap, Layout
@@ -18,31 +19,32 @@ import { useRouter } from 'next/navigation';
 export default function IndustryTemplatesPage() {
   const router = useRouter();
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [applying, setApplying] = useState(false);
 
   const templates = Object.values(INDUSTRY_TEMPLATES);
 
-  const handleApply = async () => {
-    if (!selectedId) return;
-    
-    setApplying(true);
-    try {
+  // #1328: apply via useMutation (was raw fetch + useState applying flag).
+  const applyMutation = useMutation({
+    mutationFn: async () => {
       const res = await fetch('/api/tenant/industry-templates', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ templateId: selectedId }),
       });
-      
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Failed to apply template');
-      
+      return data;
+    },
+    onSuccess: () => {
       toast.success('Template applied successfully!');
       router.push('/tenant/dashboard');
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to apply template');
-    } finally {
-      setApplying(false);
-    }
+    },
+    onError: (err: Error) => toast.error(err.message || 'Failed to apply template'),
+  });
+  const applying = applyMutation.isPending;
+
+  const handleApply = () => {
+    if (!selectedId) return;
+    applyMutation.mutate();
   };
 
   const getIcon = (icon: string) => {

@@ -9,7 +9,7 @@ import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { createServiceSchema } from '@/lib/api/schemas';
 import { db } from '@/drizzle/db';
 import { services } from '@/drizzle/schema';
-import { eq, and, desc, like } from 'drizzle-orm';
+import { eq, and, desc, like, isNull, type SQL} from 'drizzle-orm';
 import { requireAuth } from '@/lib/auth/middleware';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
@@ -18,10 +18,10 @@ export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
-    const { tenantId, userId: _userId, isSuperAdmin } = ctx;
+    const { tenantId, userId: _userId, isSuperAdmin, noWorkspace } = ctx;
 
     // Superadmin without tenant needs to use a real tenant
-    if (isSuperAdmin && (!tenantId || tenantId === '__superadmin_no_tenant__')) {
+    if (isSuperAdmin && (noWorkspace || !tenantId)) {
       return NextResponse.json({ 
         error: 'Superadmin must select a tenant workspace',
         code: 'SUPERADMIN_NO_TENANT'
@@ -35,8 +35,9 @@ export const GET = withApiRoute(async (request: NextRequest) => {
 
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const conditions: any[] = [eq(services.tenantId, tenantId)];
+    // DELETE is a soft delete (deletedAt), so the list/picker must exclude the
+    // tombstone or a deleted service keeps surfacing (#2236).
+    const conditions: SQL[] = [eq(services.tenantId, tenantId), isNull(services.deletedAt)];
     if (activeOnly) conditions.push(eq(services.isActive, true));
     if (category) conditions.push(eq(services.category, category));
     if (search) conditions.push(like(services.name, `%${search}%`));

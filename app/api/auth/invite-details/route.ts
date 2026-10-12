@@ -6,7 +6,7 @@
 import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { verifyToken } from '@/lib/auth/session';
+import { getCurrentUserForToken } from '@/lib/auth/session';
 import { db } from '@/drizzle/db';
 import { invitations, tenants, users } from '@/drizzle/schema';
 import { eq, and, gt, isNull } from 'drizzle-orm';
@@ -46,10 +46,11 @@ export async function GET(request: NextRequest) {
       const cookieStore = await cookies();
       const sessionToken = cookieStore.get('nucrm_session')?.value;
       if (sessionToken) {
-        const p = await verifyToken(sessionToken);
+        // #2216: only count a live session, not a revoked-but-unexpired JWT.
+        const p = await getCurrentUserForToken(sessionToken);
         if (p) {
           const u = await db.query.users.findFirst({
-            where: eq(users.id, p.userId),
+            where: eq(users.id, p.id),
             columns: { email: true }
           });
           isLoggedIn = u?.email?.toLowerCase() === inv.email.toLowerCase();

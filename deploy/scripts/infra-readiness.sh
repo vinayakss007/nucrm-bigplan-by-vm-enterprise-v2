@@ -21,7 +21,7 @@
 #
 #  Usage (on the VM):
 #    bash deploy/scripts/infra-readiness.sh                 # full check
-#    bash deploy/scripts/infra-readiness.sh --public-ip 1.2.3.4   # also probe firewall from host
+#    bash deploy/scripts/infra-readiness.sh --public-ip 203.0.113.9   # also probe firewall from host
 #    STRICT=1 bash deploy/scripts/infra-readiness.sh        # WARN => FAIL (CI/launch gate)
 #
 #  Exit codes: 0 = ready (warnings allowed), 1 = one or more hard failures.

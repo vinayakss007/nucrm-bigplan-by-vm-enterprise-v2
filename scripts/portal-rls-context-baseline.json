@@ -1,0 +1,4 @@
+{
+  "_comment": "Exemptions for scripts/check-portal-rls-context.mts (#2446). Every entry is RE-VERIFIED on each run: the reason must be long enough to argue with, deferredTo must be a real issue number, pinnedBy must be a test file that exists and names the same table. An entry that matches no violation fails the guard's unit test, so the list ratchets down. It is EMPTY as of #2468: the bearer-token surface (offers/*, sign/[token], csat/[token]) that #2446 deferred here now derives its context from the credential row — migration 0123's narrow lookup policies plus withPortalLookupContext/withTenantContext at each call site. Do not add an entry to make CI go green: a route that reads a tenant-policyed table on the pool returns zero rows silently, which is the failure #2446 was filed for.",
+  "entries": []
+}

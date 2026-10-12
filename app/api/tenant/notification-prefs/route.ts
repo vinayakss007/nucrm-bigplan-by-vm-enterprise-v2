@@ -10,7 +10,7 @@ import { updateNotificationPrefsSchema } from '@/lib/api/schemas';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { tenantMembers } from '@/drizzle/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 import { concurrencyGuard, checkStaleUpdate } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
@@ -26,10 +26,17 @@ export const GET = withApiRoute(async (req: NextRequest) => {
         eq(tenantMembers.tenantId, ctx.tenantId),
         eq(tenantMembers.status, 'active')
       ),
-      columns: { notificationPrefs: true }
+      columns: { notificationPrefs: true, updatedAt: true }
     });
 
-    return NextResponse.json({ data: row?.notificationPrefs ?? {} });
+    // `updatedAt` is not decoration: PATCH only applies `expectedUpdatedAt` when
+    // the caller echoes back the row's current value, and this GET is the only
+    // place a client can read it. Omit it and the concurrency guard is
+    // unreachable — two admins editing prefs at once silently lose one edit.
+    return NextResponse.json({
+      data: row?.notificationPrefs ?? {},
+      updatedAt: row?.updatedAt?.toISOString() ?? null,
+    });
  
  
   } catch (err) { return apiError(err); }
@@ -47,8 +54,7 @@ export const PATCH = withApiRoute(async (req: NextRequest) => {
     const v = validated.data;
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const safe: Record<string, any> = {};
+    const safe: Record<string, unknown> = {};
     if (v['email_notifications'] !== undefined) safe['email_notifications'] = v['email_notifications'];
     if (v['push_notifications'] !== undefined) safe['push_notifications'] = v['push_notifications'];
     if (v['notification_frequency'] !== undefined) safe['notification_frequency'] = v['notification_frequency'];
@@ -57,8 +63,7 @@ export const PATCH = withApiRoute(async (req: NextRequest) => {
     if (v['notify_on_ticket_created'] !== undefined) safe['notify_on_ticket_created'] = v['notify_on_ticket_created'];
     if (v['notify_on_task_due'] !== undefined) safe['notify_on_task_due'] = v['notify_on_task_due'];
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const concurrencyWhere = concurrencyGuard(tenantMembers, (rawBody as any).expectedUpdatedAt);
+    const concurrencyWhere = concurrencyGuard(tenantMembers, rawBody.expectedUpdatedAt);
     const whereConditions = [
       eq(tenantMembers.userId, ctx.userId),
       eq(tenantMembers.tenantId, ctx.tenantId),
@@ -67,14 +72,27 @@ export const PATCH = withApiRoute(async (req: NextRequest) => {
     if (concurrencyWhere) whereConditions.push(concurrencyWhere);
 
     const [updated] = await db.update(tenantMembers)
-      .set({ notificationPrefs: safe, updatedAt: new Date() })
+      // Merge, do not replace. `notification_prefs` is shared with
+      // /api/tenant/notifications/matrix, which stores its whole per-event
+      // channel grid under the `matrix` key of this same column. Assigning
+      // `safe` outright deleted that grid on every prefs save.
+      .set({
+        notificationPrefs: sql`
+          COALESCE(${tenantMembers.notificationPrefs}, '{}'::jsonb) || ${JSON.stringify(safe)}::jsonb
+        `,
+        updatedAt: new Date(),
+      })
       .where(and(...whereConditions))
-      .returning();
+      .returning({ notificationPrefs: tenantMembers.notificationPrefs, updatedAt: tenantMembers.updatedAt });
 
     const stale = checkStaleUpdate(updated);
     if (stale) return stale;
 
-    return NextResponse.json({ ok: true, data: safe });
+    return NextResponse.json({
+      ok: true,
+      data: updated!.notificationPrefs ?? {},
+      updatedAt: updated!.updatedAt?.toISOString() ?? null,
+    });
  
  
   } catch (err) { return apiError(err); }

@@ -11,6 +11,7 @@ import { readJsonBody } from '@/lib/api/validate';
 import { signOAuthState } from '@/lib/calendar-sync/state';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { cookieSecureForRequest } from '@/lib/auth/cookie-security';
 
 export const GET = withApiRoute(async (request: NextRequest) => {
   try {
@@ -35,7 +36,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     const response = NextResponse.json({ authUrl, state });
     response.cookies.set('oauth_state', state, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: cookieSecureForRequest(request),
       sameSite: 'lax',
       path: '/',
       maxAge: 600,

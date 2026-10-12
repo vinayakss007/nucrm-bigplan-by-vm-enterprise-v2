@@ -142,8 +142,7 @@ export const PATCH = withApiRoute(async (request: NextRequest) => {
     const body = await readJsonBody(request);
     const expectedUpdatedAt = body.expectedUpdatedAt ?? body._updated_at;
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const updateData: any = {};
+    const updateData: Partial<typeof tenants.$inferInsert> = {};
     
     // Map allowed fields to camelCase
     if (body.name !== undefined) updateData.name = body.name;

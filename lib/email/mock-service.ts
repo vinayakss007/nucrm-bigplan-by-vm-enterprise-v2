@@ -16,6 +16,7 @@
 
 import crypto from 'crypto';
 import nodemailer from 'nodemailer';
+import type { Transporter } from 'nodemailer';
 
 export interface EmailOptions {
   to: string | string[];
@@ -43,8 +44,7 @@ class MockEmailService implements EmailService {
   // sends instead of building a fresh one on every call. Mirrors the caching in
   // lib/email/service.ts, keyed by a hash of the SMTP config so a credential
   // change transparently rebuilds the transporter instead of reusing stale auth.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private transporter: any = null;
+  private transporter: Transporter | null = null;
   private transporterConfig: string | null = null;
 
   private getTransporter() {

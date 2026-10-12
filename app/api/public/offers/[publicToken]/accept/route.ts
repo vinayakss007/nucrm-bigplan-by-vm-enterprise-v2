@@ -19,14 +19,15 @@
  *   - audit log entry
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/drizzle/db';
 import { quotes, activities } from '@/drizzle/schema';
-import { eq, sql } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { logAudit } from '@/lib/audit';
+import { withTenantContext, NO_USER_SENTINEL } from '@/lib/db/rls';
 import {
   findOfferByToken,
+  patchOfferMetadata,
   canTransition,
 } from '@/lib/offers';
 import { z } from 'zod';
@@ -36,6 +37,16 @@ const offerAcceptSchema = z.object({
   email: z.string().email().max(200).optional().nullable(),
   signature: z.string().max(200).optional().nullable(),
 });
+
+/**
+ * What the one transaction decided, mapped to a response outside the RLS context
+ * (#2446's K2 rule). Before #2468 these branches returned `NextResponse` from
+ * inside a bare `db.transaction()`, so a pool connection could be handed to the
+ * next request mid-accept; now they are data.
+ */
+type AcceptOutcome =
+  | { kind: 'expired' }
+  | { kind: 'accepted'; acceptedAt: Date };
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ publicToken: string }> }) {
   try {
@@ -49,10 +60,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pub
     if (!canTransition(offer.status ?? '', 'accepted')) {
       return NextResponse.json({ error: 'Offer cannot be accepted in its current state' }, { status: 409 });
     }
-    if (offer.expiresAt && new Date(offer.expiresAt).getTime() < Date.now()) {
-      await db.update(quotes).set({ status: 'expired', updatedAt: new Date() }).where(eq(quotes.id, offer.id));
-      return NextResponse.json({ error: 'Offer has expired' }, { status: 410 });
-    }
 
     let raw;
     try { raw = await readJsonBody(req); } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
@@ -61,26 +68,30 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pub
     const email = parsed.data.email?.trim() ?? null;
     const signature = parsed.data.signature?.trim() ?? null;
 
-    const now = new Date();
-    await db.transaction(async (tx) => {
+    // #2468: `quotes` and `activities` are both tenant-policyed and this handler
+    // named no workspace for either — the expire write ran on the bare pool and
+    // the accept wrote through a transaction with no GUCs. The whole lifecycle
+    // write is now one transaction scoped to the tenant the credential resolved.
+    // #2446's sibling (`app/api/public/quotes/[id]/accept`) is the shape copied.
+    const outcome = await withTenantContext(offer.tenantId, NO_USER_SENTINEL, async (tx): Promise<AcceptOutcome> => {
+      if (offer.expiresAt && new Date(offer.expiresAt).getTime() < Date.now()) {
+        await tx.update(quotes).set({ status: 'expired', updatedAt: new Date() }).where(eq(quotes.id, offer.id));
+        return { kind: 'expired' };
+      }
+
+      const now = new Date();
       await tx
         .update(quotes)
         .set({ status: 'accepted', acceptedAt: now, updatedAt: now })
         .where(eq(quotes.id, offer.id));
 
-      await tx
-        .update(quotes)
-        .set({
-          metadata: sql`
-            jsonb_set(
-              COALESCE(${quotes.metadata}, '{}'::jsonb),
-              '{offer}',
-              COALESCE(${quotes.metadata}->'offer', '{}'::jsonb) || ${JSON.stringify({ accepted_by_email: email ?? undefined, accepted_at: now.toISOString() })}::jsonb
-            )
-          `,
-          updatedAt: now,
-        })
-        .where(eq(quotes.id, offer.id));
+      // One jsonb merge through patchOfferMetadata instead of the second inline
+      // jsonb_set this route used to run: same merge semantics as decline, and it
+      // scopes the write to (id, tenantId) rather than to the id alone.
+      await patchOfferMetadata(offer.id, offer.tenantId, {
+        accepted_by_email: email ?? undefined,
+        accepted_at: now.toISOString(),
+      }, tx);
 
       if (offer.contactId) {
         await tx.insert(activities).values({
@@ -95,7 +106,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pub
           metadata: { offer_id: offer.id, total_amount: offer.totalAmount, accepted_by_email: email, signature },
         });
       }
+
+      return { kind: 'accepted', acceptedAt: now };
     });
+
+    if (outcome.kind === 'expired') return NextResponse.json({ error: 'Offer has expired' }, { status: 410 });
 
     await logAudit({
       tenantId: offer.tenantId,
@@ -105,7 +120,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pub
       newData: { accepted_by_email: email },
     });
 
-    return NextResponse.json({ ok: true, status: 'accepted', accepted_at: now.toISOString() });
+    return NextResponse.json({ ok: true, status: 'accepted', accepted_at: outcome.acceptedAt.toISOString() });
   } catch (err) {
     return apiError(err);
   }

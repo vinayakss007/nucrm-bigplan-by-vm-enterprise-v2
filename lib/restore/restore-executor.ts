@@ -28,6 +28,7 @@ import {
 } from './backup-parser';
 import { validateTableName } from '@/lib/sql-allowlist';
 import { logError } from '@/lib/errors-server';
+import { tenantScope } from '@/lib/tenant-restore-wipe';
 
 /**
  * Foreign key dependency ordering for restore.
@@ -163,16 +164,15 @@ export async function createPreRestoreSnapshot(
   tables: string[]
 ): Promise<string> {
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const snapshotData: Record<string, any[]> = {};
+  const snapshotData: Record<string, Record<string, unknown>[]> = {};
   let totalRecords = 0;
   
   for (const table of tables) {
     validateTableName(table);
     try {
-      const result = await db.execute(sql`
-        SELECT * FROM ${sql.identifier(table)} WHERE tenant_id = ${tenantId}
-      `);
+      // A platform-wide table has no tenant predicate — scope it as empty.
+      const where = tenantScope(table, tenantId) ?? sql`false`;
+      const result = await db.execute(sql`SELECT * FROM ${sql.identifier(table)} WHERE ${where}`);
       snapshotData[table] = result.rows;
       totalRecords += result.rows.length;
     } catch {
@@ -206,19 +206,20 @@ export async function rollbackToSnapshot(snapshotId: string, tenantId: string): 
   }
   
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const snapshotData = snapshot.snapshotData as Record<string, any[]>;
+  const snapshotData = snapshot.snapshotData as Record<string, Record<string, unknown>[]>;
   
   await db.transaction(async (tx) => {
     for (const [table, rows] of Object.entries(snapshotData)) {
       // Reject any table name not on the allowlist before it reaches SQL
       const safeTable = validateTableName(table);
-      // Delete current data
-      await tx.execute(sql`DELETE FROM ${sql.identifier(safeTable)} WHERE tenant_id = ${tenantId}`);
+      // Delete current data; a platform-wide table has no tenant predicate, so skip it.
+      const delWhere = tenantScope(safeTable, tenantId);
+      if (!delWhere) continue;
+      await tx.execute(sql`DELETE FROM ${sql.identifier(safeTable)} WHERE ${delWhere}`);
       
       // Restore from snapshot
       if (Array.isArray(rows) && rows.length > 0) {
-        const columns = Object.keys(rows[0]);
+        const columns = Object.keys(rows[0]!);
         const colIdents = columns.map(c => sql.identifier(c));
 
         const chunkSize = 1000;
@@ -404,15 +405,15 @@ export async function executeSelectiveRestore(
     
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (error: any) {
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
     const durationMs = Date.now() - startTime;
     onProgress({
       step: 'failed',
       currentCount: 0,
       totalCount: 0,
       status: 'failed',
-      message: `Restore failed: ${error.message}`,
+      message: `Restore failed: ${errorMsg}`,
     });
     
     return {
@@ -421,7 +422,7 @@ export async function executeSelectiveRestore(
       recordsPerTable,
       durationMs,
       unparsedStatements,
-      error: error.message,
+      error: errorMsg,
     };
   }
 }
@@ -434,9 +435,8 @@ export async function countExistingRecords(
   for (const table of tables) {
     try {
       const safeTable = validateTableName(table);
-      const result = await db.execute(sql`
-        SELECT count(*)::int as cnt FROM ${sql.identifier(safeTable)} WHERE tenant_id = ${tenantId}
-      `);
+      const where = tenantScope(safeTable, tenantId) ?? sql`false`;
+      const result = await db.execute(sql`SELECT count(*)::int as cnt FROM ${sql.identifier(safeTable)} WHERE ${where}`);
       const row = result.rows[0] as { cnt?: number } | undefined;
       counts[table] = row?.cnt ?? 0;
     } catch (err) {
@@ -452,8 +452,7 @@ export async function validateTenant(tenantId: string): Promise<{
   valid: boolean;
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  tenant?: any;
+  tenant?: { id: string; name: string; slug: string; status: string };
   error?: string;
 }> {
   const tenant = await db.query.tenants.findFirst({

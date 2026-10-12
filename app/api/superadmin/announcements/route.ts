@@ -8,7 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { announcements } from '@/drizzle/schema';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, isNull } from 'drizzle-orm';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { createAnnouncementSchema, updateAnnouncementSchema, deleteAnnouncementSchema } from '@/lib/api/schemas';
 import { logSuperAdminAction } from '@/lib/audit/super-admin';
@@ -36,6 +36,8 @@ export const GET = withApiRoute(async (request: NextRequest) => {
         updated_at: announcements.updatedAt,
       })
       .from(announcements)
+      // #2291: hide soft-deleted announcements from the superadmin list.
+      .where(isNull(announcements.deletedAt))
       .orderBy(desc(announcements.createdAt))
       .limit(50)
       .catch((err) => { void logError({ error: err, context: 'superadmin/announcements list query' }); return []; });
@@ -75,7 +77,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       })
       .returning();
 
-    logSuperAdminAction({
+    await logSuperAdminAction({
       adminId: ctx.userId,
       adminEmail: ctx.user?.email || "",
       action: 'settings.changed',
@@ -123,7 +125,7 @@ export const PATCH = withApiRoute(async (request: NextRequest) => {
 
     if (!row) return NextResponse.json({ error: 'Announcement was modified by another user — please refresh' }, { status: 409 });
 
-    logSuperAdminAction({
+    await logSuperAdminAction({
       adminId: ctx.userId,
       adminEmail: ctx.user?.email || "",
       action: 'settings.changed',
@@ -154,7 +156,7 @@ export const DELETE = withApiRoute(async (request: NextRequest) => {
 
     await db.delete(announcements).where(eq(announcements.id, result.data.id));
 
-    logSuperAdminAction({
+    await logSuperAdminAction({
       adminId: ctx.userId,
       adminEmail: ctx.user?.email || "",
       action: 'settings.changed',

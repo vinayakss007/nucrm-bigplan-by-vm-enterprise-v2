@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { z } from 'zod';
+import { uuidIdSchema } from '@/lib/validation/uuid';
 import { requiredString } from './common';
 
 // ── Plan schemas ──
@@ -30,24 +31,31 @@ export const updatePlanSchema = createPlanSchema.partial().extend({
 });
 
 // ── Announcement schemas ──
+// `type` and `target` are the exact vocabularies `chk_announcements_type` and
+// `chk_announcements_target` accept (see drizzle/schema/infra.ts). Anything
+// outside them passes validation, reaches the INSERT and comes back as 23514 →
+// a 500 for the admin and an announcement that was never written.
+const ANNOUNCEMENT_TYPES = ['info', 'warning', 'update', 'feature'] as const;
+const ANNOUNCEMENT_TARGETS = ['all', 'plans', 'tenants', 'users', 'super_admins'] as const;
+
 export const createAnnouncementSchema = z.object({
   title: requiredString.max(200, 'Title too long'),
   body: z.string().max(10000).optional(),
   content: z.string().max(10000).optional(),
-  type: z.enum(['info', 'warning', 'success', 'error', 'maintenance']).optional().default('info'),
-  target: z.enum(['all', 'plans', 'tenants', 'users']).optional().default('all'),
+  type: z.enum(ANNOUNCEMENT_TYPES).optional().default('info'),
+  target: z.enum(ANNOUNCEMENT_TARGETS).optional().default('all'),
   is_active: z.boolean().optional().default(true),
   starts_at: z.string().datetime().optional().nullable(),
   ends_at: z.string().datetime().optional().nullable(),
 });
 
 export const updateAnnouncementSchema = z.object({
-  id: z.string().uuid(),
+  id: uuidIdSchema,
   title: z.string().trim().max(200).optional(),
   body: z.string().max(10000).optional(),
   content: z.string().max(10000).optional(),
-  type: z.enum(['info', 'warning', 'success', 'error', 'maintenance']).optional(),
-  target: z.enum(['all', 'plans', 'tenants', 'users']).optional(),
+  type: z.enum(ANNOUNCEMENT_TYPES).optional(),
+  target: z.enum(ANNOUNCEMENT_TARGETS).optional(),
   is_active: z.boolean().optional(),
   starts_at: z.string().datetime().optional().nullable(),
   ends_at: z.string().datetime().optional().nullable(),
@@ -55,12 +63,12 @@ export const updateAnnouncementSchema = z.object({
 });
 
 export const deleteAnnouncementSchema = z.object({
-  id: z.string().uuid(),
+  id: uuidIdSchema,
 });
 
 // ── System Key schema ──
 export const setSystemKeySchema = z.object({
-  tenantId: z.string().uuid(),
+  tenantId: uuidIdSchema,
   provider: requiredString.max(50),
   api_key: z.string().min(1, 'API key is required'),
   base_url: z.string().url().optional().nullable(),
@@ -71,9 +79,9 @@ export const setSystemKeySchema = z.object({
 export const updateRateLimitsSchema = z.object({
   action: z.enum(['update_global', 'update_plan_limits', 'toggle_super_admin_unlimited', 'reset_to_defaults']),
   rateLimits: z.record(z.string(), z.unknown()).optional(),
-  planId: z.string().uuid().optional(),
+  planId: uuidIdSchema.optional(),
   unlimited: z.boolean().optional(),
-  userId: z.string().uuid().optional(),
+  userId: uuidIdSchema.optional(),
 });
 
 // ── Superadmin Invite Member schema ──
@@ -125,8 +133,8 @@ export const platformSettingsSchema = z.record(
 export const createBackupSchema = z.object({
   backup_type: z.enum(['full', 'schema', 'selective']).optional().default('full'),
   action: z.literal('restore').optional(),
-  backupId: z.string().uuid().optional(),
-  tenant_id: z.string().uuid().optional(),
+  backupId: uuidIdSchema.optional(),
+  tenant_id: uuidIdSchema.optional(),
 });
 
 export const backupConfigSchema = z.object({

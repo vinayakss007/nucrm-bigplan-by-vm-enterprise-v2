@@ -4,12 +4,24 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { z } from 'zod';
+import { uuidIdSchema } from '@/lib/validation/uuid';
 import { uuid, requiredString } from './common';
 
 // ── Ticket schemas ──
-export const createTicketSchema = z.object({
+/**
+ * `support_tickets.body` is NOT NULL, but `description` used to be optional, so a
+ * body-less POST sailed through validation and the INSERT threw — a 500 whose dev
+ * message carried the whole SQL statement plus its bound values (Issue #2285).
+ *
+ * Clients also naturally send `body`, the name the column and the Helpdesk create
+ * modal use; it was silently dropped, so even a caller that supplied body text got
+ * the 500. Both names are accepted, and at least one must carry text.
+ */
+const ticketBodyField = z.string().trim().max(10000);
+const ticketFieldsSchema = z.object({
   subject: requiredString.max(300, 'Subject too long'),
-  description: z.string().trim().max(10000).nullable().optional(),
+  description: ticketBodyField.nullable().optional(),
+  body: ticketBodyField.nullable().optional(),
   status: z.enum(['open', 'in_progress', 'pending', 'resolved', 'closed', 'awaiting_customer', 'on_hold', 'escalated']).optional().default('open'),
   priority: z.enum(['low', 'medium', 'high', 'urgent', 'critical']).optional().default('medium'),
   category: z.string().trim().max(100).nullable().optional(),
@@ -18,7 +30,29 @@ export const createTicketSchema = z.object({
   tags: z.array(z.string()).optional().default([]),
 });
 
-export const updateTicketSchema = createTicketSchema.partial();
+/**
+ * The text that actually lands in `support_tickets.body`: whichever name the
+ * caller used, preferring a non-empty `description`. Empty for a value that never
+ * passed `createTicketSchema` — the schema is what guarantees a real string.
+ */
+export function ticketBodyText(v: { description?: string | null; body?: string | null }): string {
+  const description = (v.description ?? '').trim();
+  return description || (v.body ?? '').trim();
+}
+
+export const createTicketSchema = ticketFieldsSchema.superRefine((v, ctx) => {
+  if (!ticketBodyText(v)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['description'],
+      message: 'description (or body) is required',
+    });
+  }
+});
+
+// `.partial()` refuses a refined object, so the PATCH contract is derived from
+// the unrefined fields — a status/priority-only edit stays valid.
+export const updateTicketSchema = ticketFieldsSchema.partial();
 
 export const ticketQuerySchema = z.object({
   offset: z.coerce.number().int().min(0).default(0),
@@ -45,14 +79,14 @@ export const createTicketReplySchema = z.object({
 export const ticketReplyQuerySchema = z.object({
   offset: z.coerce.number().int().min(0).default(0),
   limit: z.coerce.number().int().min(1).max(200).default(50),
-  contact_id: z.string().uuid().optional(),
+  contact_id: uuidIdSchema.optional(),
 });
 
 // ── KB Article schemas ──
 export const createKbArticleSchema = z.object({
   title: requiredString.max(300),
   content: requiredString.max(50000),
-  category_id: z.string().uuid().optional(),
+  category_id: uuidIdSchema.optional(),
   status: z.enum(['draft', 'published', 'archived', 'review', 'needs_review']).optional().default('draft'),
   tags: z.array(z.string()).optional().default([]),
   order: z.coerce.number().int().min(0).optional().default(0),
@@ -65,7 +99,7 @@ export const kbArticleQuerySchema = z.object({
   offset: z.coerce.number().int().min(0).default(0),
   limit: z.coerce.number().int().min(1).max(200).default(50),
   q: z.string().optional(),
-  category_id: z.string().uuid().optional(),
+  category_id: uuidIdSchema.optional(),
   status: z.string().optional(),
   tags: z.array(z.string()).optional(),
 });

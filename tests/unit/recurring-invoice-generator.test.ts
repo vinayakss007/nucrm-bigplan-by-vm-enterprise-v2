@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { NextRequest } from 'next/server';
+import type { CronTenantSweep } from '@/lib/cron/tenant-scope';
 
 // ── Captured writes so tests can assert on what the cron inserted/updated ─────
 type Row = Record<string, unknown>;
@@ -10,6 +11,28 @@ const updated: { set: Row }[] = [];
 let dueTemplates: Row[] = [];
 // The line items the SELECT on `invoiceLineItems` returns.
 let lineItems: Row[] = [];
+
+// The tenant whose RLS context the (mocked) sweep stands in.
+const TENANT_A = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+const TENANT_B = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+
+const mockSweepTenants = vi.fn(
+  async (
+    _context: string,
+    body: (tenantId: string) => Promise<void>,
+  ): Promise<CronTenantSweep> => {
+    await body(TENANT_A);
+    return { visited: 1, skipped: [], failed: [] };
+  },
+);
+
+// invoices and invoice_line_items carry plain tenant_isolation with no
+// super-admin branch, so the route must run inside a per-tenant sweep
+// (lib/cron/tenant-scope.ts). Mocked here so the generation logic stays under
+// test while the sweep contract is asserted separately.
+vi.mock('@/lib/cron/tenant-scope', () => ({
+  sweepTenants: mockSweepTenants,
+}));
 
 // db.select() is used twice with different shapes:
 //   invoices:        .from().where()            -> due templates
@@ -55,8 +78,23 @@ vi.mock('@/drizzle/db', () => ({
 }));
 
 vi.mock('@/drizzle/schema', () => ({
-  invoices: { toString: () => 'invoices', tenantId: 't', invoiceNumber: 'n', isRecurring: 'r', deletedAt: 'd', status: 's', nextBillingDate: 'nb', id: 'id' },
-  invoiceLineItems: { toString: () => 'invoice_line_items', invoiceId: 'inv', sortOrder: 'so' },
+  invoices: {
+    toString: () => 'invoices',
+    id: 'invoices.id',
+    tenantId: 'invoices.tenant_id',
+    invoiceNumber: 'invoices.invoice_number',
+    isRecurring: 'invoices.is_recurring',
+    deletedAt: 'invoices.deleted_at',
+    status: 'invoices.status',
+    nextBillingDate: 'invoices.next_billing_date',
+    metadata: 'invoices.metadata',
+  },
+  invoiceLineItems: {
+    toString: () => 'invoice_line_items',
+    tenantId: 'invoice_line_items.tenant_id',
+    invoiceId: 'invoice_line_items.invoice_id',
+    sortOrder: 'invoice_line_items.sort_order',
+  },
 }));
 
 vi.mock('drizzle-orm', () => ({
@@ -85,13 +123,57 @@ function makeReq(withSecret = true): NextRequest {
   }) as unknown as NextRequest;
 }
 
+function templateFixture(overrides: Row = {}): Row {
+  return {
+    id: 'tmpl-1',
+    tenantId: TENANT_A,
+    contactId: 'c1',
+    companyId: null,
+    dealId: null,
+    title: 'Monthly retainer',
+    subtotal: '100.00',
+    discountType: 'percentage',
+    discountValue: '0',
+    discountAmount: '0',
+    taxAmount: '18.00',
+    taxRate: '18',
+    totalAmount: '118.00',
+    currency: 'INR',
+    notes: 'thanks',
+    terms: 'net 15',
+    footer: null,
+    issueDate: '2026-01-01',
+    dueDate: '2026-01-15',
+    isRecurring: true,
+    recurringFrequency: 'monthly',
+    nextBillingDate: '2026-02-01',
+    parentInvoiceId: null,
+    createdBy: 'user-1',
+    ...overrides,
+  };
+}
+
+const lineItemFixture: Row = {
+  invoiceId: 'tmpl-1',
+  productId: null, serviceId: null, description: 'Retainer', itemType: 'custom',
+  quantity: '1', unitPrice: '100.00', discountType: 'percentage', discountValue: '0',
+  discountAmount: '0', taxRate: '18', taxAmount: '18.00', total: '100.00', sortOrder: 0,
+};
+
 describe('recurring-invoice-generator cron', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
     inserted.length = 0;
     updated.length = 0;
     dueTemplates = [];
     lineItems = [];
+    mockSweepTenants.mockImplementation(async (_context, body) => {
+      await body(TENANT_A);
+      return { visited: 1, skipped: [], failed: [] };
+    });
+    // clearAllMocks() keeps mockReturnValue(), so pin the auth seam per test.
+    const { verifySecret } = await import('@/lib/crypto');
+    vi.mocked(verifySecret).mockReturnValue(true);
   });
 
   it('rejects requests without a valid cron secret', async () => {
@@ -100,6 +182,7 @@ describe('recurring-invoice-generator cron', () => {
     const { POST } = await import('@/app/api/cron/recurring-invoice-generator/route');
     const res = await POST(makeReq(false));
     expect(res.status).toBe(401);
+    expect(mockSweepTenants).not.toHaveBeenCalled();
   });
 
   it('skips when the distributed lock is held', async () => {
@@ -108,51 +191,25 @@ describe('recurring-invoice-generator cron', () => {
     const { POST } = await import('@/app/api/cron/recurring-invoice-generator/route');
     const res = await POST(makeReq());
     const body = await res.json();
-    expect(res.status).toBe(200);
-    expect(body.skipped).toBe(true);
+    expect(res.status).toBe(423);
+    // #2539: a skipped run is not a run. `ok: true` was the mask; the 423 itself
+    // is pinned for all 22 routes in tests/unit/cron-lock-refusal-2539.test.ts.
+    expect(body.ok).toBe(false);
+    expect(body.skipped).toBe('lock-held');
+    expect(mockSweepTenants).not.toHaveBeenCalled();
   });
 
   it('returns due=0 generated=0 when nothing is due', async () => {
     const { POST } = await import('@/app/api/cron/recurring-invoice-generator/route');
     const res = await POST(makeReq());
     const body = await res.json();
-    expect(body).toMatchObject({ ok: true, due: 0, generated: 0, failed: 0 });
+    expect(body).toMatchObject({ ok: true, due: 0, generated: 0, failed: 0, tenants_checked: 1 });
     expect(inserted).toHaveLength(0);
   });
 
   it('generates one invoice per due template, clones line items, links the series, advances the schedule', async () => {
-    dueTemplates = [{
-      id: 'tmpl-1',
-      tenantId: 'tenant-1',
-      contactId: 'c1',
-      companyId: null,
-      dealId: null,
-      title: 'Monthly retainer',
-      subtotal: '100.00',
-      discountType: 'percentage',
-      discountValue: '0',
-      discountAmount: '0',
-      taxAmount: '18.00',
-      taxRate: '18',
-      totalAmount: '118.00',
-      currency: 'INR',
-      notes: 'thanks',
-      terms: 'net 15',
-      footer: null,
-      issueDate: '2026-01-01',
-      dueDate: '2026-01-15',
-      isRecurring: true,
-      recurringFrequency: 'monthly',
-      nextBillingDate: '2026-02-01',
-      parentInvoiceId: null,
-      createdBy: 'user-1',
-    }];
-    lineItems = [{
-      invoiceId: 'tmpl-1',
-      productId: null, serviceId: null, description: 'Retainer', itemType: 'custom',
-      quantity: '1', unitPrice: '100.00', discountType: 'percentage', discountValue: '0',
-      discountAmount: '0', taxRate: '18', taxAmount: '18.00', total: '100.00', sortOrder: 0,
-    }];
+    dueTemplates = [templateFixture()];
+    lineItems = [lineItemFixture];
 
     const { POST } = await import('@/app/api/cron/recurring-invoice-generator/route');
     const res = await POST(makeReq());
@@ -186,5 +243,210 @@ describe('recurring-invoice-generator cron', () => {
 
     // Template schedule advanced monthly: 2026-02-01 -> 2026-03-01.
     expect(updated.some((u) => u.set.nextBillingDate === '2026-03-01')).toBe(true);
+  });
+
+  // ── #2429: month-end series must clamp, and must come back to month end ─────
+  // Every case below is a NON-LEAP February on purpose. Under the old
+  // `setUTCMonth` code 2024-01-31 -> 2024-02-29 looked correct, which is how the
+  // defect survived; 2026-01-31 -> 2026-03-03 is the same call, visibly wrong.
+
+  it('advances a month-end template to 28 Feb, not 3 Mar', async () => {
+    dueTemplates = [templateFixture({ nextBillingDate: '2026-01-31' })];
+    lineItems = [];
+
+    const { POST } = await import('@/app/api/cron/recurring-invoice-generator/route');
+    const body = await (await POST(makeReq())).json();
+
+    expect(body).toMatchObject({ ok: true, due: 1, generated: 1, failed: 0 });
+    expect(updated.map((u) => u.set.nextBillingDate)).toContain('2026-02-28');
+    expect(updated.some((u) => String(u.set.nextBillingDate).endsWith('-03'))).toBe(false);
+  });
+
+  it('returns a month-end series to the 31st after February, from the stored anchor', async () => {
+    // Second run of the series above: the template now sits on 2026-02-28 and
+    // carries the anchor recorded on the first run.
+    dueTemplates = [templateFixture({
+      nextBillingDate: '2026-02-28',
+      metadata: { billing_anchor_day: 31 },
+    })];
+    lineItems = [];
+
+    const { POST } = await import('@/app/api/cron/recurring-invoice-generator/route');
+    await POST(makeReq());
+
+    // Without the anchor this is 2026-03-28 — a month-end customer pinned to the
+    // 28th forever, which is the failure mode a plain clamp produces.
+    expect(updated.map((u) => u.set.nextBillingDate)).toContain('2026-03-31');
+  });
+
+  it('records the anchor day on the template without replacing its other metadata', async () => {
+    dueTemplates = [templateFixture({
+      nextBillingDate: '2026-01-31',
+      metadata: { seller_note: 'keep me' },
+    })];
+    lineItems = [];
+
+    const { POST } = await import('@/app/api/cron/recurring-invoice-generator/route');
+    await POST(makeReq());
+
+    const meta = updated.find((u) => u.set.metadata !== undefined)?.set.metadata;
+    // A SQL fragment computed from the stored column, not a literal object built
+    // from this read: a whole-column overwrite would drop the seller's own keys.
+    expect(typeof meta).toBe('string');
+    expect(String(meta)).toContain('invoices.metadata');
+    expect(String(meta)).toContain('31'); // the resolved anchor
+    expect(String(meta)).not.toContain('seller_note');
+  });
+
+  it('keeps a series that already drifted to the 3rd on the 3rd instead of jumping it', async () => {
+    dueTemplates = [templateFixture({
+      nextBillingDate: '2026-02-03',
+      metadata: { billing_anchor_day: 3 },
+    })];
+    lineItems = [];
+
+    const { POST } = await import('@/app/api/cron/recurring-invoice-generator/route');
+    await POST(makeReq());
+
+    expect(updated.map((u) => u.set.nextBillingDate)).toContain('2026-03-03');
+  });
+
+  it('honours the frequency regardless of how it is capitalised', async () => {
+    // The switch lowercases its input, so any comparison inside it must use the
+    // lowered value: `'WEEKLY' === 'weekly'` is false and silently billed daily.
+    dueTemplates = [templateFixture({
+      recurringFrequency: 'WEEKLY',
+      nextBillingDate: '2026-01-31',
+    })];
+    lineItems = [];
+
+    const { POST } = await import('@/app/api/cron/recurring-invoice-generator/route');
+    await POST(makeReq());
+
+    expect(updated.map((u) => u.set.nextBillingDate)).toContain('2026-02-07');
+  });
+
+  it('applies month-end clamping to an upper-case MONTHLY frequency', async () => {
+    dueTemplates = [templateFixture({
+      recurringFrequency: 'MONTHLY',
+      nextBillingDate: '2026-01-31',
+    })];
+    lineItems = [];
+
+    const { POST } = await import('@/app/api/cron/recurring-invoice-generator/route');
+    await POST(makeReq());
+
+    expect(updated.map((u) => u.set.nextBillingDate)).toContain('2026-02-28');
+  });
+
+  it('clamps quarterly and yearly periods too', async () => {
+    dueTemplates = [templateFixture({
+      recurringFrequency: 'quarterly',
+      nextBillingDate: '2026-01-31',
+    })];
+    lineItems = [];
+
+    const { POST } = await import('@/app/api/cron/recurring-invoice-generator/route');
+    await POST(makeReq());
+
+    // setUTCMonth(+3) gave 2026-05-01 here.
+    expect(updated.map((u) => u.set.nextBillingDate)).toContain('2026-04-30');
+  });
+
+  it('advances a leap-day annual anniversary to 28 Feb, not 1 Mar', async () => {
+    dueTemplates = [templateFixture({
+      recurringFrequency: 'yearly',
+      nextBillingDate: '2024-02-29',
+    })];
+    lineItems = [];
+
+    const { POST } = await import('@/app/api/cron/recurring-invoice-generator/route');
+    await POST(makeReq());
+
+    // setUTCFullYear(+1) rolled 2024-02-29 to 2025-03-01, losing the anniversary.
+    expect(updated.map((u) => u.set.nextBillingDate)).toContain('2025-02-28');
+  });
+
+  it('runs the whole pipeline inside a per-tenant sweep', async () => {
+    dueTemplates = [templateFixture()];
+    lineItems = [lineItemFixture];
+
+    const { POST } = await import('@/app/api/cron/recurring-invoice-generator/route');
+    const res = await POST(makeReq());
+
+    expect(mockSweepTenants).toHaveBeenCalledWith('cron/recurring-invoice-generator', expect.any(Function));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toMatchObject({ tenants_checked: 1, tenants_skipped: 0, tenants_failed: 0 });
+  });
+
+  it('scopes every read and write to the tenant whose context the sweep set', async () => {
+    dueTemplates = [templateFixture()];
+    lineItems = [lineItemFixture];
+
+    const { eq } = await import('drizzle-orm');
+    const { POST } = await import('@/app/api/cron/recurring-invoice-generator/route');
+    await POST(makeReq());
+
+    const tenantEqs = vi
+      .mocked(eq)
+      .mock.calls.filter(([column, value]) => column === 'invoices.tenant_id' && value === TENANT_A);
+    // due-template scan, MAX(sequence) lookup and the schedule advance, in the
+    // one-tenant run. Without them the job would insert rows RLS then rejects.
+    expect(tenantEqs).toHaveLength(3);
+
+    expect(vi.mocked(eq)).toHaveBeenCalledWith('invoice_line_items.tenant_id', TENANT_A);
+
+    // The cloned invoice and its line items are stamped with the same tenant.
+    expect((inserted.find((i) => i.table === 'invoices')!.values as Row).tenantId).toBe(TENANT_A);
+
+    // Invoice-number serialization locks THIS tenant's row, not the whole table.
+    expect(tx.execute).toHaveBeenCalledWith(expect.stringContaining(TENANT_A));
+  });
+
+  it('accumulates due/generated across every tenant the sweep visits', async () => {
+    mockSweepTenants.mockImplementation(async (_context, body) => {
+      await body(TENANT_A);
+      await body(TENANT_B);
+      return { visited: 2, skipped: [], failed: [] };
+    });
+    dueTemplates = [templateFixture()];
+    lineItems = [lineItemFixture];
+
+    const { POST } = await import('@/app/api/cron/recurring-invoice-generator/route');
+    const body = await (await POST(makeReq())).json();
+
+    expect(body).toMatchObject({ ok: true, due: 2, generated: 2, tenants_checked: 2 });
+  });
+
+  it('flips ok when a tenant aborts the sweep, keeping per-template errors separate', async () => {
+    mockSweepTenants.mockImplementation(async () => ({
+      visited: 1,
+      skipped: [{ tenantId: TENANT_B, reason: 'no-acting-user' }],
+      failed: [{ tenantId: TENANT_A, error: 'boom' }],
+    }));
+
+    const { POST } = await import('@/app/api/cron/recurring-invoice-generator/route');
+    const body = await (await POST(makeReq())).json();
+
+    expect(body).toMatchObject({ ok: false, tenants_checked: 1, tenants_skipped: 1, tenants_failed: 1 });
+  });
+
+  it('records a per-template failure without aborting the tenant', async () => {
+    dueTemplates = [templateFixture()];
+    lineItems = [lineItemFixture];
+    const { db } = await import('@/drizzle/db');
+    // A non-unique error: a 23505 would be retried up to MAX_NUMBER_RETRIES times.
+    vi.mocked(db.transaction).mockRejectedValueOnce(new Error('db connection lost'));
+    const { logError } = await import('@/lib/errors-server');
+
+    const { POST } = await import('@/app/api/cron/recurring-invoice-generator/route');
+    const body = await (await POST(makeReq())).json();
+
+    expect(body).toMatchObject({ ok: true, due: 1, generated: 0, failed: 1 });
+    expect(body.errors[0]).toMatchObject({ invoiceId: 'tmpl-1' });
+    expect(vi.mocked(logError)).toHaveBeenCalledWith(
+      expect.objectContaining({ tenantId: TENANT_A }),
+    );
   });
 });

@@ -14,6 +14,7 @@ import { db } from '@/drizzle/db';
 import { followUps, contacts, leads, deals, users } from '@/drizzle/schema';
 import { eq, and, isNull, desc, asc, gte, lte, sql } from 'drizzle-orm';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { parseLimitOffset } from '@/lib/api/query-params';
 
 export const GET = withApiRoute(async (request: NextRequest) => {
   try {
@@ -21,8 +22,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     if (ctx instanceof NextResponse) return ctx;
 
     const { searchParams } = new URL(request.url);
-    const limit = Math.min(500, parseInt(searchParams.get('limit') ?? '100'));
-    const offset = parseInt(searchParams.get('offset') ?? '0');
+    const { limit, offset } = parseLimitOffset(searchParams, { defaultLimit: 100, maxLimit: 500 });
     const status = searchParams.get('status');
     const leadId = searchParams.get('lead_id');
     const contactId = searchParams.get('contact_id');

@@ -4,11 +4,12 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect } from 'react';
-import { useCallback } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Users, Search, Crown, Plus, ArrowRight, AlertTriangle, Loader2, Edit, UserX, X, Save } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
+import { useApiQuery } from '@/lib/query/client';
 import toast from 'react-hot-toast';
 import { createUserSchema, validateForm } from '@/lib/validation/forms';
 
@@ -44,31 +45,29 @@ function EditUserDialog({ user, onSave, onClose }: { user: UserData; onSave: () 
     role: user.metadata?.role || 'user',
     status: user.metadata?.account_status || 'active',
   });
-  const [saving, setSaving] = useState(false);
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-muted/30 text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500";
   const lbl = "block text-xs font-medium text-muted-foreground mb-1";
 
-  const save = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSaving(true);
-    try {
+  // #1328: PATCH via useMutation (was raw fetch + useState saving flag).
+  const saveMutation = useMutation({
+    mutationFn: async () => {
       const res = await fetch('/api/superadmin/users', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: user.id, ...form }),
       });
-      const d = await res.json();
-      if (res.ok) {
-        toast.success('User updated');
-        onSave();
-      } else {
-        toast.error(d.error || 'Failed to update');
-      }
-    } catch {
-      toast.error('Failed to update user');
-    } finally {
-      setSaving(false);
-    }
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || 'Failed to update');
+      return d;
+    },
+    onSuccess: () => { toast.success('User updated'); onSave(); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const saving = saveMutation.isPending;
+
+  const save = (e: React.FormEvent) => {
+    e.preventDefault();
+    saveMutation.mutate();
   };
 
   return (
@@ -116,92 +115,92 @@ function EditUserDialog({ user, onSave, onClose }: { user: UserData; onSave: () 
 }
 
 export default function SuperAdminUsersPage() {
-  const [users, setUsers]   = useState<UserData[]>([]);
-  const [me, setMe]         = useState<MeData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [showCreate, setShowCreate] = useState(false);
   const [showTransfer, setShowTransfer] = useState(false);
   const [transferTarget, setTransferTarget] = useState('');
   const [editUser, setEditUser] = useState<UserData | null>(null);
   const [form, setForm]     = useState({ email:'', full_name:'', password:'' });
-  const [saving, setSaving] = useState(false);
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-muted/30 text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500";
   const lbl = "block text-xs font-medium text-muted-foreground mb-1";
 
-  const load = useCallback(async (abortSignal?: AbortSignal) => {
-    const q = search ? `?q=${encodeURIComponent(search)}` : '';
-    const [res, meRes] = await Promise.all([
-      fetch('/api/superadmin/users' + q, { signal: abortSignal }),
-      fetch('/api/superadmin/me', { signal: abortSignal }),
-    ]);
-    const d = await res.json();
-    const m = await meRes.json();
-    setUsers(d.data||[]);
-    // #1093 — read the standardized `data` envelope (falls back to the flat body).
-    setMe(m.data ?? m);
-    setLoading(false);
-  }, [search]);
-  useEffect(() => {
-    const abort = new AbortController();
-    load(abort.signal);
-    return () => abort.abort();
-  }, [search, load]);
+  // #1328: reads via TanStack Query (were parallel raw fetch + useEffect).
+  // The users URL depends on search, so it's part of the query key.
+  const usersUrl = '/api/superadmin/users' + (search ? `?q=${encodeURIComponent(search)}` : '');
+  const usersQuery = useApiQuery<{ data?: UserData[] }>(['superadmin', 'users', search], usersUrl);
+  const meQuery = useApiQuery<{ data?: MeData } & Partial<MeData>>(['superadmin', 'me'], '/api/superadmin/me');
+  // #1093 — read the standardized `data` envelope (falls back to the flat body).
+  const users: UserData[] = usersQuery.data?.data ?? [];
+  const me: MeData | null = (meQuery.data?.data ?? (meQuery.data as MeData | undefined)) ?? null;
+  const loading = usersQuery.isLoading;
 
-  const transferSuperAdmin = async () => {
-    if (!transferTarget) { toast.error('Select a target user'); return; }
-      setSaving(true);
-    const res = await fetch('/api/superadmin/transfer-admin', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ targetUserId: transferTarget }),
-    });
-    const d = await res.json();
-    if (res.ok) {
+  const invalidateUsers = () => queryClient.invalidateQueries({ queryKey: ['superadmin', 'users'] });
+
+  const transferMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch('/api/superadmin/transfer-admin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetUserId: transferTarget }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || 'Failed');
+      return d;
+    },
+    onSuccess: (d) => {
       toast.success(d.message || 'Transferred');
       setShowTransfer(false);
       setTransferTarget('');
       // #1267: intentional full reload — ownership transfer invalidates the
       // current session, so force a clean navigation to the login page.
       setTimeout(() => { window.location.href = '/auth/login'; }, 2000);
-    } else {
-      toast.error(d.error || 'Failed');
-    }
-    setSaving(false);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const transferSuperAdmin = () => {
+    if (!transferTarget) { toast.error('Select a target user'); return; }
+    transferMutation.mutate();
   };
 
-  const createUser = async (e: React.FormEvent) => {
+  const createMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch('/api/superadmin/users',{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ ...form, is_super_admin: false }) });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || 'Failed to create user');
+      return d;
+    },
+    onSuccess: () => { toast.success('User created'); setShowCreate(false); setForm({email:'',full_name:'',password:''}); invalidateUsers(); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const createUser = (e: React.FormEvent) => {
     e.preventDefault();
     const validation = validateForm(createUserSchema, form);
     if (!validation.success) {
       toast.error(validation.errors._form || Object.values(validation.errors)[0] || 'Please check the form and try again.');
       return;
     }
-    setSaving(true);
-    const res = await fetch('/api/superadmin/users',{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ ...form, is_super_admin: false }) });
-    const d = await res.json();
-    if (res.ok) { toast.success('User created'); setShowCreate(false); setForm({email:'',full_name:'',password:''}); load(); }
-    else toast.error(d.error);
-    setSaving(false);
+    createMutation.mutate();
   };
 
-  const deactivateUser = async (userId: string) => {
-    try {
+  const patchMutation = useMutation({
+    mutationFn: async (body: Record<string, unknown>) => {
       const res = await fetch('/api/superadmin/users', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: userId, status: 'suspended' }),
+        body: JSON.stringify(body),
       });
-      const d = await res.json();
-      if (res.ok) {
-        toast.success('User deactivated');
-        load();
-      } else {
-        toast.error(d.error || 'Failed to deactivate');
-      }
-    } catch {
-      toast.error('Failed to deactivate user');
-    }
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || 'Failed');
+      return d;
+    },
+    onSuccess: () => invalidateUsers(),
+  });
+  const deactivateUser = (userId: string) => {
+    patchMutation.mutate({ id: userId, status: 'suspended' }, {
+      onSuccess: () => toast.success('User deactivated'),
+      onError: (e: Error) => toast.error(e.message),
+    });
   };
 
   const filtered = users.filter(u => !search || u.email?.includes(search) || u.full_name?.toLowerCase()?.includes(search.toLowerCase()));
@@ -209,7 +208,7 @@ export default function SuperAdminUsersPage() {
 
   return (
     <div className="space-y-5 max-w-6xl">
-      {editUser && <EditUserDialog user={editUser} onSave={() => { setEditUser(null); load(); }} onClose={() => setEditUser(null)} />}
+      {editUser && <EditUserDialog user={editUser} onSave={() => { setEditUser(null); invalidateUsers(); }} onClose={() => setEditUser(null)} />}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-lg font-bold text-foreground flex items-center gap-2"><Users className="w-5 h-5 text-violet-400"/>All Users</h1>
@@ -247,9 +246,9 @@ export default function SuperAdminUsersPage() {
                 ))}
               </select>
             </div>
-            <button onClick={transferSuperAdmin} disabled={saving || !transferTarget}
+            <button onClick={transferSuperAdmin} disabled={transferMutation.isPending || !transferTarget}
               className="flex items-center gap-2 px-5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold disabled:opacity-50">
-              {saving && <Loader2 className="w-3.5 h-3.5 animate-spin"/>}
+              {transferMutation.isPending && <Loader2 className="w-3.5 h-3.5 animate-spin"/>}
               Transfer & Step Down
             </button>
           </div>
@@ -282,8 +281,8 @@ export default function SuperAdminUsersPage() {
           </div>
           <div className="flex gap-2 justify-end">
             <button type="button" onClick={()=>setShowCreate(false)} className="px-4 py-2 rounded-xl border border-border text-xs text-muted-foreground hover:text-foreground transition-colors">Cancel</button>
-            <button type="submit" disabled={saving} className="flex items-center gap-2 px-5 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold disabled:opacity-50 transition-colors">
-              {saving&&<Loader2 className="w-3.5 h-3.5 animate-spin"/>}Create User
+            <button type="submit" disabled={createMutation.isPending} className="flex items-center gap-2 px-5 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold disabled:opacity-50 transition-colors">
+              {createMutation.isPending&&<Loader2 className="w-3.5 h-3.5 animate-spin"/>}Create User
             </button>
           </div>
         </form>

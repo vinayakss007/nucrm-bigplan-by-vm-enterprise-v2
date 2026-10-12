@@ -36,17 +36,87 @@ const ssoConfigSchema = z.object({
   isActive: z.boolean().optional().default(true),
 });
 
+interface SsoProviderRow {
+  id: string;
+  tenantId: string;
+  providerType: string;
+  name: string;
+  config: unknown;
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date | null;
+}
+
+/** The columns every response may carry; `config` is masked by `maskProvider`. */
+const PROVIDER_COLUMNS = {
+  id: ssoProviders.id,
+  tenantId: ssoProviders.tenantId,
+  providerType: ssoProviders.providerType,
+  name: ssoProviders.name,
+  config: ssoProviders.config,
+  isActive: ssoProviders.isActive,
+  createdAt: ssoProviders.createdAt,
+  updatedAt: ssoProviders.updatedAt,
+};
+
+/**
+ * The OIDC client secret stays in `config` at rest — `lib/auth/sso.ts:193` reads it
+ * back to exchange the auth code — so it cannot be dropped from storage here. It can
+ * and must be dropped from every response: a client secret plus this app's client id
+ * lets a reader mint tokens at the tenant's IdP for any user in that tenant.
+ *
+ * `certificate` is deliberately not masked: it is the IdP **signing** certificate, a
+ * public trust anchor used to verify assertions (`lib/auth/sso.ts:446-448`), and the
+ * settings form has to display it.
+ */
+export function maskProvider(row: SsoProviderRow) {
+  const { clientSecret, ...publicConfig } = (row.config ?? {}) as Record<string, unknown>;
+  return {
+    id: row.id,
+    tenantId: row.tenantId,
+    providerType: row.providerType,
+    name: row.name,
+    isActive: row.isActive,
+    config: publicConfig,
+    clientSecretPresent: typeof clientSecret === 'string' && clientSecret.length > 0,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+}
+
+/**
+ * A blank or omitted `clientSecret` on an update means "leave the stored one", not
+ * "clear it". The settings form can no longer prefill the secret — the API stopped
+ * returning it — so without this the first admin who edits any other field would
+ * silently wipe the tenant's working IdP credential.
+ */
+export function keepStoredSecret(
+  incoming: Record<string, unknown>,
+  stored: Record<string, unknown>,
+): Record<string, unknown> {
+  const value = incoming['clientSecret'];
+  const clearsIt = value === undefined || value === null || value === '';
+  const storedSecret = stored['clientSecret'];
+  if (clearsIt && typeof storedSecret === 'string' && storedSecret.length > 0) {
+    return { ...incoming, clientSecret: storedSecret };
+  }
+  return incoming;
+}
+
 export const GET = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
+    // POST and PUT both require admin. This route answers with IdP configuration, so
+    // it must not be the one method any member of the tenant can read (#2520).
+    if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
 
     const providers = await db
-      .select()
+      .select(PROVIDER_COLUMNS)
       .from(ssoProviders)
       .where(eq(ssoProviders.tenantId, ctx.tenantId));
 
-    return NextResponse.json({ data: providers });
+    return NextResponse.json({ data: providers.map(maskProvider) });
  
  
   } catch (err) { return apiError(err); }
@@ -73,7 +143,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
       isActive: v.isActive,
     }).returning();
 
-    return NextResponse.json({ data: provider }, { status: 201 });
+    return NextResponse.json({ data: maskProvider(provider as SsoProviderRow) }, { status: 201 });
  
  
   } catch (err) { return apiError(err); }
@@ -103,9 +173,20 @@ export const PUT = withApiRoute(async (req: NextRequest) => {
 
     const updateData: Record<string, unknown> = { updatedAt: new Date() };
     if (updateFields.name !== undefined) updateData['name'] = updateFields.name;
-    if (updateFields.config !== undefined) updateData['config'] = updateFields.config;
     if (updateFields.isActive !== undefined) updateData['isActive'] = updateFields.isActive;
     if (updateFields.providerType !== undefined) updateData['providerType'] = updateFields.providerType;
+
+    if (updateFields.config !== undefined) {
+      const [existing] = await db
+        .select({ config: ssoProviders.config })
+        .from(ssoProviders)
+        .where(and(eq(ssoProviders.id, id), eq(ssoProviders.tenantId, ctx.tenantId)))
+        .limit(1);
+      updateData['config'] = keepStoredSecret(
+        updateFields.config as Record<string, unknown>,
+        (existing?.config ?? {}) as Record<string, unknown>,
+      );
+    }
 
     const [updated] = await db.update(ssoProviders)
       .set(updateData)
@@ -121,7 +202,7 @@ export const PUT = withApiRoute(async (req: NextRequest) => {
       return NextResponse.json({ error: 'SSO provider not found' }, { status: 404 });
     }
 
-    return NextResponse.json({ data: updated });
+    return NextResponse.json({ data: maskProvider(updated as SsoProviderRow) });
  
  
   } catch (err) { return apiError(err); }

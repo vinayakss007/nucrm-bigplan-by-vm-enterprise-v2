@@ -7,7 +7,7 @@ git clone <repo>
 cd nu2-crm
 cp .env.example .env.local
 npm install
-npm run db:push
+npm run db:migrate
 npm run dev
 ```
 
@@ -15,10 +15,10 @@ npm run dev
 
 ```
 app/                    # Next.js App Router
-  api/                  # 223 REST endpoints
-  tenant/               # 103 CRM pages
-  superadmin/           # 19 admin pages
-  portal/               # 5 customer portal pages
+  api/                  # 507 REST endpoints
+  tenant/               # 149 CRM pages
+  superadmin/           # 31 admin pages
+  portal/               # 9 customer portal pages
   auth/                 # Login, signup, 2FA
 components/             # UI components
   ui/                   # Shared (20+ Radix-based)
@@ -31,10 +31,10 @@ lib/                    # Core logic
   modules/              # Module SDK + registry
   tenant/               # Multi-tenant context
 drizzle/                # Database
-  schema/               # 163 tables, 13 files
+  schema/               # 224 tables, 46 files
   migrations/           # DDL + indexes + RLS
 tests/                  # Test suite
-  unit/                 # 108+ unit tests
+  unit/                 # 425 unit test files
   integration/          # Multi-tenant, validation
   e2e/                  # Playwright specs
 ```
@@ -42,17 +42,20 @@ tests/                  # Test suite
 ## Code Standards
 
 ### TypeScript
+
 - Strict mode enabled (`strict: true` in tsconfig)
 - No `any` types in new code — use generics or proper interfaces
 - All props must have typed interfaces
 
 ### Database
+
 - Every tenant-scoped table MUST have `tenantId` + `utils.audit()`
 - Use factory functions from `drizzle/schema/utils.ts`
 - Add GIN index on any `jsonb` metadata column
 - Every migration must have a rollback plan
 
 ### API Routes
+
 ```
 export async function GET(request: NextRequest) {
   try {
@@ -66,6 +69,7 @@ export async function GET(request: NextRequest) {
 ```
 
 ### Components
+
 - Server components for data fetching
 - Client components for interactivity (prefix with `'use client'`)
 - Use `Suspense` for async data loading

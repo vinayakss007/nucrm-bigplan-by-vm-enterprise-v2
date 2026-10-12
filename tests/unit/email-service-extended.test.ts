@@ -217,7 +217,7 @@ describe('email/service - Extended', () => {
 
   describe('createEmailTracking', () => {
     it('returns null when import fails', async () => {
-      const { createEmailTracking } = await import('@/lib/email/service');
+      const { createEmailTracking } = await import('@/lib/email/tracking');
       const result = await createEmailTracking({
         tenantId: 't1',
         contactId: 'c1',

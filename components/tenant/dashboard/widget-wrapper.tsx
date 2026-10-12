@@ -51,12 +51,10 @@ export function WidgetShell({
   tenantId: string
   userId: string
   isAdmin: boolean
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  config?: Record<string, any>
+  config?: WidgetProps['config']
   loading: boolean
   error: string | null
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  data: any
+  data: WidgetProps['data']
   onRefresh: () => void
   children: (props: WidgetProps) => React.ReactNode
 }) {
@@ -85,8 +83,7 @@ export function LazyWidget({
   tenantId: string
   userId: string
   isAdmin: boolean
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  config?: Record<string, any>
+  config?: WidgetProps['config']
   children: (props: WidgetProps) => React.ReactNode
 }) {
   const { data, loading, error, refresh } = useWidgetData(widget.apiEndpoint, {

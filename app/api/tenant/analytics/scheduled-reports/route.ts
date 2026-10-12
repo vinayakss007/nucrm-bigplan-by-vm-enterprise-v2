@@ -8,7 +8,7 @@ import { logError } from '@/lib/errors-server';
 import { requireTenantCtx } from '@/lib/tenant/context';
 import { db } from '@/drizzle/db';
 import { scheduledReports } from '@/drizzle/schema';
-import { eq, desc } from 'drizzle-orm';
+import { eq, desc, and, isNull } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
 import { readJsonBody } from '@/lib/api/validate';
 import { withApiRoute } from '@/lib/api/with-api-route';
@@ -23,8 +23,10 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     const ctx = await requireTenantCtx();
     if (ctx instanceof NextResponse) return ctx;
 
+    // Soft-deleted schedules (deletedAt) must not keep showing up as active
+    // entries in the analytics/reporting list (#2236).
     const reports = await db.select().from(scheduledReports)
-      .where(eq(scheduledReports.tenantId, ctx.tenantId))
+      .where(and(eq(scheduledReports.tenantId, ctx.tenantId), isNull(scheduledReports.deletedAt)))
       .orderBy(desc(scheduledReports.createdAt));
 
     return NextResponse.json({ data: reports });

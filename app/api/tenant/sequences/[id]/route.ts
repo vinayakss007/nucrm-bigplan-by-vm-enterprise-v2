@@ -12,6 +12,7 @@ import { db } from '@/drizzle/db';
 import { sequences, sequenceSteps } from '@/drizzle/schema';
 import { eq, and, sql, isNull } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { cancelOpenEnrollments } from '@/lib/cron/sequence-steps';
 import { concurrencyGuard } from '@/lib/api/concurrency';
 import { logError } from '@/lib/errors-server';
 import { withApiRoute } from '@/lib/api/with-api-route';
@@ -21,10 +22,7 @@ import { withApiRoute } from '@/lib/api/with-api-route';
  * Get sequence details with steps
  */
 export const GET = withApiRoute(async (request: NextRequest,
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  { params }: any) => {
+  { params }: { params: Promise<{ id: string }> }) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -66,11 +64,24 @@ export const GET = withApiRoute(async (request: NextRequest,
  * PATCH /api/tenant/sequences/[id]
  * Update sequence
  */
+interface SequenceStepInput {
+  type?: string;
+  stepType?: string;
+  subject?: string | null;
+  body?: string | null;
+  delayDays?: number;
+  delay_days?: number;
+  delayHours?: number;
+  delay_hours?: number;
+  delayMinutes?: number;
+  delay_minutes?: number;
+  content?: string | null;
+  templateId?: string | null;
+  template_id?: string | null;
+}
+
 export const PATCH = withApiRoute(async (request: NextRequest,
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  { params }: any) => {
+  { params }: { params: Promise<{ id: string }> }) => {
   try {
   const limited = await rateLimitMutating(request, 'sequences', 'patch');
   if (limited) return limited;
@@ -97,8 +108,7 @@ export const PATCH = withApiRoute(async (request: NextRequest,
     await db.transaction(async (tx) => {
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const updateData: any = {};
+      const updateData: Partial<typeof sequences.$inferInsert> = {};
       if (name !== undefined) updateData.name = name;
       if (description !== undefined) updateData.description = description;
       if (status !== undefined) updateData.status = status;
@@ -121,10 +131,7 @@ export const PATCH = withApiRoute(async (request: NextRequest,
 
         // Insert new steps
         if (steps.length > 0) {
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const stepValues = steps.map((step: any, index: number) => ({
+          const stepValues = steps.map((step: SequenceStepInput, index: number) => ({
             sequenceId,
             tenantId: ctx.tenantId,
             stepNumber: index + 1,
@@ -161,10 +168,7 @@ export const PATCH = withApiRoute(async (request: NextRequest,
  * Delete sequence (soft delete)
  */
 export const DELETE = withApiRoute(async (request: NextRequest,
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  { params }: any) => {
+  { params }: { params: Promise<{ id: string }> }) => {
   try {
   const limited = await rateLimitMutating(request, 'sequences', 'delete');
   if (limited) return limited;
@@ -176,19 +180,29 @@ export const DELETE = withApiRoute(async (request: NextRequest,
 
     const sequenceId = (await params).id;
 
-    await db.update(sequences)
-      .set({ 
-        deletedAt: new Date(),
-        deletedBy: ctx.userId,
-        status: 'archived'
-      })
-      .where(and(
-        eq(sequences.id, sequenceId),
-        eq(sequences.tenantId, ctx.tenantId)
-      ));
+    // #2392: the tombstone and the enrollment cancel must commit together.
+    // A bare UPDATE leaves every `sequence_enrollments` row at status
+    // 'active', and the cron sweep filtered on nothing but that status, so a
+    // deleted sequence kept mailing its contacts until each step ran out.
+    const cancelledEnrollments = await db.transaction(async (tx) => {
+      await tx.update(sequences)
+        .set({
+          deletedAt: new Date(),
+          deletedBy: ctx.userId,
+          updatedAt: new Date(),
+          status: 'archived'
+        })
+        .where(and(
+          eq(sequences.id, sequenceId),
+          eq(sequences.tenantId, ctx.tenantId)
+        ));
+
+      return cancelOpenEnrollments(tx, ctx.tenantId, { sequenceId });
+    });
 
     return NextResponse.json({
       ok: true,
+      cancelledEnrollments,
       message: 'Sequence deleted',
     });
  
@@ -204,10 +218,7 @@ export const DELETE = withApiRoute(async (request: NextRequest,
  * Enroll contacts in sequence
  */
 export const POST = withApiRoute(async (request: NextRequest,
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  { params }: any) => {
+  { params }: { params: Promise<{ id: string }> }) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;

@@ -10,9 +10,11 @@ import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { requireAuth } from '@/lib/auth/middleware';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { db } from '@/drizzle/db';
-import { tenants, tenantMembers, roles, pipelines, dealStages } from '@/drizzle/schema';
+import { tenants, tenantMembers, users } from '@/drizzle/schema';
 import { and, eq, sql } from 'drizzle-orm';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { setTenantContext, NO_TENANT_SENTINEL } from '@/lib/db/rls';
+import { provisionTenantWorkspace } from '@/lib/tenants/provision';
 import { logError } from '@/lib/errors-server';
 
 // tenantId is optional: when omitted (or an empty body is sent) the handler
@@ -68,63 +70,28 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       tenant = found;
     }
 
-    // Check if already member
-    const [existingMember] = await db
-      .select()
-      .from(tenantMembers)
-      .where(eq(tenantMembers.userId, ctx.userId))
-      .limit(1);
-
-    if (!existingMember) {
-      // Add superadmin to tenant as admin
-      await db.insert(tenantMembers).values({
-        userId: ctx.userId,
+    // Membership, roles and the default pipeline all isolate on
+    // app.current_tenant with no super-admin escape, so writing them from the
+    // console connection either matched no rows or raised 42501 while the route
+    // still answered "Added to tenant successfully". Run the whole write in a
+    // transaction that carries the target tenant's context, and reuse the shared
+    // provisioning steps so joining an under-provisioned tenant repairs it too.
+    await db.transaction(async (tx) => {
+      await setTenantContext(tenant.id, ctx.userId, tx);
+      await provisionTenantWorkspace(tx, {
         tenantId: tenant.id,
-        roleSlug: 'admin',
+        userId: ctx.userId,
+        planId: tenant.planId ?? 'free',
       });
-    } else if (!existingMember.tenantId) {
-      // Update existing placeholder membership
-      await db
-        .update(tenantMembers)
-        .set({ tenantId: tenant.id, roleSlug: 'admin' })
-        .where(eq(tenantMembers.userId, ctx.userId));
-    }
 
-    // Check if roles exist, if not create them
-    const [existingRole] = await db.select().from(roles).where(eq(roles.tenantId, tenant.id)).limit(1);
-    if (!existingRole) {
-      await db.insert(roles).values([
-        { tenantId: tenant.id, name: 'Admin', slug: 'admin', description: 'Full access', isSystem: true, permissions: { all: true }, sortOrder: 1 },
-        { tenantId: tenant.id, name: 'Manager', slug: 'manager', description: 'Manage team', isSystem: true, permissions: { 'contacts.view': true, 'contacts.create': true, 'deals.view': true }, sortOrder: 2 },
-        { tenantId: tenant.id, name: 'Sales Rep', slug: 'sales_rep', description: 'Standard access', isSystem: true, permissions: { 'contacts.view': true, 'deals.view': true }, sortOrder: 3 },
-      ]);
-    }
-
-    // Check if pipeline exists
-    const [existingPipeline] = await db.select().from(pipelines).where(eq(pipelines.tenantId, tenant.id)).limit(1);
-    if (!existingPipeline) {
-      const [_pipeline] = await db.transaction(async (tx) => {
-        const [p] = await tx.insert(pipelines).values({
-          tenantId: tenant.id,
-          name: 'Sales Pipeline',
-          description: 'Default sales pipeline',
-          isDefault: true,
-        }).returning();
-
-        if (!p) throw new Error('Failed to create pipeline');
-
-        await tx.insert(dealStages).values([
-          { pipelineId: p.id, tenantId: tenant.id, name: 'Lead', order: 1 },
-          { pipelineId: p.id, tenantId: tenant.id, name: 'Qualified', order: 2 },
-          { pipelineId: p.id, tenantId: tenant.id, name: 'Proposal', order: 3 },
-          { pipelineId: p.id, tenantId: tenant.id, name: 'Negotiation', order: 4 },
-          { pipelineId: p.id, tenantId: tenant.id, name: 'Won', order: 5 },
-          { pipelineId: p.id, tenantId: tenant.id, name: 'Lost', order: 6 },
-        ]);
-
-        return [p];
-      });
-    }
+      // The workspace is only usable once it is the account's current one:
+      // requireAuth derives the tenant context from last_tenant_id, so without
+      // this the join succeeds and the console still reports no workspace.
+      await tx
+        .update(users)
+        .set({ lastTenantId: tenant.id, updatedAt: new Date() })
+        .where(eq(users.id, ctx.userId));
+    });
 
     return NextResponse.json({ 
       ok: true, 
@@ -169,7 +136,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     return NextResponse.json({
       tenants: allTenants,
       memberships: memberTenantIds,
-      currentTenant: ctx.tenantId === '__superadmin_no_tenant__' ? null : ctx.tenantId
+      currentTenant: ctx.noWorkspace || ctx.tenantId === NO_TENANT_SENTINEL ? null : ctx.tenantId
     });
  
  

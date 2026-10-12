@@ -10,11 +10,12 @@ import { requireAuth, requirePerm, can } from '@/lib/auth/middleware';
 import { checkLimit } from '@/lib/usage/middleware';
 import { db } from '@/drizzle/db';
 import { leads, users, companies, leadActivities, activities, contacts } from '@/drizzle/schema';
-import { eq, and, or, desc, sql, ilike, isNull, gte, lte, arrayContains } from 'drizzle-orm';
+import { eq, and, or, desc, sql, ilike, isNull, gte, lte, arrayContains, type SQL } from 'drizzle-orm';
+import type { PgColumn } from 'drizzle-orm/pg-core';
 import { logAudit } from '@/lib/audit';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { resolveOrCreateContactForLead } from '@/lib/contacts/resolve';
-import { generateLeadOid } from '@/lib/leads/oid';
+import { generateLeadOid, isLeadOidCollision } from '@/lib/leads/oid';
 import { resolveAssignee } from '@/lib/assignment-resolver';
 import { fireWebhooks } from '@/lib/webhooks';
 import { logError } from '@/lib/errors-server';
@@ -23,10 +24,10 @@ import { escapeLike } from '@/lib/api/sanitize-like';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 // Whitelist for sort columns to prevent SQL injection
+
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const ALLOWED_SORT_COLUMNS: Record<string, any> = {
+const ALLOWED_SORT_COLUMNS: Record<string, PgColumn> = {
   'created_at': leads.createdAt,
   'updated_at': leads.updatedAt,
   'last_activity_at': leads.lastActivityAt,
@@ -80,14 +81,13 @@ export const GET = withApiRoute(async (request: NextRequest) => {
 
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const filters: any[] = [
+    const filters: SQL[] = [
       eq(leads.tenantId, ctx.tenantId),
       isNull(leads.deletedAt)
     ];
 
     if (!can(ctx, 'leads.view_all')) {
-      filters.push(or(eq(leads.assignedTo, ctx.userId), eq(leads.createdBy, ctx.userId)));
+      filters.push(or(eq(leads.assignedTo, ctx.userId), eq(leads.createdBy, ctx.userId))!);
     }
 
     if (leadStatus) {
@@ -124,7 +124,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
         ilike(leads.email, searchWildcard),
         ilike(leads.phone, searchWildcard),
         ilike(leads.companyName, searchWildcard)
-      ));
+      )!);
     }
 
     const [countResult] = await db.select({ 
@@ -253,7 +253,11 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     }
 
     // ── Workflow: every lead is attached to a contact at intake (one contact, many leads) ──
-    const newLead = await db.transaction(async (tx) => {
+    // #2343: lead_oid now collides loudly against the unique
+    // idx_leads_tenant_oid. generateLeadOid holds the tenant-row FOR UPDATE
+    // lock so a collision is a vanishingly rare residual race — retry the
+    // whole create so it still lands instead of surfacing a 500.
+    const createLeadTx = () => db.transaction(async (tx) => {
       let contactId: string;
       let companyId: string | null = null;
       let isNewContact = false;
@@ -377,6 +381,21 @@ export const POST = withApiRoute(async (request: NextRequest) => {
 
       return inserted;
     });
+
+    let newLead: typeof leads.$inferSelect | undefined;
+    const MAX_LEAD_CREATE_RETRIES = 3;
+    for (let attempt = 0; attempt < MAX_LEAD_CREATE_RETRIES; attempt++) {
+      try {
+        newLead = await createLeadTx();
+        break;
+      } catch (err: unknown) {
+        if (isLeadOidCollision(err) && attempt < MAX_LEAD_CREATE_RETRIES - 1) continue;
+        throw err;
+      }
+    }
+    if (!newLead) {
+      return NextResponse.json({ error: 'Failed to create lead' }, { status: 500 });
+    }
 
     await logAudit({
       tenantId: ctx.tenantId, userId: ctx.userId,

@@ -7,6 +7,8 @@
 import { useState } from 'react';
 import { Users, Plus, Mail, UserMinus, AlertTriangle, CheckCircle, Clock, Loader2 } from 'lucide-react';
 import { cn, formatDate, formatRelativeTime, getInitials } from '@/lib/utils';
+import { fetchJsonSafe } from '@/lib/fetch-json';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import toast from 'react-hot-toast';
 import { useFormValidation } from '@/lib/hooks/use-form-validation';
@@ -150,15 +152,26 @@ export default function TeamSettingsClient({ members: initialMembers, invitation
   const [fullName, setFullName]       = useState('');
   const [password, setPassword]       = useState('');
   const [inviting, setInviting]       = useState(false);
+  const [rosterError, setRosterError] = useState<string | null>(null);
   const [removeModal, setRemoveModal] = useState<TeamMember | null>(null);
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
   const { errors: inviteErrors, touched: inviteTouched, validate: inviteValidate, touch: inviteTouch, validateAll: inviteValidateAll, clearErrors: inviteClearErrors } = useFormValidation(inviteValidationRules);
   const { errors: directErrors, touched: directTouched, validate: directValidate, touch: directTouch, validateAll: directValidateAll, clearErrors: directClearErrors } = useFormValidation(directValidationRules);
 
+  // #2231: a failed GET /members must NOT wipe the roster into a false
+  // "0 active members" empty state — keep the previous rows and surface an
+  // explicit error with retry instead.
   const reload = async () => {
-    const res = await fetch('/api/tenant/members');
-    const d = await res.json();
-    setMembers(d.data||[]); setInvitations(d.invitations||[]);
+    const result = await fetchJsonSafe<{ data?: TeamMember[]; invitations?: TeamInvitation[] }>('/api/tenant/members');
+    if (result.status === 'error') {
+      setRosterError(result.message);
+      toast.error('Failed to refresh the team roster — showing previous data');
+      return;
+    }
+    if (result.status === 'ok') {
+      setMembers(result.data.data || []); setInvitations(result.data.invitations || []);
+      setRosterError(null);
+    }
   };
 
   const handleAddMember = async (e: React.FormEvent) => {
@@ -217,26 +230,40 @@ export default function TeamSettingsClient({ members: initialMembers, invitation
     }
   };
 
+  // #2231: mutations must distinguish transport failure (network drop — used
+  // to be a silent unhandled rejection) from a non-2xx response (server error).
   const changeRole = async (memberId: string, roleSlug: string) => {
-    const res = await fetch('/api/tenant/members',{ method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({memberId,action:'change_role',roleSlug}) });
-    const d = await res.json();
-    if (res.ok) { toast.success('Role updated'); reload(); }
-    else toast.error(d.error);
+    try {
+      const res = await fetch('/api/tenant/members',{ method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({memberId,action:'change_role',roleSlug}) });
+      if (!res.ok) { toast.error((await res.json().catch(() => ({})))?.error ?? 'Failed to update role'); return; }
+      toast.success('Role updated'); reload();
+    } catch {
+      toast.error('Network error — role was not updated');
+    }
   };
 
   const removeMember = async (reassignTo: string, reason: string) => {
     const m = removeModal;
     if (!m) return;
-    const res = await fetch('/api/tenant/members',{ method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({memberId:m.id,action:'remove',reassignTo,reason}) });
-    const d = await res.json();
-    if (res.ok) { toast.success(`${m.full_name||m.email} removed. Data reassigned.`); setRemoveModal(null); reload(); }
-    else toast.error(d.error);
+    try {
+      const res = await fetch('/api/tenant/members',{ method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({memberId:m.id,action:'remove',reassignTo,reason}) });
+      if (!res.ok) { toast.error((await res.json().catch(() => ({})))?.error ?? 'Failed to remove member'); return; }
+      toast.success(`${m.full_name||m.email} removed. Data reassigned.`); setRemoveModal(null); reload();
+    } catch {
+      toast.error('Network error — member was not removed');
+    }
   };
 
   const cancelInvite = async (inviteId: string) => {
     await confirmThen('Cancel this invitation?', async () => {
-      await fetch(`/api/tenant/invite/${inviteId}`,{ method:'DELETE' });
-      toast.success('Invitation cancelled'); reload();
+      try {
+        const res = await fetch(`/api/tenant/invite/${inviteId}`,{ method:'DELETE' });
+        // #2231: never toast success when the DELETE failed (500 or network drop).
+        if (!res.ok) { toast.error((await res.json().catch(() => ({})))?.error ?? 'Failed to cancel invitation'); return; }
+        toast.success('Invitation cancelled'); reload();
+      } catch {
+        toast.error('Network error — invitation was not cancelled');
+      }
     });
   };
 
@@ -248,6 +275,7 @@ export default function TeamSettingsClient({ members: initialMembers, invitation
         <div>
           <h1 className="text-lg font-bold flex items-center gap-2"><Users className="w-5 h-5"/>Team</h1>
           <p className="text-sm text-muted-foreground">{members.length} active member{members.length!==1?'s':''}</p>
+          {rosterError && <InlineErrorState className="mt-2 max-w-sm" message={`Failed to refresh roster: ${rosterError}`} onRetry={() => void reload()} />}
         </div>
         <button onClick={()=>setShowInvite(s=>!s)} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold transition-colors">
           <Plus className="w-4 h-4"/>{showInvite ? 'Hide Form' : 'Add Team Member'}

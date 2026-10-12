@@ -177,8 +177,7 @@ export interface TenantModule {
   tenant_id: string;
   module_id: string;
   status: ModuleStatus;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  settings: Record<string, any>;
+  settings: Record<string, unknown>;
   installed_at: string;
   installed_by: string;
   last_used_at: string | null;
@@ -205,14 +204,12 @@ export type ActionType =
 
 export interface AutomationTrigger {
   type: TriggerType;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  conditions?: { field: string; operator: string; value: any }[];
+  conditions?: { field: string; operator: string; value: unknown }[];
 }
 
 export interface AutomationAction {
   type: ActionType;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  config: Record<string, any>;
+  config: Record<string, unknown>;
   delay_minutes?: number;
 }
 
@@ -238,8 +235,7 @@ export interface Integration {
   user_id: string;
   type: string;
   name: string;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  config: Record<string, any>;
+  config: Record<string, unknown>;
   is_active: boolean;
   last_used_at: string | null;
   created_at: string;
@@ -250,8 +246,7 @@ export interface WebhookDelivery {
   tenant_id: string;
   integration_id: string;
   event: string;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  payload: Record<string, any>;
+  payload: Record<string, unknown>;
   status: 'pending' | 'delivered' | 'failed';
   response_code: number | null;
   response_body: string | null;

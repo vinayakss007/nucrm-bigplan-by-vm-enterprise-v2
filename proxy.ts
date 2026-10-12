@@ -16,6 +16,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { jwtVerify } from 'jose';
 import { getCsrfTokenFromCookie, getCsrfTokenFromHeader, needsCsrfValidation, validateCsrfToken } from '@/lib/auth/csrf';
 import { edgeLimiter, getRateLimitHeaders, shouldBypassRateLimit } from '@/lib/rate-limit-edge';
+import { getClientIp as gatedClientIp } from '@/lib/client-ip';
 
 const JWT_SECRET_ENV = process.env['JWT_SECRET'];
 const JWT_SECRET = JWT_SECRET_ENV ? new TextEncoder().encode(JWT_SECRET_ENV) : null;
@@ -121,6 +122,16 @@ function buildCsp(nonce: string): string {
   const scriptSrc = isProd
     ? `script-src 'self' 'nonce-${nonce}'`
     : `script-src 'self' 'nonce-${nonce}' 'unsafe-eval'`;
+  // #2331: the client Sentry bundle posts envelopes to the DSN's ingest host.
+  // Without it in connect-src every report is silently blocked — we pay for
+  // Sentry and receive nothing. Derive the exact origin from the DSN so no
+  // wildcard is needed.
+  let sentryOrigin = '';
+  try {
+    const dsn = process.env['NEXT_PUBLIC_SENTRY_DSN'];
+    const at = dsn ? dsn.indexOf('@') : -1;
+    if (dsn && at !== -1) sentryOrigin = ' ' + new URL(`https://${dsn.slice(at + 1)}`).origin;
+  } catch { /* malformed DSN: omit, same as no Sentry */ }
   return [
     "default-src 'self'",
     scriptSrc,
@@ -129,7 +140,7 @@ function buildCsp(nonce: string): string {
     "style-src-attr 'unsafe-inline'",
     "img-src 'self' data: blob:",
     "font-src 'self' data:",
-    "connect-src 'self' ws: wss:",
+    `connect-src 'self' ws: wss:${sentryOrigin}`,
     "frame-ancestors 'none'",
     "frame-src 'self'",
     "form-action 'self'",
@@ -202,12 +213,30 @@ const PUBLIC_PATHS = [
   '/api/auth/csrf-token', '/api/auth/sso',
   '/api/forms/submit', '/api/leads/public',
   '/api/webhooks/stripe', '/api/webhooks/resend', '/api/webhooks/whatsapp', '/api/webhooks/inbound',
+  // Same #2415 class, found by sweeping every handler that authenticates something
+  // other than a user session: these six verify a client secret, a provider HMAC
+  // or a per-plugin webhook secret, so demanding a JWT first meant no caller could
+  // ever reach them (measured: 401 {"error":"Authentication required"} from the
+  // middleware, handler never run). razorpay/payu/telegram/plugins each verify
+  // before touching money or rows and fail closed with no secret configured; the
+  // two OAuth routes compare client_secret with timingSafeEqual and self-limit.
+  // /api/tenant/visitors/track was the seventh hit and stays closed: it has no
+  // credential and no limiter, so publishing it would be an unbounded anonymous
+  // write. Pinned by tests/unit/proxy.test.ts.
+  '/api/webhooks/razorpay', '/api/webhooks/payu', '/api/webhooks/telegram/bot',
+  '/api/tenant/plugins/webhook',
+  '/api/auth/oauth/token', '/api/auth/oauth/revoke',
   '/api/health', '/api/track/click', '/api/track/open', '/api/track/event', '/api/unsubscribe',
   '/api/keepalive', '/api/test-email', '/api/cron', '/api/metrics', '/api/embed', '/api/emergency',
   '/api/flags', '/api/openapi',
-  '/api/setup/check', '/api/setup/create-admin', '/api/lead-capture', '/api/lead-capture/submit',
+  '/api/setup/check', '/api/setup/create-admin',
   '/api/public/tickets', '/api/public/invoices', '/api/public/kb', '/api/public/offers',
   '/api/public/quotes',
+  // E-signature and CSAT links are opened from an email by someone with no
+  // session at all: the 192-bit URL token is the only credential, so the edge
+  // must not demand a JWT they cannot have (#2415 — absent from this list,
+  // every anonymous GET/POST to them was 401'd before reaching the handler).
+  '/api/public/sign', '/api/public/csat',
   // Customer-portal login mints the httpOnly session cookie — it must be
   // reachable without an existing session (#1982 portal-auth hardening).
   '/api/tenant/portal/login',
@@ -215,6 +244,35 @@ const PUBLIC_PATHS = [
 ];
 
 const PUBLIC_PREFIXES = ['/_next', '/favicon', '/images', '/static', '/icons', '/api/v2', '/fonts', '/sounds', '/videos', '/api/tenant/forms/public'];
+
+/**
+ * #2313: single source of truth for the post-login landing path. Matches what
+ * the login form navigates to (app/auth/login/login-form.tsx) and what the
+ * removed-onboarding shortcut below already used. Used by the authenticated
+ * `/login` alias redirect so the two sites cannot drift.
+ */
+const AUTHENTICATED_HOME_PATH = '/tenant/dashboard';
+
+/**
+ * #2215: surfaces that legitimately consume `ak_` API keys. The gateway
+ * catch-alls (/api/v1/*, /api/v2/*) and the internal tenant API they proxy to
+ * (/api/tenant/*) are the only code paths that call tryApiKeyAuth()/
+ * resolveGatewayTenant(). Everywhere else a Bearer `ak_*` is a failed
+ * credential, not a pass-through ticket.
+ */
+const API_KEY_ALLOWED_PREFIXES = ['/api/v1/', '/api/v2/', '/api/tenant/'];
+/**
+ * #2215: login-adjacent routes are NEVER API-key surfaces, even under the
+ * allowed prefixes. An `ak_` Bearer here used to skip JWT verification, CSRF
+ * and edge rate limiting outright, which made the deprecated v1 login
+ * anonymously brute-forceable with a junk `Bearer ak_x` header.
+ */
+const API_KEY_DENIED_PREFIXES = ['/api/v1/auth', '/api/v2/auth', '/api/tenant/portal/login'];
+
+function isApiKeyAllowedPath(pathname: string): boolean {
+  if (API_KEY_DENIED_PREFIXES.some(p => pathname === p || pathname.startsWith(p + '/'))) return false;
+  return API_KEY_ALLOWED_PREFIXES.some(p => pathname.startsWith(p));
+}
 
 // #1992: exact matches hit a Set first so the common public routes
 // (/api/health, /auth/login, ...) skip the ~70-entry linear scan.
@@ -268,8 +326,12 @@ function applyRateLimitHeaders(response: NextResponse, result: { allowed: boolea
   }
 }
 
+// #2219: the old local version trusted the raw first `x-forwarded-for` entry.
+// nginx APPENDS to XFF (`$proxy_add_x_forwarded_for`), so that entry is
+// attacker-controlled and rotating it nullified the rl:pub/rl:csrf limits.
+// Delegate to the central TRUST_PROXY-gated helper (#1249).
 function getClientIp(request: NextRequest): string {
-  return request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
+  return gatedClientIp(request);
 }
 
 function buildRateLimitResponse(requestId: string, result: { allowed: boolean; remaining: number; reset: number; limit: number }, origin: string | null): NextResponse {
@@ -323,7 +385,7 @@ export async function proxy(request: NextRequest) {
   // just in the page component) so it holds even while streaming.
   if (pathname === '/tenant/onboarding' || pathname.startsWith('/tenant/onboarding/')) {
     const url = request.nextUrl.clone();
-    url.pathname = '/tenant/dashboard';
+    url.pathname = AUTHENTICATED_HOME_PATH;
     const redirect = NextResponse.redirect(url);
     redirect.headers.set('x-request-id', requestId);
     return redirect;
@@ -386,19 +448,50 @@ export async function proxy(request: NextRequest) {
     });
   }
 
-  const cookieToken = request.cookies.get('nucrm_session')?.value;
+  const cookieTokenRaw = request.cookies.get('nucrm_session')?.value;
   const authHeader = request.headers.get('authorization');
   const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
-  const token = cookieToken || bearerToken;
 
-  // NOTE: API keys (ak_*) are not JWTs — skip JWT verification and pass through
-  // to route handlers where tryApiKeyAuth() handles them properly.
-  if (bearerToken?.startsWith('ak_')) {
+  // #2215: the ak_* pass-through is NO LONGER unconditional. It used to skip
+  // JWT verification, CSRF and edge rate limiting on EVERY path, which turned
+  // every protected route — including the deprecated, auth-adjacent
+  // POST /api/v1/auth/login — into an anonymously brute-forceable endpoint for
+  // anyone shipping a junk `Bearer ak_x` header ("API keys are not JWTs" was
+  // true, but it was also the only pre-handler auth check the bypass had).
+  // Keys are now only passed through on the data-API surfaces that actually
+  // consume them (never /api/v1/auth*, /api/v2/auth*, portal login), and even
+  // there they get an IP-keyed edge budget so an unvalidated junk key cannot
+  // flood the origin. Key validity itself is still checked by tryApiKeyAuth()
+  // in the route layer — the edge cannot do DB lookups.
+  if (bearerToken?.startsWith('ak_') && isApiRequest(pathname)) {
+    if (!isApiKeyAllowedPath(pathname)) {
+      return NextResponse.json(
+        { error: 'API keys are only accepted on /api/v1, /api/v2 and /api/tenant data routes' },
+        { status: 401, headers: apiErrorHeaders(requestId) }
+      );
+    }
+    if (!shouldBypassRateLimit(pathname)) {
+      const ip = getClientIp(request);
+      const result = edgeLimiter.check(`rl:apikey-edge:${ip}`, RATE_LIMIT_API_KEY, RATE_LIMIT_WINDOW_MS);
+      if (!result.allowed) {
+        return buildRateLimitResponse(requestId, result, origin);
+      }
+      const response = nextWithRequestId(request, requestId);
+      response.headers.set('x-request-id', requestId);
+      setCORS(response, origin, pathname);
+      applyRateLimitHeaders(response, result);
+      return response;
+    }
     const response = nextWithRequestId(request, requestId);
     response.headers.set('x-request-id', requestId);
     setCORS(response, origin, pathname);
     return response;
   }
+
+  // #2215: `ak_` values are API-key bearer credentials only — they were never
+  // valid session cookies, and must not enter the JWT path from either source.
+  const cookieToken = cookieTokenRaw && !cookieTokenRaw.startsWith('ak_') ? cookieTokenRaw : null;
+  const token = cookieToken || (isApiRequest(pathname) ? bearerToken : null);
 
   if (!token) {
     if (isApiRequest(pathname)) {
@@ -411,14 +504,11 @@ export async function proxy(request: NextRequest) {
     return redirect;
   }
 
-  // API key tokens are validated by requireAuth in route handlers, not here.
-  // Skip JWT verification and pass through to let the route handler authenticate.
-  if (token.startsWith('ak_')) {
-    const response = nextWithRequestId(request, requestId);
-    response.headers.set('x-request-id', requestId);
-    setCORS(response, origin, pathname);
-    return response;
-  }
+  // #2215: the old second `token.startsWith('ak_')` pass-through lived here.
+  // After the gated branch above, `token` can no longer be an API key (cookie
+  // ak_ values are sanitized away and bearer ak_ values are handled or
+  // rejected), so it has been removed — an `ak_` value reaching jwtVerify here
+  // correctly fails with 401 instead of buying an unthrottled edge bypass.
 
   try {
     let sub: string;
@@ -466,6 +556,18 @@ export async function proxy(request: NextRequest) {
         applyRateLimitHeaders(response, result);
         return response;
       }
+    }
+
+    // #2313: `/login` is a commonly bookmarked legacy alias with NO route
+    // behind it (the real page is /auth/login). Anonymous visitors already
+    // get the preserved 307 → /auth/login?callbackUrl=%2Flogin from the
+    // no-token branch above; a valid session used to fall through to the
+    // router and hard-404. Resolve the alias for BOTH states: signed-in
+    // visitors go to the post-login landing instead of a dead route.
+    if (pathname === '/login') {
+      const redirect = NextResponse.redirect(new URL(AUTHENTICATED_HOME_PATH, request.url));
+      redirect.headers.set('x-request-id', requestId);
+      return redirect;
     }
 
     // Authenticated pass-through. For HTML page navigations, layer the

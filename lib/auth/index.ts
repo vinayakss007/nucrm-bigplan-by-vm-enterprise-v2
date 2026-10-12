@@ -43,5 +43,6 @@ export {
 export {
   POST_login,
   POST_signup,
-  POST_logout,
 } from './api-handlers';
+
+export { POST_logout } from './logout';

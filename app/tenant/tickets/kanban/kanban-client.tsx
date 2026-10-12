@@ -136,11 +136,13 @@ export default function TicketsKanbanPage() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const loading = isLoading && tickets.length === 0;
 
-  /* eslint-disable react-hooks/exhaustive-deps */
   useEffect(() => {
-    if (res?.data && tickets.length === 0) {
-      setTickets(res.data as Ticket[]);
-    }
+    const fetched = res?.data as Ticket[] | undefined;
+    if (!fetched) return;
+    // Read the current list through the updater: the old guard closed over
+    // `tickets` from the render that scheduled it, so "only seed once" was
+    // evaluated against a possibly stale array.
+    setTickets(prev => (prev.length === 0 ? fetched : prev));
   }, [res]);
 
   const sensors = useSensors(

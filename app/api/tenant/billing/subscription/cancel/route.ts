@@ -12,6 +12,8 @@ import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { cancelSubscription, isStripeConfigured } from '@/lib/stripe';
+import { deriveSubscriptionActionIdempotencyKey } from '@/lib/billing-idempotency';
+import { currencyFromProvider } from '@/lib/billing-currency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
@@ -64,8 +66,16 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       return NextResponse.json({ error: 'Subscription is already cancelled' }, { status: 400 });
     }
 
-    // Cancel in Stripe
-    const stripeSub = await cancelSubscription(currentSub.stripeSubscriptionId, cancelAtPeriodEnd);
+    // Cancel in Stripe — #2228: deterministic idempotency key so a client
+    // retry of this POST replays Stripe's first response instead of
+    // re-mutating the subscription.
+    const idempotencyKey = deriveSubscriptionActionIdempotencyKey(
+      'cancel',
+      ctx.tenantId,
+      currentSub.stripeSubscriptionId,
+      cancelAtPeriodEnd ? 'period-end' : 'immediate',
+    );
+    const stripeSub = await cancelSubscription(currentSub.stripeSubscriptionId, cancelAtPeriodEnd, idempotencyKey);
 
     // Update subscription in database
     const updateData: {
@@ -96,7 +106,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
         tenantId: ctx.tenantId,
         eventType: cancelAtPeriodEnd ? 'subscription.cancel_scheduled' : 'subscription.cancelled',
         amount: currentSub.planId ? '0' : undefined,
-        currency: 'usd',
+        currency: currencyFromProvider(stripeSub),
         stripeSubscriptionId: currentSub.stripeSubscriptionId,
         metadata: {
           plan_id: currentSub.planId || 'none',

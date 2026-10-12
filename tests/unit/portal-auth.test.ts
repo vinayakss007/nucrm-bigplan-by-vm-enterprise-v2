@@ -55,6 +55,8 @@ vi.mock('@/lib/portal-session', async (importOriginal) => {
 
 import { resolvePortalContact, resolvePortalIdentity } from '@/lib/portal-auth';
 import { getPortalSession } from '@/lib/portal-session';
+import { db } from '@/drizzle/db';
+import type { RlsTransaction } from '@/lib/db/rls';
 function reqWithHeaders(headers: Record<string, string>): NextRequest {
   return new NextRequest('http://localhost/api/public/quotes/x/accept', { headers });
 }
@@ -104,15 +106,26 @@ describe('resolvePortalContact (#1982)', () => {
     vi.clearAllMocks();
   });
 
+  // #2446: `tx` became a required parameter, because the `contacts` policy
+  // compares tenant_id to app.current_tenant and the only place that value
+  // lives is the caller's transaction. These pass the mock pool handle as the
+  // transaction stand-in; the point of the signature is that a caller cannot
+  // leave it out.
   it('returns the contact scoped to (email, tenantId)', async () => {
     tokenLookupResult = [{ id: 'contact-9', tenantId: 'tenant-cookie' }];
-    const contact = await resolvePortalContact({ email: 'cookie-client@example.com', tenantId: 'tenant-cookie' });
+    const contact = await resolvePortalContact(
+      { email: 'cookie-client@example.com', tenantId: 'tenant-cookie' },
+      db as unknown as RlsTransaction,
+    );
     expect(contact).toEqual({ id: 'contact-9', tenantId: 'tenant-cookie' });
   });
 
   it('returns null when no contact matches the scoped lookup', async () => {
     tokenLookupResult = [];
-    const contact = await resolvePortalContact({ email: 'nobody@example.com', tenantId: 'tenant-cookie' });
+    const contact = await resolvePortalContact(
+      { email: 'nobody@example.com', tenantId: 'tenant-cookie' },
+      db as unknown as RlsTransaction,
+    );
     expect(contact).toBeNull();
   });
 });

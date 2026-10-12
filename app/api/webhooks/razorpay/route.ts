@@ -21,6 +21,26 @@ import { claimWebhookEvent, completeWebhookEvent, releaseWebhookEvent } from '@/
 /** Idempotency window: how long a processed event id blocks re-processing. */
 const IDEMPOTENCY_TTL = 24 * 60 * 60; // 24h
 
+// Structural views of the Razorpay webhook payload — only the fields this
+// handler reads. JSON.parse output is validated by usage (guards on every
+// dereference), not by a runtime schema.
+interface RazorpayNotes {
+  tenant_id?: string | null;
+  plan_id?: string | null;
+}
+interface RazorpayEntityLike {
+  id?: string;
+  notes?: RazorpayNotes | null;
+}
+interface RazorpayPayloadLike {
+  payment?: { entity?: RazorpayEntityLike | null } | null;
+  subscription?: { entity?: RazorpayEntityLike | null } | null;
+}
+interface RazorpayEventLike {
+  event?: string;
+  payload?: RazorpayPayloadLike | null;
+}
+
 /**
  * Razorpay Webhook Handler
  *
@@ -44,8 +64,7 @@ export async function POST(request: NextRequest) {
   }
 
   let body: string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let event: any;
+  let event: RazorpayEventLike;
 
   try {
     body = await request.text();
@@ -59,7 +78,7 @@ export async function POST(request: NextRequest) {
     return apiError(err, 'Bad request', 400);
   }
 
-  const eventType: string = event.event;
+  const eventType: string = event.event ?? '';
   const payload = event.payload;
 
   // L-F: idempotency. Razorpay delivers at-least-once, so a redelivered or
@@ -143,8 +162,7 @@ export async function POST(request: NextRequest) {
 
 // -- Event Handlers -----------------------------------------------------------
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function handlePaymentCaptured(payload: any) {
+async function handlePaymentCaptured(payload: RazorpayPayloadLike | null | undefined) {
   const payment = payload?.payment?.entity;
   if (!payment) return;
 
@@ -170,8 +188,7 @@ async function handlePaymentCaptured(payload: any) {
   console.log(`[Razorpay] Tenant ${tenantId} activated with plan ${planId}`);
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function handleSubscriptionActivated(payload: any) {
+async function handleSubscriptionActivated(payload: RazorpayPayloadLike | null | undefined) {
   const subscription = payload?.subscription?.entity;
   if (!subscription) return;
 
@@ -189,7 +206,7 @@ async function handleSubscriptionActivated(payload: any) {
       planId,
       status: 'active',
       billingType: 'razorpay',
-      subscriptionId: subscription.id,
+      subscriptionId: subscription.id ?? null,
       updatedAt: new Date(),
     })
     .where(eq(tenants.id, tenantId));
@@ -197,8 +214,7 @@ async function handleSubscriptionActivated(payload: any) {
   console.log(`[Razorpay] Tenant ${tenantId} subscription activated: plan=${planId}`);
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function handleSubscriptionCancelled(payload: any) {
+async function handleSubscriptionCancelled(payload: RazorpayPayloadLike | null | undefined) {
   const subscription = payload?.subscription?.entity;
   if (!subscription) return;
 
@@ -225,8 +241,7 @@ async function handleSubscriptionCancelled(payload: any) {
   console.log(`[Razorpay] Tenant ${tenantId} subscription cancelled - downgraded to free`);
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function handlePaymentFailed(payload: any) {
+async function handlePaymentFailed(payload: RazorpayPayloadLike | null | undefined) {
   const payment = payload?.payment?.entity;
   if (!payment) return;
 

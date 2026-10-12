@@ -4,9 +4,10 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { z } from 'zod';
+import { uuidIdSchema } from '@/lib/validation/uuid';
 
 // ── Common helpers (re-exported for use by other schema modules) ──
-export const uuid = z.string().uuid().optional().nullable().or(z.literal(''));
+export const uuid = uuidIdSchema.optional().nullable().or(z.literal(''));
 export const requiredString = z.string().trim().min(1);
 export const _optionalString = z.string().trim();
 export const _optionalDate = z.string().datetime().optional().nullable();

@@ -6,6 +6,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useMutation } from '@tanstack/react-query';
 import { 
   Plus, GripVertical, Settings, Save, Eye, 
   Trash2, ChevronLeft, Layout, Type, Mail, Phone, Hash, 
@@ -63,7 +64,6 @@ function FormBuilderInner() {
     theme_color: '#7c3aed', // violet-600
     notify_email: '',
   });
-  const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState<'fields' | 'settings' | 'preview'>('fields');
 
   const addField = (template: { type: string; label: string }) => {
@@ -88,7 +88,28 @@ function FormBuilderInner() {
     setFields(fields.map(f => f.id === id ? { ...f, ...updates } : f));
   };
 
-  const handleSave = async () => {
+  // #1328: save via useMutation (was raw fetch + useState saving flag).
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch('/api/tenant/forms', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name,
+          fields,
+          settings,
+        }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || 'Failed to save');
+      return d;
+    },
+    onSuccess: () => { toast.success('Form saved successfully!'); router.push('/tenant/forms'); },
+    onError: (e: Error) => toast.error(e.message || 'Network error'),
+  });
+  const saving = saveMutation.isPending;
+
+  const handleSave = () => {
     // #1342: validate before saving — a form needs a name, at least one field,
     // and every field must have a non-empty label.
     if (!name.trim()) {
@@ -104,29 +125,7 @@ function FormBuilderInner() {
       toast.error(`Field ${unlabeled + 1} is missing a label`);
       return;
     }
-    setSaving(true);
-    try {
-      const res = await fetch('/api/tenant/forms', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name,
-          fields,
-          settings,
-        }),
-      });
-      if (res.ok) {
-        toast.success('Form saved successfully!');
-        router.push('/tenant/forms');
-      } else {
-        const d = await res.json();
-        toast.error(d.error || 'Failed to save');
-      }
-    } catch {
-      toast.error('Network error');
-    } finally {
-      setSaving(false);
-    }
+    saveMutation.mutate();
   };
 
   return (

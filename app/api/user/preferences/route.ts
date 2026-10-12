@@ -134,10 +134,7 @@ export const GET = withApiRoute(async (req: NextRequest) => {
       .select({ settings: tenants.settings }).from(tenants).where(eq(tenants.id, ctx.tenantId)).limit(1);
     const workspaceDefaults = (((t?.settings as Record<string, unknown>) ?? {}).user_defaults ?? {}) as Record<string, unknown>;
 
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const resolved: Record<string, any> = { ...DEFAULTS, ...workspaceDefaults, ...userPrefs };
+    const resolved: Record<string, unknown> = { ...DEFAULTS, ...workspaceDefaults, ...userPrefs };
     if (u?.locale) resolved['locale'] = u.locale;
     if (u?.theme)  resolved['theme'] = u.theme;
 
@@ -185,10 +182,7 @@ export const PATCH = withApiRoute(async (req: NextRequest) => {
     if (typeof body.theme === 'string')  update.theme = body.theme;
 
     // Build the metadata.prefs patch (everything else)
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const patch: Record<string, any> = {};
+    const patch: Record<string, unknown> = {};
     for (const k of [...STRING_VALIDATED, ...NUMBER_VALIDATED]) {
       if (body[k] !== undefined) patch[k] = NUMBER_VALIDATED.includes(k as typeof NUMBER_VALIDATED[number]) ? Number(body[k]) : body[k];
     }
@@ -200,10 +194,7 @@ export const PATCH = withApiRoute(async (req: NextRequest) => {
     // Sidebar customization — array of nav hrefs the user has hidden
     if (Array.isArray(body.hidden_nav_items)) {
       const cleaned = body.hidden_nav_items
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-        .filter((s: any) => typeof s === 'string' && s.startsWith('/tenant/'))
+        .filter((s: unknown) => typeof s === 'string' && s.startsWith('/tenant/'))
         .map((s: string) => s.trim().slice(0, 200))
         .slice(0, 200);
       patch['hidden_nav_items'] = cleaned;

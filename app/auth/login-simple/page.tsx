@@ -5,40 +5,45 @@
  */
 'use client';
 import { useState } from 'react';
+import { useMutation } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 
 export default function SimpleLogin() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState('');
   const router = useRouter();
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setMessage('');
-    
-    try {
-      const res = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
-      });
-      
-      const data = await res.json();
-      
-      if (!res.ok) {
-        setMessage('Error: ' + (data.error || 'Login failed'));
-      } else {
-        setMessage('Success! Token: ' + data.token?.substring(0, 20) + '...');
-        setTimeout(() => router.push('/tenant/dashboard'), 1500);
+  // #1328: login via useMutation (was raw fetch + useState loading/message).
+  const loginMutation = useMutation({
+    mutationFn: async () => {
+      let res: Response;
+      try {
+        res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password }),
+        });
+      } catch {
+        throw new Error('Error: Cannot connect to server');
       }
-    } catch {
-      setMessage('Error: Cannot connect to server');
-    }
-    
-    setLoading(false);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error('Error: ' + (data.error || 'Login failed'));
+      return data;
+    },
+    onSuccess: () => {
+      setTimeout(() => router.push('/tenant/dashboard'), 1500);
+    },
+  });
+  const loading = loginMutation.isPending;
+  const message = loginMutation.isError
+    ? loginMutation.error.message
+    : loginMutation.isSuccess
+      ? 'Success! Token: ' + loginMutation.data?.token?.substring(0, 20) + '...'
+      : '';
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    loginMutation.mutate();
   };
 
   return (

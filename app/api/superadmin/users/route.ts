@@ -13,7 +13,7 @@ import { db } from '@/drizzle/db';
 import { users, tenantMembers, tenants } from '@/drizzle/schema';
 import { eq, and, sql, ilike, desc, or } from 'drizzle-orm';
 import { hashPassword, validatePassword } from '@/lib/auth/session';
-import { concurrencyGuard } from '@/lib/api/concurrency';
+import { concurrencyGuard, updatedAtMs } from '@/lib/api/concurrency';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { logError } from '@/lib/errors-server';
 
@@ -116,9 +116,8 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     return NextResponse.json({ data: newUser }, { status: 201 });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
-    if (err.code === '23505' || err.message?.includes('unique constraint')) {
+  } catch (err) {
+    if ((err as { code?: string }).code === '23505' || (err instanceof Error && err.message.includes('unique constraint'))) {
       return NextResponse.json({ error: 'Email already exists' }, { status: 409 });
     }
     await logError({ error: err, context: 'superadmin/users POST', requestMethod: 'POST' });
@@ -176,7 +175,7 @@ export const PATCH = withApiRoute(async (request: NextRequest) => {
       const [updated] = await db
         .update(users)
         .set(updates)
-        .where(and(eq(users.id, v.id), eq(users.updatedAt, new Date(expectedUpdatedAt as string | number | Date))))
+        .where(expectedUpdatedAt ? and(eq(users.id, v.id), updatedAtMs(users, expectedUpdatedAt)) : eq(users.id, v.id))
         .returning({
           id: users.id,
           email: users.email,
@@ -195,7 +194,7 @@ export const PATCH = withApiRoute(async (request: NextRequest) => {
     const [updated] = await db
       .update(users)
       .set(updates)
-      .where(and(eq(users.id, v.id), eq(users.updatedAt, new Date(expectedUpdatedAt as string | number | Date))))
+      .where(expectedUpdatedAt ? and(eq(users.id, v.id), updatedAtMs(users, expectedUpdatedAt)) : eq(users.id, v.id))
       .returning({
         id: users.id,
         email: users.email,

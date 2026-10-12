@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { z } from 'zod';
+import { uuidIdSchema } from '@/lib/validation/uuid';
 import { requiredString, uuid, urlField } from './common';
 
 // ── Custom Field schemas ──
@@ -24,7 +25,7 @@ export const createCustomFieldSchema = z.object({
 });
 
 export const updateCustomFieldSchema = z.object({
-  fieldId: z.string().uuid(),
+  fieldId: uuidIdSchema,
   fieldLabel: z.string().trim().max(200).optional(),
   fieldType: z.enum(customFieldTypes).optional(),
   fieldOptions: z.array(z.string()).optional().nullable(),
@@ -189,7 +190,7 @@ export const createWebhookFieldMappingSchema = z.object({
 });
 
 export const updateWebhookFieldMappingSchema = z.object({
-  id: z.string().uuid(),
+  id: uuidIdSchema,
   sourceKey: requiredString.max(200).optional(),
   targetType: z.enum(['custom_field', 'native']).optional(),
   targetKey: requiredString.max(200).optional(),

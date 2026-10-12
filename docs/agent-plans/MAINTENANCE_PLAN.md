@@ -84,7 +84,9 @@ npm ci && npm run typecheck && npm run lint && npm run test:unit && npm run buil
   npm run db:migrate      # apply pending migrations
   npm run db:status       # confirm state / see pending
   npm run db:verify-chain # detect journal gaps/duplicates
-  npm run db:drift-check  # detect schema drift vs migrations
+  npm run db:drift-check  # detect schema drift vs migrations — tables, functions,
+                          # RLS policies and every column (nullability / type / presence);
+                          # it runs in CI (fresh-install) and nightly (schema-drift.yml)
   ```
 - `drizzle-kit push` (`db:sync`) is **dev/CI only** and is guarded — it must never touch production.
 - After a change, verify tenant isolation & integrity where relevant:

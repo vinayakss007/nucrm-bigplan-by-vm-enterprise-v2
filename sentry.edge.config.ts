@@ -5,6 +5,7 @@
  */
 // Sentry Edge config (for middleware, etc.)
 import * as Sentry from '@sentry/nextjs';
+import { DATA_COLLECTION } from './sentry-data-collection';
 import { scrubPii } from './sentry-pii-scrub';
 
 const SENTRY_DSN = process.env['SENTRY_DSN'];
@@ -19,11 +20,14 @@ if (SENTRY_DSN) {
     environment: SENTRY_ENVIRONMENT,
     ...(SENTRY_RELEASE ? { release: SENTRY_RELEASE } : {}),
 
-    // GDPR: never send PII by default
-    sendDefaultPii: false,
+    // v11 replaced `sendDefaultPii` with `dataCollection`, whose defaults are
+    // all ON — omitting it collects cookies, headers, bodies and query params.
+    // Stated in full; see sentry-data-collection.ts.
+    dataCollection: DATA_COLLECTION,
 
-    // Initialize whenever a DSN is configured; explicit opt-out is SENTRY_DISABLE=true
-    enabled: process.env['SENTRY_DISABLE'] !== 'true',
+    // Initialize whenever a DSN is configured; both documented opt-outs count
+    // (SENTRY_DISABLE=true or SENTRY_ENABLE=false — see sentry.server.config.ts).
+    enabled: process.env['SENTRY_DISABLE'] !== 'true' && process.env['SENTRY_ENABLE'] !== 'false',
     tracesSampleRate: 0.2,
     beforeSend(event) {
       return scrubPii(event);

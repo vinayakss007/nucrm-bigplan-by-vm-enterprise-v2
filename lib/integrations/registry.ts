@@ -28,10 +28,7 @@ export function getAllProviders(): ProviderDefinition[] {
 export async function executeAction(
   instance: IntegrationInstance,
   action: string,
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  params: Record<string, any>
+  params: Record<string, unknown>
 ): Promise<ActionResult> {
   const _provider = getProviderDef(instance.providerId);
 
@@ -40,29 +37,20 @@ export async function executeAction(
   if (handler) {
     try {
       return await handler(instance, action, params);
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (err: any) {
-      return { success: false, error: err.message };
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : String(err) };
     }
   }
 
   // Fallback: AI connector — works with ANY API
   try {
     return await aiConnector(instance, action, params);
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
-    return { success: false, error: `AI connector failed: ${err.message}` };
+  } catch (err) {
+    return { success: false, error: `AI connector failed: ${err instanceof Error ? err.message : String(err)}` };
   }
 }
 
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type ActionHandler = (instance: IntegrationInstance, action: string, params: Record<string, any>) => Promise<ActionResult>;
+type ActionHandler = (instance: IntegrationInstance, action: string, params: Record<string, unknown>) => Promise<ActionResult>;
 
 function getHandler(providerId: string): ActionHandler | undefined {
   const handlers: Record<string, ActionHandler> = {
@@ -74,10 +62,7 @@ function getHandler(providerId: string): ActionHandler | undefined {
   return handlers[providerId];
 }
 
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function handleSendGrid(instance: IntegrationInstance, action: string, params: Record<string, any>): Promise<ActionResult> {
+async function handleSendGrid(instance: IntegrationInstance, action: string, params: Record<string, unknown>): Promise<ActionResult> {
   const apiKey = instance.config['api_key'];
   const baseUrl = 'https://api.sendgrid.com/v3';
 
@@ -124,10 +109,7 @@ async function handleSendGrid(instance: IntegrationInstance, action: string, par
   return { success: false, error: `Unknown action: ${action}` };
 }
 
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function handleSlack(instance: IntegrationInstance, action: string, params: Record<string, any>): Promise<ActionResult> {
+async function handleSlack(instance: IntegrationInstance, action: string, params: Record<string, unknown>): Promise<ActionResult> {
   const token = instance.config['bot_token'];
 
   if (action === 'send_message') {
@@ -146,10 +128,7 @@ async function handleSlack(instance: IntegrationInstance, action: string, params
   return { success: false, error: `Unknown action: ${action}` };
 }
 
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function handleMailgun(instance: IntegrationInstance, action: string, params: Record<string, any>): Promise<ActionResult> {
+async function handleMailgun(instance: IntegrationInstance, action: string, params: Record<string, unknown>): Promise<ActionResult> {
   const apiKey = instance.config['api_key'];
   const domain = instance.config['domain'];
   const baseUrl = instance.config['base_url'] || 'https://api.mailgun.net/v3';
@@ -160,9 +139,9 @@ async function handleMailgun(instance: IntegrationInstance, action: string, para
     formData.append('from', instance.config['from_name']
       ? `${instance.config['from_name']} <${fromEmail}>`
       : fromEmail);
-    formData.append('to', params['to']);
-    formData.append('subject', params['subject']);
-    formData.append('html', params['body']);
+    formData.append('to', String(params['to']));
+    formData.append('subject', String(params['subject']));
+    formData.append('html', String(params['body']));
 
     const res = await fetch(`${baseUrl}/${domain}/messages`, {
       method: 'POST',
@@ -177,10 +156,7 @@ async function handleMailgun(instance: IntegrationInstance, action: string, para
   return { success: false, error: `Unknown action: ${action}` };
 }
 
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function handleOpenAI(instance: IntegrationInstance, action: string, params: Record<string, any>): Promise<ActionResult> {
+async function handleOpenAI(instance: IntegrationInstance, action: string, params: Record<string, unknown>): Promise<ActionResult> {
   const apiKey = instance.config['api_key'];
   const model = instance.config['model'] || 'gpt-4o-mini';
   const baseUrl = 'https://api.openai.com/v1';

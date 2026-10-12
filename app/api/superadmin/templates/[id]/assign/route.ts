@@ -4,7 +4,9 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { safeApiError } from '@/lib/api-error';
 import { z } from 'zod';
+import { uuidIdSchema } from '@/lib/validation/uuid';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
@@ -15,7 +17,7 @@ import { withApiRoute } from '@/lib/api/with-api-route';
 import { logError } from '@/lib/errors-server';
 
 const assignSchema = z.object({
-  tenant_id: z.string().uuid(),
+  tenant_id: uuidIdSchema,
 });
 
 export const POST = withApiRoute(async (req: NextRequest,
@@ -70,8 +72,7 @@ export const POST = withApiRoute(async (req: NextRequest,
 
     return NextResponse.json({ data: assignment }, { status: 201 });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Internal server error';
     await logError({ error: err, context: 'superadmin/templates/[id]/assign POST', requestMethod: 'POST' });
-    return NextResponse.json({ error: message }, { status: 500 });
+    return safeApiError(err); // #2527
   }
 });

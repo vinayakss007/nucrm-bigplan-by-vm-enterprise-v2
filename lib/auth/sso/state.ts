@@ -14,6 +14,7 @@
 import { SignJWT, jwtVerify } from 'jose';
 import { logError } from '@/lib/errors-server';
 import { cookies } from 'next/headers';
+import { resolveCookieSecureFromHeaders } from '@/lib/auth/cookie-security';
 
 export interface SsoStatePayload {
   providerId: string;
@@ -45,7 +46,8 @@ export async function setSsoState(payload: SsoStatePayload): Promise<void> {
   const jar = await cookies();
   jar.set(COOKIE_NAME, token, {
     httpOnly: true,
-    secure: process.env['NODE_ENV'] === 'production',
+    // #2275: central Secure resolution (COOKIE_SECURE > prod fail-closed > https).
+    secure: await resolveCookieSecureFromHeaders(),
     sameSite: 'lax', // 'lax' so it survives the IdP redirect
     path: '/',
     maxAge: TTL_SECONDS,

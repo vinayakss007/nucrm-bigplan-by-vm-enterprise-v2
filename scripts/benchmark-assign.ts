@@ -1,9 +1,9 @@
-import { sql } from 'drizzle-orm';
+import { sql, type SQL } from 'drizzle-orm';
 import { performance } from 'perf_hooks';
 
 // Simulate Drizzle DB object with execute function
 const mockDb = {
-  execute: async (query: any) => {
+  execute: async (_query: SQL) => {
     // simulate network latency ~1ms per query
     return new Promise(resolve => setTimeout(resolve, 1));
   }

@@ -61,13 +61,16 @@ export const services = pgTable('services', {
   
   ...utils.audit(),
 }, (table) => ({
+    deletedByFk2261Idx: index("services_deleted_by_fk_idx").on(table.deletedBy),
+    updatedByFk2261Idx: index("services_updated_by_fk_idx").on(table.updatedBy),
   tenantIdx: utils.tenantIdx(table),
   nameIdx: index('idx_services_name').on(table.name),
   categoryIdx: index('idx_services_category').on(table.category),
   contactIdx: index('idx_services_contact').on(table.contactId),
   companyIdx: index('idx_services_company').on(table.companyId),
   activeIdx: utils.activeIdx(table),
-}));
+
+  drz2255_idx_services_created_by: index('idx_services_created_by').on(table.createdBy),}));
 
 export const serviceCategories = pgTable('service_categories', {
   id: utils.pk(),
@@ -79,9 +82,12 @@ export const serviceCategories = pgTable('service_categories', {
   sortOrder: integer('sort_order').default(0),
   ...utils.audit(),
 }, (table) => ({
+    deletedByFk2261Idx: index("service_categories_deleted_by_fk_idx").on(table.deletedBy),
+    updatedByFk2261Idx: index("service_categories_updated_by_fk_idx").on(table.updatedBy),
   tenantIdx: utils.tenantIdx(table),
   nameIdx: index('idx_service_categories_name').on(table.name),
-}));
+
+  drz2255_idx_service_categories_created_by: index('idx_service_categories_created_by').on(table.createdBy),}));
 
 // ── INVOICES MODULE ─────────────────────────────────────
 export const invoices = pgTable('invoices', {
@@ -140,14 +146,30 @@ export const invoices = pgTable('invoices', {
   
   ...utils.audit(),
 }, (table) => ({
+    deletedByFk2261Idx: index("invoices_deleted_by_fk_idx").on(table.deletedBy),
+    updatedByFk2261Idx: index("invoices_updated_by_fk_idx").on(table.updatedBy),
   tenantIdx: utils.tenantIdx(table),
   invoiceNumberIdx: uniqueIndex('idx_invoices_number').on(table.tenantId, table.invoiceNumber),
   contactIdx: index('idx_invoices_contact').on(table.contactId),
   companyIdx: index('idx_invoices_company').on(table.companyId),
   statusIdx: index('idx_invoices_status').on(table.tenantId, table.status),
   dueDateIdx: index('idx_invoices_due_date').on(table.dueDate),
+  // #2228 / #2257: DB-level guard for the quote→invoice race. The convert
+  // route's SELECT-then-INSERT pre-check runs OUTSIDE the transaction, so two
+  // concurrent POSTs both passed and each inserted an invoice for the same
+  // quote; the existing 23505-retry loop could never fire because nothing was
+  // unique. Partial: only live rows count (soft-deleted invoices must not
+  // block a legitimate reconversion), and NULL quote_id (invoices not born
+  // from a quote) never collides — Postgres UNIQUE treats NULLs as distinct.
+  quoteUidIdx: uniqueIndex('uq_invoices_quote_id').on(table.quoteId).where(sql`${table.deletedAt} IS NULL`),
   activeIdx: utils.activeIdx(table),
-}));
+
+  drz2255_idx_invoices_quote: index('idx_invoices_quote').on(table.quoteId),
+  drz2255_idx_invoices_order: index('idx_invoices_order').on(table.orderId),
+  drz2255_idx_invoices_deal: index('idx_invoices_deal').on(table.tenantId, table.dealId),
+  drz2255_idx_invoices_created_by: index('idx_invoices_created_by').on(table.createdBy),
+  drz2255_idx_invoices_deal_id: index('idx_invoices_deal_id').on(table.dealId),
+  drz2255_idx_invoices_parent_invoice_id: index('idx_invoices_parent_invoice_id').on(table.parentInvoiceId),}));
 
 export const invoiceLineItems = pgTable('invoice_line_items', {
   id: utils.pk(),
@@ -171,7 +193,10 @@ export const invoiceLineItems = pgTable('invoice_line_items', {
   ...utils.lifecycle(),
 }, (table) => ({
   invoiceIdx: index('idx_invoice_line_items_invoice').on(table.invoiceId),
-}));
+
+  drz2255_idx_invoice_line_items_tenant: index('idx_invoice_line_items_tenant').on(table.tenantId),
+  drz2255_idx_invoice_line_items_product_id: index('idx_invoice_line_items_product_id').on(table.productId),
+  drz2255_idx_invoice_line_items_service_id: index('idx_invoice_line_items_service_id').on(table.serviceId),}));
 
 export const invoicePayments = pgTable('invoice_payments', {
   id: utils.pk(),
@@ -189,6 +214,9 @@ export const invoicePayments = pgTable('invoice_payments', {
   recordedBy: uuid('recorded_by').references(() => users.id, { onDelete: 'set null' }),
   ...utils.audit(),
 }, (table) => ({
+    deletedByFk2261Idx: index("invoice_payments_deleted_by_fk_idx").on(table.deletedBy),
+    recordedByFk2261Idx: index("invoice_payments_recorded_by_fk_idx").on(table.recordedBy),
+    updatedByFk2261Idx: index("invoice_payments_updated_by_fk_idx").on(table.updatedBy),
   invoiceIdx: index('idx_invoice_payments_invoice').on(table.invoiceId),
   dateIdx: index('idx_invoice_payments_date').on(table.paymentDate),
   // #1916: DB-level idempotency backstop. Application-level SELECT-then-INSERT
@@ -199,7 +227,9 @@ export const invoicePayments = pgTable('invoice_payments', {
   tenantRefUidIdx: uniqueIndex('uq_invoice_payments_tenant_reference')
     .on(table.tenantId, table.reference)
     .where(sql`${table.deletedAt} IS NULL AND ${table.reference} IS NOT NULL`),
-}));
+
+  drz2255_idx_invoice_payments_tenant: index('idx_invoice_payments_tenant').on(table.tenantId),
+  drz2255_idx_invoice_payments_created_by: index('idx_invoice_payments_created_by').on(table.createdBy),}));
 
 // ── ORDERS MODULE ─────────────────────────────────────
 export const orders = pgTable('orders', {
@@ -248,13 +278,18 @@ export const orders = pgTable('orders', {
   metadata: utils.metadata(),
   ...utils.audit(),
 }, (table) => ({
+    deletedByFk2261Idx: index("orders_deleted_by_fk_idx").on(table.deletedBy),
+    updatedByFk2261Idx: index("orders_updated_by_fk_idx").on(table.updatedBy),
   tenantIdx: utils.tenantIdx(table),
   orderNumberIdx: uniqueIndex('idx_orders_number').on(table.tenantId, table.orderNumber),
   contactIdx: index('idx_orders_contact').on(table.contactId),
   companyIdx: index('idx_orders_company').on(table.companyId),
   statusIdx: index('idx_orders_status').on(table.tenantId, table.status),
   activeIdx: utils.activeIdx(table),
-}));
+
+  drz2255_idx_orders_quote: index('idx_orders_quote').on(table.quoteId),
+  drz2255_idx_orders_created_by: index('idx_orders_created_by').on(table.createdBy),
+  drz2255_idx_orders_invoice_id: index('idx_orders_invoice_id').on(table.invoiceId),}));
 
 export const orderLineItems = pgTable('order_line_items', {
   id: utils.pk(),
@@ -271,7 +306,10 @@ export const orderLineItems = pgTable('order_line_items', {
   ...utils.lifecycle(),
 }, (table) => ({
   orderIdx: index('idx_order_line_items_order').on(table.orderId),
-}));
+
+  drz2255_idx_order_line_items_tenant: index('idx_order_line_items_tenant').on(table.tenantId),
+  drz2255_idx_order_line_items_product_id: index('idx_order_line_items_product_id').on(table.productId),
+  drz2255_idx_order_line_items_service_id: index('idx_order_line_items_service_id').on(table.serviceId),}));
 
 // ── CONTRACTS MODULE ────────────────────────────────────
 export const contracts = pgTable('contracts', {
@@ -303,6 +341,8 @@ export const contracts = pgTable('contracts', {
   metadata: utils.metadata(),
   ...utils.audit(),
 }, (table) => ({
+    deletedByFk2261Idx: index("contracts_deleted_by_fk_idx").on(table.deletedBy),
+    updatedByFk2261Idx: index("contracts_updated_by_fk_idx").on(table.updatedBy),
   tenantIdx: utils.tenantIdx(table),
   contactIdx: index('idx_contracts_contact').on(table.contactId),
   companyIdx: index('idx_contracts_company').on(table.companyId),
@@ -310,7 +350,8 @@ export const contracts = pgTable('contracts', {
   activeIdx: utils.activeIdx(table),
   // #1054: index the self-referential parentContractId used for renewal chains.
   parentIdx: index('idx_contracts_parent').on(table.parentContractId),
-}));
+
+  drz2255_idx_contracts_created_by: index('idx_contracts_created_by').on(table.createdBy),}));
 
 // ── PLANS (Billing plans) ────────────────────────────
 export const plans = pgTable('plans', {
@@ -349,9 +390,9 @@ export const plans = pgTable('plans', {
 }, (table) => {
   return {
     nameIdx: index('idx_plans_name').on(table.name),
-    slugIdx: index('idx_plans_slug').on(table.slug),
     activeIdx: index('idx_plans_active').on(table.isActive, table.sortOrder),
-  };
+  
+  drz2255_idx_plans_rate_limit: index('idx_plans_rate_limit').on(table.isActive).where(sql`(is_active = true)`),};
 });
 
 // ── BILLING SUBSCRIPTIONS (tenant billing) ─────────────
@@ -376,7 +417,8 @@ export const subscriptions = pgTable('subscriptions', {
   return {
     tenantIdx: utils.tenantIdx(table),
     metadataGinIdx: utils.metadataIdx(table),
-  };
+  
+  drz2255_idx_subscriptions_plan_id: index('idx_subscriptions_plan_id').on(table.planId),};
 });
 
 // ── BILLING EVENTS ─────────────────────────────────────
@@ -397,7 +439,8 @@ export const billingEvents = pgTable('billing_events', {
     typeIdx: index('idx_billing_events_type').on(table.eventType, table.createdAt),
     stripeEventIdx: index('idx_billing_events_stripe_event').on(table.stripeEventId).where(sql`stripe_event_id IS NOT NULL`),
     metadataGinIdx: utils.metadataIdx(table),
-  };
+  
+};
 });
 
 // ── WEBHOOK EVENTS (provider delivery ledger) ──
@@ -414,7 +457,12 @@ export const webhookEvents = pgTable('webhook_events', {
   // failed → processing threw (kept for audit; the claim row is deleted on
   // failure so provider retries re-process — see lib/webhooks/idempotency).
   status: text('status').notNull().default('claimed'),
-  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  // #2237: 0087 declared this `DEFAULT now()` but NULLABLE, and the stale-claim
+  // sweep in lib/webhooks/idempotency.ts keyed on `created_at < cutoff` — a
+  // NULL row could never be reclaimed, wedging the UNIQUE(provider, event_id)
+  // claim forever. Migration 0109 backfills and enforces NOT NULL; the sweeper
+  // additionally treats NULL as stale so pre-0109 databases self-heal.
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   processedAt: timestamp('processed_at', { withTimezone: true }),
 }, (table) => {
   return {
@@ -453,12 +501,15 @@ export const serviceSubscriptions = pgTable('service_subscriptions', {
   metadata: utils.metadata(),
   ...utils.audit(),
 }, (table) => ({
+    deletedByFk2261Idx: index("service_subscriptions_deleted_by_fk_idx").on(table.deletedBy),
+    updatedByFk2261Idx: index("service_subscriptions_updated_by_fk_idx").on(table.updatedBy),
   tenantIdx: utils.tenantIdx(table),
   contactIdx: index('idx_service_subscriptions_contact').on(table.contactId),
   companyIdx: index('idx_service_subscriptions_company').on(table.companyId),
   statusIdx: index('idx_service_subscriptions_status').on(table.tenantId, table.status),
   activeIdx: utils.activeIdx(table),
-}));
+
+  drz2255_idx_service_subscriptions_created_by: index('idx_service_subscriptions_created_by').on(table.createdBy),}));
 
 // ── DUNNING SETTINGS ──────────────────────────────────
 export const dunningSettings = pgTable('dunning_settings', {
@@ -480,9 +531,12 @@ export const dunningSettings = pgTable('dunning_settings', {
   metadata: utils.metadata(),
   ...utils.audit(),
 }, (table) => ({
+    deletedByFk2261Idx: index("dunning_settings_deleted_by_fk_idx").on(table.deletedBy),
+    updatedByFk2261Idx: index("dunning_settings_updated_by_fk_idx").on(table.updatedBy),
   tenantIdx: utils.tenantIdx(table),
   activeIdx: index('idx_dunning_settings_active').on(table.tenantId, table.isActive),
-}));
+
+  drz2255_idx_dunning_settings_created_by: index('idx_dunning_settings_created_by').on(table.createdBy),}));
 
 // ── DUNNING ATTEMPTS ──────────────────────────────────
 export const dunningAttempts = pgTable('dunning_attempts', {

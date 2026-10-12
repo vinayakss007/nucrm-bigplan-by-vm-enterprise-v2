@@ -9,6 +9,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, RefreshCw, Loader2, Download, Filter } from 'lucide-react';
 import { formatCurrency, cn } from '@/lib/utils';
+import { csvRow } from '@/lib/csv';
 import { useApiQuery } from '@/lib/query/client';
 
 interface FunnelStage {
@@ -36,15 +37,12 @@ const DATE_RANGES = [
 
 function toCsv(stages: FunnelStage[]): string {
   const headers = ['Stage', 'Order', 'Count', 'Value', 'Cumulative count', 'Cumulative value', 'To next %'];
+  // #2340: stage names are configurable user text — csvRow adds the formula
+  // guard and '\r' quoting the local escaper omitted.
   const lines = stages.map((s) =>
-    [s.stageName, s.order, s.count, s.value, s.cumulativeCount, s.cumulativeValue, s.conversionToNext ?? '']
-      .map((v) => {
-        const str = String(v ?? '');
-        return /[",\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
-      })
-      .join(','),
+    csvRow([s.stageName, s.order, s.count, s.value, s.cumulativeCount, s.cumulativeValue, s.conversionToNext ?? '']),
   );
-  return [headers.join(','), ...lines].join('\n');
+  return [csvRow(headers), ...lines].join('\n');
 }
 
 function downloadCsv(csv: string) {

@@ -8,6 +8,7 @@
 import { useState, useCallback } from 'react';
 import { useApiQuery } from '@/lib/query/client';
 import { clientLogError } from '@/lib/client-logger';
+import { csvRow } from '@/lib/csv';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import {
   Search,
@@ -265,7 +266,9 @@ export default function SuperAdminDataExplorer() {
       ]);
     }
 
-    const csv = [allHeaders, ...allRows].map(row => row.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
+    // #2340: shared escaper — cross-tenant dumps must neutralise formula
+    // prefixes in every cell, not just quote separators.
+    const csv = [allHeaders, ...allRows].map((row) => csvRow(row)).join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');

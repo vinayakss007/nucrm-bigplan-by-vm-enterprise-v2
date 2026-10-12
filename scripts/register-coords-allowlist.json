@@ -1,0 +1,4 @@
+{
+  "_comment": "Known-drifting register coordinates, each with a written `reason` naming the PR that corrects it. The guard FAILS on any drift not listed here and hints when an entry goes stale (prune it). Regenerate preserving reasons: node scripts/check-register-coords.mjs --update",
+  "entries": []
+}

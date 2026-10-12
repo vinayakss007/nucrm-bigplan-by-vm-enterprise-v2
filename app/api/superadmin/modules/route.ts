@@ -92,7 +92,7 @@ export const PATCH = withApiRoute(async (req: NextRequest) => {
         })
         .where(eq(modules.id, v.module_id));
 
-      logSuperAdminAction({
+      await logSuperAdminAction({
         adminId: ctx.userId,
         adminEmail: ctx.user?.email || "",
         action: 'settings.changed',
@@ -109,7 +109,7 @@ export const PATCH = withApiRoute(async (req: NextRequest) => {
         UPDATE public.modules SET is_available = ${v.is_available}, updated_at = now() WHERE id = ${v.module_id}
       `);
 
-      logSuperAdminAction({
+      await logSuperAdminAction({
         adminId: ctx.userId,
         adminEmail: ctx.user?.email || "",
         action: 'settings.changed',

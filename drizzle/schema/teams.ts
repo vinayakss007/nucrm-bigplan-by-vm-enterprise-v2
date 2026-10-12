@@ -31,7 +31,10 @@ export const teams = pgTable('teams', {
   ...utils.audit(),
 }, (table) => {
   return {
-    tenantIdx: utils.tenantIdx(table),
+    deletedByFk2261Idx: index("teams_deleted_by_fk_idx").on(table.deletedBy),
+    updatedByFk2261Idx: index("teams_updated_by_fk_idx").on(table.updatedBy),
+    // #2255: no standalone tenant index exists live — idx_teams_tenant_name
+    // UNIQUE (tenant_id, name) serves tenant filtering via its leading column.
     managerIdx: index('idx_teams_manager').on(table.managerId),
     // Team names are unique per tenant (case-sensitive at the DB layer; the API
     // normalises before insert).
@@ -49,7 +52,10 @@ export const teamMembers = pgTable('team_members', {
   ...utils.audit(),
 }, (table) => {
   return {
-    tenantIdx: utils.tenantIdx(table),
+    deletedByFk2261Idx: index("team_members_deleted_by_fk_idx").on(table.deletedBy),
+    updatedByFk2261Idx: index("team_members_updated_by_fk_idx").on(table.updatedBy),
+    // #2255: live DB created idx_team_members_tenant_id — mirror the live name.
+    tenantIdx: index('idx_team_members_tenant_id').on(table.tenantId),
     teamIdx: index('idx_team_members_team').on(table.teamId),
     userIdx: index('idx_team_members_user').on(table.userId),
     // A user appears at most once per team.

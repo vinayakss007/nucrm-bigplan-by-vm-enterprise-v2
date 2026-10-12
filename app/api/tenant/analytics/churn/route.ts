@@ -9,16 +9,26 @@ import { requireAuth, can } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { churnPredictions } from '@/drizzle/schema';
 import { contacts } from '@/drizzle/schema';
-import { eq, and, desc, sql } from 'drizzle-orm';
+import { eq, and, desc, isNull, sql } from 'drizzle-orm';
+import { z } from 'zod';
 import { concurrencyGuard } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
-import { readJsonBody } from '@/lib/api/validate';
+import { readJsonBody, validateBody, uuidField } from '@/lib/api/validate';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { logError } from '@/lib/errors-server';
 
+const calculateSchema = z.object({ contact_id: uuidField });
+
 /**
  * GET /api/tenant/analytics/churn
- * Get churn predictions
+ * Get churn predictions.
+ *
+ * #2556 — a soft-deleted contact stays in this queue with their email attached,
+ * while every other contact read in the app excludes them
+ * (`app/api/tenant/contacts/route.ts:54`) and the deal side of this same feature
+ * does too (`deals_by_win_probability` ends `WHERE d.deleted_at IS NULL`). The
+ * filter belongs on the join partner, not on `churn_predictions`: the prediction
+ * row has no `deleted_at` of its own.
  */
 export const GET = withApiRoute(async (request: NextRequest) => {
   try {
@@ -32,7 +42,8 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     const risk_level = searchParams.get('risk_level');
 
     const filters = [
-      eq(churnPredictions.tenantId, ctx.tenantId)
+      eq(churnPredictions.tenantId, ctx.tenantId),
+      isNull(contacts.deletedAt)
     ];
 
     if (risk_level) {
@@ -71,8 +82,15 @@ export const GET = withApiRoute(async (request: NextRequest) => {
 });
 
 /**
- * POST /api/tenant/analytics/churn/calculate
- * Calculate churn risk for a contact
+ * POST /api/tenant/analytics/churn
+ * Calculate churn risk for a contact.
+ *
+ * The doc comment used to advertise `.../churn/calculate`, which is not a route:
+ * there is no `calculate/route.ts` under `app/api/tenant/analytics/`, so a client
+ * following the comment would 404. #2556 — this handler is the POST half of the
+ * page the GET above renders, so it refuses a soft-deleted contact for the same
+ * reason the GET no longer lists one: a churn queue entry the operator cannot
+ * resolve is worse than an absent one.
  */
 export const POST = withApiRoute(async (request: NextRequest) => {
   try {
@@ -83,10 +101,27 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     }
 
     const body = await readJsonBody(request);
-    const { contact_id } = body;
+    const validated = validateBody(calculateSchema, body);
+    if (validated instanceof NextResponse) return validated;
+    const { contact_id } = validated.data;
 
-    if (!contact_id) {
-      return NextResponse.json({ error: 'contact_id is required' }, { status: 400 });
+    // #2524 — contact_id arrives from the body. Prove it belongs to the calling
+    // tenant before the RPC runs and before the prediction row is read: RLS is
+    // this repo's backstop, never its primary filter.
+    // #2556 — and prove it is not soft-deleted, so the two halves of this page
+    // cannot disagree: the GET above stopped listing rows this POST would still
+    // happily score. Matches the deal-side probe's `deletedAt IS NULL`.
+    const [ownedContact] = await db
+      .select({ id: contacts.id })
+      .from(contacts)
+      .where(and(
+        eq(contacts.id, contact_id),
+        eq(contacts.tenantId, ctx.tenantId),
+        isNull(contacts.deletedAt),
+      ))
+      .limit(1);
+    if (!ownedContact) {
+      return NextResponse.json({ error: 'Contact not found' }, { status: 404 });
     }
 
     const result = await db.execute(sql`SELECT public.calculate_churn_risk(${contact_id}) as probability`);
@@ -94,7 +129,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
 
     const [prediction] = await db.select()
       .from(churnPredictions)
-      .where(eq(churnPredictions.contactId, contact_id))
+      .where(and(eq(churnPredictions.contactId, contact_id), eq(churnPredictions.tenantId, ctx.tenantId)))
       .limit(1);
 
     return NextResponse.json({

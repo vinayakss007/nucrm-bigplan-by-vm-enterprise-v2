@@ -14,7 +14,7 @@
 
 import type { StorageClass } from '@aws-sdk/client-s3';
 import { getS3Config, describeS3ConfigGap } from '@/lib/storage/s3-config';
-import { applyRetentionPolicy, readRetentionConfig, type BackupEntry } from './retention-policy';
+import { applyRetentionPolicy, readRetentionConfig, MIN_RETENTION_DAYS, type BackupEntry } from './retention-policy';
 
 export interface UploadResult {
   /** Key of the object in the bucket. */
@@ -84,7 +84,13 @@ export class OffsiteUploadError extends Error {
   }
 }
 
-export const DEFAULT_RETENTION_DAYS = 30;
+/**
+ * Retention used when the operator sets nothing. It IS the floor: a scheduled
+ * purge with no configuration must never be the shortest window in the system
+ * (it used to be 30 days, which is why #2233's restore points could age out
+ * before anyone noticed).
+ */
+export const DEFAULT_RETENTION_DAYS = MIN_RETENTION_DAYS;
 
 /**
  * Resolve the backup retention window in days.
@@ -95,20 +101,39 @@ export const DEFAULT_RETENTION_DAYS = 30;
  * example file therefore had no effect on the scheduled purge. Accept both,
  * canonical name first, and ignore values that are not a positive integer so a
  * typo cannot silently expand or collapse retention.
+ *
+ * The result is clamped UP to MIN_RETENTION_DAYS: the flat "delete after N
+ * days" model is the least safe of the purge paths, so an operator value below
+ * the retention floor (or the 30-day default) can never shorten it. Callers who
+ * genuinely want a shorter window must pass it straight to
+ * purgeExpiredBackups(), which stays faithful to its argument.
  */
 export function resolveRetentionDays(): number {
+  let resolved = DEFAULT_RETENTION_DAYS;
+
   for (const name of ['BACKUP_RETENTION_DAYS', 'BACKUP_KEEP_DAYS'] as const) {
     const raw = process.env[name];
     if (raw === undefined || raw.trim() === '') continue;
 
     const parsed = Number(raw);
-    if (Number.isInteger(parsed) && parsed > 0) return parsed;
+    if (Number.isInteger(parsed) && parsed > 0) {
+      resolved = parsed;
+      break;
+    }
 
     console.warn(
       `[backups] Ignoring invalid ${name}="${raw}"; using ${DEFAULT_RETENTION_DAYS} days`
     );
   }
-  return DEFAULT_RETENTION_DAYS;
+
+  if (resolved < MIN_RETENTION_DAYS) {
+    console.warn(
+      `[backups] Retention ${resolved}d is below the ${MIN_RETENTION_DAYS}d floor; ` +
+        `purging nothing younger than ${MIN_RETENTION_DAYS} days (#2233 follow-up).`
+    );
+    return MIN_RETENTION_DAYS;
+  }
+  return resolved;
 }
 
 /**
@@ -193,6 +218,8 @@ export async function purgeWithTieredRetention(): Promise<{
   kept: number;
   deleted: number;
   bucket: string;
+  /** True when the mass-delete guard refused the run — see applyRetentionPolicy. */
+  guardTriggered: boolean;
 }> {
   const cfg = getS3Config();
   if (!cfg.configured || !cfg.backupBucket) {
@@ -240,6 +267,15 @@ export async function purgeWithTieredRetention(): Promise<{
   const retentionConfig = readRetentionConfig();
   const decision = applyRetentionPolicy(entries, retentionConfig);
 
+  if (decision.guardTriggered) {
+    console.warn(
+      `[backups] Tiered purge would have expired ${decision.guardBlocked} of ${entries.length} ` +
+        `objects, over the ${(retentionConfig.maxDeleteRatio ?? 1) * 100}% per-run limit — ` +
+        `deleting NOTHING. Check that the bucket listing is complete before retrying ` +
+        `(#2233 follow-up).`,
+    );
+  }
+
   // Delete the expired objects in batches of 1000 (S3 limit)
   let deleted = 0;
   const toDelete = decision.delete.map((d) => ({ Key: d.entry.key }));
@@ -255,5 +291,10 @@ export async function purgeWithTieredRetention(): Promise<{
     deleted += batch.length;
   }
 
-  return { kept: decision.keep.length, deleted, bucket };
+  return {
+    kept: decision.keep.length,
+    deleted,
+    bucket,
+    guardTriggered: decision.guardTriggered,
+  };
 }

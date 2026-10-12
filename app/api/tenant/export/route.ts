@@ -8,11 +8,24 @@ import { apiError } from '@/lib/api-error';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { contacts, companies, deals, leads, tasks, activities } from '@/drizzle/schema';
-import { eq, and, isNull, sql } from 'drizzle-orm';
+import { type SQL, eq, and, isNull, sql } from 'drizzle-orm';
+import type { PgColumn } from 'drizzle-orm/pg-core';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
 import { escapeCSV } from '@/lib/export';
 import { withApiRoute } from '@/lib/api/with-api-route';
+
+/**
+ * Structural view of the per-entity select builders: enough for the two
+ * ordered/limited reads below without a common generic select type.
+ */
+type ExportQuery = {
+  orderBy: (by: SQL) => {
+    limit: (n: number) => PromiseLike<Record<string, unknown>[]> & {
+      offset: (n: number) => PromiseLike<Record<string, unknown>[]>;
+    };
+  };
+};
 
 /**
  * GET /api/tenant/export
@@ -61,11 +74,9 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     // #1987: build the query instead of eagerly loading up to 10k rows into
     // memory for the JSON path; the CSV path still materializes (it streams
     // row-by-row into the response but reads in one round-trip).
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let query: any = null;
+    let query: ExportQuery | null = null;
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const tenantFilter = (table: { tenantId: any; deletedAt?: any }) =>
+    const tenantFilter = (table: { tenantId: PgColumn; deletedAt?: PgColumn }) =>
       and(eq(table.tenantId, ctx.tenantId), table.deletedAt ? isNull(table.deletedAt) : undefined);
 
     // #1048: select an explicit, business-meaningful column set per entity
@@ -198,8 +209,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
         'Content-Disposition': `attachment; filename="${entity}-export.csv"`,
       };
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const data: any[] = await query.orderBy(sql`id`).limit(10000);
+      const data = await query!.orderBy(sql`id`).limit(10000);
 
       if (data.length === 0) {
         return new NextResponse('', { status: 200, headers: csvHeaders });
@@ -256,8 +266,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
             controller.enqueue(encoder.encode('{"data":['));
             headerSent = true;
           }
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const rows: any[] = await query
+          const rows = await query!
             .orderBy(sql`id`)
             .limit(CHUNK_SIZE)
             .offset(offset);

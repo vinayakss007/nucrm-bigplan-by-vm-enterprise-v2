@@ -6,6 +6,7 @@
 import type { Metadata } from 'next';
 import { SiteHeader } from '@/components/marketing/site-header';
 import { SiteFooter } from '@/components/marketing/site-footer';
+import { CookieConsent } from '@/components/marketing/cookie-consent';
 import { BRAND } from '@/lib/marketing/site';
 import './marketing.css';
 
@@ -67,6 +68,7 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
       <SiteHeader />
       <main id="main">{children}</main>
       <SiteFooter />
+      <CookieConsent />
     </div>
   );
 }

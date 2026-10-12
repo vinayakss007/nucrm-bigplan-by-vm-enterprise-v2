@@ -108,21 +108,19 @@ export default function SuperAdminModulesPage() {
     }));
 
     let hasError = false;
-    await Promise.all(updates.map(async (update) => {
-      try {
-        const res = await fetch('/api/superadmin/modules', {
-          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ module_id: update.id, pricing: update.pricing }),
-        });
-        if (!res.ok) {
-          hasError = true;
-          toast.error(`Failed to update ${update.id}`);
-        }
-      } catch (_err) {
+    try {
+      const res = await fetch('/api/superadmin/modules/bulk', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ updates }),
+      });
+      if (!res.ok) {
         hasError = true;
-        toast.error(`Error updating ${update.id}`);
+        toast.error('Failed to update modules');
       }
-    }));
+    } catch (_err) {
+      hasError = true;
+      toast.error('Error updating modules');
+    }
 
     if (!hasError) {
       setDirty(new Set());

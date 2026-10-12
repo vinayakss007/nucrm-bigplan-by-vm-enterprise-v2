@@ -1,0 +1,3 @@
+#!/bin/sh
+# #2332 test double for `docker`: deterministic answers from FAKE_DOCKER_STATE.
+exec node "$(dirname "$0")/docker.mjs" "$@"

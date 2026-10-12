@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
+import type { CreateAutomation } from '@/lib/sdk/types';
 
 describe('AutomationsResource', () => {
   it('list calls GET /automations with no params', async () => {
@@ -36,8 +37,10 @@ describe('AutomationsResource', () => {
     const req = vi.fn().mockResolvedValue({ id: 'a-2' });
     const { AutomationsResource } = await import('@/lib/sdk/resources/automations');
     const r = new AutomationsResource(req);
-    const data = { name: 'Auto 1', trigger: 'event', actions: [] };
-    expect(await r.create(data as any)).toEqual({ id: 'a-2' });
+    // CreateAutomation keeps `status` required, which is what the `as any` was
+    // papering over.
+    const data: CreateAutomation = { name: 'Auto 1', trigger: 'event', actions: [], status: 'active' };
+    expect(await r.create(data)).toEqual({ id: 'a-2' });
     expect(req).toHaveBeenCalledWith('POST', '/automations', data);
   });
 
@@ -46,7 +49,7 @@ describe('AutomationsResource', () => {
     const { AutomationsResource } = await import('@/lib/sdk/resources/automations');
     const r = new AutomationsResource(req);
     const data = { name: 'Auto 2' };
-    const result = await r.update('a-1', data as any);
+    const result = await r.update('a-1', data);
     expect(result.name).toBe('Auto 2');
     expect(req).toHaveBeenCalledWith('PATCH', '/automations/a-1', data);
   });

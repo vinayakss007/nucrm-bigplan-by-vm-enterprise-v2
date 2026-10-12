@@ -1,0 +1,61 @@
+{
+  "_comment": "Known column-level drift that scripts/drift-check.ts (#2508) is told to tolerate, so the screen can run unattended in CI and nightly without going red for a fact already scheduled away. Follows the convention of scripts/schema-drift-baseline.json (#1883) and KNOWN_REDUNDANT_DUPLICATE_INDEXES (#2264): an entry is a debt record, not a mute button. Rules: (1) key is `kind:table.column` where kind is nullability | type | presence, exactly as the script emits it; (2) every entry names the migration that clears it (`clearedBy`) or the issue that owns the fix (`filedAs`) — an entry with neither is a bug report suppressed, not drift recorded; (3) entries are checked against both databases the screen runs against, and the chain-built one (npm run db:bootstrap) is where a `filedAs` entry must disappear first, because that build is the migration chain; (4) when an entry stops firing the script prints a `[allowlist]` ratchet line naming it — delete the entry in that PR. Never add an entry for drift you have not measured on a real database.",
+  "entries": [
+    {
+      "key": "nullability:support_tickets.portal_token",
+      "reason": "Live is NOT NULL with no default; drizzle/schema/support.ts:132 declares it nullable because #2444 retired the credential and no insert supplies a value any more. `0124` is the DDL, pending on pre-prod. Until it lands, ticket creation on a main build fails with SQLSTATE 23502 — that is the incident, this entry is only the screen's tolerance of the schema fact.",
+      "clearedBy": "0124_retire_ticket_portal_token_rls_lookup.sql (pending on pre-prod: db:status Applied 99 / Pending 26 at 4dc2ef82)",
+      "filedAs": "#2499"
+    },
+    {
+      "key": "nullability:webhook_events.created_at",
+      "reason": "drizzle/schema declares NOT NULL, the live database accepts NULL (default now()). `0109` is the DDL and it is one of the 26 pending entries — the live database is behind main here, the chain is not.",
+      "clearedBy": "0109_webhook_events_created_at_not_null.sql (pending on pre-prod)"
+    },
+    {
+      "key": "nullability:segment_members.id",
+      "reason": "utils.pk() declares NOT NULL; 0071_schema_drift_backfill.sql:57 added the column `uuid DEFAULT gen_random_uuid()` without NOT NULL and nothing since tightened it. Drift on the chain AND on pre-prod. 0 rows in both, so the fix is pure DDL.",
+      "filedAs": "#2509"
+    },
+    {
+      "key": "nullability:custom_entities.fields",
+      "reason": "Declared NOT NULL; 0059_custom_entities.sql:12 created it nullable and 0071:67's `CREATE TABLE IF NOT EXISTS` — which does say NOT NULL — is a no-op on any database where 0059 already ran. Pre-prod has it NOT NULL because its history includes a `db:sync` push, so this is a per-install-path divergence, not a pre-prod lag.",
+      "filedAs": "#2509"
+    },
+    {
+      "key": "nullability:custom_entities.settings",
+      "reason": "Same pair: 0059_custom_entities.sql:13 nullable, 0071:68's NOT NULL never executes because the table already exists.",
+      "filedAs": "#2509"
+    },
+    {
+      "key": "nullability:custom_entities.created_at",
+      "reason": "Same pair: 0059_custom_entities.sql:15 nullable, 0071:70's NOT NULL never executes.",
+      "filedAs": "#2509"
+    },
+    {
+      "key": "nullability:custom_entity_data.data",
+      "reason": "Declared NOT NULL; the chain builds it nullable and pre-prod has it NOT NULL. Measured 0 rows on both.",
+      "filedAs": "#2509"
+    },
+    {
+      "key": "nullability:custom_entity_data.created_at",
+      "reason": "Declared NOT NULL; the chain builds it nullable and pre-prod has it NOT NULL. Measured 0 rows on both.",
+      "filedAs": "#2509"
+    },
+    {
+      "key": "type:super_admin_audit_logs.old_data",
+      "reason": "drizzle/schema declares jsonb; 0002_flat_sir_ram.sql created the column text and 0007_super_admin_audit_logs.sql:16's jsonb is an inert `CREATE TABLE IF NOT EXISTS`. text in the chain build and text on pre-prod; the hand-written SQL in lib/audit/super-admin.ts:194 writes JSON.stringify and :390 reads `string | null`, so the schema is the liar. 141 rows, old_data non-null in 0.",
+      "filedAs": "#2510"
+    },
+    {
+      "key": "type:super_admin_audit_logs.new_data",
+      "reason": "Same as old_data: jsonb declared, text built (0002 vs 0007:17). 141 rows, new_data non-null in 0.",
+      "filedAs": "#2510"
+    },
+    {
+      "key": "type:super_admin_audit_logs.metadata",
+      "reason": "Same pair (0002 text vs 0007:18 jsonb, with `DEFAULT '{}'`). All 141 live rows carry text that `jsonb_typeof` reads as `object`, so re-typing is possible today; the owner has to choose between ALTER COLUMN TYPE jsonb and declaring text in the schema. See #2510 for both dispositions and the 0057 CHECK constraints that assume text.",
+      "filedAs": "#2510"
+    }
+  ]
+}

@@ -6,6 +6,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
+import { db } from '@/drizzle/db';
+import { tenants } from '@/drizzle/schema';
+import { eq, sql } from 'drizzle-orm';
+import { logAudit } from '@/lib/audit';
 import {
   getSupportedCurrencies,
   getExchangeRate,
@@ -18,6 +22,17 @@ import { withApiRoute } from '@/lib/api/with-api-route';
 const setCurrencySchema = z.object({
   currency: z.string().min(1, 'Currency code is required'),
 });
+
+/** Reads the code POST /api/tenant/currency stored in tenants.settings. */
+async function readDefaultCurrency(tenantId: string): Promise<string> {
+  const [t] = await db
+    .select({ settings: tenants.settings })
+    .from(tenants)
+    .where(eq(tenants.id, tenantId))
+    .limit(1);
+  const stored = (t?.settings as Record<string, unknown> | undefined)?.default_currency;
+  return typeof stored === 'string' && stored ? stored : 'USD';
+}
 
 /**
  * GET /api/tenant/currency
@@ -50,6 +65,7 @@ export const GET = withApiRoute(async (req: NextRequest) => {
       data: {
         currencies,
         baseCurrency: 'USD',
+        defaultCurrency: await readDefaultCurrency(ctx.tenantId),
         rates,
       },
     });
@@ -84,8 +100,31 @@ export const POST = withApiRoute(async (req: NextRequest) => {
       );
     }
 
-    // In a full implementation, this would update the tenant's default currency
-    // in the tenants table. For now, return confirmation.
+    // tenants has no currency column, so this lives in tenants.settings the
+    // same way localization does — a jsonb_set merge that cannot clobber the
+    // other keys. Before this the handler answered 200 and stored nothing.
+    const [updated] = await db
+      .update(tenants)
+      .set({
+        settings: sql`jsonb_set(
+          COALESCE(${tenants.settings}, '{}'::jsonb),
+          '{default_currency}',
+          to_jsonb(${upperCode}::text)
+        )`,
+      })
+      .where(eq(tenants.id, ctx.tenantId))
+      .returning({ id: tenants.id });
+
+    if (!updated) return NextResponse.json({ error: 'Tenant not found' }, { status: 404 });
+
+    await logAudit({
+      tenantId: ctx.tenantId,
+      userId: ctx.userId,
+      action: 'set_default_currency',
+      entityType: 'tenant',
+      newData: { default_currency: upperCode },
+    });
+
     return NextResponse.json({
       data: {
         tenantId: ctx.tenantId,

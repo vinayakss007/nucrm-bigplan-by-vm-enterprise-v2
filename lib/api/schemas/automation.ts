@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { z } from 'zod';
+import { uuidIdSchema } from '@/lib/validation/uuid';
 import { requiredString, uuid, urlField } from './common';
 
 // ── Automation schemas ──
@@ -29,7 +30,12 @@ export const updateAutomationSchema = createAutomationSchema.partial();
 export const createWorkflowSchema = z.object({
   name: requiredString.max(200),
   description: z.string().trim().max(1000).nullable().optional(),
-  trigger_type: z.enum(['event', 'schedule', 'manual']).optional().default('event'),
+  // No default: the POST route answers 400 when this is missing, and a zod
+  // `.default()` silently materialises 'event' before the route ever sees it,
+  // so the guard was unreachable and every name-only request created an
+  // event-triggered workflow the caller never asked for. Kept identical to
+  // lib/api/schemas.ts, which app/api/tenant/workflows/route.ts imports.
+  trigger_type: z.enum(['event', 'schedule', 'manual']).optional(),
   trigger_config: z.record(z.string(), z.unknown()).optional().default({}),
   nodes: z.array(z.record(z.string(), z.unknown())).optional().default([]),
   edges: z.array(z.record(z.string(), z.unknown())).optional().default([]),
@@ -44,7 +50,8 @@ export const createSequenceSchema = z.object({
   description: z.string().trim().max(1000).nullable().optional(),
   status: z.enum(['draft', 'active', 'paused', 'completed']).optional().default('draft'),
   steps: z.array(z.object({
-    type: z.enum(['email', 'task', 'wait']),
+    // Must match chk_sequence_steps_step_type, which allows 'delay' (not 'wait').
+    type: z.enum(['email', 'task', 'delay']),
     delay_minutes: z.coerce.number().int().min(0).optional().default(0),
     template_id: uuid,
     subject: z.string().max(200).optional(),
@@ -101,7 +108,7 @@ export const updateWebhookSchema = createWebhookSchema.partial();
 // ── Trigger Workflow schema ──
 export const triggerWorkflowSchema = z.object({
   trigger_entity_type: requiredString.max(100),
-  trigger_entity_id: z.string().uuid(),
+  trigger_entity_id: uuidIdSchema,
 });
 
 // ── WhatsApp Send schema ──
@@ -111,7 +118,7 @@ export const sendWhatsAppSchema = z.object({
   content: z.record(z.string(), z.unknown()).optional().default({}),
   template_name: z.string().trim().max(100).optional().nullable(),
   language: z.string().max(10).optional().default('en'),
-  contact_id: z.string().uuid().optional().nullable(),
+  contact_id: uuidIdSchema.optional().nullable(),
 });
 
 // ── Type exports ──

@@ -1,0 +1,196 @@
+name: Nightly schema drift check (#2508)
+
+# `npm run db:drift-check` is the only thing in this repo that compares the
+# database to `drizzle/schema`, and until #2508 it could not see columns and ran
+# nowhere: `grep -rn 'drift-check' .github/workflows` returned 0 hits across all
+# five workflow files, while five documents told a human to run it. That is the
+# same defect shape as PP-059 (`guard:vocab`, code-complete and scheduled by
+# nothing) and PP-040 (this script printing "No drift ✓" about tables `db:sync`
+# would drop), and the consequence was measured, not predicted: #2444 made
+# `support_tickets.portal_token` nullable, no migration ever applied the `ALTER`
+# to the live database, nothing any more supplies a value, and every guard stayed
+# green — #2499.
+#
+# Two jobs, because the screen has to answer two different questions and only one
+# of them is about the database we are serving:
+#
+#   synthetic  — build a database from the migration chain and prove the screen
+#                actually fires. Positive control: a chain-built schema is clean
+#                apart from what `scripts/schema-drift-allowlist.json` names.
+#                Negative control: a `NOT NULL` deliberately dropped on that
+#                throwaway database must turn the run red with a
+#                `COLUMN DRIFT (nullability)` line. Without this the job would be
+#                an assertion that a green screen means something, which is
+#                precisely the reasoning #2306 retracted for the role guards.
+#
+#   live       — measure the pre-prod database, so "the database we serve is
+#                behind main" raises a nightly instead of a customer-visible 23502.
+#                Needs the `PREPROD_DATABASE_URL` repository secret; without it
+#                this job fails loudly, because a guard that silently never runs
+#                is the bug this file exists to prevent (same posture as the
+#                `rls-guards` job in `nightly-soak.yml`, which is red on this
+#                account for exactly that missing secret).
+#
+# Opt out deliberately with the `SCHEMA_DRIFT_GUARD_ENABLED` repo variable set to
+# "false".
+#
+# Scheduled on `main` only (no `pull_request`): the live half needs a secret that
+# fork and branch builds must not resolve, and the synthetic half needs a chain
+# build that CI's `fresh-install` job already gates pull requests on
+# (`.github/workflows/ci.yml`, "Schema drift check (column-level)").
+on:
+  schedule:
+    - cron: "53 3 * * *"
+  workflow_dispatch: {}
+
+permissions: {}
+
+jobs:
+  # ── the screen has teeth: build the chain, break a column, watch it fire ────
+  synthetic:
+    name: Chain build + negative control
+    if: vars.SCHEMA_DRIFT_GUARD_ENABLED != 'false'
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: nucrm_drift_ctl
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    env:
+      # This job's own database speaks plaintext, exactly like CI's other Postgres
+      # services — see lib/db/ssl-config.ts and the `fresh-install` job.
+      DATABASE_SSL: "false"
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - run: npm ci
+
+      - name: Build the schema from the migration chain
+        run: |
+          set -euo pipefail
+          export DATABASE_URL=postgresql://postgres:postgres@localhost:5432/nucrm_drift_ctl
+          npm run db:bootstrap -- --yes
+
+      - name: Positive control — a chain-built schema is clean or named in the allowlist
+        run: |
+          set -uo pipefail
+          export DATABASE_URL=postgresql://postgres:postgres@localhost:5432/nucrm_drift_ctl
+          RESULTS_DIR="$RUNNER_TEMP/schema-drift-results"
+          mkdir -p "$RESULTS_DIR"
+          npm run db:drift-check 2>&1 | tee "$RESULTS_DIR/chain-clean.log"
+          code=${PIPESTATUS[0]}
+          echo "drift-check exit=$code" | tee -a "$RESULTS_DIR/chain-clean.log"
+          if [ "$code" -ne 0 ]; then
+            echo "::error::#2508 a database built by db:bootstrap does not match drizzle/schema. Either the chain is missing an ALTER the schema declares, or new drift landed on a column and belongs in a migration — read the findings above before touching scripts/schema-drift-allowlist.json."
+          fi
+          exit "$code"
+
+      # The acceptance criterion is "the screen fires", not "the screen is green".
+      # One nullable column re-seeded as NOT NULL-free is enough to prove the
+      # comparison is wired to the catalog and not to a name list.
+      - name: Negative control — a dropped NOT NULL MUST turn the screen red
+        run: |
+          set -uo pipefail
+          export DATABASE_URL=postgresql://postgres:postgres@localhost:5432/nucrm_drift_ctl
+          RESULTS_DIR="$RUNNER_TEMP/schema-drift-results"
+          mkdir -p "$RESULTS_DIR"
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+            -c 'ALTER TABLE support_tickets ALTER COLUMN subject DROP NOT NULL'
+          if npm run db:drift-check 2>&1 | tee "$RESULTS_DIR/negative-control.log"; then
+            echo "::error::#2508 the column comparison PASSED a schema declaring NOT NULL against a database accepting NULL — the screen is not actually measuring columns."
+            exit 1
+          fi
+          grep -q 'COLUMN DRIFT (nullability): support_tickets.subject' "$RESULTS_DIR/negative-control.log" || {
+            echo "::error::#2508 the drift check failed, but not for the nullability reason — inspect negative-control.log."
+            exit 1
+          }
+          echo "OK: a NOT NULL the database does not enforce turns this screen red, exactly as #2508 requires."
+
+      - name: Upload screen results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: schema-drift-synthetic-${{ github.run_number }}
+          path: ${{ runner.temp }}/schema-drift-results
+          if-no-files-found: warn
+          retention-days: 30
+
+  # ── the database we are actually serving ────────────────────────────────────
+  live:
+    name: Pre-prod schema drift
+    if: vars.SCHEMA_DRIFT_GUARD_ENABLED != 'false'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - run: npm ci
+
+      # Read-only: scripts/drift-check.ts issues SELECTs against
+      # information_schema, pg_tables and pg_policy, and counts rows of any
+      # undeclared table. It never ALTERs, so pointing it at pre-prod is safe.
+      - name: Drift check against the pre-prod database
+        env:
+          DATABASE_URL: ${{ secrets.PREPROD_DATABASE_URL }}
+          NODE_ENV: production
+        run: |
+          set -uo pipefail
+          RESULTS_DIR="$RUNNER_TEMP/schema-drift-results"
+          mkdir -p "$RESULTS_DIR"
+          if [ -z "${DATABASE_URL:-}" ]; then
+            echo "::error::#2508 the nightly schema-drift guard has no live database to measure: add the PREPROD_DATABASE_URL repository secret (a least-privilege app role, see npm run db:provision-app-role), or set the SCHEMA_DRIFT_GUARD_ENABLED variable to 'false' to opt out deliberately. A guard that silently never runs is the bug this job exists to prevent."
+            exit 1
+          fi
+          npm run db:drift-check 2>&1 | tee "$RESULTS_DIR/preprod.log"
+          code=${PIPESTATUS[0]}
+          npm run db:drift-check -- --json > "$RESULTS_DIR/preprod-summary.txt" 2>/dev/null || true
+          echo "drift-check exit=$code" | tee -a "$RESULTS_DIR/preprod.log"
+          if [ "$code" -ne 0 ]; then
+            echo "::error::#2508 the pre-prod database does not match main's schema. Each finding names the dimension: apply the migration the schema declares, or write the one that is missing. Items already cleared by a pending migration belong in scripts/schema-drift-allowlist.json with that migration named — never to silence a finding nobody has read."
+          fi
+          exit "$code"
+
+      - name: Upload guard results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: schema-drift-live-${{ github.run_number }}
+          path: ${{ runner.temp }}/schema-drift-results
+          if-no-files-found: warn
+          retention-days: 30
+
+      # Same fan-out endpoint lib/critical-error-alert.ts posts to. The payload
+      # carries the run link only — never a connection string.
+      - name: Alert operations on failure
+        if: failure()
+        env:
+          CRITICAL_ALERT_URL: ${{ secrets.CRITICAL_ERROR_WEBHOOK_URL }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ -z "${CRITICAL_ALERT_URL:-}" ]; then
+            echo "No CRITICAL_ERROR_WEBHOOK_URL configured — the red nightly is the only alert."
+            exit 0
+          fi
+          curl -sS -X POST "$CRITICAL_ALERT_URL" \
+            -H 'Content-Type: application/json' \
+            --max-time 10 \
+            -d "{\"event\":\"schema_drift_nightly\",\"level\":\"fatal\",\"message\":\"#2508 nightly schema drift guard failed\",\"run_url\":\"$RUN_URL\",\"service\":\"nucrm-enterprise\"}" \
+            || echo "alert delivery failed (non-blocking)"

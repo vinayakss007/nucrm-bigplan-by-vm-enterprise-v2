@@ -119,12 +119,16 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
 
     (async () => {
       const safe = async <T,>(p: Promise<T>, fallback: T): Promise<T> => p.catch(() => fallback);
+      // #2291: this block queries the tables directly (not via the fixed
+      // /api/tenant/{orders,contracts} list routes), so each read needs its
+      // own isNull(deletedAt) predicate — soft-deleted rows must not show on
+      // a contact's 360 page.
       return Promise.all([
-        safe(db.select().from(invoices).where(and(eq(invoices.contactId, contactId), eq(invoices.tenantId, ctx.tenantId))).orderBy(desc(invoices.createdAt)).limit(50), []),
-        safe(db.select().from(orders).where(and(eq(orders.contactId, contactId), eq(orders.tenantId, ctx.tenantId))).orderBy(desc(orders.createdAt)).limit(50), []),
-        safe(db.select().from(contracts).where(and(eq(contracts.contactId, contactId), eq(contracts.tenantId, ctx.tenantId))).orderBy(desc(contracts.createdAt)).limit(50), []),
-        safe(db.select().from(serviceSubscriptions).where(and(eq(serviceSubscriptions.contactId, contactId), eq(serviceSubscriptions.tenantId, ctx.tenantId))).orderBy(desc(serviceSubscriptions.createdAt)).limit(50), []),
-        safe(db.select().from(quotes).where(and(eq(quotes.contactId, contactId), eq(quotes.tenantId, ctx.tenantId))).orderBy(desc(quotes.createdAt)).limit(50), []),
+        safe(db.select().from(invoices).where(and(eq(invoices.contactId, contactId), eq(invoices.tenantId, ctx.tenantId), isNull(invoices.deletedAt))).orderBy(desc(invoices.createdAt)).limit(50), []),
+        safe(db.select().from(orders).where(and(eq(orders.contactId, contactId), eq(orders.tenantId, ctx.tenantId), isNull(orders.deletedAt))).orderBy(desc(orders.createdAt)).limit(50), []),
+        safe(db.select().from(contracts).where(and(eq(contracts.contactId, contactId), eq(contracts.tenantId, ctx.tenantId), isNull(contracts.deletedAt))).orderBy(desc(contracts.createdAt)).limit(50), []),
+        safe(db.select().from(serviceSubscriptions).where(and(eq(serviceSubscriptions.contactId, contactId), eq(serviceSubscriptions.tenantId, ctx.tenantId), isNull(serviceSubscriptions.deletedAt))).orderBy(desc(serviceSubscriptions.createdAt)).limit(50), []),
+        safe(db.select().from(quotes).where(and(eq(quotes.contactId, contactId), eq(quotes.tenantId, ctx.tenantId), isNull(quotes.deletedAt))).orderBy(desc(quotes.createdAt)).limit(50), []),
       ]);
     })(),
 

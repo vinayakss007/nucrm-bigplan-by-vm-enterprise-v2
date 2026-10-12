@@ -7,6 +7,7 @@ import { db } from '@/drizzle/db';
 import { TABLE_REGISTRY, TableName } from '@/drizzle/schema/_registry';
 import { sql } from 'drizzle-orm';
 import { logger } from '@/lib/logger';
+import { isJunctionTable, junctionScope, PLATFORM_TABLES } from '@/lib/tenant-restore-wipe';
 
 /**
  * TenantDataExporter
@@ -18,7 +19,7 @@ import { logger } from '@/lib/logger';
 
 // All per-tenant tables in dependency order (parents before children)
 // NOTE: Tables marked with [NEW] were added in migration 048/049 to fix missing backup coverage
-const TENANT_TABLES = [
+export const TENANT_TABLES = [
   // Core tenant data
   { table: 'tenants', keyColumn: 'id', filterColumn: 'id' },
 
@@ -39,9 +40,9 @@ const TENANT_TABLES = [
   { table: 'tags', keyColumn: 'id', filterColumn: 'tenant_id' },
 
   // Contact junction tables [NEW - 049]
-  { table: 'contact_emails', keyColumn: 'id', filterColumn: 'tenant_id' },
-  { table: 'contact_tags', keyColumn: 'id', filterColumn: 'tenant_id' },
-  { table: 'lead_tags', keyColumn: 'id', filterColumn: 'tenant_id' },
+  { table: 'contact_emails', keyColumn: 'id', filterColumn: 'contact_id' },   // junction: scoped via contacts
+  { table: 'contact_tags', keyColumn: 'id', filterColumn: 'contact_id' },     // junction: scoped via contacts
+  { table: 'lead_tags', keyColumn: 'id', filterColumn: 'lead_id' },           // junction: scoped via leads
 
   // Communication
   { table: 'email_templates', keyColumn: 'id', filterColumn: 'tenant_id' },
@@ -57,8 +58,8 @@ const TENANT_TABLES = [
 
   // Email warm-up [NEW - 044]
   { table: 'email_warmup_configs', keyColumn: 'id', filterColumn: 'tenant_id' },
-  { table: 'email_warmup_pool', keyColumn: 'id', filterColumn: 'config_id' },
-  { table: 'email_warmup_logs', keyColumn: 'id', filterColumn: 'config_id' },
+  { table: 'email_warmup_pool', keyColumn: 'id', filterColumn: 'config_id' },   // junction: scoped via email_warmup_configs
+  { table: 'email_warmup_logs', keyColumn: 'id', filterColumn: 'config_id' },   // junction: scoped via email_warmup_configs
 
   // Tasks & activities
   { table: 'tasks', keyColumn: 'id', filterColumn: 'tenant_id' },
@@ -105,7 +106,7 @@ const TENANT_TABLES = [
   { table: 'price_books', keyColumn: 'id', filterColumn: 'tenant_id' },
   { table: 'price_book_entries', keyColumn: 'id', filterColumn: 'price_book_id' },
   { table: 'quotes', keyColumn: 'id', filterColumn: 'tenant_id' },
-  { table: 'quote_line_items', keyColumn: 'id', filterColumn: 'quote_id' },
+  { table: 'quote_line_items', keyColumn: 'id', filterColumn: 'tenant_id' },
   { table: 'sso_providers', keyColumn: 'id', filterColumn: 'tenant_id' },
 
   // Lead management
@@ -121,11 +122,13 @@ const TENANT_TABLES = [
   { table: 'impersonation_sessions', keyColumn: 'id', filterColumn: 'tenant_id' },
 
   // Modules & forms
-  // NOTE: 'modules' is a global table (no tenant_id) — exported via tenant_modules mapping
-  { table: 'modules', keyColumn: 'id', filterColumn: 'id', optional: true },  // Global table, export all
+  // 'modules' is the global catalog: no tenant column, no tenant-owned rows.
+  // It is skipped below (see PLATFORM_TABLES); a tenant's entitlements live in
+  // tenant_modules, which IS exported.
+  { table: 'modules', keyColumn: 'id', filterColumn: 'id', optional: true },
   { table: 'tenant_modules', keyColumn: 'id', filterColumn: 'tenant_id' },
   { table: 'forms', keyColumn: 'id', filterColumn: 'tenant_id' },
-  { table: 'form_submissions', keyColumn: 'id', filterColumn: 'form_id' },
+  { table: 'form_submissions', keyColumn: 'id', filterColumn: 'tenant_id' },
 
   // Meetings & calls
   { table: 'meetings', keyColumn: 'id', filterColumn: 'tenant_id' },
@@ -147,7 +150,7 @@ const TENANT_TABLES = [
   { table: 'usage_snapshots', keyColumn: 'id', filterColumn: 'tenant_id' },
   { table: 'usage_alerts', keyColumn: 'id', filterColumn: 'tenant_id' },
   { table: 'limit_violations', keyColumn: 'id', filterColumn: 'tenant_id' },
-  { table: 'announcements', keyColumn: 'id', filterColumn: 'id', optional: true },  // Platform-level, export if exists
+  { table: 'announcements', keyColumn: 'id', filterColumn: 'id', optional: true },  // Platform-level, skipped
 
   // Custom fields
   { table: 'custom_field_defs', keyColumn: 'id', filterColumn: 'tenant_id' },
@@ -158,10 +161,7 @@ const TENANT_TABLES = [
 ];
 
 export interface TenantExportResult {
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  tables: Record<string, { columns: string[]; rows: Record<string, any>[] }>;
+  tables: Record<string, { columns: string[]; rows: Record<string, unknown>[] }>;
   dataSize: number;
   tableCount: number;
   totalRecords: number;
@@ -199,10 +199,14 @@ export class TenantDataExporter {
         result.tenantName = (tenantInfo.rows[0] as { name?: string })?.name;
       }
 
-      // Determine which tables to export
-      const tablesToExport = includeTables
+      // Determine which tables to export. Platform-level tables have no tenant
+      // column at all, so their filter can only ever match nothing — and copying
+      // global rows into a tenant dump would put them back on restore.
+      const platformSkipped = new Set(PLATFORM_TABLES);
+      const candidateTables = includeTables
         ? TENANT_TABLES.filter(t => includeTables.includes(t.table))
         : TENANT_TABLES;
+      const tablesToExport = candidateTables.filter(t => !platformSkipped.has(t.table));
 
       for (const tableDef of tablesToExport) {
         try {
@@ -212,14 +216,11 @@ export class TenantDataExporter {
             result.totalRecords += tableData.rows.length;
           }
           result.tableCount++;
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-        } catch (err: any) {
+        } catch (err) {
           // Table might not exist yet (migrations not run) — skip gracefully
           // Only warn for non-optional tables; optional tables are expected to be missing sometimes
           if (!tableDef.optional) {
-            console.warn(`[Export] Table ${tableDef.table} not found or error, skipping:`, err.message);
+            console.warn(`[Export] Table ${tableDef.table} not found or error, skipping:`, err instanceof Error ? err.message : String(err));
           }
           result.tableCount++; // Count it anyway so progress is accurate
         }
@@ -228,10 +229,7 @@ export class TenantDataExporter {
       // Calculate data size
       result.dataSize = Buffer.byteLength(JSON.stringify(result.tables), 'utf8');
 
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (err: any) {
+    } catch (err) {
       logger.error('[Export] Critical error during export', { error: err instanceof Error ? err.message : String(err) });
       throw err;
     }
@@ -244,37 +242,33 @@ export class TenantDataExporter {
    */
   private async exportTable(
     tableDef: { table: string; filterColumn: string }
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  ): Promise<{ columns: string[]; rows: Record<string, any>[] }> {
+  ): Promise<{ columns: string[]; rows: Record<string, unknown>[] }> {
     // Get Drizzle table object if it exists in registry
     const table = TABLE_REGISTRY[tableDef.table as TableName];
-    
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let result: any;
-    if (table) {
+
+    let result: Record<string, unknown>[];
+    if (isJunctionTable(tableDef.table)) {
+      // No usable own column — reach the tenant through the parent row.
+      const execResult = await db.execute(
+        sql`SELECT * FROM ${sql.identifier(tableDef.table)} WHERE ${junctionScope(tableDef.table, this.tenantId)}`
+      );
+      result = execResult.rows as unknown as Record<string, unknown>[];
+    } else if (table) {
       // Use Drizzle select if table is registered
       result = await db.select()
         .from(table.table)
-        .where(sql`${sql.identifier(tableDef.filterColumn)} = ${this.tenantId}`);
+        .where(sql`${sql.identifier(tableDef.filterColumn)} = ${this.tenantId}`) as unknown as Record<string, unknown>[];
     } else {
       // Fallback to raw SQL for unregistered tables
-      result = await db.execute(
+      const execResult = await db.execute(
         sql`SELECT * FROM ${sql.identifier(tableDef.table)} WHERE ${sql.identifier(tableDef.filterColumn)} = ${this.tenantId}`
       );
-      result = result.rows;
+      result = execResult.rows as unknown as Record<string, unknown>[];
     }
 
     // Convert BigInt and Date to serializable formats
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const rows = result.map((row: any) => {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const cleanRow: Record<string, any> = {};
+    const rows = result.map((row) => {
+      const cleanRow: Record<string, unknown> = {};
       for (const [key, value] of Object.entries(row)) {
         if (typeof value === 'bigint') {
           cleanRow[key] = Number(value);
@@ -290,7 +284,7 @@ export class TenantDataExporter {
     });
 
     // Get column names
-    const columns = rows.length > 0 ? Object.keys(rows[0]) : [];
+    const columns = rows[0] ? Object.keys(rows[0]) : [];
 
     return {
       columns,

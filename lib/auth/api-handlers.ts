@@ -4,13 +4,13 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/drizzle/db';
 import { users, sessions, tenants, roles, tenantMembers, emailVerifications, pipelines, dealStages, platformSettings } from '@/drizzle/schema';
 import { onboardingProgress } from '@/drizzle/schema';
 import { isNull } from 'drizzle-orm';
 import { eq, and } from 'drizzle-orm';
-import { hashPassword, verifyPassword, createToken, hashToken, makeSessionCookieString, clearSessionCookie, validatePassword } from '@/lib/auth/session';
-import { generateCsrfToken, setCsrfCookie, requestIsHttps } from '@/lib/auth/csrf';
+import { hashPassword, verifyPassword, createToken, hashToken, makeSessionCookieString, validatePassword } from '@/lib/auth/session';
+import { generateCsrfToken, setCsrfCookie } from '@/lib/auth/csrf';
+import { cookieSecureForRequest, requestIsHttps } from '@/lib/auth/cookie-security';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { sendEmail, sendWebhookNotification, sendTelegram } from '@/lib/email/service';
 import { sendAdminTelegram } from '@/lib/telegram-admin';
@@ -20,25 +20,12 @@ import { randomBytes, createHash } from 'crypto';
 import { verifyTOTP } from '@/lib/auth/totp';
 import { installDefaultModules } from '@/lib/modules/auto-install';
 import { withSecurityContext, withTenantContext, withUserContext, withAuthLookupContext, setTenantContext } from '@/lib/db/rls';
-import { isBlocked, recordFailedAttempt, recordSuccessfulLogin } from '@/lib/security/brute-force';
+import { findLoginBlocks, recordFailedAttempt, recordSuccessfulLogin } from '@/lib/security/brute-force';
 import { getClientIp } from '@/lib/client-ip';
+import { checkLoginIpAllowed } from '@/lib/ip-whitelist';
 import { validateBody, readJsonBody, InvalidJsonBodyError } from '@/lib/api/validate';
 import { loginSchema, signupSchema } from '@/lib/api/schemas';
 import { redactEmail } from '@/lib/logger/pii';
-
-/**
- * Whether the CSRF cookie's Secure flag should be set for this request.
- *
- * Set Secure when the request is served over HTTPS (real protocol, via
- * x-forwarded-proto / request URL) or in production. Outside those cases the
- * COOKIE_SECURE env var can still force it on/off for local HTTPS testing.
- */
-function csrfCookieSecure(request: NextRequest): boolean {
-  if (requestIsHttps(request)) return true;
-  if (process.env.NODE_ENV === 'production') return true;
-  // Allow local HTTPS setups to opt in explicitly.
-  return process.env.COOKIE_SECURE === 'true';
-}
 
 // ── Login ─────────────────────────────────────────────────────
 function loginRespond(request: NextRequest, isForm: boolean, data: Record<string, unknown>, status = 200) {
@@ -66,7 +53,9 @@ export async function POST_login(request: NextRequest) {
 
     if (isForm) {
       const formData = await request.formData();
-      email = (formData.get('email') as string) || '';
+      // The JSON path lowercases through `loginSchema`; this path took the value
+      // raw, so "Admin@x.com" skipped its own lockout and found no user.
+      email = ((formData.get('email') as string) || '').trim().toLowerCase();
       password = (formData.get('password') as string) || '';
       remember_me = formData.get('remember_me') === 'on';
       totpToken = (formData.get('totp_token') as string) || undefined;
@@ -83,8 +72,13 @@ export async function POST_login(request: NextRequest) {
       totpToken = parsed.data.totp_token;
     }
 
+    // #85: one read answers both block checks. They were two security-context
+    // transactions, i.e. eight statements at PP-028's ~200 ms each, on every
+    // sign-in attempt. The decision order below is unchanged: IP still wins.
+    const blocks = await findLoginBlocks(ip, email);
+
     // Check if IP is blocked
-    const ipBlockCheck = await isBlocked(ip, 'ip');
+    const ipBlockCheck = blocks.ip;
     if (ipBlockCheck.blocked) {
       sendAdminTelegram({
         icon: '🛡️',
@@ -102,7 +96,7 @@ export async function POST_login(request: NextRequest) {
     if (limited) return limited;
 
     // Check if email is blocked
-    const emailBlockCheck = await isBlocked(email, 'email');
+    const emailBlockCheck = blocks.email;
     if (emailBlockCheck.blocked) {
       sendAdminTelegram({
         icon: '🛡️',
@@ -129,6 +123,22 @@ export async function POST_login(request: NextRequest) {
       await recordFailedAttempt(email, ip, userAgent, 'Invalid credentials');
       logger.warn('Login failed', { email, ip });
       return loginRespond(request, isForm, { error:'Invalid email or password' }, 401);
+    }
+
+    // #15: the settings page wrote this list and reported success, but nothing
+    // ever read it — a tenant believed it had IP-restricted sign-in while any
+    // address could authenticate. Checked here, at sign-in, before a session
+    // exists; an existing session is deliberately not cut mid-work.
+    if (user.lastTenantId) {
+      const gate = await checkLoginIpAllowed(user.lastTenantId, user.id, ip);
+      if (!gate.allowed) {
+        await recordFailedAttempt(email, ip, userAgent, 'IP not in tenant allow list');
+        logger.warn('Login denied by IP allow list', { email, ip, tenantId: user.lastTenantId });
+        return loginRespond(request, isForm, {
+          error: "Your IP address isn't on this workspace's allow list. Contact your administrator.",
+          code: 'ERR_IP_NOT_ALLOWED',
+        }, 403);
+      }
     }
 
     // Record successful login
@@ -193,13 +203,13 @@ export async function POST_login(request: NextRequest) {
       });
     });
 
-    const sessionCookieStr = makeSessionCookieString(token, sessionDays);
+    const sessionCookieStr = makeSessionCookieString(token, sessionDays, requestIsHttps(request));
     const csrfToken = generateCsrfToken();
     if (isForm) {
       const dest = new URL('/tenant/dashboard', request.url);
       const redirectRes = NextResponse.redirect(dest);
       redirectRes.headers.set('Set-Cookie', sessionCookieStr);
-      redirectRes.headers.append('Set-Cookie', setCsrfCookie(csrfToken, csrfCookieSecure(request)));
+      redirectRes.headers.append('Set-Cookie', setCsrfCookie(csrfToken, cookieSecureForRequest(request)));
       return redirectRes;
     }
     const response = NextResponse.json({ 
@@ -207,7 +217,7 @@ export async function POST_login(request: NextRequest) {
       user:{ id:user.id, email:user.email, full_name:user.fullName, is_super_admin:user.isSuperAdmin } 
     });
     response.headers.append('Set-Cookie', sessionCookieStr);
-    response.headers.append('Set-Cookie', setCsrfCookie(csrfToken, csrfCookieSecure(request)));
+    response.headers.append('Set-Cookie', setCsrfCookie(csrfToken, cookieSecureForRequest(request)));
     return response;
   
   
@@ -440,8 +450,8 @@ export async function POST_signup(request: NextRequest) {
 
     const signupCsrfToken = generateCsrfToken();
     const signupResponse = NextResponse.json({ ok:true, user:{ id:user.id, email:user.email, full_name:user.fullName }, tenant:{ id:tenant.id, name:tenant.name, slug:tenant.slug } }, { status:201 });
-    signupResponse.headers.append('Set-Cookie', makeSessionCookieString(token));
-    signupResponse.headers.append('Set-Cookie', setCsrfCookie(signupCsrfToken, csrfCookieSecure(request)));
+    signupResponse.headers.append('Set-Cookie', makeSessionCookieString(token, undefined, requestIsHttps(request)));
+    signupResponse.headers.append('Set-Cookie', setCsrfCookie(signupCsrfToken, cookieSecureForRequest(request)));
 
     // Send Discord/Slack webhook notification (fire-and-forget)
     sendWebhookNotification({
@@ -472,26 +482,5 @@ export async function POST_signup(request: NextRequest) {
     }
     devLogger.error(err as Error, '[auth/signup]');
     return NextResponse.json({ error: 'Signup failed. Please try again.' }, { status:500 });
-  }
-}
-
-// ── Logout ────────────────────────────────────────────────────
-export async function POST_logout(request: NextRequest) {
-  try {
-    const token = request.cookies.get('nucrm_session')?.value;
-    if (token) {
-      const tokenHash = await hashToken(token);
-      await db.delete(sessions).where(eq(sessions.tokenHash, tokenHash)).catch((e) => { logger.error('[auth/logout] Failed to delete session', { error: e instanceof Error ? e.message : String(e) }); });
-    }
-    await clearSessionCookie();
-    const logoutResponse = NextResponse.json({ ok:true });
-    logoutResponse.headers.set('Set-Cookie', 'nucrm_csrf_token=; Path=/; SameSite=Strict; Max-Age=0');
-    return logoutResponse;
-  } catch (e) {
-    logger.error('[auth/logout] Logout error, clearing cookies anyway', { error: e instanceof Error ? e.message : String(e) });
-    await clearSessionCookie();
-    const logoutResponse = NextResponse.json({ ok:true });
-    logoutResponse.headers.set('Set-Cookie', 'nucrm_csrf_token=; Path=/; SameSite=Strict; Max-Age=0');
-    return logoutResponse;
   }
 }

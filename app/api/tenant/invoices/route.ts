@@ -14,6 +14,7 @@ import { requireAuth, requireCsrf } from '@/lib/auth/middleware';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { logError } from '@/lib/errors-server';
+import { clientDbErrorResponse } from '@/lib/api/db-client-error';
 
 export const GET = withApiRoute(async (request: NextRequest) => {
   try {
@@ -171,8 +172,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
 
           // Add line items
           if (items?.length) {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const lineItems = items.map((item: any, idx: number) => {
+            const lineItems = items.map((item, idx) => {
               // Money-math correctness (#1497): use rounded money helpers and
               const base = lineTotal(item.quantity ?? 1, item.unit_price ?? 0);
               const lineTaxRate = money(item.tax_rate ?? 0);
@@ -218,6 +218,10 @@ export const POST = withApiRoute(async (request: NextRequest) => {
 
     return NextResponse.json({ data: invoice }, { status: 201 });
   } catch (error) {
+    // A CHECK the caller's value violates is their fault, not ours — this route
+    // ends its own catch with a literal 500, so withApiRoute never sees it.
+    const clientErr = clientDbErrorResponse(error, 'POST');
+    if (clientErr) return clientErr;
     await logError({ error, context: 'tenant/invoices POST', requestMethod: 'POST' });
     return NextResponse.json({ error: 'Failed to create invoice' }, { status: 500 });
   }

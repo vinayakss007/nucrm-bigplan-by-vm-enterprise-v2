@@ -112,8 +112,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       async start(controller) {
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const sendEvent = (event: string, data: any) => {
+        const sendEvent = (event: string, data: unknown) => {
           controller.enqueue(
             encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
           );
@@ -181,7 +180,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
               duration_ms: result.durationMs,
             });
 
-            logSuperAdminAction({
+            await logSuperAdminAction({
               adminId: ctx.userId,
               adminEmail: ctx.user?.email || "",
               action: 'restore.executed',
@@ -202,7 +201,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
               message: 'Restore failed. Data has been rolled back to pre-restore state.',
             });
 
-            logSuperAdminAction({
+            await logSuperAdminAction({
               adminId: ctx.userId,
               adminEmail: ctx.user?.email || "",
               action: 'restore.executed',
@@ -214,8 +213,8 @@ export const POST = withApiRoute(async (request: NextRequest) => {
 
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-        } catch (err: any) {
+        } catch (err) {
+          const errorMessage = err instanceof Error ? err.message : String(err);
           await logError({
             error: err,
             context: 'selective-restore/execute stream',
@@ -227,7 +226,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
             .update(selectiveRestoreLogs)
             .set({ 
               status: 'failed', 
-              errorMessage: err.message, 
+              errorMessage, 
               completedAt: new Date() 
             })
             .where(eq(selectiveRestoreLogs.id, restoreLog.id));
@@ -266,8 +265,7 @@ interface AuditLogParams {
   performed_by_email?: string;
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  details?: any;
+  details?: Record<string, unknown>;
   ip_address?: string | null;
   user_agent?: string | null;
 }
@@ -277,10 +275,19 @@ async function createAuditLog(params: AuditLogParams) {
     await db.insert(selectiveRestoreAuditLog).values({
       tenantId: params.tenant_id,
       action: params.action,
-      oldData: params.details, // Using oldData for details in this context
+      // The table has no columns for the restore link or the request context — it is
+      // (tenantId, action, tableName, recordId, oldData, newData, performedBy, performedAt) and
+      // nothing else — so they ride in the details envelope instead of being dropped. Promoting
+      // them to real columns needs a migration. PP-044.
+      oldData: {
+        ...params.details,
+        restore_log_id: params.restore_log_id,
+        performed_by_email: params.performed_by_email,
+        ip_address: params.ip_address,
+        user_agent: params.user_agent,
+      },
       performedBy: params.performed_by,
       performedAt: new Date(),
-      // In schema, selectiveRestoreAuditLog has: tenantId, action, tableName, recordId, oldData, newData, performedBy, performedAt.
     });
   } catch (err) {
     await logError({

@@ -11,12 +11,14 @@ import { db } from '@/drizzle/db';
 import { users, contacts, deals, tasks, activities, tenantMembers } from '@/drizzle/schema';
 import { eq, and, or, ilike, sql, desc, inArray } from 'drizzle-orm';
 import { z } from 'zod';
+import { uuidIdSchemaWith } from '@/lib/validation/uuid';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
+import { cancelOpenEnrollments } from '@/lib/cron/sequence-steps';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 const restoreUserDataSchema = z.object({
-  user_id: z.string().uuid('user_id is required'),
-  tenant_id: z.string().uuid('tenant_id is required'),
+  user_id: uuidIdSchemaWith('user_id is required'),
+  tenant_id: uuidIdSchemaWith('tenant_id is required'),
   records: z.object({
     contacts: z.array(z.record(z.string(), z.unknown())).optional(),
     deals: z.array(z.record(z.string(), z.unknown())).optional(),
@@ -428,7 +430,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       results['tasks'] = { restored, errors };
     }
 
-    console.log(`[User Data Restore] user=${user.email}, tenant=${tenant_id}, source=${source}, results=`, results);
+    console.log(`[User Data Restore] user=${user_id}, tenant=${tenant_id}, source=${source}, results=`, results); // #2529: id, not email — stdout reaches Loki
 
     return NextResponse.json({
       success: true,
@@ -470,14 +472,22 @@ export const DELETE = withApiRoute(async (request: NextRequest) => {
 
     const now = new Date();
 
-    await db.transaction(async (tx) => {
-      await tx.update(contacts)
+    const cancelledEnrollments = await db.transaction(async (tx) => {
+      const erased = await tx.update(contacts)
         .set({ deletedAt: now })
         .where(and(
           eq(contacts.tenantId, tenantId),
           eq(contacts.assignedTo, userId),
           sql`${contacts.deletedAt} IS NULL`
-        ));
+        ))
+        .returning({ id: contacts.id });
+
+      // #2392: an erasure that leaves the drip running mails the very person who
+      // asked to be removed — the worst shape of this leak, and the reason the
+      // tombstone write is captured instead of fire-and-forget.
+      const cancelled = await cancelOpenEnrollments(tx, tenantId, {
+        contactIds: erased.map((c) => c.id),
+      });
 
       await tx.update(deals)
         .set({ deletedAt: now })
@@ -486,6 +496,8 @@ export const DELETE = withApiRoute(async (request: NextRequest) => {
           eq(deals.assignedTo, userId),
           sql`${deals.deletedAt} IS NULL`
         ));
+
+      return cancelled;
     });
 
     console.log(`[User Data DELETE] GDPR erasure for user=${userId}, tenant=${tenantId}`);
@@ -497,6 +509,7 @@ export const DELETE = withApiRoute(async (request: NextRequest) => {
         contacts: 'soft-deleted',
         deals: 'soft-deleted',
       },
+      cancelled_enrollments: cancelledEnrollments,
     });
  
  

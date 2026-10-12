@@ -72,9 +72,7 @@ const patchLeadBodySchema = updateLeadSchema
  */
 export const GET = withApiRoute(async (request: NextRequest, 
  
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  { params }: any) => {
+  { params }: { params: Promise<{ id: string }> }) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
@@ -152,9 +150,7 @@ export const GET = withApiRoute(async (request: NextRequest,
  */
 export const PATCH = withApiRoute(async (request: NextRequest, 
  
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  { params }: any) => {
+  { params }: { params: Promise<{ id: string }> }) => {
   try {
   const limited = await rateLimitMutating(request, 'leads', 'patch');
   if (limited) return limited;
@@ -191,13 +187,14 @@ export const PATCH = withApiRoute(async (request: NextRequest,
     // All values come from the Zod-validated body — no raw passthrough
   
   
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const updateData: any = {
+    const updateData: Partial<typeof leads.$inferInsert> = {
       updatedAt: new Date(),
     };
 
     if (v.first_name !== undefined) updateData.firstName = v.first_name;
-    if (v.last_name !== undefined) updateData.lastName = v.last_name;
+    // last_name is NOT NULL in the schema but nullable in the wire contract;
+    // a null still reaches the DB and fails there, exactly as before.
+    if (v.last_name !== undefined) updateData.lastName = v.last_name as string;
     if (v.email !== undefined) updateData.email = v.email;
     if (v.phone !== undefined) updateData.phone = v.phone;
     if (v.title !== undefined) updateData.title = v.title;
@@ -276,9 +273,7 @@ export const PATCH = withApiRoute(async (request: NextRequest,
  */
 export const DELETE = withApiRoute(async (request: NextRequest, 
  
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  { params }: any) => {
+  { params }: { params: Promise<{ id: string }> }) => {
   try {
   const limited = await rateLimitMutating(request, 'leads', 'delete');
   if (limited) return limited;

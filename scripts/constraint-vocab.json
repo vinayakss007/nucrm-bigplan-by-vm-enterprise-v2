@@ -1,0 +1,285 @@
+{
+  "$comment": [
+    "Guard for the CHECK-constraint-vs-code-drift bug class.",
+    "",
+    "drizzle/migrations/0050_data_validation_checks.sql pinned text vocabularies as",
+    "CHECK constraints. Code kept growing and the constraints did not, so writes",
+    "started failing with 23514 — SILENTLY where the caller swallows the error",
+    "(createNotification returns false, logActivity caught to console.warn) and",
+    "LOUDLY where a route propagates it. Three live examples this file now covers:",
+    "chk_notifications_type (4 allowed vs 20 written: the notifications table held",
+    "zero rows for its entire history while cron reported notified:4),",
+    "chk_ai_activity_action (6 allowed vs 5 more written: ai_activity also held zero",
+    "rows), and chk_announcements_type (a user-visible 500).",
+    "",
+    "required — every value must exist in the DB CHECK. A missing value is the bug:",
+    "  the write is rejected, and 3 of 4 call sites so far swallowed it.",
+    "legacy   — the DB allows it and no current writer produces it. Rows may already",
+    "  carry it, so it must never be removed from the constraint without a data check.",
+    "declaredIn — files that must literally contain each required value, so this",
+    "  registry cannot drift from the code it claims to describe.",
+    "",
+    "Anything the DB allows that appears in neither list is reported as a warning,",
+    "not a failure: vocabulary creep is normal, undocumented creep is not."
+  ],
+  "constraints": [
+    {
+      "id": "notifications.type",
+      "constraint": "chk_notifications_type",
+      "table": "notifications",
+      "column": "type",
+      "migration": "0101_notifications_type_allows_app_vocabulary",
+      "declaredIn": ["lib/notifications.ts"],
+      "required": [
+        "info",
+        "task_assigned",
+        "task_due",
+        "task_overdue",
+        "deal_stage",
+        "deal_assigned",
+        "deal_won",
+        "contact_assigned",
+        "mention",
+        "invite_accepted",
+        "team_joined",
+        "limit_warning",
+        "trial_expiring",
+        "lead_warming",
+        "sla_breach",
+        "sla_escalation",
+        "contract_renewal",
+        "subscription_renewal",
+        "ai_followup_sent",
+        "system"
+      ],
+      "legacy": []
+    },
+    {
+      "id": "ai_activity.action",
+      "constraint": "chk_ai_activity_action",
+      "table": "ai_activity",
+      "column": "action",
+      "migration": "0102_ai_activity_action_allows_app_vocabulary",
+      "declaredIn": [],
+      "required": [
+        "draft",
+        "lead_scoring",
+        "predict_deal",
+        "suggest_followup",
+        "insights",
+        "email_draft",
+        "auto_followup",
+        "score_lead",
+        "sentiment_analysis"
+      ],
+      "legacy": ["enrich_contact", "summarize"],
+      "writers": {
+        "draft": ["app/api/tenant/ai/route.ts"],
+        "lead_scoring": ["app/api/tenant/ai/route.ts"],
+        "predict_deal": ["app/api/tenant/ai/route.ts"],
+        "suggest_followup": ["app/api/tenant/ai/route.ts"],
+        "insights": ["app/api/tenant/ai/insights/route.ts"],
+        "email_draft": ["app/api/tenant/ai/email-draft/route.ts"],
+        "auto_followup": ["lib/ai/auto-followup.ts"],
+        "score_lead": ["lib/ai/scoring.ts"],
+        "sentiment_analysis": ["lib/ai/sentiment.ts"]
+      }
+    },
+    {
+      "id": "scheduled_reports.type",
+      "constraint": "chk_scheduled_reports_type",
+      "table": "scheduled_reports",
+      "column": "type",
+      "migration": "0103_scheduled_reports_type_allows_exported_entities",
+      "declaredIn": [],
+      "required": ["deals", "tasks", "companies"],
+      "legacy": ["pipeline", "revenue", "contacts", "performance"],
+      "writers": {
+        "deals": ["app/api/cron/scheduled-report-delivery/route.ts"],
+        "tasks": ["app/api/cron/scheduled-report-delivery/route.ts"],
+        "companies": ["app/api/cron/scheduled-report-delivery/route.ts"]
+      },
+      "note": [
+        "'leads' and 'summary' are deliberately NOT added. They are accepted by the",
+        "free-text create route (app/api/tenant/reports/scheduled/route.ts validates",
+        "type as z.string().max(50)) and exportEntityFor() silently maps them onto the",
+        "contacts export — so a 'leads' report emails a contacts CSV. Adding them would",
+        "bless that. The default branch now throws instead; whether to support them",
+        "properly is a separate decision."
+      ]
+    },
+    {
+      "id": "integrations.type",
+      "constraint": "chk_integrations_type",
+      "table": "integrations",
+      "column": "type",
+      "migration": "0104_integrations_type_allows_configured_providers",
+      "declaredIn": [],
+      "required": [
+        "google",
+        "outlook",
+        "slack",
+        "webhook",
+        "sms",
+        "mailgun",
+        "openai",
+        "sendgrid"
+      ],
+      "legacy": ["zoom"],
+      "writers": {
+        "google": ["lib/calendar-sync/google.ts"],
+        "outlook": ["lib/calendar-sync/outlook.ts"],
+        "slack": ["lib/integrations/providers/slack.ts"],
+        "webhook": ["app/api/tenant/webhooks/route.ts"],
+        "sms": ["lib/automation/engine.ts"],
+        "mailgun": ["lib/integrations/providers/mailgun.ts"],
+        "openai": ["lib/integrations/providers/openai.ts"],
+        "sendgrid": ["lib/integrations/providers/sendgrid.ts"]
+      }
+    },
+    {
+      "id": "sequence_enrollments.status",
+      "constraint": "chk_sequence_enrollments_status",
+      "table": "sequence_enrollments",
+      "column": "status",
+      "migration": "0120_sequence_enrollments_cancelled_status",
+      "declaredIn": ["drizzle/schema/marketing.ts"],
+      "required": ["active", "completed", "cancelled"],
+      "legacy": ["paused", "unsubscribed", "error"],
+      "writers": {
+        "active": ["app/api/tenant/contacts/[id]/enroll/route.ts"],
+        "completed": ["lib/cron/sequence-steps.ts", "app/api/cron/process-sequences/route.ts"],
+        "cancelled": ["app/api/unsubscribe/route.ts", "app/api/webhooks/resend/route.ts", "lib/cron/sequence-steps.ts"]
+      },
+      "note": [
+        "0050 froze this as ('active','completed','paused','unsubscribed','error') and",
+        "the app has always written a sixth value. 'cancelled' is what one-click",
+        "unsubscribe, hard-bounce DNC, soft-bounce escalation and the un-enroll button",
+        "all set, so every one of those four paths threw 23514 — and because three of",
+        "them run inside db.transaction, the contacts.do_not_contact write in the same",
+        "transaction rolled back with it: the CRM kept mailing people who opted out.",
+   "#2392 moved the un-enroll route's write (and added the contact/sequence",
+   "DELETE cancels) into lib/cron/sequence-steps.ts, which is now the third writer.",
+        "0120 widens the constraint rather than rewriting the callers, because the",
+        "state is real and distinct (see the migration header), and #2392's",
+        "cancel-on-delete path needs the same value. The three values no writer",
+        "produces are legacy: rows may already carry them."
+      ]
+    },
+    {
+      "id": "sequence_steps.step_type",
+      "constraint": "chk_sequence_steps_step_type",
+      "table": "sequence_steps",
+      "column": "step_type",
+      "migration": null,
+      "declaredIn": [],
+      "required": ["email", "task", "delay"],
+      "legacy": ["whatsapp"],
+      "writers": {
+        "email": ["lib/api/schemas.ts"],
+        "task": ["lib/api/schemas.ts"],
+        "delay": ["lib/api/schemas.ts"]
+      },
+      "note": [
+        "No migration: the DB was always right. The bug was in code — the zod schema",
+        "and the builder offered 'wait', which the constraint never allowed, so every",
+        "sequence with a wait step failed on insert. Fixed in lib/api/schemas.ts,",
+        "lib/api/schemas/automation.ts and components/tenant/sequence-builder.tsx.",
+        "'call' and 'ab_test' are still offered by the builder UI and still rejected",
+        "by zod — reported, not fixed."
+      ]
+    },
+    {
+      "id": "announcements.type",
+      "constraint": "chk_announcements_type",
+      "table": "announcements",
+      "column": "type",
+      "migration": null,
+      "declaredIn": ["lib/api/schemas/superadmin.ts"],
+      "required": ["info", "warning", "update", "feature"],
+      "legacy": [],
+      "writers": {},
+      "note": [
+        "Regression guard for #35: the UI and zod offered a type the constraint",
+        "rejected, which surfaced as a 500 rather than silence."
+      ]
+    },
+    {
+      "id": "sequence_step_logs.status",
+      "constraint": "chk_sequence_step_logs_status",
+      "table": "sequence_step_logs",
+      "column": "status",
+      "migration": "0106_sequence_step_logs_allows_sending",
+      "declaredIn": [],
+      "required": ["pending", "sending", "sent", "skipped", "failed"],
+      "legacy": ["cancelled"],
+      "writers": {
+        "pending": [
+          "app/api/cron/process-sequences/route.ts",
+          "lib/cron/sequence-steps.ts"
+        ],
+        "sending": ["app/api/cron/process-sequences/route.ts"],
+        "sent": [
+          "app/api/cron/process-sequences/route.ts",
+          "lib/cron/sequence-steps.ts"
+        ],
+        "skipped": ["app/api/cron/process-sequences/route.ts"],
+        "failed": ["lib/cron/sequence-steps.ts"]
+      },
+      "note": [
+        "'sending' is the durable claim of the #2223 outbox flow in the",
+        "process-sequences cron: the claim tx flips 'pending' -> 'sending' and",
+        "commits BEFORE any SMTP runs, then a second short tx confirms 'sent' or",
+        "reverts to 'pending'. A log left 'sending' after a crash is finalised",
+        "without resending, so a sequence email can never double-send."
+      ]
+    },
+    {
+      "id": "invoices.status",
+      "constraint": "chk_invoices_status",
+      "table": "invoices",
+      "column": "status",
+      "migration": "0112_invoice_status_vocab",
+      "declaredIn": ["lib/api/schemas/billing.ts"],
+      "required": [
+        "draft",
+        "sent",
+        "paid",
+        "overdue",
+        "cancelled",
+        "partially_paid",
+        "written_off",
+        "pending",
+        "void"
+      ],
+      "legacy": [],
+      "writers": {
+        "draft": [
+          "app/api/tenant/invoices/route.ts",
+          "lib/billing/payments.ts"
+        ],
+        "sent": ["lib/billing/payments.ts"],
+        "paid": ["lib/billing/payments.ts"],
+        "overdue": ["app/api/tenant/dashboard/widgets/invoices/route.ts"],
+        "cancelled": ["app/api/tenant/invoices/[id]/route.ts"],
+        "partially_paid": ["lib/billing/payments.ts"],
+        "void": ["lib/billing/payments.ts", "app/api/webhooks/payu/route.ts"]
+      },
+      "note": [
+        "#2258: required is exactly INVOICE_STATUSES (declaredIn) — the DB must",
+        "accept every value the API accepts, and the API must accept every value",
+        "the DB stores. 'void' was a real product state blocked by the CHECK",
+        "(payments + PayU webhook both refuse to pay a void invoice); migration",
+        "0112 widened the constraint. 'written_off'/'pending' were DB-legal but",
+        "absent from zod, so existing rows were unaddressable via the API; they",
+        "were added to INVOICE_STATUSES instead of removed from the DB. ",
+        "'refunded' — the other zod-only value — was NOT blessed: no code ever",
+        "wrote or read invoice status 'refunded' (refunds are ledger entries that",
+        "preserve the invoice status, lib/billing/payments.ts:58-59), it read as",
+        "a copy-paste from the orders vocabulary, and no row could already carry",
+        "it because the CHECK never allowed it. It was removed from zod so the",
+        "API answers 400 with the allowed list instead of 23514."
+      ]
+    }
+  ]
+}

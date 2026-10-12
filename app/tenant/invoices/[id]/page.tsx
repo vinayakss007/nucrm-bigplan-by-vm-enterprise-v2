@@ -103,6 +103,25 @@ export default function InvoiceDetailPage() {
 
   const statusMutation = useMutation({
     mutationFn: async (newStatus: string) => {
+      // #2226: 'paid' is derived from the payment ledger — record a payment for
+      // the outstanding balance instead of hand-setting the status via PUT.
+      if (newStatus === 'paid') {
+        const outstanding = Math.max(
+          0,
+          parseFloat(invoice?.balanceDue ?? '') || parseFloat(invoice?.totalAmount ?? '') || 0,
+        );
+        if (outstanding <= 0) throw new Error('Nothing outstanding — this invoice is already settled');
+        const res = await fetch(`/api/tenant/invoices/${id}/payments`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ amount: outstanding, payment_date: new Date().toISOString().slice(0, 10) }),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || 'Failed');
+        }
+        return newStatus;
+      }
       const res = await fetch(`/api/tenant/invoices/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -115,7 +134,7 @@ export default function InvoiceDetailPage() {
       toast.success(`Invoice marked as ${newStatus}`);
       invalidate();
     },
-    onError: () => toast.error('Failed to change status'),
+    onError: (err: Error) => toast.error(err.message || 'Failed to change status'),
   });
 
   const deleteMutation = useMutation({
@@ -143,8 +162,6 @@ export default function InvoiceDetailPage() {
         taxRate: invoice.taxRate,
         taxAmount: invoice.taxAmount,
         totalAmount: invoice.totalAmount,
-        amountPaid: invoice.amountPaid,
-        balanceDue: invoice.balanceDue,
         notes: invoice.notes,
         terms: invoice.terms,
         footer: invoice.footer,
@@ -290,16 +307,8 @@ export default function InvoiceDetailPage() {
               <input type="number" step="0.01" value={form.totalAmount || ''} onChange={(e) => setForm({ ...form, totalAmount: e.target.value })}
                 className="w-full px-3 py-2 border border-border rounded-lg bg-card text-sm" />
             </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">Amount Paid</label>
-              <input type="number" step="0.01" value={form.amountPaid || ''} onChange={(e) => setForm({ ...form, amountPaid: e.target.value })}
-                className="w-full px-3 py-2 border border-border rounded-lg bg-card text-sm" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">Balance Due</label>
-              <input type="number" step="0.01" value={form.balanceDue || ''} onChange={(e) => setForm({ ...form, balanceDue: e.target.value })}
-                className="w-full px-3 py-2 border border-border rounded-lg bg-card text-sm" />
-            </div>
+            {/* #2226: amountPaid/balanceDue are derived from the payment ledger
+                and rejected by the API — record payments instead of editing them. */}
             <div>
               <label className="block text-sm font-medium mb-1">Payment Method</label>
               <input type="text" value={form.paymentMethod || ''} onChange={(e) => setForm({ ...form, paymentMethod: e.target.value })}

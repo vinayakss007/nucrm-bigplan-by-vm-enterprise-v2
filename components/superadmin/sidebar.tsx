@@ -74,6 +74,11 @@ interface Props {
 const SECTION_KEY = 'nucrm.superadmin.sections';
 const SEARCH_KEY  = 'nucrm.superadmin.query';
 
+/** Pure so the auto-open effect can depend on `pathname` alone. */
+function isItemActive(pathname: string, href: string): boolean {
+  return pathname === href || (href !== '/superadmin/dashboard' && pathname.startsWith(href));
+}
+
 export default function SuperAdminSidebar({ profile, collapsed, onToggle }: Props) {
   const pathname = usePathname();
   const router = useRouter();
@@ -104,15 +109,14 @@ export default function SuperAdminSidebar({ profile, collapsed, onToggle }: Prop
 
   // Auto-open the section containing the active page
   useEffect(() => {
-    const active = SECTIONS.find(sec => sec.items.some(i => isActive(i.href)));
-    if (active && !openSections[active.id]) {
-      setOpenSections(prev => ({ ...prev, [active.id]: true }));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const active = SECTIONS.find(sec => sec.items.some(i => isItemActive(pathname, i.href)));
+    if (!active) return;
+    // Guard inside the updater: reading `openSections` here would need it as a
+    // dependency, and returning `prev` unchanged makes React bail out anyway.
+    setOpenSections(prev => (prev[active.id] ? prev : { ...prev, [active.id]: true }));
   }, [pathname]);
 
-  const isActive = (href: string) =>
-    pathname === href || (href !== '/superadmin/dashboard' && pathname.startsWith(href));
+  const isActive = (href: string) => isItemActive(pathname, href);
 
   const toggleSection = (id: string) => {
     setOpenSections(prev => {

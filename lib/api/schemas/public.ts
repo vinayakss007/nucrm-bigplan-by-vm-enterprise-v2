@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { z } from 'zod';
+import { uuidIdSchema } from '@/lib/validation/uuid';
 
 // ── Public Lead Capture schema ──
 export const publicLeadCaptureSchema = z.object({
@@ -14,21 +15,21 @@ export const publicLeadCaptureSchema = z.object({
   company: z.string().trim().max(200).optional().nullable(),
   message: z.string().trim().max(5000).optional().nullable(),
   source: z.string().trim().max(100).optional().default('Website Form'),
-  tenant_id: z.string().uuid(),
-  form_id: z.string().uuid().optional().nullable(),
+  tenant_id: uuidIdSchema,
+  form_id: uuidIdSchema.optional().nullable(),
   tags: z.array(z.string()).optional().default([]),
 });
 
 // ── Public Form Submit schema ──
 export const publicFormSubmitSchema = z.object({
-  form_id: z.string().uuid(),
+  form_id: uuidIdSchema,
   data: z.record(z.string(), z.unknown()).optional().default({}),
   values: z.record(z.string(), z.unknown()).optional().default({}),
 });
 
 // ── Checkout Session schema ──
 export const checkoutSessionSchema = z.object({
-  plan_id: z.string().uuid(),
+  plan_id: uuidIdSchema,
 });
 
 // ── Type exports ──

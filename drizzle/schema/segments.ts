@@ -3,7 +3,7 @@
  * Copyright (c) 2026 abetworks.in. All Rights Reserved.
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
-import { pgTable, uuid, text, timestamp, jsonb, index } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, timestamp, jsonb, index, uniqueIndex } from 'drizzle-orm/pg-core';
 import * as utils from './utils';
 
 // ── 1. DYNAMIC SEGMENTS (SMART LISTS) ────────────────
@@ -25,9 +25,12 @@ export const segments = pgTable('segments', {
   ...utils.audit(),
 }, (table) => {
   return {
+    deletedByFk2261Idx: index("segments_deleted_by_fk_idx").on(table.deletedBy),
+    updatedByFk2261Idx: index("segments_updated_by_fk_idx").on(table.updatedBy),
     tenantIdx: utils.tenantIdx(table),
     metadataGinIdx: utils.metadataIdx(table),
-  };
+  
+  drz2255_idx_segments_created_by: index('idx_segments_created_by').on(table.createdBy),};
 });
 
 // Cache for segment members (to avoid re-running complex queries every time)
@@ -39,7 +42,11 @@ export const segmentMembers = pgTable('segment_members', {
   addedAt: timestamp('added_at', { withTimezone: true }).defaultNow(),
 }, (table) => {
   return {
-    segmentEntityIdx: index('idx_segment_members_segment_entity').on(table.segmentId, table.entityId),
+    // #2515: this pair is the table's identity in practice — the bulk-enroll
+    // callers insert with onConflictDoNothing() and only a UNIQUE index gives
+    // that anything to conflict with. The old plain index was named _pk while
+    // enforcing nothing; 0126 replaces it with this.
+    segmentEntityUniq: uniqueIndex('uq_segment_members_segment_entity').on(table.segmentId, table.entityId),
     tenantIdx: utils.tenantIdx(table),
     entityIdx: index('idx_segment_members_entity').on(table.entityId),
   };

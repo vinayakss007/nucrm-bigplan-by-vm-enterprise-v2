@@ -19,6 +19,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
+import { checkLimit } from '@/lib/usage/middleware';
 import { getSignedPutUrl } from '@/lib/storage/s3';
 import { randomUUID } from 'crypto';
 import { z } from 'zod';
@@ -93,6 +94,12 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       { status: 415 },
     );
   }
+
+  // #2432: this route writes no row, but it hands out the PUT that puts bytes in
+  // the bucket, so an over-quota workspace must not be able to stage an upload
+  // here only to have POST /api/tenant/documents reject it afterwards.
+  const overStorage = await checkLimit(ctx, 'storageGb');
+  if (overStorage) return overStorage;
 
   // Build a tenant-scoped storage key. Including the original extension
   // helps S3 console previews; the UUID prefix keeps keys collision-free.

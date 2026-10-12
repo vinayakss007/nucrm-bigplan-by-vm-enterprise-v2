@@ -12,6 +12,7 @@ import { withApiRoute } from '@/lib/api/with-api-route';
 import { db } from '@/drizzle/db';
 import { contacts, companies, users, activities, tenants } from '@/drizzle/schema';
 import { eq, and, sql, ne } from 'drizzle-orm';
+import { cancelOpenEnrollments } from '@/lib/cron/sequence-steps';
 import { logAudit } from '@/lib/audit';
 import { trackFieldChange } from '@/lib/history';
 import { fireWebhooks } from '@/lib/webhooks';
@@ -143,8 +144,7 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params:
     // Map snake_case to camelCase for Drizzle
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const updateData: any = {};
+    const updateData: Partial<typeof contacts.$inferInsert> = {};
     if (v.first_name !== undefined) updateData.firstName = v.first_name;
     if (v.last_name !== undefined) updateData.lastName = v.last_name;
     if (v.email !== undefined) updateData.email = v.email;
@@ -241,7 +241,7 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params:
     };
 
     for (const [field, label] of Object.entries(fieldsToTrack)) {
-      if (updateData[field] !== undefined) {
+      if (updateData[field as keyof typeof updateData] !== undefined) {
         await trackFieldChange(
           ctx.tenantId,
           ctx.userId,
@@ -252,7 +252,7 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params:
           field,
           label,
           existing[field as keyof typeof existing],
-          updateData[field],
+          updateData[field as keyof typeof updateData],
           ipAddress,
           userAgent
         );
@@ -308,7 +308,7 @@ export const DELETE = withApiRoute(async (req: NextRequest, { params }: { params
     }
 
     // SOFT DELETE
-    const [row] = await db.transaction(async (tx) => {
+    const deleted = await db.transaction(async (tx) => {
       const [r] = await tx
         .update(contacts)
         .set({
@@ -326,16 +326,22 @@ export const DELETE = withApiRoute(async (req: NextRequest, { params }: { params
         )
         .returning({ id: contacts.id });
 
-      if (!r) return [];
+      if (!r) return null;
 
       await tx.update(tenants)
         .set({ currentContacts: sql`greatest(0, ${tenants.currentContacts} - 1)` })
         .where(eq(tenants.id, ctx.tenantId));
 
-      return [r];
+      // #2392: trashing a contact has to stop its drip in the same
+      // transaction. Cancelling (rather than leaving rows 'active' for the
+      // cron to skip) is also what keeps a restore from silently resuming
+      // outbound email to a person the tenant removed.
+      const cancelledEnrollments = await cancelOpenEnrollments(tx, ctx.tenantId, { contactId });
+
+      return { cancelledEnrollments };
     });
 
-    if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    if (!deleted) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
     await logAudit({
       tenantId: ctx.tenantId,
@@ -349,7 +355,11 @@ export const DELETE = withApiRoute(async (req: NextRequest, { params }: { params
 
     invalidateWidgetCache(ctx.tenantId, 'stats-contacts', 'contacts-recent', 'activity');
 
-    return NextResponse.json({ ok: true, message: 'Moved to trash. Restore within 30 days.' });
+    return NextResponse.json({
+      ok: true,
+      cancelledEnrollments: deleted.cancelledEnrollments,
+      message: 'Moved to trash. Restore within 30 days.',
+    });
  
  
   } catch (err) {

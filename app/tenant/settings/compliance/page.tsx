@@ -174,8 +174,6 @@ export default function ComplianceSettingsPage() {
                   <option value="activities">Activities</option>
                   <option value="emails">Emails</option>
                   <option value="audit_logs">Audit Logs</option>
-                  <option value="notes">Notes</option>
-                  <option value="tasks">Tasks</option>
                 </select>
               </div>
               <div>

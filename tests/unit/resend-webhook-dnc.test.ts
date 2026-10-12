@@ -66,6 +66,16 @@ vi.mock('@/lib/rate-limit', () => ({
   checkRateLimit: vi.fn().mockResolvedValue(null),
 }));
 
+// #2406 moved tenant attribution into lib/email/webhook-scope, which reads
+// email_tracking — a table this suite's schema mock does not have. The policy
+// has its own suite (resend-webhook-scope-2406.test.ts) and the write scoping
+// has resend-webhook-tenant-scope-2406.test.ts; this file is about what the
+// handlers do once a workspace is known, so the verdict is planted.
+const mockResolveScope = vi.fn();
+vi.mock('@/lib/email/webhook-scope', () => ({
+  resolveRecipientScope: (...args: unknown[]) => mockResolveScope(...args),
+}));
+
 function makeRequest(body: Record<string, unknown>, headers?: Record<string, string>): NextRequest {
   return new Request('http://localhost/api/webhooks/resend', {
     method: 'POST',
@@ -78,6 +88,7 @@ describe('resend webhook DNC', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     delete process.env.RESEND_WEBHOOK_SECRET;
+    mockResolveScope.mockResolvedValue({ kind: 'tenant', tenantId: 't1' });
   });
 
   describe('hard bounce', () => {

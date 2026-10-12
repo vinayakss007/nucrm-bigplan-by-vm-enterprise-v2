@@ -11,10 +11,12 @@ import { createWebhookSchema } from '@/lib/api/schemas';
 import { db } from '@/drizzle/db';
 import { integrations } from '@/drizzle/schema';
 import { webhookQueue } from '@/drizzle/schema/support';
-import { eq, and, desc, sql } from 'drizzle-orm';
+import { eq, and, desc, sql, isNull } from 'drizzle-orm';
 import { randomBytes } from 'crypto';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { parseLimitOffset } from '@/lib/api/query-params';
+import { checkSaveTimeUrlSafety } from '@/lib/security/ssrf';
 
 export const GET = withApiRoute(async (req: NextRequest) => {
   try {
@@ -22,13 +24,16 @@ export const GET = withApiRoute(async (req: NextRequest) => {
     if (ctx instanceof NextResponse) return ctx;
 
     const { searchParams } = new URL(req.url);
-    const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') ?? '50')));
-    const offset = Math.max(0, parseInt(searchParams.get('offset') ?? '0'));
+    const { limit, offset } = parseLimitOffset(searchParams, { defaultLimit: 50, maxLimit: 100 });
     const isActive = searchParams.get('is_active');
 
     const filters = [
       eq(integrations.tenantId, ctx.tenantId),
-      eq(integrations.type, 'webhook')
+      eq(integrations.type, 'webhook'),
+      // #2390: DELETE tombstones the row, so without this the list kept showing
+      // webhooks the tenant had removed — still reporting their delivered/failed
+      // counts, and still PATCHable back to life.
+      isNull(integrations.deletedAt)
     ];
     if (isActive !== null) {
       filters.push(eq(integrations.isActive, isActive === 'true'));
@@ -47,8 +52,7 @@ export const GET = withApiRoute(async (req: NextRequest) => {
         created_at: integrations.createdAt,
         url: sql<string>`${integrations.config}->>'url'`,
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-        events: sql<any[]>`${integrations.config}->'events'`,
+        events: sql<string[]>`${integrations.config}->'events'`,
         delivered_count: sql<number>`(SELECT count(*)::int FROM ${webhookQueue} WHERE webhook_id = ${integrations.id} AND status = 'delivered')`,
         failed_count: sql<number>`(SELECT count(*)::int FROM ${webhookQueue} WHERE webhook_id = ${integrations.id} AND status = 'failed')`
       })
@@ -82,6 +86,18 @@ export const POST = withApiRoute(async (req: NextRequest) => {
     const validated = validateBody(createWebhookSchema, body);
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;
+
+    // #2276: tenant webhook target URLs are validated at SAVE time with the
+    // shared SSRF host checks (absolute http(s) only, no credentials, no
+    // loopback/private/link-local/metadata hosts). Delivery-time `safeFetch`
+    // still re-validates (incl. DNS rebinding) before every request.
+    const urlRejection = checkSaveTimeUrlSafety(v.url);
+    if (urlRejection) {
+      return NextResponse.json(
+        { error: 'Validation failed', details: [{ field: 'url', message: urlRejection }] },
+        { status: 400 }
+      );
+    }
     
     const signingSecret = randomBytes(24).toString('hex');
     const [row] = await db.insert(integrations).values({

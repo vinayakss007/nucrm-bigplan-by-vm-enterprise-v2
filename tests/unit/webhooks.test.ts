@@ -81,6 +81,9 @@ vi.mock('drizzle-orm', () => ({
   and: vi.fn((...args: unknown[]) => args),
   lte: vi.fn(),
   lt: vi.fn(),
+  // #2390: lib/webhooks filters webhook parents with isNull(deletedAt); a wholesale
+  // module mock has to name every operator the module under test imports.
+  isNull: vi.fn((...args: unknown[]) => args),
   sql: vi.fn(),
   asc: vi.fn(),
 }));
@@ -419,7 +422,7 @@ describe('webhooks', () => {
 
       expect(result).toBe(1);
       expect(setFn).toHaveBeenCalledWith(
-        expect.objectContaining({ status: 'success', responseStatus: 200 }),
+        expect.objectContaining({ status: 'delivered', responseStatus: 200 }),
       );
 
       vi.unstubAllGlobals();

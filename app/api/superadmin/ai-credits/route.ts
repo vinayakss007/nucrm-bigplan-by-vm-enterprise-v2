@@ -14,6 +14,7 @@ import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { allocateCredits, getCreditBalance, getAggregatedUsage, getCreditHistory } from '@/lib/ai/credits';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { logError } from '@/lib/errors-server';
+import { parseLimitOffset } from '@/lib/api/query-params';
 
 const allocateSchema = z.object({
   action: z.enum(['allocate', 'topup', 'suspend', 'reactivate', 'set_cap']),
@@ -37,7 +38,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     const { searchParams } = new URL(request.url);
     const tenantId = searchParams.get('tenantId');
     const history = searchParams.get('history');
-    const limit = parseInt(searchParams.get('limit') ?? '50');
+    const { limit } = parseLimitOffset(searchParams, { defaultLimit: 50, maxLimit: 200 });
 
     // Single tenant balance
     if (tenantId) {

@@ -1,0 +1,5 @@
+# Font binaries (#2426) must never be text-filtered: a CRLF pass over a woff2
+# stream corrupts the file, and it fails at render time rather than at build time.
+*.woff2 binary
+*.woff binary
+*.ttf binary

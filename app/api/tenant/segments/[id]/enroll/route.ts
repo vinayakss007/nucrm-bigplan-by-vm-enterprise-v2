@@ -47,11 +47,11 @@ export const POST = withApiRoute(
         return NextResponse.json({ error: 'sequence_id is required' }, { status: 400 });
       }
 
-      // Segment must exist, belong to the tenant, and target contacts.
+      // Segment must exist, belong to the tenant, be live (#2291), and target contacts.
       const [seg] = await db
         .select()
         .from(segments)
-        .where(and(eq(segments.id, id), eq(segments.tenantId, ctx.tenantId)))
+        .where(and(eq(segments.id, id), eq(segments.tenantId, ctx.tenantId), isNull(segments.deletedAt)))
         .limit(1);
       if (!seg) return NextResponse.json({ error: 'Segment not found' }, { status: 404 });
       if (seg.entityType !== 'contact') {

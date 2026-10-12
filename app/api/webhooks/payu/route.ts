@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { safeApiError } from '@/lib/api-error';
 import { logError } from '@/lib/errors-server';
 import { isPayUConfigured, verifyPayUResponse } from '@/lib/payu';
 import { db } from '@/drizzle/db';
@@ -183,6 +184,21 @@ export async function POST(request: NextRequest) {
               return { processed: false, alreadyProcessed: true };
             }
 
+            // #1917: the PayU hash proves the post body wasn't tampered with,
+            // NOT that `amount` matches what is owed. Guard against posting
+            // more than the outstanding balance — same default recordInvoicePayment
+            // applies. Partial payments remain allowed (ledger derives 'paid').
+            const totalsBefore = await recalculateInvoicePayments(tx, invoice.id, quote.tenantId);
+            if (paidAmount > totalsBefore.balanceDue + 0.01) {
+              void logError({
+                error: `PayU overpayment rejected: posted ${paidAmount}, outstanding ${totalsBefore.balanceDue}`,
+                context: 'webhooks/payu overpayment',
+                level: 'warning',
+                metadata: { txnid, invoiceId: invoice.id, paidAmount, balanceDue: totalsBefore.balanceDue },
+              });
+              return { processed: false, reason: 'overpayment_rejected' };
+            }
+
             // Append-only ledger entry; the invoice summary below is derived
             // from it (amount_paid / balance_due / status / paid_at).
             // #1916: the SELECT above races under concurrent callbacks, so the
@@ -282,7 +298,10 @@ export async function POST(request: NextRequest) {
     });
   } catch (err: unknown) {
     void logError({ error: err, context: 'webhooks/payu callback' });
-    const message = err instanceof Error ? err.message : 'Internal server error';
-    return NextResponse.json({ error: message }, { status: 500 });
+    // #2527: this is a public payment callback, and a DB failure here arrives as
+    // `Failed query: <full SQL> params: <every bound value>` — customer email/phone,
+    // invoice ids, tenant UUIDs. `apiError` scrubs driver text in every environment
+    // (#2285); echoing `err.message` straight into the body bypassed that.
+    return safeApiError(err);
   }
 }

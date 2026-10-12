@@ -1,9 +1,24 @@
 ---
+# PP-034 — nothing in this file has ever reached a person. Both webhook receivers dial
+# `host.docker.internal:9095`, which did not resolve inside this container at all (no
+# `extra_hosts`; fixed in docker-compose.production.yml), and nothing has ever listened on
+# 9095 anyway: `monitoring/alert-webhook.py` is not in compose, has no unit, and its output
+# file /var/log/nucrm-alerts.jsonl does not exist. Treat delivery as NOT configured until a
+# real alert is seen somewhere a human reads.
+#
+# This is a single-file `:ro` bind, so it is pinned to the inode that existed when the
+# container was created — editing it here changes nothing on the running alertmanager, not
+# even after SIGHUP (see the `guard:running-config` drift check and PP-033 for the same
+# trap on the Prometheus rules). Applying any of this needs `--force-recreate`.
 route:
   group_by: [alertname, severity]
   group_wait: 30s
   group_interval: 5m
   repeat_interval: 4h
+  # Catch-all for anything that matches no sub-route (severity `info`, missing label).
+  # `default` below is an empty stub, so those alerts are dropped with no error and no log
+  # line — which is indistinguishable from "nothing to alert on". That is the most dangerous
+  # shape for this file, so do not add routes without saying what unmatched alerts do.
   receiver: default
   routes:
     - match:
@@ -15,6 +30,7 @@ route:
       receiver: warning-log
 
 receivers:
+  # No integrations: deliberate silence, not an oversight — see the header.
   - name: default
   - name: critical-log
     webhook_configs:

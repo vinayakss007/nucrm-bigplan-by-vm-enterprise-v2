@@ -157,8 +157,7 @@ export async function postflightVerification(
       [expected.tables]
     );
     const existingTables = new Set(
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      tableResult.rows.map((r: any) => r.tablename as string)
+      (tableResult.rows as { tablename: string }[]).map((r) => r.tablename)
     );
     for (const t of expected.tables) {
       if (!existingTables.has(t)) {

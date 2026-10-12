@@ -26,7 +26,7 @@ import { z } from 'zod';
 import { validateBody } from '@/lib/api/validate';
 import { safeJson } from '@/lib/api/validate';
 import { checkPublicRateLimit } from '@/lib/rate-limit-simple';
-import { getSessionToken, verifyToken } from '@/lib/auth/session';
+import { getSessionToken, getCurrentUserForToken } from '@/lib/auth/session';
 import { db } from '@/drizzle/db';
 import { users, tenantMembers } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
@@ -55,8 +55,11 @@ async function resolveIdentity(): Promise<{ userId: string | null; tenantId: str
     const token = await getSessionToken();
     if (!token) return { userId: null, tenantId: null };
 
-    const payload = await verifyToken(token);
-    if (!payload?.userId) return { userId: null, tenantId: null };
+    // #2216: verifyToken-only checks keep accepting revoked/logged-out JWTs
+    // for the full token lifetime; getCurrentUserForToken also verifies the
+    // sessions row is still present and unexpired.
+    const tokenUser = await getCurrentUserForToken(token);
+    if (!tokenUser?.id) return { userId: null, tenantId: null };
 
     // Prefer the user's last-active tenant; fall back to any active membership.
     const [row] = await db
@@ -70,7 +73,7 @@ async function resolveIdentity(): Promise<{ userId: string | null; tenantId: str
         tenantMembers,
         and(eq(tenantMembers.userId, users.id), eq(tenantMembers.status, 'active')),
       )
-      .where(eq(users.id, payload.userId))
+      .where(eq(users.id, tokenUser.id))
       .limit(1);
 
     if (!row) return { userId: null, tenantId: null };

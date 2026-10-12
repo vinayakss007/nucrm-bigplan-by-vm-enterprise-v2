@@ -11,6 +11,7 @@ import { db } from '@/drizzle/db';
 import { taxRates } from '@/drizzle/schema/financial';
 import { eq, and, sql } from 'drizzle-orm';
 import { z } from 'zod';
+import { uuidIdSchemaWith } from '@/lib/validation/uuid';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { concurrencyGuard } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
@@ -29,7 +30,7 @@ export const createTaxRateSchema = z.object({
 });
 
 export const updateTaxRateSchema = z.object({
-  id: z.string().uuid('Tax rate ID is required'),
+  id: uuidIdSchemaWith('Tax rate ID is required'),
   name: z.string().optional(),
   // #658 BUG-12: accept the numeric-string round-trip (see create schema note).
   rate: z.coerce.number().min(0).optional(),

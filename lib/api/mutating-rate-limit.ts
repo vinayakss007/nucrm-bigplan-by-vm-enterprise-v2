@@ -10,7 +10,15 @@ import { checkRateLimit } from '@/lib/rate-limit';
  * Each entity has separate limits for updates and deletes.
  * DELETE limits are stricter than PATCH limits.
  */
-const MUTATING_LIMITS: Record<string, { post: number; patch: number; delete: number }> = {
+interface LimitSet {
+  post: number;
+  patch: number;
+  delete: number;
+  /** Test-fire limit; absent means DEFAULT_TEST_LIMIT (#2399). */
+  test?: number;
+}
+
+const MUTATING_LIMITS: Record<string, LimitSet> = {
   // Core CRM entities — high volume
   contacts: { post: 30, patch: 60, delete: 15 },
   deals: { post: 30, patch: 60, delete: 15 },
@@ -81,7 +89,16 @@ const MUTATING_LIMITS: Record<string, { post: number; patch: number; delete: num
   selectiveRestore: { post: 3, patch: 3, delete: 3 },
 };
 
-const DEFAULT_LIMITS = { post: 15, patch: 30, delete: 10 };
+const DEFAULT_LIMITS: LimitSet = { post: 15, patch: 30, delete: 10 };
+
+/**
+ * A "test fire" (`POST /api/tenant/webhooks/[id]/test`) is not a create: it
+ * makes one outbound request to a tenant-controlled URL with a 30 s timeout.
+ * `checkRateLimit` silently falls back to 100/min when `max` is undefined, so
+ * an entity without a `test` entry must not pass one through — this is the
+ * floor instead.
+ */
+const DEFAULT_TEST_LIMIT = 5;
 
 /**
  * Apply rate limiting to a mutating (PATCH/DELETE) route handler.
@@ -94,10 +111,13 @@ const DEFAULT_LIMITS = { post: 15, patch: 30, delete: 10 };
 export async function rateLimitMutating(
   request: Request,
   entity: string,
-  method: 'post' | 'patch' | 'put' | 'delete'
+  method: 'post' | 'patch' | 'put' | 'delete' | 'test'
 ): Promise<import('next/server').NextResponse | null> {
   const limits = MUTATING_LIMITS[entity] || DEFAULT_LIMITS;
   const bucket = method === 'put' ? 'patch' : method;
+  // Its own bucket: burning the create budget on test fires (and vice versa)
+  // makes both limits meaningless.
+  const max = bucket === 'test' ? (limits.test ?? DEFAULT_TEST_LIMIT) : limits[bucket];
   const action = `${entity}_${method}`;
-  return checkRateLimit(request, { action, max: limits[bucket], windowMinutes: 1 });
+  return checkRateLimit(request, { action, max, windowMinutes: 1 });
 }

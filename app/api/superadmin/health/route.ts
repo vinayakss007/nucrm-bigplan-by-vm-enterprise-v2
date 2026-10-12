@@ -17,10 +17,8 @@ async function runCheck(service: string, fn: () => Promise<{ latency_ms: number;
     const result = await fn();
     return { service, status: 'up', ...result };
  
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (e: any) {
-    return { service, status: 'down', latency_ms: 0, message: e.message };
+  } catch (e) {
+    return { service, status: 'down', latency_ms: 0, message: e instanceof Error ? e.message : String(e) };
   }
 }
 
@@ -59,13 +57,13 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     ]);
 
     // Persist
-    for (const c of checks) {
-      await db.insert(healthChecks).values({
+    if (checks.length > 0) {
+      await db.insert(healthChecks).values(checks.map(c => ({
         service: c.service,
         status: c.status === 'up' ? 'ok' : 'error',
         latencyMs: c.latency_ms,
         message: c.message,
-      }).catch((err) => logError({ error: err, context: 'superadmin/health async side-effect' }));
+      }))).catch((err) => logError({ error: err, context: 'superadmin/health async side-effect' }));
     }
 
     const history = await db

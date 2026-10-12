@@ -14,6 +14,11 @@ import { tenants, users, tenantBackupRecords, tenantRestoreRecords } from '@/dri
 import { eq, and, desc, sql } from 'drizzle-orm';
 import { TenantDataExporter } from '@/lib/tenant-data-export';
 import { TenantDataImporter } from '@/lib/tenant-data-import';
+import {
+  acquireTenantRestoreLock,
+  releaseTenantRestoreLock,
+  type TenantRestoreLock,
+} from '@/lib/tenant-restore-lock';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 const backupSchema = z.object({
@@ -205,17 +210,13 @@ export const PUT = withApiRoute(async (req: NextRequest) => {
         return NextResponse.json({ error: 'Tenant no longer exists' }, { status: 404 });
       }
 
-      // Start async restore
-      const restoreRecord = await performTenantRestore(
-        backupId,
-        targetTenantId,
-        restoreOptions || {},
-        ctx.userId
-      );
+      // Start async restore under the per-tenant lock (409 if one is running)
+      const started = await startTenantRestore(backupId, targetTenantId, restoreOptions || {}, ctx.userId);
+      if (started instanceof NextResponse) return started;
 
       return NextResponse.json({
         message: 'Restore started',
-        restoreId: restoreRecord.id,
+        restoreId: started.id,
         tenant,
       });
     }
@@ -239,16 +240,12 @@ export const PUT = withApiRoute(async (req: NextRequest) => {
         return NextResponse.json({ error: 'Tenant not found' }, { status: 404 });
       }
 
-      const restoreRecord = await performTenantRestore(
-        latestBackup.id,
-        tenantId,
-        restoreOptions || {},
-        ctx.userId
-      );
+      const started = await startTenantRestore(latestBackup.id, tenantId, restoreOptions || {}, ctx.userId);
+      if (started instanceof NextResponse) return started;
 
       return NextResponse.json({
         message: 'Restore started from latest backup',
-        restoreId: restoreRecord.id,
+        restoreId: started.id,
         tenant,
       });
     }
@@ -330,7 +327,44 @@ async function performTenantBackup(backupId: string, tenantId: string, includeTa
 
 // ── Background Restore Function ─────────────────────────────────────────────
 
-async function performTenantRestore(backupId: string, tenantId: string, options: Record<string, unknown> = {}, userId: string) {
+/**
+ * Acquire the per-tenant restore lock, then create the restore record and
+ * start the background wipe+import while holding it (#2225).
+ *
+ * Returns a 409 response when another restore for the same tenant already
+ * holds the lock — concurrent restores must never interleave, because two
+ * delete+import passes double-insert and can corrupt the recovery itself.
+ * The lock is carried into `runTenantRestore` and released in its finally.
+ */
+async function startTenantRestore(
+  backupId: string,
+  tenantId: string,
+  options: Record<string, unknown>,
+  userId: string,
+): Promise<Awaited<ReturnType<typeof performTenantRestore>> | NextResponse> {
+  const lock = await acquireTenantRestoreLock(tenantId);
+  if (!lock) {
+    return NextResponse.json(
+      { error: 'A restore is already running for this tenant', code: 'restore_in_progress' },
+      { status: 409 },
+    );
+  }
+  try {
+    return await performTenantRestore(backupId, tenantId, options, userId, lock);
+  } catch (err) {
+    // The background restore never started — release here instead of its finally.
+    await releaseTenantRestoreLock(lock);
+    throw err;
+  }
+}
+
+async function performTenantRestore(
+  backupId: string,
+  tenantId: string,
+  options: Record<string, unknown>,
+  userId: string,
+  lock: TenantRestoreLock,
+) {
   // Create restore record
   const [restoreRecord] = await db.insert(tenantRestoreRecords)
     .values({
@@ -346,15 +380,21 @@ async function performTenantRestore(backupId: string, tenantId: string, options:
     throw new Error('Failed to create restore record');
   }
 
-  // Run restore in background
-  runTenantRestore(restoreRecord.id, backupId, tenantId, options).catch((err) => {
+  // Run restore in background; the per-tenant lock is released when it ends.
+  runTenantRestore(restoreRecord.id, backupId, tenantId, options, lock).catch((err) => {
     void logError({ error: err, context: 'admin/tenant-restore restore task', tenantId, metadata: { restoreId: restoreRecord.id } });
   });
 
   return restoreRecord;
 }
 
-async function runTenantRestore(restoreId: string, backupId: string, tenantId: string, options: { deleteExisting?: boolean; skipTables?: string[] } = {}) {
+async function runTenantRestore(
+  restoreId: string,
+  backupId: string,
+  tenantId: string,
+  options: { deleteExisting?: boolean; skipTables?: string[] } = {},
+  lock: TenantRestoreLock,
+) {
   const startTime = Date.now();
   const { deleteExisting = false, skipTables = [] } = options;
 
@@ -372,11 +412,12 @@ async function runTenantRestore(restoreId: string, backupId: string, tenantId: s
 
     const importer = new TenantDataImporter(tenantId);
 
-    if (deleteExisting) {
-      await importer.deleteExistingData(skipTables);
-    }
-
-    const result = await importer.importAll(tables);
+    // #2225: wipe + import run in ONE transaction (with a transaction-scoped
+    // advisory lock as a second guard). Any failure rolls the whole thing
+    // back, so the tenant's existing data is still fully present when the
+    // restore reports 'failed' — previously the committed delete + failed
+    // import left the tenant wiped.
+    const result = await importer.restore(tables, { deleteExisting, skipTables });
 
     const duration = Date.now() - startTime;
 
@@ -402,5 +443,9 @@ async function runTenantRestore(restoreId: string, backupId: string, tenantId: s
       })
       .where(eq(tenantRestoreRecords.id, restoreId));
     throw err;
+  } finally {
+    // Always hand the tenant back: release the session-level advisory lock
+    // and the dedicated pooled connection it lives on.
+    await releaseTenantRestoreLock(lock);
   }
 }

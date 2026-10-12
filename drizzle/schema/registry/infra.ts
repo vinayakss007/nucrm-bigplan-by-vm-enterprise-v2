@@ -115,7 +115,7 @@ export const INFRA_TABLES = {
       dependencies: [],
       description: 'Billing plans',
       isCore: true,
-      indexes: ['idx_plans_name', 'idx_plans_slug', 'idx_plans_active'],
+      indexes: ['idx_plans_name', 'idx_plans_active'],
     },
   },
   subscriptions: {

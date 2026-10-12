@@ -4,10 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest } from 'next/server';
-import { verifyToken } from '@/lib/auth/session';
-import { db } from '@/drizzle/db';
-import { users } from '@/drizzle/schema';
-import { eq } from 'drizzle-orm';
+import { getCurrentUserForToken } from '@/lib/auth/session';
 import { logStream } from '@/lib/log-stream';
 
 export const dynamic = 'force-dynamic';
@@ -17,15 +14,13 @@ export async function GET(request: NextRequest) {
   const token = request.cookies.get('nucrm_session')?.value;
   if (!token) return new Response('Unauthorized', { status: 401 });
 
-  const payload = await verifyToken(token);
-  if (!payload) return new Response('Unauthorized', { status: 401 });
+  // #2216: session-row-backed check — a signature-only verifyToken kept
+  // working for 30 days after logout/admin revocation, and this stream
+  // exposes other tenants' logs.
+  const user = await getCurrentUserForToken(token);
+  if (!user) return new Response('Unauthorized', { status: 401 });
 
-  const [user] = await db.select({ isSuperAdmin: users.isSuperAdmin })
-    .from(users)
-    .where(eq(users.id, payload.userId))
-    .limit(1);
-
-  if (!user?.isSuperAdmin) return new Response('Forbidden', { status: 403 });
+  if (!user.isSuperAdmin) return new Response('Forbidden', { status: 403 });
 
   let clientId = '';
 

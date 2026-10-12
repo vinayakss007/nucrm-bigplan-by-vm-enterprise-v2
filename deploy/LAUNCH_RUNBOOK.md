@@ -49,7 +49,7 @@ nmap -Pn -p 22,80,443,5432,6379,9000,9090,3001 <VM_PUBLIC_IP>
 ```
 
 Access to internal dashboards is via SSH tunnel only — see
-`deploy/DEPLOYMENT_INTERNAL.md` §"Monitoring access".
+`deploy/DEPLOYMENT_INTERNAL.md` §"Monitoring Dashboard URLs".
 
 ---
 

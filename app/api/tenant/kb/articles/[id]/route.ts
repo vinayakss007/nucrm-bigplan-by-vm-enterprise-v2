@@ -8,7 +8,7 @@ import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { kbArticles, kbCategories } from '@/drizzle/schema';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, and, sql, isNull } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
 import { concurrencyGuard } from '@/lib/api/concurrency';
@@ -31,13 +31,13 @@ export const GET = withApiRoute(async (request: NextRequest, { params }: { param
     })
     .from(kbArticles)
     .leftJoin(kbCategories, eq(kbCategories.id, kbArticles.categoryId))
-    .where(and(eq(kbArticles.tenantId, ctx.tenantId), eq(kbArticles.id, id)))
+    .where(and(eq(kbArticles.tenantId, ctx.tenantId), eq(kbArticles.id, id), isNull(kbArticles.deletedAt)))
     .limit(1);
 
     if (!article) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
     // Increment view count
-    await db.update(kbArticles).set({ views: (article.views || 0) + 1 }).where(eq(kbArticles.id, id));
+    await db.update(kbArticles).set({ views: sql`${kbArticles.views} + 1` }).where(eq(kbArticles.id, id));
 
     return NextResponse.json({ data: article });
  
@@ -61,8 +61,7 @@ export const PATCH = withApiRoute(async (request: NextRequest, { params }: { par
     if (guard) return guard;
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const updates: Record<string, any> = {};
+    const updates: Partial<typeof kbArticles.$inferInsert> = {};
     if (body['title']) updates['title'] = body['title'];
     if (body['content']) updates['content'] = body['content'];
     if (body['excerpt'] !== undefined) updates['excerpt'] = body['excerpt'];

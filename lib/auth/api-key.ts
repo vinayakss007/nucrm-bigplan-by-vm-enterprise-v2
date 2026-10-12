@@ -8,13 +8,14 @@
  * Validates API keys and sets auth context
  */
 
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { logError } from '@/lib/errors-server';
 import { db } from '@/drizzle/db';
 import { apiKeys, apiKeyUsage, users } from '@/drizzle/schema';
 import { eq, and, sql, gt, desc, asc } from 'drizzle-orm';
 import { AuthContext } from '@/lib/auth/middleware';
 import { createHash } from 'crypto';
+import { withAuthLookupContext, setTenantContext } from '@/lib/db/rls';
 
 /**
  * Try to authenticate via API key
@@ -29,16 +30,23 @@ export async function tryApiKeyAuth(request: NextRequest): Promise<AuthContext |
   const rawKey = auth.slice(7);
   const keyHash = createHash('sha256').update(rawKey).digest('hex');
 
-  const results = await db.select({
-    apiKey: apiKeys,
-    isSuperAdmin: users.isSuperAdmin
-  })
-  .from(apiKeys)
-  .innerJoin(users, eq(users.id, apiKeys.userId))
-  .where(and(
-    eq(apiKeys.keyHash, keyHash),
-    eq(apiKeys.isActive, true)
-  ));
+  // This read happens before any tenant is known — discovering the tenant IS the
+  // point — so it has to run under the auth-lookup privilege (migration 0099).
+  // On the bare `db` handle the only policy on api_keys is tenant_isolation,
+  // which compares tenant_id to app.current_tenant; empty at this moment, so it
+  // matched zero rows and every minted key answered 401.
+  const results = await withAuthLookupContext((tx) =>
+    tx.select({
+      apiKey: apiKeys,
+      isSuperAdmin: users.isSuperAdmin
+    })
+    .from(apiKeys)
+    .innerJoin(users, eq(users.id, apiKeys.userId))
+    .where(and(
+      eq(apiKeys.keyHash, keyHash),
+      eq(apiKeys.isActive, true)
+    ))
+  );
 
   const row = results[0];
   if (!row) {
@@ -51,6 +59,12 @@ export async function tryApiKeyAuth(request: NextRequest): Promise<AuthContext |
   }
 
   const clientIp = request.headers.get('x-forwarded-for')?.split(',')[0] ?? null;
+
+  // Adopt the key's workspace before writing the usage trail: api_key_usage and
+  // api_keys.last_used_at are both tenant-isolated, and the caller in
+  // requireAuth() only sets the tenant after this function returns, so these
+  // writes were rejected by RLS and swallowed by the catch below.
+  await setTenantContext(row.apiKey.tenantId, row.apiKey.userId!);
 
   // Update last used + log usage atomically
   try {
@@ -117,6 +131,28 @@ export function hasScope(ctx: AuthContext, requiredScope: string): boolean {
 }
 
 /**
+ * #2215: enforce an API key's scopes at the route layer.
+ *
+ * Before this, no v1 data route (nor the v1/v2 gateway catch-alls) ever
+ * consulted the key's `scopes` — a valid `ak_` key, even one with an empty
+ * scope list, had full read/write on everything the gateway exposed. This
+ * helper denies a key that lacks the required scope while leaving JWT
+ * consumers completely untouched (their authorization stays role-based via
+ * can()/requirePerm()), so minting a narrow key now actually means something
+ * and a leaked scopeless key is inert outside `all`/`*:all` grants.
+ *
+ * Returns null when the request may proceed, or a ready-to-return 403.
+ */
+export function requireApiKeyScope(ctx: AuthContext, requiredScope: string): NextResponse | null {
+  if (ctx.authMethod !== 'api_key') return null;
+  if (hasScope(ctx, requiredScope)) return null;
+  return NextResponse.json(
+    { error: `API key scope required: ${requiredScope}`, code: 'API_KEY_SCOPE_DENIED' },
+    { status: 403 }
+  );
+}
+
+/**
  * Generate a new API key
  */
 export async function generateApiKey(
@@ -152,17 +188,22 @@ export async function generateApiKey(
 }
 
 /**
- * Revoke an API key
+ * Revoke an API key. Returns false when nothing was revoked, so the caller can
+ * answer 404 instead of claiming success for a key that does not exist (or
+ * belongs to another tenant).
  */
 export async function revokeApiKey(keyId: string, tenantId: string): Promise<boolean> {
-  const _result = await db.update(apiKeys)
+  // .returning() is how drizzle exposes the affected-row count; the previous
+  // `return true` unconditional on the result meant DELETE always said "revoked".
+  const revoked = await db.update(apiKeys)
     .set({ isActive: false })
     .where(and(
       eq(apiKeys.id, keyId),
       eq(apiKeys.tenantId, tenantId)
-    ));
-  
-  return true; // Drizzle doesn't return rowCount in the same way as pg
+    ))
+    .returning({ id: apiKeys.id });
+
+  return revoked.length > 0;
 }
 
 /**
@@ -182,10 +223,15 @@ export async function rotateApiKey(
   const prefix = `ak_${keyType}_${randomPart.slice(0, 6)}`;
   const keyHash = createHash('sha256').update(fullKey).digest('hex');
 
-  await db.transaction(async (tx) => {
-    await tx.update(apiKeys)
+  const rotated = await db.transaction(async (tx) => {
+    const revoked = await tx.update(apiKeys)
       .set({ isActive: false })
-      .where(and(eq(apiKeys.id, keyId), eq(apiKeys.tenantId, tenantId)));
+      .where(and(eq(apiKeys.id, keyId), eq(apiKeys.tenantId, tenantId)))
+      .returning({ id: apiKeys.id });
+
+    // Without this the caller got a brand-new live key back from a rotation of a
+    // key that did not exist — an untracked credential and a 200 that lied.
+    if (revoked.length === 0) return null;
 
     await tx.insert(apiKeys).values({
       tenantId,
@@ -195,9 +241,11 @@ export async function rotateApiKey(
       prefix,
       scopes,
     });
+
+    return { key: fullKey, prefix };
   });
 
-  return { key: fullKey, prefix };
+  return rotated;
 }
 
 /**

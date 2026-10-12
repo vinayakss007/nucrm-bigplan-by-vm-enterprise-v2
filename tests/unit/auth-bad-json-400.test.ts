@@ -32,6 +32,7 @@ vi.mock('@/lib/db/rls', () => ({
 vi.mock('@/lib/modules/auto-install', () => ({ installDefaultModules: vi.fn() }));
 vi.mock('@/lib/security/brute-force', () => ({
   isBlocked: vi.fn().mockResolvedValue({ blocked: false }),
+  findLoginBlocks: vi.fn().mockResolvedValue({ ip: { blocked: false }, email: { blocked: false } }),
   recordFailedAttempt: vi.fn(),
   recordSuccessfulLogin: vi.fn(),
 }));

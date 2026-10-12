@@ -1,0 +1,53 @@
+{
+  "_comment": "#2301 grandfathered HIGH/CRITICAL npm advisories. Each entry needs a written `reason`. The guard FAILS on any advisory not listed here and hints when an entry goes stale (prune it). Regenerate preserving reasons: npm audit --audit-level=high --json | node scripts/check-audit-baseline.mjs --update",
+  "entries": [
+    {
+      "ghsa": "GHSA-2GC4-CQFQ-P2GV",
+      "pkg": "engine.io",
+      "range": ">=6.6.0 <6.6.10",
+      "severity": "high",
+      "title": "Socket.IO: Engine.IO Protocol Revision Mismatch DoS",
+      "reason": "engine.io 6.6.9 (installed) via devDependency socket.io; advisory is a protocol-revision-mismatch DoS against the dev realtime server. Fix arrives with a socket.io/engine.io 6.6.10 refresh in a dedicated dependency PR. Accepted as transient until then."
+    },
+    {
+      "ghsa": "GHSA-58MR-GQGX-XQ4G",
+      "pkg": "fast-uri",
+      "range": "=3.1.6",
+      "severity": "high",
+      "title": "fast-uri vulnerable to host confusion via an unclosed bracket in the URI authority",
+      "reason": "fast-uri 3.1.6 (installed; pinned via package.json overrides ^3.1.6) — host-confusion in parse. Only reached through ajv schema URL resolution with trusted internal schemas, no attacker-controlled URIs in current call paths. Fix: bump override to ^3.1.9 in the scheduled dependency-refresh PR."
+    },
+    {
+      "ghsa": "GHSA-6J4F-FJ2G-MC7P",
+      "pkg": "brace-expansion",
+      "range": ">=4.0.0 <5.0.10",
+      "severity": "high",
+      "title": "brace-expansion: DoS via uncontrolled recursion in parseCommaParts causing stack exhaustion",
+      "reason": "brace-expansion 5.0.9 installed ONLY in nested dev toolchain trees (eslint/typescript-eslint minimatch glob parsing). Build-time DoS; the runtime copy is already forced to safe 2.1.x via package.json overrides. Fix lands when the lint toolchain refreshes minimatch."
+    },
+    {
+      "ghsa": "GHSA-QHR7-859C-M2P7",
+      "pkg": "brace-expansion",
+      "range": ">=4.0.0 <5.0.11",
+      "severity": "high",
+      "title": "brace-expansion: DoS via uncontrolled recursion on nested brace groups causing stack exhaustion",
+      "reason": "brace-expansion 5.0.9 nested dev-toolchain copies (same tree as GHSA-6J4F-FJ2G-MC7P). Build-time DoS only; runtime override already pins 2.1.x. Follows the same lint-toolchain refresh."
+    },
+    {
+      "ghsa": "GHSA-QW65-CVWX-89V3",
+      "pkg": "fast-uri",
+      "range": ">=3.0.0 <3.1.7",
+      "severity": "high",
+      "title": "fast-uri vulnerable to authority injection via an unvalidated port in serialize",
+      "reason": "fast-uri 3.1.6 authority-injection in serialize. Same reachability as GHSA-58MR-GQGX-XQ4G (ajv internal schema resolution, trusted inputs). Fix: override bump to >=3.1.8 in the scheduled dependency-refresh PR."
+    },
+    {
+      "ghsa": "GHSA-VFJ7-8CJW-P6XM",
+      "pkg": "braces",
+      "range": "<=3.0.3",
+      "severity": "high",
+      "title": "braces vulnerable to stack-exhaustion denial of service through deeply nested patterns",
+      "reason": "braces 3.0.3 transitive of tailwindcss 3.4.19/chokidar/micromatch (dev build toolchain only). Only listed fix is the tailwindcss 4.3.3 semver-major, which is a separate tracked upgrade. Build-time DoS; no server-runtime exposure."
+    }
+  ]
+}

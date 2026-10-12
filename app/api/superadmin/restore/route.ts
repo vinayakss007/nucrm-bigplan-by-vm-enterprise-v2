@@ -13,10 +13,12 @@ import { db } from '@/drizzle/db';
 import { backupRecords, errorLogs } from '@/drizzle/schema';
 import { eq, and, desc } from 'drizzle-orm';
 import { spawn } from 'child_process';
+import fs from 'fs';
 import { downloadFromS3, checkFileExists, deleteFile } from '@/lib/restore/runtime-fs';
 import { logError } from '@/lib/errors-server';
 import { logSuperAdminAction } from '@/lib/audit/super-admin';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { setSuperAdminContext } from '@/lib/db/rls';
 
 /**
  * Safely run pg_restore with input validation.
@@ -71,13 +73,19 @@ async function runPgRestore(inputPath: string): Promise<void> {
       '--no-acl',
       '--clean',
       '--if-exists',
-      '--',
-      inputPath,
     ], {
       timeout: 600_000,
       stdio: ['pipe', 'pipe', 'pipe'],
       env: { ...process.env, ...pgEnv },
     });
+
+    const fileStream = fs.createReadStream(inputPath);
+    fileStream.on('error', (err) => {
+      child.kill();
+      reject(err);
+    });
+
+    fileStream.pipe(child.stdin);
 
     let stderr = '';
     child.stderr.on('data', (data) => { stderr += data.toString(); });
@@ -96,6 +104,11 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
     if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Super admin required' }, { status: 403 });
+
+    // PP-031: backupRecords is deny-by-default RLS; only app.is_super_admin
+    // admits a platform-wide read, and the plain `db` handle set nothing, so
+    // the Restore page listed zero of the 132 stored backups.
+    await setSuperAdminContext();
 
     const backups = await db
       .select({
@@ -145,7 +158,21 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     const body = await readJsonBody(request);
     const validated = validateBody(restoreSchema, body);
     if (validated instanceof NextResponse) return validated;
-    const { backup_id, confirm_restore: _confirm_restore } = validated.data;
+    const { backup_id, confirm_restore } = validated.data;
+
+    // pg_restore --clean replaces live data with the archive, and restoreSchema
+    // only required a boolean, not a true one. Nothing ever hit that gap because
+    // PP-031 made the lookup below answer 404 for every id. Enforce the flag the
+    // way selective-restore/execute:52 does for REPLACE mode.
+    if (!confirm_restore) {
+      return NextResponse.json(
+        { error: 'Set confirm_restore: true to restore. This replaces live data with the backup.' },
+        { status: 400 },
+      );
+    }
+
+    // PP-031: same RLS-blind read as GET; without it a real backup id 404s.
+    await setSuperAdminContext();
 
     const [backup] = await db
       .select()
@@ -201,7 +228,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       message: `Database restore completed from ${backup.storagePath} in ${durationMs}ms`,
     }).catch((err) => logError({ error: err, context: 'superadmin/restore async side-effect' }));
 
-    logSuperAdminAction({
+    await logSuperAdminAction({
       adminId: ctx.userId,
       adminEmail: ctx.user?.email || "",
       action: 'restore.executed',
@@ -215,16 +242,13 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       message: `Database restored from backup: ${backup.storagePath}`,
       duration_ms: durationMs,
     });
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
+  } catch (err) {
     await logError({ error: err, context: 'superadmin/restore POST', requestMethod: 'POST' });
     await db.insert(errorLogs).values({
       level: 'fatal',
       code: 'RESTORE_FAILED',
       message: "Internal server error",
-      stack: err.stack?.slice(0, 2000),
+      stack: (err instanceof Error ? err.stack : undefined)?.slice(0, 2000),
     }).catch((err) => logError({ error: err, context: 'superadmin/restore async side-effect' }));
     return apiError(err);
   }

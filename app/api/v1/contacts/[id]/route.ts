@@ -15,9 +15,11 @@ import { db } from '@/drizzle/db';
 import { contacts, contactEmails, companies } from '@/drizzle/schema';
 import { eq, and, sql } from 'drizzle-orm';
 import { requireAuth } from '@/lib/auth/require-auth';
+import { requireApiKeyScope } from '@/lib/auth/api-key';
 import { handleError, NotFoundError } from '@/lib/errors';
 import { devLogger } from '@/lib/dev-logger';
 import { syncCalculatedFields } from '@/lib/formula/sync';
+import { cancelOpenEnrollments } from '@/lib/cron/sequence-steps';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 /**
@@ -27,6 +29,10 @@ export const GET = withApiRoute(async (request: NextRequest, { params }: { param
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+
+    // #2215: an `ak_` key must actually carry the contacts:read scope.
+    const scopeDenied = requireApiKeyScope(ctx, 'contacts:read');
+    if (scopeDenied) return scopeDenied;
     const { id } = await params;
 
     // Use Drizzle to fetch contact with joined fields
@@ -84,6 +90,10 @@ export const PUT = withApiRoute(async (request: NextRequest, { params }: { param
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+
+    // #2215: writes through an `ak_` key require the contacts:write scope.
+    const scopeDenied = requireApiKeyScope(ctx, 'contacts:write');
+    if (scopeDenied) return scopeDenied;
     const { id } = await params;
     const body = await readJsonBody(request);
 
@@ -150,20 +160,35 @@ export const DELETE = withApiRoute(async (request: NextRequest, { params }: { pa
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+
+    // #2215: writes through an `ak_` key require the contacts:write scope.
+    const scopeDenied = requireApiKeyScope(ctx, 'contacts:write');
+    if (scopeDenied) return scopeDenied;
     const { id } = await params;
 
-    // Soft delete - set deleted_at using Drizzle
-    const [result] = await db.update(contacts)
-      .set({
-        deletedAt: new Date(),
-        deletedBy: ctx.userId,
-      })
-      .where(and(
-        eq(contacts.id, id),
-        eq(contacts.tenantId, ctx.tenantId),
-        sql`${contacts.deletedAt} IS NULL`
-      ))
-      .returning({ id: contacts.id });
+    // Soft delete - set deleted_at using Drizzle.
+    // #2392: the API-key path deleted the contact and left the drip running, so
+    // an integration could mail a person it had just removed. One transaction,
+    // so "deleted" can never mean "still enrolled".
+    const result = await db.transaction(async (tx) => {
+      const [r] = await tx.update(contacts)
+        .set({
+          deletedAt: new Date(),
+          deletedBy: ctx.userId,
+        })
+        .where(and(
+          eq(contacts.id, id),
+          eq(contacts.tenantId, ctx.tenantId),
+          sql`${contacts.deletedAt} IS NULL`
+        ))
+        .returning({ id: contacts.id });
+
+      if (!r) return null;
+
+      // Wrapped in an object: a delete with zero open enrollments returns 0,
+      // and `!0` would read as "contact not found".
+      return { cancelledEnrollments: await cancelOpenEnrollments(tx, ctx.tenantId, { contactId: id }) };
+    });
 
     if (!result) {
       throw new NotFoundError('Contact');
@@ -171,7 +196,7 @@ export const DELETE = withApiRoute(async (request: NextRequest, { params }: { pa
 
     devLogger.request('DELETE', `/api/v1/contacts/${id}`, 200, 0, undefined, ctx.userId);
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, cancelledEnrollments: result.cancelledEnrollments });
   } catch (error) {
     const { id } = await params;
     devLogger.error(error as Error, `DELETE /api/v1/contacts/${id}`);

@@ -11,7 +11,7 @@ import { requireModule } from '@/lib/modules/gate';
 import { db } from '@/drizzle/db';
 import { complianceRequests } from '@/drizzle/schema/compliance';
 import { eq, and, desc } from 'drizzle-orm';
-import { exportTenantData } from '@/lib/compliance/gdpr';
+import { exportTenantData, type GDPRExportData, type GDPRDeletionResult } from '@/lib/compliance/gdpr';
 import { anonymizeTenantData } from '@/lib/compliance/gdpr';
 import { readJsonBody } from '@/lib/api/validate';
 import { withApiRoute } from '@/lib/api/with-api-route';
@@ -93,8 +93,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
     // Process the request
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let result: any;
+    let result: GDPRExportData | GDPRDeletionResult;
     try {
       if (requestType === 'export') {
         result = await exportTenantData(ctx.tenantId);
@@ -107,7 +106,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
         .set({
           status: 'completed',
           completedAt: new Date(),
-          result: { summary: result.metadata || result.categories || {} },
+          result: { summary: ('metadata' in result ? result.metadata : undefined) || result.categories || {} },
         })
         .where(eq(complianceRequests.id, request!.id));
  

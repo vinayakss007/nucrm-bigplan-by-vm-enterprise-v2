@@ -7,19 +7,31 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { auditLogs, users, editHistory } from '@/drizzle/schema';
-import { eq, and, or, desc, sql, gte, lte, isNull, inArray } from 'drizzle-orm';
+import { eq, and, or, desc, sql, gte, lte, isNull, inArray, type SQL } from 'drizzle-orm';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { logError } from '@/lib/errors-server';
 import { escapeLike } from '@/lib/api/sanitize-like';
+import { parseLimitOffset } from '@/lib/api/query-params';
 
 export const GET = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
 
+    // #2274: this GET called only requireAuth, so every tenant member (sales
+    // reps included) could read the FULL audit trail — other users' emails and
+    // old_data/new_data PII diffs of every admin/manager CRUD. Audit viewing
+    // is an admin capability: the UI already treats it that way
+    // (app/tenant/settings/audit/page.tsx redirects non-admins, sidebar-nav
+    // marks it adminOnly) and sibling #2221 fixed backup/config the same way.
+    // Gate the whole route — the UI has no self-view ("my own entries only")
+    // consumer of user_id, so there is nothing to preserve for other roles.
+    if (!ctx.isAdmin) {
+      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+    }
+
     const { searchParams } = new URL(req.url);
-    const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') ?? '50')));
-    const offset = Math.max(0, parseInt(searchParams.get('offset') ?? '0'));
+    const { limit, offset } = parseLimitOffset(searchParams, { defaultLimit: 50, maxLimit: 100 });
     const action = searchParams.get('action');
     const entityType = searchParams.get('entity_type');
     const userId = searchParams.get('user_id');
@@ -28,8 +40,7 @@ export const GET = withApiRoute(async (req: NextRequest) => {
     const dateTo = searchParams.get('to');
     const entityId = searchParams.get('entity_id');
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const filters: any[] = [
+    const filters: SQL[] = [
       eq(auditLogs.tenantId, ctx.tenantId),
       isNull(auditLogs.deletedAt),
     ];

@@ -12,12 +12,12 @@
  * No auth — the token IS the credential. Rate-limited.
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/drizzle/db';
 import { quotes, activities } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { logAudit } from '@/lib/audit';
+import { withTenantContext, NO_USER_SENTINEL } from '@/lib/db/rls';
 import {
   findOfferByToken,
   patchOfferMetadata,
@@ -53,10 +53,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pub
 
     const now = new Date();
     // Persist the lifecycle change: status + metadata + timeline activity all in
-    // one db.transaction so the offer is never marked 'declined' without its
-    // decline metadata (H7). patchOfferMetadata takes the tx; the activity write
+    // one transaction so the offer is never marked 'declined' without its decline
+    // metadata (H7). patchOfferMetadata takes the tx; the activity write
     // participates so a failed timeline row rolls the decline back.
-    await db.transaction(async (tx) => {
+    //
+    // #2468: that transaction also has to NAME a workspace. `quotes` and
+    // `activities` are tenant-policyed and this is an unauthenticated route with
+    // no tenant carrier, so the bare `db.transaction()` set no GUCs at all — the
+    // writes were as unreachable as the credential read in lib/offers.ts. The
+    // context comes from the resolved offer row, never from the request.
+    await withTenantContext(offer.tenantId, NO_USER_SENTINEL, async (tx) => {
       await tx
         .update(quotes)
         .set({ status: 'declined', declinedAt: now, updatedAt: now })

@@ -7,14 +7,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { apiError } from '@/lib/api-error';
 import { validateBody, validateQuery, readJsonBody } from '@/lib/api/validate';
-import { createTicketSchema, ticketQuerySchema } from '@/lib/api/schemas';
+import { createTicketSchema, ticketBodyText, ticketQuerySchema } from '@/lib/api/schemas';
 import { requireAuth, requirePerm, requireModule } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { supportTickets, contacts, users } from '@/drizzle/schema';
 import { eq, and, desc, sql, isNull } from 'drizzle-orm';
 import { fireWebhooks } from '@/lib/webhooks';
 import { logError } from '@/lib/errors-server';
-import { generatePortalToken } from '@/lib/ticket-portal';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 /**
@@ -115,13 +114,27 @@ export const POST = withApiRoute(async (request: NextRequest) => {
         createdBy: ctx.userId,
         contactId: v.contact_id || null,
         subject: v.subject,
-        body: v.description,
+        body: ticketBodyText(v),
         category: v.category || 'general',
         priority: v.priority,
         status: v.status,
-        portalToken: generatePortalToken(),
       } as typeof supportTickets.$inferInsert)
-      .returning();
+      // #2498: name the returned columns. `.returning()` echoed all 23 columns —
+      // the live `portal_token` bearer credential in the response AND, through
+      // the automation payload below, copied into automation_runs.metadata
+      // where DROP COLUMN cannot reach it. Same fix shape as #2440/#2443.
+      .returning({
+        id: supportTickets.id,
+        tenantId: supportTickets.tenantId,
+        contactId: supportTickets.contactId,
+        subject: supportTickets.subject,
+        body: supportTickets.body,
+        status: supportTickets.status,
+        priority: supportTickets.priority,
+        category: supportTickets.category,
+        createdAt: supportTickets.createdAt,
+        updatedAt: supportTickets.updatedAt,
+      });
 
     if (!row) throw new Error('Failed to create ticket');
 
@@ -149,6 +162,10 @@ export const POST = withApiRoute(async (request: NextRequest) => {
  
   } catch (err) {
     await logError({ error: err, context: 'tenant tickets POST', requestMethod: 'POST' });
-    return apiError(err);
+    // #2285: the insert used to fail on a NOT NULL column and this returned 500.
+    // The client message is now this route's fixed text in EVERY environment —
+    // `apiError()` scrubs the SQL statement, bound values and even the
+    // SQLSTATE/constraint a drizzle query failure carries, in and out of dev.
+    return apiError(err, 'Failed to create ticket', 500);
   }
 });

@@ -6,10 +6,10 @@
 import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
-import { db } from '@/drizzle/db';
 import { users, tenantMembers } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { withTenantContext } from '@/lib/db/rls';
 import { logError } from '@/lib/errors-server';
 
 /**
@@ -29,21 +29,27 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       return NextResponse.json({ error: 'tenant_id query parameter is required' }, { status: 400 });
     }
 
-    const tenantUsers = await db
-      .select({
-        id: users.id,
-        email: users.email,
-        fullName: users.fullName,
-        role: tenantMembers.roleSlug,
-      })
-      .from(users)
-      .innerJoin(tenantMembers, eq(tenantMembers.userId, users.id))
-      .where(
-        and(
-          eq(tenantMembers.tenantId, tenantId),
-          eq(tenantMembers.status, 'active')
-        )
-      );
+    // tenant_members isolates on app.current_tenant with no super-admin escape, so
+    // this join matched nothing on the console connection and the picker listed no
+    // users. It runs in the target tenant's context instead; `users` stays visible
+    // through the super-admin read policy, which the context does not clear.
+    type TenantUser = { id: string; email: string; fullName: string | null; role: string | null };
+    const tenantUsers = await withTenantContext<TenantUser[]>(tenantId, ctx.userId, tx =>
+      tx
+        .select({
+          id: users.id,
+          email: users.email,
+          fullName: users.fullName,
+          role: tenantMembers.roleSlug,
+        })
+        .from(users)
+        .innerJoin(tenantMembers, eq(tenantMembers.userId, users.id))
+        .where(
+          and(
+            eq(tenantMembers.tenantId, tenantId),
+            eq(tenantMembers.status, 'active')
+          )
+        ));
 
     return NextResponse.json({ users: tenantUsers });
  

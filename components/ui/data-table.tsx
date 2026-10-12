@@ -7,20 +7,28 @@
 
 import * as React from "react"
 import { useVirtualizer } from "@tanstack/react-virtual"
+// #2208 — react-table v9 moved the feature map into ColumnDef's first type
+// parameter and renamed useReactTable/get*RowModel to useTable/create*RowModel.
+// v9 ships the v8 surface as a supported compatibility layer, so this file
+// imports it from `/legacy` and re-exports `ColumnDef` under the name the nine
+// consumer files already use; the native feature-slot migration is the
+// follow-up. tests/unit/data-table-legacy-v9-2208.test.tsx pins the behaviour.
 import {
   flexRender,
+  type SortingState,
+  type RowSelectionState,
+  type RowData,
+} from "@tanstack/react-table"
+import {
   getCoreRowModel,
   getFilteredRowModel,
   getPaginationRowModel,
   getSortedRowModel,
   getFacetedRowModel,
   getFacetedUniqueValues,
-  useReactTable,
-  type SortingState,
-  type ColumnDef,
-  type Column,
-  type RowSelectionState,
-} from "@tanstack/react-table"
+  useLegacyTable as useReactTable,
+  type LegacyColumnDef as ColumnDef,
+} from "@tanstack/react-table/legacy"
 import {
   Table,
   TableBody,
@@ -49,9 +57,6 @@ import {
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
-  ArrowUpDown,
-  ArrowUp,
-  ArrowDown,
   Settings2,
   Search,
   X,
@@ -59,8 +64,9 @@ import {
 } from "lucide-react"
 
 export { ColumnDef }
+export { createSortableHeader } from "./data-table-sortable-header"
 
-export interface DataTableProps<TData, TValue> {
+export interface DataTableProps<TData extends RowData, TValue> {
   columns: ColumnDef<TData, TValue>[]
   data: TData[]
   total?: number
@@ -116,7 +122,7 @@ export interface EmptyStateProps {
   }
 }
 
-export function DataTable<TData, TValue>({
+export function DataTable<TData extends RowData, TValue>({
   columns,
   data,
   total,
@@ -164,20 +170,31 @@ export function DataTable<TData, TValue>({
   // Clear selection when data changes (e.g. after bulk action, page change, or refresh)
   React.useEffect(() => {
     setRowSelection({})
-     
   }, [data])
 
-  // Reset select all matching when filters or page changes
+  // Clear select-all-matching only when the filter/page scope actually changes (ref keeps deps honest)
+  const selectionScope = `${externalGlobalFilter ?? ''}|${externalPageIndex ?? ''}|${pageIndex}`
+  const selectionScopeRef = React.useRef(selectionScope)
   React.useEffect(() => {
-    if (selectAllMatching) {
-      onSelectAllMatching?.(false)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [externalGlobalFilter, externalPageIndex, pageIndex])
+    if (selectionScopeRef.current === selectionScope) return
+    selectionScopeRef.current = selectionScope
+    if (selectAllMatching) onSelectAllMatching?.(false)
+  }, [selectionScope, selectAllMatching, onSelectAllMatching])
 
   const table = useReactTable({
     data,
-    columns,
+    // v8 typed `columns` with `any` for the value generic; v9 uses `unknown`.
+    // TValue appears in callback *parameter* positions inside ColumnDef, so it is
+    // invariant and a caller's ColumnDef<TData, TValue>[] is not assignable to the
+    // unknown form. Widening here keeps the public DataTableProps<TData, TValue>
+    // surface — and the nine consumer files built against it — unchanged.
+    columns: columns as unknown as ColumnDef<TData, unknown>[],
+    // These get*RowModel calls are markers, not row models: useLegacyTable reads
+    // them once on mount to pick v9's feature slots (v8 re-read them every
+    // render). So flipping `enablePagination`/`manualPagination` on an already
+    // mounted table no longer adds or drops the paginated row model. All nine
+    // consumers pass both as static attributes, so this is inert today; a dynamic
+    // one is the native-v9 follow-up's job, not a silent behaviour revert.
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: enablePagination && !manualPagination ? getPaginationRowModel() : undefined,
@@ -227,16 +244,16 @@ const virtualizer = useVirtualizer({
     enabled: virtualize,
   })
 
-  const selectedIds = React.useMemo(() => {
-    const selectedRows = table.getFilteredSelectedRowModel().rows
-    return selectedRows.map(row => (row.original as { id: string }).id)
-    // #665: depend on the selection STATE (rowSelection) and the current data,
-    // not the `table` instance. TanStack returns a STABLE table ref, so a
-    // `[table]` dependency computed once (with an empty selection) and never
-    // recomputed — bulk actions then received an empty selectedIds. rowSelection
-    // changes on every select/deselect; data changes on page/refresh.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [table, rowSelection, data])
+  // #665: compute during render instead of memoizing. TanStack caches the
+  // filtered-selected row model on the table's own state, so this reads live
+  // selection and data on every pass; a `[table]` memo once went stale (stable
+  // table ref → empty selectedIds for bulk actions), and memoizing on
+  // [rowSelection, data] was the suppression the ratchet kept tripping.
+  // Consumers only read this in render/handlers — no effect depends on the
+  // array identity.
+  const selectedIds = table
+    .getFilteredSelectedRowModel()
+    .rows.map(row => (row.original as { id: string }).id)
 
   // Derived values for select-all-matching feature (must be after table and selectedIds)
   const allPageSelected = table.getIsAllPageRowsSelected()
@@ -748,42 +765,4 @@ const handleBulkAction = async (action: BulkAction) => {
       )}
     </div>
   )
-}
-
-// Minimal structural type for the sortable-header column: only the methods used
-// here. Accepting this instead of Column<unknown, unknown> keeps the header
-// callable with any concretely-typed Column<TData> passed by callers.
-type SortableColumn = Pick<
-  Column<unknown, unknown>,
-  "getIsSorted" | "toggleSorting"
->
-
-// Helper to create sortable column headers
-export function createSortableHeader(
-  label: string,
-  accessorKey: string
-) {
-  return {
-    accessorKey,
-    header: ({ column }: { column: SortableColumn }) => {
-      const sortState = column.getIsSorted()
-      return (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-          aria-sort={sortState === "asc" ? "ascending" : sortState === "desc" ? "descending" : "none"}
-          className="h-8 p-0 hover:bg-transparent"
-        >
-          {label}
-          {sortState === "asc" ? (
-            <ArrowUp className="ml-2 h-4 w-4" />
-          ) : sortState === "desc" ? (
-            <ArrowDown className="ml-2 h-4 w-4" />
-          ) : (
-            <ArrowUpDown className="ml-2 h-4 w-4" />
-          )}
-        </Button>
-      )
-    },
-  }
 }

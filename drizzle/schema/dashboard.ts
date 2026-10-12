@@ -17,6 +17,9 @@ export const dashboardLayouts = pgTable('dashboard_layouts', {
   source: text('source').notNull().default('user'),
   ...utils.audit(),
 }, (table) => ({
+    deletedByFk2261Idx: index("dashboard_layouts_deleted_by_fk_idx").on(table.deletedBy),
+    updatedByFk2261Idx: index("dashboard_layouts_updated_by_fk_idx").on(table.updatedBy),
   tenantIdx: utils.tenantIdx(table),
   userDefaultIdx: index('idx_dashboard_layouts_user_default').on(table.userId, table.isDefault),
-}));
+
+  drz2255_idx_dashboard_layouts_created_by: index('idx_dashboard_layouts_created_by').on(table.createdBy),}));

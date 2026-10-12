@@ -8,9 +8,10 @@ import { apiError } from '@/lib/api-error';
 import { logError } from '@/lib/errors-server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { requireModule } from '@/lib/modules/gate';
+import { checkLimit } from '@/lib/usage/middleware';
 import { db } from '@/drizzle/db';
 import { documents, documentFolders } from '@/drizzle/schema/documents';
-import { eq, and, desc, isNull, sql } from 'drizzle-orm';
+import { eq, and, desc, isNull, sql, type SQL } from 'drizzle-orm';
 import { getSignedPutUrl } from '@/lib/storage/s3';
 import { getS3Config } from '@/lib/storage/s3-config';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
@@ -63,8 +64,7 @@ export const GET = withApiRoute(async (req: NextRequest) => {
 
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const filters: any[] = [eq(documents.tenantId, ctx.tenantId)];
+    const filters: SQL[] = [eq(documents.tenantId, ctx.tenantId)];
 
     if (entityType) filters.push(eq(documents.entityType, entityType));
     if (entityId) filters.push(eq(documents.entityId, entityId));
@@ -90,8 +90,7 @@ export const GET = withApiRoute(async (req: NextRequest) => {
     // Also get folders at the same level
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const folderFilters: any[] = [eq(documentFolders.tenantId, ctx.tenantId)];
+    const folderFilters: SQL[] = [eq(documentFolders.tenantId, ctx.tenantId)];
     if (folderId) {
       folderFilters.push(eq(documentFolders.parentId, folderId));
     } else {
@@ -169,6 +168,14 @@ export const POST = withApiRoute(async (req: NextRequest) => {
         { status: 415 },
       );
     }
+
+    // #2432: the plan's `max_storage_gb` was configured and displayed but never
+    // measured or checked, so a 1 GB workspace could upload unlimited 100 MB
+    // objects. This is the byte-creating path (the folder branch above writes no
+    // file row), so it is where the quota belongs. Records a violation + alerts
+    // the owner either way; only blocks when USAGE_LIMITS=on.
+    const overStorage = await checkLimit(ctx, 'storageGb');
+    if (overStorage) return overStorage;
 
     // H-D: use the app's unified S3 config + user-files bucket so uploads and
     // the download route (lib/storage/s3.getSignedUrl) hit the SAME bucket.

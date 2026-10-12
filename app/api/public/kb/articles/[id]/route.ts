@@ -4,27 +4,77 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/drizzle/db';
 import { kbArticles, kbCategories } from '@/drizzle/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, isNull, sql } from 'drizzle-orm';
+import { resolvePortalIdentity } from '@/lib/portal-auth';
+import { checkRateLimit } from '@/lib/rate-limit';
+import { withTenantContext, NO_USER_SENTINEL } from '@/lib/db/rls';
 
+/**
+ * Public KB article detail — DECISION (#2284, follow-up to #2221 / PR #2283):
+ * the list route was scoped to the caller's server-validated portal identity,
+ * but this detail route still resolved any article by UUID with only a
+ * status='published' filter, so a guessed article id leaked another tenant's
+ * KB content (and draft/archived rows never reached here, but the tenant gap
+ * did). Same mechanism as /api/public/tickets and the list route:
+ * resolvePortalIdentity (httpOnly cookie or x-portal-token), anonymous -> 401,
+ * and the WHERE clause mirrors the list predicate exactly
+ * (tenant_id + status='published' + deleted_at IS NULL). Anything that does
+ * not match — other tenant, draft, archived, soft-deleted, missing — gets an
+ * identical 404 so this is not an existence oracle. Legitimately-public rows
+ * keep the exact same { data: article } response shape.
+ *
+ * #2284 proved the tenant and #2417 bounded the writes; neither could make the
+ * route read anything. `kb_articles` is `tenant_isolation`-policyed and this
+ * handler set no context, so the article was invisible (404) and the `views + 1`
+ * UPDATE below matched no row — a counter that never moved was the tell (#2446).
+ */
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    // This handler writes (`views + 1`) on a read route, so this ceiling is
+    // what bounds view-count inflation (#2417). Incrementing from a beacon
+    // instead would be the better shape, but it changes what `views` means to
+    // tenants, so it is not decided here.
+    const limited = await checkRateLimit(request, { action: 'public-kb-view', max: 30, windowMinutes: 1 });
+    if (limited) return limited;
+
+    const identity = await resolvePortalIdentity(request);
+    if (!identity) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
     const { id } = await params;
-    const [article] = await db.select({
-      id: kbArticles.id, title: kbArticles.title, slug: kbArticles.slug,
-      content: kbArticles.content, excerpt: kbArticles.excerpt,
-      views: kbArticles.views, createdAt: kbArticles.createdAt,
-      categoryName: kbCategories.name,
-    })
-    .from(kbArticles)
-    .leftJoin(kbCategories, eq(kbCategories.id, kbArticles.categoryId))
-    .where(and(eq(kbArticles.id, id), eq(kbArticles.status, 'published')))
-    .limit(1);
+
+    // One transaction, because the read that proves the row is public and the
+    // write that counts the view must see the same tenant — and the response is
+    // built outside it, so a 404 branch never returns holding an open
+    // transaction.
+    const article = await withTenantContext(identity.tenantId, NO_USER_SENTINEL, async (tx) => {
+      const [row] = await tx.select({
+        id: kbArticles.id, title: kbArticles.title, slug: kbArticles.slug,
+        content: kbArticles.content, excerpt: kbArticles.excerpt,
+        views: kbArticles.views, createdAt: kbArticles.createdAt,
+        categoryName: kbCategories.name,
+      })
+        .from(kbArticles)
+        .leftJoin(kbCategories, eq(kbCategories.id, kbArticles.categoryId))
+        .where(and(
+          eq(kbArticles.id, id),
+          eq(kbArticles.tenantId, identity.tenantId),
+          eq(kbArticles.status, 'published'),
+          isNull(kbArticles.deletedAt),
+        ))
+        .limit(1);
+
+      if (!row) return null;
+
+      // id already proven to be a published, live, same-tenant row above.
+      await tx.update(kbArticles).set({ views: sql`${kbArticles.views} + 1` }).where(eq(kbArticles.id, id));
+
+      return row;
+    });
 
     if (!article) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-
-    await db.update(kbArticles).set({ views: (article.views || 0) + 1 }).where(eq(kbArticles.id, id));
 
     return NextResponse.json({ data: article });
   } catch { return NextResponse.json({ error: 'Not found' }, { status: 404 }); }

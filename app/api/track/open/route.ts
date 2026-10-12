@@ -16,10 +16,10 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { logError } from '@/lib/errors-server';
-import { db } from '@/drizzle/db';
 import { emailTracking, activities } from '@/drizzle/schema';
 import { eq, and, isNull, sql } from 'drizzle-orm';
 import { checkPublicRateLimit } from '@/lib/rate-limit-simple';
+import { withTenantContext, withTrackingLookupContext, NO_USER_SENTINEL } from '@/lib/db/rls';
 
 // 1x1 transparent GIF
 const PIXEL = Buffer.from(
@@ -41,18 +41,29 @@ export async function GET(req: NextRequest) {
     // Record open — fire and forget, never block
     Promise.resolve().then(async () => {
       try {
-        const row = await db.query.emailTracking.findFirst({
-          where: and(eq(emailTracking.id, trackId), isNull(emailTracking.deletedAt)),
-          columns: {
-            id: true,
-            contactId: true,
-            tenantId: true,
-            openCount: true
-          }
-        });
+        // The tracking id in the query string is the only credential this
+        // request carries, and resolving it is a read no tenant GUC can
+        // satisfy — `email_tracking`'s policy compares tenant_id to
+        // app.current_tenant, which a public route never sets. Hence the
+        // narrow lookup context (0105). Keep it to this one row.
+        const row = await withTrackingLookupContext((tx) =>
+          tx.query.emailTracking.findFirst({
+            where: and(eq(emailTracking.id, trackId), isNull(emailTracking.deletedAt)),
+            columns: {
+              id: true,
+              contactId: true,
+              tenantId: true,
+              openCount: true
+            }
+          })
+        );
         if (!row) return;
 
-        await db.transaction(async (tx) => {
+        // Both writes below are checked against app.current_tenant, so the
+        // tenant the row named has to be the context they run in. Under the
+        // bare pool they matched zero rows and inserted nothing — silently,
+        // because RLS refuses without raising.
+        await withTenantContext(row.tenantId, NO_USER_SENTINEL, async (tx) => {
           await tx.update(emailTracking)
             .set({
               openedAt: sql`COALESCE(${emailTracking.openedAt}, now())`,

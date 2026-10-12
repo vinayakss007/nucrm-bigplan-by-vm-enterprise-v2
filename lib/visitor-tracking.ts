@@ -159,12 +159,8 @@ export async function getVisitorScore(visitorId: string, tenantId: string): Prom
  * Get full visitor profile with page views and score
  */
 export async function getVisitorProfile(visitorId: string, tenantId: string): Promise<{
-  
-  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  visitor: any;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  pageViews: any[];
+  visitor: typeof visitors.$inferSelect;
+  pageViews: (typeof pageViews.$inferSelect)[];
   score: { totalScore: number; pageScore: number; frequencyBonus: number; recencyBonus: number };
 } | null> {
   const visitorRows = await db
@@ -183,7 +179,7 @@ export async function getVisitorProfile(visitorId: string, tenantId: string): Pr
   const score = await getVisitorScore(visitorId, tenantId);
 
   return {
-    visitor: visitorRows[0],
+    visitor: visitorRows[0]!,
     pageViews: views,
     score,
   };

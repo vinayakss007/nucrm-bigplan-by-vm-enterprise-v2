@@ -100,7 +100,7 @@ export const MODULES_TABLES = {
       dependencies: ['users'],
       description: 'Product template definitions for onboarding',
       isCore: false,
-      indexes: ['idx_product_templates_slug', 'idx_product_templates_status'],
+      indexes: ['idx_product_templates_status'],
     },
   },
   tenantTemplates: {

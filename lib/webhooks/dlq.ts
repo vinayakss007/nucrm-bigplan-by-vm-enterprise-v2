@@ -30,10 +30,7 @@ export interface DLQEntry {
   jobType: string;
   jobId: string | null;
   queue: string;
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  payload: any;
+  payload: unknown;
   errorMessage: string;
   errorStack: string | null;
   attempts: number;
@@ -64,7 +61,9 @@ export async function moveToDeadLetterQueue(deliveryId: string): Promise<string 
   }
 
   const metadata = (delivery.metadata as Record<string, unknown>) || {};
-  const url = metadata.url || '';
+  const asNum = (v: unknown, fallback: number): number =>
+    (typeof v === 'number' && Number.isFinite(v) ? v : fallback);
+  const url = typeof metadata.url === 'string' ? metadata.url : '';
 
   // Insert into the dead_letter_queue table
   const [dlqEntry] = await db.insert(deadLetterQueue)
@@ -80,17 +79,15 @@ export async function moveToDeadLetterQueue(deliveryId: string): Promise<string 
         payload: delivery.payload,
         headers: metadata.headers,
       },
-      errorMessage: metadata.failureReason || metadata.lastError || 'Unknown error',
-      errorStack: metadata.errorStack || null,
-      attempts: metadata.attempt || 0,
-      maxAttempts: metadata.maxRetries || 3,
+      errorMessage: typeof metadata.failureReason === 'string' ? metadata.failureReason
+        : (typeof metadata.lastError === 'string' ? metadata.lastError : 'Unknown error'),
+      errorStack: typeof metadata.errorStack === 'string' ? metadata.errorStack : null,
+      attempts: asNum(metadata.attempt, 0),
+      maxAttempts: asNum(metadata.maxRetries, 3),
       status: 'pending',
       originalRunAt: delivery.createdAt,
       failedAt: new Date(),
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any)
+    })
     .returning({ id: deadLetterQueue.id });
 
   devLogger.queue('dlq', `Webhook ${deliveryId} moved to dead letter queue as ${dlqEntry?.id}`);

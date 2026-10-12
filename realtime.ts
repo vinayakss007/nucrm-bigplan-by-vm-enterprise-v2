@@ -38,7 +38,7 @@ import IORedis from 'ioredis';
 import { eq, and } from 'drizzle-orm';
 import { db } from '@/drizzle/db';
 import { tenantMembers } from '@/drizzle/schema';
-import { verifyToken } from '@/lib/auth/session';
+import { getCurrentUserForToken } from '@/lib/auth/session';
 import { registerProcessErrorHandlers } from '@/lib/process-errors';
 import {
   REALTIME_CHANNEL,
@@ -138,8 +138,10 @@ async function main() {
       const token = readCookie(socket.handshake.headers.cookie, SESSION_COOKIE);
       if (!token) return next(new Error('unauthorized'));
 
-      const verified = await verifyToken(token);
-      if (!verified?.userId) return next(new Error('unauthorized'));
+      // #2216: handshake must fail once the session row is gone, even while
+      // the JWT itself is still cryptographically valid.
+      const verified = await getCurrentUserForToken(token);
+      if (!verified?.id) return next(new Error('unauthorized'));
 
       // Resolve the tenant from the membership table, not from the client.
       const [membership] = await db
@@ -147,7 +149,7 @@ async function main() {
         .from(tenantMembers)
         .where(
           and(
-            eq(tenantMembers.userId, verified.userId),
+            eq(tenantMembers.userId, verified.id),
             eq(tenantMembers.status, 'active'),
           ),
         )
@@ -155,7 +157,7 @@ async function main() {
 
       if (!membership?.tenantId) return next(new Error('forbidden'));
 
-      socket.data.userId = verified.userId;
+      socket.data.userId = verified.id;
       socket.data.tenantId = membership.tenantId;
       return next();
     } catch (err) {

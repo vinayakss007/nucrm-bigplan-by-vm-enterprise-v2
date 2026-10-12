@@ -16,10 +16,7 @@ import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { isEntityId } from '@/lib/id';
 
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const GET = withApiRoute(async (req: NextRequest, { params }: any) => {
+export const GET = withApiRoute(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
@@ -55,10 +52,7 @@ export const GET = withApiRoute(async (req: NextRequest, { params }: any) => {
   } catch (err) { return apiError(err); }
 });
 
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const PATCH = withApiRoute(async (req: NextRequest, { params }: any) => {
+export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
   const limited = await rateLimitMutating(req, 'forms', 'patch');
   if (limited) return limited;
@@ -79,8 +73,7 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: any) => {
     
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const updateData: any = { updatedAt: new Date(), updatedBy: ctx.userId };
+    const updateData: Partial<typeof forms.$inferInsert> = { updatedAt: new Date(), updatedBy: ctx.userId };
     if (v.name !== undefined) updateData.name = v.name;
     if (v.description !== undefined) updateData.description = v.description;
     if (v.fields !== undefined) updateData.fields = v.fields;
@@ -100,10 +93,7 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: any) => {
   } catch (err) { return apiError(err); }
 });
 
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const DELETE = withApiRoute(async (req: NextRequest, { params }: any) => {
+export const DELETE = withApiRoute(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
   const limited = await rateLimitMutating(req, 'forms', 'delete');
   if (limited) return limited;

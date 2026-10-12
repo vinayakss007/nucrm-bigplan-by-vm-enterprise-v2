@@ -293,6 +293,8 @@ export const FOOTER: { heading: string; links: NavLink[] }[] = [
       { label: 'Privacy policy', href: '/legal/privacy' },
       { label: 'Terms of service', href: '/legal/terms' },
       { label: 'Data processing', href: '/legal/dpa' },
+      { label: 'Cookie policy', href: '/legal/cookies' },
+      { label: 'Refund policy', href: '/legal/refunds' },
     ],
   },
 ];

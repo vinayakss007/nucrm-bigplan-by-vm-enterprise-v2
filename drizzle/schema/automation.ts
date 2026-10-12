@@ -27,9 +27,12 @@ export const automations = pgTable('automations', {
   ...utils.audit(),
 }, (table) => {
   return {
+    deletedByFk2261Idx: index("automations_deleted_by_fk_idx").on(table.deletedBy),
+    updatedByFk2261Idx: index("automations_updated_by_fk_idx").on(table.updatedBy),
     tenantIdx: utils.tenantIdx(table),
     activeIdx: utils.activeIdx(table),
-  };
+  
+  drz2255_idx_automations_created_by: index('idx_automations_created_by').on(table.createdBy),};
 });
 
 export const automationRuns = pgTable('automation_runs', {
@@ -54,7 +57,8 @@ export const automationRuns = pgTable('automation_runs', {
     tenantIdx: utils.tenantIdx(table),
     statusIdx: index('idx_automation_runs_status').on(table.status, table.startedAt),
     metadataGinIdx: utils.metadataIdx(table),
-  };
+  
+  drz2255_idx_automation_runs_triggered_by: index('idx_automation_runs_triggered_by').on(table.triggeredBy),};
 });
 
 // ── 1. WORKFLOW ENGINE ────────────────────────────────
@@ -74,10 +78,13 @@ export const workflows = pgTable('workflows', {
   ...utils.audit(),
 }, (table) => {
   return {
+    deletedByFk2261Idx: index("workflows_deleted_by_fk_idx").on(table.deletedBy),
+    updatedByFk2261Idx: index("workflows_updated_by_fk_idx").on(table.updatedBy),
     tenantIdx: utils.tenantIdx(table).where(sql`deleted_at IS NULL AND is_active = true`),
     metadataGinIdx: utils.metadataIdx(table),
     activeIdx: utils.activeIdx(table),
-  };
+  
+  drz2255_idx_workflows_created_by: index('idx_workflows_created_by').on(table.createdBy),};
 });
 
 export const workflowActions = pgTable('workflow_actions', {
@@ -116,7 +123,9 @@ export const workflowExecutions = pgTable('workflow_executions', {
     tenantIdx: utils.tenantIdx(table),
     workflowIdx: index('idx_workflow_executions_workflow').on(table.workflowId, table.startedAt),
     metadataGinIdx: utils.metadataIdx(table),
-  };
+  
+  drz2255_idx_workflow_executions_contact_id: index('idx_workflow_executions_contact_id').on(table.contactId),
+  drz2255_idx_workflow_executions_lead_id: index('idx_workflow_executions_lead_id').on(table.leadId),};
 });
 
 export const workflowActionLogs = pgTable('workflow_action_logs', {
@@ -134,7 +143,8 @@ export const workflowActionLogs = pgTable('workflow_action_logs', {
   return {
     executionIdx: index('idx_workflow_action_logs_execution').on(table.executionId),
     tenantIdx: utils.tenantIdx(table),
-  };
+  
+  drz2255_idx_workflow_action_logs_action_id: index('idx_workflow_action_logs_action_id').on(table.actionId),};
 });
 
 // ── 2. WEBHOOKS ───────────────────────────────────────
@@ -217,7 +227,8 @@ export const aiUsageLogs = pgTable('ai_usage_logs', {
     tenantIdx: utils.tenantIdx(table),
     featureIdx: index('idx_ai_usage_logs_feature').on(table.tenantId, table.feature, table.createdAt),
     metadataGinIdx: utils.metadataIdx(table),
-  };
+  
+  drz2255_idx_ai_usage_logs_user_id: index('idx_ai_usage_logs_user_id').on(table.userId),};
 });
 
 // Alias for compatibility if needed
@@ -241,10 +252,14 @@ export const aiEmailDrafts = pgTable('ai_email_drafts', {
   ...utils.audit(),
 }, (table) => {
   return {
+    deletedByFk2261Idx: index("ai_email_drafts_deleted_by_fk_idx").on(table.deletedBy),
+    updatedByFk2261Idx: index("ai_email_drafts_updated_by_fk_idx").on(table.updatedBy),
     userCreatedAtIdx: index('idx_ai_email_drafts_user').on(table.tenantId, table.createdBy, table.createdAt),
     tenantIdx: utils.tenantIdx(table),
     metadataGinIdx: utils.metadataIdx(table),
-  };
+  
+  drz2255_idx_ai_email_drafts_contact_id: index('idx_ai_email_drafts_contact_id').on(table.contactId),
+  drz2255_idx_ai_email_drafts_deal_id: index('idx_ai_email_drafts_deal_id').on(table.dealId),};
 });
 
 // ── 4. AI CONTENT & OPPORTUNITIES ─────────────────────
@@ -268,7 +283,8 @@ export const contentGenerations = pgTable('content_generations', {
   return {
     tenantIdx: utils.tenantIdx(table),
     metadataGinIdx: utils.metadataIdx(table),
-  };
+  
+  drz2255_idx_content_generations_user_id: index('idx_content_generations_user_id').on(table.userId),};
 });
 
 export const revenueOpportunities = pgTable('revenue_opportunities', {
@@ -345,10 +361,13 @@ export const automationWorkflows = pgTable('automation_workflows', {
   ...utils.audit(),
 }, (table) => {
   return {
+    deletedByFk2261Idx: index("automation_workflows_deleted_by_fk_idx").on(table.deletedBy),
+    updatedByFk2261Idx: index("automation_workflows_updated_by_fk_idx").on(table.updatedBy),
     tenantWorkflowIdx: uniqueIndex('idx_automation_workflows_tenant_workflow').on(table.tenantId, table.workflowId),
     tenantIdx: utils.tenantIdx(table),
     activeIdx: utils.activeIdx(table),
-  };
+  
+  drz2255_idx_automation_workflows_created_by: index('idx_automation_workflows_created_by').on(table.createdBy),};
 });
 
 // ── 8. WORKFLOW EXECUTION LOGS ────────────────────────
@@ -401,7 +420,8 @@ export const deadLetterQueue = pgTable('dead_letter_queue', {
     statusIdx: index('idx_dead_letter_status').on(table.status, table.tenantId),
     jobTypeIdx: index('idx_dead_letter_job_type').on(table.jobType),
     createdIdx: index('idx_dead_letter_created').on(table.createdAt),
-  };
+  
+  drz2255_idx_dead_letter_queue_resolved_by: index('idx_dead_letter_queue_resolved_by').on(table.resolvedBy),};
 });
 
 // ── Scheduled Reports ─────────────────────────────────────
@@ -425,8 +445,11 @@ export const scheduledReports = pgTable('scheduled_reports', {
   ...utils.audit(),
 }, (table) => {
   return {
+    deletedByFk2261Idx: index("scheduled_reports_deleted_by_fk_idx").on(table.deletedBy),
+    updatedByFk2261Idx: index("scheduled_reports_updated_by_fk_idx").on(table.updatedBy),
     tenantIdx: utils.tenantIdx(table),
     statusIdx: index('idx_scheduled_reports_status').on(table.status, table.tenantId),
     nextRunIdx: index('idx_scheduled_reports_next_run').on(table.nextRunAt),
-  };
+  
+  drz2255_idx_scheduled_reports_created_by: index('idx_scheduled_reports_created_by').on(table.createdBy),};
 });

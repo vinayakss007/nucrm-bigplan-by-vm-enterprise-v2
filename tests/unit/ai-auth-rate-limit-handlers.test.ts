@@ -61,6 +61,12 @@ vi.mock('next/headers', () => ({
 }));
 vi.mock('@/lib/auth/session', () => ({
   verifyToken: vi.fn(async () => ({ userId: 'user-1' })),
+  // #2216: accept-invite now checks the live session row via
+  // getCurrentUserForToken — mirror the stubbed identity.
+  getCurrentUserForToken: vi.fn(async () => ({
+    id: 'user-1', email: 'user-1@test.local', fullName: 'User One',
+    isSuperAdmin: false, avatarUrl: null, lastTenantId: null,
+  })),
 }));
 
 // getRateLimit consults the DB first; null lookups -> checkRateLimit falls back

@@ -8,7 +8,7 @@ import { apiError } from '@/lib/api-error';
 import { validateBody, validateQuery, readJsonBody } from '@/lib/api/validate';
 import { createContactSchema, contactQuerySchema } from '@/lib/api/schemas';
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAuth, requirePerm } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm, type AuthContext } from '@/lib/auth/middleware';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { checkLimit } from '@/lib/usage/middleware';
 import { db } from '@/drizzle/db';
@@ -24,8 +24,7 @@ import { invalidateTenantCache } from '@/lib/cache/index';
 
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function canViewAll(ctx: any) {
+function canViewAll(ctx: AuthContext) {
   return ctx.isAdmin || ctx.permissions?.['all'] || ctx.permissions?.['contacts.view_all'];
 }
 

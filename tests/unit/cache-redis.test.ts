@@ -1,7 +1,20 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { cacheGet, cacheSet, cacheDel, withCache } from '@/lib/cache/redis';
 
 describe('Cache (memory fallback)', () => {
+  beforeEach(() => {
+    // vitest.setup.ts loads .env.local (and dev boxes run a Redis container),
+    // so REDIS_URL may be set — this suite must test the in-memory fallback
+    // regardless, not silently hit live Redis where LRU eviction never runs.
+    vi.stubEnv('REDIS_URL', '');
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
+
   it('stores and retrieves values', async () => {
     await cacheSet('test:1', { hello: 'world' });
     const result = await cacheGet<{ hello: string }>('test:1');

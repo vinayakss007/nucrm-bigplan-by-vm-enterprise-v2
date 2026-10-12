@@ -302,3 +302,26 @@ describe('validateForm helper', () => {
     }
   });
 });
+
+// #2287: API-created forms store fields as { id, ... } (no `key`). The public
+// schema builder must key validation by the same identity the submit
+// validator enforces (key ?? id ?? name).
+describe('buildPublicFormSchema — id-shaped fields (#2287)', () => {
+  it('enforces required on id-only fields', () => {
+    const schema = buildPublicFormSchema([
+      { id: 'email', label: 'Email', required: true },
+      { id: 'notes', required: false },
+    ]);
+    expect(schema.safeParse({}).success).toBe(false);
+    expect(fieldErrorKeys(schema, {})).toContain('email');
+    expect(schema.safeParse({ email: 'a@b.co' }).success).toBe(true);
+  });
+
+  it('prefers key over id when both are present', () => {
+    const schema = buildPublicFormSchema([
+      { id: '1', key: 'email', label: 'Email', required: true },
+    ]);
+    expect(fieldErrorKeys(schema, { id: 'a@b.co' })).toContain('email');
+    expect(schema.safeParse({ email: 'a@b.co' }).success).toBe(true);
+  });
+});

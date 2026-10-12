@@ -9,11 +9,13 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { getFieldPermissions, setFieldPermission } from '@/lib/rbac/field-permissions';
 import type { FieldAccessLevel } from '@/lib/rbac/field-permissions';
 import { z } from 'zod';
+import { uuidIdSchema } from '@/lib/validation/uuid';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { isUuid } from '@/lib/id';
 
 const setPermissionSchema = z.object({
-  role_id: z.string().uuid(),
+  role_id: uuidIdSchema,
   entity_type: z.string().min(1).max(100),
   field_name: z.string().min(1).max(100),
   access_level: z.enum(['none', 'read', 'write', 'admin']),
@@ -34,6 +36,13 @@ export const GET = withApiRoute(async (req: NextRequest) => {
         { error: 'role_id and entity_type query params required' },
         { status: 400 }
       );
+    }
+
+    // role_id is bound into a uuid column. A slug ('admin') or a typo reached
+    // Postgres, which answered `invalid input syntax for type uuid` and the
+    // settings tab that opens this URL showed a server error.
+    if (!isUuid(roleId)) {
+      return NextResponse.json({ error: 'role_id must be a valid id' }, { status: 400 });
     }
 
     const permissions = await getFieldPermissions(ctx.tenantId, roleId, entityType);

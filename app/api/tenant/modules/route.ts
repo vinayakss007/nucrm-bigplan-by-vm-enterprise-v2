@@ -21,8 +21,7 @@ export const GET = withApiRoute(async (req: NextRequest) => {
     const merged = all.map(m => {
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const inst = installed.find((i: any) => i.module_id === m.id);
+      const inst = installed.find((i) => i.module_id === m.id);
       return { ...m, status: inst?.status ?? 'available', settings: inst?.settings ?? {}, installed_at: inst?.installed_at ?? null };
     });
     return NextResponse.json({ data: merged });

@@ -9,11 +9,12 @@ import { createContractSchema } from '@/lib/api/schemas';
 import { parsePageLimit } from '@/lib/api/query-params';
 import { db } from '@/drizzle/db';
 import { contracts } from '@/drizzle/schema';
-import { eq, and, desc, count } from 'drizzle-orm';
+import { eq, and, desc, count, isNull } from 'drizzle-orm';
 import { requireAuth } from '@/lib/auth/middleware';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { logError } from '@/lib/errors-server';
+import { clientDbErrorResponse } from '@/lib/api/db-client-error';
 
 export const GET = withApiRoute(async (request: NextRequest) => {
   try {
@@ -26,13 +27,15 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     const _contactId = searchParams.get('contactId');
     const { page, limit, offset } = parsePageLimit(searchParams);
 
-    const filters = [eq(contracts.tenantId, tenantId)];
+    // Soft-deleted contracts (deletedAt set by DELETE /contracts/[id]) must
+    // not appear in the list or inflate the pagination total (#2236).
+    const filters = [eq(contracts.tenantId, tenantId), isNull(contracts.deletedAt)];
     if (status) {
       filters.push(eq(contracts.status, status));
     }
 
     const results = await db.select().from(contracts).where(and(...filters)).orderBy(desc(contracts.startDate)).limit(limit).offset(offset);
-    const countResult = await db.select({ count: count() }).from(contracts).where(eq(contracts.tenantId, tenantId));
+    const countResult = await db.select({ count: count() }).from(contracts).where(and(eq(contracts.tenantId, tenantId), isNull(contracts.deletedAt)));
     const total = countResult[0]?.count ?? 0;
 
     return NextResponse.json({ contracts: results, total, page, limit, totalPages: Math.ceil(total / limit) });
@@ -67,21 +70,26 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       companyId: companyId || null,
       title,
       contractNumber: null,
-      contractType: contractType || 'other',
+      // 'other' is not in chk_contracts_contract_type, so this default made
+      // every create that omitted `type` fail on its own INSERT.
+      contractType: contractType ?? 'service',
       status: status ?? 'draft',
-      startDate: new Date(startDate),
-      endDate: endDate ? new Date(endDate) : null,
+      startDate: new Date(startDate).toISOString().slice(0, 10),
+      endDate: endDate ? new Date(endDate).toISOString().slice(0, 10) : null,
       totalValue: totalValue ? String(totalValue) : null,
       billingFrequency: null,
       terms,
       notes: description,
       documentUrl: null,
       createdBy: userId,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any).returning();
+    }).returning();
 
     return NextResponse.json({ contract }, { status: 201 });
   } catch (error) {
+    // Postgres rejecting the caller's status is a bad request, not a server
+    // fault; this literal 500 hid it from withApiRoute's classifier.
+    const clientErr = clientDbErrorResponse(error, 'POST');
+    if (clientErr) return clientErr;
     await logError({ error, context: 'tenant/contracts POST', requestMethod: 'POST' });
     return NextResponse.json({ error: 'Failed to create contract' }, { status: 500 });
   }

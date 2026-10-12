@@ -63,6 +63,21 @@ vi.mock('next/navigation', () => ({
 
 vi.mock('@/lib/auth/session', () => ({
   verifyToken: (...args: unknown[]) => mockVerifyToken(...args),
+  // #2216: requireTenantCtx now resolves identity through the session-backed
+  // helper. Derive it from the same verifyToken stub so existing per-test
+  // mockVerifyToken setups keep driving behavior.
+  getCurrentUserForToken: async (t: unknown) => {
+    const p = await mockVerifyToken(t as string);
+    if (!p) return null;
+    return {
+      id: (p as { userId?: string }).userId ?? null,
+      email: null,
+      fullName: null,
+      isSuperAdmin: null,
+      avatarUrl: null,
+      lastTenantId: null,
+    };
+  },
 }));
 
 vi.mock('@/drizzle/db', () => ({

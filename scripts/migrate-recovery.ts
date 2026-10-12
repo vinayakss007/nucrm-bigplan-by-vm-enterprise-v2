@@ -17,9 +17,26 @@
  *   2. After stamping we verify every journal entry's headline objects
  *      (CREATE TABLE / ADD COLUMN / CREATE FUNCTION, minus anything later
  *      dropped or renamed) against the live catalog. On mismatch the stamp
- *      is rolled back and the run FAILS LOUDLY instead of reporting
+ *      is rolled back and the run FAILS LOUDLY, naming the count and the
+ *      OWNING JOURNAL ENTRY of every missing object, instead of reporting
  *      "All migrations applied successfully".
  *   3. Procedure docs live in docs/runbooks/migration-drift-recovery.md.
+ *
+ * #2450 added the two things this file was missing, and they are the same
+ * thing seen from either end. "Provisioned via db:push/db:sync" and
+ * "restored from a dump" were treated as one case above, but they are not:
+ * `drizzle-kit push` builds tables and columns from `drizzle/schema/*` only,
+ * so a pushed schema has ZERO rows in `pg_policy` — every tenant-isolation
+ * guarantee in this database is an RLS policy, so a pushed schema is
+ * unprotected — while a dump of a migrated database carries those policies.
+ * The stamp is defensible for the dump and indefensible for the push, and it
+ * was being applied to both. So:
+ *
+ *   4. Before stamping we classify the provisioning from `pg_policy`
+ *      (`classifyProvisioning`). A push-provisioned schema is refused up
+ *      front, naming the object classes the journal contributes and the
+ *      command that builds them (`npm run db:bootstrap`). We never stamp,
+ *      verify, fail and roll back to leave a database labelled as neither.
  */
 import type { Pool } from 'pg';
 
@@ -28,10 +45,70 @@ export interface JournalEntry {
   when: number;
 }
 
+export interface ExpectedTable {
+  /** journal tag whose CREATE TABLE promised this table */
+  owner: string;
+  /** column name -> journal tag whose ALTER ... ADD COLUMN promised it */
+  columns: Map<string, string>;
+}
+
 export interface ExpectedState {
-  /** table name -> set of column names */
-  tables: Map<string, Set<string>>;
-  functions: Set<string>;
+  tables: Map<string, ExpectedTable>;
+  /**
+   * Function name -> journal tag whose CREATE FUNCTION promised it. Owners are
+   * the LAST entry that creates an object, so a `CREATE OR REPLACE` in a later
+   * file claims what an earlier file first wrote: the tag reported is the file
+   * whose DDL the operator has to fix, not the one they have to `grep` for.
+   */
+  functions: Map<string, string>;
+}
+
+/**
+ * One headline object the journal promised and the live catalog does not
+ * have. `owner` is the point of the whole struct (#2450 AC4): a reader who
+ * is handed 21 bare function signatures has to go find which migration
+ * writes them, and that search is the difference between a reportable
+ * defect and a dead end.
+ */
+export interface MissingObject {
+  kind: 'table' | 'column' | 'function' | 'migration-file';
+  /** `table`, `table.column`, `fn()` or the journal tag */
+  name: string;
+  owner: string;
+}
+
+export interface ProvisioningShape {
+  policies: number;
+  rlsEnabledTables: number;
+  tables: number;
+  columns: number;
+  functions: number;
+}
+
+export type ProvisioningKind = 'push' | 'dump';
+
+/**
+ * Was this schema built by `drizzle-kit push`, or is it a dump of a database
+ * that ran the journal? `pg_policy` is the tell: RLS policies exist only
+ * because hand-written migration files create them (32 files, 192 CREATE
+ * POLICY statements), and push has no notion of them — and stamping a schema
+ * that never executed the journal would label an unprotected database migrated.
+ *
+ * The bare count is not enough, though, because a policy is not proof on its
+ * own: `tests/integration/superadmin-panel-sql.test.ts` enables RLS and installs
+ * one hand-typed policy on `activities` to prove an RLS behaviour, and never
+ * restores the set it dropped. So a *pushed* schema that has run the integration
+ * suite holds exactly one policy over one RLS-enabled table with every object
+ * the journal contributes still missing (#2455). What says the journal ran is
+ * that RLS covers the schema, not that a policy exists somewhere: measured on
+ * databases that executed the journal, 225 of 227 tables wear it (production,
+ * and a CI schema built by `apply-rls-ci`); a pushed schema is 0 of 227.
+ */
+export const MIN_RLS_TABLE_RATIO = 0.5;
+
+export function classifyProvisioning(shape: ProvisioningShape): ProvisioningKind {
+  if (shape.tables === 0 || shape.policies === 0) return 'push';
+  return shape.rlsEnabledTables / shape.tables >= MIN_RLS_TABLE_RATIO ? 'dump' : 'push';
 }
 
 const ID = '("[a-zA-Z_][\\w$]*"|[a-zA-Z_][\\w$]*)';
@@ -65,18 +142,18 @@ export function stripComments(sql: string): string {
  * only complain about objects a static statement promised.
  */
 export function extractExpectedSchema(files: { tag: string; sql: string }[]): ExpectedState {
-  const tables = new Map<string, Set<string>>();
-  const functions = new Set<string>();
+  const tables = new Map<string, ExpectedTable>();
+  const functions = new Map<string, string>();
 
-  const addTable = (name: string) => {
-    if (!tables.has(name)) tables.set(name, new Set());
+  const addTable = (name: string, owner: string) => {
+    if (!tables.has(name)) tables.set(name, { owner, columns: new Map() });
   };
   const dropTable = (name: string) => {
     tables.delete(name);
   };
-  const addColumn = (table: string, column: string) => {
-    const cols = tables.get(table);
-    if (cols) cols.add(column);
+  const addColumn = (table: string, column: string, owner: string) => {
+    const cols = tables.get(table)?.columns;
+    if (cols) cols.set(column, owner);
     // Table not tracked (created dynamically or by a pattern we ignore):
     // nothing to promise about its columns.
   };
@@ -90,10 +167,10 @@ export function extractExpectedSchema(files: { tag: string; sql: string }[]): Ex
   const createFunctionRe = new RegExp(`CREATE\\s+(?:OR\\s+REPLACE\\s+)?FUNCTION\\s+${QUALIFIED}${ID}\\s*\\(`, 'gi');
   const dropFunctionRe = /DROP\s+FUNCTION\s+(?:IF\s+EXISTS\s+)?([^;\n(]+)/gi;
 
-  for (const { sql: rawSql } of files) {
+  for (const { tag, sql: rawSql } of files) {
     const sql = stripComments(stripDownSection(rawSql));
 
-    for (const m of sql.matchAll(createTableRe)) addTable(unquote(m[1]!));
+    for (const m of sql.matchAll(createTableRe)) addTable(unquote(m[1]!), tag);
     for (const m of sql.matchAll(dropTableRe)) {
       for (const token of m[1]!.split(',')) {
         const parts = token.trim().split('.');
@@ -104,23 +181,25 @@ export function extractExpectedSchema(files: { tag: string; sql: string }[]): Ex
     for (const m of sql.matchAll(renameTableRe)) {
       const oldName = unquote(m[1]!);
       const newName = unquote(m[2]!);
-      if (tables.has(oldName)) {
-        tables.set(newName, tables.get(oldName)!);
+      const moved = tables.get(oldName);
+      if (moved) {
+        tables.set(newName, moved);
         tables.delete(oldName);
-      } else addTable(newName);
+      } else addTable(newName, tag);
     }
-    for (const m of sql.matchAll(addColumnRe)) addColumn(unquote(m[1]!), unquote(m[2]!));
+    for (const m of sql.matchAll(addColumnRe)) addColumn(unquote(m[1]!), unquote(m[2]!), tag);
     for (const m of sql.matchAll(dropColumnRe)) {
-      tables.get(unquote(m[1]!))?.delete(unquote(m[2]!));
+      tables.get(unquote(m[1]!))?.columns.delete(unquote(m[2]!));
     }
     for (const m of sql.matchAll(renameColumnRe)) {
-      const cols = tables.get(unquote(m[1]!));
+      const cols = tables.get(unquote(m[1]!))?.columns;
       if (cols) {
+        const oldOwner = cols.get(unquote(m[2]!));
         cols.delete(unquote(m[2]!));
-        cols.add(unquote(m[3]!));
+        cols.set(unquote(m[3]!), oldOwner ?? tag);
       }
     }
-    for (const m of sql.matchAll(createFunctionRe)) functions.add(unquote(m[1]!));
+    for (const m of sql.matchAll(createFunctionRe)) functions.set(unquote(m[1]!), tag);
     for (const m of sql.matchAll(dropFunctionRe)) {
       const parts = m[1]!.trim().split('.');
       const name = unquote(parts[parts.length - 1] ?? '');
@@ -138,31 +217,99 @@ export interface ActualState {
   functions: Set<string>;
 }
 
-/** Pure diff — unit-testable without a database. Returns human-readable issues. */
-export function diffExpectedVsActual(expected: ExpectedState, actual: ActualState): string[] {
-  const issues: string[] = [];
-  const missingTables: string[] = [];
+/** Pure diff — unit-testable without a database. One record per promised object that is not there. */
+export function diffExpectedVsActual(expected: ExpectedState, actual: ActualState): MissingObject[] {
+  const missing: MissingObject[] = [];
 
-  for (const [table, cols] of expected.tables) {
+  for (const [table, { owner, columns }] of expected.tables) {
     if (!actual.tables.has(table)) {
-      missingTables.push(table);
+      // A table that is not there makes every column the journal added to it
+      // absent too, but reporting the table is the whole truth: the operator
+      // fixes one object, not twenty.
+      missing.push({ kind: 'table', name: table, owner });
       continue;
     }
-    for (const col of cols) {
-      if (!actual.columns.has(`${table}.${col}`)) issues.push(`column "${table}.${col}"`);
+    for (const [col, colOwner] of columns) {
+      if (!actual.columns.has(`${table}.${col}`)) {
+        missing.push({ kind: 'column', name: `${table}.${col}`, owner: colOwner });
+      }
     }
   }
-  for (const fn of expected.functions) {
-    if (!actual.functions.has(fn)) issues.push(`function "${fn}()"`);
+  for (const [fn, fnOwner] of expected.functions) {
+    if (!actual.functions.has(fn)) missing.push({ kind: 'function', name: `${fn}()`, owner: fnOwner });
   }
-
-  const out: string[] = [];
-  if (missingTables.length) out.push(`missing tables: ${missingTables.map((t) => `"${t}"`).join(', ')}`);
-  if (issues.length) out.push(`missing columns/functions: ${issues.join(', ')}`);
-  return out;
+  return missing;
 }
 
-async function loadActualState(pool: Pool): Promise<ActualState> {
+/**
+ * The sentence `db:status` ends with when the ledger says "everything pending".
+ * It used to be one line — *run `npm run db:migrate`* — which since #2450 is
+ * actively wrong advice for a push-provisioned schema: migrate now refuses that
+ * database, so the read-only instrument sent the operator to a command that sends
+ * them back. The two shapes get different next commands, and both are named here
+ * so the status tool cannot drift from the migrator again.
+ */
+export function ledgerGuidance(shape: ProvisioningShape, ledgerRows: number): string[] {
+  if (ledgerRows > 0 || shape.tables === 0) {
+    return ["Run 'npm run db:migrate' to apply pending journal entries (verify first with 'npm run db:migrate -- --dry-run')."];
+  }
+  if (classifyProvisioning(shape) === 'push') {
+    return [
+      `The ledger is empty and RLS covers ${shape.rlsEnabledTables} of ${shape.tables} tables: this schema was`,
+      'built by `drizzle-kit push` (db:sync/db:push), which creates tables and columns only.',
+      "npm run db:migrate REFUSES it rather than stamping an unprotected database (#2450).",
+      'Build it from the journal instead — on an EMPTY database:',
+      '  npm run db:bootstrap   (replays the journal, stamps, verifies RLS coverage by query)',
+    ];
+  }
+  return [
+    `The ledger is empty while RLS covers ${shape.rlsEnabledTables} of ${shape.tables} tables: a dump restore`,
+    'of a database that ran the journal. npm run db:migrate will stamp the ledger and then',
+    'verify every headline object the journal promises against the live catalog.',
+  ];
+}
+
+/**
+ * Group by the journal entry that promised each object, biggest gap first.
+ * This is the shape an operator acts on: "#2450's 21 missing functions are
+ * 16 from 0032 and 5 from four other files" is a sentence, where a flat list
+ * of signatures is a chore.
+ */
+export function groupMissingByOwner(missing: MissingObject[]): { owner: string; objects: MissingObject[] }[] {
+  const byOwner = new Map<string, MissingObject[]>();
+  for (const m of missing) {
+    const list = byOwner.get(m.owner);
+    if (list) list.push(m);
+    else byOwner.set(m.owner, [m]);
+  }
+  return [...byOwner.entries()]
+    .map(([owner, objects]) => ({ owner, objects }))
+    .sort((a, b) => b.objects.length - a.objects.length || a.owner.localeCompare(b.owner));
+}
+
+/**
+ * `• 0032_missing_db_functions.sql — 16 object(s): function "purge_trash()", …`
+ * — one line per journal entry, with the object list capped so a 400-object
+ * gap stays readable; the counts above the list are the full truth.
+ */
+export function formatMissingObjects(
+  missing: MissingObject[],
+  { maxGroups = 12, maxObjects = 10 }: { maxGroups?: number; maxObjects?: number } = {},
+): string[] {
+  const groups = groupMissingByOwner(missing);
+  const lines = groups.slice(0, maxGroups).map((g) => {
+    const names = g.objects.map((o) => `"${o.name}"`);
+    const shown = names.slice(0, maxObjects).join(', ');
+    return `${g.owner} — ${g.objects.length} object(s): ${shown}` +
+      (names.length > maxObjects ? `, … ${names.length - maxObjects} more` : '');
+  });
+  if (groups.length > maxGroups) {
+    lines.push(`… ${groups.length - maxGroups} more journal entr(ies) with missing objects`);
+  }
+  return lines;
+}
+
+export async function loadActualState(pool: Pool): Promise<ActualState> {
   const [tablesRes, columnsRes, functionsRes] = await Promise.all([
     pool.query<{ tablename: string }>(
       "SELECT tablename FROM pg_tables WHERE schemaname = 'public'"),
@@ -185,18 +332,51 @@ async function loadActualState(pool: Pool): Promise<ActualState> {
 export function verifyStampedLedger(
   files: { tag: string; sql: string | null }[],
   actual: ActualState,
-): string[] {
+): MissingObject[] {
   const readable: { tag: string; sql: string }[] = [];
-  const issues: string[] = [];
+  const missing: MissingObject[] = [];
   for (const f of files) {
     if (f.sql === null) {
-      issues.push(`migration file "${f.tag}.sql" listed in the journal is not present on disk`);
+      missing.push({
+        kind: 'migration-file',
+        name: `${f.tag}.sql (listed in the journal, not on disk)`,
+        owner: f.tag,
+      });
       continue;
     }
     readable.push({ tag: f.tag, sql: f.sql });
   }
-  issues.push(...diffExpectedVsActual(extractExpectedSchema(readable), actual));
-  return issues;
+  missing.push(...diffExpectedVsActual(extractExpectedSchema(readable), actual));
+  return missing;
+}
+
+/**
+ * The live catalog counts that decide a stamp (#2450): `pg_policy` for the
+ * provisioning class, plus the object counts quoted in both the stamp log and
+ * the refusal. One round trip; every count is a string from COUNT(*).
+ */
+export async function loadProvisioningShape(pool: Pool): Promise<ProvisioningShape> {
+  const res = await pool.query<{
+    tables: string; columns: string; functions: string; policies: string; rls_enabled_tables: string;
+  }>(`
+    SELECT
+      (SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public') AS tables,
+      (SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = 'public') AS columns,
+      (SELECT COUNT(*) FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+        WHERE n.nspname = 'public') AS functions,
+      (SELECT COUNT(*) FROM pg_policy pl JOIN pg_class c ON c.oid = pl.polrelid
+        JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'public') AS policies,
+      (SELECT COUNT(*) FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE n.nspname = 'public' AND c.relrowsecurity) AS rls_enabled_tables
+  `);
+  const r = res.rows[0]!;
+  return {
+    tables: Number(r.tables),
+    columns: Number(r.columns),
+    functions: Number(r.functions),
+    policies: Number(r.policies),
+    rlsEnabledTables: Number(r.rls_enabled_tables),
+  };
 }
 
 /**
@@ -249,21 +429,43 @@ export async function runRecoveryStamp(opts: {
     ]);
   }
 
-  // Both markers present — stamp, but first show WHAT justified the decision.
-  const counts = await pool.query<{ tables: string; columns: string; functions: string }>(`
-    SELECT
-      (SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public') AS tables,
-      (SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = 'public') AS columns,
-      (SELECT COUNT(*) FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
-        WHERE n.nspname = 'public') AS functions
-  `);
-  const c = counts.rows[0]!;
+  // Both markers present. Before stamping, find out what KIND of pre-existing
+  // schema this is (#2450) — the markers only prove the journal reached
+  // `backup_records`, not that it ever ran here.
+  const shape = await loadProvisioningShape(pool);
   log('[migrate] Recovery: schema already exists but the migration ledger is empty.');
   log('[migrate] Markers matched: table "api_key_usage", column "backup_records.last_verified_at"; ' +
-    `public schema has ${c.tables} tables / ${c.columns} columns / ${c.functions} functions.`);
-  log('[migrate] This database was provisioned with db:push/db:sync or restored');
-  log('[migrate] from a dump. Stamping the journal as applied rather than replaying');
-  log(`[migrate] it over live tables. Seeding ${journalEntries.length} entries...`);
+    `public schema has ${shape.tables} tables / ${shape.columns} columns / ${shape.functions} functions / ` +
+    `${shape.policies} RLS policies over ${shape.rlsEnabledTables} RLS-enabled tables.`);
+
+  if (classifyProvisioning(shape) === 'push') {
+    // Refuse NOW, not after the fact. Stamping, verifying, failing and rolling
+    // back is the #2450 bug: it spends a "Recovery complete" line, exits 1,
+    // and leaves the database labelled as neither migrated nor unmigrated.
+    fail([
+      '[migrate] ERROR: this schema was built by `drizzle-kit push` (db:push/db:sync), not by these migrations.',
+      `[migrate] Evidence: pg_policy holds ${shape.policies} row(s) and RLS is enabled on` +
+      ` ${shape.rlsEnabledTables} of ${shape.tables} tables — a schema whose journal ever ran` +
+      ' wears it on nearly all of them (measured: 225 of 227). Push creates tables and' +
+      ' columns from drizzle/schema/* only, so every RLS policy, SQL function and' +
+      ' hand-written index the journal contributes is absent here — while the' +
+      ' markers this branch matches on are all present.',
+      '[migrate] Stamping would label an UNPROTECTED database as fully migrated; and',
+      '[migrate] post-stamp verification would then (correctly) fail and roll the stamp back.',
+      '[migrate] Refusing BEFORE stamping: no ledger row was written, no migration SQL ran.',
+      '[migrate] Build this database from the journal instead — on an EMPTY database:',
+      '[migrate]   npm run db:bootstrap    (replays every journal entry, stamps the ledger,',
+      '[migrate]    then verifies RLS coverage and headline objects by query and fails if short)',
+      '[migrate] A pushed schema is a throwaway CI shape; drop it and bootstrap rather than',
+      '[migrate] reconciling it. If this database holds real data, follow',
+      '[migrate] docs/runbooks/migration-drift-recovery.md instead.',
+      '[migrate] CI runs `node scripts/apply-rls-ci.mjs` over a pushed schema on purpose and',
+      '[migrate] never calls db:migrate — that is not an install path.',
+    ]);
+  }
+
+  log(`[migrate] Journal-shaped schema (RLS on ${shape.rlsEnabledTables} of ${shape.tables} tables). Stamping the journal`);
+  log(`[migrate] as applied rather than replaying it over live tables. Seeding ${journalEntries.length} entries...`);
 
   for (const entry of journalEntries) {
     await pool.query(
@@ -273,24 +475,26 @@ export async function runRecoveryStamp(opts: {
   }
   log('[migrate] Recovery complete — no migration SQL was executed.');
 
-  // #1969 ask 2: post-stamp verification. Never trust a stamp we just made.
+  // #1969 ask 2 / #2450 AC4: post-stamp verification. Never trust a stamp we
+  // just made, and when it fails say WHICH journal entry promised what, not
+  // just a flat list of signatures the reader has to go and locate by hand.
   log('[migrate] Post-stamp verification: checking every journal entry\'s headline objects against the live schema...');
   const files = journalEntries.map((e) => ({ tag: e.tag, sql: readMigrationFile(e.tag) }));
   const actual = await loadActualState(pool);
-  const issues = verifyStampedLedger(files, actual);
+  const missing = verifyStampedLedger(files, actual);
 
-  if (issues.length > 0) {
+  if (missing.length > 0) {
     // Roll the stamp back so the ledger does not claim a state the schema
     // does not have; the next run re-enters recovery honestly.
     await pool.query(
       `DELETE FROM "drizzle"."__drizzle_migrations" WHERE hash = ANY($1::text[])`,
       [journalEntries.map((e) => e.tag)],
     );
-    const shown = issues.slice(0, 25);
+    const groups = groupMissingByOwner(missing);
     fail([
-      `[migrate] ERROR: Post-stamp verification FAILED — ${issues.length} expected object(s) missing:`,
-      ...shown.map((i) => `[migrate]   - ${i}`),
-      ...(issues.length > shown.length ? [`[migrate]   ... ${issues.length - shown.length} more`] : []),
+      `[migrate] ERROR: Post-stamp verification FAILED — ${missing.length} expected object(s)` +
+      ` missing, promised by ${groups.length} journal entr(ies):`,
+      ...formatMissingObjects(missing).map((line) => `[migrate]   - ${line}`),
       '[migrate] The stamp was rolled back (ledger left empty). The schema does NOT match',
       '[migrate] the journal, so it was never fully migrated. Follow',
       '[migrate] docs/runbooks/migration-drift-recovery.md to apply the missing DDL,',

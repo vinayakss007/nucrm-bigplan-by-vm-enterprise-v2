@@ -3,7 +3,7 @@
  * Copyright (c) 2026 abetworks.in. All Rights Reserved.
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
-import { pgTable, uuid, text, timestamp, jsonb, index, boolean, integer } from 'drizzle-orm/pg-core';
+import {pgTable, uuid, text, timestamp, jsonb, index, boolean, integer, uniqueIndex} from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import * as utils from './utils';
 import { tenants, users } from './core';
@@ -33,7 +33,8 @@ export const errorLogs = pgTable('error_logs', {
     levelIdx: index('idx_error_logs_level').on(table.level),
     resolvedIdx: index('idx_error_logs_resolved').on(table.resolved),
     createdIdx: index('idx_error_logs_created').on(table.createdAt),
-  };
+  
+  drz2255_idx_error_logs_resolved_by: index('idx_error_logs_resolved_by').on(table.resolvedBy),};
 });
 
 // ── 2. WEBHOOK QUEUE (Pending/Delayed Webhooks) ───────
@@ -118,23 +119,42 @@ export const supportTickets = pgTable('support_tickets', {
   slaPolicyId: uuid('sla_policy_id').references(() => slaPolicies.id, { onDelete: 'set null' }),
   firstResponseAt: timestamp('first_response_at', { withTimezone: true }),
   
-  /** Opaque token for unauthenticated public ticket access (email-header auth replaced). */
-  portalToken: text('portal_token').notNull().unique(),
+  /**
+   * Retired as a credential by #2444: nothing mints it any more and nothing reads
+   * it. It was a permanent, contact-wide, un-revocable bearer token with no expiry
+   * and no delivery channel — `0124` dropped the `NOT NULL` that the three mints
+   * required, and with it 0122's `support_tickets_portal_token_lookup` policy, so a
+   * stored value can no longer authorise a read even by code that compares it.
+   * The column stays (dropping it is the owner's data decision, recorded in
+   * `docs/infra/PREPROD-ISSUE-REGISTER.md`), which is why `.unique()` stays too:
+   * Postgres counts NULLs as distinct, so tokenless tickets do not collide.
+   */
+  portalToken: text('portal_token').unique(),
 
   metadata: utils.metadata(),
   ...utils.audit(),
   resolvedAt: timestamp('resolved_at', { withTimezone: true }),
 }, (table) => {
   return {
+    deletedByFk2261Idx: index("support_tickets_deleted_by_fk_idx").on(table.deletedBy),
+    slaPolicyIdFk2261Idx: index("support_tickets_sla_policy_id_fk_idx").on(table.slaPolicyId),
+    updatedByFk2261Idx: index("support_tickets_updated_by_fk_idx").on(table.updatedBy),
     tenantIdx: utils.tenantIdx(table),
     contactIdx: index('idx_tickets_contact').on(table.contactId),
     assignedIdx: index('idx_tickets_assigned').on(table.assignedTo),
     statusIdx: index('idx_tickets_status').on(table.status),
     tenantStatusIdx: index('idx_tickets_tenant_status').on(table.tenantId, table.status),
-    portalTokenIdx: index('idx_tickets_portal_token').on(table.portalToken),
     metadataGinIdx: utils.metadataIdx(table),
     activeIdx: utils.activeIdx(table),
-  };
+  
+  drz2255_idx_support_tickets_company: index('idx_support_tickets_company').on(table.tenantId, table.companyId),
+  drz2255_idx_support_tickets_deal: index('idx_support_tickets_deal').on(table.tenantId, table.dealId),
+  drz2255_idx_support_tickets_lead: index('idx_support_tickets_lead').on(table.tenantId, table.leadId),
+  drz2255_idx_support_tickets_company_id: index('idx_support_tickets_company_id').on(table.companyId),
+  drz2255_idx_support_tickets_created_by: index('idx_support_tickets_created_by').on(table.createdBy),
+  drz2255_idx_support_tickets_deal_id: index('idx_support_tickets_deal_id').on(table.dealId),
+  drz2255_idx_support_tickets_lead_id: index('idx_support_tickets_lead_id').on(table.leadId),
+};
 });
 
 // ── 2. TICKET CONVERSATIONS (REPLIES) ─────────────────
@@ -155,7 +175,9 @@ export const ticketReplies = pgTable('ticket_replies', {
   return {
     tenantIdx: utils.tenantIdx(table),
     ticketIdx: index('idx_ticket_replies_ticket').on(table.ticketId),
-  };
+  
+  drz2255_idx_ticket_replies_contact_id: index('idx_ticket_replies_contact_id').on(table.contactId),
+  drz2255_idx_ticket_replies_user_id: index('idx_ticket_replies_user_id').on(table.userId),};
 });
 
 // ── 6. CSAT SURVEYS ────────────────────────────────────
@@ -170,7 +192,7 @@ export const csatSurveys = pgTable('csat_surveys', {
 
   sentAt: timestamp('sent_at', { withTimezone: true }).defaultNow().notNull(),
   respondedAt: timestamp('responded_at', { withTimezone: true }),
-  token: text('token').notNull().unique(), // unique token for public response URL
+  token: text('token').notNull(), // unique via csat_surveys_token_key (#2255 mirror)
 
   metadata: utils.metadata(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
@@ -179,9 +201,9 @@ export const csatSurveys = pgTable('csat_surveys', {
     tenantIdx: utils.tenantIdx(table),
     ticketIdx: index('idx_csat_ticket').on(table.ticketId),
     contactIdx: index('idx_csat_contact').on(table.contactId),
-    tokenIdx: index('idx_csat_token').on(table.token),
     respondedIdx: index('idx_csat_responded').on(table.respondedAt),
-  };
+  
+  drz2255_csat_surveys_token_key: uniqueIndex('csat_surveys_token_key').on(table.token),};
 });
 
 // ── 7. CANNED RESPONSES ───────────────────────────────
@@ -197,7 +219,10 @@ export const cannedResponses = pgTable('canned_responses', {
   ...utils.audit(),
 }, (table) => {
   return {
+    deletedByFk2261Idx: index("canned_responses_deleted_by_fk_idx").on(table.deletedBy),
+    updatedByFk2261Idx: index("canned_responses_updated_by_fk_idx").on(table.updatedBy),
     tenantIdx: utils.tenantIdx(table),
     shortcutIdx: index('idx_canned_shortcut').on(table.tenantId, table.shortcut),
-  };
+  
+  drz2255_idx_canned_responses_created_by: index('idx_canned_responses_created_by').on(table.createdBy),};
 });

@@ -4,7 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { db, type DbClient } from '@/drizzle/db';
-import { withTenantContext } from '@/lib/db/rls';
+import { withTenantContext, NO_USER_SENTINEL } from '@/lib/db/rls';
 import { auditLogs } from '@/drizzle/schema';
 import { logger } from '@/lib/logger';
 import { eq, desc } from 'drizzle-orm';
@@ -182,9 +182,13 @@ export async function logAudit(opts: {
     // (Callers that pass dbOrTx keep the all-or-nothing behaviour below.)
     if (!opts.dbOrTx) {
       if (!opts.userId) {
-        // System action with no acting user: no identity to scope a tenant
-        // context to, so keep the legacy best-effort direct write.
-        await writeAuditEntry(db, opts);
+        // #2446: "no acting user" was read as "no identity to scope a context
+        // to", so this branch wrote on the bare pool and `audit_logs`' policy —
+        // which keys only on app.current_tenant — dropped the row silently. The
+        // tenant IS known here (it is opts.tenantId, checked above), and
+        // NO_USER_SENTINEL is the uuid-shaped "nobody is acting" value that
+        // exists for exactly this; the row keeps user_id NULL either way.
+        await withTenantContext(opts.tenantId, NO_USER_SENTINEL, (tx) => writeAuditEntry(tx, opts));
         return;
       }
       await withTenantContext(opts.tenantId, opts.userId, async (tx) => {

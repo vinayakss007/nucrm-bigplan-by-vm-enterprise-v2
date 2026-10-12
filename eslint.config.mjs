@@ -43,7 +43,12 @@ export default tseslint.config(
       ...nextPlugin.configs["core-web-vitals"].rules,
       "react-hooks/rules-of-hooks": "error",
       "react-hooks/exhaustive-deps": "warn",
-      "@typescript-eslint/no-explicit-any": "warn",
+      // `error`, not `warn`: at `warn` a new `any` written *without* a disable
+      // comment is silently accepted, because `eslint .` does not fail on
+      // warnings — which is how the 156-suppression pile of #1341 grew in the
+      // first place. The ratchet in scripts/check-any-suppressions.mjs only
+      // counts suppressions, so this is the other half of that gate.
+      "@typescript-eslint/no-explicit-any": "error",
       "@typescript-eslint/no-unused-vars": "off",
       "unused-imports/no-unused-imports": "error",
       "unused-imports/no-unused-vars": ["warn", { argsIgnorePattern: "^_", varsIgnorePattern: "^_", caughtErrorsIgnorePattern: "^_" }],

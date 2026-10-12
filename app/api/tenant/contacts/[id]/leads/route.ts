@@ -25,8 +25,7 @@ import { withApiRoute } from '@/lib/api/with-api-route';
 
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const GET = withApiRoute(async (request: NextRequest, { params }: any) => {
+export const GET = withApiRoute(async (request: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;

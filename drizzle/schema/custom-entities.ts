@@ -38,6 +38,7 @@ export const customEntityData = pgTable('custom_entity_data', {
   tenantIdx: utils.tenantIdx(table),
   entityIdx: index('idx_custom_entity_data_entity').on(table.tenantId, table.entityId),
   dataGinIdx: index('idx_custom_entity_data_gin').using('gin', table.data),
+  activeIdx: utils.activeIdx(table),
 }));
 
 export const customEntityDataRelations = relations(customEntityData, ({ one }) => ({

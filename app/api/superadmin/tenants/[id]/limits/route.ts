@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { tenants, planLimits } from '@/drizzle/schema';
+import { tenants, planLimits, plans } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
 import { logSuperAdminAction } from '@/lib/audit/super-admin';
 import { readJsonBody } from '@/lib/api/validate';
@@ -41,16 +41,38 @@ export const GET = withApiRoute(async (request: NextRequest,
       where: eq(planLimits.planId, tenant.planId),
     });
 
+    // plan_limits ships empty, so without this fallback the panel reports no
+    // limit for anything and an admin cannot tell free from enterprise. The
+    // per-plan columns on `plans` are the values the pricing tiers actually
+    // carry, so they are the default wherever plan_limits has no row.
+    const plan = await db.query.plans.findFirst({
+      where: eq(plans.id, tenant.planId),
+    });
+    const storageGb = plan?.maxStorageGb !== undefined && plan?.maxStorageGb !== null
+      ? Number(plan.maxStorageGb)
+      : NaN;
+
+    const planFallback: Partial<Record<(typeof LIMIT_FIELDS)[number], number | null>> = {
+      maxUsers: plan?.maxUsers ?? null,
+      maxContacts: plan?.maxContacts ?? null,
+      maxDeals: plan?.maxDeals ?? null,
+      maxStorageBytes: Number.isFinite(storageGb) ? Math.round(storageGb * 1024 ** 3) : null,
+      maxApiCallsPerDay: plan?.maxApiCallsDay ?? null,
+      maxActiveAutomations: plan?.maxAutomations ?? null,
+      maxForms: plan?.maxForms ?? null,
+    };
+
     const overrides = ((tenant.settings as Record<string, unknown>)?.limitOverrides as Record<string, number | null>) ?? {};
 
     const limits: Record<string, { planDefault: number | null; override: number | null; effective: number | null }> = {};
     for (const field of LIMIT_FIELDS) {
       const planVal = planRow ? (planRow[field as keyof typeof planRow] as number | null) : null;
+      const planDefault = planVal ?? planFallback[field] ?? null;
       const override = field in overrides ? overrides[field] : null;
       limits[field] = {
-        planDefault: planVal ?? null,
+        planDefault,
         override: override ?? null,
-        effective: override ?? planVal ?? null,
+        effective: override ?? planDefault,
       };
     }
 
@@ -77,6 +99,20 @@ export const PATCH = withApiRoute(async (request: NextRequest,
     });
 
     if (!tenant) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+    // A typo'd field name used to be dropped on the floor while the route still
+    // answered {ok:true}, so an admin could believe a limit was set when
+    // nothing changed. Reject anything that is not a known limit instead.
+    const unknownKeys = Object.keys(body ?? {}).filter(
+      k => k !== 'expectedUpdatedAt' && k !== '_updated_at'
+        && !(LIMIT_FIELDS as readonly string[]).includes(k)
+    );
+    if (unknownKeys.length) {
+      return NextResponse.json(
+        { error: `Unknown limit field(s): ${unknownKeys.join(', ')}` },
+        { status: 400 },
+      );
+    }
 
     const guardResult = await concurrencyGuard(db, tenants, id, id, body.expectedUpdatedAt);
     if (guardResult) return guardResult;
@@ -111,7 +147,7 @@ export const PATCH = withApiRoute(async (request: NextRequest,
 
     if (!updated) return NextResponse.json({ error: 'Tenant not found' }, { status: 404 });
 
-    logSuperAdminAction({
+    await logSuperAdminAction({
       adminId: ctx.userId,
       adminEmail: ctx.user?.email || "",
       action: 'tenant.settings_changed',

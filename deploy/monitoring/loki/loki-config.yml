@@ -1,4 +1,21 @@
 ---
+# Multi-tenancy was never set in this file, and 3.0 defaults `auth_enabled` to
+# true — so the running Loki requires an organisation on every read and write,
+# and neither side of this pipeline supplies one. Measured on the live
+# instance: an unscoped HTTP query is answered `no org id`, promtail's
+# `clients:` block sends no tenant, and the Grafana datasource sends no org
+# header. The result is a store that rejects everything and looks empty rather
+# than broken.
+#
+# This is a single-tenant deployment: nothing is queried by more than one
+# identity, and `ports:` binds Loki to 127.0.0.1 only, so no host outside this
+# machine can reach it. Turning multi-tenancy off is the documented
+# configuration for that shape, and it fixes the reader and the writer at once —
+# the alternative (inventing an org id and threading it through promtail AND
+# Grafana AND any future client) leaves a footgun in every new config file.
+# If Loki is ever published beyond loopback, revisit this with real auth.
+auth_enabled: false
+
 server:
   http_listen_port: 3100
   grpc_listen_port: 9096
@@ -31,10 +48,24 @@ limits_config:
   allow_structured_metadata: true
   ingestion_rate_mb: 10
   ingestion_burst_size_mb: 20
-
-table_manager:
-  retention_deletes_enabled: true
+  # 90 days. `max_retention_period` (the 2.x ceiling that had to be set as well)
+  # is not a field in 3.0 — `-verify-config` rejects it — so this one value is
+  # the whole setting now, applied by the compactor below.
   retention_period: 2160h
+
+# ── Retention lives here now, not in `table_manager` ─────────────────────────
+#
+# Loki 3.0 renamed `table_manager.retention_deletes_enabled` to
+# `compactor.retention_enabled` and stopped honouring the old key. The setting
+# was silently inert: the running `/config` reported `retention_enabled: false`,
+# so chunks were never deleted and the 90-day retention the file advertised was
+# not a policy but a comment. `table_manager` is dropped rather than left beside
+# this, so there is only one place that claims to set retention.
+compactor:
+  retention_enabled: true
+  # Loki refuses to start with retention on and no place to write delete
+  # requests; `filesystem` is the object_store this deployment already uses.
+  delete_request_store: filesystem
 
 ruler:
   alertmanager_url: http://alertmanager:9093

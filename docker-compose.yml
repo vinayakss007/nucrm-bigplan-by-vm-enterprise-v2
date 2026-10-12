@@ -33,8 +33,11 @@ services:
       - PORT=3000
       # Direct to postgres by default (prod path). For pgbouncer testing, use
       # the 6432 line and PGBOUNCER_ENABLED (see pgbouncer service docs above).
-      - DATABASE_URL=postgresql://nucrm:${POSTGRES_PASSWORD:?REQUIRED}@localhost:5432/nucrm?sslmode=require
-      # - DATABASE_URL=postgresql://nucrm:${POSTGRES_PASSWORD:?REQUIRED}@127.0.0.1:6432/nucrm?sslmode=require
+      # No sslmode= in the URL: node-postgres v8 treats require/prefer/verify-ca
+      # as verify-full and lets it override the app's ssl policy, so TLS is
+      # controlled solely by pgSslConfig() via DATABASE_SSL (#1971).
+      - DATABASE_URL=postgresql://nucrm:${POSTGRES_PASSWORD:?REQUIRED}@localhost:5432/nucrm
+      # - DATABASE_URL=postgresql://nucrm:${POSTGRES_PASSWORD:?REQUIRED}@127.0.0.1:6432/nucrm
       # - PGBOUNCER_ENABLED=true
       - REDIS_URL=redis://:${REDIS_PASSWORD}@localhost:6379
       - JWT_SECRET=${JWT_SECRET}
@@ -52,7 +55,7 @@ services:
       # was never saturated.
       - DATABASE_POOL_SIZE=${DATABASE_POOL_SIZE:-20}
       - DATABASE_CONNECTION_TIMEOUT_MS=${DATABASE_CONNECTION_TIMEOUT_MS:-5000}
-      - NEXT_PUBLIC_APP_URL=http://34.70.191.180
+      - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL:?REQUIRED}
       - BREVO_SMTP_HOST=${BREVO_SMTP_HOST}
       - BREVO_SMTP_PORT=${BREVO_SMTP_PORT}
       - BREVO_SMTP_USER=${BREVO_SMTP_USER}
@@ -92,9 +95,9 @@ services:
     command: ["node", "--import", "tsx", "worker.ts"]
     environment:
       - NODE_ENV=production
-      # See web service — same pgbouncer opt-in.
-      - DATABASE_URL=postgresql://nucrm:${POSTGRES_PASSWORD:?REQUIRED}@localhost:5432/nucrm?sslmode=require
-      # - DATABASE_URL=postgresql://nucrm:${POSTGRES_PASSWORD:?REQUIRED}@127.0.0.1:6432/nucrm?sslmode=require
+      # See web service — same pgbouncer opt-in, and no sslmode= (#1971).
+      - DATABASE_URL=postgresql://nucrm:${POSTGRES_PASSWORD:?REQUIRED}@localhost:5432/nucrm
+      # - DATABASE_URL=postgresql://nucrm:${POSTGRES_PASSWORD:?REQUIRED}@127.0.0.1:6432/nucrm
       # - PGBOUNCER_ENABLED=true
       - REDIS_URL=redis://:${REDIS_PASSWORD}@localhost:6379
       - JWT_SECRET=${JWT_SECRET}
@@ -276,7 +279,7 @@ services:
       echo 'MinIO bucket ready' &&
       exit 0
       "
-    restart: no
+    restart: "no"
     networks:
       - nucrm-net
 
@@ -314,8 +317,9 @@ services:
     container_name: nucrm-prometheus
     profiles: ["monitoring"]
     # prometheus.yml references a bearer-token credentials_file for the app
-    # scrape. Write it from the env (empty in dev is fine — dev /api/metrics does
-    # not require the secret) before launching Prometheus.
+    # scrape. Write it from the env before launching Prometheus. #2221:
+    # /api/metrics now fails CLOSED in EVERY environment when METRICS_SECRET
+    # is unset — leave it empty here and the scrape gets 503 by design.
     entrypoint:
       - /bin/sh
       - -c
@@ -384,6 +388,10 @@ services:
     volumes:
       - ./deploy/monitoring/promtail/promtail-config.yml:/etc/promtail/promtail-config.yml:ro
       - /var/log:/var/log:ro
+      # #2053: docker_sd_configs target discovery. Read-only mount is still a
+      # powerful surface (container control via socket); promtail is the only
+      # consumer and the stack is single-host.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     command:
       - "--config.file=/etc/promtail/promtail-config.yml"
     depends_on:
@@ -456,7 +464,9 @@ services:
     container_name: nucrm-postgres-exporter
     profiles: ["monitoring"]
     environment:
-      - DATA_SOURCE_NAME=postgresql://nucrm:${POSTGRES_PASSWORD:?REQUIRED}@postgres:5432/nucrm?sslmode=require
+      # libpq-default (prefer): the compose postgres service has no server TLS,
+      # so sslmode=require here could never connect (#1971).
+      - DATA_SOURCE_NAME=postgresql://nucrm:${POSTGRES_PASSWORD:?REQUIRED}@postgres:5432/nucrm
     ports:
       - "127.0.0.1:9187:9187"
     restart: unless-stopped

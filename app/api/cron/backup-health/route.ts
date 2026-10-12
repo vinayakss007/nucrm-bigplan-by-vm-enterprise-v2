@@ -4,13 +4,22 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { apiError } from '@/lib/api-error';
-import { acquireLock } from '@/lib/cache';
+import { refuseIfCronLockHeld } from '@/lib/cron/cron-lock';
 import { verifySecret } from '@/lib/crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { alertSuperAdmin } from '@/lib/email/service';
 import { db } from '@/drizzle/db';
+import { withSecurityContext } from '@/lib/db/rls';
 import { backupRecords, backupAlerts } from '@/drizzle/schema';
 import { eq, and, desc, gt } from 'drizzle-orm';
+
+// backup_alerts is readable by anyone (backup_alerts_read_all) but its only write policy
+// is FOR ALL USING is_super_admin — and Postgres reuses USING as WITH CHECK for an
+// ALL-COMMANDS policy. On the bare pool handle (lib/db/pool.ts pins
+// app.is_super_admin='false') these INSERTs raise 42501, so the job that exists to report
+// a missing backup died on its own alert insert and returned a 500 instead.
+const insertAlert = (alertType: string, message: string) =>
+  withSecurityContext((tx) => tx.insert(backupAlerts).values({ alertType, message }));
 
 // Runs every 6 hours — checks backup health and alerts if backup is overdue
 export async function POST(request: NextRequest) {
@@ -21,13 +30,15 @@ export async function POST(request: NextRequest) {
 
   // Distributed dedup guard (#1422): skip when another scheduler
   // instance already fired this job within its interval.
-  const lock = await acquireLock('cron:backup-health', 1800);
-  if (!lock.acquired) {
-    return NextResponse.json({ ok: true, skipped: true, reason: 'lock-held' });
-  }
+  const refusal = await refuseIfCronLockHeld('cron:backup-health', 1800);
+  if (refusal) return refusal;
 
   try {
     const lastBackup = await db.query.backupRecords.findFirst({
+      // Four of `backup_records`' 23 columns (measured via getTableColumns): what
+      // the response and both alert bodies read. The rest — checksum, error_message,
+      // metadata, the audit columns — never leave the row.
+      columns: { id: true, completedAt: true, storagePath: true, sizeBytes: true },
       where: eq(backupRecords.status, 'completed'),
       orderBy: [desc(backupRecords.completedAt)],
     });
@@ -38,6 +49,7 @@ export async function POST(request: NextRequest) {
     if (!lastBackup || !lastBackup.completedAt) {
       // No backup ever — critical
       const alreadyAlerted = await db.query.backupAlerts.findFirst({
+        columns: { id: true },
         where: and(
           eq(backupAlerts.alertType, 'no_backup'),
           eq(backupAlerts.resolved, false),
@@ -45,10 +57,7 @@ export async function POST(request: NextRequest) {
         )
       });
       if (!alreadyAlerted) {
-        await db.insert(backupAlerts).values({
-          alertType: 'no_backup',
-          message: 'No backup has ever been completed',
-        });
+        await insertAlert('no_backup', 'No backup has ever been completed');
         await alertSuperAdmin(
           'WARNING: No database backup has ever been run',
           'Please configure automated backups immediately.\n\nVisit: /superadmin/backups'
@@ -61,6 +70,7 @@ export async function POST(request: NextRequest) {
 
     if (hoursSinceBackup > alertThresholdHours) {
       const alreadyAlerted = await db.query.backupAlerts.findFirst({
+        columns: { id: true },
         where: and(
           eq(backupAlerts.alertType, 'no_backup'),
           eq(backupAlerts.resolved, false),
@@ -68,10 +78,10 @@ export async function POST(request: NextRequest) {
         )
       });
       if (!alreadyAlerted) {
-        await db.insert(backupAlerts).values({
-          alertType: 'no_backup',
-          message: `No backup in ${Math.floor(hoursSinceBackup)} hours. Last backup: ${lastBackup.completedAt.toISOString()}`,
-        });
+        await insertAlert(
+          'no_backup',
+          `No backup in ${Math.floor(hoursSinceBackup)} hours. Last backup: ${lastBackup.completedAt.toISOString()}`,
+        );
         await alertSuperAdmin(
           `WARNING: No backup in ${Math.floor(hoursSinceBackup)} hours`,
           `Last successful backup: ${lastBackup.completedAt.toISOString()}\nStorage: ${lastBackup.storagePath}\nSize: ${lastBackup.sizeBytes ? (lastBackup.sizeBytes/1024/1024).toFixed(1)+'MB' : 'unknown'}\n\nPlease check the backup cron job.`

@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm';
 /*!
  * NuCRM Enterprise — Property of abetworks.in
  * Copyright (c) 2026 abetworks.in. All Rights Reserved.
@@ -49,5 +50,7 @@ export const documents = pgTable('documents', {
     folderIdx: index('idx_documents_folder').on(table.tenantId, table.folderId),
     entityIdx: index('idx_documents_entity').on(table.tenantId, table.entityType, table.entityId),
     uploaderIdx: index('idx_documents_uploader').on(table.tenantId, table.uploadedBy),
-  };
+  
+  drz2255_idx_documents_active: index('idx_documents_active').on(table.id).where(sql`(deleted_at IS NULL)`),
+  drz2255_idx_documents_metadata_g: index('idx_documents_metadata_g').using('gin', table.metadata),};
 });

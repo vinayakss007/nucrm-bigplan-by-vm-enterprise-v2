@@ -7,6 +7,15 @@ import { errorLogs } from '@/drizzle/schema/support';
 import { sendCriticalErrorAlert } from '@/lib/critical-error-alert';
 import { getCurrentRequestId } from '@/lib/tenant/request-context';
 import { InvalidJsonBodyError } from '@/lib/errors-shared';
+import {
+  MAX_STORED_MESSAGE,
+  MAX_STORED_STACK,
+  errorStackText,
+  errorText,
+  redactedErrorForSinks,
+  redactQueryParams,
+  truncateForStore,
+} from '@/lib/error-redaction';
 
 type ErrorLevel = 'warning' | 'error' | 'fatal';
 
@@ -29,15 +38,13 @@ const SENTRY_LEVEL: Record<ErrorLevel, 'warning' | 'error' | 'fatal'> = {
  * not initialized (no DSN), this is a no-op and the DB write is unaffected.
  */
 async function forwardToSentry(opts: {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  error: any;
+  error: unknown;
   level: ErrorLevel;
   context?: string;
   tenantId?: string;
   userId?: string;
   requestId?: string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   requestUrl?: string;
   requestMethod?: string;
 }): Promise<void> {
@@ -52,8 +59,7 @@ async function forwardToSentry(opts: {
         requestId: opts.requestId,
         tenantId: opts.tenantId,
       },
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      user: opts.userId ? ({ id: opts.userId } as any) : undefined,
+      user: opts.userId ? { id: opts.userId } : undefined,
       extra: {
         requestUrl: opts.requestUrl,
         requestMethod: opts.requestMethod,
@@ -84,16 +90,14 @@ const LOKI_LEVEL: Record<ErrorLevel, 'warn' | 'error'> = {
  * guarded so a push failure can never affect the DB write or the caller.
  */
 async function forwardToLoki(opts: {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  error: any;
+  error: unknown;
   level: ErrorLevel;
   message: string;
   context?: string;
   tenantId?: string;
   userId?: string;
   requestId?: string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   requestUrl?: string;
   requestMethod?: string;
   stack?: string;
@@ -131,19 +135,40 @@ function getSourceLocation(): { file: string; line: number; function: string } |
   };
 }
 
+/**
+ * Walk a wrapped error's `cause` chain collecting what each level knows.
+ *
+ * Same walk `lib/api/db-client-error.ts` does for status mapping: the SQLSTATE
+ * only ever lives on the inner pg error, never on drizzle's QueryFailedError.
+ * Bounded so a pathological chain cannot spin, and self-cause guarded.
+ */
+function errorCauseChain(error: unknown): { code: string | null; message: string; constraint?: string }[] {
+  const chain: { code: string | null; message: string; constraint?: string }[] = [];
+  let current: unknown = error instanceof Error ? error.cause : undefined;
+  for (let depth = 0; depth < 4 && current; depth += 1) {
+    if (typeof current === 'string') {
+      chain.push({ code: null, message: current });
+      break;
+    }
+    const e = current as { code?: unknown; sqlstate?: unknown; message?: unknown; constraint?: unknown; cause?: unknown };
+    const code = typeof e.code === 'string' ? e.code : typeof e.sqlstate === 'string' ? e.sqlstate : null;
+    const text = typeof e.message === 'string' ? redactQueryParams(e.message) : '';
+    if (code || text) {
+      chain.push({ code, message: text, ...(typeof e.constraint === 'string' ? { constraint: e.constraint } : {}) });
+    }
+    if (e.cause === current) break;
+    current = e.cause;
+  }
+  return chain;
+}
+
 export async function logError(opts: {
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  error: any;
+  error: unknown;
   context?: string;
   tenantId?: string;
   userId?: string;
   level?: ErrorLevel;
- 
- 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   requestUrl?: string;
   requestMethod?: string;
   sourceFile?: string;
@@ -157,8 +182,26 @@ export async function logError(opts: {
   // the critical-alert keeps clients from paging anyone.
   if (opts.error instanceof InvalidJsonBodyError) return;
   const level: ErrorLevel = opts.level ?? 'error';
-  const msg = opts.error instanceof Error ? opts.error.message : String(opts.error ?? 'Unknown error');
-  const stack = opts.error instanceof Error ? opts.error.stack : undefined;
+  const msg = errorText(opts.error);
+  // #44: drizzle's node-postgres driver rethrows as QueryFailedError — the SQL
+  // text becomes `message` and the pg error, the only object holding the
+  // SQLSTATE, moves to `cause`. Storing the top message alone made every RLS
+  // refusal, FK violation and CHECK drift read as "Failed query: select …",
+  // with the one line that explained it dropped. End the stored message with the
+  // root cause and keep the whole chain structured alongside it.
+  const causes = errorCauseChain(opts.error);
+  const root = causes.length > 0 ? causes[causes.length - 1] : null;
+  // #62: that same QueryFailedError appends `params: <every bound value>`, so
+  // the stored row carried the tenant's data — 82,345 of the 82,645 characters
+  // in the worst preprod row. Redaction happens here, at the one funnel every
+  // structured server error flows through, rather than at each call site.
+  const message = truncateForStore(
+    root && root.message && !msg.includes(root.message)
+      ? `${msg} | caused by ${root.code ? `${root.code}: ` : ''}${root.message}`
+      : msg,
+    MAX_STORED_MESSAGE,
+  );
+  const stack = truncateForStore(errorStackText(opts.error) ?? '', MAX_STORED_STACK) || undefined;
   const source = opts.sourceFile ? null : getSourceLocation();
   // Correlate the DB row, the Sentry event, and the request. The proxy/auth
   // middleware put the id in AsyncLocalStorage; callers may still override.
@@ -171,14 +214,13 @@ export async function logError(opts: {
     // Skip the DB mirror in test mode unless the caller mocked `db.insert`
     // (those unit tests legitimately assert the write happened).
     const testMode = process.env.VITEST === 'true' || process.env.NODE_ENV === 'test';
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const mockedInsert = typeof (db as any).insert?._isMockFunction === 'boolean';
+    const mockedInsert = typeof (db as unknown as { insert?: { _isMockFunction?: unknown } }).insert?.['_isMockFunction'] === 'boolean';
     if (testMode && !mockedInsert) {
       console.log(JSON.stringify({
         source: 'logError.test-mode',
         outcome: 'db_write_skipped',
         level,
-        message: msg,
+        message,
         context: opts.context ?? null,
         requestId: requestId ?? null,
       }));
@@ -187,7 +229,7 @@ export async function logError(opts: {
       tenantId: opts.tenantId ?? null,
       userId: opts.userId ?? null,
       level,
-      message: msg,
+      message,
       stack: stack ?? null,
       context: {
         context: opts.context,
@@ -195,6 +237,7 @@ export async function logError(opts: {
         requestId,
         requestUrl: opts.requestUrl,
         requestMethod: opts.requestMethod,
+        ...(causes.length > 0 ? { errorCauses: causes } : {}),
         ...opts.metadata,
       },
     });
@@ -209,7 +252,7 @@ export async function logError(opts: {
       source: 'logError.fallback',
       outcome: 'db_write_failed',
       level,
-      message: msg,
+      message,
       context: opts.context ?? null,
       requestId: requestId ?? null,
       tenantId: opts.tenantId ?? null,
@@ -226,7 +269,10 @@ export async function logError(opts: {
   // expected errors; the DB row is always written above regardless.
   if (opts.captureToSentry !== false) {
     await forwardToSentry({
-      error: opts.error,
+      // The raw Error is not passed on: Sentry renders `event.message` from
+      // error.message, which for a failed query is the parameter dump. The copy
+      // keeps name, stack and the deepest cause (the SQLSTATE).
+      error: redactedErrorForSinks(opts.error, message),
       level,
       context: opts.context,
       tenantId: opts.tenantId,
@@ -239,7 +285,7 @@ export async function logError(opts: {
     await forwardToLoki({
       error: opts.error,
       level,
-      message: msg,
+      message,
       context: opts.context,
       tenantId: opts.tenantId,
       userId: opts.userId,

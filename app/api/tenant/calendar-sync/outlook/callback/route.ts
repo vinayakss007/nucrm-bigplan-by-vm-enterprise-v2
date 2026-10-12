@@ -41,13 +41,15 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(new URL('/tenant/calendar?error=not_authenticated', request.url));
     }
 
-    const { verifyToken } = await import('@/lib/auth/session');
-    const payload = await verifyToken(sessionCookie);
-    if (!payload) {
+    // #2216: verifyToken alone would let a revoked (logged-out) JWT link an
+    // OAuth calendar for up to 30 days — require a live sessions row.
+    const { getCurrentUserForToken } = await import('@/lib/auth/session');
+    const session = await getCurrentUserForToken(sessionCookie);
+    if (!session) {
       return NextResponse.redirect(new URL('/tenant/calendar?error=invalid_session', request.url));
     }
 
-    const userId = payload.userId;
+    const userId = session.id;
 
     // Resolve the user's active tenant membership (JWT only carries userId)
     const { db } = await import('@/drizzle/db');

@@ -73,12 +73,20 @@ export async function POST(request: NextRequest) {
     // "only one super admin" guard silently allowed an unlimited number.
     const result = await withSecurityContext(async (tx) => {
       // 1. Create super admin user
+      // #2459: `.returning()` is `RETURNING *`, and `users` is 36 columns
+      // (drizzle/schema/core.ts:66) whose credentials it therefore pulls —
+      // password_hash, email_verify_token, reset_token, telegram_bot_token,
+      // totp_secret, totp_backup_codes. This handler is on proxy.ts's public
+      // list and proves itself with a setup key, not a session, so the row it
+      // returns was never one to hand back unprefixed. `return { u, t, token }`
+      // below carries the row out of the transaction, so one spread would ship
+      // the fresh hash. Three columns are read; tsc proves three is enough.
       const [u] = await tx.insert(users).values({
         email: emailLower,
         passwordHash,
         fullName: fullNameTrim,
         isSuperAdmin: true
-      }).returning();
+      }).returning({ id: users.id, email: users.email, fullName: users.fullName });
       if (!u) throw new Error('Failed to create admin user');
 
       const slug = workspace_name.toLowerCase()
@@ -87,18 +95,25 @@ export async function POST(request: NextRequest) {
 
       // 2. Look up the Enterprise plan UUID (it's often 'enterprise' by default)
       const enterprisePlan = await tx.query.plans.findFirst({
+        // #2459: `plans` is 22 columns of pricing and limits; `planId` below is
+        // the only thing ever read out of it.
+        columns: { id: true },
         where: eq(plans.id, 'enterprise')
       });
       const planId = enterprisePlan?.id ?? 'enterprise';
 
       // 3. Create tenant
+      // #2459: `tenants` is 34 columns — billing identifiers, `admin_notes` and
+      // the tenant's `settings`/`metadata` — and this `RETURNING *` is the row
+      // the response reads. It carries no credential today, which is exactly
+      // why the projection belongs here: an unnamed `*` grows with the table.
       const [t] = await tx.insert(tenants).values({
         name: workspace_name.trim(),
         slug,
         ownerId: u.id,
         planId,
         status: 'active'
-      }).returning();
+      }).returning({ id: tenants.id, name: tenants.name });
       if (!t) throw new Error('Failed to create tenant');
 
       // Roles, tenant_members, pipelines, deal_stages, tenant_modules and
@@ -108,6 +123,9 @@ export async function POST(request: NextRequest) {
       await setTenantContext(t.id, u.id, tx);
 
       // 4. Create admin role first for the new tenant
+      // #2459: `roles` is 11 columns and the one that matters here is
+      // `permissions` — the route just wrote `{ all: true }` into it, and the
+      // only reader below wants the generated id to stamp tenant_members.
       const [adminRole] = await tx.insert(roles).values({
         tenantId: t.id,
         slug: 'admin',
@@ -117,7 +135,7 @@ export async function POST(request: NextRequest) {
       }).onConflictDoUpdate({
         target: [roles.tenantId, roles.slug],
         set: { permissions: { all: true }, updatedAt: new Date() }
-      }).returning();
+      }).returning({ id: roles.id });
       if (!adminRole) throw new Error('Failed to create admin role');
 
       const adminRoleId = adminRole.id;
@@ -146,11 +164,13 @@ export async function POST(request: NextRequest) {
         .where(eq(users.id, u.id));
 
       // 1. Create Default Sales Pipeline
+      // #2459: `pipelines` is 9 columns; this insert writes three of them and
+      // the only reader anywhere below is `pipeline.id`, for the deal stages.
       const [pipeline] = await tx.insert(pipelines).values({
         tenantId: t.id,
         name: 'Sales Pipeline',
         isDefault: true,
-      }).returning();
+      }).returning({ id: pipelines.id });
       if (!pipeline) throw new Error('Failed to create pipeline');
 
       // 2. Create Default Stages

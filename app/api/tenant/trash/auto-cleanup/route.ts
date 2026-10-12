@@ -78,8 +78,10 @@ export const POST = withApiRoute(async (request: NextRequest) => {
 
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const countQuery = (table: any, tenantId: string) => 
+    const countQuery = (
+      table: typeof contacts | typeof companies | typeof deals | typeof tasks | typeof leads,
+      tenantId: string
+    ) => 
       db.select({ count: sql<number>`count(*)` })
         .from(table)
         .where(and(eq(table.tenantId, tenantId), isNotNull(table.deletedAt)));

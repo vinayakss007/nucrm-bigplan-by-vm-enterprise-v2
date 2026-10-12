@@ -5,24 +5,34 @@
  */
 import { verifySecret } from '@/lib/crypto';
 import { logError } from '@/lib/errors-server';
-import { acquireLock } from '@/lib/cache';
+import { refuseIfCronLockHeld } from '@/lib/cron/cron-lock';
 import { NextRequest, NextResponse } from 'next/server';
-import { retryFailedWebhooks } from '@/lib/webhooks';
+import { retryFailedWebhooks, drainDeletedWebhookQueue } from '@/lib/webhooks';
 import { purgeOldDLQEntries } from '@/lib/webhooks/dlq';
+// The retry scan is cross-tenant and the DLQ purge writes dead_letter_queue,
+// whose policy admits only the super-admin context (NUCRM-A). Pin one client
+// and mark it so the helpers below inherit the context.
+import { withApiRoute } from '@/lib/api/with-api-route';
+import { setSuperAdminContext } from '@/lib/db/rls';
 
-export async function POST(req: NextRequest) {
+export const POST = withApiRoute(async (req: NextRequest) => {
   if (!verifySecret(req.headers.get('x-cron-secret'), process.env.CRON_SECRET)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   // Distributed dedup guard (#1422): skip when another scheduler
   // instance already fired this job within its interval.
-  const lock = await acquireLock('cron:retry-webhooks', 300);
-  if (!lock.acquired) {
-    return NextResponse.json({ ok: true, skipped: true, reason: 'lock-held' });
-  }
+  const refusal = await refuseIfCronLockHeld('cron:retry-webhooks', 300);
+  if (refusal) return refusal;
   try {
+    await setSuperAdminContext();
     const retried = await retryFailedWebhooks();
+
+    // #2390: the sweep above now skips rows whose integration was deleted, which
+    // stops the traffic but leaves them queued forever. Retire them here and say
+    // how many, so the count is in the response the scheduler logs rather than
+    // only in a warning line nobody reads.
+    const retired = await drainDeletedWebhookQueue();
 
     // Purge dead letter queue entries older than 30 days
     let purged = 0;
@@ -32,9 +42,9 @@ export async function POST(req: NextRequest) {
       void logError({ error: purgeErr, context: 'cron/retry-webhooks DLQ purge', level: 'warning' });
     }
 
-    return NextResponse.json({ ok: true, retried, dlqPurged: purged });
+    return NextResponse.json({ ok: true, retried, retiredDeleted: retired, dlqPurged: purged });
   } catch (err) {
     void logError({ error: err, context: 'cron/retry-webhooks' });
     return NextResponse.json({ error: 'Failed to retry webhooks' }, { status: 500 });
   }
-}
+});

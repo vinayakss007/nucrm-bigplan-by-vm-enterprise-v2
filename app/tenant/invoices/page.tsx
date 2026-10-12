@@ -87,7 +87,8 @@ function InvoicesPageInner() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),
       });
-      if (!res.ok) throw new Error('Failed to create invoice');
+      const data = await res.json().catch(() => ({}) as { error?: string });
+      if (!res.ok) throw new Error(data.error || 'Failed to create invoice');
     },
     onSuccess: () => {
       toast.success('Invoice created successfully');
@@ -95,11 +96,13 @@ function InvoicesPageInner() {
       setForm({ title: '', contactId: '', issueDate: new Date().toISOString().split('T')[0], dueDate: '', notes: '', items: [{ description: '', quantity: '1', unitPrice: '0' }], discountType: 'percentage', discountValue: '0', taxRate: '0' });
       queryClient.invalidateQueries({ queryKey: INVOICES_QUERY });
     },
-    onError: () => toast.error('Failed to create invoice'),
+    onError: (err) => toast.error(err instanceof Error && err.message ? err.message : 'Failed to create invoice'),
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    // #2230 in-flight lock: double-click must not POST twice.
+    if (createInvoice.isPending) return;
     createInvoice.mutate();
   };
 
@@ -363,8 +366,8 @@ function InvoicesPageInner() {
               </div>
 
               <div className="flex gap-2 pt-2">
-                <button type="button" onClick={() => setShowModal(false)} className="flex-1 px-4 py-2 border border-border rounded-lg text-sm font-medium hover:bg-accent">Cancel</button>
-                <button type="submit" className="flex-1 px-4 py-2 bg-violet-600 text-white rounded-lg text-sm font-semibold hover:bg-violet-700">Create Invoice</button>
+                <button type="button" onClick={() => setShowModal(false)} disabled={createInvoice.isPending} className="flex-1 px-4 py-2 border border-border rounded-lg text-sm font-medium hover:bg-accent disabled:opacity-50">Cancel</button>
+                <button type="submit" disabled={createInvoice.isPending} className="flex-1 px-4 py-2 bg-violet-600 text-white rounded-lg text-sm font-semibold hover:bg-violet-700 disabled:opacity-50 disabled:cursor-not-allowed">{createInvoice.isPending ? 'Creating…' : 'Create Invoice'}</button>
               </div>
             </form>
           </div>

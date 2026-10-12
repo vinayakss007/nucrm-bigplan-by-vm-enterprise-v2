@@ -4,28 +4,33 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { useMutation } from '@tanstack/react-query';
 import { Mail, Loader2, CheckCircle, AlertTriangle, Send } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export default function EmailSettingsPage() {
-  const [_templates, _setTemplates] = useState<unknown[]>([]);
-  const [_loading, setLoading] = useState(true);
   const [testEmail, setTestEmail] = useState('');
-  const [testing, setTesting] = useState(false);
-  const [result, setResult] = useState<'ok'|'fail'|null>(null);
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
 
-  useEffect(() => { setLoading(false); }, []);
+  // #1328: test-send via useMutation (was raw fetch + useState flags).
+  // A 200 with {ok:false} is thrown so the error branch owns the 'fail' state.
+  const testMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch('/api/tenant/email/test', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ to:testEmail }) });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok || !d.ok) throw new Error(d.error || 'Failed');
+      return d;
+    },
+    onSuccess: () => toast.success('Test email sent!'),
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const testing = testMutation.isPending;
+  const result = testMutation.isError ? 'fail' : testMutation.isSuccess ? 'ok' : null;
 
-  const sendTest = async () => {
+  const sendTest = () => {
     if (!testEmail) { toast.error('Enter email'); return; }
-    setTesting(true); setResult(null);
-    const res = await fetch('/api/tenant/email/test', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ to:testEmail }) });
-    const d = await res.json();
-    setResult(d.ok ? 'ok' : 'fail');
-    if (d.ok) toast.success('Test email sent!'); else toast.error(d.error || 'Failed');
-    setTesting(false);
+    testMutation.mutate();
   };
 
   const EMAIL_EVENTS = [

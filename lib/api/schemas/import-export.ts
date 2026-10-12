@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { z } from 'zod';
+import { uuidIdSchema } from '@/lib/validation/uuid';
 import { requiredString } from './common';
 
 // ── Import schemas ──
@@ -23,8 +24,8 @@ export const importContactsSchema = z.object({
 
 // ── Merge Contact schema ──
 export const mergeContactSchema = z.object({
-  primary_contact_id: z.string().uuid(),
-  duplicate_contact_id: z.string().uuid(),
+  primary_contact_id: uuidIdSchema,
+  duplicate_contact_id: uuidIdSchema,
   merge_strategy: z.record(z.string(), z.unknown()).optional().default({}),
   reason: z.string().trim().max(500).optional().nullable(),
 });
@@ -34,9 +35,9 @@ export const convertLeadSchema = z.object({
   create_deal: z.boolean().optional().default(false),
   deal_title: z.string().trim().max(200).optional().nullable(),
   deal_value: z.coerce.number().min(0).optional().default(0),
-  deal_stage: z.string().uuid().optional().nullable(),
-  pipeline_id: z.string().uuid().optional().nullable(),
-  assigned_to: z.string().uuid().optional().nullable(),
+  deal_stage: uuidIdSchema.optional().nullable(),
+  pipeline_id: uuidIdSchema.optional().nullable(),
+  assigned_to: uuidIdSchema.optional().nullable(),
 });
 
 // ── Search schema ──
@@ -49,11 +50,11 @@ export const searchSchema = z.object({
 
 // ── Bulk operations schemas ──
 export const bulkDeleteSchema = z.object({
-  ids: z.array(z.string().uuid()).min(1, 'At least one ID required').max(1000),
+  ids: z.array(uuidIdSchema).min(1, 'At least one ID required').max(1000),
 });
 
 export const bulkUpdateSchema = z.object({
-  ids: z.array(z.string().uuid()).min(1, 'At least one ID required').max(1000),
+  ids: z.array(uuidIdSchema).min(1, 'At least one ID required').max(1000),
   updates: z.record(z.string(), z.unknown()),
 });
 

@@ -3,6 +3,8 @@ import {
   applyRetentionPolicy,
   readRetentionConfig,
   DEFAULT_RETENTION,
+  DEFAULT_MAX_DELETE_RATIO,
+  MIN_RETENTION_DAYS,
   type BackupEntry,
   type RetentionConfig,
 } from '@/lib/backups/retention-policy';
@@ -14,6 +16,19 @@ function dailyBackups(count: number, start = new Date('2026-07-29T02:00:00Z')): 
     createdAt: new Date(start.getTime() - i * 86_400_000),
   }));
 }
+
+/**
+ * Tier arithmetic only: the protection floor and the mass-delete guard are
+ * production defaults (see DEFAULT_RETENTION), but these three tests are about
+ * the GFS slot maths itself, so they opt out of the floor and assert that the
+ * floor is genuinely what protects young backups elsewhere.
+ */
+const NO_FLOOR: RetentionConfig = {
+  daily: DEFAULT_RETENTION.daily,
+  weekly: DEFAULT_RETENTION.weekly,
+  monthly: DEFAULT_RETENTION.monthly,
+  yearly: DEFAULT_RETENTION.yearly,
+};
 
 describe('applyRetentionPolicy', () => {
   it('keeps exactly 30 daily backups from a 60-day run', () => {
@@ -61,7 +76,7 @@ describe('applyRetentionPolicy', () => {
       { key: 'a', createdAt: new Date('2026-07-01T02:00:00Z') },
       { key: 'b', createdAt: new Date('2026-07-01T14:00:00Z') },
     ];
-    const { keep } = applyRetentionPolicy(entries, DEFAULT_RETENTION);
+    const { keep } = applyRetentionPolicy(entries, NO_FLOOR);
 
     expect(keep).toHaveLength(1);
     // Latest one is kept
@@ -82,9 +97,9 @@ describe('applyRetentionPolicy', () => {
     expect(del).toHaveLength(0);
   });
 
-  it('handles a full year of dailies against the default policy', () => {
+  it('handles a full year of dailies against the tier policy', () => {
     const entries = dailyBackups(365);
-    const { keep, delete: del } = applyRetentionPolicy(entries, DEFAULT_RETENTION);
+    const { keep, delete: del } = applyRetentionPolicy(entries, NO_FLOOR);
 
     // At minimum we keep 30 daily + some additional weekly/monthly/yearly
     expect(keep.length).toBeGreaterThanOrEqual(30);
@@ -101,9 +116,84 @@ describe('applyRetentionPolicy', () => {
     expect(byTier.yearly).toBeLessThanOrEqual(DEFAULT_RETENTION.yearly);
   });
 
-  it('respects the decision for 2 years of data with default policy', () => {
+  it('keeps both same-day dumps while they are inside the protection floor', () => {
+    // This is the #2233 case: a deploy burst writes several restore points on
+    // one day. Under the old tier maths the daily de-dup expired all but the
+    // newest immediately — deleting the restore point the deploy needed.
+    const today = new Date('2026-07-29T02:00:00Z');
+    const entries: BackupEntry[] = [
+      { key: 'morning', createdAt: new Date('2026-07-29T01:00:00Z') },
+      { key: 'afternoon', createdAt: new Date('2026-07-29T14:00:00Z') },
+    ];
+    const { keep, delete: del } = applyRetentionPolicy(entries, DEFAULT_RETENTION, today);
+
+    expect(del).toHaveLength(0);
+    expect(keep).toHaveLength(2);
+    expect(keep.every((k) => k.protected === true)).toBe(true);
+  });
+
+  it('never expires anything younger than the 2-year floor', () => {
+    const now = new Date('2026-07-29T02:00:00Z');
+    // 400 days of dailies: every one is younger than MIN_RETENTION_DAYS (730).
+    const entries = dailyBackups(400, now);
+    const { keep, delete: del } = applyRetentionPolicy(entries, DEFAULT_RETENTION, now);
+
+    expect(del).toHaveLength(0);
+    expect(keep).toHaveLength(400);
+  });
+
+  it('applies the tiers again past the floor', () => {
+    const now = new Date('2026-07-29T02:00:00Z');
+    // 900 days: the ~170 oldest sit past the 730-day floor and get tiered.
+    const entries = dailyBackups(900, now);
+    const { keep, delete: del, guardTriggered } = applyRetentionPolicy(
+      entries,
+      { ...DEFAULT_RETENTION, maxDeleteRatio: 0.5 },
+      now,
+    );
+
+    expect(del.length).toBeGreaterThan(0);
+    expect(guardTriggered).toBe(false);
+    // Everything that was expired must be past the floor.
+    for (const d of del) {
+      expect(now.getTime() - d.entry.createdAt.getTime()).toBeGreaterThanOrEqual(730 * 86_400_000);
+    }
+    for (const k of keep.filter((x) => x.protected)) {
+      expect(now.getTime() - k.entry.createdAt.getTime()).toBeLessThan(730 * 86_400_000);
+    }
+  });
+
+  it('refuses a mass delete and reports the guard instead', () => {
+    const now = new Date('2026-07-29T02:00:00Z');
+    // A truncated listing: 100 old entries with no young ones to anchor them.
+    const entries = dailyBackups(100, new Date(now.getTime() - 800 * 86_400_000));
+    const { keep, delete: del, guardTriggered } = applyRetentionPolicy(
+      entries,
+      { ...DEFAULT_RETENTION, minAgeDays: 0, maxDeleteRatio: 0.2 },
+      now,
+    );
+
+    expect(guardTriggered).toBe(true);
+    expect(del).toHaveLength(0);
+    expect(keep).toHaveLength(100);
+  });
+
+  it('deletes freely when no ratio guard is configured', () => {
+    const now = new Date('2026-07-29T02:00:00Z');
+    const entries = dailyBackups(100, new Date(now.getTime() - 800 * 86_400_000));
+    const { delete: del, guardTriggered } = applyRetentionPolicy(
+      entries,
+      { ...DEFAULT_RETENTION, minAgeDays: 0, maxDeleteRatio: undefined },
+      now,
+    );
+
+    expect(guardTriggered).toBe(false);
+    expect(del.length).toBeGreaterThan(0);
+  });
+
+  it('respects the decision for 2 years of data with the tier policy', () => {
     const entries = dailyBackups(730);
-    const { keep } = applyRetentionPolicy(entries, DEFAULT_RETENTION);
+    const { keep } = applyRetentionPolicy(entries, NO_FLOOR);
 
     // With 2 years of dailies, we expect both yearly slots filled
     const yearly = keep.filter((k) => k.tier === 'yearly');
@@ -123,7 +213,29 @@ describe('readRetentionConfig', () => {
       BACKUP_RETAIN_MONTHLY: '3',
       BACKUP_RETAIN_YEARLY: '1',
     });
-    expect(cfg).toEqual({ daily: 14, weekly: 8, monthly: 3, yearly: 1 });
+    expect(cfg).toEqual({
+      daily: 14,
+      weekly: 8,
+      monthly: 3,
+      yearly: 1,
+      minAgeDays: MIN_RETENTION_DAYS,
+      maxDeleteRatio: DEFAULT_MAX_DELETE_RATIO,
+    });
+  });
+
+  it('honours a retention window longer than the floor', () => {
+    expect(readRetentionConfig({ BACKUP_MIN_AGE_DAYS: '1095' }).minAgeDays).toBe(1095);
+  });
+
+  it('clamps a retention window below the floor up to it', () => {
+    expect(readRetentionConfig({ BACKUP_MIN_AGE_DAYS: '7' }).minAgeDays).toBe(MIN_RETENTION_DAYS);
+  });
+
+  it('ignores an out-of-range delete ratio', () => {
+    expect(readRetentionConfig({ BACKUP_MAX_DELETE_RATIO: '1.5' }).maxDeleteRatio).toBe(
+      DEFAULT_MAX_DELETE_RATIO,
+    );
+    expect(readRetentionConfig({ BACKUP_MAX_DELETE_RATIO: '0.1' }).maxDeleteRatio).toBe(0.1);
   });
 
   it('ignores non-positive or non-integer values', () => {

@@ -10,9 +10,20 @@ import { useApiQuery } from '@/lib/query/client';
 import { useParams } from 'next/navigation';
 import { FileText, CheckCircle, Loader2, AlertCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { getFieldIdentity } from '@/lib/forms/field-shape';
 
 interface PublicForm { name?: string; description?: string; settings?: { success_message?: string }; fields?: PublicFormField[] }
-interface PublicFormField { key: string; label: string; type?: string; required?: boolean; options?: string[] }
+interface PublicFormField {
+  // #2287: legacy/builder forms store `key`, API-created forms store `id`;
+  // getFieldIdentity resolves the submitted-data key for both shapes.
+  key?: string;
+  id?: string;
+  name?: string;
+  label: string;
+  type?: string;
+  required?: boolean;
+  options?: string[];
+}
 
 export default function PublicFormPage() {
   const params = useParams();
@@ -105,7 +116,10 @@ export default function PublicFormPage() {
 
         {/* Form */}
         <form onSubmit={submit} className="space-y-4">
-          {form.fields?.map((field, index) => (
+          {form.fields?.map((field, index) => {
+            // #2287: same identity rule as the submit validator.
+            const fid = getFieldIdentity(field) ?? `field_${index}`;
+            return (
             <div key={index}>
               <label className="block text-sm font-medium mb-1">
                 {field.label}
@@ -114,16 +128,16 @@ export default function PublicFormPage() {
               
               {field.type === 'textarea' ? (
                 <textarea
-                  value={String(values[field.key] || '')}
-                  onChange={e => updateValue(field.key, e.target.value)}
+                  value={String(values[fid] || '')}
+                  onChange={e => updateValue(fid, e.target.value)}
                   className={inp}
                   rows={4}
                   required={field.required}
                 />
               ) : field.type === 'select' ? (
                 <select
-                  value={String(values[field.key] || '')}
-                  onChange={e => updateValue(field.key, e.target.value)}
+                  value={String(values[fid] || '')}
+                  onChange={e => updateValue(fid, e.target.value)}
                   className={inp}
                   required={field.required}
                 >
@@ -136,8 +150,8 @@ export default function PublicFormPage() {
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="checkbox"
-                    checked={Boolean(values[field.key])}
-                    onChange={e => updateValue(field.key, e.target.checked)}
+                    checked={Boolean(values[fid])}
+                    onChange={e => updateValue(fid, e.target.checked)}
                     className="w-4 h-4 rounded border-border text-violet-600"
                     required={field.required}
                   />
@@ -146,14 +160,15 @@ export default function PublicFormPage() {
               ) : (
                 <input
                   type={field.type || 'text'}
-                  value={String(values[field.key] || '')}
-                  onChange={e => updateValue(field.key, e.target.value)}
+                  value={String(values[fid] || '')}
+                  onChange={e => updateValue(fid, e.target.value)}
                   className={inp}
                   required={field.required}
                 />
               )}
             </div>
-          ))}
+            );
+          })}
 
           <button
             type="submit"

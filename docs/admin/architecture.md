@@ -40,12 +40,12 @@ processes.
 
 ### Processes
 
-| Process | What it is | Where |
-| --- | --- | --- |
-| **web** | The Next.js app: UI pages + API routes | `next start` (PM2 cluster) |
-| **worker** | Background job processor (BullMQ) | [`worker.ts`](../../worker.ts) |
-| **realtime** | Standalone socket.io server for live updates | [`realtime.ts`](../../realtime.ts) |
-| **cron** | Scheduler that triggers periodic jobs | `scripts/cron-scheduler.ts` (or host crontab) |
+| Process      | What it is                                   | Where                                         |
+| ------------ | -------------------------------------------- | --------------------------------------------- |
+| **web**      | The Next.js app: UI pages + API routes       | `next start` (PM2 cluster)                    |
+| **worker**   | Background job processor (BullMQ)            | [`worker.ts`](../../worker.ts)                |
+| **realtime** | Standalone socket.io server for live updates | [`realtime.ts`](../../realtime.ts)            |
+| **cron**     | Scheduler that triggers periodic jobs        | `scripts/cron-scheduler.ts` (or host crontab) |
 
 Production process definitions live in [`ecosystem.config.cjs`](../../ecosystem.config.cjs) (PM2).
 See [Deployment](./deployment.md) and [Jobs & Realtime](./jobs-and-realtime.md).
@@ -64,24 +64,24 @@ app/            Next.js App Router
 └── api/        ~492 route handlers (see API surface below)
 
 lib/            Core libraries (auth, db, tenant, billing, ai, integrations, …)
-drizzle/        Schema (~215 tables) + migrations + RLS policies
+drizzle/        Schema (224 tables) + migrations + RLS policies
 components/     UI (Radix + Tailwind)
 ```
 
 ### API surface (`app/api`)
 
-| Namespace | Purpose |
-| --- | --- |
-| `auth/` | Login, signup, password reset, 2FA, OAuth, SSO |
-| `tenant/` | All workspace-scoped CRM operations |
-| `superadmin/` & `super-admin/` | Platform operator operations |
-| `v1/[...path]`, `v2/[...path]` | **Versioned public API gateways** → resolve tenant, then route to `tenant/*` |
-| `public/`, `embed/`, `forms/`, `track/`, `unsubscribe/` | Unauthenticated/customer-facing |
-| `webhooks/` | Inbound provider webhooks (Stripe, Razorpay, PayU, Resend, WhatsApp, Telegram) |
-| `cron/` | ~22 scheduled jobs (secret-authenticated) |
-| `scim/v2/` | SCIM 2.0 provisioning |
-| `openapi/`, `api-docs` | OpenAPI spec + Swagger UI |
-| `health/`, `metrics/` | Health checks and Prometheus metrics |
+| Namespace                                               | Purpose                                                                        |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `auth/`                                                 | Login, signup, password reset, 2FA, OAuth, SSO                                 |
+| `tenant/`                                               | All workspace-scoped CRM operations                                            |
+| `superadmin/` & `super-admin/`                          | Platform operator operations                                                   |
+| `v1/[...path]`, `v2/[...path]`                          | **Versioned public API gateways** → resolve tenant, then route to `tenant/*`   |
+| `public/`, `embed/`, `forms/`, `track/`, `unsubscribe/` | Unauthenticated/customer-facing                                                |
+| `webhooks/`                                             | Inbound provider webhooks (Stripe, Razorpay, PayU, Resend, WhatsApp, Telegram) |
+| `cron/`                                                 | ~22 scheduled jobs (secret-authenticated)                                      |
+| `scim/v2/`                                              | SCIM 2.0 provisioning                                                          |
+| `openapi/`, `api-docs`                                  | OpenAPI spec + Swagger UI                                                      |
+| `health/`, `metrics/`                                   | Health checks and Prometheus metrics                                           |
 
 The public API (`/api/v1`, `/api/v2`) is implemented as a **catch-all gateway** (`lib/api/gateway.ts`)
 that authenticates, resolves the tenant (API key / `X-Tenant-ID` / custom domain), applies CORS,
@@ -125,7 +125,7 @@ Tenant isolation is enforced at **two layers**:
 
 ## Data & storage
 
-- **PostgreSQL** — primary datastore, ~215 tables across ~35 Drizzle schema files in
+- **PostgreSQL** — primary datastore, 224 tables across 46 Drizzle schema files in
   [`drizzle/schema`](../../drizzle). Optional **read replica** for heavy reads.
 - **Redis** — cache (with in-memory fallback), BullMQ queues, socket.io adapter.
 - **Object storage (S3/R2/MinIO)** — file uploads and database backups.

@@ -85,7 +85,11 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       trigger_config = {},
       nodes = [],
     } = v;
-    const actions = rawBody.actions || [];
+    const actions: {
+      action_type?: string;
+      action_config?: Record<string, unknown>;
+      condition_config?: Record<string, unknown>;
+    }[] = rawBody.actions || [];
 
     if (!name || !name.trim()) {
       return NextResponse.json({ error: 'Name is required' }, { status: 400 });
@@ -113,8 +117,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       if (actions.length > 0) {
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const actionValues = actions.map((action: any, index: number) => ({
+        const actionValues = actions.map((action, index) => ({
           workflowId: newWorkflow.id,
           tenantId: ctx.tenantId,
           orderIndex: index + 1,

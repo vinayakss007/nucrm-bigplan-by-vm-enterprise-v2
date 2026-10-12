@@ -19,7 +19,7 @@ import toast from 'react-hot-toast'
 export interface SequenceStep {
   id?: string
   step_number: number
-  type: 'email' | 'task' | 'wait' | 'call' | 'ab_test'
+  type: 'email' | 'task' | 'delay' | 'call' | 'ab_test'
   subject?: string
   body?: string
   delay_days?: number
@@ -53,7 +53,7 @@ interface SequenceBuilderProps {
 const STEP_TYPES = [
   { value: 'email', label: 'Email', icon: Mail, color: 'text-blue-600' },
   { value: 'task', label: 'Task', icon: Calendar, color: 'text-violet-600' },
-  { value: 'wait', label: 'Wait', icon: Clock, color: 'text-amber-600' },
+  { value: 'delay', label: 'Wait', icon: Clock, color: 'text-amber-600' },
   { value: 'call', label: 'Call', icon: Phone, color: 'text-green-600' },
   { value: 'ab_test', label: 'A/B Test', icon: Split, color: 'text-rose-600' },
 ] as const
@@ -73,7 +73,7 @@ export function SequenceBuilder({ sequence, onSave, onCancel }: SequenceBuilderP
     const newStep: SequenceStep = {
       step_number: steps.length + 1,
       type,
-      delay_days: type === 'wait' ? 1 : 0,
+      delay_days: type === 'delay' ? 1 : 0,
       delay_hours: type === 'email' ? 9 : 0,
       subject: type === 'email' ? '' : undefined,
       body: type === 'email' ? '' : undefined,

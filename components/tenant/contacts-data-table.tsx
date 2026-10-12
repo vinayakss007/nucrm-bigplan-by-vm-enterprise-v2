@@ -12,7 +12,8 @@ import { Plus, Upload, Download, MoreHorizontal, Edit, Trash2, AlertCircle, X, U
 import { cn, formatDate } from '@/lib/utils'
 import { confirmThen } from '@/components/ui/confirm-dialog'
 import { InlineEdit } from '@/components/ui/inline-edit'
-import { DataTable, ColumnDef, createSortableHeader } from '@/components/ui/data-table'
+import { DataTable, ColumnDef, createSortableHeader, type BulkAction } from '@/components/ui/data-table'
+import { useSubmitLock } from '@/hooks/use-submit-lock'
 import { clientLogWarn, clientLogError } from '@/lib/client-logger'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -318,7 +319,18 @@ export default function ContactsDataTable({
     },
   ], [pagination.pageIndex, loadData, router])
 
-  const [_bulkActionLoading, setBulkActionLoading] = useState(false)
+  // #2230 — one shared in-flight lock for all bulk actions: double-clicks are
+  // dropped, every failure surfaces a toast, and the flag can never stick.
+  const { isPending: bulkActionLoading, run: runBulk } = useSubmitLock(async (
+    body: Record<string, unknown>,
+    errorMessage: string = 'Bulk action failed',
+    url: string = '/api/tenant/contacts/bulk',
+  ) => {
+    const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    const data = await res.json().catch(() => ({}) as { affected?: number; sent?: number; failed?: number; errors?: unknown[]; error?: string })
+    if (!res.ok) throw new Error(data.error || errorMessage)
+    return data
+  })
   const [_showBulkAction, _setShowBulkAction] = useState<string | null>(null)
   const [_bulkPayload, _setBulkPayload] = useState<Record<string, string>>({})
   const [customFields, setCustomFields] = useState<{ fieldKey: string; fieldLabel: string }[]>([])
@@ -362,7 +374,7 @@ export default function ContactsDataTable({
     return () => abort.abort();
   }, [])
 
-  const bulkActions = useMemo(() => {
+  const bulkActions = useMemo<BulkAction[]>(() => {
     const buildBody = (action: string, selectedIds: string[], payload?: Record<string, unknown>, isSelectAll = false) => {
       if (isSelectAll) {
         const filters: Record<string, string> = {};
@@ -381,20 +393,11 @@ export default function ContactsDataTable({
       inputPlaceholder: 'Enter tag name',
       onClick: async (selectedIds: string[], input?: string, isSelectAllMatching?: boolean) => {
         if (!input?.trim()) { toast.error('Tag name required'); return; }
-        setBulkActionLoading(true)
-        const res = await fetch('/api/tenant/contacts/bulk', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(buildBody('tag', selectedIds, { tag: input.trim() }, isSelectAllMatching)),
-        })
-        const data = await res.json()
-        if (res.ok) {
+        const data = await runBulk(buildBody('tag', selectedIds, { tag: input.trim() }, isSelectAllMatching), 'Failed to tag contacts')
+        if (data) {
           toast.success(`Tagged ${data.affected} contacts`)
           loadData(pagination.pageIndex)
-        } else {
-          toast.error(data.error || 'Failed to tag contacts')
         }
-        setBulkActionLoading(false)
       },
     },
     {
@@ -404,20 +407,11 @@ export default function ContactsDataTable({
       inputPlaceholder: 'Enter tag to remove',
       onClick: async (selectedIds: string[], input?: string, isSelectAllMatching?: boolean) => {
         if (!input?.trim()) { toast.error('Tag name required'); return; }
-        setBulkActionLoading(true)
-        const res = await fetch('/api/tenant/contacts/bulk', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(buildBody('untag', selectedIds, { tag: input.trim() }, isSelectAllMatching)),
-        })
-        const data = await res.json()
-        if (res.ok) {
+        const data = await runBulk(buildBody('untag', selectedIds, { tag: input.trim() }, isSelectAllMatching), 'Failed to untag contacts')
+        if (data) {
           toast.success(`Removed tag from ${data.affected} contacts`)
           loadData(pagination.pageIndex)
-        } else {
-          toast.error(data.error || 'Failed to untag contacts')
         }
-        setBulkActionLoading(false)
       },
     },
     {
@@ -427,20 +421,11 @@ export default function ContactsDataTable({
       selectOptions: teamMembers.map(m => ({ value: m.user_id, label: m.full_name })),
       onClick: async (selectedIds: string[], input?: string, isSelectAllMatching?: boolean) => {
         if (!input) { toast.error('Select a team member'); return; }
-        setBulkActionLoading(true)
-        const res = await fetch('/api/tenant/contacts/bulk', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(buildBody('assign', selectedIds, { assign_to: input }, isSelectAllMatching)),
-        })
-        const data = await res.json()
-        if (res.ok) {
+        const data = await runBulk(buildBody('assign', selectedIds, { assign_to: input }, isSelectAllMatching), 'Failed to assign contacts')
+        if (data) {
           toast.success(`Assigned ${data.affected} contacts`)
           loadData(pagination.pageIndex)
-        } else {
-          toast.error(data.error || 'Failed to assign contacts')
         }
-        setBulkActionLoading(false)
       },
     },
     {
@@ -450,20 +435,11 @@ export default function ContactsDataTable({
       selectOptions: ['new', 'contacted', 'qualified', 'unqualified', 'converted', 'lost'].map(s => ({ value: s, label: s })),
       onClick: async (selectedIds: string[], input?: string, isSelectAllMatching?: boolean) => {
         if (!input) { toast.error('Select a status'); return; }
-        setBulkActionLoading(true)
-        const res = await fetch('/api/tenant/contacts/bulk', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(buildBody('status', selectedIds, { lead_status: input }, isSelectAllMatching)),
-        })
-        const data = await res.json()
-        if (res.ok) {
+        const data = await runBulk(buildBody('status', selectedIds, { lead_status: input }, isSelectAllMatching), 'Failed to update status')
+        if (data) {
           toast.success(`Updated ${data.affected} contacts`)
           loadData(pagination.pageIndex)
-        } else {
-          toast.error(data.error || 'Failed to update status')
         }
-        setBulkActionLoading(false)
       },
     },
     {
@@ -472,48 +448,38 @@ export default function ContactsDataTable({
       requiresConfirmation: true,
       confirmationMessage: 'Archive the selected contacts? They will be hidden from active views.',
       onClick: async (selectedIds: string[], _input?: string, isSelectAllMatching?: boolean) => {
-        setBulkActionLoading(true)
-        const res = await fetch('/api/tenant/contacts/bulk', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(buildBody('archive', selectedIds, undefined, isSelectAllMatching)),
-        })
-        const data = await res.json()
-        if (res.ok) {
-          const archivedIds = isSelectAllMatching ? [] : selectedIds
-          toast.success(
-            (t) => (
-              <div className="flex items-center gap-2">
-                <span>Archived {data.affected} contacts</span>
-                <button
-                  onClick={async () => {
-                    toast.dismiss(t.id)
-                    const restoreRes = await fetch('/api/tenant/contacts/bulk', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify(buildBody('restore', archivedIds, undefined, isSelectAllMatching)),
-                    })
-                    const restoreData = await restoreRes.json()
-                    if (restoreRes.ok) {
-                      toast.success(`Restored ${restoreData.affected} contacts`)
-                      loadData(pagination.pageIndex)
-                    } else {
-                      toast.error(restoreData.error || 'Failed to restore')
-                    }
-                  }}
-                  className="text-sm font-medium underline hover:no-underline"
-                >
-                  Undo
-                </button>
-              </div>
-            ),
-            { duration: 8000 }
-          )
-          loadData(pagination.pageIndex)
-        } else {
-          toast.error(data.error || 'Failed to archive contacts')
-        }
-        setBulkActionLoading(false)
+        const data = await runBulk(buildBody('archive', selectedIds, undefined, isSelectAllMatching), 'Failed to archive contacts')
+        if (!data) return
+        const archivedIds = isSelectAllMatching ? [] : selectedIds
+        toast.success(
+          (t) => (
+            <div className="flex items-center gap-2">
+              <span>Archived {data.affected} contacts</span>
+              <button
+                onClick={async () => {
+                  toast.dismiss(t.id)
+                  const restoreRes = await fetch('/api/tenant/contacts/bulk', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(buildBody('restore', archivedIds, undefined, isSelectAllMatching)),
+                  })
+                  const restoreData = await restoreRes.json().catch(() => ({}) as { affected?: number; error?: string })
+                  if (restoreRes.ok) {
+                    toast.success(`Restored ${restoreData.affected} contacts`)
+                    loadData(pagination.pageIndex)
+                  } else {
+                    toast.error(restoreData.error || 'Failed to restore')
+                  }
+                }}
+                className="text-sm font-medium underline hover:no-underline"
+              >
+                Undo
+              </button>
+            </div>
+          ),
+          { duration: 8000 }
+        )
+        loadData(pagination.pageIndex)
       },
     },
     {
@@ -522,20 +488,11 @@ export default function ContactsDataTable({
       requiresConfirmation: true,
       confirmationMessage: 'Restore the selected contacts from archive?',
       onClick: async (selectedIds: string[], _input?: string, isSelectAllMatching?: boolean) => {
-        setBulkActionLoading(true)
-        const res = await fetch('/api/tenant/contacts/bulk', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(buildBody('restore', selectedIds, undefined, isSelectAllMatching)),
-        })
-        const data = await res.json()
-        if (res.ok) {
+        const data = await runBulk(buildBody('restore', selectedIds, undefined, isSelectAllMatching), 'Failed to restore contacts')
+        if (data) {
           toast.success(`Restored ${data.affected} contacts`)
           loadData(pagination.pageIndex)
-        } else {
-          toast.error(data.error || 'Failed to restore contacts')
         }
-        setBulkActionLoading(false)
       },
     },
     {
@@ -544,48 +501,38 @@ export default function ContactsDataTable({
       requiresConfirmation: true,
       confirmationMessage: 'Delete the selected contacts?',
       onClick: async (selectedIds: string[], _input?: string, isSelectAllMatching?: boolean) => {
-        setBulkActionLoading(true)
-        const res = await fetch('/api/tenant/contacts/bulk', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(buildBody('delete', selectedIds, undefined, isSelectAllMatching)),
-        })
-        const data = await res.json()
-        if (res.ok) {
-          const deletedIds = isSelectAllMatching ? [] : selectedIds
-          toast.success(
-            (t) => (
-              <div className="flex items-center gap-2">
-                <span>Deleted {data.affected} contacts</span>
-                <button
-                  onClick={async () => {
-                    toast.dismiss(t.id)
-                    const restoreRes = await fetch('/api/tenant/contacts/bulk', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify(buildBody('restore', deletedIds, undefined, isSelectAllMatching)),
-                    })
-                    const restoreData = await restoreRes.json()
-                    if (restoreRes.ok) {
-                      toast.success(`Restored ${restoreData.affected} contacts`)
-                      loadData(pagination.pageIndex)
-                    } else {
-                      toast.error(restoreData.error || 'Failed to restore')
-                    }
-                  }}
-                  className="text-sm font-medium underline hover:no-underline"
-                >
-                  Undo
-                </button>
-              </div>
-            ),
-            { duration: 8000 }
-          )
-          loadData(pagination.pageIndex)
-        } else {
-          toast.error(data.error || 'Failed to delete contacts')
-        }
-        setBulkActionLoading(false)
+        const data = await runBulk(buildBody('delete', selectedIds, undefined, isSelectAllMatching), 'Failed to delete contacts')
+        if (!data) return
+        const deletedIds = isSelectAllMatching ? [] : selectedIds
+        toast.success(
+          (t) => (
+            <div className="flex items-center gap-2">
+              <span>Deleted {data.affected} contacts</span>
+              <button
+                onClick={async () => {
+                  toast.dismiss(t.id)
+                  const restoreRes = await fetch('/api/tenant/contacts/bulk', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(buildBody('restore', deletedIds, undefined, isSelectAllMatching)),
+                  })
+                  const restoreData = await restoreRes.json().catch(() => ({}) as { affected?: number; error?: string })
+                  if (restoreRes.ok) {
+                    toast.success(`Restored ${restoreData.affected} contacts`)
+                    loadData(pagination.pageIndex)
+                  } else {
+                    toast.error(restoreData.error || 'Failed to restore')
+                  }
+                }}
+                className="text-sm font-medium underline hover:no-underline"
+              >
+                Undo
+              </button>
+            </div>
+          ),
+          { duration: 8000 }
+        )
+        loadData(pagination.pageIndex)
       },
     },
     {
@@ -599,20 +546,11 @@ export default function ContactsDataTable({
         if (!fieldKey) { toast.error('Select a field'); return; }
         const value = (textInput ?? '').trim();
         if (!value) { toast.error('Enter a value for the field'); return; }
-        setBulkActionLoading(true)
-        const res = await fetch('/api/tenant/contacts/bulk', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(buildBody('update_field', selectedIds, { field_key: fieldKey, field_value: value }, isSelectAllMatching)),
-        })
-        const data = await res.json()
-        if (res.ok) {
+        const data = await runBulk(buildBody('update_field', selectedIds, { field_key: fieldKey, field_value: value }, isSelectAllMatching), 'Failed to update field')
+        if (data) {
           toast.success(`Updated ${data.affected} contacts`)
           loadData(pagination.pageIndex)
-        } else {
-          toast.error(data.error || 'Failed to update field')
         }
-        setBulkActionLoading(false)
       },
     },
     {
@@ -620,27 +558,28 @@ export default function ContactsDataTable({
       label: 'Export',
       onClick: async (selectedIds: string[]) => {
         setExporting(true)
-        const res = await fetch('/api/tenant/contacts/export', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ids: selectedIds }),
-        })
-        if (!res.ok) {
+        try {
+          const res = await fetch('/api/tenant/contacts/export', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ids: selectedIds }),
+          })
+          if (!res.ok) { toast.error('Export failed'); return }
+          const blob = await res.blob()
+          const url = URL.createObjectURL(blob)
+          const a = document.createElement('a')
+          a.href = url
+          a.download = `contacts_${new Date().toISOString().split('T')[0]}.csv`
+          document.body.appendChild(a)
+          a.click()
+          document.body.removeChild(a)
+          URL.revokeObjectURL(url)
+          toast.success(`Exported ${selectedIds.length} contacts`)
+        } catch {
           toast.error('Export failed')
+        } finally {
           setExporting(false)
-          return
         }
-        const blob = await res.blob()
-        const url = URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = url
-        a.download = `contacts_${new Date().toISOString().split('T')[0]}.csv`
-        document.body.appendChild(a)
-        a.click()
-        document.body.removeChild(a)
-        URL.revokeObjectURL(url)
-        toast.success(`Exported ${selectedIds.length} contacts`)
-        setExporting(false)
       },
     },
     {
@@ -650,13 +589,8 @@ export default function ContactsDataTable({
       inputPlaceholder: 'Note content...',
       onClick: async (ids: string[], content?: string) => {
         if (!content?.trim()) { toast.error('Note content required'); return; }
-        const res = await fetch('/api/tenant/notes/bulk', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ entity_type: 'contact', entity_ids: ids, content }),
-        });
-        if (!res.ok) throw new Error('Failed to add notes');
-        toast.success(`Note added to ${ids.length} contact(s)`);
+        const data = await runBulk({ entity_type: 'contact', entity_ids: ids, content }, 'Failed to add notes', '/api/tenant/notes/bulk')
+        if (data) toast.success(`Note added to ${ids.length} contact(s)`);
       }
     },
     {
@@ -666,20 +600,11 @@ export default function ContactsDataTable({
       selectOptions: sequences.map(s => ({ value: s.id, label: s.name })),
       onClick: async (selectedIds: string[], sequenceId?: string, isSelectAllMatching?: boolean) => {
         if (!sequenceId) { toast.error('Select a sequence'); return; }
-        setBulkActionLoading(true)
-        const res = await fetch('/api/tenant/contacts/bulk', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(buildBody('add_to_sequence', selectedIds, { sequence_id: sequenceId }, isSelectAllMatching)),
-        })
-        const data = await res.json()
-        if (res.ok) {
+        const data = await runBulk(buildBody('add_to_sequence', selectedIds, { sequence_id: sequenceId }, isSelectAllMatching), 'Failed to enroll contacts')
+        if (data) {
           toast.success(`Enrolled ${data.affected} contacts in sequence`)
           loadData(pagination.pageIndex)
-        } else {
-          toast.error(data.error || 'Failed to enroll contacts')
         }
-        setBulkActionLoading(false)
       },
     },
     ...(emailTemplates.length > 0 ? [{
@@ -691,20 +616,11 @@ export default function ContactsDataTable({
       selectOptions: emailTemplates.map(t => ({ value: t.id, label: t.name })),
       onClick: async (selectedIds: string[], templateId?: string) => {
         if (!templateId) { toast.error('Select a template'); return; }
-        setBulkActionLoading(true)
-        const res = await fetch('/api/tenant/email/bulk', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ entity_type: 'contact', entity_ids: selectedIds, template_id: templateId }),
-        })
-        const data = await res.json()
-        if (res.ok) {
+        const data = await runBulk({ entity_type: 'contact', entity_ids: selectedIds, template_id: templateId }, 'Failed to send emails', '/api/tenant/email/bulk')
+        if (data) {
           toast.success(`Sent ${data.sent} email(s), ${data.failed} failed`)
           if (data.errors?.length) clientLogWarn('contacts-data-table', 'Bulk email had per-recipient errors', data.errors)
-        } else {
-          toast.error(data.error || 'Failed to send emails')
         }
-        setBulkActionLoading(false)
       },
     }] : []),
     ...(segments.length > 0 ? [{
@@ -714,24 +630,15 @@ export default function ContactsDataTable({
       selectOptions: segments.map(s => ({ value: s.id, label: s.name })),
       onClick: async (ids: string[], input?: string, isSelectAllMatching?: boolean) => {
         if (!input) { toast.error('Select a segment'); return; }
-        setBulkActionLoading(true)
-        const res = await fetch('/api/tenant/contacts/bulk', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(buildBody('add_to_segment', ids, { segment_id: input }, isSelectAllMatching)),
-        })
-        const data = await res.json()
-        if (res.ok) {
+        const data = await runBulk(buildBody('add_to_segment', ids, { segment_id: input }, isSelectAllMatching), 'Failed to add to segment')
+        if (data) {
           toast.success(`Added ${data.affected} contacts to segment`)
           loadData(pagination.pageIndex)
-        } else {
-          toast.error(data.error || 'Failed to add to segment')
         }
-        setBulkActionLoading(false)
       },
     }] : []),
-    ];
-  }, [globalFilter, initialStatus, teamMembers, pagination.pageIndex, loadData, customFields, sequences, segments, emailTemplates])
+    ].map((a: BulkAction) => ({ ...a, disabled: a.disabled || bulkActionLoading })); // #2230: busy flag → action.disabled
+  }, [globalFilter, initialStatus, teamMembers, pagination.pageIndex, loadData, customFields, sequences, segments, emailTemplates, runBulk, bulkActionLoading])
 
   const handleAddContact = async (e: React.FormEvent) => {
     e.preventDefault()

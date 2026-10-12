@@ -4,9 +4,11 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { z } from 'zod';
+import { uuidIdSchema } from '@/lib/validation/uuid';
+import { CONTRACT_TYPES, INVOICE_STATUSES } from './schemas/billing';
 
 // ── Common helpers ──
-const uuid = z.string().uuid().optional().nullable().or(z.literal(''));
+const uuid = uuidIdSchema.optional().nullable().or(z.literal(''));
 const _optionalString = z.string().trim();
 const requiredString = z.string().trim().min(1);
 const _optionalDate = z.string().datetime().optional().nullable();
@@ -49,7 +51,7 @@ export const contactQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(200).default(50),
   q: z.string().optional(),
   lead_status: z.string().optional(),
-  company_id: z.string().uuid().optional().or(z.literal('')),
+  company_id: uuidIdSchema.optional().or(z.literal('')),
 });
 
 // ── Deal schemas ──
@@ -76,7 +78,7 @@ export const dealQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(500).default(200),
   stage_id: z.string().optional(),
   stage: z.string().optional(),
-  pipeline_id: z.string().uuid().optional(),
+  pipeline_id: uuidIdSchema.optional(),
   q: z.string().optional(),
   /**
    * Archive visibility. Deals are archived by setting metadata.archived = true
@@ -176,7 +178,7 @@ export const leadQuerySchema = z.object({
   source: z.string().optional(),
   // #1083 — surface the leads data model as filters
   lead_status: z.string().trim().max(50).optional(),
-  assigned_to: z.string().uuid().optional().or(z.literal('')),
+  assigned_to: uuidIdSchema.optional().or(z.literal('')),
   lifecycle_stage: z.string().trim().max(50).optional(),
   // Comma-separated tag list; every provided tag must be present on the lead.
   tags: z.string().trim().max(500).optional(),
@@ -209,32 +211,30 @@ export const taskQuerySchema = z.object({
   q: z.string().optional(),
   status: z.string().optional(),
   priority: z.string().optional(),
-  contact_id: z.string().uuid().optional(),
-  deal_id: z.string().uuid().optional(),
+  contact_id: uuidIdSchema.optional(),
+  deal_id: uuidIdSchema.optional(),
 });
 
 // ── Ticket schemas ──
-export const createTicketSchema = z.object({
-  subject: requiredString.max(300, 'Subject too long'),
-  description: z.string().trim().max(10000).nullable().optional(),
-  status: z.enum(['open', 'in_progress', 'pending', 'resolved', 'closed', 'awaiting_customer', 'on_hold', 'escalated']).optional().default('open'),
-  priority: z.enum(['low', 'medium', 'high', 'urgent', 'critical']).optional().default('medium'),
-  category: z.string().trim().max(100).nullable().optional(),
-  contact_id: uuid,
-  assigned_to: uuid,
-  tags: z.array(z.string()).optional().default([]),
-});
-
-export const updateTicketSchema = createTicketSchema.partial();
-
-export const ticketQuerySchema = z.object({
-  offset: z.coerce.number().int().min(0).default(0),
-  limit: z.coerce.number().int().min(1).max(200).default(50),
-  q: z.string().optional(),
-  status: z.string().optional(),
-  priority: z.string().optional(),
-  category: z.string().optional(),
-});
+/**
+ * The canonical definitions live in `./schemas/support.ts`. They are re-exported
+ * here instead of duplicated because #2285 needed a real change to the create
+ * contract — `support_tickets.body` is NOT NULL while `description` was optional,
+ * so a schema-valid POST 500'd and the error body echoed the whole SQL statement
+ * with its bound values. `description` and `body` are now both accepted and one of
+ * them must carry text.
+ *
+ * `ticketBodyText()` is the single place that decides which name wins, so the
+ * route cannot re introduce the null-into-NOT-NULL insert.
+ */
+export {
+  createTicketSchema,
+  updateTicketSchema,
+  ticketQuerySchema,
+  ticketBodyText,
+  type CreateTicketInput,
+  type UpdateTicketInput,
+} from './schemas/support';
 
 export const ticketReplySchema = z.object({
   content: requiredString.max(10000),
@@ -248,7 +248,7 @@ export const createInvoiceSchema = z.object({
   company_id: uuid,
   issue_date: z.string().date().default(() => new Date().toISOString().split('T')[0]!),
   due_date: z.string().date().optional().nullable(),
-  status: z.enum(['draft', 'sent', 'paid', 'overdue', 'cancelled', 'refunded', 'partially_paid', 'void']).optional().default('draft'),
+  status: z.enum(INVOICE_STATUSES).optional().default('draft'), // #2258 — one list with chk_invoices_status; see ./schemas/billing.ts
   line_items: z.array(z.object({
     description: z.string().max(500),
     quantity: z.coerce.number().min(0),
@@ -267,7 +267,7 @@ export const invoiceQuerySchema = z.object({
   offset: z.coerce.number().int().min(0).default(0),
   limit: z.coerce.number().int().min(1).max(200).default(50),
   status: z.string().optional(),
-  contact_id: z.string().uuid().optional(),
+  contact_id: uuidIdSchema.optional(),
 });
 
 // ── Quote schemas ──
@@ -313,7 +313,9 @@ export const createContractSchema = z.object({
   title: requiredString.max(200),
   contact_id: uuid,
   company_id: uuid,
-  type: z.string().trim().max(100).nullable().optional(),
+  // chk_contracts_contract_type admits exactly CONTRACT_TYPES and the column is
+  // NOT NULL, so free text here was a guaranteed 23514 on the way in.
+  type: z.enum(CONTRACT_TYPES).nullable().optional(),
   status: z.enum(['draft', 'active', 'expired', 'terminated', 'renewed', 'signed', 'pending_approval']).optional().default('draft'),
   start_date: z.string().date().default(() => new Date().toISOString().split('T')[0]!),
   end_date: z.string().date().optional().nullable(),
@@ -417,7 +419,7 @@ export const updatePipelineSchema = createPipelineSchema.partial();
 
 // ── Deal Stage schemas ──
 export const createDealStageSchema = z.object({
-  pipeline_id: z.string().uuid(),
+  pipeline_id: uuidIdSchema,
   name: requiredString.max(100),
   order: z.coerce.number().int().min(0).optional().default(0),
   probability: z.coerce.number().min(0).max(100).optional().default(0),
@@ -449,7 +451,11 @@ export const updateAutomationSchema = createAutomationSchema.partial();
 export const createWorkflowSchema = z.object({
   name: requiredString.max(200),
   description: z.string().trim().max(1000).nullable().optional(),
-  trigger_type: z.enum(['event', 'schedule', 'manual']).optional().default('event'),
+  // No default: the POST route answers 400 when this is missing, and a zod
+  // `.default()` silently materialises 'event' before the route ever sees it,
+  // so the guard was unreachable and every name-only request created an
+  // event-triggered workflow the caller never asked for.
+  trigger_type: z.enum(['event', 'schedule', 'manual']).optional(),
   trigger_config: z.record(z.string(), z.unknown()).optional().default({}),
   nodes: z.array(z.record(z.string(), z.unknown())).optional().default([]),
   edges: z.array(z.record(z.string(), z.unknown())).optional().default([]),
@@ -464,7 +470,9 @@ export const createSequenceSchema = z.object({
   description: z.string().trim().max(1000).nullable().optional(),
   status: z.enum(['draft', 'active', 'paused', 'completed']).optional().default('draft'),
   steps: z.array(z.object({
-    type: z.enum(['email', 'task', 'wait']),
+    // 'delay' is what sequence_steps.step_type allows (chk_sequence_steps_step_type)
+    // and what app/api/tenant/sequences writes verbatim; the UI labels it "Wait".
+    type: z.enum(['email', 'task', 'delay']),
     delay_minutes: z.coerce.number().int().min(0).optional().default(0),
     template_id: uuid,
     subject: z.string().max(200).optional(),
@@ -543,14 +551,14 @@ export const inviteMemberSchema = z.object({
   password: z.string().min(8, 'Password must be at least 8 characters').max(128).optional(),
   full_name: z.string().trim().min(1).max(200).optional(),
   role_slug: z.string().trim().toLowerCase().regex(/^[a-z0-9_-]{1,64}$/, 'Invalid role').optional().default('sales_rep'),
-  role_id: z.string().uuid().optional(),
+  role_id: uuidIdSchema.optional(),
   permissions: z.record(z.string(), z.boolean()).optional().default({}),
 });
 
 // ── Superadmin user update schema (PATCH /api/superadmin/users) ──
 // role/status enums MUST match the route's allowed values.
 export const updateSuperadminUserSchema = z.object({
-  id: z.string().uuid(),
+  id: uuidIdSchema,
   full_name: z.string().trim().max(200).optional().nullable(),
   role: z.enum(['admin', 'user', 'viewer']).optional(),
   status: z.enum(['active', 'suspended']).optional(),
@@ -558,11 +566,11 @@ export const updateSuperadminUserSchema = z.object({
 
 // ── Bulk operation schemas ──
 export const bulkDeleteSchema = z.object({
-  ids: z.array(z.string().uuid()).min(1, 'At least one ID required').max(1000),
+  ids: z.array(uuidIdSchema).min(1, 'At least one ID required').max(1000),
 });
 
 export const bulkUpdateSchema = z.object({
-  ids: z.array(z.string().uuid()).min(1, 'At least one ID required').max(1000),
+  ids: z.array(uuidIdSchema).min(1, 'At least one ID required').max(1000),
   updates: z.record(z.string(), z.unknown()),
 });
 
@@ -594,7 +602,7 @@ export const searchSchema = z.object({
 export const createKbArticleSchema = z.object({
   title: requiredString.max(300),
   content: requiredString.max(50000),
-  category_id: z.string().uuid().optional(),
+  category_id: uuidIdSchema.optional(),
   status: z.enum(['draft', 'published', 'archived', 'review', 'needs_review']).optional().default('draft'),
   tags: z.array(z.string()).optional().default([]),
   order: z.coerce.number().int().min(0).optional().default(0),
@@ -730,8 +738,8 @@ export const updateScheduledReportSchema = createScheduledReportSchema.partial()
 export const createBackupSchema = z.object({
   backup_type: z.enum(['full', 'schema', 'selective']).optional().default('full'),
   action: z.literal('restore').optional(),
-  backupId: z.string().uuid().optional(),
-  tenant_id: z.string().uuid().optional(),
+  backupId: uuidIdSchema.optional(),
+  tenant_id: uuidIdSchema.optional(),
 });
 
 export const backupConfigSchema = z.object({
@@ -765,7 +773,7 @@ export const createCustomFieldSchema = z.object({
 });
 
 export const updateCustomFieldSchema = z.object({
-  fieldId: z.string().uuid(),
+  fieldId: uuidIdSchema,
   fieldLabel: z.string().trim().max(200).optional(),
   fieldType: z.enum(customFieldTypes).optional(),
   fieldOptions: z.array(z.string()).optional().nullable(),
@@ -778,8 +786,8 @@ export const updateCustomFieldSchema = z.object({
 
 // ── Contact Merge schema ──
 export const mergeContactSchema = z.object({
-  primary_contact_id: z.string().uuid(),
-  duplicate_contact_id: z.string().uuid(),
+  primary_contact_id: uuidIdSchema,
+  duplicate_contact_id: uuidIdSchema,
   merge_strategy: z.record(z.string(), z.unknown()).optional().default({}),
   reason: z.string().trim().max(500).optional().nullable(),
 });
@@ -789,15 +797,15 @@ export const convertLeadSchema = z.object({
   create_deal: z.boolean().optional().default(false),
   deal_title: z.string().trim().max(200).optional().nullable(),
   deal_value: z.coerce.number().min(0).optional().default(0),
-  deal_stage: z.string().uuid().optional().nullable(),
-  pipeline_id: z.string().uuid().optional().nullable(),
-  assigned_to: z.string().uuid().optional().nullable(),
+  deal_stage: uuidIdSchema.optional().nullable(),
+  pipeline_id: uuidIdSchema.optional().nullable(),
+  assigned_to: uuidIdSchema.optional().nullable(),
 });
 
 // ── Trigger Workflow schema ──
 export const triggerWorkflowSchema = z.object({
   trigger_entity_type: requiredString.max(100),
-  trigger_entity_id: z.string().uuid(),
+  trigger_entity_id: uuidIdSchema,
 });
 
 // ── WhatsApp Send schema ──
@@ -807,7 +815,7 @@ export const sendWhatsAppSchema = z.object({
   content: z.record(z.string(), z.unknown()).optional().default({}),
   template_name: z.string().trim().max(100).optional().nullable(),
   language: z.string().max(10).optional().default('en'),
-  contact_id: z.string().uuid().optional().nullable(),
+  contact_id: uuidIdSchema.optional().nullable(),
 });
 
 // ── Email Test schema ──
@@ -826,14 +834,14 @@ export const publicLeadCaptureSchema = z.object({
   company: z.string().trim().max(200).optional().nullable(),
   message: z.string().trim().max(5000).optional().nullable(),
   source: z.string().trim().max(100).optional().default('Website Form'),
-  tenant_id: z.string().uuid(),
-  form_id: z.string().uuid().optional().nullable(),
+  tenant_id: uuidIdSchema,
+  form_id: uuidIdSchema.optional().nullable(),
   tags: z.array(z.string()).optional().default([]),
 });
 
 // ── Public Form Submit schema ──
 export const publicFormSubmitSchema = z.object({
-  form_id: z.string().uuid(),
+  form_id: uuidIdSchema,
   data: z.record(z.string(), z.unknown()).optional().default({}),
   values: z.record(z.string(), z.unknown()).optional().default({}),
 });
@@ -889,8 +897,8 @@ export const aiAssistantSchema = z.object({
 
 // ── Assign Contact schema (bulk assign) ──
 export const assignContactSchema = z.object({
-  contact_ids: z.array(z.string().uuid()).min(1, 'At least one contact ID required').max(500),
-  assign_to: z.string().uuid(),
+  contact_ids: z.array(uuidIdSchema).min(1, 'At least one contact ID required').max(500),
+  assign_to: uuidIdSchema,
   reason: z.string().trim().max(500).optional().nullable(),
 });
 
@@ -918,7 +926,7 @@ export const updateTelegramSchema = z.object({
 
 // ── Checkout Session schema ──
 export const checkoutSessionSchema = z.object({
-  plan_id: z.string().uuid(),
+  plan_id: uuidIdSchema,
 });
 
 // ── Superadmin schemas ──
@@ -990,13 +998,12 @@ export const updateProjectSchema = createProjectSchema.partial();
 export const createMilestoneSchema = z.object({
   title: requiredString.max(200, 'Title too long'),
   due_date: z.string().date().optional().nullable(),
-  project_id: z.string().uuid(),
+  project_id: uuidIdSchema,
 });
 
 export const linkTaskSchema = z.object({
-  task_id: z.string().uuid(),
+  task_id: uuidIdSchema,
 });
-
 
 // ── Type exports ──
 export type CreateContactInput = z.infer<typeof createContactSchema>;
@@ -1009,8 +1016,7 @@ export type CreateLeadInput = z.infer<typeof createLeadSchema>;
 export type UpdateLeadInput = z.infer<typeof updateLeadSchema>;
 export type CreateTaskInput = z.infer<typeof createTaskSchema>;
 export type UpdateTaskInput = z.infer<typeof updateTaskSchema>;
-export type CreateTicketInput = z.infer<typeof createTicketSchema>;
-export type UpdateTicketInput = z.infer<typeof updateTicketSchema>;
+// CreateTicketInput / UpdateTicketInput are re-exported with the schemas above.
 export type CreateInvoiceInput = z.infer<typeof createInvoiceSchema>;
 export type UpdateInvoiceInput = z.infer<typeof updateInvoiceSchema>;
 export type CreateQuoteInput = z.infer<typeof createQuoteSchema>;
@@ -1095,10 +1101,10 @@ export const followUpQuerySchema = z.object({
   offset: z.coerce.number().int().min(0).default(0),
   limit: z.coerce.number().int().min(1).max(200).default(50),
   status: z.string().optional(),
-  lead_id: z.string().uuid().optional(),
-  contact_id: z.string().uuid().optional(),
-  deal_id: z.string().uuid().optional(),
-  assigned_to: z.string().uuid().optional(),
+  lead_id: uuidIdSchema.optional(),
+  contact_id: uuidIdSchema.optional(),
+  deal_id: uuidIdSchema.optional(),
+  assigned_to: uuidIdSchema.optional(),
   due_before: z.string().datetime().optional(),
   due_after: z.string().datetime().optional(),
   missed_only: z.coerce.boolean().optional().default(false),
@@ -1202,7 +1208,7 @@ export const createWebhookFieldMappingSchema = z.object({
 });
 
 export const updateWebhookFieldMappingSchema = z.object({
-  id: z.string().uuid(),
+  id: uuidIdSchema,
   sourceKey: requiredString.max(200).optional(),
   targetType: z.enum(['custom_field', 'native']).optional(),
   targetKey: requiredString.max(200).optional(),

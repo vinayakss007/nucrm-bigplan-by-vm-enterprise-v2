@@ -59,5 +59,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     entry('/legal/privacy', 0.3, 'yearly'),
     entry('/legal/terms', 0.3, 'yearly'),
     entry('/legal/dpa', 0.3, 'yearly'),
+    entry('/legal/cookies', 0.3, 'yearly'),
+    entry('/legal/refunds', 0.3, 'yearly'),
   ];
 }

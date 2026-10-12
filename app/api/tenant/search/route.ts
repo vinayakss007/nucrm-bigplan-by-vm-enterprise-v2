@@ -14,6 +14,7 @@ import { tasks } from '@/drizzle/schema';
 import { eq, and, or, ilike, desc, sql, asc } from 'drizzle-orm';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { parseLimitOffset } from '@/lib/api/query-params';
 
 export const GET = withApiRoute(async (request: NextRequest) => {
   try {
@@ -27,7 +28,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     const { searchParams } = new URL(request.url);
     const q = searchParams.get('q')?.trim();
     const type = searchParams.get('type') ?? 'all'; // all | contacts | deals | companies | tasks
-    const limit = Math.min(50, parseInt(searchParams.get('limit') ?? '20'));
+    const { limit } = parseLimitOffset(searchParams, { defaultLimit: 20, maxLimit: 50 });
 
     if (!q || q.length < 1) {
       return NextResponse.json({ contacts: [], leads: [], deals: [], companies: [], tasks: [], total: 0 });
@@ -177,8 +178,8 @@ export const GET = withApiRoute(async (request: NextRequest) => {
 
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const total = (contactResults as any[]).length + (leadResults as any[]).length + (dealResults as any[]).length + (companyResults as any[]).length + (taskResults as any[]).length;
+    const total = [contactResults, leadResults, dealResults, companyResults, taskResults]
+      .reduce((acc, r) => acc + (Array.isArray(r) ? r.length : 0), 0);
     return NextResponse.json({ 
       contacts: contactResults, 
       leads: leadResults, 

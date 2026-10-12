@@ -160,6 +160,10 @@ services:
       - SENTRY_DSN=${SENTRY_DSN:-}
       - NEXT_PUBLIC_SENTRY_DSN=${NEXT_PUBLIC_SENTRY_DSN:-}
       - SENTRY_DISABLE=${SENTRY_DISABLE:-false}
+      # The runbook and docs/OPERATIONS.md have always told operators SENTRY_ENABLE
+      # is the telemetry switch, but it was never passed into the container, so the
+      # code could not see it. Both spellings now reach sentry.*.config.ts.
+      - SENTRY_ENABLE=${SENTRY_ENABLE:-}
       - SENTRY_TRACES_SAMPLE_RATE=${SENTRY_TRACES_SAMPLE_RATE:-0.1}
       - SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT:-production}
       - SENTRY_RELEASE=${SENTRY_RELEASE:-}
@@ -215,6 +219,17 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
+    # PP-029: Docker's 10 s default never applied, because the process exited on
+    # its own — and the `pool.end()` on that path is what made a measured stop take
+    # 35.93 s. Now that Next.js owns the exit and awaits `server.close()` for every
+    # open connection, this is the real bound on how long a redeploy will wait for
+    # live work: SIGTERM → drain → SIGKILL after 120 s.
+    # Deliberately not larger. `/api/cron/backup`'s pg_dump has a 10-minute
+    # timeout, and letting the grace period chase it would turn every deploy that
+    # overlaps the nightly window into a 10-minute outage. Jobs that long are
+    # protected by their own lock + idempotency (PP-030), not here; a stop inside
+    # their window still costs up to this value.
+    stop_grace_period: 120s
     restart: unless-stopped
     networks:
       - nucrm-net
@@ -427,6 +442,15 @@ services:
   alertmanager:
     image: prom/alertmanager:v0.27.0
     container_name: nucrm-alertmanager
+    # PP-034: alertmanager.yml dials http://host.docker.internal:9095/webhook, but this
+    # service was the only one of the four that needs it without `extra_hosts`, so the
+    # name never resolved here (10.8k `no such host` in its logs). `app`, `worker`,
+    # `pgbouncer` and `postgres-exporter` all already have this line.
+    # Note this only makes the URL resolvable — there is still nothing listening on 9095
+    # (`monitoring/alert-webhook.py` was never installed). Delivery stays broken until
+    # either that receiver runs or the URL points at an in-network service.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
       - ./monitoring/alertmanager/templates:/etc/alertmanager/templates:ro
@@ -541,6 +565,8 @@ services:
       - ./monitoring/promtail/promtail-config.yml:/etc/promtail/promtail-config.yml:ro
       - /var/log:/var/log:ro
       - nginx-logs:/var/log/nginx:ro
+      # #2053: docker_sd_configs target discovery (see promtail-config.yml)
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     command:
       - "--config.file=/etc/promtail/promtail-config.yml"
     deploy:

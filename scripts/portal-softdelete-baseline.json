@@ -1,0 +1,4 @@
+{
+  "_comment": "Waivers for deliberate non-filtered reads of a soft-deletable table (#2382). Empty as of #2444: the only entry was the `portal_token` → identity lookup in app/api/public/tickets/route.ts, and that branch is retired with the credential (0124), so there is nothing left to waive. Do not add an entry to make a failing screen pass — project the read or filter the tombstone.",
+  "entries": []
+}

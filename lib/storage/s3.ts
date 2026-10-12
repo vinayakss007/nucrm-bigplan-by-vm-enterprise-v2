@@ -13,7 +13,6 @@ import {
   PutObjectCommand,
   GetObjectCommand,
   ListObjectsV2Command,
-  DeleteObjectsCommand,
   DeleteObjectCommand,
 } from '@aws-sdk/client-s3';
 import { Readable } from 'stream';
@@ -100,19 +99,11 @@ export async function downloadBackup(key: string): Promise<Buffer> {
   return Buffer.concat(chunks);
 }
 
-export async function deleteOldBackups(keepCount: number = 30): Promise<void> {
-  const backups = await listBackups();
-  
-  if (backups.length <= keepCount) return;
-  
-  const toDelete = backups.slice(keepCount);
-  const objectsToDelete = toDelete.map(b => ({ Key: b.key }));
-  
-  await s3Client.send(new DeleteObjectsCommand({
-    Bucket: BUCKET,
-    Delete: { Objects: objectsToDelete },
-  }));
-}
+// No deleteOldBackups() here. It trimmed the bucket to the newest `keepCount`
+// objects with no regard for age, so a burst of same-day dumps could expire a
+// restore point minutes after it was written. Bucket expiry now lives solely in
+// purgeWithTieredRetention() (lib/backups/offsite.ts), which enforces the
+// MIN_RETENTION_DAYS floor and the mass-delete guard.
 
 export async function uploadFileToS3(
   data: Buffer | Uint8Array,
@@ -135,8 +126,7 @@ export async function getSignedUrl(key: string, expiresIn: number = 3600, bucket
   const command = new GetObjectCommand({ Bucket: bucket || BUCKET, Key: key });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return getSignedUrl(s3Client as any, command, { expiresIn });
+  return getSignedUrl(s3Client, command, { expiresIn });
 }
 
 /**
@@ -161,8 +151,7 @@ export async function getSignedPutUrl(args: {
   });
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return getSignedUrl(s3Client as any, command, {
+  return getSignedUrl(s3Client, command, {
     expiresIn: args.expiresInSeconds ?? 600, // 10 minutes
   });
 }

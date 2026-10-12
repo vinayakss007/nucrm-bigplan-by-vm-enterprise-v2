@@ -14,15 +14,21 @@ import { db } from '@/drizzle/db';
 import { tasks, contacts, users } from '@/drizzle/schema';
 import { eq, and, sql, desc, count, asc } from 'drizzle-orm';
 import { requireAuth } from '@/lib/auth/require-auth';
+import { requireApiKeyScope } from '@/lib/auth/api-key';
 import { limiters } from '@/lib/rate-limit';
 import { handleError, ValidationError } from '@/lib/errors';
 import { devLogger } from '@/lib/dev-logger';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { parseLimitOffset } from '@/lib/api/query-params';
 
 export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+
+    // #2215: an `ak_` key must actually carry the deals:read scope.
+    const scopeDenied = requireApiKeyScope(ctx, 'tasks:read');
+    if (scopeDenied) return scopeDenied;
 
     const rateCheck = await limiters.contacts.check(`tasks:${ctx.tenantId}`);
     if (!rateCheck.allowed) {
@@ -33,8 +39,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     }
 
     const { searchParams } = new URL(request.url);
-    const limit = Math.min(parseInt(searchParams.get('limit') || '50'), 100);
-    const offset = parseInt(searchParams.get('offset') || '0');
+    const { limit, offset } = parseLimitOffset(searchParams, { defaultLimit: 50, maxLimit: 100 });
     const status = searchParams.get('status') || '';
     const priority = searchParams.get('priority') || '';
 
@@ -102,6 +107,10 @@ export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+
+    // #2215: writes through an `ak_` key require the deals:write scope.
+    const scopeDenied = requireApiKeyScope(ctx, 'tasks:write');
+    if (scopeDenied) return scopeDenied;
 
     const rateCheck = await limiters.contacts.check(`tasks:${ctx.tenantId}`);
     if (!rateCheck.allowed) {

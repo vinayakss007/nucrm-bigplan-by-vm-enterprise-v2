@@ -16,6 +16,8 @@ import { createHash } from 'crypto';
 
 /** Queue of results handed out to successive `db.select()` calls. */
 let selectResults: any[][] = [];
+/** Queue of `UPDATE … RETURNING` row sets, one per `db.update()` call. */
+let updateResults: any[][] = [];
 /** Every mutation recorded in call order so tests can assert on payloads. */
 let calls: { op: string; table?: unknown; payload?: unknown }[] = [];
 
@@ -54,7 +56,10 @@ vi.mock('@/drizzle/db', () => {
     select: vi.fn(() => node(selectResults.shift() ?? [])),
     update: vi.fn((table: unknown) => {
       calls.push({ op: 'update', table });
-      return node([]);
+      // UPDATE resolves through .returning(): an empty queue entry means the
+      // statement matched no rows, which is how a wrong id or a foreign tenant
+      // looks to the caller.
+      return node(updateResults.shift() ?? [{ id: 'matched-row' }]);
     }),
     insert: vi.fn((table: unknown) => {
       calls.push({ op: 'insert', table });
@@ -75,6 +80,7 @@ vi.mock('@/drizzle/db', () => {
 
 beforeEach(() => {
   selectResults = [];
+  updateResults = [];
   calls = [];
   vi.clearAllMocks();
 });
@@ -144,9 +150,19 @@ describe('revokeApiKey', () => {
     expect(calls.find(c => c.op === 'set')!.payload).toEqual({ isActive: false });
   });
 
-  it('resolves true', async () => {
+  it('resolves true when the update matched a row', async () => {
+    updateResults = [[{ id: 'key-1' }]];
     const { revokeApiKey } = await import('@/lib/auth/api-key');
     await expect(revokeApiKey('key-1', 'tenant-1')).resolves.toBe(true);
+  });
+
+  it('resolves false when the update matched zero rows (wrong id or foreign tenant)', async () => {
+    // The whole reason this returns a boolean: the previous `return true` was
+    // unconditional, so revoking a key that did not exist looked like success and
+    // the DELETE route answered 200 for a no-op.
+    updateResults = [[]];
+    const { revokeApiKey } = await import('@/lib/auth/api-key');
+    await expect(revokeApiKey('missing', 'tenant-1')).resolves.toBe(false);
   });
 });
 
@@ -164,6 +180,18 @@ describe('rotateApiKey', () => {
     expect(ops.indexOf('update')).toBeGreaterThan(ops.indexOf('transaction'));
     expect(ops).toContain('insert');
     expect(calls.find(c => c.op === 'set')!.payload).toEqual({ isActive: false });
+  });
+
+  it('mints nothing when the old key was not found', async () => {
+    // Rotating a key that does not exist used to hand back a fresh live key and
+    // a 200 — an untracked credential. The revoke-matched-rows check now aborts
+    // the rotation instead.
+    updateResults = [[]];
+    const { rotateApiKey } = await import('@/lib/auth/api-key');
+    const result = await rotateApiKey('ghost', 't1', 'u1', 'rotated', ['all']);
+
+    expect(result).toBeNull();
+    expect(calls.some((c) => c.op === 'insert')).toBe(false);
   });
 
   it('returns a fresh key that hashes to the stored hash', async () => {

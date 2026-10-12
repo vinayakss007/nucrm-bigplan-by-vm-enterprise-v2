@@ -189,6 +189,14 @@ export function getPool(): Pool {
       // while the pool drains instead of piling on doomed requests.
       connectionTimeoutMillis: parseIntEnv(process.env['DATABASE_CONNECTION_TIMEOUT_MS'], 5_000),
       allowExitOnIdle: true,
+      // TCP keepalive (Sentry 7786045318/7786045342): without it a peer-dropped
+      // socket stays invisible in the idle pool until the NEXT borrower's first
+      // query dies with "Client has encountered a connection error and is not
+      // queryable" — seen killing the process-sequences cron on its tenant-GUC
+      // set_config. With it the kernel probes idle connections, pg emits
+      // 'error' on the dead client, and pg-pool removes it before reuse.
+      keepAlive: true,
+      keepAliveInitialDelayMillis: 10_000,
       statement_timeout: parseIntEnv(process.env['DATABASE_STATEMENT_TIMEOUT'], 10000),
     };
 
@@ -230,7 +238,7 @@ export function getPool(): Pool {
         // #1837: make a *persistent* failure observable instead of fully silent
         // — log at most once every 60s so a tearing-down client can't flood.
         void client
-          .query("SELECT set_config('app.current_tenant', '', false), set_config('app.current_user', '', false), set_config('app.is_super_admin', 'false', false), set_config('app.auth_lookup', '', false)")
+          .query("SELECT set_config('app.current_tenant', '', false), set_config('app.current_user', '', false), set_config('app.is_super_admin', 'false', false), set_config('app.auth_lookup', '', false), set_config('app.tracking_lookup', '', false), set_config('app.portal_lookup_token', '', false), set_config('app.portal_lookup_tenant', '', false), set_config('app.portal_lookup_email', '', false)")
           .catch((err: unknown) => {
             const now = Date.now();
             if (now - lastRlsResetWarnAt >= 60_000) {

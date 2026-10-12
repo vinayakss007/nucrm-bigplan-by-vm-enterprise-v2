@@ -15,7 +15,7 @@ import { escapeLike } from '@/lib/api/sanitize-like';
 import { NextRequest, NextResponse } from 'next/server';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { bulkUpdateSchema } from '@/lib/api/schemas';
-import { requireAuth, requirePerm } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm, type AuthContext } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { contacts, tenantMembers, sequences, sequenceEnrollments, segments, segmentMembers, companies, tenants } from '@/drizzle/schema';
 import { eq, and, sql, inArray, isNull, or, ilike } from 'drizzle-orm';
@@ -23,6 +23,7 @@ import { logAudit } from '@/lib/audit';
 import { logError } from '@/lib/errors-server';
 import { invalidateWidgetCache } from '@/lib/dashboard/widget-cache';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
+import { cancelOpenEnrollments } from '@/lib/cron/sequence-steps';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 const MAX_BULK = 500;
@@ -32,11 +33,11 @@ export const POST = withApiRoute(async (req: NextRequest) => {
   if (limited) return limited;
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let ctx: any;
+  let ctx!: AuthContext;
   try {
-    ctx = await requireAuth(req);
-    if (ctx instanceof NextResponse) return ctx;
+    const auth = await requireAuth(req);
+    if (auth instanceof NextResponse) return auth;
+    ctx = auth;
 
     const rawBody = await readJsonBody(req);
     const action = rawBody.action;
@@ -251,6 +252,15 @@ export const POST = withApiRoute(async (req: NextRequest) => {
             await tx.update(tenants)
               .set({ currentContacts: sql`greatest(0, ${tenants.currentContacts} - ${affected})` })
               .where(eq(tenants.id, ctx.tenantId));
+
+            // #2392: the single delete cancels in its tombstone transaction;
+            // this is the same write with a list of subjects, and the drip used
+            // to keep mailing all of them. Cancelling here rather than leaving
+            // the rows 'active' for the cron also means a restore cannot
+            // silently resume outbound email to people the tenant trashed.
+            extraResult.cancelledEnrollments = await cancelOpenEnrollments(tx, ctx.tenantId, {
+              contactIds: validIds,
+            });
           }
         });
         break;
@@ -397,7 +407,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
         const segId = payload['segment_id'] as string | undefined;
         if (!segId) return NextResponse.json({ error: 'segment_id required' }, { status: 400 });
         const [seg] = await db.select({ id: segments.id }).from(segments)
-          .where(and(eq(segments.id, segId), eq(segments.tenantId, ctx.tenantId)))
+          .where(and(eq(segments.id, segId), eq(segments.tenantId, ctx.tenantId), isNull(segments.deletedAt)))
           .limit(1);
         if (!seg) return NextResponse.json({ error: 'Segment not found' }, { status: 404 });
         const memberValues = validIds.map(entityId => ({ segmentId: segId, entityId, tenantId: ctx.tenantId }));

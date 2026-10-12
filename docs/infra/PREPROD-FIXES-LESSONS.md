@@ -4,7 +4,7 @@
 > That file answers *"what is broken / is it fixed"*. This file answers *"what did we change,
 > and what should we do differently next time"*. Append, never rewrite.
 >
-> - **Scope:** NuCRM pre-prod bring-up on UpCloud VM `95.111.194.98`
+> - **Scope:** NuCRM pre-prod bring-up on UpCloud VM `<PREPROD_HOST>`
 > - **Last updated:** 2026-09-15 (UTC)
 
 ## Fix log (chronological)
@@ -21,6 +21,7 @@
 | 2026-09-15 00:xx | PP-004 | delete the partial `${BACKUP_FILE}` when `pg_dump` fails                                | `deploy/scripts/backup.sh`                                |
 | 2026-09-15 01:xx | PP-003 | setup form sends the key in the `x-setup-key` header                                    | `app/setup/SetupClient.tsx`                               |
 | 2026-09-15 01:4x | PP-010…PP-012 | **diagnosed** (RLS blocks the pre-auth bootstrap paths) — fix pending decision | `drizzle/migrations/0054_rls_phase0.sql`                  |
+| 2026-10-09       | #2302 follow-up | redact 12 published IPv4s (this VM, PgBouncer, a customer) + a plaintext admin password | `docs/planning/TEST_PLAN.txt`, `docs/planning/issues-2026-06-02.txt`, `docs/infra/PREPROD-ISSUE-REGISTER.md`, `scripts/fire-cron.mts`, `tests/unit/deploy-host-literals-2302.test.ts` |
 
 ## Lessons
 
@@ -135,6 +136,23 @@ never by a dev-compose run of the same commit. On this stack `realtime` was heal
 kept returning "invalid credentials" and the Sentry issue looked cosmetic. Reading the catch body changed
 the severity call entirely: the swallowed failure was a security control (rate limiting) that no longer
 functioned.
+
+### L13 — A guard's "excluded on purpose" comment is a decision somebody has to actually make
+
+`tests/unit/deploy-host-literals-2302.test.ts` was shipped to keep the live host out of the repo, and it
+scanned exactly the surfaces where a host has a build-time *effect*: compose files, `Dockerfile`, `deploy/`,
+`.github/`. Docs were excluded in writing — "the infra runbooks describe the pre-prod address in prose and
+that is a separate decision". Twelve occurrences of publicly-routable addresses then stayed in the tree
+(8 in this register, 1 in this file, 1 in `scripts/fire-cron.mts`, 1 in `docs/planning/TEST_PLAN.txt`, 1 in
+`docs/planning/issues-2026-06-02.txt`), and the last of those came with a third-party customer's IP *and
+their ISP named next to it*. Alongside the address on `TEST_PLAN.txt:7` sat an admin email and its password
+in the clear — a live login for a URL reachable over plain HTTP, published in a public repo.
+
+**Rule:** a deliberate exclusion has to name the decision, who owns it and when it was made — "separate
+decision" with no owner and no date is how a leak becomes permanent while looking policed. Redaction is
+line-count preserving on purpose: `guard:coords` and `guard:register-drift` key on citations, and rewriting
+prose around a redaction would have rotted 244 pointers in the same commit that fixed the leak. Rotating the
+exposed account is **not** something a repo edit can do — that half is an owner action.
 
 ## Repro recipes
 

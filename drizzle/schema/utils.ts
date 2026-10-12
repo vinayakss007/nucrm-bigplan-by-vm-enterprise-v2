@@ -28,9 +28,13 @@ interface FkTableRef {
   id: unknown;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Must remain `any` so that `_tenantsRef?.id` satisfies Drizzle's `.references(() => PgColumn)` without an unsafe cast
+// Must stay any: Drizzle types .references() as `ref: () => PgColumn`, and the
+// "?? sql" fallback each reader passes is a SQL fragment, not a column. That
+// fallback is load-bearing — core.ts spreads utils.tenantId() into its own
+// tables before it reaches _registerFkRefs at the bottom of that file.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- any is required so the sql fallback satisfies .references(() => PgColumn) without an unsafe cast
 let _tenantsRef: any;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Must remain `any` so that `_usersRef?.id` satisfies Drizzle's `.references(() => PgColumn)` without an unsafe cast
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- same reason as _tenantsRef
 let _usersRef: any;
 
 export function _registerFkRefs(tenants: FkTableRef, users: FkTableRef): void {
@@ -50,12 +54,9 @@ export const deletedAt = () => timestamp('deleted_at', { withTimezone: true });
 
 export const metadata = () => jsonb('metadata').default({});
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Return type must be `any` so audit() spread is compatible with all pgTable column maps (Drizzle uses complex conditional builder types)
-export const createdBy = (): any => uuid('created_by').references(() => _usersRef?.id ?? sql`users.id`, { onDelete: 'set null' });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Return type must be `any` so audit() spread is compatible with all pgTable column maps
-export const updatedBy = (): any => uuid('updated_by').references(() => _usersRef?.id ?? sql`users.id`, { onDelete: 'set null' });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Return type must be `any` so audit() spread is compatible with all pgTable column maps
-export const deletedBy = (): any => uuid('deleted_by').references(() => _usersRef?.id ?? sql`users.id`, { onDelete: 'set null' });
+export const createdBy = () => uuid('created_by').references(() => _usersRef?.id ?? sql`users.id`, { onDelete: 'set null' });
+export const updatedBy = () => uuid('updated_by').references(() => _usersRef?.id ?? sql`users.id`, { onDelete: 'set null' });
+export const deletedBy = () => uuid('deleted_by').references(() => _usersRef?.id ?? sql`users.id`, { onDelete: 'set null' });
 
 // =============================================================================
 // HELPERS

@@ -13,8 +13,8 @@ import * as Sentry from '@sentry/nextjs';
  * The server logger in `lib/logger.ts` writes to the filesystem (`fs`/`path`)
  * and cannot be imported into `'use client'` components. In the browser, raw
  * `console.error(err)` calls (a) leak debug/PII detail into the user's console
- * and (b) never reach Sentry, so they bypass the PII scrubbing configured in
- * `sentry.client.config.ts` (`sendDefaultPii: false` + `scrubPii`).
+ * and (b) never reach Sentry, so they bypass the PII scrubbing wired up in
+ * `instrumentation-client.ts` (`dataCollection` off + `beforeSend: scrubPii`).
  *
  * This helper routes client-side errors to Sentry (which is already
  * PII-scrubbed) with a stable `context` tag, and only mirrors to the browser

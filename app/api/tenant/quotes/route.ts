@@ -15,6 +15,7 @@ import { requireAuth, requireModule } from '@/lib/auth/middleware';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { logError } from '@/lib/errors-server';
+import { clientDbErrorResponse } from '@/lib/api/db-client-error';
 
 export const GET = withApiRoute(async (request: NextRequest) => {
   try {
@@ -162,6 +163,10 @@ export const POST = withApiRoute(async (request: NextRequest) => {
 
     return NextResponse.json({ quote }, { status: 201 });
   } catch (error) {
+    // Postgres rejecting the caller's status is a bad request, not a server
+    // fault; this literal 500 hid it from withApiRoute's classifier.
+    const clientErr = clientDbErrorResponse(error, 'POST');
+    if (clientErr) return clientErr;
     await logError({ error, context: 'tenant/quotes POST', requestMethod: 'POST' });
     return NextResponse.json({ error: 'Failed to create quote' }, { status: 500 });
   }

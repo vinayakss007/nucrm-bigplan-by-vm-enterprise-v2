@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { cookieSecureForRequest } from '@/lib/auth/cookie-security';
 import { apiError } from '@/lib/api-error';
 import { initiateSSO, handleSSOCallback } from '@/lib/auth/sso';
 import { readJsonBody } from '@/lib/api/validate';
@@ -34,14 +35,14 @@ export async function GET(
     const response = NextResponse.redirect(redirectUrl);
     response.cookies.set('sso_state', state, {
       httpOnly: true,
-      secure: process.env['NODE_ENV'] === 'production',
+      secure: cookieSecureForRequest(req),
       sameSite: 'lax',
       maxAge: 600, // 10 minutes
       path: '/',
     });
     response.cookies.set('sso_tenant_id', tenantId, {
       httpOnly: true,
-      secure: process.env['NODE_ENV'] === 'production',
+      secure: cookieSecureForRequest(req),
       sameSite: 'lax',
       maxAge: 600,
       path: '/',
@@ -112,7 +113,7 @@ export async function POST(
     response.cookies.delete('sso_tenant_id');
     response.cookies.set('nucrm_session', result.token, {
       httpOnly: true,
-      secure: process.env['NODE_ENV'] === 'production',
+      secure: cookieSecureForRequest(req),
       sameSite: 'lax',
       maxAge: 30 * 24 * 60 * 60,
       path: '/',

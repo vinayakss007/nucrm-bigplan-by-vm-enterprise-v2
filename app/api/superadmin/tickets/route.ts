@@ -12,7 +12,6 @@ import { eq, and, sql, desc } from 'drizzle-orm';
 import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { concurrencyGuardById } from '@/lib/api/concurrency';
-import { generatePortalToken } from '@/lib/ticket-portal';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { logError } from '@/lib/errors-server';
 
@@ -120,9 +119,21 @@ export const POST = withApiRoute(async (request: NextRequest) => {
         body: ticketBody,
         category,
         priority,
-        portalToken: generatePortalToken(),
       })
-      .returning();
+      // #2498: `.returning()` handed the caller the live `portal_token` bearer
+      // credential and the whole 23-column row; name only the fields a create
+      // response needs. Same fix shape as #2440/#2443.
+      .returning({
+        id: supportTickets.id,
+        tenantId: supportTickets.tenantId,
+        subject: supportTickets.subject,
+        body: supportTickets.body,
+        status: supportTickets.status,
+        priority: supportTickets.priority,
+        category: supportTickets.category,
+        createdAt: supportTickets.createdAt,
+        updatedAt: supportTickets.updatedAt,
+      });
 
     return NextResponse.json({ data: row }, { status: 201 });
   } catch (err: unknown) {
@@ -142,8 +153,7 @@ export const PATCH = withApiRoute(async (request: NextRequest) => {
     if (validated instanceof NextResponse) return validated;
     const { id, status, resolution, assigned_to, updated_at } = validated.data;
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const updateData: any = { updatedAt: new Date() };
+    const updateData: Partial<typeof supportTickets.$inferInsert> = { updatedAt: new Date() };
     if (status) {
       updateData.status = status;
       if (status === 'resolved') {
@@ -177,7 +187,14 @@ export const PATCH = withApiRoute(async (request: NextRequest) => {
       .update(supportTickets)
       .set(updateData)
       .where(and(eq(supportTickets.id, id), eq(supportTickets.updatedAt, expectedUpdatedAt)))
-      .returning();
+      // #2504: the last argument-less `.returning()` on this table. `row` is read
+      // only by the presence check below and the response is `{ ok: true }`, so
+      // this was never a leak — but `RETURNING *` is 23 columns, `portal_token`
+      // (#2444's retired credential, still `NOT NULL` until `0124` lands) and
+      // `metadata` (#2443's operator prose) among them. One column is the whole
+      // requirement. `guard:public-projection` cannot see this site: its scope is
+      // `proxy.ts`'s anonymous surface (#2459) and this is a staff route.
+      .returning({ id: supportTickets.id });
 
     if (!row) return NextResponse.json({ error: 'Ticket was modified by another user — please refresh' }, { status: 409 });
     return NextResponse.json({ ok: true });

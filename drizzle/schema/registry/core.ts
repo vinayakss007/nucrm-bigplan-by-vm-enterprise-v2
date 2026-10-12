@@ -45,7 +45,7 @@ export const CORE_TABLES = {
       dependencies: [],
       description: 'Root tenant/organization records',
       isCore: true,
-      indexes: ['idx_tenants_slug', 'idx_tenants_subdomain', 'idx_tenants_metadata_g'],
+      indexes: ['idx_tenants_subdomain', 'idx_tenants_metadata_g'],
     },
   },
   users: {
@@ -60,7 +60,7 @@ export const CORE_TABLES = {
       dependencies: [],
       description: 'User accounts',
       isCore: true,
-      indexes: ['idx_users_email', 'idx_users_metadata_g', 'idx_users_active'],
+      indexes: ['idx_users_metadata_g', 'idx_users_active'],
     },
   },
   refreshTokens: {
@@ -135,7 +135,7 @@ export const CORE_TABLES = {
       dependencies: ['users'],
       description: 'User sessions',
       isCore: true,
-      indexes: ['idx_sessions_token'],
+      indexes: ['idx_sessions_user_id'],
     },
   },
   impersonationSessions: {

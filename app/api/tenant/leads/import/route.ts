@@ -14,7 +14,7 @@ import { leads, leadActivities, activities, tenants, plans } from '@/drizzle/sch
 import { eq, and, sql } from 'drizzle-orm';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { resolveOrCreateContactForLead } from '@/lib/contacts/resolve';
-import { generateLeadOid } from '@/lib/leads/oid';
+import { generateLeadOid, isLeadOidCollision } from '@/lib/leads/oid';
 import { logAudit } from '@/lib/audit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
@@ -150,8 +150,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       try {
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const mapped: any = {};
+        const mapped: Record<string, string> = {};
         for (const [key, val] of Object.entries(row)) {
           const dbCol = LEAD_COLUMN_MAP[key.toLowerCase().trim()];
           if (dbCol && val) mapped[dbCol] = val;
@@ -171,13 +170,22 @@ export const POST = withApiRoute(async (request: NextRequest) => {
           continue;
         }
 
-        const leadStatus = VALID_STATUSES.includes(mapped.leadStatus) ? mapped.leadStatus : 'new';
-        const lifecycle = VALID_LIFECYCLES.includes(mapped.lifecycleStage) ? mapped.lifecycleStage : 'lead';
-        const authority = VALID_AUTHORITY.includes(mapped.authorityLevel) ? mapped.authorityLevel : 'unknown';
+        const leadStatus = VALID_STATUSES.includes(mapped.leadStatus ?? "") ? mapped.leadStatus : 'new';
+        const lifecycle = VALID_LIFECYCLES.includes(mapped.lifecycleStage ?? "") ? mapped.lifecycleStage : 'lead';
+        const authority = VALID_AUTHORITY.includes(mapped.authorityLevel ?? "") ? mapped.authorityLevel : 'unknown';
         const tags = mapped.tags ? mapped.tags.split(/[;|]/).map((t: string) => t.trim()).filter(Boolean) : [];
         const scoreVal = mapped.score ? Math.min(100, Math.max(0, parseInt(mapped.score) || 0)) : 0;
         const budgetVal = mapped.budget ? mapped.budget.toString() : null;
-        const valueVal = mapped.value ? mapped.value.toString() : null;
+        // #2256: leads.value is money and is now CHECKed >= 0 at the DB level.
+        // A negative CSV value (e.g. annual-revenue exported as -1000) is
+        // dropped to NULL instead of aborting the whole import on a CHECK
+        // violation; unparseable strings keep the pre-existing behaviour.
+        const valueVal = (() => {
+          if (!mapped.value) return null;
+          const s = mapped.value.toString();
+          const n = Number(s);
+          return Number.isFinite(n) && n < 0 ? null : s;
+        })();
 
         // ── Existing-lead handling: dedupe / update / skip ────────────────
         if (email) {
@@ -238,7 +246,10 @@ export const POST = withApiRoute(async (request: NextRequest) => {
         }
 
         // ── New-lead path: resolve-or-create contact + insert lead, atomic per row ─
-        await db.transaction(async (tx) => {
+        // #2343: extracted into a factory so a lead_oid collision against the
+        // unique idx_leads_tenant_oid can re-run allocation instead of
+        // surfacing as a failed row.
+        const createLeadRowTx = () => db.transaction(async (tx) => {
           const resolve = await resolveOrCreateContactForLead(tx, ctx.tenantId, ctx.userId, {
             firstName,
             lastName: mapped.lastName || '',
@@ -329,12 +340,22 @@ export const POST = withApiRoute(async (request: NextRequest) => {
           else results.mergedContacts++;
         });
 
+        const MAX_IMPORT_ROW_RETRIES = 3;
+        for (let attempt = 0; attempt < MAX_IMPORT_ROW_RETRIES; attempt++) {
+          try {
+            await createLeadRowTx();
+            break;
+          } catch (rowTxErr) {
+            if (isLeadOidCollision(rowTxErr) && attempt < MAX_IMPORT_ROW_RETRIES - 1) continue;
+            throw rowTxErr;
+          }
+        }
+
         results.imported++;
  
  
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } catch (rowErr: any) {
-        results.errors.push(`Row ${index + 2}: ${rowErr.message}`);
+      } catch (rowErr) {
+        results.errors.push(`Row ${index + 2}: ${rowErr instanceof Error ? rowErr.message : String(rowErr)}`);
         results.skipped++;
       }
     }

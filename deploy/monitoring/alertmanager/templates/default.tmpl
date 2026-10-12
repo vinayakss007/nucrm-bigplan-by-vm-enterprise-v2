@@ -1,19 +1,28 @@
 {{/* vim: set ft=gotmpl */}}
 
-{{/* Slack webhook URL — first non-empty env var wins */}}
-{{- define "slack.nucrm.url" -}}
-  {{- $url := "" -}}
-  {{- if env "SLACK_WEBHOOK_URL" | not -}}
-    {{- $url = env "SLACK_WEBHOOK_URL" -}}
-  {{- end -}}
-  {{- $url -}}
-{{- end -}}
+{{/*
+  PP-034 — this file used to define `slack.nucrm.url` and `webhook.nucrm.url`, built like:
 
-{{/* Critical error webhook URL */}}
-{{- define "webhook.nucrm.url" -}}
-  {{- $url := "" -}}
-  {{- if env "CRITICAL_ERROR_WEBHOOK_URL" | not -}}
-    {{- $url = env "CRITICAL_ERROR_WEBHOOK_URL" -}}
-  {{- end -}}
-  {{- $url -}}
-{{- end -}}
+      {{- if env "SLACK_WEBHOOK_URL" | not -}}{{- $url = env "SLACK_WEBHOOK_URL" -}}{{- end -}}
+
+  Two independent reasons that never could have worked, both measured rather than assumed:
+
+  1. The condition is inverted — it assigns the variable only when it is empty.
+  2. `env` is not a function in Alertmanager's template funcmap. Proof:
+
+       amtool check-config <config that lists this file under `templates:`>
+       FAILED: template: default.tmpl:7: function "env" not defined
+
+  ...so adding a `templates:` key that references this file would make alertmanager refuse to
+  load its config, not start with empty URLs. `amtool check-config alertmanager.yml` currently
+  reports `0 templates`: this file is mounted at /etc/alertmanager/templates but never read,
+  and neither define was referenced anywhere.
+
+  Both defines are therefore deleted rather than fixed. A webhook URL belongs in
+  alertmanager.yml (`webhook_configs.url`), which compose cannot interpolate at that level;
+  if Slack is ever wired here, the URL has to come from the config file itself (rendered by
+  the deploy pipeline) or from a receiver integration — not from a template expression.
+
+  Keep this file comment-only unless `templates:` is added to alertmanager.yml AND something
+  here actually formats a message; re-run `amtool check-config` either way.
+*/}}

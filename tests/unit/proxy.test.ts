@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { readdirSync } from 'fs';
+import { join } from 'path';
 
 type MockHeaders = Map<string, string> & { set: ReturnType<typeof vi.fn>; get: ReturnType<typeof vi.fn> };
 
@@ -147,6 +149,54 @@ describe('proxy middleware', () => {
     });
   });
 
+  // Five handlers authenticate something other than a user session — a client
+  // secret, a provider HMAC, a per-plugin webhook secret — so no caller can ever
+  // present the JWT the edge demanded of them. Measured on the running app before
+  // this list existed: POST to each answered 401 {"error":"Authentication required"}
+  // from the middleware, i.e. the handler never ran. This is #2415's class again
+  // (e-sign and CSAT were missing from the same list and got added there).
+  describe('session-free credential routes', () => {
+    const credentialRoutes = [
+      '/api/auth/oauth/token',
+      '/api/auth/oauth/revoke',
+      '/api/webhooks/razorpay',
+      '/api/webhooks/payu',
+      '/api/webhooks/telegram/bot',
+      '/api/tenant/plugins/webhook/0f9d0000-0000-4000-8000-000000000001',
+    ];
+
+    it.each(credentialRoutes)('lets POST %s reach its handler', async (pathname) => {
+      const { proxy } = await import('@/proxy');
+      const res = await proxy(makeReq(pathname, { method: 'POST' }));
+      expect(res._isNext).toBe(true);
+    });
+
+    // The webhook receivers are exempt from the edge's rl:pub budget by design
+    // (proxy.ts — a provider retrying from rotating IPs must not be throttled),
+    // so each of them has to be cheap before it does anything. Measured in the
+    // handlers: telegram compares X-Telegram-Bot-Api-Secret-Token with
+    // timingSafeEqual before reading the body, razorpay HMAC-verifies before its
+    // first query, payu returns 503 unless configured and sha512-verifies the
+    // posted hash (length-checked timingSafeEqual) before its first query, and the
+    // plugin route rejects on a missing secret with 403. The two OAuth routes are
+    // not exempt and do self-limit at 20/min.
+    it('does not put the webhook receivers under the edge unauthenticated budget', async () => {
+      const { proxy } = await import('@/proxy');
+      await proxy(makeReq('/api/webhooks/telegram/bot', { method: 'POST' }));
+      expect(edgeCheckMock).not.toHaveBeenCalled();
+    });
+
+    // /api/tenant/visitors/track is NOT one of those handlers — no credential, no
+    // signature, no limiter — and it stays behind the session check until it earns
+    // a secret and a bucket of its own.
+    it('keeps POST /api/tenant/visitors/track behind the session check', async () => {
+      const { proxy } = await import('@/proxy');
+      const res = await proxy(makeReq('/api/tenant/visitors/track', { method: 'POST' }));
+      expect(res._isNext).toBeFalsy();
+      expect(res.status).toBe(401);
+    });
+  });
+
   // #1992: CSP/nonce work belongs on HTML document responses only — RSC
   // flight-payload prefetches must skip it, and the nonce must be edge-safe
   // (WebCrypto base64, still matching Next's nonce regex).
@@ -265,6 +315,52 @@ describe('proxy middleware', () => {
     });
   });
 
+  // #2215: the `ak_` Bearer pass-through used to skip JWT verification, CSRF
+  // and edge rate limiting on EVERY path — which made the deprecated
+  // POST /api/v1/auth/login anonymously brute-forceable with a junk
+  // `Bearer ak_x`. It is now gated to the data-API surfaces and rate limited.
+  describe('ak_ API-key pass-through gating (#2215)', () => {
+    it('rejects a junk ak_ Bearer on /api/v1/auth/login with 401 instead of bypassing', async () => {
+      const { proxy } = await import('@/proxy');
+      const res = await proxy(makeReq('/api/v1/auth/login', {
+        method: 'POST',
+        headers: { authorization: 'Bearer ak_live_deadbeef' },
+      }));
+      expect(res.status).toBe(401);
+      expect(res._isNext).toBeUndefined();
+    });
+
+    it('rejects ak_ Bearer on non-key surfaces (e.g. tenant dashboard page)', async () => {
+      const { proxy } = await import('@/proxy');
+      // Non-API page path: no cookie -> redirect to login, not a pass-through.
+      const res = await proxy(makeReq('/tenant/dashboard', {
+        headers: { authorization: 'Bearer ak_live_deadbeef' },
+      }));
+      expect(res._isRedirect).toBe(true);
+      expect(res._isNext).toBeUndefined();
+    });
+
+    it('passes ak_ Bearer through on /api/v1 data routes WITH an IP-keyed edge budget', async () => {
+      const { proxy } = await import('@/proxy');
+      const res = await proxy(makeReq('/api/v1/leads', {
+        headers: { authorization: 'Bearer ak_live_deadbeef' },
+      }));
+      expect(res._isNext).toBe(true);
+      expect(edgeCheckMock).toHaveBeenCalled();
+      const key = edgeCheckMock.mock.calls[0][0] as string;
+      expect(key).toMatch(/^rl:apikey-edge:/);
+    });
+
+    it('treats an ak_ value in the session cookie as no token (never a JWT bypass)', async () => {
+      const { proxy } = await import('@/proxy');
+      const res = await proxy(makeReq('/api/tenant/contacts', {
+        cookies: { nucrm_session: 'ak_live_deadbeef' },
+      }));
+      expect(res.status).toBe(401);
+      expect(mockJwtVerify).not.toHaveBeenCalled();
+    });
+  });
+
   describe('requestId', () => {
     it('sets x-request-id on responses', async () => {
       const { proxy } = await import('@/proxy');
@@ -297,6 +393,95 @@ describe('proxy middleware', () => {
       const fwd = res._requestHeaders?.get('x-request-id');
       expect(fwd).toBeTruthy();
       expect(fwd).toBe(res.headers.get('x-request-id'));
+    });
+  });
+
+  // #2313: `/login` is a bookmarked legacy alias with no route behind it.
+  // Anonymous visitors must keep the exact 307 → /auth/login?callbackUrl=%2Flogin;
+  // authenticated sessions used to fall through the proxy and hard-404 on the
+  // missing page — they must now be redirected to the post-login landing.
+  describe('/login alias by auth state (#2313)', () => {
+    it('keeps the anonymous 307 to /auth/login?callbackUrl=%2Flogin byte-identical', async () => {
+      const { proxy } = await import('@/proxy');
+      const res = await proxy(makeReq('/login'));
+      expect(res._isRedirect).toBe(true);
+      expect(res._isNext).toBeUndefined();
+      expect(String(res.url)).toBe('http://localhost:3000/auth/login?callbackUrl=%2Flogin');
+      expect(res.headers.get('x-request-id')).toBeTruthy();
+    });
+
+    it('redirects an authenticated session to /tenant/dashboard instead of 404ing', async () => {
+      mockJwtVerify.mockResolvedValue({ payload: { sub: 'user-123' } });
+      const { proxy } = await import('@/proxy');
+      // Unique token: the module-level 10s JWT cache (#1992) persists across
+      // tests, so reusing 'valid-token' could skip jwtVerify and fail the spy.
+      const res = await proxy(makeReq('/login', { cookies: { nucrm_session: 'login-alias-2313-token' } }));
+      expect(res._isRedirect).toBe(true);
+      // Must NOT fall through to the router (that fall-through was the 404).
+      expect(res._isNext).toBeUndefined();
+      expect(String(res.url)).toBe('http://localhost:3000/tenant/dashboard');
+      expect(res.headers.get('x-request-id')).toBeTruthy();
+      expect(mockJwtVerify).toHaveBeenCalled();
+    });
+
+    it('does not change behavior for other authenticated page navigations', async () => {
+      mockJwtVerify.mockResolvedValue({ payload: { sub: 'user-123' } });
+      const { proxy } = await import('@/proxy');
+      const res = await proxy(makeReq('/tenant/contacts', { cookies: { nucrm_session: 'valid-token' } }));
+      expect(res._isNext).toBe(true);
+      expect(res._isRedirect).toBeUndefined();
+      expect(res.headers.get('content-security-policy')).toContain('nonce-');
+    });
+
+    it('does not change behavior for other anonymous protected paths (callbackUrl intact)', async () => {
+      const { proxy } = await import('@/proxy');
+      const res = await proxy(makeReq('/tenant/contacts'));
+      expect(res._isRedirect).toBe(true);
+      expect(String(res.url)).toBe('http://localhost:3000/auth/login?callbackUrl=%2Ftenant%2Fcontacts');
+    });
+  });
+
+  // #2415: the seam between the edge and the public routes went untested for
+  // as long as both halves existed — `proxy()` was tested for the auth split,
+  // the handlers were tested by calling them directly, and nothing ever asked
+  // whether an anonymous browser request *reaches* a handler. /api/public/sign
+  // and /api/public/csat were 401'd by the edge from the day they shipped.
+  // Paths are derived from the route tree rather than listed by hand, so the
+  // next public route added without a PUBLIC_PATHS entry fails here instead of
+  // shipping dead.
+  const publicApiRoutePaths = (() => {
+    const root = join(process.cwd(), 'app', 'api', 'public');
+    const walk = (rel: string): string[] =>
+      readdirSync(rel ? join(root, rel) : root, { withFileTypes: true }).flatMap((ent) => {
+        const child = rel ? `${rel}/${ent.name}` : ent.name;
+        if (ent.isDirectory()) return walk(child);
+        if (ent.name !== 'route.ts') return [];
+        return ['/api/public/' + child.replace(/\/route\.ts$/, '').replace(/\[[^\]]+\]/g, 'TOKEN')];
+      });
+    return walk('').sort();
+  })();
+
+  describe('public API routes reach their handler anonymously (#2415)', () => {
+    it('derives the list from app/api/public, not from a hand-written roster', () => {
+      expect(publicApiRoutePaths).toContain('/api/public/sign/TOKEN');
+      expect(publicApiRoutePaths).toContain('/api/public/csat/TOKEN');
+      expect(publicApiRoutePaths.length).toBeGreaterThanOrEqual(14);
+    });
+
+    for (const path of publicApiRoutePaths) {
+      for (const method of ['GET', 'POST']) {
+        it(`${method} ${path} passes the edge with no session`, async () => {
+          const { proxy } = await import('@/proxy');
+          const res = await proxy(makeReq(path, { method }));
+          expect(res._isNext, `${method} ${path} was intercepted: ${JSON.stringify(res.body ?? res.status)}`).toBe(true);
+        });
+      }
+    }
+
+    it('control: a protected API path is still 401 for an anonymous caller', async () => {
+      const { proxy } = await import('@/proxy');
+      const res = await proxy(makeReq('/api/tenant/contacts'));
+      expect(res.status).toBe(401);
     });
   });
 });

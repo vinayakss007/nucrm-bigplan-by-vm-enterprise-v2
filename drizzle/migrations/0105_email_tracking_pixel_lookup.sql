@@ -1,0 +1,42 @@
+-- 0105: a read path for the two public email-tracking endpoints.
+--
+-- /api/track/open and /api/track/click are unauthenticated: they identify the
+-- mail by an unguessable tracking uuid in the query string, and which tenant
+-- that row belongs to is exactly what the read exists to discover. But
+-- email_tracking carries one policy, tenant_isolation, whose USING clause
+-- compares tenant_id to app.current_tenant — unset on these routes. So the
+-- lookup matches nothing, `row` is null, and both endpoints degrade silently:
+--
+--   /open  still returns the 1x1 GIF and records nothing. open_count never
+--          moves, so the "email opened" activity never appears on the contact.
+--   /click fails its #1981 gate, so every link in every mail redirects to '/'
+--          instead of the destination the sender wrapped around it.
+--
+-- Measured on preprod (scripts/probe-open-tracking.ts, 2026-10-02): a row
+-- seeded through the tenant context a sender uses was invisible to a
+-- no-context session, and GET /api/track/open?t=<that id> answered
+-- 200 image/gif while leaving open_count=0, opened_at=NULL.
+--
+-- Granted the way 0088 and 0099 granted the same shape of thing: SELECT only,
+-- behind its own GUC, which nothing outside withTrackingLookupContext() ever
+-- sets and which is transaction-local inside it (reset on every pooled
+-- checkout — lib/db/pool.ts, lib/db/request-connection.ts).
+--
+-- It is deliberately NOT app.is_super_admin. That GUC already admits SELECT on
+-- activities, error_logs and tenants; handing it to a public endpoint would
+-- mean any bug in these two routes turns into a cross-tenant read with the
+-- platform's widest context. This grants one table, reads only, and the write
+-- half still has to open its own withTenantContext() transaction — so widening
+-- SELECT cannot let anyone move another tenant's counters.
+--
+-- Written as a drop-then-create DO block (0100's shape) rather than a bare
+-- CREATE POLICY, so that applying it by hand and having a later `db:migrate`
+-- replay it are the same no-op instead of a duplicate-object abort.
+DO $$
+BEGIN
+  DROP POLICY IF EXISTS "email_tracking_pixel_lookup" ON "email_tracking";
+  CREATE POLICY "email_tracking_pixel_lookup" ON "email_tracking"
+    AS PERMISSIVE
+    FOR SELECT
+    USING (((current_setting('app.tracking_lookup', true))::text = 'true'::text));
+END $$;

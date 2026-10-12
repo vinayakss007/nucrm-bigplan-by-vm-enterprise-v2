@@ -10,7 +10,6 @@
   "/api/auth/sso/[provider]",
   "/api/dev/dashboard",
   "/api/emergency/recover",
-  "/api/forms",
   "/api/keepalive",
   "/api/leads/public",
   "/api/public/csat/[token]",

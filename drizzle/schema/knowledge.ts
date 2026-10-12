@@ -19,12 +19,15 @@ export const kbCategories = pgTable('kb_categories', {
   ...utils.audit(),
 }, (table) => {
   return {
+    deletedByFk2261Idx: index("kb_categories_deleted_by_fk_idx").on(table.deletedBy),
+    updatedByFk2261Idx: index("kb_categories_updated_by_fk_idx").on(table.updatedBy),
     tenantIdx: utils.tenantIdx(table),
     activeIdx: utils.activeIdx(table),
     slugIdx: index('idx_kb_categories_slug').on(table.tenantId, table.slug),
     // #1054: index the self-referential parentId used to build the category tree.
     parentIdx: index('idx_kb_categories_parent').on(table.parentId),
-  };
+  
+  drz2255_idx_kb_categories_created_by: index('idx_kb_categories_created_by').on(table.createdBy),};
 });
 
 export const kbArticles = pgTable('kb_articles', {
@@ -45,6 +48,8 @@ export const kbArticles = pgTable('kb_articles', {
   publishedAt: timestamp('published_at', { withTimezone: true }),
 }, (table) => {
   return {
+    deletedByFk2261Idx: index("kb_articles_deleted_by_fk_idx").on(table.deletedBy),
+    updatedByFk2261Idx: index("kb_articles_updated_by_fk_idx").on(table.updatedBy),
     tenantIdx: utils.tenantIdx(table),
     categoryIdx: index('idx_kb_articles_category').on(table.categoryId),
     statusIdx: index('idx_kb_articles_status').on(table.tenantId, table.status),
@@ -54,5 +59,6 @@ export const kbArticles = pgTable('kb_articles', {
     ),
     metadataGinIdx: utils.metadataIdx(table),
     activeIdx: utils.activeIdx(table),
-  };
+  
+  drz2255_idx_kb_articles_created_by: index('idx_kb_articles_created_by').on(table.createdBy),};
 });

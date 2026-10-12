@@ -40,7 +40,13 @@ export async function POST(request: NextRequest) {
     }
 
     const [client] = await db
-      .select()
+      .select({
+        // 2 of `oauth_clients`' 9 columns (measured via getTableColumns): the id
+        // the tokens hang off, plus the secret this route exists to verify.
+        // tenant_id, redirect_uris and created_by have no reader here.
+        id: oauthClients.id,
+        clientSecret: oauthClients.clientSecret,
+      })
       .from(oauthClients)
       .where(and(eq(oauthClients.clientId, clientId), eq(oauthClients.isActive, true)))
       .limit(1);
@@ -71,14 +77,42 @@ export async function POST(request: NextRequest) {
       }
 
       const [authCode] = await db
-        .select()
+        .select({
+          // 5 of `oauth_codes`' 9 columns (measured via getTableColumns): id is the
+          // UPDATE's target and usedAt the replay gate; userId + scope are the only
+          // values that reach the inserted token; redirectUri is only compared. `code`
+          // and clientId stay WHERE predicates.
+          id: oauthCodes.id,
+          userId: oauthCodes.userId,
+          redirectUri: oauthCodes.redirectUri,
+          scope: oauthCodes.scope,
+          usedAt: oauthCodes.usedAt,
+        })
         .from(oauthCodes)
-        .where(and(eq(oauthCodes.code, code), gt(oauthCodes.expiresAt, new Date())))
+        // authorize writes client_id onto the code it mints, so the binding is
+        // already recorded — this just stops another authenticated client from
+        // redeeming it (RFC 6749 §4.1.3). Without it a secret for client B turns a
+        // code issued to client A into a token carrying A's user and scope.
+        .where(and(
+          eq(oauthCodes.code, code),
+          eq(oauthCodes.clientId, client.id),
+          gt(oauthCodes.expiresAt, new Date()),
+        ))
         .limit(1);
 
       if (!authCode || authCode.usedAt) {
         return NextResponse.json(
           { error: 'invalid_grant', error_description: 'Invalid or expired code' },
+          { status: 400 }
+        );
+      }
+
+      // Same section: a redirect_uri sent with the authorization request must be
+      // repeated here. Omitting it on both sides stays legal.
+      const codeRedirectUri = formData.get('redirect_uri') as string | null;
+      if (codeRedirectUri && codeRedirectUri !== authCode.redirectUri) {
+        return NextResponse.json(
+          { error: 'invalid_grant', error_description: 'redirect_uri does not match the authorization request' },
           { status: 400 }
         );
       }
@@ -99,7 +133,13 @@ export async function POST(request: NextRequest) {
             scope: authCode.scope,
             expiresAt: new Date(Date.now() + 3600 * 1000),
           })
-          .returning();
+          // The response is built from these two fields alone — this is the
+          // OAuth token endpoint, so RETURNING * would hand the caller columns
+          // it never asked for.
+          .returning({
+            accessToken: oauthTokens.accessToken,
+            refreshToken: oauthTokens.refreshToken,
+          });
       });
 
       if (!token) {
@@ -127,9 +167,24 @@ export async function POST(request: NextRequest) {
       }
 
       const [existingToken] = await db
-        .select()
+        .select({
+          // 4 of `oauth_tokens`' 9 columns (measured via getTableColumns): id deletes
+          // the old row, expiresAt gates the grant, userId + scope are carried onto
+          // the replacement. The refresh token itself and clientId are WHERE
+          // predicates and never re-enter scope after the lookup.
+          id: oauthTokens.id,
+          userId: oauthTokens.userId,
+          scope: oauthTokens.scope,
+          expiresAt: oauthTokens.expiresAt,
+        })
         .from(oauthTokens)
-        .where(eq(oauthTokens.refreshToken, refreshToken))
+        // Rotation stays inside the client that minted the token: a refresh token
+        // leaked to a second client must not keep working under that client's own
+        // secret.
+        .where(and(
+          eq(oauthTokens.refreshToken, refreshToken),
+          eq(oauthTokens.clientId, client.id),
+        ))
         .limit(1);
 
       if (!existingToken || existingToken.expiresAt < new Date()) {
@@ -152,7 +207,13 @@ export async function POST(request: NextRequest) {
             scope: existingToken.scope,
             expiresAt: new Date(Date.now() + 3600 * 1000),
           })
-          .returning();
+          // The response is built from these two fields alone — this is the
+          // OAuth token endpoint, so RETURNING * would hand the caller columns
+          // it never asked for.
+          .returning({
+            accessToken: oauthTokens.accessToken,
+            refreshToken: oauthTokens.refreshToken,
+          });
       });
 
       if (!newToken) {

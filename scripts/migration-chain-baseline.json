@@ -1,0 +1,14 @@
+{
+  "_comment": "Known migration-chain defects. Shrink this file as they are fixed; the guard fails on any NEW one and hints when one disappears. Regenerate: node scripts/check-migration-chain.mjs --update",
+  "counts": {
+    "files": 113,
+    "entries": 113
+  },
+  "violations": {
+    "missing": [],
+    "orphans": [],
+    "dupIdx": [],
+    "dupWhen": [],
+    "order": []
+  }
+}

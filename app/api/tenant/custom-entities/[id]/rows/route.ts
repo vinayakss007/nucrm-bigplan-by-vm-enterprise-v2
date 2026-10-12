@@ -11,6 +11,7 @@ import { eq, and, isNull, desc, sql } from 'drizzle-orm';
 import { readJsonBody } from '@/lib/api/validate';
 import { apiError } from '@/lib/api-error';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { parseLimitOffset } from '@/lib/api/query-params';
 
 export const GET = withApiRoute(async (request: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
@@ -20,8 +21,7 @@ export const GET = withApiRoute(async (request: NextRequest, { params }: { param
     const entityId = (await params).id;
     const url = new URL(request.url);
     const search = url.searchParams.get('search') || '';
-    const limit = Math.min(parseInt(url.searchParams.get('limit') || '50'), 100);
-    const offset = parseInt(url.searchParams.get('offset') || '0');
+    const { limit, offset } = parseLimitOffset(url.searchParams, { defaultLimit: 50, maxLimit: 100 });
 
     const conditions = [
       eq(customEntityData.tenantId, ctx.tenantId),

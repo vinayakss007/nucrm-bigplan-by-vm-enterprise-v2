@@ -33,7 +33,8 @@ export const loginBlocks = pgTable('login_blocks', {
 }, (table) => ({
   identifierTypeUnique: uniqueIndex('idx_login_blocks_identifier_type').on(table.identifier, table.identifierType),
   untilIdx: index('idx_login_blocks_until').on(table.blockedUntil),
-}));
+
+  drz2255_idx_login_blocks_identifier: index('idx_login_blocks_identifier').on(table.identifier),}));
 
 export const securityEvents = pgTable('security_events', {
   id: utils.pk(),
@@ -83,5 +84,6 @@ export const ssoSessions = pgTable('sso_sessions', {
     userIdx: index('idx_sso_sessions_user').on(table.userId, table.createdAt),
     sessionIdx: index('idx_sso_sessions_id').on(table.sessionId),
     tenantIdx: utils.tenantIdx(table),
-  };
+  
+  drz2255_idx_sso_sessions_provider_id: index('idx_sso_sessions_provider_id').on(table.providerId),};
 });

@@ -4,14 +4,13 @@ import { db } from './drizzle/db';
 async function verify() {
   console.log('🚀 Starting Schema Validation Scan...');
   
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const tables = Object.keys(schema).filter(key => typeof (schema as any)[key] === 'object');
+  const schemaExports = schema as Record<string, unknown>;
+  const tables = Object.keys(schemaExports).filter(key => typeof schemaExports[key] === 'object');
   console.log(`📊 Found ${tables.length} exported schema entities.`);
 
   // Basic check for table definitions
   for (const tableName of tables) {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const table = (schema as any)[tableName];
+    const table = schemaExports[tableName] as { getColumns?: () => Record<string, unknown> } | undefined;
     if (table && typeof table.getColumns === 'function') {
       const columns = Object.keys(table.getColumns());
       console.log(`✅ Table "${tableName}": Valid (${columns.length} columns)`);

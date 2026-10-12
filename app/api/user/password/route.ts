@@ -10,7 +10,7 @@ import { db } from '@/drizzle/db';
 import { withUserContext } from '@/lib/db/rls';
 import { users, sessions } from '@/drizzle/schema';
 import { eq } from 'drizzle-orm';
-import { verifyPassword, hashPassword, createToken, hashToken, setSessionCookie } from '@/lib/auth/session';
+import { verifyPassword, hashPassword, createToken, hashToken, setSessionCookie, validatePassword } from '@/lib/auth/session';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { changePasswordSchema } from '@/lib/api/schemas';
 import { concurrencyGuardById } from '@/lib/api/concurrency';
@@ -30,10 +30,8 @@ export const PATCH = withApiRoute(async (request: NextRequest) => {
     if (conflict) return conflict;
 
     // Password validation
-    if (new_password.length < 12) return NextResponse.json({ error: 'New password must be at least 12 characters' }, { status: 400 });
-    if (!/[A-Z]/.test(new_password)) return NextResponse.json({ error: 'Password must contain an uppercase letter' }, { status: 400 });
-    if (!/[0-9]/.test(new_password)) return NextResponse.json({ error: 'Password must contain a number' }, { status: 400 });
-    if (!/[!@#$%^&*(),.?":{}|<>]/.test(new_password)) return NextResponse.json({ error: 'Password must contain a special character' }, { status: 400 });
+    const passwordError = validatePassword(new_password);
+    if (passwordError) return NextResponse.json({ error: passwordError }, { status: 400 });
 
     const userRow = await db.query.users.findFirst({
       where: eq(users.id, ctx.userId),

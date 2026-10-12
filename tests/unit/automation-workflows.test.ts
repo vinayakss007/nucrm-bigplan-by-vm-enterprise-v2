@@ -50,8 +50,9 @@ import {
   getAllWorkflows,
   getWorkflowsByCategory,
 } from '@/lib/automation/workflows';
+import type { WorkflowEventData } from '@/lib/automation/types';
 
-const exec = (id: string, data: unknown) => getWorkflow(id)!.actions[0]!.execute(data);
+const exec = (id: string, data: WorkflowEventData) => getWorkflow(id)!.actions[0]!.execute(data);
 
 beforeEach(() => {
   vi.clearAllMocks();

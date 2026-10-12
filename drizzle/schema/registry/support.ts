@@ -53,7 +53,7 @@ export const SUPPORT_TABLES = {
       dependencies: ['webhooks'],
       description: 'Queued webhook deliveries with retry logic',
       isCore: false,
-      indexes: ['idx_webhook_queue_webhook_id', 'idx_webhook_queue_status', 'idx_webhook_queue_next_retry'],
+      indexes: ['idx_webhook_deliveries_webhook_id', 'idx_webhook_deliveries_status', 'idx_webhook_deliveries_next_retry'],
     },
   },
   failedWebhooks: {

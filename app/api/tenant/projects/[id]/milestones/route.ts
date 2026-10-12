@@ -12,6 +12,7 @@ import { db } from '@/drizzle/db';
 import { milestones, projects } from '@/drizzle/schema';
 import { eq, and, isNull } from 'drizzle-orm';
 import { z } from 'zod';
+import { uuidIdSchema } from '@/lib/validation/uuid';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { concurrencyGuard } from '@/lib/api/concurrency';
 import { logError } from '@/lib/errors-server';
@@ -112,7 +113,7 @@ export const POST = withApiRoute(async (request: NextRequest,
 });
 
 const updateMilestoneSchema = z.object({
-  milestone_id: z.string().uuid(),
+  milestone_id: uuidIdSchema,
   title: z.string().trim().max(200).optional(),
   due_date: z.string().date().optional().nullable(),
   completed: z.boolean().optional(),
@@ -175,7 +176,7 @@ export const PATCH = withApiRoute(async (request: NextRequest,
 });
 
 const deleteMilestoneSchema = z.object({
-  milestone_id: z.string().uuid(),
+  milestone_id: uuidIdSchema,
 });
 
 export const DELETE = withApiRoute(async (request: NextRequest,

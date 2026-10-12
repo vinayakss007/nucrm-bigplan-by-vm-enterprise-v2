@@ -44,7 +44,14 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     }
 
     const [client] = await db
-      .select()
+      .select({
+        // The only two fields this step can use. `client_secret` in particular:
+        // this route authenticates nothing — anyone who can name a client_id
+        // reaches this line — so it must not have the secret in scope on its way
+        // to issuing a code.
+        id: oauthClients.id,
+        redirectUris: oauthClients.redirectUris,
+      })
       .from(oauthClients)
       .where(and(eq(oauthClients.clientId, clientId), eq(oauthClients.isActive, true)))
       .limit(1);

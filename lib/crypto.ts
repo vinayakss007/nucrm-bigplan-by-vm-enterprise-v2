@@ -14,6 +14,13 @@ const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 16;
 const _AUTH_TAG_LENGTH = 16;
 
+export class CryptoError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'CryptoError';
+  }
+}
+
 /**
  * Timing-safe secret comparison
  * Prevents timing attacks on secret validation
@@ -44,12 +51,12 @@ export function verifySecret(provided: string | null, expected: string | undefin
  * Returns base64 encoded string with IV and auth tag
  */
 export function encrypt(plaintext: string, key: string): string {
-  if (!plaintext) throw new Error('Plaintext cannot be empty');
-  if (!key) throw new Error('Key cannot be empty');
+  if (!plaintext) throw new CryptoError('Plaintext cannot be empty');
+  if (!key) throw new CryptoError('Key cannot be empty');
 
   const keyBytes = Buffer.from(key, 'utf-8');
   if (keyBytes.length < 32) {
-    throw new Error(
+    throw new CryptoError(
       `Encryption key too short: ${keyBytes.length} bytes (minimum 32). ` +
       `Generate with: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
     );
@@ -72,20 +79,20 @@ export function encrypt(plaintext: string, key: string): string {
  * Decrypt ciphertext using AES-256-GCM
  */
 export function decrypt(encryptedText: string, key: string): string {
-  if (!encryptedText) throw new Error('Encrypted text cannot be empty');
-  if (!key) throw new Error('Key cannot be empty');
+  if (!encryptedText) throw new CryptoError('Encrypted text cannot be empty');
+  if (!key) throw new CryptoError('Key cannot be empty');
 
   const [ivBase64, authTagBase64, encrypted] = encryptedText.split(':');
   
   if (!ivBase64 || !authTagBase64 || !encrypted) {
-    throw new Error('Invalid encrypted format');
+    throw new CryptoError('Invalid encrypted format');
   }
 
   const iv = Buffer.from(ivBase64, 'base64');
   const authTag = Buffer.from(authTagBase64, 'base64');
   const keyBytes = Buffer.from(key, 'utf-8');
   if (keyBytes.length < 32) {
-    throw new Error(`Encryption key too short: ${keyBytes.length} bytes (minimum 32)`);
+    throw new CryptoError(`Encryption key too short: ${keyBytes.length} bytes (minimum 32)`);
   }
   const keyBuffer = keyBytes.subarray(0, 32);
   
@@ -102,7 +109,7 @@ export function decrypt(encryptedText: string, key: string): string {
  * Hash password using bcrypt
  */
 export async function hashPassword(password: string): Promise<string> {
-  if (!password) throw new Error('Password cannot be empty');
+  if (!password) throw new CryptoError('Password cannot be empty');
   const salt = await bcrypt.genSalt(12);
   return bcrypt.hash(password, salt);
 }

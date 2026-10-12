@@ -9,7 +9,7 @@ import { createOrderSchema } from '@/lib/api/schemas';
 import { parsePageLimit } from '@/lib/api/query-params';
 import { db } from '@/drizzle/db';
 import { orders, orderLineItems } from '@/drizzle/schema';
-import { eq, and, desc, sql, count } from 'drizzle-orm';
+import { eq, and, desc, sql, count, isNull } from 'drizzle-orm';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
@@ -30,7 +30,9 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     const contactId = searchParams.get('contactId');
     const { page, limit, offset } = parsePageLimit(searchParams);
 
-    const whereConditions = [eq(orders.tenantId, tenantId)];
+    // Soft-deleted orders (deletedAt set by DELETE /orders/[id]) must not
+    // appear in the list or inflate the pagination total (#2236).
+    const whereConditions = [eq(orders.tenantId, tenantId), isNull(orders.deletedAt)];
 
     if (status) {
       whereConditions.push(eq(orders.status, status));
@@ -42,7 +44,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
 
     const results = await db.select().from(orders).where(and(...whereConditions)).orderBy(desc(orders.createdAt)).limit(limit).offset(offset);
 
-    const [countResult] = await db.select({ count: count() }).from(orders).where(eq(orders.tenantId, tenantId));
+    const [countResult] = await db.select({ count: count() }).from(orders).where(and(eq(orders.tenantId, tenantId), isNull(orders.deletedAt)));
     const total = countResult?.count ?? 0;
 
     return NextResponse.json({ 
@@ -80,62 +82,89 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       return NextResponse.json({ error: 'At least one line item is required' }, { status: 400 });
     }
 
-    const countResult = await db.select({ count: sql<number>`count(*)` }).from(orders).where(eq(orders.tenantId, tenantId));
-    const orderNumber = `ORD-${String((countResult[0]?.count ?? 0) + 1).padStart(5, '0')}`;
-
     let subtotal = 0;
     for (const item of items) {
       subtotal += (parseFloat(String(item.quantity)) || 1) * (parseFloat(String(item.unit_price)) || 0);
     }
     const totalAmount = subtotal;
 
-    const order = await db.transaction(async (tx) => {
-      const [o] = await tx.insert(orders).values({
-        tenantId,
-        contactId: contactId ?? null,
-        companyId: companyId ?? null,
-        orderNumber,
-        title: `Order ${orderNumber}`,
-        status: status ?? 'pending',
-        orderDate: new Date().toISOString().split('T')[0],
-        expectedDeliveryDate: null,
-        subtotal: String(subtotal.toFixed(2)),
-        discountAmount: '0',
-        taxAmount: '0',
-        shippingAmount: '0',
-        totalAmount: String(totalAmount.toFixed(2)),
-        shippingAddress: shippingAddress ?? null,
-        shippingCity: null,
-        shippingState: null,
-        shippingCountry: null,
-        shippingPostalCode: null,
-        notes: notes ?? null,
-        customerNotes: null,
-        createdBy: userId,
-      } as typeof orders.$inferInsert).returning();
+    // Atomic per-tenant order-number generation (#2342): the previous COUNT(*)+1
+    // read raced with concurrent inserts and collided with the unique
+    // idx_orders_number. Mirrors the quote fix (#1611) and invoice fix (#1462):
+    // lock the tenant row, derive MAX(sequence)+1, retry on unique violation.
+    const MAX_RETRIES = 3;
+    let order: typeof orders.$inferSelect | undefined;
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      try {
+        order = await db.transaction(async (tx) => {
+          await tx.execute(sql`SELECT id FROM tenants WHERE id = ${tenantId} FOR UPDATE`);
+          const [maxRow] = await tx.select({
+            maxNum: sql<number>`COALESCE(MAX(
+              CASE WHEN ${orders.orderNumber} ~ '^ORD-[0-9]+$'
+              THEN CAST(SUBSTRING(${orders.orderNumber} FROM 5) AS integer)
+              ELSE 0 END
+            ), 0)`
+          }).from(orders).where(and(eq(orders.tenantId, tenantId), isNull(orders.deletedAt)));
+          const seq = ((maxRow?.maxNum as number) ?? 0) + 1;
+          const orderNumber = `ORD-${String(seq).padStart(5, '0')}`;
 
-      if (!o) throw new Error('Failed to create order');
+          const [o] = await tx.insert(orders).values({
+            tenantId,
+            contactId: contactId ?? null,
+            companyId: companyId ?? null,
+            orderNumber,
+            title: `Order ${orderNumber}`,
+            status: status ?? 'pending',
+            orderDate: new Date().toISOString().split('T')[0],
+            expectedDeliveryDate: null,
+            subtotal: String(subtotal.toFixed(2)),
+            discountAmount: '0',
+            taxAmount: '0',
+            shippingAmount: '0',
+            totalAmount: String(totalAmount.toFixed(2)),
+            shippingAddress: shippingAddress ?? null,
+            shippingCity: null,
+            shippingState: null,
+            shippingCountry: null,
+            shippingPostalCode: null,
+            notes: notes ?? null,
+            customerNotes: null,
+            createdBy: userId,
+          } as typeof orders.$inferInsert).returning();
 
-      if (items?.length) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const lineItems = items.map((item: any, idx: number) => ({
-          tenantId: ctx.tenantId,
-          orderId: o.id,
-          productId: null,
-          serviceId: null,
-          description: item.description,
-          itemType: 'product',
-          quantity: String(item.quantity || 1),
-          unitPrice: String(item.unit_price || 0),
-          total: String(((parseFloat(item.quantity) || 1) * (parseFloat(item.unit_price) || 0)).toFixed(2)),
-          sortOrder: idx,
-        }));
+          if (!o) throw new Error('Failed to create order');
 
-        await tx.insert(orderLineItems).values(lineItems);
+          if (items?.length) {
+            const lineItems = items.map((item, idx) => ({
+              tenantId: ctx.tenantId,
+              orderId: o.id,
+              productId: null,
+              serviceId: null,
+              description: item.description,
+              itemType: 'product',
+              quantity: String(item.quantity || 1),
+              unitPrice: String(item.unit_price || 0),
+              total: String(((item.quantity || 1) * (item.unit_price || 0)).toFixed(2)),
+              sortOrder: idx,
+            }));
+
+            await tx.insert(orderLineItems).values(lineItems);
+          }
+
+          return o;
+        });
+        break;
+      } catch (err: unknown) {
+        const isUniqueViolation = err instanceof Error &&
+          ((err as { code?: string }).code === '23505' || err.message.includes('unique'));
+        if (isUniqueViolation && attempt < MAX_RETRIES - 1) continue;
+        throw err;
       }
+    }
 
-      return o;
-    });
+    if (!order) {
+      return NextResponse.json({ error: 'Failed to create order' }, { status: 500 });
+    }
 
     return NextResponse.json({ order }, { status: 201 });
   } catch (error) {

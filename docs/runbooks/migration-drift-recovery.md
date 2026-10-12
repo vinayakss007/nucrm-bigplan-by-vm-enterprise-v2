@@ -1,27 +1,67 @@
 # Migration Drift Recovery
 
-## How `db:migrate` behaves with an empty ledger (#1969)
+## How `db:migrate` behaves with an empty ledger (#1969, #2450)
 
 When the migration ledger (`drizzle.__drizzle_migrations`) is empty but the
-database has schema (provisioned with `db:push`/`db:sync` or restored from a
-dump), `npm run db:migrate` runs the **recovery path** in
+database has schema, `npm run db:migrate` runs the **recovery path** in
 `scripts/migrate-recovery.ts`:
 
 1. It checks two markers — the early table `api_key_usage` and the column
    `backup_records.last_verified_at` from the last-known backup-era
    migration — and **logs exactly which matched plus live object counts**
    before deciding anything.
-2. If both match, it stamps every journal entry as applied (no SQL runs).
-3. It then runs a **post-stamp verification**: every journal file is parsed
-   for its headline objects (tables, functions, and columns added/altered by
-   migrations) and diffed against the live catalog. If anything promised is
-   missing, the stamp is **rolled back**, the ledger stays empty, and the
-   run **fails loudly** listing the missing objects — instead of falsely
-   reporting "All migrations applied successfully".
+2. If both match, it asks a second question (#2450): **what kind of pre-existing
+   schema is this?** `pg_policy` decides it. Row-level security exists only
+   because hand-written migration files create it (32 files, 192 `CREATE POLICY`
+   statements), and `drizzle-kit push` has no notion of policies at all. The test
+   is *coverage*, not bare presence: a schema whose journal ever ran has RLS on
+   nearly every table (measured 225 of 227, in production and in CI), so
+   `MIN_RLS_TABLE_RATIO` requires it on at least half.
+   - **No RLS across the schema ⇒ provisioned by `db:push`/`db:sync`.** Refused
+     **before** anything is stamped: the journal has never executed here, so
+     stamping would label an unprotected database as migrated. One stray policy
+     does not change that verdict — an integration suite can install one to prove
+     an RLS behaviour (#2455) while every object the journal contributes is still
+     missing. The error names the object classes missing (RLS policies, SQL
+     functions, hand-written indexes) and the command that builds them —
+     `npm run db:bootstrap` on an empty database.
+   - **RLS across the schema ⇒ restored from a dump.** Every journal entry is
+     stamped as applied (no SQL runs).
+3. After stamping it runs a **post-stamp verification**: every journal file is
+   parsed for its headline objects (tables, functions, and columns added/altered
+   by migrations) and diffed against the live catalog. If anything promised is
+   missing, the stamp is **rolled back**, the ledger stays empty, and the run
+   **fails loudly** with the count and the **owning journal entry** of each
+   missing object (#2450 AC4) — not a flat list of signatures you have to go and
+   `grep` for.
 4. If the early marker matches but the last marker does not, it refuses
    immediately (partial schema — stamping would cement the drift).
 
-If you see `Post-stamp verification FAILED`, follow the steps below to
+Every one of these outcomes leaves the database labelled as either stamped or
+not. The #2450 bug was the middle path: stamp 122 entries, print
+"Recovery complete", fail verification, roll back, and exit — leaving 227
+tables, **0 policies**, 0 ledger rows and a next run that fails the same way.
+
+## You ran `db:sync` and `db:migrate` refuses
+
+That refusal is correct, and the schema it is refusing is a throwaway:
+`db:sync` writes tables only, so nothing in it came from the journal.
+
+```bash
+# Build from the journal instead — on an EMPTY database (it refuses otherwise,
+# and never drops a schema itself):
+createdb nucrm_fresh
+DATABASE_URL=postgresql://…/nucrm_fresh npm run db:bootstrap
+```
+
+`db:bootstrap` replays every journal entry, stamps the ledger, then **measures**
+the result instead of trusting the log lines: at least 200 RLS policies over at
+least 200 RLS-enabled tables, and no headline object the journal promised.
+`scripts/check-fresh-install-sequence.mts` runs the whole comparison — pushed
+schema refuses coherently, empty schema builds completely — against a real
+PostgreSQL in CI.
+
+If instead you see `Post-stamp verification FAILED`, follow the steps below to
 apply the missing DDL, then re-run `db:migrate` so it can stamp and verify
 cleanly.
 
@@ -37,7 +77,7 @@ cleanly.
 This means:
 
 - The `drizzle.__drizzle_migrations` table is empty (no rows)
-- The database **does** have tables (it was provisioned with `db:push` / `db:sync`, or restored from a partial dump)
+- The database **does** have tables (it was provisioned by `db:push` / `db:sync`, or restored from a partial dump)
 - But the schema is **not** at the latest migration — some migrations were never applied
 
 ---
@@ -137,9 +177,9 @@ curl http://localhost:3000/api/health
 
 ## How this state happens
 
-1. **`db:push` / `db:sync`** — `drizzle-kit push` applies schema changes directly without recording them in the migration ledger. CI uses this (`npm run db:sync`), which is why the ledger can be empty while the schema exists.
+1. **`db:push` / `db:sync`** — `drizzle-kit push` applies schema changes directly without recording them in the migration ledger. CI uses this (`npm run db:sync`), which is why the ledger can be empty while the schema exists. It creates **tables and columns only**: no RLS policy, no SQL function, no hand-written index. That is why `db:migrate` now checks RLS coverage in `pg_policy` before it will stamp anything, and refuses this shape (#2450).
 
-2. **Partial restore** — A database dump restored from a snapshot that included tables but not the `drizzle.__drizzle_migrations` ledger data.
+2. **Partial restore** — A database dump restored from a snapshot that included tables but not the `drizzle.__drizzle_migrations` ledger data. The dump carries its policies, so recovery stamps it and then verifies.
 
 3. **Manual DDL** — An operator ran migration SQL manually (e.g. during an incident) without stamping the ledger.
 
@@ -147,7 +187,7 @@ curl http://localhost:3000/api/health
 
 ## Prevention
 
-- Never use `db:sync` / `db:push` on a production database. It is for CI only.
-- Always use `npm run db:migrate` for production schema changes.
+- Never use `db:sync` / `db:push` on a production database. It is for CI only, and a schema it produces is not an installed product — it has no row-level security.
+- Always use `npm run db:migrate` for production schema changes, and `npm run db:bootstrap` to build a database from nothing.
 - After any manual restore, verify `SELECT count(*) FROM drizzle.__drizzle_migrations` matches the number of entries in `drizzle/migrations/meta/_journal.json`.
-- The `db:migrate` recovery path logs its marker evidence, then verifies every journal entry's headline objects after stamping and rolls the stamp back on drift (`scripts/migrate-recovery.ts`), so a false stamp can no longer silently cement schema drift.
+- The `db:migrate` recovery path logs its marker evidence, classifies the schema by `pg_policy` before stamping, then verifies every journal entry's headline objects after stamping and rolls the stamp back on drift, reporting the owning journal entry of each gap (`scripts/migrate-recovery.ts`) — so a false stamp can neither silently cement drift nor label an unprotected database as migrated.
