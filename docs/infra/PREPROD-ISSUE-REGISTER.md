@@ -2171,7 +2171,7 @@ from pg_policies where schemaname='public' and (qual like '%app.is_super_admin%'
   lists extended by **#2446** with the three `app.portal_lookup_*` GUCs, so a portal-credential read cannot
   outlive its transaction either). No route splices
   request data into SQL: the template-literal sinks in `app/` are compile-time identifiers or regex-gated numerics
-  (`app/api/cron/backup-verify/route.ts:267-268` gates `nucrm_verify_${Date.now()}` through `^[a-z0-9_]+$` before
+  (`app/api/cron/backup-verify/route.ts:267-269` gates `nucrm_verify_${Date.now()}` through `^[a-z0-9_]+$` before
   `CREATE DATABASE`; `app/api/tenant/sla/route.ts:36` is drizzle identifiers — the coordinate did not move but the text under it did: **#2482** rewrote that line on 2026-10-10 from `sql.raw('"sla_policies"."id"')`, a compile-time constant, to the `slaPolicies.id` identifier it is now, so the claim this sentence makes became literally true only with that PR). Library-level splices are not reachable from
   `app/` (`lib/data-integrity.ts:294` has zero importers under `app/`; `lib/db/query-timeout.ts:63` is `Math.round`ed).
   **So this is (i) a credential-handling problem — a leaked `DATABASE_URL` _is_ a full cross-tenant read grant over 49
@@ -2204,7 +2204,7 @@ from pg_policies where schemaname='public' and (qual like '%app.is_super_admin%'
   `lib/db/request-connection.ts:88-94` (both reset lists gained the `app.portal_lookup_*` names with
   **#2446**, which is why their text moved while the cited construct did not), `lib/auth/middleware.ts:297,391`,
   `drizzle/migrations/0088_rls_bootstrap_and_isolation.sql:344-360`, `drizzle/migrations/0099_api_keys_auth_lookup.sql`,
-  `drizzle/migrations/0105_email_tracking_pixel_lookup.sql`, `app/api/cron/backup-verify/route.ts:267-268`,
+  `drizzle/migrations/0105_email_tracking_pixel_lookup.sql`, `app/api/cron/backup-verify/route.ts:267-269`,
   `deploy/docker-compose.preprod.yml`, `deploy/docker-compose.production.yml`.
 
 ## PP-049 — 🔧 PP-030's honest 503 has no central place to live: 22 of 22 cron routes hand-roll their own skip, so the fix is a 23-file design batch, not a narrow change _(S3 · Cron + observability · #2539)_
@@ -5111,7 +5111,7 @@ no space, no semicolon, no dash, no `-`-comment, and a length under Postgres's o
        three named the eight-`set_config` reset in the connection-pool module (PP-048 says it twice, once
        in the body and once in its read-only file list, and PP-058 names it again in its own read-log —
        from 233 to 241); two named the scratch-database name gate in the nightly verify route (PP-048's
-       injection-surface survey and its file list — from the range 239 through 241 to 267 and 268); one
+       injection-surface survey and its file list — from the range 239 through 241 to 267 through 269); one
        named that route's fire-and-forget trio (PP-050's latent-multiplier paragraph — from 277, 311 and
        329 to 305, 339 and 357); and one named the very same shape guard again (PP-073's
        "three sinks, one rule" — from 248 to 268). Every new number was read off the current file rather
