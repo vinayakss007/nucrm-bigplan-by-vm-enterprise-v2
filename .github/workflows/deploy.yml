@@ -169,6 +169,39 @@ jobs:
             fi
             echo "Deploying main commit: $SHA"
 
+            # #2542: every Sentry event must carry the release it came from —
+            # without it every deploy lands in one bucket and "this started at
+            # the last push" is unanswerable. The SDK reads SENTRY_RELEASE at
+            # runtime (Next.js loads .env.local before the first handler runs;
+            # worker/cron via scripts/load-env.mjs) and NEXT_PUBLIC_SENTRY_RELEASE
+            # is inlined into the client bundle AT BUILD TIME — so the pair has
+            # to be written before `npm run build`, and re-written before the
+            # rollback rebuild so the recovered app is tagged with the commit
+            # that actually serves, not the failed one. A SHA is not a secret —
+            # it is already public on GitHub.
+            pin_sentry_release() {
+              if [ -z "${1:-}" ]; then
+                echo "WARNING: no release id to pin; Sentry falls back to BUILD_ID."
+                return 0
+              fi
+              # The value reaches sed below. github.event fields are quoted
+              # here anyway: a release id must be a commit SHA, anything else
+              # is a bug upstream, not something to write into .env.local.
+              case "$1" in
+                *[!0-9a-fA-F]*|'')
+                  echo "WARNING: release id '$1' is not a hex SHA; falling back to BUILD_ID."
+                  return 0 ;;
+              esac
+              for K in SENTRY_RELEASE NEXT_PUBLIC_SENTRY_RELEASE; do
+                if grep -q "^$K=" .env.local 2>/dev/null; then
+                  sed -i "s|^$K=.*|$K=$1|" .env.local
+                else
+                  printf '%s=%s\n' "$K" "$1" >> .env.local
+                fi
+              done
+              echo "Pinned Sentry release $1 in .env.local"
+            }
+
             # The pm2 app name is not stable across hosts/rewrites: production
             # has been 'nucrm-prod' (next start -p 3099) while
             # ecosystem.config.cjs declares 'web' (PORT=3000). Restart whichever
@@ -363,6 +396,7 @@ jobs:
             echo "Schema is current — safe to build and restart."
 
             echo "Building..."
+            pin_sentry_release "$SHA"
             NODE_OPTIONS="--max-old-space-size=8192" npm run build
 
             echo "Restarting app (pm2: $PM2_APP) + background consumers ($BG_APPS)..."
@@ -395,6 +429,9 @@ jobs:
             # a failed pipeline:  npm run db:rollback -- <tag> --yes
             echo "NOTE: schema is NOT reverted here (forward-only). Restore point,"
             echo "      if one was taken, is in the migration step output above."
+            # The recovered build must be tagged with what actually serves —
+            # the previous commit — not the SHA whose restart failed.
+            pin_sentry_release "$(git rev-parse HEAD)"
             NODE_OPTIONS="--max-old-space-size=8192" npm run build
             # #2300: rollback reverses ALL three apps, not just web — otherwise
             # the old web returns while worker/cron keep running new code.
