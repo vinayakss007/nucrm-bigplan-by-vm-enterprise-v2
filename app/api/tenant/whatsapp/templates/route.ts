@@ -20,7 +20,10 @@ export const GET = withApiRoute(async (req: NextRequest) => {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
 
-    const [integration] = await db.select()
+    // #2563: `config` is the only column this handler reads, and `integrations`
+    // is the credential store (#2521/#2522/#2559) — keep this projected rather
+    // than reverting to a bare `db.select()`, which would pull the whole row.
+    const [integration] = await db.select({ config: integrations.config })
       .from(integrations)
       .where(and(
         eq(integrations.tenantId, ctx.tenantId),
@@ -79,7 +82,10 @@ export const POST = withApiRoute(async (req: NextRequest) => {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
 
-    const [integration] = await db.select()
+    // #2563: `config` is the only column this handler reads, and `integrations`
+    // is the credential store (#2521/#2522/#2559) — keep this projected rather
+    // than reverting to a bare `db.select()`, which would pull the whole row.
+    const [integration] = await db.select({ config: integrations.config })
       .from(integrations)
       .where(and(
         eq(integrations.tenantId, ctx.tenantId),
