@@ -142,7 +142,7 @@ export function buildInsert(table: string, data: Record<string, unknown>) {
   const keys = Object.keys(data).filter(k => !PROTECTED.has(k)).map(k => validateIdentifier(k));
   if (!keys.length) throw new Error('buildInsert: no fields');
   return {
-    sql: `INSERT INTO public.${validTable} (${keys.map(k=>`"${k}"`).join(',')}) VALUES (${keys.map((_,i)=>`$${i+1}`).join(',')}) RETURNING *`,
+    sql: `INSERT INTO public.${validTable} (${keys.map(k=>`"${k}"`).join(',')}) VALUES (${keys.map((_,i)=>`$${i+1}`).join(',')}) RETURNING *`, // raw-sql-guard: allow — every name in this template was returned by validateIdentifier above (#2528)
     values: keys.map(k=>data[k]),
   };
 }
@@ -158,7 +158,7 @@ export function buildUpdate(table: string, data: Record<string, unknown>, where:
   const wk = Object.keys(where).map(k => validateIdentifier(k));
   let i = 1;
   return {
-    sql: `UPDATE public.${validTable} SET ${dk.map(k=>`"${k}"=$${i++}`).join(',')}, updated_at=now() WHERE ${wk.map(k=>`"${k}"=$${i++}`).join(' AND ')} RETURNING *`,
+    sql: `UPDATE public.${validTable} SET ${dk.map(k=>`"${k}"=$${i++}`).join(',')}, updated_at=now() WHERE ${wk.map(k=>`"${k}"=$${i++}`).join(' AND ')} RETURNING *`, // raw-sql-guard: allow — every name in this template was returned by validateIdentifier above (#2528)
     values: [...dk.map(k=>data[k]), ...wk.map(k=>where[k])],
   };
 }
@@ -168,6 +168,12 @@ export async function countRows(table: string, where: Record<string, unknown>): 
   // FIX CRITICAL-06: Add table name validation (was missing unlike buildInsert/buildUpdate)
   const validTable = validateTableName(table);
   const keys = Object.keys(where).map(k => validateIdentifier(k));
-  const r = await query<{count:string}>(`SELECT count(*)::int as count FROM public.${validTable} WHERE ${keys.map((k,i)=>`"${k}"=$${i+1}`).join(' AND ')}`, keys.map(k=>where[k]));
+  // `WHERE` with nothing after it is Postgres 42601, and `where: {}` is the
+  // natural "count everything in this table" call — the signature invites it and
+  // no caller passes one today, so this has never been exercised.
+  const predicate = keys.length
+    ? ` WHERE ${keys.map((k, i) => `"${k}"=$${i + 1}`).join(' AND ')}` // raw-sql-guard: allow — every name in this template was returned by validateIdentifier above (#2528)
+    : '';
+  const r = await query<{count:string}>(`SELECT count(*)::int as count FROM public.${validTable}${predicate}`, keys.map(k=>where[k]));
   return parseInt(r.rows[0]?.count ?? '0', 10);
 }

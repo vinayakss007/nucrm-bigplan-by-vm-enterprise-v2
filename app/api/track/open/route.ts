@@ -16,9 +16,10 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { logError } from '@/lib/errors-server';
-import { emailTracking, activities } from '@/drizzle/schema';
+import { emailTracking, emailOpens, activities } from '@/drizzle/schema';
 import { eq, and, isNull, sql } from 'drizzle-orm';
 import { checkPublicRateLimit } from '@/lib/rate-limit-simple';
+import { getClientIp } from '@/lib/client-ip';
 import { withTenantContext, withTrackingLookupContext, NO_USER_SENTINEL } from '@/lib/db/rls';
 
 // 1x1 transparent GIF
@@ -29,6 +30,11 @@ const PIXEL = Buffer.from(
 
 export async function GET(req: NextRequest) {
   const trackId = new URL(req.url).searchParams.get('t');
+  // Read the request-derived values now, while `req.headers` is live: the write
+  // below runs in a detached promise after the pixel has already been returned,
+  // and reading a consumed Request is not guaranteed to work.
+  const clientIp = getClientIp(req);
+  const userAgent = req.headers.get('user-agent');
 
   // #1143: this endpoint is public and unauthenticated. Without a limit, anyone
   // can hammer it to inflate open counts and log fake activities. Rate-limit the
@@ -70,6 +76,25 @@ export async function GET(req: NextRequest) {
               openCount: sql`${emailTracking.openCount} + 1`
             })
             .where(eq(emailTracking.id, trackId));
+
+          // #2590: the aggregate openRow / recentOpens readers on the Email
+          // Analytics page, and the "Opened" badge join in email/tracking, all
+          // read email_opens. That table lost its only writer when #2526/#2568
+          // retired the old track route, so every one of them has been
+          // permanently empty since. Record one event row per open, keyed to the
+          // same tenant and (DB-resolved) tracking row the counter above updates
+          // — never to a value from the query string. emailId carries the
+          // email_tracking id; campaign_id stays null because no campaigns table
+          // exists to attribute to, so the per-campaign rollup is genuinely not
+          // a source we can populate and is left for that feature's owner.
+          await tx.insert(emailOpens).values({
+            tenantId: row.tenantId,
+            contactId: row.contactId,
+            emailId: row.id,
+            openedAt: new Date(),
+            ipAddress: clientIp,
+            userAgent,
+          });
 
           // Log activity on first open only
           if (row.openCount === 0 && row.contactId) {

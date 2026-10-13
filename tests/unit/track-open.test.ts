@@ -137,8 +137,12 @@ describe('GET /api/track/open', () => {
     await GET(get(TRACK_URL));
     await settle();
 
-    expect(insertMock).toHaveBeenCalledTimes(1);
-    expect(insertMock.mock.calls[0][0]).toMatchObject({
+    // #2590: the first open now writes TWO rows — the per-open email_opens
+    // event and the activity. Disambiguate by payload: the activity carries an
+    // `action`, the event row carries an `emailId` and no `action`.
+    const payloads = insertMock.mock.calls.map((c) => c[0] as Record<string, unknown>);
+    const activity = payloads.find((v) => v.action === 'email_open');
+    expect(activity).toMatchObject({
       tenantId: 'ten1',
       contactId: 'c1',
       eventType: 'email',
@@ -146,14 +150,34 @@ describe('GET /api/track/open', () => {
     });
   });
 
-  it('does not re-log the activity for a repeat open', async () => {
+  it('records an email_opens event row keyed to the resolved tracking row (#2590)', async () => {
+    findFirstMock.mockResolvedValue({ id: 't1', contactId: 'c1', tenantId: 'ten1', openCount: 0 });
+    const { GET } = await import('@/app/api/track/open/route');
+    await GET(get(TRACK_URL));
+    await settle();
+
+    const payloads = insertMock.mock.calls.map((c) => c[0] as Record<string, unknown>);
+    const event = payloads.find((v) => v.emailId !== undefined);
+    expect(event).toMatchObject({ tenantId: 'ten1', contactId: 'c1', emailId: 't1' });
+    // There is no campaigns table, and the token route takes no caller-supplied
+    // campaign — campaign_id is never invented from the query string.
+    expect(event.campaignId).toBeUndefined();
+  });
+
+  it('writes the per-open event row, but not the activity, on a repeat open', async () => {
     findFirstMock.mockResolvedValue({ id: 't1', contactId: 'c1', tenantId: 'ten1', openCount: 4 });
     const { GET } = await import('@/app/api/track/open/route');
     await GET(get(TRACK_URL));
     await settle();
 
     expect(updateMock).toHaveBeenCalledTimes(1);
-    expect(insertMock).not.toHaveBeenCalled();
+    const payloads = insertMock.mock.calls.map((c) => c[0] as Record<string, unknown>);
+    // The email_opens event still lands on every open (it is the event log the
+    // recentOpens reader lists), so a repeat open is not silently dropped…
+    expect(payloads.some((v) => v.emailId !== undefined)).toBe(true);
+    // …while the "first open only" activity guard still suppresses the second
+    // activity row.
+    expect(payloads.some((v) => v.action === 'email_open')).toBe(false);
   });
 
   it('still returns the pixel when the write is rate-limited', async () => {

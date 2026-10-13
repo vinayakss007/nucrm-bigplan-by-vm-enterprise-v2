@@ -37,6 +37,7 @@
  */
 
 import { getPool } from './pool';
+import { validateTimeoutMs } from '@/lib/sql-allowlist';
 import type { PoolClient, QueryResult } from 'pg';
 
 /**
@@ -54,13 +55,19 @@ export async function withTimeout<T>(
   timeoutMs: number,
   fn: (client: PoolClient) => Promise<T>,
 ): Promise<T> {
+  // #2528: this value is interpolated into raw SQL below, so it goes through the
+  // same clamp the other two `statement_timeout` sites use — and before a
+  // connection is taken, because `Math.round` on its own renders `NaN` for a stray
+  // undefined and then fails as a Postgres error mid-transaction instead of here.
+  const clampedMs = validateTimeoutMs(timeoutMs);
+
   const pool = getPool();
   const client = await pool.connect();
 
   try {
     // SET LOCAL only lasts for the current transaction, so we wrap in one.
     await client.query('BEGIN');
-    await client.query(`SET LOCAL statement_timeout = '${Math.max(1, Math.round(timeoutMs))}'`);
+    await client.query(`SET LOCAL statement_timeout = '${clampedMs}'`); // raw-sql-guard: allow — clamped above (#2528)
 
     const result = await fn(client);
 
