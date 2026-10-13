@@ -1,0 +1,115 @@
+{
+  "_comment": [
+    "Environment variables that scripts/check-env-coverage.mjs finds in the code",
+    "but that must NOT appear in .env.example, each with the reason it is exempt.",
+    "An entry whose read site disappears is reported as stale and fails the screen,",
+    "so this file cannot accumulate exemptions for code that has since gone.",
+    "Added by #2596."
+  ],
+  "entries": [
+    {
+      "name": "NEXT_PHASE",
+      "reason": "Set by Next.js itself, never by an operator. instrumentation.ts:61 reads it to skip database work during a build phase. Documenting it would invite someone to set it."
+    },
+    {
+      "name": "NEXT_RUNTIME",
+      "reason": "Set by Next.js per runtime entry (nodejs/edge). instrumentation.ts:9,101 dispatch on it. An operator setting it would desynchronise the code from the bundle it is loaded into."
+    },
+    {
+      "name": "VITEST",
+      "reason": "Set by the Vitest runner when it loads the test files. lib/errors-server.ts:216 uses it to relax error handling in tests only. Never part of a deployment's configuration."
+    },
+    {
+      "name": "CI",
+      "reason": "Set by the GitHub Actions runner. scripts/migrate.ts:169 reads it to refuse an interactive prompt with no terminal. Not a NuCRM knob."
+    },
+    {
+      "name": "USER",
+      "reason": "Not read: lib/db/pool.ts:164 contains the string 'process.env.USER' inside a warning message explaining that the pg client falls back to the OS user. Matched by this screen's extractor; exempted rather than reworded so the warning keeps its exact wording."
+    },
+    {
+      "name": "NEXT_PUBLIC_DATABASE_URL",
+      "reason": "MUST NEVER BE SET. lib/keepalive.ts is unreachable dead code, and because it reads a NEXT_PUBLIC_ name, adopting it would inline a live Postgres connection string — credentials and all — into the JavaScript shipped to every browser. The hazard is recorded in the readiness report instead of being documented here as if it were a normal option."
+    },
+    {
+      "name": "BASE_URL",
+      "reason": "Generic CLI-style parameter for scripts/lighthouse-audit.ts (defaults to http://localhost:3000). Passing BASE_URL in a shared shell environment would also be picked up by unrelated tooling, which is why it is a one-shot prefix rather than a .env entry."
+    },
+    {
+      "name": "OUTPUT",
+      "reason": "Format selector for scripts/lighthouse-audit.ts (json/html/both). Far too generic a name to reserve in a deployment env file; set per invocation."
+    },
+    {
+      "name": "SKIP_LIGHTHOUSE",
+      "reason": "Escape hatch for scripts/quality-report.ts to skip the browser run when no Chrome is available (CI). A report-behaviour flag, not application configuration."
+    },
+    {
+      "name": "CI_MIN_SCORE",
+      "reason": "Pass mark for scripts/quality-report.ts (default 80). Tuned in the workflow that calls it, so a workflow edit and a config edit cannot disagree about the threshold."
+    },
+    {
+      "name": "E2E_BASE_URL",
+      "reason": "Target origin for scripts/preprod-api-e2e.ts (default http://127.0.0.1:3100). Chosen by whatever is running the suite against an environment; not something an operator configures on a deploy."
+    },
+    {
+      "name": "STRESS_BATCH",
+      "reason": "Row count per batch for scripts/stress-test.ts (default 100). Load-generation tuning for the person running the test."
+    },
+    {
+      "name": "STRICT",
+      "reason": "Makes scripts/preflight.ts treat warnings as failures. A mode flag for the caller, and a name generic enough that reserving it in .env.example would collide with other tools."
+    },
+    {
+      "name": "COMPOSE_FILE",
+      "reason": "Docker Compose's own variable, interpreted by the compose binary before any NuCRM process starts. scripts/check-running-config-drift.mjs:194 reads it only to work out which files compose is using. Belongs to compose, not to this app."
+    },
+    {
+      "name": "COMPOSE_FILES",
+      "reason": "NuCRM's multi-file variant of the above, set by the deploy tooling that invokes compose. Paths to files already in the repository; nothing for an operator to choose per deployment."
+    },
+    {
+      "name": "COMPOSE_PROJECT",
+      "reason": "Compose project name used by scripts/check-running-config-drift.mjs:59 to find the running containers. Default 'deploy' is what the repository's own compose setup uses."
+    },
+    {
+      "name": "RUNNING_CONFIG_ALLOW_EMPTY",
+      "reason": "Says 'the containers I expect are not up yet' to scripts/check-running-config-drift.mjs. Valid on a machine with no running deployment; documenting it in the app's env file would suggest it is normal to carry."
+    },
+    {
+      "name": "SEED_ALLOW_REMOTE",
+      "reason": "Deliberate opt-in that lets scripts/seed-dev.ts write fixture data to a non-local database. Keeping it out of .env.example is part of its safety: it should never be present-and-forgotten, only typed once when you mean it."
+    },
+    {
+      "name": "SKIP_VERIFY",
+      "reason": "Skips the post-provision verification pass in scripts/provision-app-role.mjs, for hosts where the verifying connection cannot be opened. Recovery flag for the person running the script."
+    },
+    {
+      "name": "DEPLOY_SHA",
+      "reason": "Written by the deploy workflow (deploy.yml) and read by scripts/deploy-migrate.ts:77 to tag a restore point with the revision being deployed. Machine-supplied provenance, never operator-supplied."
+    },
+    {
+      "name": "WEBHOOK_SECRET_1",
+      "reason": "Per-endpoint fixture secret in scripts/seed-dev.ts:925. Falls back to a generated whsec_dev_<uuid>, so seeding works with nothing set; it is not a value a deployment configures."
+    },
+    {
+      "name": "WEBHOOK_SECRET_2",
+      "reason": "Second fixture of the same kind (scripts/seed-dev.ts:934), for the two-endpoint seed scenario. Same generated-default reasoning as WEBHOOK_SECRET_1."
+    },
+    {
+      "name": "ANALYZE",
+      "reason": "Build-invocation flag for next.config.mjs:108 ('ANALYZE=true npm run build') that adds the bundle-analyzer plugin. It changes what the BUILD produces, not what a deployment runs, and it is typed in front of the one command that needs it."
+    },
+    {
+      "name": "SLIM_BUILD",
+      "reason": "Caps build workers to one so 'next build' fits in ~1.5GB on low-RAM boxes (next.config.mjs:37, set by scripts/start-slim.sh --build). Build-time only; leaving it in an env file would silently halve the speed of every later build on that machine."
+    },
+    {
+      "name": "NEXT_DIST_DIR",
+      "reason": "Relocates the .next build directory, e.g. onto tmpfs for a faster build (#177, next.config.mjs:7). A property of the machine doing the building, and next.config creates it if absent, so it needs no documentation for operators."
+    },
+    {
+      "name": "EXTERNAL_IP",
+      "reason": "Adds this machine's address to Next's allowedDevOrigins for remote development (next.config.mjs:18); unused in production, where the check is not applied. Its value is a live host address, which by AGENTS.md policy has no place in a file committed to this public repository — next.config warns and explains it instead."
+    }
+  ]
+}
