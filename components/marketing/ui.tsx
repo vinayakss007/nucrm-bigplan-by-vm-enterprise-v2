@@ -48,15 +48,15 @@ export function Aurora({
     <div className={`pointer-events-none absolute inset-0 -z-10 overflow-hidden ${className}`} aria-hidden>
       <div
         className="mk-aurora absolute -top-40 left-[6%] h-[520px] w-[520px] rounded-full blur-[130px]"
-        style={{ background: `rgba(37,99,235,${0.4 * intensity})` }}
+        style={{ background: `rgba(201,125,75,${0.3 * intensity})` }}
       />
       <div
         className="mk-aurora absolute -top-24 right-[4%] h-[460px] w-[460px] rounded-full blur-[130px]"
-        style={{ background: `rgba(56,189,248,${0.34 * intensity})`, animationDelay: '-9s' }}
+        style={{ background: `rgba(226,174,105,${0.24 * intensity})`, animationDelay: '-9s' }}
       />
       <div
         className="mk-aurora absolute top-[38%] left-[38%] h-[420px] w-[420px] rounded-full blur-[140px]"
-        style={{ background: `rgba(224,242,254,${0.22 * intensity})`, animationDelay: '-17s' }}
+        style={{ background: `rgba(255,237,207,${0.15 * intensity})`, animationDelay: '-17s' }}
       />
       <div className="mk-grid-bg mk-fade-y absolute inset-0" />
     </div>
@@ -254,10 +254,10 @@ export function CtaBand({
   return (
     <section className="relative overflow-hidden py-20 sm:py-28">
       <div className="pointer-events-none absolute inset-0 -z-10" aria-hidden>
-        <div className="absolute inset-0 bg-[linear-gradient(135deg,#1d4ed8_0%,#0284c7_50%,#0e7490_100%)] opacity-95" />
+        <div className="absolute inset-0 bg-[linear-gradient(135deg,#713f2b_0%,#a85e3c_52%,#bd8451_100%)] opacity-95" />
         <div className="mk-grid-bg absolute inset-0 opacity-60" />
         <div className="mk-aurora absolute -top-24 left-1/4 h-80 w-80 rounded-full bg-white/15 blur-[110px]" />
-        <div className="mk-aurora absolute -bottom-20 right-1/5 h-80 w-80 rounded-full bg-cyan-300/20 blur-[110px]" style={{ animationDelay: '-11s' }} />
+        <div className="mk-aurora absolute -bottom-20 right-1/5 h-80 w-80 rounded-full bg-amber-200/20 blur-[110px]" style={{ animationDelay: '-11s' }} />
       </div>
       <Container className="text-center">
         <Reveal>

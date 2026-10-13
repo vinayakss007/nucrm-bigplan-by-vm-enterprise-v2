@@ -260,15 +260,15 @@ function Sparkline() {
     <svg viewBox="0 0 120 34" className="mt-2 h-8 w-full" aria-hidden>
       <defs>
         <linearGradient id="mk-spark" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.45" />
-          <stop offset="100%" stopColor="#38bdf8" stopOpacity="0" />
+          <stop offset="0%" stopColor="#dda05f" stopOpacity="0.45" />
+          <stop offset="100%" stopColor="#dda05f" stopOpacity="0" />
         </linearGradient>
       </defs>
       <path d="M0 28 L18 24 L34 26 L52 16 L70 19 L88 9 L104 12 L120 4 V34 H0 Z" fill="url(#mk-spark)" />
       <path
         d="M0 28 L18 24 L34 26 L52 16 L70 19 L88 9 L104 12 L120 4"
         fill="none"
-        stroke="#60a5fa"
+        stroke="#dda05f"
         strokeWidth="1.6"
         strokeLinecap="round"
       />
@@ -358,7 +358,7 @@ export function AutomationMock() {
       <div className="p-3">
         <svg viewBox="0 0 420 250" className="h-auto w-full" aria-hidden>
           {/* connectors */}
-          <g fill="none" stroke="#38bdf8" strokeWidth="1.5" opacity="0.7">
+          <g fill="none" stroke="#dda05f" strokeWidth="1.5" opacity="0.7">
             <path className="mk-flow" d="M76 47 C76 70 154 62 154 82" />
             <path className="mk-flow" d="M210 116 C210 138 118 132 118 152" style={{ animationDelay: '-0.4s' }} />
             <path className="mk-flow" d="M210 116 C210 138 300 132 300 152" style={{ animationDelay: '-0.8s' }} />
@@ -368,20 +368,20 @@ export function AutomationMock() {
 
           {/* trigger */}
           <g>
-            <rect x="20" y="13" width="112" height="34" rx="9" fill="rgba(56,189,248,0.16)" stroke="rgba(56,189,248,0.5)" />
-            <circle cx="36" cy="30" r="4" fill="#60a5fa" />
-            <text x="48" y="34" fill="#dbeafe" fontSize="9.5" fontWeight="700">
+            <rect x="20" y="13" width="112" height="34" rx="9" fill="rgba(221,160,95,0.16)" stroke="rgba(221,160,95,0.5)" />
+            <circle cx="36" cy="30" r="4" fill="#dda05f" />
+            <text x="48" y="34" fill="#f5dfbd" fontSize="9.5" fontWeight="700">
               Deal marked Won
             </text>
           </g>
 
           {/* condition diamond */}
           <g>
-            <path d="M210 78 L262 99 L210 120 L158 99 Z" fill="rgba(34,211,238,0.12)" stroke="rgba(34,211,238,0.45)" />
-            <text x="210" y="96" fill="#a5f3fc" fontSize="9" fontWeight="700" textAnchor="middle">
+            <path d="M210 78 L262 99 L210 120 L158 99 Z" fill="rgba(207,129,82,0.12)" stroke="rgba(207,129,82,0.45)" />
+            <text x="210" y="96" fill="#ebbf91" fontSize="9" fontWeight="700" textAnchor="middle">
               Value
             </text>
-            <text x="210" y="107" fill="#a5f3fc" fontSize="9" fontWeight="700" textAnchor="middle">
+            <text x="210" y="107" fill="#ebbf91" fontSize="9" fontWeight="700" textAnchor="middle">
               &gt; $50k?
             </text>
           </g>
