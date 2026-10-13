@@ -14,7 +14,7 @@ import { concurrencyGuard } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
 import { withApiRoute } from '@/lib/api/with-api-route';
-import { splitConfigCredentials } from '@/lib/integrations/config-credentials';
+import { splitConfigCredentials, mergeKeepingSecretKeys } from '@/lib/integrations/config-credentials';
 
 export const GET = withApiRoute(async (request: NextRequest) => {
   try {
@@ -143,7 +143,23 @@ export const PATCH = withApiRoute(async (request: NextRequest) => {
  
     const updates: Partial<typeof integrations.$inferInsert> = {};
     if (body['name']) updates['name'] = body['name'];
-    if (body['config']) updates['config'] = body['config'];
+    if (body['config']) {
+      // #2562: `GET` above withholds every credential key (#2559) and reports only
+      // their names, so the documented read→edit→write cycle cannot round-trip the
+      // stored bag. Assigning the body wholesale deleted the webhook signing secret
+      // (`app/api/tenant/webhooks/route.ts:108`) and the calendar refresh token
+      // (`lib/calendar-sync/service.ts:50`) while answering `success: true`.
+      // Merge over the stored row so a PATCH changes only keys the caller named.
+      if (typeof body['config'] !== 'object' || Array.isArray(body['config'])) {
+        return NextResponse.json({ error: 'config must be an object' }, { status: 400 });
+      }
+      const [existing] = await db
+        .select({ config: integrations.config })
+        .from(integrations)
+        .where(and(eq(integrations.tenantId, ctx.tenantId), eq(integrations.id, body.id)))
+        .limit(1);
+      updates['config'] = mergeKeepingSecretKeys(existing?.config, body['config']);
+    }
     if (body['enabled'] !== undefined) updates['isActive'] = body['isActive'];
 
     const expectedUpdatedAt = body.expectedUpdatedAt ? new Date(body.expectedUpdatedAt) : null;
