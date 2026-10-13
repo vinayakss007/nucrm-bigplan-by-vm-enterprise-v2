@@ -4,7 +4,27 @@
 > here, with the evidence that proves it and the verification that closed it.
 > Update the status the moment it changes; IDs are never reused.
 >
-> - **Last updated:** 2026-10-11 (UTC) — **PP-070**: `segment_members` has been keyed by nothing since `0000_init` created it without
+> - **Last updated:** 2026-10-11 (UTC) — **PP-075**: **#2560**'s Active/Disabled toggle has
+>   never worked, on any build this repo can produce. `app/api/tenant/plugin-engine/route.ts:147`
+>   guarded on `body['enabled']` — the key the only PATCH caller sends
+>   (`app/tenant/integrations/page.tsx:61` posts `{ id, enabled }`, and `grep -n isActive` in that
+>   file returns nothing) — and then assigned `body['isActive']`, a key no caller has ever sent.
+>   Measured against real drizzle with no database (`new Pool()` opens no socket; `.toSQL()` runs
+>   the same `mapUpdateSet` the server did): `{ isActive: undefined }` throws **No values to set**,
+>   so every click 500'd through `apiError` — which at `lib/api-error.ts:114-116` pages on any
+>   status >= 500, so a dead UI button emitted a *fatal* critical-error alert — and `{ name,
+>   isActive: undefined }` silently dropped the flag and answered `success: true` for a
+>   half-applied write. The column mapping was never wrong: `{ isActive: false }` renders
+>   `set "is_active" = $1` perfectly, which is why this is a property-name bug and not a schema
+>   one. `git log --all -S` puts the line in `ecbba74e`, the **init** commit (2026-05-19): the
+>   toggle has been broken for the entire history of this repository. Fixed by reading the field
+>   that was checked (accepting the sibling route's `isActive`/`is_active` spellings too, since
+>   `app/api/tenant/integrations/[id]/route.ts:28` reads `is_active` off the body) and by
+>   refusing an empty `updates` with 400 before it reaches drizzle. Filed as **PP-075** — the
+>   earliest claimant of that number, so **#2578** takes **PP-077** and **#2581** keeps **PP-076**.
+>   This bullet re-pins the `docs/README.md:75` pointer to the keep-the-entry rule's line here
+>   (`:5172`); **#2578**, **#2581**, **#2587** and **#2595** re-pin it from their own trees, so whichever merges last re-measures.
+> - **Previous:** 2026-10-11 (UTC) — **PP-070**: `segment_members` has been keyed by nothing since `0000_init` created it without
 > an `id` at all: `0071` added the column nullable-with-default, `0125` made it NOT NULL and *deliberately stopped short*, and the only
 > index shaped like a key — `idx_segment_members_pk` — is a **non-unique** btree over `(segment_id, entity_id)` (`pg_index.indisunique = f`),
 > so `pg_constraint` answers `pk=0` on the chain build *and* on preprod, and the bulk-enroll callers' `onConflictDoNothing()`
@@ -325,6 +345,7 @@ Severity: **S1** blocks go-live · **S2** broken feature or security weakness ·
 | PP-072 | S3  | Analytics / data minimisation | **The churn queue never asked whether the contact still exists.** `GET /api/tenant/analytics/churn` filtered `churn_predictions.tenant_id` only, so a soft-deleted contact stayed listed with name, email, risk factors and `recommendedActions`, and `POST` kept scoring them because #2555 matched the neighbouring `GET` instead of fixing both — the deal side of the same feature filters `deleted_at` on both sides | 🔧 FIXED in this PR (`isNull(contacts.deletedAt)` in the `GET` filter and the `POST` ownership probe; the two advertised `.../calculate` routes do not exist and the doc comments now say so · `tests/unit/churn-soft-deleted-2556.test.ts`, 6 tests, asserting the rendered SQL) |
 | PP-073 | S3  | Data access / raw SQL | **Six raw-string sinks interpolate a caller-supplied name or a typed-number option and none of them escapes it.** An identifier position can never be a `$n` parameter, so the builders' `` `"${k}"` `` is not escaping: a `lib/db/client.ts` column key of `x" = '1' OR 1=1 --` closes its own quoted identifier and continues the statement; `SET [LOCAL] statement_timeout` has no parameter slot at all. Table names were already allowlisted, every value already binds as `$n`, and `buildInsert`/`buildUpdate`/`countRows` are re-exported at `lib/db/index.ts:17-19` and imported by **nothing** — so this is the pattern, not an active injection | 🔧 FIXED in this PR (**#2528**): `lib/sql-allowlist.ts` gains `BARE_IDENTIFIER` + `validateIdentifier()` (applied to all three builder key lists — `lib/db/client.ts:142`/`:156`/`:158`/`:170` — and to `verifyAuditChainIntegrity`'s operator-supplied `--audit-table` name at `lib/data-integrity.ts:305`, re-pinned from `:285` by **#2566**, *before* the `try` because the `catch` at `:358` (was `:342`) reports the name back) and `MAX_STATEMENT_TIMEOUT_MS` + `validateTimeoutMs()` at `lib/api/with-transaction.ts:86` / `lib/cron/distributed-lock.ts:72` · **14** new tests + **493** existing across the **17** suites that reach these modules, `tsc --noEmit` exit 0 · **all 1,946** explicitly-named columns in `drizzle/schema` satisfy the lowercase-only rule · **not** #683's per-table column allowlist · **#2566 converts what #2567 left** — `withTimeout`'s `SET LOCAL statement_timeout` (clamped *before* `pool.connect()`), both `data-integrity` discovery loops, `exportAsSQL`'s `INSERT INTO "…"`, the `countRows(table, {})` → 42601 empty predicate — deletes `lib/db/identifier.ts` rather than ship a second rule, and adds `guard:raw-sql` (1,498 files re-measured at `59725908`, was 1,499 · 0 unescaped · 15 guarded or marked) + **16** tests |
 | PP-074 | S3  | Email / public edge | **#2526** reported `/api/tenant/email/track` as an unauthenticated pixel/click sink taking `tid`/`cid`/`cpid`/`eid` off the query string. Measured: the path was never in `PUBLIC_PATHS`/`PUBLIC_PREFIXES` (anonymous requests die at the edge with **401**), and both inserts were refused by `0031`'s `tenant_isolation` `WITH CHECK` because the handler sets no tenant context — so it had no working behaviour to forge, and the "public, no auth required" wording lived in two doc comments. What it did do is 302 to any caller-chosen public `?url=` off the CRM's own domain (the #2218 shape), and the two tables it names have had exactly that one writer | 🔧 FIXED in this PR (route + its 12-test #2267 suite deleted; `app/api/tenant/email/analytics/route.ts` docblock corrected to name the token pair; `tests/unit/legacy-email-track-retired-2526.test.ts`, **11** tests, reproduces `isPublic()`'s rules from the arrays in `proxy.ts` and pins that `/api/track/open` + `/api/track/click` read only `?t` and write under `withTenantContext(<row>.tenantId)` · the zero-writer consequence for `email_opens`/`email_clicks` is recorded in the section, not fixed here) |
+| PP-075 | S2  | Integrations / UI write | **#2560**: `PATCH /api/tenant/plugin-engine` guarded on `body['enabled']` (the key the only caller sends) and assigned `body['isActive']` (a key nobody ever sent), so the integrations Active/Disabled toggle produced `{ isActive: undefined }` and drizzle threw `No values to set` — measured offline against real drizzle, no DB. Every click answered **500**, which `lib/api-error.ts:114-116` turns into a *fatal* critical-error page, and a request that also carried `name`/`config` dropped the flag and answered `success: true`. The line is in `ecbba74e` (**init**, 2026-05-19), so the toggle has never worked on any build this repo can produce | 🔧 FIXED in this PR (assign the guarded field, accept the sibling `isActive`/`is_active` spellings, and answer **400 `{ error: 'no fields to update' }`** instead of letting an empty `updates` reach drizzle; `tests/unit/plugin-engine-toggle-2560.test.ts`, **12** tests — 9 handler + 3 drizzle-semantics evidence — **8** of the 9 handler tests fail against the pre-fix line. The whole-config replace and the missing in-handler CSRF gate stay **#2562**/**#2561**, as the issue itself scopes them) |
 
 ## Sentry issues → register entries
 
@@ -5071,6 +5092,78 @@ no space, no semicolon, no dash, no `-`-comment, and a length under Postgres's o
   surface that could never work, found by reading the config instead of the comment),
   **0105** + `withTrackingLookupContext` (the narrow read that makes the token pair safe to
   publish), **#2530** / **PP-070** (writes RLS refuses in silence).
+## PP-075 — 🔧 **#2560**: `PATCH /api/tenant/plugin-engine` guards on `body['enabled']` and assigns
+`body['isActive']` — a key no caller has ever sent — so the integrations Active/Disabled toggle
+threw `No values to set` inside drizzle, answered **500** on every click, and paged a *fatal*
+critical-error alert for a button that has been broken since the **init** commit _(S2 · Integrations
+/ UI write · PR **#2569**)_
+
+- **Found by:** **#2560**, filed from the integrations page. Confirmed here before touching it, in
+  three independent measurements.
+- **Measurement 1 — what drizzle does with the payload, no database required.** `new Pool()` opens
+  no socket and `.toSQL()` runs the same `mapUpdateSet` the server ran, so the failure is
+  reproducible in a unit test:
+  ```
+  { isActive: false }              -> update "integrations" set "is_active" = $1
+  { isActive: undefined }          -> THROWS: No values to set
+  { name: 'x', isActive: undefined } -> update "integrations" set "name" = $1   (flag dropped, 200 OK)
+  ```
+  The first line is the point: the column mapping was always right. `isActive` → `is_active`
+  works, which is why the bug is the *property name read off the body* and not the schema.
+- **Measurement 2 — there is exactly one caller and it sends the other spelling.**
+  `app/tenant/integrations/page.tsx:59-61` posts `{ id: inst.id, enabled: !inst.enabled }`; `grep
+  -n isActive` over that file returns **no hits**. The route's own POST above the PATCH writes
+  `isActive: body.enabled !== false` (`:103`) — the handler knows the mapping when it inserts and
+  loses it when it updates. The sibling `PATCH /api/tenant/integrations/[id]/route.ts:28` reads
+  `is_active` off the body, so a third spelling exists on the wire for the same column.
+- **Measurement 3 — provenance.** `git log --all -S "updates['isActive'] = body['isActive']"`
+  returns `ecbba74e`, `init: NuCRM Enterprise v2 — based on v1.0.0 stable release`, 2026-05-19.
+  Every later hit is the same line moving between the `.next-build` artefact copies. So this has
+  never worked in any build this repository can produce, and no regression test could have caught
+  it: the route had no PATCH test at all before this entry.
+- **What was actually live.** Two distinct failures, both reported to the user as nothing:
+  1. *Toggle alone* (the only thing the UI does): `updates` is `{ isActive: undefined }`, drizzle
+     throws before building SQL, the `catch` returns `apiError(err)` (`app/api/tenant/plugin-engine/route.ts:174-175`), which defaults
+     to **500** — and `lib/api-error.ts:114-116` treats any status >= 500 as fatal, calling both
+     `Sentry.captureException` and `sendCriticalErrorAlert`. One click on "Disabled" was a paging
+     incident. The page then shows `toast.error('Failed')` and the row's `is_active` never changes.
+  2. *Toggle plus another field* (any future client): drizzle drops the undefined key and updates
+     `name`/`config` only, answering `success: true` for a half-applied write. Worse than the 500,
+     because it is silent.
+  Impact is not cosmetic: `app/api/tenant/webhooks/retry/route.ts` honours `is_active` and refuses
+  to send into a disabled webhook with 409, so the flag is real on the send path — it simply
+  cannot be set from the UI. A tenant that wants to stop a webhook has to delete the integration.
+- **What this does.** `const enabled = body['enabled'] ?? body['isActive'] ?? body['is_active']`,
+  then `if (enabled !== undefined) updates['isActive'] = Boolean(enabled)` — the assignment now
+  reads the field the guard reads, and the two sibling spellings are accepted rather than silently
+  no-oping. And an empty `updates` is refused with **400 `{ error: 'no fields to update' }`**
+  before it reaches drizzle: "nothing to change" is a client-input answer, and keeping it below
+  500 is what stops the paging path, not a nicety.
+- **What this does NOT do.** The issue names two further defects in the same handler and scopes
+  them out, and this entry keeps that scope: `:146` replaces the whole `config` bag (**#2562** —
+  with **#2559**'s GET masking, a read-then-write round trip now destroys credentials), and the
+  route has no in-handler CSRF/admin gate (**#2561** — `guard:csrf` counts it as covered via an
+  env-gated middleware path). Neither is fixed here, and neither is made worse: this change adds
+  no new write and touches no auth surface.
+- **Measured.** `tests/unit/plugin-engine-toggle-2560.test.ts` — **12** tests: 3 drizzle-semantics
+  evidence tests (the block above, run offline over an unconnected `Pool`) and 9 handler tests that
+  assert on the object the route hands to `.set()`. **Mutation-checked**: with the pre-fix line
+  restored, **8** of the 9 handler tests fail (the 9th pins the `id is required` guard, which
+  predates this bug and still passes) — the suite is a test of the bug, not of the fix's shape.
+  Also green: `plugin-engine-config-mask-2521.test.ts`, `concurrency-guard.test.ts`, 31 tests
+  across the three files. **Not measured live** — this sandbox has no reachable Docker daemon and
+  nothing on `127.0.0.1:3099`, so the click-to-200 path is proven by the `.set()` payload plus the
+  real `mapUpdateSet` render, not by a browser.
+- **Files:** `app/api/tenant/plugin-engine/route.ts` (PATCH `updates` block),
+  `tests/unit/plugin-engine-toggle-2560.test.ts` (new).
+- **Pointers this entry's own edits moved:** the `docs/README.md:75` re-pin in the header bullet
+  above, and the drift allowlist re-derived after this commit.
+- **Related:** **#2560** (the report), **#2562**/**#2561** (the two same-handler defects the issue
+  scopes out), **#2559**/**PP-074**-adjacent integrations masking work (the GET that made the
+  config-bag replace dangerous), `lib/api-error.ts:114-116` (why a 500 from a UI toggle pages),
+  **#2526**/**PP-074** (the same class of finding one layer out: a surface whose contract was
+  documented rather than measured).
+
 ## How to maintain this file
 
 - **New issue** → next free `PP-0NN` id, one section, and a row in the Summary table. Never renumber.

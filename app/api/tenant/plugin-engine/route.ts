@@ -144,7 +144,20 @@ export const PATCH = withApiRoute(async (request: NextRequest) => {
     const updates: Partial<typeof integrations.$inferInsert> = {};
     if (body['name']) updates['name'] = body['name'];
     if (body['config']) updates['config'] = body['config'];
-    if (body['enabled'] !== undefined) updates['isActive'] = body['isActive'];
+    // #2560: this line was `= body['isActive']` — guarded on the key the only
+    // caller sends (`app/tenant/integrations/page.tsx:61` posts `{ id, enabled }`)
+    // and then reading a key no caller has ever sent, so a toggle produced
+    // `{ isActive: undefined }`, drizzle's `mapUpdateSet` threw "No values to
+    // set", and `apiError` answered 500 *and paged* (`lib/api-error.ts` treats
+    // status >= 500 as fatal). Read the field that was checked; accept the
+    // sibling route's spellings too (`app/api/tenant/integrations/[id]/route.ts:28`).
+    const enabled = body['enabled'] ?? body['isActive'] ?? body['is_active'];
+    if (enabled !== undefined) updates['isActive'] = Boolean(enabled);
+    // "Nothing to change" is a client-input answer, not a server fault: without
+    // this the empty `updates` still reaches drizzle and throws into the 500 path.
+    if (Object.keys(updates).length === 0) {
+      return NextResponse.json({ error: 'no fields to update' }, { status: 400 });
+    }
 
     const expectedUpdatedAt = body.expectedUpdatedAt ? new Date(body.expectedUpdatedAt) : null;
     const guard = await concurrencyGuard(db, integrations, body.id, ctx.tenantId, expectedUpdatedAt);
