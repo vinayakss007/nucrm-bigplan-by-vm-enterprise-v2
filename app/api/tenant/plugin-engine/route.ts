@@ -5,7 +5,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth, requireCsrf } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { integrations } from '@/drizzle/schema';
 import { eq, and, isNull } from 'drizzle-orm';
@@ -80,6 +80,18 @@ export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+    // #2561: in-handler CSRF, the placement `app/api/tenant/integrations/route.ts:74`
+    // (#1835) uses. The proxy does check this surface (`proxy.ts:530-532`), but a
+    // `Bearer ak_*` request on an allowed path is passed through before that block
+    // (`proxy.ts:466`) and `requireAuth` then falls back to the ambient session cookie
+    // (`lib/auth/middleware.ts:262`) — on that path nothing has validated CSRF. The
+    // exemption keys on the *verified* credential, not on the client-settable
+    // `x-auth-method` header `requireCsrf` alone would trust, so an API-key client that
+    // sends no CSRF cookie keeps working.
+    if (ctx.authMethod !== 'api_key') {
+      const csrf = requireCsrf(request);
+      if (csrf) return csrf;
+    }
 
     const body = await readJsonBody(request);
     if (!body.provider_id || !body.name) {
@@ -135,6 +147,10 @@ export const PATCH = withApiRoute(async (request: NextRequest) => {
   if (limited) return limited;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+    if (ctx.authMethod !== 'api_key') {
+      const csrf = requireCsrf(request); // #2561: see the POST handler for why
+      if (csrf) return csrf;
+    }
 
     const body = await readJsonBody(request);
     if (!body.id) return NextResponse.json({ error: 'id is required' }, { status: 400 });
@@ -185,6 +201,10 @@ export const DELETE = withApiRoute(async (request: NextRequest) => {
   if (limited) return limited;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+    if (ctx.authMethod !== 'api_key') {
+      const csrf = requireCsrf(request); // #2561: see the POST handler for why
+      if (csrf) return csrf;
+    }
 
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');

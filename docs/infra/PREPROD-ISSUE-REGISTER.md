@@ -4,7 +4,35 @@
 > here, with the evidence that proves it and the verification that closed it.
 > Update the status the moment it changes; IDs are never reused.
 >
-> - **Last updated:** 2026-10-11 (UTC) — **PP-070**: `segment_members` has been keyed by nothing since `0000_init` created it without
+> - **Last updated:** 2026-10-12 (UTC) — **PP-076**: **#2561**'s "no CSRF check on
+>   `/api/tenant/plugin-engine`" was measured through the one file its evidence list never opened.
+>   `proxy.ts` **is** the root Next.js middleware, and validates the double-submit token for every
+>   `/api/` mutation that carries one (`:530-540`), so the **289** mutating route files that
+>   `guard:csrf` passed on the strength of `requireAuth()` were covered — but by the proxy, not by
+>   `requireAuth()`, whose cited backstop is `CSRF_ENFORCE_CENTRAL` (`lib/auth/middleware.ts:220`), a
+>   flag nothing in this repository sets (**3** hits, all code or comments). The guard's header said
+>   "There is no root Next.js middleware", which is the sentence that let it credit the dead flag
+>   instead of naming the file doing the work. What is genuinely exposed sits above that block: the
+>   `Bearer ak_*` pass-through returns at `proxy.ts:466` for any `isApiKeyAllowedPath()` route — which
+>   includes `/api/tenant` — and a key that is not in `api_keys` falls through to `requireAuth()`'s
+>   own cookie path (`lib/auth/middleware.ts:241` → `:262`), i.e. a cookie-authenticated mutation no
+>   CSRF check has ever inspected; reachability is bounded by `setCORS` echoing only listed
+>   `ALLOWED_ORIGINS` (`proxy.ts:307-319`, fail-closed and `*`-fatal in production at `:282-284`), not
+>   by anything the request itself controls. This PR puts the in-handler check on the three
+>   plugin-engine writers — exempt on the verified `ctx.authMethod`, never on the client-settable
+>   `x-auth-method` header — and rewrites `guard:csrf` from a guard that asserted blanket coverage
+>   into one that **verifies** the load-bearing edge check, its ungatedness, and its agreement with
+>   `needsCsrfValidation()`'s own literals, reporting **14** in-handler / **288** proxy-covered /
+>   **34** baseline instead of a claim. No ratchet on the requireAuth-only count, deliberately: those
+>   routes are covered by assertion 2, so a growing count is not a growing hole, and a cap would buy
+>   in-handler calls chosen for the number rather than for the pass-through that needs one. Filed as
+>   **PP-076**: **#2569** minted **PP-075** first and **#2578** took **PP-077**, so the earlier merge keeps
+>   its number and this entry sits between them; **#2587** takes **PP-078**. The pass-through is **#2579** and the
+>   dead-flag decision is **#2580**, both left open on purpose; the retraction of the "no token at all
+>   cross-origin" impact line is posted on **#2561**. This bullet re-pins the `docs/README.md:75`
+>   pointer to the keep-the-entry rule's line here (`:5194`) — it overtakes **PP-070**'s `:5013`,
+>   which moved because this entry added a header bullet, a summary row and a section above it.
+> - **Previous:** 2026-10-11 (UTC) — **PP-070**: `segment_members` has been keyed by nothing since `0000_init` created it without
 > an `id` at all: `0071` added the column nullable-with-default, `0125` made it NOT NULL and *deliberately stopped short*, and the only
 > index shaped like a key — `idx_segment_members_pk` — is a **non-unique** btree over `(segment_id, entity_id)` (`pg_index.indisunique = f`),
 > so `pg_constraint` answers `pk=0` on the chain build *and* on preprod, and the bulk-enroll callers' `onConflictDoNothing()`
@@ -310,7 +338,7 @@ Severity: **S1** blocks go-live · **S2** broken feature or security weakness ·
 | PP-057 | S2  | Migrations + tooling        | The repo has exactly one "what is applied?" command and it cannot see the ledger: `db:status` queries `__drizzle_migrations(name, applied_at)` — no such table, no such columns — and maps **any** failure to "history table does not exist", so against preprod it printed **`Applied: 0 / Pending: <every journal entry>`** on a database with **99 applied and 18 outstanding**. `db:migrate --dry-run` compounds it: its first line counts journal entries (**`116 pending migration(s)`**) before reading anything, and that number is what the y/N apply prompt offers. Nothing in CI or the runbooks would ever have revealed the 18-behind state, which includes `0091` (the usage-snapshot bypass **#56** shipped), `0059` (**#74**'s still-unstamped entry) and now `0116` (**#2367**, merged while this PR was open)                                                                                                                | 🔧 SCRIPTS FIXED in this PR (verified 99/18 against two instruments) · applying the 18 is an **owner decision** · also measured: `0115`'s absence is **not** a live cross-tenant read                   |
 | PP-058 | S2  | Migrations + tooling        | `db:migrate` connects as the tables' **owner** (`nucrm`) with `FORCE ROW LEVEL SECURITY` active on 48 of the 49 tables the pending set names, and `scripts/migrate.ts:198` sets **no tenant GUC** — so every data-correcting statement in a migration matches **0 rows** and silently corrects nothing, while the DDL built on top of it (`CREATE UNIQUE INDEX`, `SET NOT NULL`) reads the whole heap regardless. Measured on preprod: `0114_leads_tenant_oid_unique` (pending) dedupes `(tenant_id, lead_oid)` before creating the unique index, but its own CTE sees 0 of 25 leads while the truth is **1 duplicate group / 5 rows / 4 losers** (all five soft-deleted, all nine days older than the header's own "measured 0"), so the pending 21-entry run **aborts on 23505** — the exact failure its header says the dedupe exists to prevent                                                                                            | 🚨 OPEN · owner decision · no historical damage demonstrated · `0109` already proves the fix is one `set_config` line                                                                                   |
 | PP-059 | S2  | CHECK vs code               | `guard:vocab` — the only command in the repo that asks the **live database** what it will reject — exits **1** on `main` — measured at `38ae90e2`, re-measured at `f3787f32` — with **2 of 9** constraints disagreeing: `chk_sequence_enrollments_status` (5 values) refuses `'cancelled'`, which `/api/unsubscribe` has written since the repo's first commit `ecbba74e`, and `chk_invoices_status` (8 values) refuses `'void'`, which `INVOICE_STATUSES` offers and `PATCH /api/tenant/invoices/[id]` passes through. Its own fixes, `0120` and `0112`, are two of the **24** entries PP-057 says nobody has agreed to apply (the count was **22** when this row was written; `0121` landed since, then `0122` with **#2446**) — and it is the **only one of the 23 `guard:*` scripts no automation invokes** (23 re-measured on 2026-10-11 by **#2566**, which adds `guard:raw-sql` **with** a runner — the count was 22 when this row was written, counting **#2539**'s `guard:cron-lock` as new: 20 called by `npm run guard:*` alias, 2 by direct `node` command): workflows call 20 by alias — 17 in `ci.yml` at `:45` through `:87` and 3 in `nightly-soak.yml` — and 2 by direct `node` command (`ci.yml:221`, `:254` — re-pinned from `:219`/`:252`, themselves re-pinned from `:217`/`:250` on 2026-10-10 by **#2539**, on 2026-10-11 by **#2566**'s step two lines above them), while `grep -rn check-constraint-vocab .github/workflows` returns **0** | 🚨 OPEN · guard wired nowhere · latent **on this DB** (both tables hold 0 rows, measured `--superadmin`) · CI green proves only that the `.sql` text says the right thing                               |
-| PP-060 | S2  | Deploy                      | The 24-entry backlog (23 until `0122` landed with **#2446**) has **no automated apply path that could reach this database**: the only executable migrate in the repo's automation is `deploy.yml:356` (`scripts/deploy-migrate.ts --yes`, which spawns `migrate.ts --yes` at `:96`), inside the single `script:` block opened at `:138` — so it runs over SSH on the **pm2 production VM**, not on this Docker preprod host. That hop has failed every run since the last success (`30748691555`, 2026-08-02T12:51:06Z): **778 runs · 0 success** (667 failure / 63 cancelled / 48 skipped), 15 of 15 sampled recent runs contain `dial tcp ***:22: i/o timeout`, and the full retained history is **3 successes in 1,319 runs**. No workflow mentions `db:status` (grep: 0 hits in all 5), `ci.yml` and `backup-drill.yml` build their databases with `db:sync`, and this host has no deploy cron or timer                                                                                    | 🚨 OPEN · owner action (`gh secret set DEPLOY_HOST`, the remedy AGENTS.md already documents) · even a healthy deploy migrates a **different database**, so PP-057's exit (a) has no mechanism behind it · **PP-063** measured the hop over the whole history and found a second defect behind this one |
+| PP-060 | S2  | Deploy                      | The 24-entry backlog (23 until `0122` landed with **#2446**) has **no automated apply path that could reach this database**: the only executable migrate in the repo's automation is `deploy.yml:389 (re-pinned 2026-10-13: **#2542** shifted it from :356)` (`scripts/deploy-migrate.ts --yes`, which spawns `migrate.ts --yes` at `:96`), inside the single `script:` block opened at `:138` — so it runs over SSH on the **pm2 production VM**, not on this Docker preprod host. That hop has failed every run since the last success (`30748691555`, 2026-08-02T12:51:06Z): **778 runs · 0 success** (667 failure / 63 cancelled / 48 skipped), 15 of 15 sampled recent runs contain `dial tcp ***:22: i/o timeout`, and the full retained history is **3 successes in 1,319 runs**. No workflow mentions `db:status` (grep: 0 hits in all 5), `ci.yml` and `backup-drill.yml` build their databases with `db:sync`, and this host has no deploy cron or timer                                                                                    | 🚨 OPEN · owner action (`gh secret set DEPLOY_HOST`, the remedy AGENTS.md already documents) · even a healthy deploy migrates a **different database**, so PP-057's exit (a) has no mechanism behind it · **PP-063** measured the hop over the whole history and found a second defect behind this one |
 | PP-061 | S2  | Edge / auth surface         | **Six endpoints that authenticate with something other than a session were unreachable on this host.** `POST` to `/api/auth/oauth/token`, `/api/auth/oauth/revoke`, `/api/webhooks/razorpay`, `/api/webhooks/payu`, `/api/webhooks/telegram/bot` and `/api/tenant/plugins/webhook/<id>` each answered `401 {"error":"Authentication required"}` — the identical byte-for-byte body the middleware itself writes, so **no handler ran** — because none of the six is in `proxy.ts:226`'s public list. The OAuth exchange, **both payment receivers**, the bot and the plugin integrators all had a caller that could never arrive. The same screen then caught what the closed edge had been hiding: `app/api/tenant/plugins/webhook/[id]/route.ts:63` loaded **all 19 columns** of `custom_plugins` — including `drizzle/schema/plugins.ts:20`, whose own comment says it "stores token/username/password/client_id/etc" — and did it **before** verifying the caller at `app/api/tenant/plugins/webhook/[id]/route.ts:106`, on a URL that is itself the credential | 🔧 FIXED in this PR (6 paths opened, row projected to 4 of 19 columns, `tests/unit/proxy.test.ts:158`) · **0 of 6 live**, re-measured 2026-10-10 against the deployed tree `30e9f263` — **103** commits behind main, and the count rose while this PR was open · `/api/tenant/visitors/track` measured as the seventh hit and **deliberately left closed** |
 | PP-062 | S2  | Portal / credential         | `support_tickets.portal_token` was a **second credential living on the header the portal already uses for `portal_clients.access_token`**: `lib/portal-auth.ts:45` reads `x-portal-token` as a client token, and three public ticket routes read the *same* header (plus a POST body field) as a **ticket** token, resolved it to a **contact** and answered with that contact's **whole** ticket history — deliberately, #2378 — so possession of one ticket's string read every ticket that contact ever filed, subjects and bodies included. Permanent and un-revocable by construction: no `expires_at`, no `is_active`, no rotation, no revoke path, unlike `portal_clients` (`drizzle/schema/tokens.ts:202`, `:204`). **Nothing ever delivered it** — 0 references to `portal_token`/`portalToken` in `app/portal/**`, in `components/**`, in any email template or webhook payload — and #2440 had already stopped `POST /api/public/tickets` echoing a freshly minted one, so the only tokens that can still exist are ones handed out **before** that fix. That read was also the *only* thing letting an unauthenticated connection see a `support_tickets` row at all: 0122's `support_tickets_portal_token_lookup` arm. **Latent on this database**, measured: `support_tickets` holds 0 rows for the one tenant `tenants` exposes under `--superadmin`, and the retired grant is not even installed here because **0122 itself is pending** (PP-060) | 🔧 FIXED in this PR (credential retired in code, RLS and nullability by `0124` — the **26th** outstanding entry, `db:status` → `Applied: 99 · Pending: 26 · Total: 125`) · `DROP COLUMN` and `SET portal_token = NULL` stay **owner decisions** · not live until deployed |
 | PP-063 | S2  | Deploy                      | **The deploy hop's one failure line is two independent defects, and neither reads out of the log.** (D1) PP-060's `dial tcp ***:22: i/o timeout` is not "the VM is down": `sshd` answers on `0.0.0.0:22`, `ufw` is **inactive**, and 22 is reached from outside daily — but the only hostname this box is configured with is a **dynamic-DNS name with no updater installed anywhere on it**, and dialing that name from this host reproduces the identical silent timeout (**12,011 ms**) while the address this session actually arrived on answers in **114 ms**. (D2) behind it, the job deploys a runtime this host does not have: `deploy.yml:5` asserts pm2-not-Docker, `deploy.yml:158` `cd`s to a `$HOME` git checkout and `:172-189` drive `pm2` — measured here: no `pm2` binary, no nvm, `/home` **empty**, the app running as 18 Compose containers under `/srv/nucrm`. Re-pointing `DEPLOY_HOST` alone therefore produces a **different red**, not a deploy — and `set -e` at `:139` plus the `cd` mean the abort happens 146 lines **before** the first `git checkout --force` at `:305`, so the compose tree was never at risk | 🔧 DIAGNOSABILITY FIXED in this PR (pre-flight classifies the dial at `deploy.yml:79`; the remote side names the model mismatch at `deploy.yml:151`) · the hop itself is **owner action**: `DEPLOY_HOST` must hold a real address **and** someone must choose between "the pm2 VM" and rewriting this job for `docker compose up -d --build` |
@@ -325,6 +353,7 @@ Severity: **S1** blocks go-live · **S2** broken feature or security weakness ·
 | PP-072 | S3  | Analytics / data minimisation | **The churn queue never asked whether the contact still exists.** `GET /api/tenant/analytics/churn` filtered `churn_predictions.tenant_id` only, so a soft-deleted contact stayed listed with name, email, risk factors and `recommendedActions`, and `POST` kept scoring them because #2555 matched the neighbouring `GET` instead of fixing both — the deal side of the same feature filters `deleted_at` on both sides | 🔧 FIXED in this PR (`isNull(contacts.deletedAt)` in the `GET` filter and the `POST` ownership probe; the two advertised `.../calculate` routes do not exist and the doc comments now say so · `tests/unit/churn-soft-deleted-2556.test.ts`, 6 tests, asserting the rendered SQL) |
 | PP-073 | S3  | Data access / raw SQL | **Six raw-string sinks interpolate a caller-supplied name or a typed-number option and none of them escapes it.** An identifier position can never be a `$n` parameter, so the builders' `` `"${k}"` `` is not escaping: a `lib/db/client.ts` column key of `x" = '1' OR 1=1 --` closes its own quoted identifier and continues the statement; `SET [LOCAL] statement_timeout` has no parameter slot at all. Table names were already allowlisted, every value already binds as `$n`, and `buildInsert`/`buildUpdate`/`countRows` are re-exported at `lib/db/index.ts:17-19` and imported by **nothing** — so this is the pattern, not an active injection | 🔧 FIXED in this PR (**#2528**): `lib/sql-allowlist.ts` gains `BARE_IDENTIFIER` + `validateIdentifier()` (applied to all three builder key lists — `lib/db/client.ts:142`/`:156`/`:158`/`:170` — and to `verifyAuditChainIntegrity`'s operator-supplied `--audit-table` name at `lib/data-integrity.ts:305`, re-pinned from `:285` by **#2566**, *before* the `try` because the `catch` at `:358` (was `:342`) reports the name back) and `MAX_STATEMENT_TIMEOUT_MS` + `validateTimeoutMs()` at `lib/api/with-transaction.ts:86` / `lib/cron/distributed-lock.ts:72` · **14** new tests + **493** existing across the **17** suites that reach these modules, `tsc --noEmit` exit 0 · **all 1,946** explicitly-named columns in `drizzle/schema` satisfy the lowercase-only rule · **not** #683's per-table column allowlist · **#2566 converts what #2567 left** — `withTimeout`'s `SET LOCAL statement_timeout` (clamped *before* `pool.connect()`), both `data-integrity` discovery loops, `exportAsSQL`'s `INSERT INTO "…"`, the `countRows(table, {})` → 42601 empty predicate — deletes `lib/db/identifier.ts` rather than ship a second rule, and adds `guard:raw-sql` (1,498 files re-measured at `59725908`, was 1,499 · 0 unescaped · 15 guarded or marked) + **16** tests |
 | PP-074 | S3  | Email / public edge | **#2526** reported `/api/tenant/email/track` as an unauthenticated pixel/click sink taking `tid`/`cid`/`cpid`/`eid` off the query string. Measured: the path was never in `PUBLIC_PATHS`/`PUBLIC_PREFIXES` (anonymous requests die at the edge with **401**), and both inserts were refused by `0031`'s `tenant_isolation` `WITH CHECK` because the handler sets no tenant context — so it had no working behaviour to forge, and the "public, no auth required" wording lived in two doc comments. What it did do is 302 to any caller-chosen public `?url=` off the CRM's own domain (the #2218 shape), and the two tables it names have had exactly that one writer | 🔧 FIXED in this PR (route + its 12-test #2267 suite deleted; `app/api/tenant/email/analytics/route.ts` docblock corrected to name the token pair; `tests/unit/legacy-email-track-retired-2526.test.ts`, **11** tests, reproduces `isPublic()`'s rules from the arrays in `proxy.ts` and pins that `/api/track/open` + `/api/track/click` read only `?t` and write under `withTenantContext(<row>.tenantId)` · the zero-writer consequence for `email_opens`/`email_clicks` is recorded in the section, not fixed here) |
+| PP-076 | S2  | Auth / CSRF | **#2561** reported `/api/tenant/plugin-engine` POST/PATCH/DELETE as having no CSRF check. Measured, the *coverage* half of that is wrong and the *guard* is the real defect: `proxy.ts:530-540` validates the double-submit pair for **every** `/api/` mutation that carries a token and answers the 403 itself, so of **302** non-exempt mutating route files **289** were covered after all — by the proxy, not by the `requireAuth()` backstop the guard cites (`CSRF_ENFORCE_CENTRAL`, set nowhere: **3** repo-wide hits, all code or comments) — while the guard's own header asserted "There is no root Next.js middleware". The hole that is real sits upstream: the `Bearer ak_*` pass-through returns at `proxy.ts:466`, **above** that block, and a junk key then falls through to `requireAuth()`'s cookie path (`lib/auth/middleware.ts:241` → `:262`), producing a cookie-authenticated mutation no CSRF check ever inspected | 🔧 FIXED in this PR (**#2581**): in-handler `requireCsrf()` on all three mutating handlers, exempt only when `ctx.authMethod === 'api_key'` — the credential `requireAuth()` actually verified (`lib/auth/middleware.ts:252`), not `requireCsrf()`'s **client-settable** `x-auth-method` header (`:482`, which nothing in this repo ever sends) · `scripts/check-csrf-coverage.mjs` rewritten to three assertions (the edge call exists, is not behind a `process.env` test, and its exempt lists agree with the literals inside `needsCsrfValidation()` in both directions) plus honest populations (**14** in-handler / **288** proxy-covered / **34** baseline) and **deliberately no ratchet** · `tests/unit/plugin-engine-csrf-2561.test.ts`, **12** tests, **4** red at `79cc642f` against the real `requireCsrf` (only `requireAuth` stubbed, via `importOriginal`) · the pass-through itself is **#2579** and the dead-flag call is **#2580**, both left open on purpose |
 
 ## Sentry issues → register entries
 
@@ -2156,7 +2185,7 @@ from pg_policies where schemaname='public' and (qual like '%app.is_super_admin%'
   lists extended by **#2446** with the three `app.portal_lookup_*` GUCs, so a portal-credential read cannot
   outlive its transaction either). No route splices
   request data into SQL: the template-literal sinks in `app/` are compile-time identifiers or regex-gated numerics
-  (`app/api/cron/backup-verify/route.ts:267-269 (re-pinned 2026-10-12: **#2575** shifted it)` gates `nucrm_verify_${Date.now()}` through `^[a-z0-9_]+$` before
+  (`app/api/cron/backup-verify/route.ts:313-315 (re-pinned 2026-10-13: **#2600** shifted it from :267-269)` gates `nucrm_verify_${Date.now()}` through `^[a-z0-9_]+$` before
   `CREATE DATABASE`; `app/api/tenant/sla/route.ts:36` is drizzle identifiers — the coordinate did not move but the text under it did: **#2482** rewrote that line on 2026-10-10 from `sql.raw('"sla_policies"."id"')`, a compile-time constant, to the `slaPolicies.id` identifier it is now, so the claim this sentence makes became literally true only with that PR). Library-level splices are not reachable from
   `app/` (`lib/data-integrity.ts:314`, re-pinned from `:290`/`:294` on 2026-10-11 — both halves of **#2528**
   edited that file; `lib/db/query-timeout.ts:70`, re-pinned from `:63` on 2026-10-11, is clamped — `Math.round`ed
@@ -2194,7 +2223,7 @@ from pg_policies where schemaname='public' and (qual like '%app.is_super_admin%'
   `lib/db/request-connection.ts:88-94` (both reset lists gained the `app.portal_lookup_*` names with
   **#2446**, which is why their text moved while the cited construct did not), `lib/auth/middleware.ts:297,391`,
   `drizzle/migrations/0088_rls_bootstrap_and_isolation.sql:344-360`, `drizzle/migrations/0099_api_keys_auth_lookup.sql`,
-  `drizzle/migrations/0105_email_tracking_pixel_lookup.sql`, `app/api/cron/backup-verify/route.ts:267-269 (re-pinned 2026-10-12: **#2575** shifted it)`,
+  `drizzle/migrations/0105_email_tracking_pixel_lookup.sql`, `app/api/cron/backup-verify/route.ts:313-315 (re-pinned 2026-10-13: **#2600** shifted it from :267-269)`,
   `deploy/docker-compose.preprod.yml`, `deploy/docker-compose.production.yml`.
 
 ## PP-049 — 🔧 PP-030's honest 503 has no central place to live: 22 of 22 cron routes hand-roll their own skip, so the fix is a 23-file design batch, not a narrow change _(S3 · Cron + observability · #2539)_
@@ -3393,7 +3422,7 @@ portal_token`, `0037`'s five backfills) ran blind **and were rescued by the loud
   ledger** — and `:175-178` then applies RLS files through `scripts/apply-rls-ci.mjs` (`:176`) under
   `DATABASE_URL=postgresql://postgres:postgres@…` (also the workflow-level default at `:11`). RLS does not filter a superuser and no
   ledger means neither branch of `scripts/migrate.ts` is taken, so in the only context CI can reach, the blindness in this entry
-  cannot manifest. `scripts/migrate.ts` never runs in `ci.yml` at all: the only workflow that invokes it is `deploy.yml:356`, against
+  cannot manifest. `scripts/migrate.ts` never runs in `ci.yml` at all: the only workflow that invokes it is `deploy.yml:389 (re-pinned 2026-10-13: **#2542** shifted it from :356)`, against
   a live database — the runner is exercised by failing in preprod, never by a pre-merge check.
   <!-- coordinate corrections at the commit that wired this guard into CI: adding the step moved three of the
        coordinates in the paragraph above. Re-measured after the insertion rather than before it: db:sync 163 →
@@ -3646,7 +3675,7 @@ CONSTRAINT` + `ADD CONSTRAINT` widenings, so they are not exposed to PP-058's RL
 - **Mechanism — where the migrate actually happens.** There are **5** workflow files. Exactly two name
   `migrate` at all: `deploy.yml` (**5** case-insensitive hits) and `backup-drill.yml` (**1** — and that one
   is a comment, see below). Across the whole `.github/workflows` directory `db:migrate` matches **once**, at
-  `deploy.yml:349`, inside the comment that lists what the new helper does ("a deploy and a manual
+  `deploy.yml:382 (re-pinned 2026-10-13: **#2542** shifted it from :349)`, inside the comment that lists what the new helper does ("a deploy and a manual
   `db:migrate` cannot interleave"); `migrate.ts` matches **twice**, at `:340` (comment) and `:356` — the
   one executable statement in the repo's automation:
   `DEPLOY_SHA="$SHA" npx tsx --import ./scripts/load-env.mjs scripts/deploy-migrate.ts --yes`.
@@ -3752,7 +3781,7 @@ connection refused/timeout`, run `curl -s ifconfig.me`, then `gh secret set DEPL
 - **The chain, end to end.** (i) **24** entries are pending (23 at `f3787f32`, `0122` from **#2446** being the
   24th), including `0112`/`0120` (PP-059's fix for a
   live rejection), `0091` (**#56**) and `0059` (**#74**); (ii) the only automated apply path is
-  `deploy.yml:356`,
+  `deploy.yml:389 (re-pinned 2026-10-13: **#2542** shifted it from :356)`,
   behind an SSH hop that has not opened in 778 runs, pointing at another host; (iii) even when it opens,
   PP-058 applies — the runner connects as the table owner with `FORCE ROW LEVEL SECURITY` on, so the
   row-writing halves of `0109` and `0114` match 0 rows silently, which is decision **#103**, upstream of
@@ -3928,7 +3957,7 @@ not wired in).
   check anyone can run.
 - **Review posture:** #2476 hardened the OAuth handler *before* this PR makes it reachable, on
   purpose, in that order. This is a **surface-widening** change. The CSRF question is answered by a
-  measurement, not an assumption: `proxy.ts:532` validates a CSRF token only inside the branch that
+  measurement, not an assumption: `proxy.ts:555 (re-pinned 2026-10-13: **#2579** shifted it from :532)` validates a CSRF token only inside the branch that
   runs *after* session verification, so anything on the public list is CSRF-unchecked by
   construction — sound here because all six handlers read **0** occurrences of `cookies()`,
   `requireAuth`, `getSession` or `verifyAuth` (measured per file), i.e. none of them can be driven
@@ -4215,7 +4244,7 @@ psql -tAc "select count(*) from support_tickets"  # as the app role, with app.po
   which is the failure AGENTS.md describes as "EPHEMERAL" and papers over with a manual re-set.
   **(D2)** someone must pick the deployment model: either there is a pm2 VM to point at, in which case
   **preprod still has no deploy path** (PP-060's exit (b) stays open), or this job is rewritten around
-  `docker compose up -d --build` — which also relocates `deploy.yml:356`, the only executable migrate in the
+  `docker compose up -d --build` — which also relocates `deploy.yml:389 (re-pinned 2026-10-13: **#2542** shifted it from :356)`, the only executable migrate in the
   repo's automation, onto the database anyone is actually running against, and is why **#137** waits behind
   this one.
 - **Why the fix is shaped like this.** The failure lives in a secret the repository cannot read, on a host the
@@ -4862,7 +4891,7 @@ no space, no semicolon, no dash, no `-`-comment, and a length under Postgres's o
   request-shaped key like `x" = '1' OR 1=1 --` reaching the planner as a 17-character column named
   `x = '1' OR 1=1 --`. Reaching the planner is not the failure the register records: silently
   addressing a different column is. Shape rejection also matches what the sibling sinks already do
-  (`validateTableName`, the `^[a-z0-9_]+$` guard at `app/api/cron/backup-verify/route.ts:276 (re-pinned 2026-10-12: **#2575** shifted it)`), so
+  (`validateTableName`, the `^[a-z0-9_]+$` guard at `app/api/cron/backup-verify/route.ts:322 (re-pinned 2026-10-13: **#2600** shifted it from :276)`), so
   the codebase has one rule for "a name in a string" instead of two.
 - **Three sinks, one rule.** `buildInsert` (`lib/db/client.ts:142`), `buildUpdate` — which has two
   separate key lists, `dk` mapped at `:156` and `wk` at `:158`, and both interpolate — and
@@ -5071,6 +5100,92 @@ no space, no semicolon, no dash, no `-`-comment, and a length under Postgres's o
   surface that could never work, found by reading the config instead of the comment),
   **0105** + `withTrackingLookupContext` (the narrow read that makes the token pair safe to
   publish), **#2530** / **PP-070** (writes RLS refuses in silence).
+## PP-076 — 🔧 **#2561**: `/api/tenant/plugin-engine` had no in-handler CSRF check on POST/PATCH/DELETE and `guard:csrf` counted it as covered — measured, the report's *coverage* claim was the wrong half and the *guard* is the real defect: 289 mutating route files pass that guard on the strength of `requireAuth()`, whose cited backstop is a flag nothing in this repository sets, while the thing that actually protects them is the edge proxy, which the guard's own header said did not exist _(S2 · Auth / CSRF · PR **#2581**)_
+
+- **Found by** taking #2561's own evidence list and opening the one file it did not cite. The
+  report is right that `app/api/tenant/plugin-engine/route.ts` never calls `requireCsrf()`
+  (`grep -c requireCsrf` → **0**) and right that `CSRF_ENFORCE_CENTRAL`
+  (`lib/auth/middleware.ts:220`) is set nowhere — 3 repo-wide hits, all code or comments, none
+  in `.env.example`, a workflow, or a deploy config. It is wrong about the consequence. Its
+  impact line — "a logged-in admin's browser can be made to POST/PATCH/DELETE cross-origin with
+  no token at all" — assumes the only CSRF defense is the one behind that flag. There is
+  another, and it is unconditional.
+- **Measurement 1 — where the coverage actually is.** `proxy.ts:530-540` validates the
+  double-submit pair for **every** `/api/` request whose method is unsafe and that carries a
+  token, and answers the 403 itself. Counting with `guard:csrf`'s own regexes on this tree
+  (`79cc642f`): **302** non-exempt mutating route files, of which **13** call `requireCsrf()`
+  in-handler and **289** rely on authentication alone — and those 289 are covered by the proxy,
+  not by `requireAuth()`. So the guard's conclusion was right while its stated reason was doubly
+  false: `scripts/check-csrf-coverage.mjs` opened with "There is no root Next.js middleware",
+  which is exactly what let it credit `requireAuth()` instead of naming the file doing the work.
+  The retraction is posted on **#2561**. The number that is true after this PR is the one the
+  guard now prints (14 in-handler / 288 proxy-covered), not a number in prose.
+- **Measurement 2 — the hole the report was circling.** The proxy's `Bearer ak_*` pass-through
+  returns at `proxy.ts:466`, **above** the block above, for any path
+  `isApiKeyAllowedPath()` accepts — which includes the `/api/tenant` data routes. A junk key does
+  not stop there: `requireAuth()` tries the key first (`lib/auth/middleware.ts:241`) and, when it
+  is not in `api_keys`, falls through to `extractToken(request)` (`:262`), which reads the
+  ambient `nucrm_session` cookie. That request is a cookie-authenticated mutation no CSRF check
+  has ever inspected. Reachability is bounded, not zero: a cross-site page cannot set the header
+  without a preflight, and the preflight only succeeds for an origin `setCORS` echoes
+  (`proxy.ts:307-319`, from a fail-closed `ALLOWED_ORIGINS` that `proxy.ts:282-284` makes fatal as
+  `*` in production) — so the reachable set is origins the deployment itself trusts, plus
+  anything running on the site's own origin. Filed as **#2579** with the one-line fix; an
+  in-handler check is what closes it per route, which is what #2561 asked for.
+- **What this does.** `POST` / `PATCH` / `DELETE` in
+  `app/api/tenant/plugin-engine/route.ts` now call `requireCsrf(request)` immediately after
+  `requireAuth()` — the placement and comment `app/api/tenant/integrations/route.ts:74` (#1835)
+  established for the same table. The exemption is keyed on `ctx.authMethod`, the credential
+  `requireAuth()` actually verified and stamped at `lib/auth/middleware.ts:252`, rather than on
+  `requireCsrf()`'s own signal, because that signal is the **client-settable** `x-auth-method`
+  request header (`lib/auth/middleware.ts:482`, read into `lib/auth/csrf.ts:136`). Two
+  consequences, both tested: a `curl` or SDK caller presenting a real `ak_` key keeps its write —
+  it would otherwise start 403ing, since nothing in this repo ever sets that header
+  (`grep -rn "x-auth-method"` → the CORS list in `proxy.ts:318` and two reads) — and a caller
+  cannot talk itself out of the check by volunteering it.
+- **What the guard does now.** Three assertions instead of one, plus an honest summary. It still
+  fails a mutating route that neither authenticates nor calls `requireCsrf()`; it now **also**
+  fails if `proxy.ts` stops calling `needsCsrfValidation()`, or calls it from behind a
+  `process.env` test — which is precisely how the middleware backstop became dead code while this
+  guard printed OK — or if its exempt lists drift from the literals inside
+  `needsCsrfValidation()`, read back out of `lib/auth/csrf.ts` in both directions. The success
+  line reports both populations instead of asserting "all mutating handlers are CSRF-protected".
+  Deliberately **not** included: a ratchet capping the requireAuth-only count. Those routes are
+  covered (assertion 2 is what covers them), so a growing count is not a growing hole, and a cap
+  would push authors toward an in-handler call chosen for the number rather than for the
+  pass-through that needs one.
+- **Measured so the next reader does not re-derive it:** the in-app browser is not what this
+  could break. `components/shared/csrf-provider.tsx` patches `globalThis.fetch` to attach
+  `X-CSRF-Token` to every same-origin `/api/` mutation, and is mounted at `app/layout.tsx:121`,
+  so every caller this route already has carries the token. Adding the check therefore changes
+  behaviour only for callers that never had a CSRF defense to begin with.
+- **Verification.** `tests/unit/plugin-engine-csrf-2561.test.ts`, **12** tests. **4** are red with
+  the route at `79cc642f` and green after it (POST/PATCH/DELETE refused with no token, plus the
+  mismatched cookie/header pair refused); the other 8 pin what must *not* change — a matching
+  double-submit still writes, a verified API key still writes, `GET` stays 200 — and the guard's
+  own fixtures. `requireCsrf` is the **real** one (only `requireAuth` is stubbed, through
+  `importOriginal`), so every assertion travels through the actual constant-time comparison at
+  `lib/auth/csrf.ts:92` instead of a mock that would pass whether or not the handler called it.
+  The five guard tests plant each failure in a throwaway fixture tree, then run the script against
+  this repository and assert the summary reports populations rather than blanket coverage.
+  `npx eslint` exit **0** on all three changed files. `tsc --noEmit` reports **125** errors in
+  **10** files, none of them in these three: all of them are `components/**/*data-table*.tsx` from
+  `@tanstack/react-table` **8.21.3** against a `^9.2.6` pin in a symlinked-`node_modules` tree,
+  which CI's `npm ci` does not reproduce.
+  `tests/unit/{csrf,csrf-unit,proxy,security-fixes,auth-modules,plugin-engine-config-mask-2521}.test.ts`
+  re-run green alongside. **Not run:** `postman/full-test-suite.sh`, and no live request.
+- **Collision, recorded rather than discovered later.** **#2569** edits this same route file for
+  **#2560** (its `PATCH` guards on `body.enabled` and assigns `body.isActive`), and **#2578** and
+  **#2569** both mint **PP-075** in their own trees. The earlier merge keeps the number and the
+  later one moves — the rule **PP-057**/**PP-063** record — which is why this entry takes
+  **PP-076** rather than waiting: **#2578** is already published claiming 075. Whoever moves next
+  takes **PP-077**.
+- **Left open on purpose.** **#2579** (the edge pass-through — a `proxy.ts` change that would
+  affect all 289, not one route) and **#2580** (owner decision: delete the dead
+  `CSRF_ENFORCE_CENTRAL` branch, or turn it on — the latter is a silent-403 risk for any
+  cookie-authenticated caller outside `csrf-provider.tsx`, which is not a call to make inside a
+  security PR). Both are cited from this entry; neither is fixed by it.
+
 ## How to maintain this file
 
 - **New issue** → next free `PP-0NN` id, one section, and a row in the Summary table. Never renumber.
