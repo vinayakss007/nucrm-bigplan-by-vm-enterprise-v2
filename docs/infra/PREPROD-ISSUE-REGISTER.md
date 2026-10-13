@@ -2156,7 +2156,7 @@ from pg_policies where schemaname='public' and (qual like '%app.is_super_admin%'
   lists extended by **#2446** with the three `app.portal_lookup_*` GUCs, so a portal-credential read cannot
   outlive its transaction either). No route splices
   request data into SQL: the template-literal sinks in `app/` are compile-time identifiers or regex-gated numerics
-  (`app/api/cron/backup-verify/route.ts:267-269 (re-pinned 2026-10-12: **#2575** shifted it)` gates `nucrm_verify_${Date.now()}` through `^[a-z0-9_]+$` before
+  (`app/api/cron/backup-verify/route.ts:313-315 (re-pinned 2026-10-13: **#2600** shifted it from :267-269)` gates `nucrm_verify_${Date.now()}` through `^[a-z0-9_]+$` before
   `CREATE DATABASE`; `app/api/tenant/sla/route.ts:36` is drizzle identifiers — the coordinate did not move but the text under it did: **#2482** rewrote that line on 2026-10-10 from `sql.raw('"sla_policies"."id"')`, a compile-time constant, to the `slaPolicies.id` identifier it is now, so the claim this sentence makes became literally true only with that PR). Library-level splices are not reachable from
   `app/` (`lib/data-integrity.ts:314`, re-pinned from `:290`/`:294` on 2026-10-11 — both halves of **#2528**
   edited that file; `lib/db/query-timeout.ts:70`, re-pinned from `:63` on 2026-10-11, is clamped — `Math.round`ed
@@ -2194,7 +2194,7 @@ from pg_policies where schemaname='public' and (qual like '%app.is_super_admin%'
   `lib/db/request-connection.ts:88-94` (both reset lists gained the `app.portal_lookup_*` names with
   **#2446**, which is why their text moved while the cited construct did not), `lib/auth/middleware.ts:297,391`,
   `drizzle/migrations/0088_rls_bootstrap_and_isolation.sql:344-360`, `drizzle/migrations/0099_api_keys_auth_lookup.sql`,
-  `drizzle/migrations/0105_email_tracking_pixel_lookup.sql`, `app/api/cron/backup-verify/route.ts:267-269 (re-pinned 2026-10-12: **#2575** shifted it)`,
+  `drizzle/migrations/0105_email_tracking_pixel_lookup.sql`, `app/api/cron/backup-verify/route.ts:313-315 (re-pinned 2026-10-13: **#2600** shifted it from :267-269)`,
   `deploy/docker-compose.preprod.yml`, `deploy/docker-compose.production.yml`.
 
 ## PP-049 — 🔧 PP-030's honest 503 has no central place to live: 22 of 22 cron routes hand-roll their own skip, so the fix is a 23-file design batch, not a narrow change _(S3 · Cron + observability · #2539)_
@@ -4862,7 +4862,7 @@ no space, no semicolon, no dash, no `-`-comment, and a length under Postgres's o
   request-shaped key like `x" = '1' OR 1=1 --` reaching the planner as a 17-character column named
   `x = '1' OR 1=1 --`. Reaching the planner is not the failure the register records: silently
   addressing a different column is. Shape rejection also matches what the sibling sinks already do
-  (`validateTableName`, the `^[a-z0-9_]+$` guard at `app/api/cron/backup-verify/route.ts:276 (re-pinned 2026-10-12: **#2575** shifted it)`), so
+  (`validateTableName`, the `^[a-z0-9_]+$` guard at `app/api/cron/backup-verify/route.ts:322 (re-pinned 2026-10-13: **#2600** shifted it from :276)`), so
   the codebase has one rule for "a name in a string" instead of two.
 - **Three sinks, one rule.** `buildInsert` (`lib/db/client.ts:142`), `buildUpdate` — which has two
   separate key lists, `dk` mapped at `:156` and `wk` at `:158`, and both interpolate — and
