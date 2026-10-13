@@ -46,3 +46,33 @@ export function splitConfigCredentials(config: unknown): SplitConfigCredentials 
   }
   return { publicConfig, credentialKeys };
 }
+
+/**
+ * The write-side counterpart to {@link splitConfigCredentials} (#2562).
+ *
+ * `GET` withholds every `SECRET_CONFIG_KEY` name, so a client doing the documented
+ * read→edit→write cycle can only ever send back a bag that has *lost* those keys.
+ * Assigning that bag to the column deletes the tenant's webhook signing secret and
+ * its Google/Outlook refresh token while answering `success: true`.
+ *
+ * Merging — stored bag first, caller's keys over it — means a PATCH can only change
+ * keys the caller actually named, and a caller who does hold a fresh credential can
+ * still write it: a `secret` in `incoming` overwrites the stored one rather than
+ * being treated as a no-op.
+ *
+ * Keys absent from `incoming` are kept, not deleted; removing a credential is a
+ * deliberate act this route has never offered, and inventing one here would widen
+ * the blast radius of a dropped field to match the bug being fixed.
+ *
+ * Flat keys only — every writer listed above stores `config` as a flat object.
+ *
+ * Lives beside the mask because a preserved-key set and a stripped-key set that
+ * disagree is the next leak-or-deletion bug; one module owns both directions.
+ */
+export function mergeKeepingSecretKeys(
+  existing: unknown,
+  incoming: Record<string, unknown>
+): Record<string, unknown> {
+  const base = (existing ?? {}) as Record<string, unknown>;
+  return { ...base, ...incoming };
+}

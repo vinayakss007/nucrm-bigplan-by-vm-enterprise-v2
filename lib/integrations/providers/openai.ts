@@ -13,7 +13,7 @@ export const openaiProvider: ProviderDefinition = {
   icon: 'Brain',
   docsUrl: 'https://platform.openai.com/docs/api-reference',
   configFields: [
-    { key: 'api_key', label: 'API Key', type: 'string', required: true, placeholder: 'sk-...' },
+    { key: 'api_key', label: 'API Key', type: 'string', required: true, placeholder: 'sk-...', secret: true },
     { key: 'model', label: 'Model', type: 'select', required: true, options: [
       { label: 'GPT-4o', value: 'gpt-4o' },
       { label: 'GPT-4o-mini', value: 'gpt-4o-mini' },
