@@ -29,11 +29,12 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { logError } from '@/lib/errors-server';
-import { emailTracking, activities } from '@/drizzle/schema';
+import { emailTracking, emailClicks, activities } from '@/drizzle/schema';
 import { eq, sql } from 'drizzle-orm';
 import { safeRedirectTarget } from '@/lib/security/redirect-target';
 import { readClickLinkDestination } from '@/lib/email/tracking';
 import { checkPublicRateLimit } from '@/lib/rate-limit-simple';
+import { getClientIp } from '@/lib/client-ip';
 import { withTenantContext, withTrackingLookupContext, NO_USER_SENTINEL } from '@/lib/db/rls';
 
 /**
@@ -47,6 +48,9 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const trackId = searchParams.get('t');
   const linkId = searchParams.get('l');
+  // Capture the request-derived IP now, while `req` is live — the click event
+  // below is written in a detached promise that runs after the 302 is sent.
+  const clientIp = getClientIp(req);
 
   // #2218: a request without a well-formed token is not a click on a tracked
   // mail at all, so it gets 404 — not a redirect. Responding 302 to '/' here
@@ -147,6 +151,24 @@ export async function GET(req: NextRequest) {
               updatedAt: new Date(),
             })
             .where(eq(emailTracking.id, tracked.id));
+
+          // #2590: give email_clicks back the writer #2568 removed, so the
+          // clickRow / recentClicks readers on Email Analytics stop reporting an
+          // always-empty feature. link_url is NOT NULL, so an event is recorded
+          // ONLY for the validated server-side destination — a click with no
+          // registered link still counts above, it just has no URL to store.
+          // Kept non-throwing by that guard: this insert must never roll back
+          // the clickCount update it sits beside.
+          if (destination) {
+            await tx.insert(emailClicks).values({
+              tenantId: tracked.tenantId,
+              contactId: tracked.contactId,
+              emailId: tracked.id,
+              linkUrl: destination,
+              clickedAt: new Date(),
+              ipAddress: clientIp,
+            });
+          }
 
           // Log activity — only the validated, server-side destination is
           // recorded, so nothing an attacker typed lands in a tenant's feed.

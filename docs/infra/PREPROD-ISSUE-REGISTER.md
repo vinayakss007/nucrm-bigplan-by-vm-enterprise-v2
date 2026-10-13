@@ -5035,7 +5035,7 @@ no space, no semicolon, no dash, no `-`-comment, and a length under Postgres's o
   feed). Nothing observable changed — those reads were always empty for the reason in
   Measurement 2 — but the truth about opens and clicks is on
   `email_tracking.opened_at`/`.clicked_at`/`open_count`/`click_count`, which the token pair
-  maintains (`app/api/track/open/route.ts:67-72`, `app/api/track/click/route.ts:142-149`), and
+  maintains (`app/api/track/open/route.ts:73-78`, `app/api/track/click/route.ts:146-153` — re-pinned 2026-10-12: **#2590**'s new event inserts shifted the update blocks off `67-72` / `142-149`), and
   re-pointing the readers is a join decision, not a rename: `email_opens.email_id` is an
   **unconstrained** uuid (`drizzle/schema/email-tracking.ts:17`, `:36` — `0020` added FKs for
   `tenant_id` only) while `email_tracking` is keyed by the server-minted tracking row. That

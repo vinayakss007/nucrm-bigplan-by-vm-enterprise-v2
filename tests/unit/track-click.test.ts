@@ -268,13 +268,43 @@ describe('GET /api/track/click (#2218 redirect target comes only from the row)',
     // tenant, or RLS refuses it without raising.
     expect(tenantContextArgs).toHaveBeenCalledWith('ten1', '00000000-0000-0000-0000-000000000000');
     expect(updateMock).toHaveBeenCalledTimes(1);
-    expect(insertMock).toHaveBeenCalledTimes(1);
-    const activity = insertMock.mock.calls[0]?.[0] as
+
+    // #2590: a validated destination now produces TWO writes inside the tenant
+    // transaction — the email_clicks event row the analytics reader lists, and
+    // the activity. Distinguish them by payload: the event carries `linkUrl`,
+    // the activity carries `action`.
+    expect(insertMock).toHaveBeenCalledTimes(2);
+    const payloads = insertMock.mock.calls.map((c) => c[0] as Record<string, unknown>);
+
+    const event = payloads.find((v) => v.linkUrl !== undefined);
+    expect(event).toMatchObject({
+      tenantId: 'ten1',
+      contactId: 'c1',
+      emailId: 't1',
+      linkUrl: STORED,
+    });
+
+    const activity = payloads.find((v) => v.action === 'email_click') as
       | { tenantId: string; contactId: string; metadata: { url: string | null } }
       | undefined;
     expect(activity).toMatchObject({ tenantId: 'ten1', contactId: 'c1' });
     // The audit row records the server-side destination, never what was typed.
     expect(activity?.metadata.url).toBe(STORED);
+  });
+
+  it('writes no email_clicks row when there is no validated destination (#2590 link_url NOT NULL)', async () => {
+    findFirstMock.mockResolvedValue(rowWithDestination({ metadata: {} }));
+    const { GET } = await import('@/app/api/track/click/route');
+    await GET(get(`/api/track/click?t=${UUID}&l=offer`));
+    await flush();
+
+    // The click still counts (the counter update ran), and the activity still
+    // lands, but no event row is written — link_url is NOT NULL and there is no
+    // URL to store, and an insert here must never throw beside the counter.
+    expect(updateMock).toHaveBeenCalledTimes(1);
+    const payloads = insertMock.mock.calls.map((c) => c[0] as Record<string, unknown>);
+    expect(payloads.some((v) => v.linkUrl !== undefined)).toBe(false);
+    expect(payloads.some((v) => v.action === 'email_click')).toBe(true);
   });
 
   it('still redirects when the tracking write rejects, and reports it through logError', async () => {
