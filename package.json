@@ -149,7 +149,8 @@
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build -o storybook-static",
     "prepare": "husky",
-    "lint-staged": "lint-staged"
+    "lint-staged": "lint-staged",
+    "guard:env-coverage": "node scripts/check-env-coverage.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.1148.0",
