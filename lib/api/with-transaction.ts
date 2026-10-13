@@ -91,7 +91,7 @@ export async function withTransaction(
     try {
       const result = await dbClient.transaction(async (tx) => {
         // Set per-transaction timeout (scoped — doesn't leak to pool)
-        await tx.execute(sql.raw(`SET LOCAL statement_timeout = '${timeoutMs}'`));
+        await tx.execute(sql.raw(`SET LOCAL statement_timeout = '${timeoutMs}'`)); // raw-sql-guard: allow — clamped by validateTimeoutMs (#2528)
 
         return handler(tx as unknown as DbClient);
       });

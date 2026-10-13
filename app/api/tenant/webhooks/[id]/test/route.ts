@@ -28,6 +28,11 @@ export const POST = withApiRoute(async (req: NextRequest, { params }: { params: 
     // the same filter the delivery path gained — otherwise "Send test" keeps
     // POSTing to an integration the customer already deleted.
     const webhook = await db.query.integrations.findFirst({
+      // #2563: name the columns this route uses (`config` for url/secret, then
+      // `id`/`name` for the test payload). `integrations` is the credential store
+      // (#2521/#2522/#2559); an unprojected findFirst deserializes the entire row
+      // and invites a future `{ data: webhook }` to echo the secret bag.
+      columns: { id: true, name: true, config: true },
       where: and(
         eq(integrations.id, id),
         eq(integrations.tenantId, ctx.tenantId),

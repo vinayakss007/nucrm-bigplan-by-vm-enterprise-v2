@@ -33,8 +33,11 @@ export const POST = withApiRoute(async (req: NextRequest) => {
       return NextResponse.json({ error: 'to (phone number) is required' }, { status: 400 });
     }
 
-    // Find tenant's WhatsApp integration
-    const [integration] = await db.select()
+    // Find tenant's WhatsApp integration.
+    // #2563: only `config` is read here, and `integrations` is the credential
+    // store (#2521/#2522/#2559) — project it instead of pulling the whole row on
+    // the per-message send path.
+    const [integration] = await db.select({ config: integrations.config })
       .from(integrations)
       .where(and(
         eq(integrations.tenantId, ctx.tenantId),
