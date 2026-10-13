@@ -13,7 +13,7 @@ export const sendgridProvider: ProviderDefinition = {
   icon: 'Mail',
   docsUrl: 'https://docs.sendgrid.com/api-reference',
   configFields: [
-    { key: 'api_key', label: 'API Key', type: 'string', required: true, placeholder: 'SG.xxxxx...' },
+    { key: 'api_key', label: 'API Key', type: 'string', required: true, placeholder: 'SG.xxxxx...', secret: true },
     { key: 'from_email', label: 'From Email', type: 'string', required: true, placeholder: 'noreply@yourdomain.com' },
     { key: 'from_name', label: 'From Name', type: 'string', placeholder: 'NuCRM' },
   ],

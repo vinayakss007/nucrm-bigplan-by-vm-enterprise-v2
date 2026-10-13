@@ -22,6 +22,7 @@ describe('slackProvider', () => {
       type: 'string',
       required: true,
       placeholder: 'xoxb-...',
+      secret: true,
     });
 
     expect(slackProvider.configFields[1]).toEqual({

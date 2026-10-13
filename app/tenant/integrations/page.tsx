@@ -16,6 +16,7 @@ import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import type { ProviderDefinition, IntegrationInstance } from '@/lib/integrations/types';
+import { customApiProvider } from '@/lib/integrations/providers/custom';
 
 const ICON_MAP: Record<string, LucideIcon> = {
   Mail, MessageSquare, Brain, Database, Cloud, Plug,
@@ -208,18 +209,7 @@ export default function IntegrationsPage() {
       {/* Add integration modal */}
       {showAdd && (
         <AddIntegrationModal
-          provider={showAdd === '__custom__' ? {
-            id: '__custom__', name: 'Custom API', description: 'Connect any REST API',
-            category: 'custom', icon: 'Cloud', configFields: [
-              { key: 'base_url', label: 'Base URL', type: 'string', required: true, placeholder: 'https://api.example.com/v1' },
-              { key: 'api_key', label: 'API Key / Token', type: 'string', required: true, placeholder: 'Your API key' },
-              { key: 'auth_type', label: 'Auth Type', type: 'select', options: [
-                { label: 'Bearer Token', value: 'bearer' },
-                { label: 'Basic Auth', value: 'basic' },
-                { label: 'Header-Only', value: 'header' },
-              ]},
-            ], capabilities: [], builtIn: false,
-          } as ProviderDefinition : providers.find(p => p.id === showAdd)!}
+          provider={showAdd === '__custom__' ? customApiProvider : providers.find(p => p.id === showAdd)!}
           onClose={() => setShowAdd(null)}
           onInstalled={() => { setShowAdd(null); load(); }}
         />
@@ -284,7 +274,7 @@ function AddIntegrationModal({ provider, onClose, onInstalled }: { provider: Pro
                 <input required={field.required} value={config[field.key] || ''}
                   onChange={e => setConfig(p => ({ ...p, [field.key]: e.target.value }))}
                   className={inp} placeholder={field.placeholder}
-                  type={field.key.includes('key') || field.key.includes('token') || field.key.includes('secret') ? 'password' : 'text'}
+                  type={field.secret ? 'password' : 'text'}
                 />
               )}
             </div>
