@@ -3928,7 +3928,7 @@ not wired in).
   check anyone can run.
 - **Review posture:** #2476 hardened the OAuth handler *before* this PR makes it reachable, on
   purpose, in that order. This is a **surface-widening** change. The CSRF question is answered by a
-  measurement, not an assumption: `proxy.ts:532` validates a CSRF token only inside the branch that
+  measurement, not an assumption: `proxy.ts:555 (re-pinned 2026-10-13: **#2579** shifted it from :532)` validates a CSRF token only inside the branch that
   runs *after* session verification, so anything on the public list is CSRF-unchecked by
   construction — sound here because all six handlers read **0** occurrences of `cookies()`,
   `requireAuth`, `getSession` or `verifyAuth` (measured per file), i.e. none of them can be driven
