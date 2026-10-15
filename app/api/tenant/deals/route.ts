@@ -21,6 +21,7 @@ import { cache } from '@/lib/cache';
 import { archiveFilter } from '@/lib/api/deals-archive-filter';
 import { escapeLike } from '@/lib/api/sanitize-like';
 import { resolveDealStage, stageFailureMessage } from '@/lib/deals/resolve-stage';
+import { enforceFieldRead, enforceFieldWrite } from '@/lib/rbac/enforce';
 
 // #1615: withApiRoute pins ONE connection for the whole handler body so the
 // auth check's setTenantContext() and every db query below (count + list) share
@@ -94,8 +95,10 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       .offset(offset),
     ]);
 
-    // Map camelCase to snake_case for frontend compatibility
-    const data = rawData.map(d => ({
+    // #2597 A1: field_permissions rows were configurable but never enforced.
+    // Project the response through the role's read restrictions (alias-proof:
+    // hiding `amount` also clears the `value` copy above).
+    const data = await enforceFieldRead(ctx, 'deals', rawData.map(d => ({
       id: d.id,
       title: d.title,
       value: d.amount,
@@ -114,7 +117,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       last_name: d.lastName,
       company_name: d.companyName,
       assigned_name: d.assignedName,
-    }));
+    })));
 
     const response = { data, total: countResult?.count ?? 0 };
     return NextResponse.json(response);
@@ -136,7 +139,10 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     const limited = await checkRateLimit(request, { action: 'deals_create', max: 100, windowMinutes: 60 });
     if (limited) return limited;
 
-    const body = await readJsonBody(request);
+    const rawBody = await readJsonBody(request);
+    // #2597 A1: drop body keys the role may not write (pinned: STRIP, not 403)
+    // before they reach the column map. `read`-level fields block the write too.
+    const { body } = await enforceFieldWrite(ctx, 'deals', rawBody);
     const validated = validateBody(createDealSchema, body);
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;
@@ -255,7 +261,9 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     await cache.delByPattern(`tenant:${ctx.tenantId}:deals:*`).catch((e: unknown) =>
       logError({ error: e as Error, context: 'tenant/deals POST cache invalidate' })
     );
-    return NextResponse.json({ data: { id: deal.id, title: deal.title, amount: (deal.amount ?? '0').toString(), stage_id: deal.stageId, pipeline_id: deal.pipelineId, close_date: deal.closeDate ? deal.closeDate.toISOString() : null, contact_id: deal.contactId, company_id: deal.companyId, assigned_to: deal.assignedTo, status: (deal.metadata as Record<string, unknown>)?.status as string | undefined, created_at: (deal.createdAt ?? new Date()).toISOString(), updated_at: deal.updatedAt?.toISOString(), tenant_id: deal.tenantId, user_id: deal.createdBy } }, { status: 201 });
+    const createdRow = { id: deal.id, title: deal.title, amount: (deal.amount ?? '0').toString(), stage_id: deal.stageId, pipeline_id: deal.pipelineId, close_date: deal.closeDate ? deal.closeDate.toISOString() : null, contact_id: deal.contactId, company_id: deal.companyId, assigned_to: deal.assignedTo, status: (deal.metadata as Record<string, unknown>)?.status as string | undefined, created_at: (deal.createdAt ?? new Date()).toISOString(), updated_at: deal.updatedAt?.toISOString(), tenant_id: deal.tenantId, user_id: deal.createdBy };
+    const [projected] = await enforceFieldRead(ctx, 'deals', [createdRow]);
+    return NextResponse.json({ data: projected }, { status: 201 });
   
   } catch (err) {
     await logError({ error: err, context: 'tenant/deals POST', requestMethod: 'POST' });

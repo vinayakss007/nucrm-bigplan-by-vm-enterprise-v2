@@ -23,6 +23,7 @@ import { updatedAtMs } from '@/lib/api/concurrency';
 import { checkConcurrency } from '@/lib/api/optimistic-lock';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { enforceFieldRead, enforceFieldWrite } from '@/lib/rbac/enforce';
 
 export const GET = withApiRoute(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
@@ -76,7 +77,10 @@ export const GET = withApiRoute(async (req: NextRequest, { params }: { params: P
       stage: row.stageId, // Original used 'stage' column which is now stageId
     };
 
-    return NextResponse.json({ data: legacyRow });
+    // #2597 A1: project the detail response through the role's read
+    // restrictions; hiding `amount` also clears the `value` copy above.
+    const [projected] = await enforceFieldRead(ctx, 'deals', [legacyRow]);
+    return NextResponse.json({ data: projected });
  
  
   } catch (err) {
@@ -97,7 +101,11 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params:
 
     const dealId = (await params).id;
     const rawBody = await readJsonBody(req);
-    const validated = validateBody(updateDealSchema, rawBody);
+    // #2597 A1: drop keys the role may not write (STRIP, not 403) before they
+    // reach the column map. A `value` alias for amount is stripped by the
+    // amount restriction too, since normalize + alias both resolve to amount.
+    const { body } = await enforceFieldWrite(ctx, 'deals', rawBody);
+    const validated = validateBody(updateDealSchema, body);
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;
 
@@ -277,7 +285,8 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params:
     await cache.delByPattern(`tenant:${ctx.tenantId}:deals:*`).catch((e: unknown) =>
       logError({ error: e as Error, context: 'deals cache invalidate' })
     );
-    return NextResponse.json({ data: row });
+    const [projectedRow] = row ? await enforceFieldRead(ctx, 'deals', [row]) : [row];
+    return NextResponse.json({ data: projectedRow });
   
 
   } catch (err) {
