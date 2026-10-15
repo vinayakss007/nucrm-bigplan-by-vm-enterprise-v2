@@ -17,7 +17,7 @@ import { logError } from '@/lib/errors-server';
 import { createNotification } from '@/lib/notifications';
 import { cache } from '@/lib/cache';
 import { withApiRoute } from '@/lib/api/with-api-route';
-import { enforceFieldRead, enforceFieldWrite } from '@/lib/rbac/enforce';
+import { enforceFieldRead, enforceFieldWrite, attachStrippedFields } from '@/lib/rbac/enforce';
 import { parseLimitOffset } from '@/lib/api/query-params';
 
 export const GET = withApiRoute(async (request: NextRequest) => {
@@ -124,7 +124,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
 
     const rawBody = await readJsonBody(request);
     // #2597 A2: drop keys the role may not write (STRIP, not 403) before the column map.
-    const { body } = await enforceFieldWrite(ctx, 'tasks', rawBody);
+    const { body, stripped } = await enforceFieldWrite(ctx, 'tasks', rawBody);
     const validated = validateBody(createTaskSchema, body);
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;
@@ -210,7 +210,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
 
     // #2597 A2: project the created task through the read restrictions.
     const [created] = await enforceFieldRead(ctx, 'tasks', [{ id: newTask.id, title: newTask.title, description: newTask.description, priority: newTask.priority, status: newTask.status, completed: newTask.completed, due_date: newTask.dueDate ? newTask.dueDate.toISOString() : null, completed_at: newTask.completedAt ? newTask.completedAt.toISOString() : null, contact_id: newTask.contactId, deal_id: newTask.dealId, assigned_to: newTask.assignedTo, created_at: (newTask.createdAt ?? new Date()).toISOString(), updated_at: newTask.updatedAt?.toISOString(), tenant_id: newTask.tenantId, user_id: newTask.createdBy }]);
-    return NextResponse.json({ data: created }, { status: 201 });
+    return attachStrippedFields(NextResponse.json({ data: created }, { status: 201 }), stripped);
  
  
   } catch (err) {

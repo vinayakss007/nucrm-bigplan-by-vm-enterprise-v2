@@ -23,7 +23,7 @@ import { updatedAtMs } from '@/lib/api/concurrency';
 import { checkConcurrency } from '@/lib/api/optimistic-lock';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
-import { enforceFieldRead, enforceFieldWrite } from '@/lib/rbac/enforce';
+import { enforceFieldRead, enforceFieldWrite, attachStrippedFields } from '@/lib/rbac/enforce';
 
 export const GET = withApiRoute(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
@@ -104,7 +104,7 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params:
     // #2597 A1: drop keys the role may not write (STRIP, not 403) before they
     // reach the column map. A `value` alias for amount is stripped by the
     // amount restriction too, since normalize + alias both resolve to amount.
-    const { body } = await enforceFieldWrite(ctx, 'deals', rawBody);
+    const { body, stripped } = await enforceFieldWrite(ctx, 'deals', rawBody);
     const validated = validateBody(updateDealSchema, body);
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;
@@ -286,7 +286,7 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params:
       logError({ error: e as Error, context: 'deals cache invalidate' })
     );
     const [projectedRow] = row ? await enforceFieldRead(ctx, 'deals', [row]) : [row];
-    return NextResponse.json({ data: projectedRow });
+    return attachStrippedFields(NextResponse.json({ data: projectedRow }), stripped);
   
 
   } catch (err) {

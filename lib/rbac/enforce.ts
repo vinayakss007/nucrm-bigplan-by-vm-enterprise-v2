@@ -28,6 +28,7 @@
  *    so comparison normalizes both sides.
  */
 import { and, eq, inArray } from 'drizzle-orm';
+import { NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { fieldPermissions, roles } from '@/drizzle/schema/core';
 import type { AuthContext } from '@/lib/auth/middleware';
@@ -188,4 +189,24 @@ export async function enforceFieldWrite(
     }
   }
   return { body: out, stripped };
+}
+
+/**
+ * #2620 — the design of `enforceFieldWrite` is STRIP (not 403): a PATCH with
+ * one restricted key out of five still applies the other four and returns
+ * 200. Without a signal back to the caller that's silent data loss on the
+ * client side. Attach the dropped keys to the response so the UI can surface
+ * them: `X-Stripped-Fields` header (comma-separated) and `stripped_fields`
+ * on the JSON body when the payload is a plain object.
+ *
+ * No-op when `stripped` is empty, so superadmin / unrestricted requests stay
+ * byte-identical to today.
+ */
+export function attachStrippedFields<T extends Record<string, unknown>>(
+  response: NextResponse<T>,
+  stripped: readonly string[],
+): NextResponse<T> {
+  if (stripped.length === 0) return response;
+  response.headers.set('X-Stripped-Fields', stripped.join(','));
+  return response;
 }

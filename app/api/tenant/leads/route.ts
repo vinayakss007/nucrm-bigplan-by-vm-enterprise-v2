@@ -22,7 +22,7 @@ import { logError } from '@/lib/errors-server';
 import { createNotification } from '@/lib/notifications';
 import { escapeLike } from '@/lib/api/sanitize-like';
 import { withApiRoute } from '@/lib/api/with-api-route';
-import { enforceFieldRead, enforceFieldWrite } from '@/lib/rbac/enforce';
+import { enforceFieldRead, enforceFieldWrite, attachStrippedFields } from '@/lib/rbac/enforce';
 
 // Whitelist for sort columns to prevent SQL injection
 
@@ -233,7 +233,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
 
     const rawBody = await readJsonBody(request);
     // #2597 A2: drop keys the role may not write (STRIP, not 403) before the column map.
-    const { body } = await enforceFieldWrite(ctx, 'leads', rawBody);
+    const { body, stripped } = await enforceFieldWrite(ctx, 'leads', rawBody);
     const validated = validateBody(createLeadSchema, body);
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;
@@ -425,7 +425,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
 
     // #2597 A2: project the created lead through the read restrictions.
     const [created] = newLead ? await enforceFieldRead(ctx, 'leads', [newLead]) : [newLead];
-    return NextResponse.json({ data: created }, { status: 201 });
+    return attachStrippedFields(NextResponse.json({ data: created }, { status: 201 }), stripped);
  
  
   } catch (error) {

@@ -21,7 +21,7 @@ import { withConcurrencyGuard } from '@/lib/concurrency';
 import { updatedAtMs } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
-import { enforceFieldRead, enforceFieldWrite } from '@/lib/rbac/enforce';
+import { enforceFieldRead, enforceFieldWrite, attachStrippedFields } from '@/lib/rbac/enforce';
 
 /**
  * #2289: GET /api/tenant/tasks/[id] answered 405 — the detail read was missing
@@ -84,7 +84,7 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params:
     const rawBody = await readJsonBody(req);
     // #2597 A2: drop keys the role may not write (STRIP, not 403) before the column map.
     // Synthetic concurrency keys (_version/updated_at) are unrestricted and survive.
-    const { body } = await enforceFieldWrite(ctx, 'tasks', rawBody);
+    const { body, stripped } = await enforceFieldWrite(ctx, 'tasks', rawBody);
     const validated = validateBody(updateTaskSchema, body);
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;
@@ -171,7 +171,7 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params:
 
     // #2597 A2: project the updated task through the read restrictions.
     const [projected] = await enforceFieldRead(ctx, 'tasks', [row]);
-    return NextResponse.json({ data: projected });
+    return attachStrippedFields(NextResponse.json({ data: projected }), stripped);
  
  
   } catch (err) { 

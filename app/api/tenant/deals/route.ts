@@ -21,7 +21,7 @@ import { cache } from '@/lib/cache';
 import { archiveFilter } from '@/lib/api/deals-archive-filter';
 import { escapeLike } from '@/lib/api/sanitize-like';
 import { resolveDealStage, stageFailureMessage } from '@/lib/deals/resolve-stage';
-import { enforceFieldRead, enforceFieldWrite } from '@/lib/rbac/enforce';
+import { enforceFieldRead, enforceFieldWrite, attachStrippedFields } from '@/lib/rbac/enforce';
 
 // #1615: withApiRoute pins ONE connection for the whole handler body so the
 // auth check's setTenantContext() and every db query below (count + list) share
@@ -142,7 +142,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     const rawBody = await readJsonBody(request);
     // #2597 A1: drop body keys the role may not write (pinned: STRIP, not 403)
     // before they reach the column map. `read`-level fields block the write too.
-    const { body } = await enforceFieldWrite(ctx, 'deals', rawBody);
+    const { body, stripped } = await enforceFieldWrite(ctx, 'deals', rawBody);
     const validated = validateBody(createDealSchema, body);
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;
@@ -263,7 +263,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     );
     const createdRow = { id: deal.id, title: deal.title, amount: (deal.amount ?? '0').toString(), stage_id: deal.stageId, pipeline_id: deal.pipelineId, close_date: deal.closeDate ? deal.closeDate.toISOString() : null, contact_id: deal.contactId, company_id: deal.companyId, assigned_to: deal.assignedTo, status: (deal.metadata as Record<string, unknown>)?.status as string | undefined, created_at: (deal.createdAt ?? new Date()).toISOString(), updated_at: deal.updatedAt?.toISOString(), tenant_id: deal.tenantId, user_id: deal.createdBy };
     const [projected] = await enforceFieldRead(ctx, 'deals', [createdRow]);
-    return NextResponse.json({ data: projected }, { status: 201 });
+    return attachStrippedFields(NextResponse.json({ data: projected }, { status: 201 }), stripped);
   
   } catch (err) {
     await logError({ error: err, context: 'tenant/deals POST', requestMethod: 'POST' });

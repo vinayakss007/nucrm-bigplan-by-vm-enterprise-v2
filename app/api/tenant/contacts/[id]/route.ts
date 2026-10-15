@@ -22,7 +22,7 @@ import { withConcurrencyGuard } from '@/lib/concurrency';
 import { isEntityId } from '@/lib/id';
 import { updatedAtMs } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
-import { enforceFieldRead, enforceFieldWrite } from '@/lib/rbac/enforce';
+import { enforceFieldRead, enforceFieldWrite, attachStrippedFields } from '@/lib/rbac/enforce';
 
 // #1615: withApiRoute pins ONE connection for the whole handler body (auth +
 // all db queries share it) so RLS is enforced on the pinned connection. The
@@ -118,7 +118,7 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params:
     const rawBody = await readJsonBody(req);
     // #2597 A2: drop keys the role may not write (STRIP, not 403) before the
     // column map; a multi-key PATCH still applies the permitted keys.
-    const { body } = await enforceFieldWrite(ctx, 'contacts', rawBody);
+    const { body, stripped } = await enforceFieldWrite(ctx, 'contacts', rawBody);
 
     const validated = validateBody(updateContactSchema, body);
     if (validated instanceof NextResponse) return validated;
@@ -279,7 +279,7 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params:
 
     // #2597 A2: project the response through the role's read restrictions.
     const [projected] = row ? await enforceFieldRead(ctx, 'contacts', [row]) : [row];
-    return NextResponse.json({ data: projected });
+    return attachStrippedFields(NextResponse.json({ data: projected }), stripped);
  
  
   } catch (err) {

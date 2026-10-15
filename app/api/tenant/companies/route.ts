@@ -16,7 +16,7 @@ import { fireWebhooks } from '@/lib/webhooks';
 import { logError } from '@/lib/errors-server';
 import { escapeLike } from '@/lib/api/sanitize-like';
 import { withApiRoute } from '@/lib/api/with-api-route';
-import { enforceFieldRead, enforceFieldWrite } from '@/lib/rbac/enforce';
+import { enforceFieldRead, enforceFieldWrite, attachStrippedFields } from '@/lib/rbac/enforce';
 
 export const GET = withApiRoute(async (request: NextRequest) => {
   try {
@@ -124,7 +124,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
 
     const rawBody = await readJsonBody(request);
     // #2597 A2: drop keys the role may not write (STRIP, not 403) before the column map.
-    const { body } = await enforceFieldWrite(ctx, 'companies', rawBody);
+    const { body, stripped } = await enforceFieldWrite(ctx, 'companies', rawBody);
     const validated = validateBody(createCompanySchema, body);
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;
@@ -164,7 +164,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
 
     // #2597 A2: project the created company through the read restrictions.
     const [created] = row ? await enforceFieldRead(ctx, 'companies', [row]) : [row];
-    return NextResponse.json({ data: created }, { status: 201 });
+    return attachStrippedFields(NextResponse.json({ data: created }, { status: 201 }), stripped);
  
  
   } catch (err) {
