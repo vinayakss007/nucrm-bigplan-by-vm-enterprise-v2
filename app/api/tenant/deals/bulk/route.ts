@@ -22,6 +22,7 @@ import { logError } from '@/lib/errors-server';
 import { readJsonBody } from '@/lib/api/validate';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { enforceFieldWrite } from '@/lib/rbac/enforce';
 
 const MAX_BULK = 500;
 
@@ -87,6 +88,31 @@ export const POST = withApiRoute(async (req: NextRequest) => {
       return NextResponse.json({ error: 'No valid deals found' }, { status: 404 });
 
     let affected = 0;
+
+    // #2616 — assign/transfer/stage/close write real deals columns
+    // (assigned_to / stage_id) straight from payload keys with no
+    // enforceFieldWrite on the path, so a role with those fields hidden via
+    // field_permissions could still bulk-move or bulk-assign deals. Unlike
+    // PATCH, stripping the action's only payload value would leave the
+    // action meaningless, so reject the whole request (403) instead.
+    const BULK_WATCHED_FIELDS: Record<string, string[]> = {
+      assign: ['assigned_to'],
+      transfer: ['assigned_to'],
+      stage: ['stage_id'],
+      close: ['stage_id'],
+    };
+    const watched = BULK_WATCHED_FIELDS[action as string];
+    if (watched) {
+      const { stripped } = await enforceFieldWrite(
+        ctx, 'deals', Object.fromEntries(watched.map((f) => [f, true])),
+      );
+      if (stripped.length > 0) {
+        return NextResponse.json(
+          { error: `field_permissions restricts: ${stripped.join(', ')}` },
+          { status: 403 },
+        );
+      }
+    }
 
     switch (action) {
       case 'assign':
