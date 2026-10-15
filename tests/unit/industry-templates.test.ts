@@ -14,6 +14,16 @@ vi.mock('@/drizzle/schema/modules', () => ({
   tenantModules: {},
 }));
 
+// #2633: auto-install resolves template modules from the DB via
+// lib/templates/resolve. This suite tests the legacy static map's content,
+// so back the resolver with that same map.
+vi.mock('@/lib/templates/resolve', async () => {
+  const { INDUSTRY_TEMPLATES } = await import('@/lib/modules/industry-templates');
+  return {
+    resolveTemplate: vi.fn(async (id: string) => INDUSTRY_TEMPLATES[id] ?? null),
+  };
+});
+
 describe('Industry Templates', () => {
   beforeEach(() => {
     vi.resetModules();
@@ -143,7 +153,7 @@ describe('Auto-Install with Templates', () => {
 
   it('getModulesForPlanAndTemplate merges plan and template modules', async () => {
     const { getModulesForPlanAndTemplate } = await import('@/lib/modules/auto-install');
-    const modules = getModulesForPlanAndTemplate('free', 'saas');
+    const modules = await getModulesForPlanAndTemplate('free', 'saas');
     // Should include both free plan modules and SaaS template modules
     expect(modules).toContain('core-crm');
     expect(modules).toContain('automation-basic');
@@ -156,7 +166,7 @@ describe('Auto-Install with Templates', () => {
 
   it('getModulesForPlanAndTemplate returns plan modules for invalid template', async () => {
     const { getModulesForPlanAndTemplate } = await import('@/lib/modules/auto-install');
-    const modules = getModulesForPlanAndTemplate('starter', 'nonexistent_template');
+    const modules = await getModulesForPlanAndTemplate('starter', 'nonexistent_template');
     const { getDefaultModulesForPlan } = await import('@/lib/modules/auto-install');
     const planModules = getDefaultModulesForPlan('starter');
     expect(modules).toEqual(planModules);
@@ -164,7 +174,7 @@ describe('Auto-Install with Templates', () => {
 
   it('getTemplateModules returns valid modules for real_estate', async () => {
     const { getTemplateModules } = await import('@/lib/modules/auto-install');
-    const modules = getTemplateModules('real_estate');
+    const modules = await getTemplateModules('real_estate');
     expect(modules).toContain('core-crm');
     expect(modules).toContain('forms-builder');
     expect(modules.length).toBeGreaterThan(0);
@@ -172,7 +182,7 @@ describe('Auto-Install with Templates', () => {
 
   it('getTemplateModules returns empty array for unknown template', async () => {
     const { getTemplateModules } = await import('@/lib/modules/auto-install');
-    const modules = getTemplateModules('nonexistent');
+    const modules = await getTemplateModules('nonexistent');
     expect(modules).toEqual([]);
   });
 
@@ -183,7 +193,7 @@ describe('Auto-Install with Templates', () => {
 
     const { INDUSTRY_TEMPLATES } = await import('@/lib/modules/industry-templates');
     for (const templateId of Object.keys(INDUSTRY_TEMPLATES)) {
-      const modules = getTemplateModules(templateId);
+      const modules = await getTemplateModules(templateId);
       for (const moduleId of modules) {
         expect(validIds.has(moduleId)).toBe(true);
       }

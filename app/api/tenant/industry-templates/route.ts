@@ -7,27 +7,30 @@ import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { customFieldDefs, pipelines, dealStages, automations } from '@/drizzle/schema';
-import { INDUSTRY_TEMPLATES } from '@/lib/modules/industry-templates';
 import { readJsonBody } from '@/lib/api/validate';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { logError } from '@/lib/errors-server';
+import { resolveTemplate, listActiveTemplates } from '@/lib/templates/resolve';
+import { applyTemplate } from '@/lib/templates/apply-template';
 
-// GET /api/tenant/industry-templates - list all available industry templates
+// GET /api/tenant/industry-templates — #2633: DB is the source of truth
+// (product_templates, seeded by 0128), so superadmin edits/new templates show up.
 export const GET = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
 
-    const data = Object.values(INDUSTRY_TEMPLATES).map((t) => ({
+    const templates = await listActiveTemplates();
+    const data = templates.map((t) => ({
       id: t.id,
+      slug: t.slug,
       name: t.name,
       description: t.description,
       icon: t.icon,
       modules: t.modules,
-      custom_fields: t.custom_fields,
-      pipelines: t.pipelines,
-      automations: t.automations,
+      custom_fields: t.custom_fields ?? [],
+      pipelines: t.pipelines ?? [],
+      automations: t.automations ?? [],
     }));
 
     return NextResponse.json({ data });
@@ -44,63 +47,26 @@ export const POST = withApiRoute(async (req: NextRequest) => {
     if (!ctx.isAdmin) return NextResponse.json({ error: 'Admin required' }, { status: 403 });
 
     const { templateId } = await readJsonBody(req);
-    const template = INDUSTRY_TEMPLATES[templateId];
-    
+    const template = await resolveTemplate(String(templateId ?? ''));
     if (!template) {
       return NextResponse.json({ error: 'Template not found' }, { status: 404 });
     }
 
-    await db.transaction(async (tx) => {
-      // 1. Insert Custom Fields
-      if (template.custom_fields.length > 0) {
-        const customFieldValues = template.custom_fields.map((field) => ({
-          tenantId: ctx.tenantId,
-          entityType: field.entity,
-          fieldKey: field.key,
-          fieldLabel: field.label,
-          fieldType: field.type
-        }));
-        await tx.insert(customFieldDefs).values(customFieldValues).onConflictDoNothing();
-      }
+    // Idempotent: re-applying reuses pipelines/stages/automations by name and
+    // reports what was created vs already present (#2633 measured 4 pipelines /
+    // 20 stages from a double-apply before this existed).
+    const report = await db.transaction((tx) => applyTemplate({
+      tenantId: ctx.tenantId,
+      actorUserId: ctx.userId,
+      blueprint: template,
+      tx,
+    }));
 
-      // 2. Insert Pipelines & Stages
-      for (const pipe of template.pipelines) {
-        const pipelineRows = await tx.insert(pipelines).values({
-          tenantId: ctx.tenantId,
-          name: pipe.name,
-        }).returning({ id: pipelines.id });
-        const firstRow = pipelineRows[0];
-        if (!firstRow) continue;
-        const pipelineId: string = firstRow.id;
-
-        const stageValues = pipe.stages.map((stageName, i) => ({
-          tenantId: ctx.tenantId,
-          pipelineId: pipelineId,
-          name: stageName,
-          order: i,
-        }));
-
-        if (stageValues.length > 0) {
-          await tx.insert(dealStages).values(stageValues);
-        }
-      }
-
-      // 3. Insert Automations
-      for (const auto of template.automations) {
-        await tx.insert(automations).values({
-          tenantId: ctx.tenantId,
-          name: auto.name,
-          triggerType: auto.trigger,
-          actions: [{ type: auto.action, config: auto.config }],
-          isActive: true
-        }).onConflictDoNothing();
-      }
+    return NextResponse.json({
+      ok: true,
+      message: `Applied ${template.name} template`,
+      report,
     });
-
-    return NextResponse.json({ ok: true, message: `Applied ${template.name} template` });
-
- 
- 
   } catch (err) {
     await logError({ error: err, context: 'IndustryTemplates POST', requestMethod: 'POST' });
     return apiError(err);

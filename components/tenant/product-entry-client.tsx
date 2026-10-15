@@ -5,6 +5,7 @@
  */
 'use client';
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import {
   FileText, Brain, MessageCircle, LifeBuoy, Users, Home, ShoppingCart, Receipt,
   LayoutDashboard, Target, Briefcase, Calendar, GitBranch, Copy, Send,
@@ -14,7 +15,6 @@ import {
   ChevronRight, Package,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { INDUSTRY_TEMPLATES } from '@/lib/modules/industry-templates';
 import type { ProductEntry } from '@/lib/products/registry';
 import Link from 'next/link';
 
@@ -38,9 +38,28 @@ interface ProductEntryClientProps {
   _userId?: string;
 }
 
+interface TemplateView {
+  id: string;
+  slug: string | null;
+  name: string;
+  modules: string[];
+  pipelines: Array<{ name: string; stages: string[] }>;
+}
+
 export default function ProductEntryClient({ product, _tenantId, _userId }: ProductEntryClientProps) {
   const [activeAction, setActiveAction] = useState<string | null>(null);
-  const template = INDUSTRY_TEMPLATES[product.templateId];
+  // #2633: product entries resolve their template from product_templates via
+  // the tenant API (slug = the legacy hardcoded key), not the static map.
+  const templatesQuery = useQuery({
+    queryKey: ['industry-templates'],
+    queryFn: async (): Promise<TemplateView[]> => {
+      const res = await fetch('/api/tenant/industry-templates');
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Failed to load templates');
+      return (data.data ?? []) as TemplateView[];
+    },
+  });
+  const template = templatesQuery.data?.find(t => t.slug === product.templateId) ?? null;
   const pipeline = template?.pipelines?.find(p => p.name === product.mainPipeline) ?? template?.pipelines?.[0];
 
   const HeroIcon = getIcon(product.icon);

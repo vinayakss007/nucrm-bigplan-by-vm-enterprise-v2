@@ -4,7 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { getWidgetsForPlan } from '@/components/tenant/dashboard/widget-registry';
-import { INDUSTRY_TEMPLATES } from '@/lib/modules/industry-templates';
+import { resolveTemplate } from '@/lib/templates/resolve';
 import type { DashboardLayout } from '@/types/dashboard';
 
 const PLAN_DEFAULT_LAYOUT_CACHE = new Map<string, DashboardLayout>();
@@ -25,10 +25,24 @@ export function getPlanDefaultLayout(planName: string): DashboardLayout {
   return layout;
 }
 
-export function getIndustryDefaultLayout(industryId: string): DashboardLayout | null {
-  const template = INDUSTRY_TEMPLATES[industryId];
-  if (!template?.defaultDashboardLayout) return null;
-  return template.defaultDashboardLayout as DashboardLayout;
+// #2633: industry defaults come from product_templates.default_dashboard_layout
+// (superadmin-editable), with a 60s TTL cache so the dashboard resolver doesn't
+// hit the DB per request. Null (unknown template / pre-0128 DB) falls through
+// to role/plan defaults in layout-resolver.
+const INDUSTRY_LAYOUT_TTL_MS = 60_000;
+const INDUSTRY_LAYOUT_CACHE = new Map<string, { layout: DashboardLayout | null; expires: number }>();
+
+export async function getIndustryDefaultLayout(industryId: string): Promise<DashboardLayout | null> {
+  if (!industryId) return null;
+  const hit = INDUSTRY_LAYOUT_CACHE.get(industryId);
+  if (hit && hit.expires > Date.now()) return hit.layout;
+
+  const template = await resolveTemplate(industryId).catch(() => null);
+  const layout = template?.defaultDashboardLayout?.length
+    ? (template.defaultDashboardLayout as unknown as DashboardLayout)
+    : null;
+  INDUSTRY_LAYOUT_CACHE.set(industryId, { layout, expires: Date.now() + INDUSTRY_LAYOUT_TTL_MS });
+  return layout;
 }
 
 /**

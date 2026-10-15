@@ -91,7 +91,7 @@ export async function resolveDashboardLayout(
   if (saved) return saved;
 
   if (industryId) {
-    const industry = getIndustryDefaultLayout(industryId);
+    const industry = await getIndustryDefaultLayout(industryId);
     if (industry) {
       return { layout: industry, source: 'industry' };
     }
