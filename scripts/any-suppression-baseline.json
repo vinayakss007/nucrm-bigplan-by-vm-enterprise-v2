@@ -16,6 +16,5 @@
   "types/dashboard.ts": 1,
   "sentry-pii-scrub.ts": 2,
   "sentry.client.config.ts": 1,
-  "sentry.server.config.ts": 1,
-  "worker.ts": 8
+  "sentry.server.config.ts": 1
 }

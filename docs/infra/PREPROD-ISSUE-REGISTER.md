@@ -936,7 +936,7 @@ image`), so **restarting worker or realtime silently deploys whatever `nucrm-app
 - **Fix (applied, deployed).** `exitProcess: false` **and** `endPool: false` at the one
   instrumentation call site, plus `stop_grace_period: 120s` on the `app` service. `endPool` is a
   new option, defaulting to `true` so the polite close survives for any caller that owns its whole
-  process (today `worker.ts:667` and `realtime.ts:224` install their own handlers and never call
+  process (today `worker.ts:663` and `realtime.ts:224` install their own handlers and never call
   this module, so nothing depends on that default). It also skips the drain wait: with the exit
   handed to Next.js, waiting on a counter this process provably cannot see is latency for no
   safety.
