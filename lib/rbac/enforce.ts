@@ -43,10 +43,14 @@ type RestrictionMap = Map<string, FieldAccess>;
 // #2617 — the deal detail handler re-emits `stageId` under the legacy `stage`
 // key, and the POST response copies `createdBy` to `user_id`; without these
 // rows restricting `stage_id` / `created_by` still leaks the value.
+// #2616 — the same `ownerField` map is consulted by `enforceFieldWrite`, so
+// the entries below also close the inbound rename bypass: a PATCH body
+// sending `stage` or `stage_name` writes `deals.stage_id`, and without the
+// alias a `stage_id` write-restriction would not strip it.
 const READ_ALIASES: Record<string, Record<string, string[]>> = {
   deals: {
     amount: ['value'],
-    stage_id: ['stage'],
+    stage_id: ['stage', 'stage_name'],
     created_by: ['user_id'],
   },
 };
