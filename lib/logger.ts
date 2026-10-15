@@ -4,6 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 import { getCurrentRequestId } from '@/lib/tenant/request-context';
 import { streamLog } from '@/lib/log-stream';
@@ -19,7 +20,12 @@ import { redactQueryParams, redactedErrorForSinks } from '@/lib/error-redaction'
  *   logger.error('DB connection failed', { error: err.message, stack: err.stack })
  */
 
-const LOG_FILE = path.join(process.cwd(), 'nucrm.log');
+// #2621 — vitest runs write their noise to stdout anyway; sending the file
+// sink to the repo-root nucrm.log made it indistinguishable from production
+// runtime output (and invited committing genuine logs later). Under a test
+// runner the same file lands in the OS temp dir instead.
+const TEST_RUNTIME = process.env.VITEST === 'true' || process.env.NODE_ENV === 'test';
+const LOG_FILE = path.join(TEST_RUNTIME ? os.tmpdir() : process.cwd(), 'nucrm.log');
 const MAX_LOG_SIZE = 10 * 1024 * 1024; // 10 MB
 const MAX_LOG_FILES = 5;
 
