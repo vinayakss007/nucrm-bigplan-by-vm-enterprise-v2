@@ -51,17 +51,13 @@ scrape_configs:
         regex: "(promtail|loki)"
         action: "drop"
 
-  # ── Postgres — the one service that really is a host process ───────────────
-  # `/var/log/postgresql` exists on this host; Postgres is not a container, so
-  # the docker job above cannot see it.
-  - job_name: postgres-logs
-    static_configs:
-      - targets: [localhost]
-        labels:
-          job: nucrm-postgres
-          __path__: /var/log/postgresql/*.log
-    pipeline_stages:
-      - regex:
-          expression: '(?P<timestamp>\S+)\s+(?P<pid>\d+)\s+(?P<level>\w+):\s+(?P<message>.*)'
-      - labels:
-          level:
+  # ── #2602: the `postgres-logs` job is deleted, not kept inert ───────────────
+  # It tailed /var/log/postgresql/*.log with a comment claiming the directory
+  # "exists on this host". It does not: the production database is
+  # UpCloud-managed (see deploy/docker-compose.preprod.yml, pgbouncer block),
+  # and the path exists neither on the VM nor inside the promtail container —
+  # so the job matched zero targets and a {job="nucrm-postgres"} query returned
+  # zero streams forever, silently. An inert job with no error is worse than a
+  # failing one: anyone using Loki as evidence for "are there Postgres log
+  # problems?" reads silence as a no. Postgres is monitored through
+  # postgres-exporter metrics (deploy/monitoring/prometheus.yml), not through logs.
