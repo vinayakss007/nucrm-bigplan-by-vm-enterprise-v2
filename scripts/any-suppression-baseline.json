@@ -1,5 +1,4 @@
 {
-  "drizzle/db.ts": 3,
   "drizzle/schema/utils.ts": 5,
   "lib/api/validate.ts": 1,
   "scripts/add-indexes.ts": 1,

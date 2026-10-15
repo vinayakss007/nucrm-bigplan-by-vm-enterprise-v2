@@ -1,5 +1,8 @@
 import { drizzle } from 'drizzle-orm/node-postgres';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
+import type { NodePgTransaction } from 'drizzle-orm/node-postgres/session';
+import type { PgTransactionConfig } from 'drizzle-orm/pg-core';
+import type { ExtractTablesWithRelations } from 'drizzle-orm';
 import type { PoolClient } from 'pg';
 import { sql } from 'drizzle-orm';
 import { getPool } from '../lib/db/pool';
@@ -8,6 +11,7 @@ import { getTenantCarrier } from '../lib/db/tenant-carrier';
 import * as schema from './schema';
 
 export type DbClient = NodePgDatabase<typeof schema>;
+type TxArg = NodePgTransaction<typeof schema, ExtractTablesWithRelations<typeof schema>>;
 
 let _db: DbClient | null = null;
 
@@ -68,18 +72,15 @@ export const db: DbClient = new Proxy({} as DbClient, {
       // the same transaction and always take precedence.
       if (prop === 'transaction') {
         const carrier = getTenantCarrier();
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const runTx = value.bind(target) as (...args: any[]) => Promise<any>;
+        const runTx = (target.transaction as DbClient['transaction']).bind(target);
         if (!carrier) return runTx;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        return (fn: any, ...rest: any[]) =>
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          runTx(async (tx: any) => {
+        return <T,>(fn: (tx: TxArg) => Promise<T>, config?: PgTransactionConfig): Promise<T> =>
+          runTx(async (tx) => {
             await tx.execute(
               sql`SELECT set_config('app.current_tenant', ${carrier.tenantId}, true), set_config('app.current_user', ${carrier.userId}, true)`
             );
             return fn(tx);
-          }, ...rest);
+          }, config);
       }
       return value.bind(target);
     }
