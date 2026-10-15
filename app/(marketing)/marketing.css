@@ -911,6 +911,18 @@
 .mk-home [class*='text-slate-500'] { color: #777164 !important; }
 .mk-home [class*='text-slate-600'] { color: #8e8779 !important; }
 .mk-home [class*='text-sky-'], .mk-home [class*='text-blue-'], .mk-home [class*='text-cyan-'] { color: #a94f32 !important; }
+/* #2601 — .mk-home-product is a deliberately dark (#1c1a17) workspace mock,
+   but the ink remap above is a descendant selector, so it recoloured the
+   mock's own light text to near-black ink (measured 1.65:1 on the hero).
+   Restore the pre-remap Tailwind values inside the mock; the higher
+   specificity (two classes + attribute) beats the remap rules. */
+.mk-home .mk-home-product .text-white { color: #ffffff !important; }
+.mk-home .mk-home-product [class*='text-slate-100'] { color: #f1f5f9 !important; }
+.mk-home .mk-home-product [class*='text-slate-200'] { color: #e2e8f0 !important; }
+.mk-home .mk-home-product [class*='text-slate-300'] { color: #cbd5e1 !important; }
+.mk-home .mk-home-product [class*='text-slate-400'] { color: #94a3b8 !important; }
+.mk-home .mk-home-product [class*='text-slate-500'] { color: #64748b !important; }
+.mk-home .mk-home-product [class*='text-slate-600'] { color: #475569 !important; }
 .mk-home [class*='border-white/'] { border-color: rgba(49, 45, 37, .13) !important; }
 .mk-home [class*='bg-white/[0.0'], .mk-home [class*='bg-black/'] { background-color: rgba(86, 71, 50, .045) !important; }
 .mk-home [class*='from-blue-'], .mk-home [class*='from-sky-'], .mk-home [class*='from-cyan-'], .mk-home [class*='from-indigo-'], .mk-home [class*='from-violet-'] { --tw-gradient-from: #a94f32 var(--tw-gradient-from-position) !important; --tw-gradient-to: rgb(169 79 50 / 0) var(--tw-gradient-to-position) !important; }
