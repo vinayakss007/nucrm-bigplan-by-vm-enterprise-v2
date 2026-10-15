@@ -2230,7 +2230,7 @@ from pg_policies where schemaname='public' and (qual like '%app.is_super_admin%'
 
 **Found:** 2026-10-04 (UTC), verifying PP-030 against the tree before implementing its fix as a narrow behaviour change.
 **Status:** 🔧 FIXED IN THIS PR (#2539, 2026-10-10 UTC) — one shared refusal site (`lib/cron/cron-lock.ts`), all **22** routes
-converted, a CI guard (`npm run guard:cron-lock`, wired at `ci.yml:84-85` + `package.json:68`) and 48 refusal tests. The
+converted, a CI guard (`npm run guard:cron-lock`, wired at `ci.yml:84-85` + `package.json:69` (re-pinned 2026-10-15 from `:68`: script lines above it grew since #2539)) and 48 refusal tests. The
 **200 `ok:true` mask is gone from the tree**: a held lock is now `423 { ok:false }`. _Written 2026-10-04 as:_ 🚨 OPEN —
 defect re-confirmed with two corrections; **no code shipped**, because the honest fix spans 23 files, which is a design
 decision (a shared skip site), not an edit.
@@ -2379,7 +2379,7 @@ connection setup (~400–600 ms) and bounds the 50-statement loop rather than pr
 - **Statements per tenant iteration, counted from the current tree** (empty-work path): `setTenantContext`
   `lib/cron/tenant-scope.ts:151` → `lib/db/rls.ts:88` (one statement, two `set_config`s) · `resolveActingUser` `:154` →
   `:122-127` · a second `setTenantContext` `:161` (0–1, data-dependent) · the Phase-1 `db.transaction`
-  `app/api/cron/process-sequences/route.ts:55` = `BEGIN` + the carrier re-apply `drizzle/db.ts:79` + the due-enrollments
+  `app/api/cron/process-sequences/route.ts:55` = `BEGIN` + the carrier re-apply `drizzle/db.ts:80 (re-pinned 2026-10-15 from `:79`: #2623 reflowed the carrier block)` + the due-enrollments
   `SELECT … FOR UPDATE SKIP LOCKED` (called at `:57`; #2392 moved the SQL itself out of the route into
   `lib/cron/sequence-steps.ts:145`) + `COMMIT` · `clearTenantContext` in the per-iteration `finally` `:173` →
   `rls.ts:107`. Fixed per sweep (5): `BEGIN` + `setSuperAdminContext` (`rls.ts:169`) + the tenants `SELECT`
@@ -2437,7 +2437,7 @@ connection setup (~400–600 ms) and bounds the 50-statement loop rather than pr
   (`GET /api/superadmin/data-explorer`), so it is ~29× the real non-cron ceiling: cheap to silence, but it deletes the only
   alert on the pin path and leaves the pool pinning above untouched. (c) _Code_: what can actually be removed on this path is
   the per-iteration `clearTenantContext` (`tenant-scope.ts:173`, hoist to one terminal clear — a mid-sweep throw must still
-  clear) = 53 statements = **10.6 s**, and the `drizzle/db.ts:79` carrier re-apply, which re-sets transaction-locally what
+  clear) = 53 statements = **10.6 s**, and the `drizzle/db.ts:80` (re-pinned 2026-10-15 from `:79`: same #2623 reflow) carrier re-apply, which re-sets transaction-locally what
   `rls.ts:88` just set session-scoped on the same pinned client = 53 statements = **10.6 s**. Both together:
   **75.3 s → 54.1 s, which is still over the 30 s threshold** — under 30 s needs ≤2 statements/tenant
   (`53×3+5 = 164` → 32.8 s), impossible **while each statement is its own client round trip** (see (d): the premise is
@@ -2492,7 +2492,7 @@ connection setup (~400–600 ms) and bounds the 50-statement loop rather than pr
   checkout sites confirmed by grep).
 - **Files (all read-only):** `lib/cron/tenant-scope.ts:81,122-127,139,145-178`, `lib/db/rls.ts:7-16,72-107,165-169,181-189`,
   `lib/db/request-connection.ts:31-42,136-181,202-249`, `lib/db/leak-detector.ts:27-29,41-42,50-57,100-122`,
-  `lib/db/pool.ts:168,183,190`, `drizzle/db.ts:69-81`, `app/api/cron/process-sequences/route.ts:35-66,72-118,128,297`
+  `lib/db/pool.ts:168,183,190`, `drizzle/db.ts:73-84 (re-pinned 2026-10-15 from `:69-81`: #2623 genericised `transaction`)`, `app/api/cron/process-sequences/route.ts:35-66,72-118,128,297`
   (re-pinned 2026-10-10: **#2539** added one import line above `POST`, shifting every coordinate in this file by 1),
   `lib/email/tracking.ts:39-41`, `lib/ai/sentiment.ts:165-176`, `lib/errors-server.ts:228`,
   `lib/api/with-api-route.ts:106-162`, `deploy/cron/crontab`, `deploy/cron/run-cron.sh`,
@@ -2946,7 +2946,7 @@ tests/unit/tenant-restore-atomic-2225.test.ts tests/unit/restore` → **8 files 
   Evidence read: `lib/tenant-data-import.ts:86,138,142,164-169,195,283`,
   `app/api/admin/tenant-restore/route.ts:413-420`, `app/api/admin/tenant-restore/route.ts:261-265,362-390`
   (super-admin-only guard, and the restore detached with `runTenantRestore(...).catch(…)`),
-  `drizzle/db.ts:55-90` (a bare `db.transaction()` re-applies only tenant and user, per PP-027),
+  `drizzle/db.ts:59-89 (re-pinned 2026-10-15 from `:55-90`: #2623 shed the `any` suppressions inside the Proxy block)` (a bare `db.transaction()` re-applies only tenant and user, per PP-027),
   `lib/restore/restore-executor.ts:171,214,437,493`,
   `app/api/superadmin/selective-restore/execute/route.ts:128,153`.
 
@@ -3066,7 +3066,7 @@ contiguous with it — nothing was renumbered; see "How to maintain this file".)
   (a) + (b) together are what makes "the suite is green" mean the suite is green again.
 - **Files:** `docs/infra/PREPROD-ISSUE-REGISTER.md` only. Evidence read: `df -h/-k /tmp`,
   `du -xsh /tmp/*`, `stat -c %y` on the 88 dirs, `lsof +D /tmp`, the two aborted-and-retried
-  `vitest run` logs, `lib/client-ip.ts:1-22`, `lib/rate-limit.ts:411`, `tests/unit/rate-limit.test.ts:308-311`,
+  `vitest run` logs, `lib/client-ip.ts:1-22`, `lib/rate-limit.ts:422 (re-pinned 2026-10-15 from `:411`: #2630/#2635 fail-closed lines grew above it)`, `tests/unit/rate-limit.test.ts:308-311`,
   `origin/main:tests/unit/rate-limit.test.ts` (confirms it is on main, not on a feature branch),
   `.env.local:48`, `.github/workflows/ci.yml` (no `TRUST_PROXY`), `vitest.setup.ts:4-17`.
   Related: **#2359**, **#2345**, **#96**, **PP-054** (signal that is not its name), **PP-052** (the
@@ -3637,7 +3637,7 @@ database`, and exactly two FAILs:
 CONSTRAINT` + `ADD CONSTRAINT` widenings, so they are not exposed to PP-058's RLS blindness at all — this
   is the cheapest half of the backlog to drain and the one with a named consequence.
   (c) **Make the wiring greppable** — route `ci.yml:221` and `:254` (re-pinned from `:219`/`:252` on 2026-10-11 by **#2566**, originally from `:217`/`:250` by **#2539**) through `npm run guard:audit` /
-  `npm run guard:semgrep` (the same two commands, already aliases in `package.json:62`/`:63`) so "which
+  `npm run guard:semgrep` (the same two commands, already aliases in `package.json:63`/`:64 (re-pinned 2026-10-15 from `:62/:63`: one script line inserted above)`) so "which
   guards run?" has one answer instead of two syntaxes, and so adding `guard:vocab` to the set is a one-line
   change rather than a third convention — **#2445** and **#2447** proved that half by wiring `coords` and
   `register-drift` themselves. A control that is invisible to the obvious audit command is a
@@ -3690,7 +3690,7 @@ CONSTRAINT` + `ADD CONSTRAINT` widenings, so they are not exposed to PP-058's RL
   row. It refuses before that when `BACKUP_LOCAL_DIR` is ephemeral (`:138-143`) or `pg_dump` is not on
   PATH (`:146-155`) — both satisfiable here (this host's app image **does** ship `pg_dump` and `psql`:
   `docker exec nucrm-app command -v pg_dump` → `/usr/bin/pg_dump`), so neither refusal is this entry's
-  point. `package.json:87` now also defines `db:deploy-migrate` as a hand-run alias (re-pinned 2026-10-09
+  point. `package.json:88` (re-pinned 2026-10-15 from `:87`: db:* scripts inserted above; this line was itself re-pinned 2026-10-09) now also defines `db:deploy-migrate` as a hand-run alias (re-pinned 2026-10-09
   from `:84`, which **#2474**'s `guard:catalog-grants` script line pushed down by one, again on
   2026-10-10 to `:86` by **#2539**'s `guard:cron-lock` line, and on 2026-10-11 to `:87` by **#2566**'s
   `guard:raw-sql` line); **no workflow
@@ -4559,7 +4559,7 @@ was which screen in this repo owns column attributes. Answer: none, and the clos
   and `new_data` NULL in all of them and all 141 `metadata` values parsing as JSON objects — so the
   conversion is safe and pending, which is exactly what an allowlist entry is for.
 
-- **AC3 — it runs somewhere, in both shapes.** `package.json:106` (re-pinned from `:105` on 2026-10-11 by
+- **AC3 — it runs somewhere, in both shapes.** `package.json:107` (re-pinned 2026-10-15 from `:106`: (itself re-pinned from :105 on 2026-10-11) one script line above) (re-pinned from `:105` on 2026-10-11 by
   **#2566**'s `guard:raw-sql` script line, and from `:104` on 2026-10-10 by
   **#2539**'s `guard:cron-lock` script line) is the alias; before this entry
   `grep -rn drift-check .github/workflows` returned **0** hits across all five workflow files while
@@ -4697,7 +4697,7 @@ into the column-drift PR. `0125`'s footer names the gap and leaves it here on pu
   `PRIMARY KEY (id)`; `(segment_id, entity_id)` is the identity **in practice** — no code path
   addresses a member by `id` (the members routes query and delete by segment/tenant only) and
   three bulk callers (`leads/bulk/route.ts:326`, `contacts/bulk/route.ts:414`,
-  `deals/bulk/route.ts:446`) already assume the pair is unique — so the misleading
+  `deals/bulk/route.ts:472 (re-pinned 2026-10-15 from `:446`: #2616/#2641 bulk gate added 26 lines above)`) already assume the pair is unique — so the misleading
   `idx_segment_members_pk` is replaced by `uq_segment_members_segment_entity`, a UNIQUE btree
   over the same two columns, which keeps AC4's lookup role in the same object.
 - **AC2 — dedupe before constraint, in the right RLS context.** The repair runs per tenant
