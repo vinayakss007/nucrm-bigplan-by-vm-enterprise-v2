@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { applyTemplate, type TemplateBlueprint } from '@/lib/templates/apply-template';
 import { pipelines, dealStages, customFieldDefs, automations } from '@/drizzle/schema';
+import type { RlsTransaction } from '@/lib/db/rls';
 
 /**
  * #2633 — applyTemplate is the single idempotent materializer. These tests
@@ -10,7 +11,23 @@ import { pipelines, dealStages, customFieldDefs, automations } from '@/drizzle/s
  * insert-and-reuse semantics are exercised for real, not string-matched.
  */
 
-type Row = Record<string, any>;
+type Row = Record<string, unknown>;
+
+/**
+ * The builder the fake hands back: chainable on the drizzle methods
+ * applyTemplate actually calls, and awaitable because a drizzle query is a
+ * thenable. Declaring it is what lets the literal below be typed instead of
+ * `any` — the only reason a fake would otherwise need `any`.
+ */
+interface FakeChain {
+  from(table: unknown): FakeChain;
+  where(): FakeChain;
+  limit(n: number): FakeChain;
+  values(v: Row | Row[]): FakeChain;
+  onConflictDoNothing(): FakeChain;
+  returning(): FakeChain;
+  then<T>(onFulfilled: (rows: Row[]) => T, onRejected?: (err: unknown) => T): Promise<T>;
+}
 
 interface FakeStore {
   pipelines: Row[];
@@ -39,10 +56,10 @@ function makeFakeTx(seed: Partial<FakeStore> = {}) {
 
   const resolve = (pending: () => Row[]): Promise<Row[]> => Promise.resolve().then(pending);
 
-  const makeChain = (key: keyof FakeStore, initial: () => Row[], kind: 'select' | 'insert') => {
+  const makeChain = (key: keyof FakeStore, initial: () => Row[]): FakeChain => {
     let pending = initial;
     let conflictSafe = false;
-    const chain: any = {
+    const chain: FakeChain = {
       from: (t: unknown) => {
         const k = tableKey(t);
         if (!k) throw new Error(`fake tx: unknown table in from()`);
@@ -76,15 +93,15 @@ function makeFakeTx(seed: Partial<FakeStore> = {}) {
       },
       onConflictDoNothing: () => { conflictSafe = true; return chain; },
       returning: () => chain,
-      then: (res: any, rej: any) => resolve(pending).then(res, rej),
+      then: (res, rej) => resolve(pending).then(res, rej),
     };
     return chain;
   };
 
   const makeChainFrom = (key: keyof FakeStore) =>
-    makeChain(key, () => store[key].filter((r) => !r.deletedAt).map((r) => ({ ...r })), 'select');
+    makeChain(key, () => store[key].filter((r) => !r.deletedAt).map((r) => ({ ...r })));
 
-  const tx: any = {
+  const tx = {
     select: () => ({
       from: (t: unknown) => {
         const k = tableKey(t);
@@ -95,9 +112,9 @@ function makeFakeTx(seed: Partial<FakeStore> = {}) {
     insert: (t: unknown) => {
       const k = tableKey(t);
       if (!k) throw new Error('fake tx: unknown table in insert()');
-      return makeChain(k, () => { throw new Error('fake tx: insert without values()'); }, 'insert');
+      return makeChain(k, () => { throw new Error('fake tx: insert without values()'); });
     },
-  };
+  } as unknown as RlsTransaction;
   return { tx, store };
 }
 
@@ -198,7 +215,8 @@ describe('applyTemplate idempotency (#2633)', () => {
 
   it('refuses to run without a transaction (RLS-pinning contract)', async () => {
     await expect(applyTemplate({
-      tenantId: 't1', actorUserId: 'u1', blueprint: BLUEPRINT, tx: undefined as any,
+      tenantId: 't1', actorUserId: 'u1', blueprint: BLUEPRINT,
+      tx: undefined as unknown as RlsTransaction,
     })).rejects.toThrow(/tx is required/);
   });
 });
