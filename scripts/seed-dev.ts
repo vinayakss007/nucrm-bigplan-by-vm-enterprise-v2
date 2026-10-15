@@ -285,6 +285,10 @@ async function main() {
     // ========================================================================
     // ROLES
     // ========================================================================
+    // #2629: permissions MUST use the dotted-boolean vocabulary can() reads
+    // (lib/auth/middleware.ts: ctx.permissions['deals.view'] === true, with
+    // 'all' as the wildcard). Coarse strings like { deals: 'full' } were
+    // silently ignored — seeded sales_rep/member roles 403'd on every API.
     logSection('Seeding Roles');
 
     await db.insert(schema.roles).values([
@@ -295,7 +299,7 @@ async function main() {
         slug: 'super_admin',
         description: 'Full system access',
         isSystem: true,
-        permissions: { '*': true },
+        permissions: { 'all': true },
         sortOrder: 0,
       },
       {
@@ -305,7 +309,7 @@ async function main() {
         slug: 'admin',
         description: 'Workspace admin access',
         isSystem: true,
-        permissions: { contacts: 'full', deals: 'full', settings: 'full', users: 'manage', reports: 'full' },
+        permissions: { 'all': true },
         sortOrder: 1,
       },
       {
@@ -315,7 +319,14 @@ async function main() {
         slug: 'sales_rep',
         description: 'Sales team member',
         isSystem: true,
-        permissions: { contacts: 'full', deals: 'full', tasks: 'full', reports: 'read' },
+        permissions: {
+          'contacts.view': true, 'contacts.view_all': true, 'contacts.create': true, 'contacts.edit': true, 'contacts.assign': true,
+          'companies.view': true, 'companies.create': true, 'companies.edit': true,
+          'deals.view': true, 'deals.view_all': true, 'deals.create': true, 'deals.edit': true, 'deals.assign': true, 'deals.export': true, 'deals.import': true,
+          'leads.view': true, 'leads.view_all': true, 'leads.create': true, 'leads.edit': true, 'leads.assign': true,
+          'tasks.view': true, 'tasks.view_all': true, 'tasks.create': true, 'tasks.edit': true, 'tasks.assign': true,
+          'reports.view': true, 'tickets.view': true, 'meetings.view': true, 'meetings.create': true, 'calendar.manage': true,
+        },
         sortOrder: 2,
       },
       {
@@ -325,7 +336,11 @@ async function main() {
         slug: 'member',
         description: 'Basic workspace member',
         isSystem: true,
-        permissions: { contacts: 'read', deals: 'read', tasks: 'own' },
+        permissions: {
+          'contacts.view': true, 'companies.view': true, 'deals.view': true,
+          'leads.view': true, 'tasks.view': true, 'reports.view': true,
+          'tickets.view': true, 'meetings.view': true,
+        },
         sortOrder: 3,
       },
     ]);
