@@ -17,7 +17,7 @@ import { concurrencyGuard } from '@/lib/api/concurrency';
 import { logError } from '@/lib/errors-server';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
-import { enforceFieldRead, enforceFieldWrite } from '@/lib/rbac/enforce';
+import { enforceFieldRead, enforceFieldWrite, attachStrippedFields } from '@/lib/rbac/enforce';
 
 export const GET = withApiRoute(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
@@ -75,7 +75,7 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params:
     const rawBody = await readJsonBody(req);
     // #2597 A2: drop keys the role may not write (STRIP, not 403) before the column map.
     // The synthetic `expectedUpdatedAt` concurrency key is unrestricted and survives.
-    const { body } = await enforceFieldWrite(ctx, 'companies', rawBody);
+    const { body, stripped } = await enforceFieldWrite(ctx, 'companies', rawBody);
     const validated = validateBody(updateCompanySchema, body);
     if (validated instanceof NextResponse) return validated;
 
@@ -147,7 +147,7 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params:
 
     // #2597 A2: project the updated company through the read restrictions.
     const [projected] = await enforceFieldRead(ctx, 'companies', [row]);
-    return NextResponse.json({ data: projected });
+    return attachStrippedFields(NextResponse.json({ data: projected }), stripped);
  
  
   } catch (err) { 

@@ -19,7 +19,7 @@ import { updatedAtMs } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { apiError } from '@/lib/api-error';
 import { withApiRoute } from '@/lib/api/with-api-route';
-import { enforceFieldRead, enforceFieldWrite } from '@/lib/rbac/enforce';
+import { enforceFieldRead, enforceFieldWrite, attachStrippedFields } from '@/lib/rbac/enforce';
 
 /**
  * PATCH body schema — every field the route consumes, all routed through Zod.
@@ -168,7 +168,7 @@ export const PATCH = withApiRoute(async (request: NextRequest,
     const rawBody = await readJsonBody(request);
 
     // #2597 A2: drop keys the role may not write (STRIP, not 403) before the column map.
-    const { body: writeBody } = await enforceFieldWrite(ctx, 'leads', rawBody);
+    const { body: writeBody, stripped } = await enforceFieldWrite(ctx, 'leads', rawBody);
 
     // Validate the entire body — every field is routed through Zod
     const validated = validateBody(patchLeadBodySchema, writeBody);
@@ -267,7 +267,7 @@ export const PATCH = withApiRoute(async (request: NextRequest,
     
     // #2597 A2: project the updated lead through the read restrictions.
     const [projected] = updatedLead ? await enforceFieldRead(ctx, 'leads', [updatedLead]) : [updatedLead];
-    return NextResponse.json({ data: projected });
+    return attachStrippedFields(NextResponse.json({ data: projected }), stripped);
  
  
   } catch (error) {
