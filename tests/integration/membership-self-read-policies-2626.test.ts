@@ -67,9 +67,9 @@ interface Read { n: number }
 
 async function readAsProbe(
   sql: string,
-  currentUser: string | null,
-  params: unknown[] = [],
+  opts: { as?: string | null; params?: unknown[] } = {},
 ): Promise<Read[]> {
+  const { as: currentUser = null, params = [] } = opts;
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -138,46 +138,48 @@ describe.skipIf(!dbAvailable)('membership self-scoped SELECT policies (#2626)', 
 
   it('shows a proven user its own active membership', async () => {
     const rows = await readAsProbe(
-      `SELECT count(*)::int AS n FROM tenant_members WHERE user_id = $1`, [userA], userA,
+      `SELECT count(*)::int AS n FROM tenant_members WHERE user_id = $1`,
+      { as: userA, params: [userA] },
     );
     expect(rows[0]?.n).toBe(1);
   });
 
   it('context-less reads DENY (zero rows) instead of aborting the statement', async () => {
-    const rows = await readAsProbe(`SELECT count(*)::int AS n FROM tenant_members`, null);
+    const rows = await readAsProbe(`SELECT count(*)::int AS n FROM tenant_members`, { as: null });
     expect(rows[0]?.n).toBe(0);
   });
 
   it('an empty (reset) app.current_user cannot cast-match or leak rows', async () => {
-    const rows = await readAsProbe(`SELECT count(*)::int AS n FROM tenant_members`, '');
+    const rows = await readAsProbe(`SELECT count(*)::int AS n FROM tenant_members`, { as: '' });
     expect(rows[0]?.n).toBe(0);
   });
 
   it('pending memberships stay invisible even to their own user', async () => {
     const rows = await readAsProbe(
-      `SELECT count(*)::int AS n FROM tenant_members WHERE user_id = $1`, [userPending], userPending,
+      `SELECT count(*)::int AS n FROM tenant_members WHERE user_id = $1`,
+      { as: userPending, params: [userPending] },
     );
     expect(rows[0]?.n).toBe(0);
   });
 
-  it('the roles arm admits exactly the role of the user''s active membership', async () => {
+  it('the roles arm admits exactly the role of the active membership owner', async () => {
     const rows = await readAsProbe(
-      `SELECT count(*)::int AS n FROM roles WHERE id = $1`, [roleA], userA,
+      `SELECT count(*)::int AS n FROM roles WHERE id = $1`, { as: userA, params: [roleA] },
     );
     expect(rows[0]?.n).toBe(1);
     const other = await readAsProbe(
-      `SELECT count(*)::int AS n FROM roles WHERE id = $1`, [roleB], userA,
+      `SELECT count(*)::int AS n FROM roles WHERE id = $1`, { as: userA, params: [roleB] },
     );
     expect(other[0]?.n).toBe(0);
   });
 
-  it('requireAuth''s exact join shape returns a membership row with permissions', async () => {
+  it('the exact join requireAuth runs returns a membership row with permissions', async () => {
     const joined = await readAsProbe(
       `SELECT count(*)::int AS n
          FROM users u
          INNER JOIN tenant_members tm ON tm.user_id = u.id AND tm.status = 'active'
          LEFT JOIN roles r ON r.id = tm.role_id
-        WHERE u.id = $1`, [userA], userA,
+        WHERE u.id = $1`, { as: userA, params: [userA] },
     );
     expect(joined[0]?.n).toBe(1);
   });
