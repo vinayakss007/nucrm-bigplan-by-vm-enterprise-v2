@@ -35,8 +35,10 @@ describe('enforceFieldWrite — deals stage aliases (#2616)', () => {
   // to keep the test hermetic.
   it('restricting stage_id strips stage_name from a PATCH body', () => {
     // Same alias table drives both directions via ownerField(); verify a
-    // stage_id restriction propagates to stage_name.
-    const map = new Map([['stage_id', 'read' as const]]);
+    // stage_id restriction propagates to stage_name. `'none'` fails both the
+    // read and the write threshold, so it exercises the alias lookup without
+    // depending on which threshold the projection applies.
+    const map = new Map([['stage_id', 'none' as const]]);
     const out = stripRowForRead('deals', map, { id: 'd', stage_id: 'S', stage: 'S', stage_name: 'Won' });
     expect(out).toEqual({ id: 'd' });
   });
