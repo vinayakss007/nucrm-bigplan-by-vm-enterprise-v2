@@ -9,7 +9,5 @@
   "tests/helpers.ts": 5,
   "tests/setup.ts": 1,
   "types/dashboard.ts": 1,
-  "sentry-pii-scrub.ts": 2,
-  "sentry.client.config.ts": 1,
-  "sentry.server.config.ts": 1
+  "sentry-pii-scrub.ts": 1
 }
