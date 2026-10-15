@@ -11,6 +11,7 @@ import { eq, asc, and, isNull } from 'drizzle-orm';
 import { escapeCSV } from '@/lib/export';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { logError } from '@/lib/errors-server';
+import { enforceFieldRead } from '@/lib/rbac/enforce';
 
 export const GET = withApiRoute(async (request: NextRequest) => {
   try {
@@ -42,18 +43,31 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       .where(and(eq(deals.tenantId, ctx.tenantId), isNull(deals.deletedAt)))
       .orderBy(asc(deals.createdAt));
 
-    const headers = ['title', 'amount', 'close_date', 'pipeline', 'stage', 'contact_email', 'company', 'assigned_to', 'created_at'];
-    const csvRows = rows.map(r => [
-      escapeCSV(r.title),
-      escapeCSV(r.amount),
-      escapeCSV(r.closeDate),
-      escapeCSV(r.pipelineName),
-      escapeCSV(r.stageName),
-      escapeCSV(r.contactEmail),
-      escapeCSV(r.companyName),
-      escapeCSV(r.assignedTo),
-      escapeCSV(r.createdAt),
-    ].join(','));
+    // #2614 — field_permissions were being bypassed on the CSV export path:
+    // the export handler selected `amount` (and every other restricted column)
+    // unconditionally, so a role with `amount` hidden via the admin UI still
+    // saw every deal's full value in the download. Project rows through
+    // enforceFieldRead and drop any column the role cannot see.
+    const projected = await enforceFieldRead(ctx, 'deals', rows);
+    const CANON: { header: string; key: keyof (typeof rows)[number] }[] = [
+      { header: 'title', key: 'title' },
+      { header: 'amount', key: 'amount' },
+      { header: 'close_date', key: 'closeDate' },
+      { header: 'pipeline', key: 'pipelineName' },
+      { header: 'stage', key: 'stageName' },
+      { header: 'contact_email', key: 'contactEmail' },
+      { header: 'company', key: 'companyName' },
+      { header: 'assigned_to', key: 'assignedTo' },
+      { header: 'created_at', key: 'createdAt' },
+    ];
+    // A role with no rows in field_permissions returns `projected === rows`,
+    // so this filter keeps all nine columns for unrestricted callers.
+    const sample = projected[0] ?? {};
+    const active = CANON.filter((c) => c.key in sample);
+    const headers = active.map((c) => c.header);
+    const csvRows = projected.map((r) =>
+      active.map((c) => escapeCSV(r[c.key] as never)).join(','),
+    );
 
     const csv = [headers.join(','), ...csvRows].join('\n');
 
