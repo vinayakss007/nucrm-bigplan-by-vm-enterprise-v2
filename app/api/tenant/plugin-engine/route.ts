@@ -176,7 +176,10 @@ export const PATCH = withApiRoute(async (request: NextRequest) => {
         .limit(1);
       updates['config'] = mergeKeepingSecretKeys(existing?.config, body['config']);
     }
-    if (body['enabled'] !== undefined) updates['isActive'] = body['isActive'];
+    // #2560: guarded on `enabled` but assigned `body['isActive']`, which no
+    // caller sends — the toggle stored undefined and the UI 500ed. The wire
+    // name is `enabled`; the column is `is_active`.
+    if (body['enabled'] !== undefined) updates['isActive'] = body['enabled'];
 
     const expectedUpdatedAt = body.expectedUpdatedAt ? new Date(body.expectedUpdatedAt) : null;
     const guard = await concurrencyGuard(db, integrations, body.id, ctx.tenantId, expectedUpdatedAt);
