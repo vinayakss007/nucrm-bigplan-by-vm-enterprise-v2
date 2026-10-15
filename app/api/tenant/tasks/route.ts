@@ -17,6 +17,7 @@ import { logError } from '@/lib/errors-server';
 import { createNotification } from '@/lib/notifications';
 import { cache } from '@/lib/cache';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { enforceFieldRead, enforceFieldWrite } from '@/lib/rbac/enforce';
 import { parseLimitOffset } from '@/lib/api/query-params';
 
 export const GET = withApiRoute(async (request: NextRequest) => {
@@ -76,7 +77,8 @@ export const GET = withApiRoute(async (request: NextRequest) => {
 
     // Map camelCase to snake_case for frontend compatibility
     const response = {
-      data: data.map(t => ({
+      // #2597 A2: project the list through the role's read restrictions.
+      data: await enforceFieldRead(ctx, 'tasks', data.map(t => ({
         id: t.id,
         title: t.title,
         description: t.description,
@@ -93,10 +95,12 @@ export const GET = withApiRoute(async (request: NextRequest) => {
         last_name: t.lastName,
         deal_title: t.dealTitle,
         assignee_name: t.assigneeName,
-      })),
+      }))),
       total: countRes?.count ?? 0,
     };
-    const cacheKey = `tenant:${ctx.tenantId}:tasks:${searchParams.toString()}`;
+    // Role-qualify the cache key: the response is now field-projected, so it
+    // must never be served to a role with different restrictions (#2597).
+    const cacheKey = `tenant:${ctx.tenantId}:tasks:${ctx.roleSlug}:${searchParams.toString()}`;
     cache.set(cacheKey, response, 30);
     return NextResponse.json(response);
   
@@ -118,7 +122,9 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     const limited = await checkRateLimit(request, { action: 'tasks_create', max: 100, windowMinutes: 60 });
     if (limited) return limited;
 
-    const body = await readJsonBody(request);
+    const rawBody = await readJsonBody(request);
+    // #2597 A2: drop keys the role may not write (STRIP, not 403) before the column map.
+    const { body } = await enforceFieldWrite(ctx, 'tasks', rawBody);
     const validated = validateBody(createTaskSchema, body);
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;
@@ -202,7 +208,9 @@ export const POST = withApiRoute(async (request: NextRequest) => {
 
     fireWebhooks(ctx.tenantId, 'task.created', { id: newTask.id, title: v.title }).catch((err) => logError({ error: err, context: 'tenant/tasks fireWebhooks task.created' }));
 
-    return NextResponse.json({ data: { id: newTask.id, title: newTask.title, description: newTask.description, priority: newTask.priority, status: newTask.status, completed: newTask.completed, due_date: newTask.dueDate ? newTask.dueDate.toISOString() : null, completed_at: newTask.completedAt ? newTask.completedAt.toISOString() : null, contact_id: newTask.contactId, deal_id: newTask.dealId, assigned_to: newTask.assignedTo, created_at: (newTask.createdAt ?? new Date()).toISOString(), updated_at: newTask.updatedAt?.toISOString(), tenant_id: newTask.tenantId, user_id: newTask.createdBy } }, { status: 201 });
+    // #2597 A2: project the created task through the read restrictions.
+    const [created] = await enforceFieldRead(ctx, 'tasks', [{ id: newTask.id, title: newTask.title, description: newTask.description, priority: newTask.priority, status: newTask.status, completed: newTask.completed, due_date: newTask.dueDate ? newTask.dueDate.toISOString() : null, completed_at: newTask.completedAt ? newTask.completedAt.toISOString() : null, contact_id: newTask.contactId, deal_id: newTask.dealId, assigned_to: newTask.assignedTo, created_at: (newTask.createdAt ?? new Date()).toISOString(), updated_at: newTask.updatedAt?.toISOString(), tenant_id: newTask.tenantId, user_id: newTask.createdBy }]);
+    return NextResponse.json({ data: created }, { status: 201 });
  
  
   } catch (err) {

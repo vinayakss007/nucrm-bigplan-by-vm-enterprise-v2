@@ -16,6 +16,7 @@ import { fireWebhooks } from '@/lib/webhooks';
 import { logError } from '@/lib/errors-server';
 import { escapeLike } from '@/lib/api/sanitize-like';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { enforceFieldRead, enforceFieldWrite } from '@/lib/rbac/enforce';
 
 export const GET = withApiRoute(async (request: NextRequest) => {
   try {
@@ -85,7 +86,8 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     ]);
 
     // Map camelCase to snake_case for frontend compatibility
-    const data = rawData.map(c => ({
+    // #2597 A2: project the list through the role's read restrictions.
+    const data = await enforceFieldRead(ctx, 'companies', rawData.map(c => ({
       id: c.id,
       name: c.name,
       industry: c.industry,
@@ -98,7 +100,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       created_at: c.createdAt,
       updated_at: c.updatedAt,
       contact_count: c.contactCount,
-    }));
+    })));
 
     return NextResponse.json({ data, total: totalResult[0]?.count ?? 0, limit, offset });
  
@@ -120,7 +122,9 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     const limited = await checkRateLimit(request, { action: 'companies_create', max: 100, windowMinutes: 60 });
     if (limited) return limited;
 
-    const body = await readJsonBody(request);
+    const rawBody = await readJsonBody(request);
+    // #2597 A2: drop keys the role may not write (STRIP, not 403) before the column map.
+    const { body } = await enforceFieldWrite(ctx, 'companies', rawBody);
     const validated = validateBody(createCompanySchema, body);
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;
@@ -158,7 +162,9 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       fireWebhooks(ctx.tenantId, 'company.created', { id: row.id, name: v.name }).catch((err) => logError({ error: err, context: 'tenant/companies POST fireWebhooks company.created' }));
     }
 
-    return NextResponse.json({ data: row }, { status: 201 });
+    // #2597 A2: project the created company through the read restrictions.
+    const [created] = row ? await enforceFieldRead(ctx, 'companies', [row]) : [row];
+    return NextResponse.json({ data: created }, { status: 201 });
  
  
   } catch (err) {

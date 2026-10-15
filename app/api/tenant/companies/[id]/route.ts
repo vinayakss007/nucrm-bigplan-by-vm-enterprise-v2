@@ -17,6 +17,7 @@ import { concurrencyGuard } from '@/lib/api/concurrency';
 import { logError } from '@/lib/errors-server';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { enforceFieldRead, enforceFieldWrite } from '@/lib/rbac/enforce';
 
 export const GET = withApiRoute(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
@@ -48,8 +49,10 @@ export const GET = withApiRoute(async (req: NextRequest, { params }: { params: P
     });
 
     if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    
-    return NextResponse.json({ data: row });
+
+    // #2597 A2: project the detail response through the read restrictions.
+    const [projected] = await enforceFieldRead(ctx, 'companies', [row]);
+    return NextResponse.json({ data: projected });
  
  
   } catch (err) { 
@@ -69,7 +72,10 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params:
     if (deny) return deny;
 
     const id = (await params).id;
-    const body = await readJsonBody(req);
+    const rawBody = await readJsonBody(req);
+    // #2597 A2: drop keys the role may not write (STRIP, not 403) before the column map.
+    // The synthetic `expectedUpdatedAt` concurrency key is unrestricted and survives.
+    const { body } = await enforceFieldWrite(ctx, 'companies', rawBody);
     const validated = validateBody(updateCompanySchema, body);
     if (validated instanceof NextResponse) return validated;
 
@@ -111,8 +117,10 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params:
     if (v.tags !== undefined) updateData.tags = v.tags;
     if (v.custom_fields !== undefined) updateData.customFields = v.custom_fields;
 
-    // Optimistic concurrency: reject if another update happened since client read
-    const expectedUpdatedAt = body.expectedUpdatedAt ? new Date(body.expectedUpdatedAt) : null;
+    // Optimistic concurrency: reject if another update happened since client
+    // read. Read the synthetic lock key off the raw body — it is not a DB
+    // column, so field-permission stripping never touches it (#2597).
+    const expectedUpdatedAt = rawBody.expectedUpdatedAt ? new Date(rawBody.expectedUpdatedAt) : null;
     const guard = await concurrencyGuard(db, companies, id, ctx.tenantId, expectedUpdatedAt);
     if (guard) return guard;
 
@@ -137,7 +145,9 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params:
 
     fireWebhooks(ctx.tenantId, 'company.updated', { id }).catch((err) => logError({ error: err, context: 'tenant/companies/:id fireWebhooks company.updated' }));
 
-    return NextResponse.json({ data: row });
+    // #2597 A2: project the updated company through the read restrictions.
+    const [projected] = await enforceFieldRead(ctx, 'companies', [row]);
+    return NextResponse.json({ data: projected });
  
  
   } catch (err) { 

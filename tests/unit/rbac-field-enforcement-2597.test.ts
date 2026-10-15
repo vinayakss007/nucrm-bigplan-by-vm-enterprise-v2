@@ -252,4 +252,29 @@ describe('#2597 dead-export guard — the enforcement layer must not itself go d
     const out = await enforceFieldRead(ctx(), 'contacts', rows);
     expect(out).toEqual([{ id: 'c1', email: 'a@x.io' }]);
   });
+
+  it('enforce.ts is wired into the leads, companies and tasks request paths (#2597 A2b)', () => {
+    const pairs = [
+      'app/api/tenant/leads/route.ts',
+      'app/api/tenant/leads/[id]/route.ts',
+      'app/api/tenant/companies/route.ts',
+      'app/api/tenant/companies/[id]/route.ts',
+      'app/api/tenant/tasks/route.ts',
+      'app/api/tenant/tasks/[id]/route.ts',
+    ];
+    for (const rel of pairs) {
+      const src = readFileSync(join(ROOT, rel), 'utf8');
+      expect(src, `${rel} must import the enforcement layer`).toMatch(/from '@\/lib\/rbac\/enforce'/);
+      expect(src, `${rel} must call the read projection`).toMatch(/enforceFieldRead\(/);
+    }
+    // POST/PATCH write-side strip on the list + detail of each entity.
+    for (const rel of pairs) {
+      expect(readFileSync(join(ROOT, rel), 'utf8')).toMatch(/enforceFieldWrite\(/);
+    }
+  });
+
+  it('the tasks list cache key is role-qualified so a projected payload can never be served cross-role (#2597)', () => {
+    const src = readFileSync(join(ROOT, 'app/api/tenant/tasks/route.ts'), 'utf8');
+    expect(src).toMatch(/tasks:\$\{ctx\.roleSlug\}/);
+  });
 });

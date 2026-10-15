@@ -19,6 +19,7 @@ import { updatedAtMs } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { apiError } from '@/lib/api-error';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { enforceFieldRead, enforceFieldWrite } from '@/lib/rbac/enforce';
 
 /**
  * PATCH body schema — every field the route consumes, all routed through Zod.
@@ -128,13 +129,16 @@ export const GET = withApiRoute(async (request: NextRequest,
     });
     
     return NextResponse.json({
-      data: {
+      // #2597 A2: project the lead (and joined display fields) through the
+      // role's read restrictions; `activities` is synthetic, not a DB column,
+      // so it survives as an unrestricted key.
+      data: (await enforceFieldRead(ctx, 'leads', [{
         ...lead,
         assigned_name: assignedUser?.fullName,
         assigned_avatar: assignedUser?.avatarUrl,
         created_by_name: creator?.fullName,
         activities,
-      },
+      }]))[0],
     });
  
  
@@ -163,8 +167,11 @@ export const PATCH = withApiRoute(async (request: NextRequest,
     const { id } = await params;
     const rawBody = await readJsonBody(request);
 
+    // #2597 A2: drop keys the role may not write (STRIP, not 403) before the column map.
+    const { body: writeBody } = await enforceFieldWrite(ctx, 'leads', rawBody);
+
     // Validate the entire body — every field is routed through Zod
-    const validated = validateBody(patchLeadBodySchema, rawBody);
+    const validated = validateBody(patchLeadBodySchema, writeBody);
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;
 
@@ -258,7 +265,9 @@ export const PATCH = withApiRoute(async (request: NextRequest,
 
     fireWebhooks(ctx.tenantId, 'lead.updated', { id }).catch((err) => logError({ error: err, context: 'tenant/leads/:id fireWebhooks lead.updated' }));
     
-    return NextResponse.json({ data: updatedLead });
+    // #2597 A2: project the updated lead through the read restrictions.
+    const [projected] = updatedLead ? await enforceFieldRead(ctx, 'leads', [updatedLead]) : [updatedLead];
+    return NextResponse.json({ data: projected });
  
  
   } catch (error) {
