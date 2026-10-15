@@ -230,4 +230,26 @@ describe('#2597 dead-export guard — the enforcement layer must not itself go d
     expect(list).toMatch(/enforceFieldRead|enforceFieldWrite/);
     expect(detail).toMatch(/enforceFieldRead|enforceFieldWrite/);
   });
+
+  it('enforce.ts is wired into both contacts request paths too (#2597 A2)', () => {
+    const list = readFileSync(join(ROOT, 'app/api/tenant/contacts/route.ts'), 'utf8');
+    const detail = readFileSync(join(ROOT, 'app/api/tenant/contacts/[id]/route.ts'), 'utf8');
+    expect(list).toMatch(/from '@\/lib\/rbac\/enforce'/);
+    expect(detail).toMatch(/from '@\/lib\/rbac\/enforce'/);
+    expect(list).toMatch(/enforceFieldRead\(/);
+    expect(list).toMatch(/enforceFieldWrite\(/);
+    expect(detail).toMatch(/enforceFieldRead\(/);
+    expect(detail).toMatch(/enforceFieldWrite\(/);
+  });
+
+  it('contacts has NO double-exposed column, so a plain key strip is enough', async () => {
+    // The contacts list projection maps each column to exactly one key (no
+    // amount→value-style alias), so read enforcement is a straight per-key
+    // filter. A camelCase response key must be caught by a snake_case config
+    // row (and vice-versa) via normalize.
+    queue([{ id: ROLE_ID }], [{ fieldName: 'first_name', accessLevel: 'none' }]);
+    const rows = [{ id: 'c1', firstName: 'Ada', email: 'a@x.io' }];
+    const out = await enforceFieldRead(ctx(), 'contacts', rows);
+    expect(out).toEqual([{ id: 'c1', email: 'a@x.io' }]);
+  });
 });
