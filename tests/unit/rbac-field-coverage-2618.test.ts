@@ -34,6 +34,7 @@ import {
   enforceFieldRead,
   enforceFieldWrite,
   __clearRoleIdCache,
+  __clearFieldRestrictionsCache,
 } from '@/lib/rbac/enforce';
 
 // Same builder-queue harness as rbac-field-enforcement-2597.test.ts, extended
@@ -50,6 +51,12 @@ function makeBuilder(rows: unknown[]) {
 function queue(...results: unknown[][]) {
   queued = results;
   call = 0;
+  // #2619 gave enforce.ts two caches (role ids, and the restriction maps keyed
+  // tenant:role:entity with a 60 s TTL). Both are module state, so a test that
+  // re-queues new rows must invalidate them or it asserts the previous test's
+  // map — which is exactly how the alias tests below failed once #2619 landed.
+  __clearRoleIdCache();
+  __clearFieldRestrictionsCache();
   mockDb.select.mockImplementation(() => {
     const rows = queued[call] ?? [];
     call += 1;
@@ -64,7 +71,11 @@ function ctx(over: Partial<AuthContext> = {}): AuthContext {
   } as AuthContext;
 }
 
-beforeEach(() => { __clearRoleIdCache(); vi.resetModules(); });
+beforeEach(() => {
+  __clearRoleIdCache();
+  __clearFieldRestrictionsCache();
+  vi.resetModules();
+});
 
 describe('alias vocabulary — true synonyms only normalize cannot bridge (#2618)', () => {
   it('leads: a lead_status restriction strips the `status` body spelling on write', async () => {
@@ -80,7 +91,6 @@ describe('alias vocabulary — true synonyms only normalize cannot bridge (#2618
     queue([{ id: ROLE_ID }], [{ fieldName: 'lead_source', accessLevel: 'none' }]);
     const rows = await enforceFieldRead(ctx(), 'leads', [{ id: 'l1', source: 'website', score: 3 }]);
     expect(rows).toEqual([{ id: 'l1', score: 3 }]);
-    __clearRoleIdCache();
     queue([{ id: ROLE_ID }], [{ fieldName: 'lead_source', accessLevel: 'none' }]);
     const { stripped } = await enforceFieldWrite(ctx(), 'leads', { source: 'website' });
     expect(stripped).toEqual(['source']);
@@ -99,7 +109,6 @@ describe('alias vocabulary — true synonyms only normalize cannot bridge (#2618
     queue([{ id: ROLE_ID }], [{ fieldName: 'job_title', accessLevel: 'none' }]);
     const { stripped } = await enforceFieldWrite(ctx(), 'contacts', { title: 'CEO', email: 'a@x.io' });
     expect(stripped).toEqual(['title']);
-    __clearRoleIdCache();
     queue([{ id: ROLE_ID }], [{ fieldName: 'job_title', accessLevel: 'none' }]);
     const rows = await enforceFieldRead(ctx(), 'contacts', [{ id: 'c1', jobTitle: 'CEO' }]);
     expect(rows).toEqual([{ id: 'c1' }]);
