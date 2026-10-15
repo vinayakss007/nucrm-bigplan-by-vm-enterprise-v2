@@ -40,6 +40,7 @@ import {
   enforceFieldRead,
   enforceFieldWrite,
   __clearRoleIdCache,
+  __clearFieldRestrictionsCache,
 } from '@/lib/rbac/enforce';
 
 // makeBuilder: each `.select().from().where()[.limit]()` chain resolves to the
@@ -72,7 +73,7 @@ function ctx(over: Partial<AuthContext> = {}): AuthContext {
   } as AuthContext;
 }
 
-beforeEach(() => { __clearRoleIdCache(); vi.resetModules(); });
+beforeEach(() => { __clearRoleIdCache(); __clearFieldRestrictionsCache(); vi.resetModules(); });
 
 describe('stripRowForRead — pure projection (#2597)', () => {
   it('keeps every key when no field is configured (default-open)', () => {
