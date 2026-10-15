@@ -1,11 +1,7 @@
 {
   "drizzle/schema/utils.ts": 5,
   "lib/api/validate.ts": 1,
-  "scripts/add-indexes.ts": 1,
-  "scripts/cron-scheduler.ts": 1,
-  "scripts/generate-migration.ts": 1,
-  "scripts/quality-report.ts": 1,
-  "scripts/stress-test.ts": 3,
+  "scripts/stress-test.ts": 2,
   "tests/helpers/auth-mock.ts": 1,
   "tests/helpers/db-mock.ts": 3,
   "tests/helpers/razorpay-mock.ts": 3,

@@ -43,9 +43,13 @@ function run(cmd: string, _label: string): { ok: boolean; out: string; dur: numb
   try {
     const out = execSync(cmd, { encoding: 'utf-8', timeout: TIMEOUT_MS, stdio: ['pipe', 'pipe', 'pipe'] });
     return { ok: true, out: out.trim(), dur: Date.now() - t0 };
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (e: any) {
-    return { ok: false, out: (e.stdout || '') + '\n' + (e.stderr || ''), dur: Date.now() - t0 };
+  } catch (e) {
+    // execSync's rejected error carries the child's stdout/stderr buffers,
+    // which are the actual report we want to keep. `ExecSyncException` in
+    // @types/node has them typed as `Buffer | string` and `unknown`, so a
+    // narrow guard is safer than a cast.
+    const err = e as { stdout?: unknown; stderr?: unknown };
+    return { ok: false, out: `${err.stdout ?? ''}\n${err.stderr ?? ''}`, dur: Date.now() - t0 };
   }
 }
 
