@@ -71,7 +71,10 @@ export const createDealSchema = z.object({
   metadata: z.record(z.string(), z.unknown()).optional().default({}),
 });
 
-export const updateDealSchema = createDealSchema.partial();
+// #2627: `.partial()` inherits `.default()`, so a PATCH body that omitted
+// `amount` used to be parsed to `{ amount: 0 }` and written back. Strip the
+// defaults on the two keys that had them before partial-ing.
+export const updateDealSchema = createDealSchema.extend({ amount: z.coerce.number().min(0).optional(), metadata: z.record(z.string(), z.unknown()).optional() }).partial();
 
 export const dealQuerySchema = z.object({
   offset: z.coerce.number().int().min(0).default(0),
