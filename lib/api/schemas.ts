@@ -71,7 +71,15 @@ export const createDealSchema = z.object({
   metadata: z.record(z.string(), z.unknown()).optional().default({}),
 });
 
-export const updateDealSchema = createDealSchema.partial();
+// #2627 — do NOT use `createDealSchema.partial()` here. Zod 4's `.partial()`
+// keeps the `.default(...)` on inner fields, so a PATCH body that omits
+// `amount` / `metadata` was parsed to `{ amount: 0, metadata: {} }` and the
+// handler wrote those back over the stored values. Rebuild the update shape
+// with those defaults removed; `.partial()` then only affects requiredness.
+export const updateDealSchema = createDealSchema.extend({
+  amount: z.coerce.number().min(0).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
+}).partial();
 
 export const dealQuerySchema = z.object({
   offset: z.coerce.number().int().min(0).default(0),
