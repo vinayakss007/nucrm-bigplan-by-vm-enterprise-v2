@@ -8,6 +8,7 @@ import { apiError } from '@/lib/api-error';
 import { logError } from '@/lib/errors-server';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { generateExportData, ExportLimitError } from '@/lib/export';
+import { enforceFieldRead } from '@/lib/rbac/enforce';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 export const GET = withApiRoute(async (request: NextRequest) => {
@@ -24,7 +25,10 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       tenantId: ctx.tenantId,
       userId: ctx.userId,
       entityType: 'contacts',
-      filters: { q }
+      filters: { q },
+      // #2618 — the CSV used to bypass field_permissions entirely (the deals
+      // export was fixed the same way in #2614): drop restricted columns.
+      project: (data) => enforceFieldRead(ctx, 'contacts', data),
     });
 
     return new NextResponse(csv, {

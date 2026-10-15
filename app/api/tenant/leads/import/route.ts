@@ -17,6 +17,7 @@ import { resolveOrCreateContactForLead } from '@/lib/contacts/resolve';
 import { generateLeadOid, isLeadOidCollision } from '@/lib/leads/oid';
 import { logAudit } from '@/lib/audit';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { enforceFieldWrite } from '@/lib/rbac/enforce';
 
 function parseCSV(text: string): Record<string, string>[] {
   const lines = text.split(/\r?\n/).filter(l => l.trim());
@@ -150,11 +151,29 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       try {
  
  
-        const mapped: Record<string, string> = {};
+        const mappedRaw: Record<string, string> = {};
         for (const [key, val] of Object.entries(row)) {
           const dbCol = LEAD_COLUMN_MAP[key.toLowerCase().trim()];
-          if (dbCol && val) mapped[dbCol] = val;
+          if (dbCol && val) mappedRaw[dbCol] = val;
         }
+
+        // #2618 — mirror of the deals import gate (#2615): project the mapped
+        // row through the role's write restrictions before it reaches the
+        // insert/update. LEAD_COLUMN_MAP emits camelCase props, so normalize
+        // to the snake_case column vocabulary field_permissions speaks, strip
+        // restricted keys, then re-camel. A stripped firstName makes the row
+        // fail its required check below — that is the intended fail-closed.
+        const toSnake = (k: string) => k.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase();
+        const toCamel = (k: string) => k.replace(/_([a-z0-9])/g, (_, c: string) => c.toUpperCase());
+        const { body: allowedSnake, stripped } = await enforceFieldWrite(
+          ctx, 'leads', Object.fromEntries(Object.entries(mappedRaw).map(([k, v]) => [toSnake(k), v])),
+        );
+        if (stripped.length > 0) {
+          results.errors.push(`Row ${index + 2}: role restrictions dropped ${stripped.join(', ')}`);
+        }
+        const mapped: Record<string, string> = Object.fromEntries(
+          Object.entries(allowedSnake).map(([k, v]) => [toCamel(k), v as string]),
+        );
 
         const firstName = mapped.firstName?.trim();
         if (!firstName) {

@@ -53,6 +53,21 @@ const READ_ALIASES: Record<string, Record<string, string[]>> = {
     stage_id: ['stage', 'stage_name'],
     created_by: ['user_id'],
   },
+  // #2618: normalize() already folds a camelCase key (leadStatus) onto its
+  // column name (lead_status), so the detail routes that spread the raw drizzle
+  // row are covered without aliases. These entries are the TRUE synonyms —
+  // spellings whose normalization does NOT equal the column name.
+  leads: {
+    lead_status: ['status'],           // body/wire alias of the lead_status column
+    lead_source: ['source'],           // drizzle prop `source` → column lead_source
+    created_by: ['user_id'],           // POST responses name the creator user_id
+    first_name: ['leadFirstName'],     // leads/history join exposes leadFirstName
+    last_name: ['leadLastName'],
+  },
+  contacts: {
+    job_title: ['title'],              // PATCH accepts `title` for job_title
+    created_by: ['user_id'],           // POST responses emit the creator as user_id
+  },
 };
 
 // The UI's entity picker and the routes do not agree on singular/plural

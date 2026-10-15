@@ -13,6 +13,7 @@ import { apiError } from '@/lib/api-error';
 import { logError } from '@/lib/errors-server';
 import { parseLimitOffset } from '@/lib/api/query-params';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { enforceFieldRead } from '@/lib/rbac/enforce';
 
 export const GET = withApiRoute(async (request: NextRequest) => {
   try {
@@ -50,8 +51,11 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       .orderBy(desc(leadAssignments.createdAt))
       .limit(limit);
 
-    const data = await query;
-    
+    const rows = await query;
+    // #2618 — every history row carries the lead's name via a join
+    // (leadFirstName/leadLastName); alias those spellings to first_name /
+    // last_name so a name-hidden role does not recover it from the trail.
+    const data = await enforceFieldRead(ctx, 'leads', rows);
     return NextResponse.json({ data });
  
  

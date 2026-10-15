@@ -21,6 +21,7 @@ import { readJsonBody } from '@/lib/api/validate';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { convertLeadCore } from '@/lib/leads/convert';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { enforceFieldWrite } from '@/lib/rbac/enforce';
 
 const MAX_BULK = 500;
 
@@ -58,6 +59,27 @@ export const POST = withApiRoute(async (req: NextRequest) => {
     // restorable ids, so don't bail out here for that action.
     if (!validIds.length && action !== 'restore')
       return NextResponse.json({ error: 'No valid leads found' }, { status: 404 });
+
+    // #2618 — mirror of the deals bulk gate (#2641): status/assign write real
+    // lead columns straight from payload keys, and stripping the action's only
+    // value would leave the action meaningless, so reject (403) when
+    // field_permissions restricts them.
+    const BULK_WATCHED_FIELDS: Record<string, string[]> = {
+      status: ['lead_status'],
+      assign: ['assigned_to'],
+    };
+    const watched = BULK_WATCHED_FIELDS[action as string];
+    if (watched) {
+      const { stripped } = await enforceFieldWrite(
+        ctx, 'leads', Object.fromEntries(watched.map((f) => [f, true])),
+      );
+      if (stripped.length > 0) {
+        return NextResponse.json(
+          { error: `field_permissions restricts: ${stripped.join(', ')}` },
+          { status: 403 },
+        );
+      }
+    }
 
     let affected = 0;
     let skippedAlreadyConverted = 0;

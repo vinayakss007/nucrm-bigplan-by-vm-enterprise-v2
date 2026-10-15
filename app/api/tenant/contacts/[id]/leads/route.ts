@@ -22,6 +22,7 @@ import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { logError } from '@/lib/errors-server';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { enforceFieldRead } from '@/lib/rbac/enforce';
 
  
  
@@ -134,7 +135,10 @@ export const GET = withApiRoute(async (request: NextRequest, { params }: { param
       };
     });
 
-    return NextResponse.json({ data });
+    // #2618 — these lead rows bypass the leads list projection; run them
+    // through the role's read restrictions too.
+    const projected = await enforceFieldRead(ctx, 'leads', data);
+    return NextResponse.json({ data: projected });
  
  
   } catch (error) {
