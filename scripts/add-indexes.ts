@@ -57,12 +57,12 @@ async function addIndexes() {
       await db.execute(sql.raw(idx.sql));
       console.log(`  ✓ ${idx.name}`);
       // Note: idx.sql is from a hardcoded array, not user input. Safe.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (error: any) {
-      if (error.message?.includes('already exists')) {
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      if (msg.includes('already exists')) {
         console.log(`  - ${idx.name} (already exists)`);
       } else {
-        console.error(`  ✗ ${idx.name}: ${error.message}`);
+        console.error(`  ✗ ${idx.name}: ${msg}`);
       }
     }
   }

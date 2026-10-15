@@ -92,10 +92,10 @@ async function insertRows(tableName: string, table: any, values: () => Record<st
       const row = { ...values(), metadata: { stress: STRESS_TAG, batch: i } };
       await db.insert(table).values(row);
       inserted++;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (err: any) {
-      errors.push(`row ${i}: ${err.message?.slice(0, 120)}`);
-      console.error(`[stress] ${tableName}[${i}] failed: ${err.message?.slice(0, 120)}`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      errors.push(`row ${i}: ${msg.slice(0, 120)}`);
+      console.error(`[stress] ${tableName}[${i}] failed: ${msg.slice(0, 120)}`);
       if (errors.length >= 5) break;
     }
   }
