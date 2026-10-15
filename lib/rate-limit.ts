@@ -401,6 +401,17 @@ export default rateLimiter;
  * Backwards compatibility - old checkRateLimit function
  * Accepts max/windowMinutes but fetches from DB when available
  */
+// #2630 — actions whose limit MUST be per-IP (auth endpoints). If the
+// derived client id is the constant `'unknown'` (TRUST_PROXY not 'true', or
+// X-Forwarded-For missing behind a trusted proxy), we refuse to serve the
+// request rather than silently bucket every user together. Live symptom:
+// Redis key `nucrm:rate:v1_rate:login:unknown` — one strike against that
+// bucket locks out every login attempt globally.
+const AUTH_RATE_ACTIONS = new Set([
+  'login', 'signup', 'register', 'password_reset', 'forgot_password',
+  'magic_link', 'otp', '2fa', '2fa_verify', 'totp',
+]);
+
 export async function checkRateLimit(
   request: Request,
   options: { action?: string; max?: number; windowMinutes?: number } = {}
@@ -409,6 +420,18 @@ export async function checkRateLimit(
 
   // #1249: header values only honored when TRUST_PROXY=true (see getClientIp)
   const ip = getClientIp(request);
+
+  // #2630: fail closed for auth-scope actions. Keying `v1_rate:login:unknown`
+  // would share one global bucket across every caller — either fix the proxy
+  // config (set TRUST_PROXY=true and have nginx emit X-Forwarded-For /
+  // X-Real-IP) or the limiter has nothing to isolate abuse against.
+  if (ip === 'unknown' && AUTH_RATE_ACTIONS.has(action)) {
+    return NextResponse.json(
+      { error: 'Rate limiter misconfigured: client IP unavailable for an auth endpoint.' },
+      { status: 503 },
+    );
+  }
+
   const key = `v1_rate:${action}:${ip}`;
 
   // Get limit from DB first, fall back to provided max
