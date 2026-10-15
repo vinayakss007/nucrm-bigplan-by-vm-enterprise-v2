@@ -3,27 +3,29 @@
   "entries": [
     {
       "cite": "app/api/cron/auto-backup/route.ts:55",
-      "regLines": [2809],
+      "regLines": [
+        2809
+      ],
       "reason": "Read-log, not a pointer: PP-055 lists the auto-backup line set (55, 147, 243, 256-257, 297) as ranges somebody read, and #2441 declined to re-pin it for exactly that reason — re-pinning would invent an intent the entry never stated. Listed here so the decision is on the record instead of silent drift."
     },
     {
-      "cite": "deploy.yml:349",
-      "regLines": [3678],
-      "reason": "Moved by #2542 (f5e238cf), which inserted the SENTRY_RELEASE pin above it: the `db:migrate` comment PP-060's mechanism read-log cites is now `deploy.yml:382`. Not re-pinned in this PR because the sentence that names it (register:3677-3679) also carries a count, and that count moved too - `db:migrate` 'matches once across `.github/workflows`' is now TWICE, since #2454 (db4f263b) added `ci.yml:342` (also a comment). Re-pinning one half of that sentence without the other would leave a pointer that reads correct and measures wrong. Listed so the decision is on the record; re-pin both numbers in one docs-only pass rather than inside #2561's CSRF delta."
-    },
-    {
-      "cite": "deploy.yml:356",
-      "regLines": [341, 3425, 3784, 4247],
-      "reason": "Same commit (#2542, f5e238cf) moved it: the only executable `deploy-migrate.ts --yes` in the repo's automation is now `deploy.yml:389`. Four register sentences cite the old line - PP-060's Summary row (:341), PP-063's `ci.yml never runs it` (:3425), this entry's own read-log (:3784) and PP-070's compose note (:4247). The companion count in the same paragraph, `migrate.ts` 'matches twice, at :340 (comment) and :356', is now ':373 and :389' - and the block anchor that sentence leans on, the `script: |` opened at `:138`, is genuinely still :138, which is why the rest of the paragraph reads fine while these two cites drift. Same stance as deploy.yml:349: re-pin all four lines plus both counts together in a docs-only PR."
-    },
-    {
       "cite": "docs/README.md:71",
-      "regLines": [211],
+      "regLines": [
+        211
+      ],
       "reason": "History, not a live pointer: the register's PP-068 bullet reports the coordinate as it found it - `docs/README.md:71` was where the README's kept-rather-than-deleted paragraph sat then, and the sentence it named now sits at `docs/README.md:75`, whose own re-pin chain has run PP-071 -> PP-072 (rule at :4651) -> PP-073 (:4774) -> PP-065 (#2507, then :4810) -> PP-074 (#2526, shipped as #2568, then :4940) -> PP-070 (#2534, then :5013) -> the #2566 addendum (:5079) -> PP-075 (#2560, shipped as #2569, then :5172) -> this PP-076 (#2561, now :5194). Re-writing PP-068's sentence would falsify the measurement it reports. #2578 (PP-077) and #2587 (PP-078) re-pin the same live cite from their own trees, so whichever docs PR merges last re-derives this entry; prune it the day the README names the rule by heading text instead of a line number."
     },
     {
       "cite": "docs/README.md:75",
-      "regLines": [32, 49, 76, 94, 127, 143, 5094],
+      "regLines": [
+        32,
+        49,
+        76,
+        94,
+        127,
+        143,
+        5094
+      ],
       "reason": "Chronic, not accidental: the register's header bullets and entry sections quote this README sentence, and that sentence is the README's own re-pin of a pointer INTO the register - so any entry that adds register header text moves the line the pointer names, and this cite reads as drift by construction. PP-072 (#2558) minted it with the rule at :4651, PP-073 (#2567) moved it to :4774, PP-065 (#2507) to :4810, PP-074 (#2526, shipped as #2568) to :4940, PP-070 (#2534, since merged) to :5013, the #2566 addendum to :5079 (the fourteenth, and the first that mints no entry of its own), PP-075 (#2560, shipped as #2569) to :5172, and this PR's PP-076 section re-pins it to :5194. The number is per-tree: #2578 and #2587 measure their own lines because all three edit the same header, so whichever merges last re-derives this entry. Prune it the day the README points at the rule by heading text instead of a line number."
     }
   ]
