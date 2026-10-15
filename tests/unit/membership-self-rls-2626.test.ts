@@ -69,9 +69,8 @@ describe('0127 membership self-scoped SELECT (#2626)', () => {
     const journal = JSON.parse(
       readFileSync(join(import.meta.dirname!, '..', '..', 'drizzle', 'migrations', 'meta', '_journal.json'), 'utf8'),
     );
-    const last = journal.entries[journal.entries.length - 1];
+    const last = journal.entries.find((e: { tag: string }) => e.tag === '0127_membership_self_scoped_select');
     expect(last.idx).toBe(127);
-    expect(last.tag).toBe('0127_membership_self_scoped_select');
-    expect(last.when).toBeGreaterThan(journal.entries[journal.entries.length - 2].when);
+    expect(last.when).toBeGreaterThan(journal.entries[journal.entries.indexOf(last) - 1].when);
   });
 });
