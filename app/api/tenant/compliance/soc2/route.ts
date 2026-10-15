@@ -12,6 +12,7 @@ import { db } from '@/drizzle/db';
 import { complianceRequests } from '@/drizzle/schema/compliance';
 import { eq, and, desc } from 'drizzle-orm';
 import { generateSOC2Report } from '@/lib/compliance/soc2';
+import { reapStaleProcessingRequests } from '@/lib/compliance/stale-requests';
 import { readJsonBody } from '@/lib/api/validate';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
@@ -22,6 +23,11 @@ export const GET = withApiRoute(async (req: NextRequest) => {
 
     const moduleGate = await requireModule(ctx.tenantId, 'compliance', ctx.isSuperAdmin);
     if (moduleGate) return moduleGate;
+
+    // #2530: same reap as the GDPR route — an interrupted generation left
+    // the row permanently `processing` (lower severity here: the middle step
+    // is read-only, so the outcome was a stuck job, not half-applied data).
+    await reapStaleProcessingRequests(ctx.tenantId, ['soc2_report']);
 
     const reports = await db
       .select()
