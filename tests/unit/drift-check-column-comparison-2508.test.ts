@@ -105,9 +105,10 @@ describe('compareColumns: the nullability dimension #2508 adds', () => {
 
 describe('compareColumns: the type dimension, and the formatting it must not confuse with drift', () => {
   it('fires when the declared type and the live type differ', () => {
-    // super_admin_audit_logs.old_data (#2510): jsonb in the schema, text in the
-    // chain build and on pre-prod, because 0007's jsonb is an inert
-    // CREATE TABLE IF NOT EXISTS over 0002.
+    // The shape of #2510 (old_data was jsonb in the schema, text in the chain
+    // build and on pre-prod because 0007's jsonb sat in an inert
+    // CREATE TABLE IF NOT EXISTS over 0002; disposition (2) later made the
+    // schema say text) — this case pins the screen, not the tree.
     const r = compareColumns(declared({ old_data: { sqlType: 'jsonb' } }), live({ old_data: { dataType: 'text', udt: 'text' } }));
     expect(KEYS(r.findings)).toEqual(['type:widgets.old_data']);
     expect(r.findings[0].detail).toContain('the database has text');
