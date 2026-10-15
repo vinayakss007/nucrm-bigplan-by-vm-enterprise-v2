@@ -75,6 +75,15 @@ export function __clearRoleIdCache(): void {
   roleIdCache.clear();
 }
 
+// #2619 — built restriction maps, keyed tenant:role:entity. Cleared wholesale
+// on an admin write (field-permission rows are rare and the TTL is short, so
+// per-key invalidation would be pure bookkeeping).
+const restrictionCache = new Map<string, { map: RestrictionMap | null; at: number }>();
+
+export function __clearFieldRestrictionsCache(): void {
+  restrictionCache.clear();
+}
+
 async function resolveRoleId(tenantId: string, roleSlug: string): Promise<string | null> {
   const key = `${tenantId}:${roleSlug}`;
   const hit = roleIdCache.get(key);
@@ -101,21 +110,32 @@ export async function getFieldRestrictions(
   entity: string,
 ): Promise<RestrictionMap | null> {
   if (!roleSlug) return null;
+  // #2619 — a PATCH consults this twice (write projection, then the response's
+  // read projection) and the rows are near-static; cache the built map with
+  // the same TTL as the role cache. setFieldPermission() clears it, so an
+  // admin's write lands immediately.
+  const cacheKey = `${tenantId}:${roleSlug}:${entity}`;
+  const hit = restrictionCache.get(cacheKey);
+  if (hit && Date.now() - hit.at < ROLE_TTL_MS) return hit.map;
   const roleId = await resolveRoleId(tenantId, roleSlug);
-  if (!roleId) return null;
-  const rows = await db
-    .select({ fieldName: fieldPermissions.fieldName, accessLevel: fieldPermissions.accessLevel })
-    .from(fieldPermissions)
-    .where(and(
-      eq(fieldPermissions.tenantId, tenantId),
-      eq(fieldPermissions.roleId, roleId),
-      inArray(fieldPermissions.entityType, ENTITY_CANDIDATES[entity] ?? [entity]),
-    ));
-  if (rows.length === 0) return null;
-  const map: RestrictionMap = new Map();
-  for (const r of rows) {
-    map.set(normalize(r.fieldName), r.accessLevel as FieldAccess);
+  let map: RestrictionMap | null = null;
+  if (roleId) {
+    const rows = await db
+      .select({ fieldName: fieldPermissions.fieldName, accessLevel: fieldPermissions.accessLevel })
+      .from(fieldPermissions)
+      .where(and(
+        eq(fieldPermissions.tenantId, tenantId),
+        eq(fieldPermissions.roleId, roleId),
+        inArray(fieldPermissions.entityType, ENTITY_CANDIDATES[entity] ?? [entity]),
+      ));
+    if (rows.length > 0) {
+      map = new Map();
+      for (const r of rows) {
+        map.set(normalize(r.fieldName), r.accessLevel as FieldAccess);
+      }
+    }
   }
+  restrictionCache.set(cacheKey, { map, at: Date.now() });
   return map;
 }
 

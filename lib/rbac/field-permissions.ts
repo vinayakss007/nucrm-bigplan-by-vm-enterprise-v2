@@ -6,6 +6,7 @@
 import { db } from '@/drizzle/db';
 import { fieldPermissions } from '@/drizzle/schema/core';
 import { eq, and } from 'drizzle-orm';
+import { __clearFieldRestrictionsCache } from '@/lib/rbac/enforce';
 
 export type FieldAccessLevel = 'none' | 'read' | 'write' | 'admin';
 
@@ -106,7 +107,7 @@ export async function setFieldPermission(
   fieldName: string,
   accessLevel: FieldAccessLevel
 ) {
-  return await db.transaction(async (tx) => {
+  const result = await db.transaction(async (tx) => {
     const [existing] = await tx.select()
       .from(fieldPermissions)
       .where(and(
@@ -134,4 +135,8 @@ export async function setFieldPermission(
 
     return result;
   });
+  // #2619 — enforcement caches restriction maps for 60 s; this is the only
+  // writer, so an admin change must be visible on the next request.
+  __clearFieldRestrictionsCache();
+  return result;
 }
