@@ -40,8 +40,15 @@ const ACCESS_ORDER: Record<FieldAccess, number> = { none: 0, read: 1, write: 2, 
 type RestrictionMap = Map<string, FieldAccess>;
 
 // Response-surface aliases: restricting the DB field also clears these keys.
+// #2617 — the deal detail handler re-emits `stageId` under the legacy `stage`
+// key, and the POST response copies `createdBy` to `user_id`; without these
+// rows restricting `stage_id` / `created_by` still leaks the value.
 const READ_ALIASES: Record<string, Record<string, string[]>> = {
-  deals: { amount: ['value'] },
+  deals: {
+    amount: ['value'],
+    stage_id: ['stage'],
+    created_by: ['user_id'],
+  },
 };
 
 // The UI's entity picker and the routes do not agree on singular/plural
