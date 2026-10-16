@@ -88,9 +88,18 @@ function setup() {
 }
 
 async function call(mod: Record<string, unknown>, path: string, query = '') {
+  // view_all across the board: this file pins archive visibility only. The owner
+  // narrowing #2688 adds on top of these same queries is asserted in
+  // tests/unit/dashboard-view-all-scope-2688.test.ts, and letting it land in
+  // here would make every raw-SQL shape below depend on a second rule.
   (requireAuth as ReturnType<typeof vi.fn>).mockResolvedValue({
     userId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', tenantId: TENANT,
-    roleSlug: 'rep', permissions: {}, isAdmin: false, isSuperAdmin: false,
+    roleSlug: 'manager',
+    permissions: {
+      'contacts.view_all': true, 'deals.view_all': true,
+      'tasks.view_all': true, 'leads.view_all': true,
+    },
+    isAdmin: false, isSuperAdmin: false,
   } as unknown as AuthContext);
   const handler = mod.GET as (req: NextRequest) => Promise<Response>;
   return handler(new NextRequest(new URL(`/api/tenant/${path}${query}`, 'http://localhost:3000'), {

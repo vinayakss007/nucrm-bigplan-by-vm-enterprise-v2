@@ -3,7 +3,7 @@
  * Copyright (c) 2026 abetworks.in. All Rights Reserved.
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
-import { or, eq, type Column, type SQL } from 'drizzle-orm';
+import { or, eq, sql, type Column, type SQL } from 'drizzle-orm';
 import { can, type AuthContext } from '@/lib/auth/middleware';
 
 /**
@@ -31,4 +31,32 @@ export function ownerScope(
 ): SQL | undefined {
   if (can(ctx, permission)) return undefined;
   return or(eq(columns.assignedTo, ctx.userId), eq(columns.createdBy, ctx.userId))!;
+}
+
+/**
+ * The cache key half of the same rule (#2688).
+ *
+ * `lib/dashboard/widget-cache.ts` keyed its entries by tenant and widget only,
+ * so whatever the first caller of a TTL window computed was served to every
+ * other caller of that tenant for up to 300s. A per-caller predicate cannot go
+ * into those queries until the key carries the caller: `ownerCacheKey` returns
+ * 'tenant' for a `view_all` holder — whose read is genuinely tenant-wide, so
+ * managers keep sharing one entry — and the user id for everyone else, whose
+ * read is their own rows.
+ */
+export function ownerCacheKey(ctx: AuthContext, permission: string): string {
+  return can(ctx, permission) ? 'tenant' : ctx.userId;
+}
+
+/**
+ * `ownerScope` as raw SQL, for the dashboard widgets that read through
+ * `db.execute(sql`...`)` instead of a query builder. `and()` skips an undefined
+ * argument; a template has nothing to skip, so this returns the empty fragment
+ * for a `view_all` holder and the predicate prefixed with AND otherwise — the
+ * caller splices it in after its own WHERE terms.
+ */
+export function ownerScopeSql(scope: SQL | undefined): SQL {
+  // The leading space is load-bearing: the templates splice this straight after
+  // their last term, and `falseAND (` is not SQL.
+  return scope ? sql` AND ${scope}` : sql``;
 }
