@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { createNoteSchema } from '@/lib/api/schemas';
-import { requireAuth, requirePerm } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm, can } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { activities, users, contacts } from '@/drizzle/schema';
 import { eq, and, desc, isNull } from 'drizzle-orm';
@@ -54,8 +54,28 @@ export const POST = withApiRoute(async (request: NextRequest,
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
-    
+
+    // The GET and PATCH handlers in this file both ask for contacts.edit; the
+    // POST — which writes the row's updatedAt — asked for nothing (#2698).
+    const deny = requirePerm(ctx, 'contacts.edit');
+    if (deny) return deny;
+
     const { id } = await params;
+
+    // #2698 — the activity insert below lands on a row the caller may not be
+    // allowed to touch. Pre-read the owners as contacts/[id]:304-316 does.
+    if (!can(ctx, 'contacts.view_all')) {
+      const [row] = await db
+        .select({ assignedTo: contacts.assignedTo, createdBy: contacts.createdBy })
+        .from(contacts)
+        .where(and(eq(contacts.id, id), eq(contacts.tenantId, ctx.tenantId)))
+        .limit(1);
+
+      if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+      if (row.assignedTo !== ctx.userId && row.createdBy !== ctx.userId) {
+        return NextResponse.json({ error: 'Not found' }, { status: 404 });
+      }
+    }
     const rawBody = await readJsonBody(request);
     const validated = validateBody(createNoteSchema, rawBody);
     if (validated instanceof NextResponse) return validated;
