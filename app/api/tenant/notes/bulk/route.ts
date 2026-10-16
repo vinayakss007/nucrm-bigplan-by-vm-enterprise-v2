@@ -13,17 +13,30 @@ import type { AnyPgTable, PgColumn } from 'drizzle-orm/pg-core';
 import { logAudit } from '@/lib/audit';
 import { logError } from '@/lib/errors-server';
 import { readJsonBody } from '@/lib/api/validate';
+import { ownerScope } from '@/lib/api/owner-scope';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 const MAX_BULK = 500;
 const VALID_ENTITY_TYPES = ['contact', 'deal', 'lead', 'company', 'task'] as const;
 
-const entityTables: Record<string, { table: AnyPgTable; idField: PgColumn; tenantField: PgColumn }> = {
-  contact: { table: contacts, idField: contacts.id, tenantField: contacts.tenantId },
-  deal: { table: deals, idField: deals.id, tenantField: deals.tenantId },
-  lead: { table: leads, idField: leads.id, tenantField: leads.tenantId },
-  company: { table: companies, idField: companies.id, tenantField: companies.tenantId },
-  task: { table: tasks, idField: tasks.id, tenantField: tasks.tenantId },
+const entityTables: Record<string, {
+  table: AnyPgTable;
+  idField: PgColumn;
+  tenantField: PgColumn;
+  assignedTo: PgColumn;
+  createdBy: PgColumn;
+  viewAll: string | null;
+}> = {
+  contact: { table: contacts, idField: contacts.id, tenantField: contacts.tenantId, assignedTo: contacts.assignedTo, createdBy: contacts.createdBy, viewAll: 'contacts.view_all' },
+  deal: { table: deals, idField: deals.id, tenantField: deals.tenantId, assignedTo: deals.assignedTo, createdBy: deals.createdBy, viewAll: 'deals.view_all' },
+  lead: { table: leads, idField: leads.id, tenantField: leads.tenantId, assignedTo: leads.assignedTo, createdBy: leads.createdBy, viewAll: 'leads.view_all' },
+  // #2699 — `companies.view_all` is defined (lib/permissions/definitions.ts:43)
+  // and enforced nowhere: neither companies/route.ts nor companies/[id]/route.ts
+  // references it, so the entity has no owner rule to be consistent with. Gating
+  // this one bulk write on it would invent a rule the rest of the entity does not
+  // have; `null` keeps the branch tenant-scoped until that decision is made.
+  company: { table: companies, idField: companies.id, tenantField: companies.tenantId, assignedTo: companies.assignedTo, createdBy: companies.createdBy, viewAll: null },
+  task: { table: tasks, idField: tasks.id, tenantField: tasks.tenantId, assignedTo: tasks.assignedTo, createdBy: tasks.createdBy, viewAll: 'tasks.view_all' },
 };
 
 export const POST = withApiRoute(async (req: NextRequest) => {
@@ -63,6 +76,15 @@ export const POST = withApiRoute(async (req: NextRequest) => {
       return NextResponse.json({ error: `Unsupported entity type: ${entity_type}` }, { status: 400 });
     }
 
+    // #2699 — the id set this route writes was scoped by tenant and tombstone
+    // only, while every entity it serves answers 404 on the record path unless
+    // the row is `assigned_to` or `created_by` the caller (#2671, #2673, #2674,
+    // #2692). Up to MAX_BULK foreign ids were accepted, one note attached to each.
+    // Narrowing here is enough: `noteValues` below is built from `validIds`.
+    const mine = entityTable.viewAll
+      ? ownerScope(ctx, entityTable.viewAll, { assignedTo: entityTable.assignedTo, createdBy: entityTable.createdBy })
+      : undefined;
+
     const valid = await db
       .select({ id: entityTable.idField })
       .from(entityTable.table)
@@ -70,7 +92,8 @@ export const POST = withApiRoute(async (req: NextRequest) => {
         and(
           inArray(entityTable.idField, entity_ids),
           eq(entityTable.tenantField, ctx.tenantId),
-          sql`deleted_at IS NULL`
+          sql`deleted_at IS NULL`,
+          mine
         )
       );
 
