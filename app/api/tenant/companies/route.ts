@@ -54,7 +54,13 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       count: sql<number>`count(*)::int`.as('contact_count')
     })
     .from(contacts)
-    .where(eq(contacts.tenantId, ctx.tenantId))
+    // #2667: the outer `filters` above exclude tombstoned *companies* and this
+    // aggregate excluded nothing, so a company's list row counted its deleted
+    // contacts while the same company's detail page (`companies/[id]/route.ts`,
+    // `contacts/route.ts`, `search/route.ts`, both `data-explorer` routes) did
+    // not. Trash three contacts on a ten-contact company and the two screens
+    // disagreed, with nothing in the UI to explain which number was right.
+    .where(and(eq(contacts.tenantId, ctx.tenantId), isNull(contacts.deletedAt)))
     .groupBy(contacts.companyId)
     .as('cnt');
     
