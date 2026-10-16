@@ -4,14 +4,14 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { db } from '@/drizzle/db';
-import { contacts, companies, deals, tasks } from '@/drizzle/schema';
+import { contacts, companies, deals, tasks, leads } from '@/drizzle/schema';
 import { eq, and, isNull, ilike, or, sql, type SQL } from 'drizzle-orm';
 import { addJob } from '@/lib/queue';
 import { escapeLike } from '@/lib/api/sanitize-like';
 import { notArchived } from '@/lib/api/deals-archive-filter';
 import { csvEscapeValue } from '@/lib/csv';
 
-export type ExportEntityType = 'contacts' | 'deals' | 'tasks' | 'companies';
+export type ExportEntityType = 'contacts' | 'deals' | 'tasks' | 'companies' | 'leads';
 
 export interface ExportOptions {
   tenantId: string;
@@ -214,6 +214,49 @@ export async function generateExportData(opts: Omit<ExportOptions, 'callbackUrl'
       .limit(MAX_EXPORT_ROWS + 1);
       break;
       
+    case 'leads': {
+      const q = filters['q'];
+      const leadStatus = filters['lead_status'];
+      // #2678 — the columns `app/api/tenant/leads/route.ts:139-165` selects for
+      // the list, and the same `q`/`lead_status` predicates it builds at `:93-95`
+      // and `:119-128`, so the download matches the rows on screen.
+      data = await db.select({
+        first_name: leads.firstName,
+        last_name: leads.lastName,
+        full_name: leads.fullName,
+        email: leads.email,
+        phone: leads.phone,
+        title: leads.title,
+        company_name: leads.companyName,
+        lead_status: leads.leadStatus,
+        lead_source: leads.source,
+        score: leads.score,
+        value: leads.value,
+        lifecycle_stage: leads.lifecycleStage,
+        authority_level: leads.authorityLevel,
+        city: leads.city,
+        country: leads.country,
+        tags: sql<string>`array_to_string(${leads.tags}, ';')`,
+        created_date: sql<string>`(${leads.createdAt})::date`
+      })
+      .from(leads)
+      .where(and(
+        eq(leads.tenantId, tenantId),
+        isNull(leads.deletedAt),
+        leadStatus ? eq(leads.leadStatus, leadStatus) : undefined,
+        q ? or(
+          ilike(leads.firstName, `%${escapeLike(q)}%`),
+          ilike(leads.lastName, `%${escapeLike(q)}%`),
+          ilike(leads.email, `%${escapeLike(q)}%`),
+          ilike(leads.phone, `%${escapeLike(q)}%`),
+          ilike(leads.companyName, `%${escapeLike(q)}%`)
+        ) : undefined,
+        scope
+      ))
+      .limit(MAX_EXPORT_ROWS + 1);
+      break;
+    }
+
     default:
       throw new Error(`Unsupported export entity type: ${entityType}`);
   }
@@ -229,6 +272,7 @@ export async function generateExportData(opts: Omit<ExportOptions, 'callbackUrl'
     if (entityType === 'deals') return 'title,amount,stage_id,contact_name,company_name,close_date,created_at';
     if (entityType === 'tasks') return 'title,description,due_date,priority,status,related_contact,created_at';
     if (entityType === 'companies') return 'name,domain,industry,company_size,annual_revenue,city,country,website,created_at';
+    if (entityType === 'leads') return 'first_name,last_name,full_name,email,phone,title,company_name,lead_status,lead_source,score,value,lifecycle_stage,authority_level,city,country,tags,created_date';
     return '';
   }
 
