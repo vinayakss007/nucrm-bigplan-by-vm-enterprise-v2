@@ -36,7 +36,7 @@
 > an `id` at all: `0071` added the column nullable-with-default, `0125` made it NOT NULL and *deliberately stopped short*, and the only
 > index shaped like a key — `idx_segment_members_pk` — is a **non-unique** btree over `(segment_id, entity_id)` (`pg_index.indisunique = f`),
 > so `pg_constraint` answers `pk=0` on the chain build *and* on preprod, and the bulk-enroll callers' `onConflictDoNothing()`
-> (`app/api/tenant/leads/bulk/route.ts:326` +2 siblings) have **nothing to conflict with** — duplicate memberships accumulate silently.
+> (`app/api/tenant/leads/bulk/route.ts:348` (re-pinned 2026-10-16 from `:326`: #2647 bulk watch-field gate added 22 lines above) +2 siblings) have **nothing to conflict with** — duplicate memberships accumulate silently.
 > `0126_segment_members_primary_key` adds `PRIMARY KEY (id)` (the key `utils.pk()` always declared), replaces the misleading index with
 > `uq_segment_members_segment_entity` — UNIQUE, same two columns, still the lookup path — and dedupes both shapes **before** constraining,
 > per tenant under `set_config('app.current_tenant', …)`: PP-067 measured `app.is_super_admin` **inert** on this table's loop-built policy,
@@ -4696,7 +4696,7 @@ into the column-drift PR. `0125`'s footer names the gap and leaves it here on pu
   (`utils.pk()` → `.primaryKey().defaultRandom()`, codebase-wide convention), so `0126` adds
   `PRIMARY KEY (id)`; `(segment_id, entity_id)` is the identity **in practice** — no code path
   addresses a member by `id` (the members routes query and delete by segment/tenant only) and
-  three bulk callers (`leads/bulk/route.ts:326`, `contacts/bulk/route.ts:414`,
+  three bulk callers (`leads/bulk/route.ts:348 (re-pinned 2026-10-16 from `:326`: #2647 bulk gate)`, `contacts/bulk/route.ts:436 (re-pinned 2026-10-16 from `:414`: #2647 bulk gate)`,
   `deals/bulk/route.ts:472 (re-pinned 2026-10-15 from `:446`: #2616/#2641 bulk gate added 26 lines above)`) already assume the pair is unique — so the misleading
   `idx_segment_members_pk` is replaced by `uq_segment_members_segment_entity`, a UNIQUE btree
   over the same two columns, which keeps AC4's lookup role in the same object.
@@ -4840,7 +4840,7 @@ commit; that is what this is.
   the tenant. What leaks is retention: a GDPR-erasure or duplicate-merge soft-delete leaves the person
   in a CS to-do list with their email attached and `isActioned`/`recommendedActions` still actionable.
 - **The comparison that makes it the outlier.** `grep -rl 'from(contacts)' app/api` → **37** files;
-  **2** of them never mention `deletedAt`: `app/api/tenant/contacts/duplicates/route.ts:113` (an
+  **2** of them never mention `deletedAt`: `app/api/tenant/contacts/duplicates/route.ts:114` (re-pinned 2026-10-16 from `:113`: #2647 enforceFieldRead import shifted the fetch one line down) (an
   enrichment fetch whose three upstream scans each end `AND deleted_at IS NULL` at `:32`, `:46`, `:61`
   — so it can only be handed live ids; not a leak, recorded here so nobody re-litigates it) and
   `app/api/superadmin/selective-restore/scope/route.ts:75`, which is *supposed* to see deleted rows.
