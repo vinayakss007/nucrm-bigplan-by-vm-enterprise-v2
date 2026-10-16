@@ -20,6 +20,13 @@ export interface ExportOptions {
  
   filters?: Record<string, string | undefined>;
   callbackUrl?: string;
+  /**
+   * #2618 — optional row projection (role field_permissions). Applied after
+   * the row-cap check and before headers are derived, so a restricted column
+   * disappears from the CSV entirely. Async export jobs (worker.ts) have no
+   * AuthContext and stay unprojected.
+   */
+  project?: (data: Record<string, unknown>[]) => Promise<Record<string, unknown>[]>;
 }
 
 // Maximum contacts per import to prevent system overload
@@ -202,8 +209,14 @@ export async function generateExportData(opts: Omit<ExportOptions, 'callbackUrl'
     if (entityType === 'companies') return 'name,domain,industry,company_size,annual_revenue,city,country,website,created_at';
     return '';
   }
-  
-  const headers = Object.keys(data[0] ?? {});
+
+  if (opts.project) data = await opts.project(data);
+  if (data.length === 0) return '';
+  // Intersect, not data[0]: projection can remove keys, and every row loses
+  // the same fields, but a first-row-only header list would emit undefined
+  // cells if projections ever diverge per row.
+  let headers = Object.keys(data[0] ?? {});
+  for (const row of data) headers = headers.filter((h) => h in row);
   const rows = data.map(row => headers.map(h => row[h] === null ? '' : escapeCSV(row[h])).join(','));
   
   return [headers.join(','), ...rows].join('\n');

@@ -10,6 +10,7 @@ import { db } from '@/drizzle/db';
 import { contacts } from '@/drizzle/schema';
 import { sql, inArray } from 'drizzle-orm';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { enforceFieldRead } from '@/lib/rbac/enforce';
 
 /**
  * GET /api/tenant/contacts/duplicates
@@ -114,7 +115,10 @@ export const GET = withApiRoute(async (request: NextRequest) => {
         .where(inArray(contacts.id, allIds));
     }
 
-    const contactMap = new Map(contactDetails.map(c => [c.id, c]));
+    // #2618 — duplicate groups embed whole contact records; project them
+    // through the role's read restrictions before mapping them back in.
+    const visibleContacts = await enforceFieldRead(ctx, 'contacts', contactDetails);
+    const contactMap = new Map(visibleContacts.map(c => [c.id, c]));
 
     const enrichedGroups = topGroups.map(g => ({
       ...g,

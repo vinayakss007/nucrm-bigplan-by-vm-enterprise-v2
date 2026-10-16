@@ -239,7 +239,10 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     const v = validated.data;
 
     if (v.email) {
-      const [existing] = await db.select()
+      // #2618: the 409 used to embed the whole duplicate row (`duplicate:
+      // existing` via select()), bypassing read restrictions. Clients only
+      // consume is_duplicate/duplicate_id, so project to the id alone.
+      const [existing] = await db.select({ id: leads.id })
         .from(leads)
         .where(and(
           eq(leads.tenantId, ctx.tenantId),
@@ -250,7 +253,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
 
       if (existing) {
         return NextResponse.json(
-          { error: 'A lead with this email already exists', is_duplicate: true, duplicate_id: existing.id, duplicate: existing },
+          { error: 'A lead with this email already exists', is_duplicate: true, duplicate_id: existing.id },
           { status: 409 }
         );
       }

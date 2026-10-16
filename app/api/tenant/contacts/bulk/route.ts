@@ -25,6 +25,7 @@ import { invalidateWidgetCache } from '@/lib/dashboard/widget-cache';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { cancelOpenEnrollments } from '@/lib/cron/sequence-steps';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { enforceFieldWrite } from '@/lib/rbac/enforce';
 
 const MAX_BULK = 500;
 
@@ -117,6 +118,27 @@ export const POST = withApiRoute(async (req: NextRequest) => {
     let affected = 0;
     // Optional extra fields merged into the response (e.g. compliance skip counts).
     let extraResult: Record<string, unknown> = {};
+
+    // #2618 — same doctrine as the deals bulk gate (#2641): assign/status
+    // write contact columns straight from payload keys; stripping the action's
+    // only value would leave the action meaningless, so reject (403) when
+    // field_permissions restricts the field.
+    const BULK_WATCHED_FIELDS: Record<string, string[]> = {
+      assign: ['assigned_to'],
+      status: ['lead_status'],
+    };
+    const watched = BULK_WATCHED_FIELDS[action as string];
+    if (watched) {
+      const { stripped } = await enforceFieldWrite(
+        ctx, 'contacts', Object.fromEntries(watched.map((f) => [f, true])),
+      );
+      if (stripped.length > 0) {
+        return NextResponse.json(
+          { error: `field_permissions restricts: ${stripped.join(', ')}` },
+          { status: 403 },
+        );
+      }
+    }
 
     switch (action) {
       case 'tag': {

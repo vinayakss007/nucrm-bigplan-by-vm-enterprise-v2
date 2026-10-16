@@ -29,6 +29,7 @@ import { createNotification } from '@/lib/notifications';
 import { apiError } from '@/lib/api-error';
 import { logError } from '@/lib/errors-server';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { enforceFieldWrite } from '@/lib/rbac/enforce';
 
 const assignSchema = z.object({
   assigned_to: uuidField,
@@ -50,6 +51,17 @@ export const POST = withApiRoute(async (request: NextRequest, { params }: { para
     const validated = validateBody(assignSchema, rawBody);
     if (validated instanceof NextResponse) return validated;
     const { assigned_to: newAssignee, reason } = validated.data;
+
+    // #2618 — this route's only job is a write to leads.assigned_to, so a
+    // field_permissions restriction on it means 403, not a stripped no-op
+    // (same doctrine as the deals bulk gate #2641).
+    const { stripped } = await enforceFieldWrite(ctx, 'leads', { assigned_to: newAssignee });
+    if (stripped.length > 0) {
+      return NextResponse.json(
+        { error: `field_permissions restricts: ${stripped.join(', ')}` },
+        { status: 403 },
+      );
+    }
 
     // Verify the lead exists and belongs to the tenant.
     const lead = await db.query.leads.findFirst({

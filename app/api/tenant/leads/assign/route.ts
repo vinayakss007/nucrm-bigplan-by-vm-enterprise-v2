@@ -16,6 +16,7 @@ import { apiError } from '@/lib/api-error';
 import { logError } from '@/lib/errors-server';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { enforceFieldWrite } from '@/lib/rbac/enforce';
 
 // POST: assign one or many contacts to a rep
 // { contact_ids: string[], assign_to: string, reason?: string }
@@ -49,6 +50,17 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       .limit(1);
 
     if (!member) return NextResponse.json({ error:'Assignee is not an active team member' }, { status:400 });
+
+    // #2618 — despite living under /leads, this route bulk-writes
+    // contacts.assigned_to; gate that column on the contacts entity, 403 (the
+    // assign value IS the action).
+    const { stripped } = await enforceFieldWrite(ctx, 'contacts', { assigned_to: assign_to });
+    if (stripped.length > 0) {
+      return NextResponse.json(
+        { error: `field_permissions restricts: ${stripped.join(', ')}` },
+        { status: 403 },
+      );
+    }
 
     // Bulk update
     const result = await db
