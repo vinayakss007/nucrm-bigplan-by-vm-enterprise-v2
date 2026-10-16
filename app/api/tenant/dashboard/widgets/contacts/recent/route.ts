@@ -30,7 +30,8 @@ export const GET = withApiRoute(async (request: NextRequest) => {
           createdAt: contacts.createdAt,
         })
         .from(contacts)
-        .where(and(eq(contacts.tenantId, tid), isNull(contacts.deletedAt)))
+        // #2684 — the strip showed archived contacts as freshly added.
+        .where(and(eq(contacts.tenantId, tid), isNull(contacts.deletedAt), eq(contacts.isArchived, false)))
         .orderBy(desc(contacts.createdAt))
         .limit(5);
 

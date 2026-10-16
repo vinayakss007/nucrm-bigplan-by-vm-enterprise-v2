@@ -8,6 +8,7 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { deals, dealStages } from '@/drizzle/schema';
 import { eq, and, isNull, sql, notInArray } from 'drizzle-orm';
+import { notArchived } from '@/lib/api/deals-archive-filter';
 import { withCache } from '@/lib/dashboard/widget-cache';
 import { logError, tenantMeta } from '@/lib/errors-server';
 import { withApiRoute } from '@/lib/api/with-api-route';
@@ -38,6 +39,8 @@ export const GET = withApiRoute(async (request: NextRequest) => {
         .where(and(
           eq(deals.tenantId, tid),
           isNull(deals.deletedAt),
+          // #2684 — an archived deal still held pipeline value here.
+          notArchived(),
           notInArray(deals.stageId, terminalStageIds)
         ));
 
