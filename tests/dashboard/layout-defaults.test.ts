@@ -1,5 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
 
+// layout-resolver imports the DB layer at module scope; stub it so importing
+// the resolver for the industry-layout test never touches a live connection.
+vi.mock('@/drizzle/db', () => ({ db: { query: {}, transaction: vi.fn() } }));
+
 // #2633: industry dashboard defaults now resolve from product_templates via
 // lib/templates/resolve (60s cache), not the static INDUSTRY_TEMPLATES map.
 vi.mock('@/lib/templates/resolve', () => ({
@@ -18,7 +22,7 @@ vi.mock('@/lib/templates/resolve', () => ({
   }),
 }));
 
-import { getIndustryDefaultLayout } from '@/lib/dashboard/layout-defaults';
+import { getIndustryDefaultLayout } from '@/lib/dashboard/layout-resolver';
 
 describe('layout-defaults', () => {
   describe('getIndustryDefaultLayout', () => {

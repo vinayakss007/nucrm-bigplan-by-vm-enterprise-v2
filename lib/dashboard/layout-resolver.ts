@@ -6,8 +6,30 @@
 import { db } from '@/drizzle/db';
 import { dashboardLayouts } from '@/drizzle/schema/dashboard';
 import { eq, and, desc } from 'drizzle-orm';
-import { getPlanDefaultLayout, getIndustryDefaultLayout, getRoleDefaultLayout } from '@/lib/dashboard/layout-defaults';
+import { getPlanDefaultLayout, getRoleDefaultLayout } from '@/lib/dashboard/layout-defaults';
+import { resolveTemplate } from '@/lib/templates/resolve';
 import type { DashboardLayout, LayoutSource } from '@/types/dashboard';
+
+// #2633: industry defaults come from product_templates.default_dashboard_layout
+// (superadmin-editable), with a 60s TTL cache so the dashboard resolver doesn't
+// hit the DB per request. Null (unknown template / pre-0128 DB) falls through
+// to role/plan defaults in resolveDashboardLayout below. This lives in the
+// server-only resolver (not layout-defaults) because it depends on the DB layer.
+const INDUSTRY_LAYOUT_TTL_MS = 60_000;
+const INDUSTRY_LAYOUT_CACHE = new Map<string, { layout: DashboardLayout | null; expires: number }>();
+
+export async function getIndustryDefaultLayout(industryId: string): Promise<DashboardLayout | null> {
+  if (!industryId) return null;
+  const hit = INDUSTRY_LAYOUT_CACHE.get(industryId);
+  if (hit && hit.expires > Date.now()) return hit.layout;
+
+  const template = await resolveTemplate(industryId).catch(() => null);
+  const layout = template?.defaultDashboardLayout?.length
+    ? (template.defaultDashboardLayout as unknown as DashboardLayout)
+    : null;
+  INDUSTRY_LAYOUT_CACHE.set(industryId, { layout, expires: Date.now() + INDUSTRY_LAYOUT_TTL_MS });
+  return layout;
+}
 
 export async function getSavedLayout(
   tenantId: string,
