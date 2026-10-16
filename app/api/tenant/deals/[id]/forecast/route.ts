@@ -5,7 +5,8 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm, type AuthContext } from '@/lib/auth/middleware';
+import { ownerScope } from '@/lib/api/owner-scope';
 import { db } from '@/drizzle/db';
 import { deals, dealForecasts } from '@/drizzle/schema';
 import { eq, and, sql } from 'drizzle-orm';
@@ -21,11 +22,22 @@ const forecastSchema = z.object({
   confidence_level: z.enum(['low', 'medium', 'high']).nullable().optional(),
 });
 
-async function assertDeal(tenantId: string, dealId: string) {
+/**
+ * The parent check `deals/[id]` applies to every verb. `id + tenant_id +
+ * deleted_at` alone resolves for a `sales_rep` whose `deals.view_all` is false
+ * (`lib/permissions/definitions.ts:135`), which is the caller
+ * `deals/[id]/route.ts:67-72` answers 404 (#2709).
+ */
+async function assertDeal(ctx: AuthContext, dealId: string) {
   const [deal] = await db
     .select({ id: deals.id })
     .from(deals)
-    .where(and(eq(deals.id, dealId), eq(deals.tenantId, tenantId), sql`${deals.deletedAt} IS NULL`))
+    .where(and(
+      eq(deals.id, dealId),
+      eq(deals.tenantId, ctx.tenantId),
+      sql`${deals.deletedAt} IS NULL`,
+      ownerScope(ctx, 'deals.view_all', deals),
+    ))
     .limit(1);
   return deal;
 }
@@ -35,9 +47,11 @@ export const GET = withApiRoute(async (req: NextRequest, { params }: { params: P
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
+    const deny = requirePerm(ctx, 'deals.view');
+    if (deny) return deny;
     const dealId = (await params).id;
 
-    if (!(await assertDeal(ctx.tenantId, dealId))) {
+    if (!(await assertDeal(ctx, dealId))) {
       return NextResponse.json({ error: 'Deal not found' }, { status: 404 });
     }
 
@@ -65,9 +79,11 @@ export const POST = withApiRoute(async (req: NextRequest, { params }: { params: 
 
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
+    const deny = requirePerm(ctx, 'deals.edit');
+    if (deny) return deny;
     const dealId = (await params).id;
 
-    if (!(await assertDeal(ctx.tenantId, dealId))) {
+    if (!(await assertDeal(ctx, dealId))) {
       return NextResponse.json({ error: 'Deal not found' }, { status: 404 });
     }
 
@@ -101,7 +117,7 @@ export const POST = withApiRoute(async (req: NextRequest, { params }: { params: 
       [result] = await db
         .update(dealForecasts)
         .set(updates)
-        .where(eq(dealForecasts.id, existing.id))
+        .where(and(eq(dealForecasts.id, existing.id), eq(dealForecasts.tenantId, ctx.tenantId)))
         .returning();
     } else {
       // Create new forecast
