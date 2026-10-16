@@ -9,6 +9,7 @@ import { db } from '@/drizzle/db';
 import { companies } from '@/drizzle/schema';
 import { eq, asc } from 'drizzle-orm';
 import { escapeCSV } from '@/lib/export';
+import { enforceFieldRead } from '@/lib/rbac/enforce';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { logError } from '@/lib/errors-server';
 
@@ -41,26 +42,25 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       .where(eq(companies.tenantId, ctx.tenantId))
       .orderBy(asc(companies.createdAt));
 
-    const headers = ['name', 'domain', 'industry', 'phone', 'address', 'city', 'state', 'country', 'postal_code', 'company_size', 'annual_revenue', 'notes', 'tags', 'created_at'];
-    const csvRows = rows.map(r => [
-      escapeCSV(r.name),
-      escapeCSV(r.domain),
-      escapeCSV(r.industry),
-      escapeCSV(r.phone),
-      escapeCSV(r.address),
-      escapeCSV(r.city),
-      escapeCSV(r.state),
-      escapeCSV(r.country),
-      escapeCSV(r.postalCode),
-      escapeCSV(r.numberOfEmployees),
-      escapeCSV(r.annualRevenue),
-      escapeCSV(r.notes),
-      escapeCSV(r.tags),
-      escapeCSV(r.createdAt),
-    ].join(','));
+    // [CSV header, row key] in the order the file is written.
+    const COLUMNS: ReadonlyArray<readonly [string, string]> = [
+      ['name', 'name'], ['domain', 'domain'], ['industry', 'industry'],
+      ['phone', 'phone'], ['address', 'address'], ['city', 'city'],
+      ['state', 'state'], ['country', 'country'], ['postal_code', 'postalCode'],
+      ['company_size', 'numberOfEmployees'], ['annual_revenue', 'annualRevenue'],
+      ['notes', 'notes'], ['tags', 'tags'], ['created_at', 'createdAt'],
+    ];
 
-    const csv = [headers.join(','), ...csvRows].join('\n');
+    // #2618 — the CSV used to bypass field_permissions entirely (same fix as
+    // #2614 for deals and #2618 for contacts). Project the rows first, then
+    // drop any column the role may not read from the header AND every row, so
+    // a restricted value cannot survive as an unnamed cell.
+    const projected = await enforceFieldRead(ctx, 'companies', rows);
+    const visible = COLUMNS.filter(([, key]) => projected.every((r) => key in r));
+    const csvRows = projected.map((r) => visible.map(([, key]) =>
+      escapeCSV((r as Record<string, unknown>)[key])).join(','));
 
+    const csv = [visible.map(([header]) => header).join(','), ...csvRows].join('\n');
     return new NextResponse(csv, {
       status: 200,
       headers: {
