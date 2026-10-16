@@ -152,16 +152,34 @@ export function filterCondition(tableKey: string, field: string, raw: unknown): 
   }
 }
 
+/**
+ * One predicate per entry of the request's `filters`, resolved against
+ * `tableKey`. Shared by both branches of `runReportForTenant` so an aggregate
+ * cannot be added that reads its tenant, its tombstones and its own `where`
+ * while throwing the customer's filters away (#2657).
+ */
+export function filterConditions(tableKey: string, filters: unknown): SQL[] {
+  if (!filters || typeof filters !== 'object' || Array.isArray(filters)) return [];
+  return Object.entries(filters as Record<string, unknown>)
+    .map(([field, raw]) => filterCondition(tableKey, field, raw));
+}
+
 // Aggregates keep their own selection because their shape is fixed: one
 // dimension plus the counts. Exported only so the test can render them.
 export const REPORT_AGGREGATES: Record<string, {
   table: RegistryTable;
+  // The name `filters` are resolved against. `table` is a drizzle object and the
+  // registry that resolves a filter field is keyed by name, so an aggregate has
+  // to name its base table: a `pipeline` filter is a `deals` filter, and
+  // `pipeline` itself is not a key in `TABLES`.
+  filterKey: string;
   select: Record<string, unknown>;
   groupBy: SQL;
   where?: SQL;
 }> = {
   pipeline: {
     table: deals,
+    filterKey: 'deals',
     select: {
       stage: DEAL_STAGE_EXPR,
       count: sql`count(*)::int`,
@@ -171,6 +189,7 @@ export const REPORT_AGGREGATES: Record<string, {
   },
   revenue: {
     table: deals,
+    filterKey: 'deals',
     select: {
       stage: DEAL_STAGE_EXPR,
       count: sql`count(*)::int`,
@@ -228,6 +247,14 @@ export async function runReportForTenant(
         conditions.push(sql`${aggregate.table.deletedAt} IS NULL` as never);
       }
       if (aggregate.where) conditions.push(aggregate.where as never);
+      // #2657: the row branch below applied the request's `filters` and this one
+      // did not, so a pipeline chart "filtered" on stage, amount or owner drew
+      // every deal in the tenant and the response still reported `report_type:
+      // pipeline` as though it had honoured them. Tombstones in this same branch
+      // were the identical defect and got fixed in #2389; filters did not.
+      for (const predicate of filterConditions(aggregate.filterKey, filters)) {
+        conditions.push(predicate as never);
+      }
       query = db
         .select(aggregate.select as never)
         .from(aggregate.table as never)
@@ -244,10 +271,8 @@ export async function runReportForTenant(
       // handler used to look for four hard-coded keys and drop everything else,
       // so a report "filtered" on industry, amount or stage silently returned
       // the whole table and still presented itself as filtered.
-      if (filters && typeof filters === 'object' && !Array.isArray(filters)) {
-        for (const [field, raw] of Object.entries(filters as Record<string, unknown>)) {
-          conditions.push(filterCondition(reportType, field, raw) as never);
-        }
+      for (const predicate of filterConditions(reportType, filters)) {
+        conditions.push(predicate as never);
       }
       const names = REPORT_COLUMNS[reportType as keyof typeof REPORT_COLUMNS];
       if (!names) return { error: 'Invalid report type', status: 400 };
