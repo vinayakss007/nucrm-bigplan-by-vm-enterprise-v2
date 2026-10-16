@@ -4,7 +4,6 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { getWidgetsForPlan } from '@/components/tenant/dashboard/widget-registry';
-import { INDUSTRY_TEMPLATES } from '@/lib/modules/industry-templates';
 import type { DashboardLayout } from '@/types/dashboard';
 
 const PLAN_DEFAULT_LAYOUT_CACHE = new Map<string, DashboardLayout>();
@@ -25,11 +24,11 @@ export function getPlanDefaultLayout(planName: string): DashboardLayout {
   return layout;
 }
 
-export function getIndustryDefaultLayout(industryId: string): DashboardLayout | null {
-  const template = INDUSTRY_TEMPLATES[industryId];
-  if (!template?.defaultDashboardLayout) return null;
-  return template.defaultDashboardLayout as DashboardLayout;
-}
+// #2633: the industry default layout is resolved from product_templates (the
+// DB single source of truth) — see getIndustryDefaultLayout in layout-resolver.ts.
+// It lives there, not here, because this module is imported by the client
+// dashboard (dashboard-client.tsx) and must stay free of the Node-only DB layer
+// (drizzle → request-connection → async_hooks) that Turbopack cannot bundle.
 
 /**
  * Static role → widget map for role-first dashboard defaults (quick-win #6).

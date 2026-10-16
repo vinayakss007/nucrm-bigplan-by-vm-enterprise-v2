@@ -6,21 +6,43 @@
 'use client';
 
 import { useState } from 'react';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { 
   Home, Laptop, Handshake, Check, ArrowRight, Loader2, 
   Sparkles, ShieldCheck, Zap, Layout
 } from 'lucide-react';
-import { INDUSTRY_TEMPLATES } from '@/lib/modules/industry-templates';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import { useRouter } from 'next/navigation';
+
+interface TemplateCard {
+  id: string;
+  slug: string | null;
+  name: string;
+  description: string | null;
+  icon: string | null;
+  modules: string[];
+  custom_fields: unknown[];
+  pipelines: unknown[];
+  automations: unknown[];
+}
 
 export default function IndustryTemplatesPage() {
   const router = useRouter();
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const templates = Object.values(INDUSTRY_TEMPLATES);
+  // #2633: the gallery reads product_templates via the API (DB is the single
+  // source of truth), so superadmin-created/edited templates appear here.
+  const templatesQuery = useQuery({
+    queryKey: ['industry-templates'],
+    queryFn: async (): Promise<TemplateCard[]> => {
+      const res = await fetch('/api/tenant/industry-templates');
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Failed to load templates');
+      return (data.data ?? []) as TemplateCard[];
+    },
+  });
+  const templates = templatesQuery.data ?? [];
 
   // #1328: apply via useMutation (was raw fetch + useState applying flag).
   const applyMutation = useMutation({
@@ -93,7 +115,7 @@ export default function IndustryTemplatesPage() {
               "w-12 h-12 rounded-2xl flex items-center justify-center mb-6 transition-colors",
               selectedId === template.id ? "bg-violet-600 text-white" : "bg-muted group-hover:bg-violet-100 group-hover:text-violet-600"
             )}>
-              {getIcon(template.icon)}
+              {getIcon(template.icon ?? '')}
             </div>
             
             <h3 className="text-xl font-bold mb-2">{template.name}</h3>
@@ -101,13 +123,13 @@ export default function IndustryTemplatesPage() {
             
             <div className="space-y-3">
               <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-                <Layout className="w-3.5 h-3.5" /> {template.custom_fields.length} Custom Fields
+                <Layout className="w-3.5 h-3.5" /> {template.custom_fields?.length ?? 0} Custom Fields
               </div>
               <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-                <Zap className="w-3.5 h-3.5" /> {template.automations.length} Automations
+                <Zap className="w-3.5 h-3.5" /> {template.automations?.length ?? 0} Automations
               </div>
               <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-                <ShieldCheck className="w-3.5 h-3.5" /> {template.pipelines.length} Pipelines
+                <ShieldCheck className="w-3.5 h-3.5" /> {template.pipelines?.length ?? 0} Pipelines
               </div>
             </div>
           </button>
