@@ -12,6 +12,7 @@ import { db } from '@/drizzle/db';
 import { contacts, leads, deals, dealStages, companies } from '@/drizzle/schema';
 import { tasks } from '@/drizzle/schema';
 import { eq, and, or, ilike, desc, sql, asc } from 'drizzle-orm';
+import { notArchived } from '@/lib/api/deals-archive-filter';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { parseLimitOffset } from '@/lib/api/query-params';
@@ -53,6 +54,10 @@ export const GET = withApiRoute(async (request: NextRequest) => {
           .where(and(
             eq(contacts.tenantId, tid),
             sql`${contacts.deletedAt} IS NULL`,
+            // An archived contact is out of the working set: the list hides it
+            // (app/api/tenant/contacts/route.ts:54) and so does the export
+            // (#2677). Search was the way back to it. (#2684)
+            eq(contacts.isArchived, false),
             or(
               ilike(contacts.firstName, pattern),
               ilike(contacts.lastName, pattern),
@@ -110,6 +115,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
           .where(and(
             eq(deals.tenantId, tid),
             sql`${deals.deletedAt} IS NULL`,
+            notArchived(),  // #2684 — deals are archived via metadata, not a column
             or(
               ilike(deals.title, pattern),
               ilike(contacts.firstName, pattern),
@@ -129,7 +135,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
             industry: companies.industry,
             phone: companies.phone,
             website: companies.website,
-            contact_count: sql<number>`(SELECT count(*)::int FROM ${contacts} WHERE ${contacts.companyId} = ${companies.id} AND ${contacts.deletedAt} IS NULL)`
+            contact_count: sql<number>`(SELECT count(*)::int FROM ${contacts} WHERE ${contacts.companyId} = ${companies.id} AND ${contacts.deletedAt} IS NULL AND ${contacts.isArchived} = false)`
           })
           .from(companies)
           .where(and(

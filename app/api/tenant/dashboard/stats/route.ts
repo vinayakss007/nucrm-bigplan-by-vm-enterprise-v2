@@ -8,6 +8,7 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { contacts, companies, deals, activities, tasks, dealStages, pipelines } from '@/drizzle/schema';
 import { eq, and, isNull, notInArray, sql, desc, asc } from 'drizzle-orm';
+import { notArchived } from '@/lib/api/deals-archive-filter';
 import { logError, tenantMeta } from '@/lib/errors-server';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
@@ -17,6 +18,12 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
     const tid = ctx.tenantId;
+
+    // #2684 — the dashboard counted what the lists hide. Contacts archive via a
+    // column, deals via metadata.archived, so both predicates come from the
+    // places the rest of the app already reads them.
+    const liveContact = sql`${contacts.isArchived} = false`;
+    const liveDeal = notArchived();
 
     // Single optimized query: all stats in 2 round-trips
     // Query 1: Terminal stages + all counts + deals by stage (combined)
@@ -31,21 +38,21 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       // Combined counts in a single query with subqueries
       db.execute(sql`
         SELECT
-          (SELECT COUNT(*)::int FROM ${contacts} WHERE tenant_id = ${tid} AND deleted_at IS NULL) AS contact_count,
+          (SELECT COUNT(*)::int FROM ${contacts} WHERE tenant_id = ${tid} AND deleted_at IS NULL AND ${liveContact}) AS contact_count,
           (SELECT COUNT(*)::int FROM ${companies} WHERE tenant_id = ${tid} AND deleted_at IS NULL) AS company_count,
           (SELECT COUNT(*)::int FROM ${tasks} WHERE tenant_id = ${tid} AND deleted_at IS NULL AND status != 'completed') AS pending_tasks,
-          (SELECT COALESCE(SUM(amount), 0)::float FROM ${deals} WHERE tenant_id = ${tid} AND deleted_at IS NULL) AS pipeline_total,
-          (SELECT COUNT(*)::int FROM ${deals} WHERE tenant_id = ${tid} AND deleted_at IS NULL) AS total_deals,
+          (SELECT COALESCE(SUM(amount), 0)::float FROM ${deals} WHERE tenant_id = ${tid} AND deleted_at IS NULL AND ${liveDeal}) AS pipeline_total,
+          (SELECT COUNT(*)::int FROM ${deals} WHERE tenant_id = ${tid} AND deleted_at IS NULL AND ${liveDeal}) AS total_deals,
           (SELECT COALESCE(SUM(amount), 0)::float FROM ${deals}
-           WHERE tenant_id = ${tid} AND deleted_at IS NULL AND created_at >= date_trunc('month', now())
+           WHERE tenant_id = ${tid} AND deleted_at IS NULL AND ${liveDeal} AND created_at >= date_trunc('month', now())
           ) AS deals_this_month_value,
           (SELECT COUNT(*)::int FROM ${contacts}
-           WHERE tenant_id = ${tid} AND deleted_at IS NULL AND created_at >= date_trunc('month', now())
+           WHERE tenant_id = ${tid} AND deleted_at IS NULL AND ${liveContact} AND created_at >= date_trunc('month', now())
           ) AS new_contacts_this_month,
           -- Folded here (was a trailing 8th query): won-stage ids resolved
           -- inline so this stays a single round-trip.
           (SELECT COALESCE(SUM(${deals.amount}), 0)::float FROM ${deals}
-           WHERE tenant_id = ${tid} AND deleted_at IS NULL AND created_at >= date_trunc('month', now())
+           WHERE tenant_id = ${tid} AND deleted_at IS NULL AND ${liveDeal} AND created_at >= date_trunc('month', now())
            AND stage_id IN (
              SELECT ds.id FROM ${dealStages} ds
              INNER JOIN ${pipelines} p ON p.id = ds.pipeline_id
@@ -67,6 +74,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       .where(and(
         eq(deals.tenantId, tid),
         isNull(deals.deletedAt),
+        notArchived(),
         eq(pipelines.tenantId, tid)
       ))
       .groupBy(dealStages.id, dealStages.name, dealStages.order)
@@ -92,7 +100,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
         lastName: contacts.lastName, email: contacts.email, status: contacts.leadStatus,
       })
       .from(contacts)
-      .where(and(eq(contacts.tenantId, tid), isNull(contacts.deletedAt)))
+      .where(and(eq(contacts.tenantId, tid), isNull(contacts.deletedAt), eq(contacts.isArchived, false)))
       .orderBy(desc(contacts.createdAt))
       .limit(5),
 
@@ -103,7 +111,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       .from(deals)
       .leftJoin(dealStages, eq(dealStages.id, deals.stageId))
       .where(and(
-        eq(deals.tenantId, tid), isNull(deals.deletedAt),
+        eq(deals.tenantId, tid), isNull(deals.deletedAt), notArchived(),
         ...(terminalStageIds.length > 0 ? [notInArray(deals.stageId, terminalStageIds)] : []),
       ))
       .orderBy(asc(deals.closeDate))

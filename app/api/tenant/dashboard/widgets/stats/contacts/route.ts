@@ -22,8 +22,10 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     return withCache(tid, 'stats-contacts', 30, async () => {
       const result = await db.execute(sql`
         SELECT
-          (SELECT COUNT(*)::int FROM ${contacts} WHERE tenant_id = ${tid} AND deleted_at IS NULL) AS count,
-          (SELECT COUNT(*)::int FROM ${contacts} WHERE tenant_id = ${tid} AND deleted_at IS NULL AND created_at >= date_trunc('month', now())) AS new_this_month,
+          -- #2684 — the tile counted archived contacts, which the contacts list
+          -- (app/api/tenant/contacts/route.ts:54) and the export (#2677) both hide.
+          (SELECT COUNT(*)::int FROM ${contacts} WHERE tenant_id = ${tid} AND deleted_at IS NULL AND is_archived = false) AS count,
+          (SELECT COUNT(*)::int FROM ${contacts} WHERE tenant_id = ${tid} AND deleted_at IS NULL AND is_archived = false AND created_at >= date_trunc('month', now())) AS new_this_month,
           (SELECT COUNT(*)::int FROM ${companies} WHERE tenant_id = ${tid} AND deleted_at IS NULL) AS company_count
       `);
       const row = result.rows?.[0] || {};

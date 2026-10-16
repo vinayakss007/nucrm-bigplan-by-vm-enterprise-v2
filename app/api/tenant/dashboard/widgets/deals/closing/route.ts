@@ -8,6 +8,7 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { deals, dealStages, pipelines } from '@/drizzle/schema';
 import { eq, and, isNull, asc, sql } from 'drizzle-orm';
+import { notArchived } from '@/lib/api/deals-archive-filter';
 import { withCache } from '@/lib/dashboard/widget-cache';
 import { logError, tenantMeta } from '@/lib/errors-server';
 import { withApiRoute } from '@/lib/api/with-api-route';
@@ -36,6 +37,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
         .where(and(
           eq(deals.tenantId, tid),
           isNull(deals.deletedAt),
+          notArchived(),  // #2684
           sql`${deals.stageId} NOT IN (
             SELECT ds.id FROM ${dealStages} ds
             INNER JOIN ${pipelines} p ON p.id = ds.pipeline_id
