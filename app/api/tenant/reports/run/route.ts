@@ -64,6 +64,39 @@ export class UnusableReportFilterValueError extends Error {
   }
 }
 
+/** A row count the endpoint cannot honour — bad input, answered 400. */
+export class UnusableReportLimitError extends Error {
+  constructor(value: unknown) {
+    super(`Limit '${String(value).slice(0, 40)}' is not a positive whole number of rows`);
+    this.name = 'UnusableReportLimitError';
+  }
+}
+
+export const REPORT_LIMIT_DEFAULT = 100;
+/** Server policy, not the caller's request: a report never reads more than this many rows. */
+export const REPORT_LIMIT_MAX = 1000;
+
+/**
+ * The rows a report is allowed to read.
+ *
+ * `Math.min(Number(limit) || 100, 1000)` got three answers wrong and hid all
+ * three: a non-positive or non-numeric limit fell through the `||` (only `0`,
+ * `''`, `NaN` are falsy, so `-1` survived as `-1`) and drizzle then **dropped the
+ * LIMIT clause entirely** — measured, not guessed: a negative or NaN argument
+ * emits `select … from "deals"` with no `limit` at all, and the endpoint answered
+ * 200 with the whole tenant. `0` silently became 100, and a fractional count was
+ * bound as given. Rejecting instead of guessing is the same treatment this file
+ * already gives an unknown field and an unusable date: bad input, not an outage —
+ * the alternative is a successful-looking wrong answer.
+ */
+export function resolveLimit(raw: unknown): number {
+  if (raw === undefined || raw === null || raw === '') return REPORT_LIMIT_DEFAULT;
+  if (typeof raw !== 'number' && typeof raw !== 'string') throw new UnusableReportLimitError(raw);
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n <= 0) throw new UnusableReportLimitError(raw);
+  return Math.min(n, REPORT_LIMIT_MAX);
+}
+
 /** Registry entry: a real pg table plus the columns this builder reads. */
 type RegistryTable = AnyPgTable & {
   tenantId: Column;
@@ -254,9 +287,14 @@ export async function runReportForTenant(
 ): Promise<ReportRunSuccess | ReportRunFailure> {
   const reportType = typeof body.report_type === 'string' ? body.report_type : '';
   const filters = body.filters;
-  const limit = body.limit ?? 100;
 
   try {
+    // Resolved before the branch, so a caller cannot be told "here is your
+    // report" for a `limit` that the aggregate side then ignores. Aggregates are
+    // grouped by deal stage — a handful of rows — so the cap is not a truncation
+    // risk there, but an unusable request is still refused either way.
+    const limit = resolveLimit(body.limit);
+
     const aggregate = REPORT_AGGREGATES[reportType];
     if (!aggregate && !(reportType in REPORT_COLUMNS)) {
       return { error: 'Invalid report type', status: 400 };
@@ -309,7 +347,7 @@ export async function runReportForTenant(
         .from(table)
         .where(and(...conditions))
         .orderBy(desc(table.createdAt))
-        .limit(Math.min(Number(limit) || 100, 1000));
+        .limit(limit);
     }
 
     const rows = (await query) as Record<string, unknown>[];
@@ -318,7 +356,7 @@ export async function runReportForTenant(
     // An unknown field is bad input, not an outage. It used to reach drizzle and
     // either overflow the stack (500) or throw inside Postgres. Resolution
     // happens while building the query, so this has to cover the build too.
-    if (err instanceof UnknownReportFieldError || err instanceof UnusableReportFilterValueError) {
+    if (err instanceof UnknownReportFieldError || err instanceof UnusableReportFilterValueError || err instanceof UnusableReportLimitError) {
       return { error: err.message, status: 400 };
     }
     throw err;
