@@ -9,6 +9,8 @@ import { db } from '@/drizzle/db';
 import { deals, dealStages, pipelines, contacts, companies } from '@/drizzle/schema';
 import { eq, asc, and, isNull } from 'drizzle-orm';
 import { escapeCSV } from '@/lib/export';
+import { notArchived } from '@/lib/api/deals-archive-filter';
+import { ownerScope } from '@/lib/api/owner-scope';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { logError } from '@/lib/errors-server';
 import { enforceFieldRead } from '@/lib/rbac/enforce';
@@ -40,7 +42,16 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       .leftJoin(companies, eq(deals.companyId, companies.id))
       // #2291: tombstoned deals must not leak into the CSV export — the
       // generic /api/tenant/export handler already filters deletedAt for deals.
-      .where(and(eq(deals.tenantId, ctx.tenantId), isNull(deals.deletedAt)))
+      // #2677 adds the two predicates this list-shaped read was still missing:
+      // archived deals (`deals/route.ts:53` hides them by default) and, for a
+      // caller without `deals.view_all`, everything not assigned to or created
+      // by them (`deals/route.ts:56-58`, `deals/[id]` 404s the same rows).
+      .where(and(
+        eq(deals.tenantId, ctx.tenantId),
+        isNull(deals.deletedAt),
+        notArchived(),
+        ownerScope(ctx, 'deals.view_all', deals),
+      ))
       .orderBy(asc(deals.createdAt));
 
     // #2614 — field_permissions were being bypassed on the CSV export path:
