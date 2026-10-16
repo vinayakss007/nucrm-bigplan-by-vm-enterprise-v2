@@ -95,6 +95,16 @@ export const GET = withApiRoute(async (request: NextRequest,
       return NextResponse.json({ error: 'Lead not found' }, { status: 404 });
     }
 
+    // #2692 — the rule contacts/deals/tasks already answer on this path, 404
+    // rather than 403: a row you may not read is not yours to know about. Leads
+    // had it on the list (#2597-era), the export (#2677), search (#2686) and the
+    // dashboard (#2688), and nowhere on the record path.
+    if (!can(ctx, 'leads.view_all')) {
+      if (lead.assignedTo !== ctx.userId && lead.createdBy !== ctx.userId) {
+        return NextResponse.json({ error: 'Lead not found' }, { status: 404 });
+      }
+    }
+
     // Get assigned user details
     let assignedUser = null;
     if (lead.assignedTo) {
@@ -175,9 +185,17 @@ export const PATCH = withApiRoute(async (request: NextRequest,
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;
 
-    // Verify lead exists and belongs to tenant
+    // Verify lead exists and belongs to tenant — and, without `leads.view_all`,
+    // to this caller (#2692). The two owner columns ride along on the read the
+    // optimistic lock already performs; `assigned_to` is itself writable here,
+    // so the check runs on the pre-patch row, as it does on contacts.
     const [existing] = await db
-      .select({ id: leads.id, updatedAt: leads.updatedAt })
+      .select({
+        id: leads.id,
+        updatedAt: leads.updatedAt,
+        assignedTo: leads.assignedTo,
+        createdBy: leads.createdBy,
+      })
       .from(leads)
       .where(and(
         eq(leads.id, id),
@@ -185,11 +203,17 @@ export const PATCH = withApiRoute(async (request: NextRequest,
         isNull(leads.deletedAt)
       ))
       .limit(1);
-    
+
     if (!existing) {
       return NextResponse.json({ error: 'Lead not found' }, { status: 404 });
     }
-    
+
+    if (!can(ctx, 'leads.view_all')) {
+      if (existing.assignedTo !== ctx.userId && existing.createdBy !== ctx.userId) {
+        return NextResponse.json({ error: 'Lead not found' }, { status: 404 });
+      }
+    }
+
     // Update mapping (snake_case from body to camelCase for Drizzle)
     // All values come from the Zod-validated body — no raw passthrough
   
@@ -294,7 +318,29 @@ export const DELETE = withApiRoute(async (request: NextRequest,
     }
 
     const { id } = await params;
-    
+
+    // #2692 — DELETE wrote on the bare key and never looked at the row, so there
+    // was nothing to check it against. The pre-read only happens for a caller who
+    // lacks `leads.view_all`, mirroring contacts/[id]'s DELETE.
+    if (!can(ctx, 'leads.view_all')) {
+      const [existing] = await db
+        .select({ assignedTo: leads.assignedTo, createdBy: leads.createdBy })
+        .from(leads)
+        .where(and(
+          eq(leads.id, id),
+          eq(leads.tenantId, ctx.tenantId),
+          isNull(leads.deletedAt)
+        ))
+        .limit(1);
+
+      if (!existing) {
+        return NextResponse.json({ error: 'Lead not found' }, { status: 404 });
+      }
+      if (existing.assignedTo !== ctx.userId && existing.createdBy !== ctx.userId) {
+        return NextResponse.json({ error: 'Lead not found' }, { status: 404 });
+      }
+    }
+
     const [deleted] = await db.update(leads)
       .set({ 
         deletedAt: new Date(),

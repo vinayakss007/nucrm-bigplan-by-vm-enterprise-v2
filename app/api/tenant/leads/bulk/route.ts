@@ -22,6 +22,7 @@ import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { convertLeadCore } from '@/lib/leads/convert';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { enforceFieldWrite } from '@/lib/rbac/enforce';
+import { ownerScope } from '@/lib/api/owner-scope';
 
 const MAX_BULK = 500;
 
@@ -41,7 +42,14 @@ export const POST = withApiRoute(async (req: NextRequest) => {
     if (lead_ids.length > MAX_BULK)
       return NextResponse.json({ error: `Max ${MAX_BULK} leads per bulk operation` }, { status: 400 });
 
-    // Validate all IDs belong to this tenant
+    // #2692 — into both id sets this route writes, the way #2671/#2673/#2674 put
+    // it into deals, contacts and tasks. Without it a `sales_rep` (whose
+    // `leads.view_all` is off, lib/permissions/definitions.ts:134) could name up
+    // to MAX_BULK of another rep's lead ids and have nine actions write them.
+    // `and()` skips the undefined a `view_all` holder gets — see lib/api/owner-scope.ts.
+    const mine = ownerScope(ctx, 'leads.view_all', leads);
+
+    // Validate all IDs belong to this tenant — and to this caller.
     const validLeads = await db
       .select({ id: leads.id })
       .from(leads)
@@ -49,7 +57,8 @@ export const POST = withApiRoute(async (req: NextRequest) => {
         and(
           inArray(leads.id, lead_ids),
           eq(leads.tenantId, ctx.tenantId),
-          sql`${leads.deletedAt} IS NULL`
+          sql`${leads.deletedAt} IS NULL`,
+          mine
         )
       );
     
@@ -290,6 +299,9 @@ export const POST = withApiRoute(async (req: NextRequest) => {
         // Restore targets SOFT-DELETED/archived rows. The `validIds` set above is
         // built with `deletedAt IS NULL`, so it never contains an archived lead —
         // reusing it made bulk restore a no-op. Re-resolve against the trashed set.
+        // #2692 — and narrow that second set the same way: `deals/bulk` carries
+        // `mine` into its restore for exactly this reason. Trash is not a
+        // permission boundary; a foreign id here restores another rep's lead.
         const restorable = await db
           .select({ id: leads.id })
           .from(leads)
@@ -297,7 +309,8 @@ export const POST = withApiRoute(async (req: NextRequest) => {
             and(
               inArray(leads.id, lead_ids),
               eq(leads.tenantId, ctx.tenantId),
-              sql`${leads.deletedAt} IS NOT NULL`
+              sql`${leads.deletedAt} IS NOT NULL`,
+              mine
             )
           );
         const restorableIds = restorable.map(r => r.id);
