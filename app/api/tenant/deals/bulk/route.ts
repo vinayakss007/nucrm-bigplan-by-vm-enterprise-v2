@@ -14,6 +14,7 @@ import { apiError } from '@/lib/api-error';
 import { escapeLike } from '@/lib/api/sanitize-like';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, requirePerm, type AuthContext } from '@/lib/auth/middleware';
+import { ownerScope } from '@/lib/api/owner-scope';
 import { db } from '@/drizzle/db';
 import { deals, dealStages, pipelines, tenantMembers, segments, segmentMembers, tenants, plans } from '@/drizzle/schema';
 import { eq, and, inArray, sql, or, ilike, isNull } from 'drizzle-orm';
@@ -44,6 +45,9 @@ export const POST = withApiRoute(async (req: NextRequest) => {
 
     let deal_ids: string[] = body.deal_ids ?? [];
 
+    // #2671 — into every id set this route writes, ahead of the caller's filters
+    // (`and()` skips the undefined a `view_all` holder gets). See lib/api/owner-scope.ts.
+    const mine = ownerScope(ctx, 'deals.view_all', deals);
     if (selectAll) {
       const whereConditions = [
         eq(deals.tenantId, ctx.tenantId),
@@ -57,7 +61,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
           ilike(deals.title, `%${escapeLike(filters.q)}%`),
         )!);
       }
-      const matched = await db.select({ id: deals.id }).from(deals).where(and(...whereConditions));
+      const matched = await db.select({ id: deals.id }).from(deals).where(and(mine, ...whereConditions));
       deal_ids = matched.map(r => r.id);
       if (!deal_ids.length) return NextResponse.json({ error: 'No deals match the provided filters' }, { status: 404 });
       if (deal_ids.length > MAX_BULK) return NextResponse.json({ error: `Max ${MAX_BULK} deals per bulk operation (matched ${deal_ids.length})` }, { status: 400 });
@@ -76,7 +80,8 @@ export const POST = withApiRoute(async (req: NextRequest) => {
         and(
           inArray(deals.id, deal_ids),
           eq(deals.tenantId, ctx.tenantId),
-          sql`${deals.deletedAt} IS NULL`
+          sql`${deals.deletedAt} IS NULL`,
+          mine
         )
       );
 
@@ -408,7 +413,8 @@ export const POST = withApiRoute(async (req: NextRequest) => {
             and(
               inArray(deals.id, deal_ids),
               eq(deals.tenantId, ctx.tenantId),
-              sql`${deals.deletedAt} IS NOT NULL`
+              sql`${deals.deletedAt} IS NOT NULL`,
+              mine
             )
           );
         const restorableIds = restorable.map(r => r.id);
