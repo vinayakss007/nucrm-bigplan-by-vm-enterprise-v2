@@ -36,7 +36,7 @@
 > an `id` at all: `0071` added the column nullable-with-default, `0125` made it NOT NULL and *deliberately stopped short*, and the only
 > index shaped like a key — `idx_segment_members_pk` — is a **non-unique** btree over `(segment_id, entity_id)` (`pg_index.indisunique = f`),
 > so `pg_constraint` answers `pk=0` on the chain build *and* on preprod, and the bulk-enroll callers' `onConflictDoNothing()`
-> (`app/api/tenant/leads/bulk/route.ts:348` (re-pinned 2026-10-16 from `:326`: #2647 bulk watch-field gate added 22 lines above) +2 siblings) have **nothing to conflict with** — duplicate memberships accumulate silently.
+> (`app/api/tenant/leads/bulk/route.ts:361` (re-pinned 2026-10-16 from `:326`: #2647 bulk watch-field gate added 22 lines above; re-pinned the same day again from `:348`: #2692/#2693 lead owner scope added 13 lines above) +2 siblings) have **nothing to conflict with** — duplicate memberships accumulate silently.
 > `0126_segment_members_primary_key` adds `PRIMARY KEY (id)` (the key `utils.pk()` always declared), replaces the misleading index with
 > `uq_segment_members_segment_entity` — UNIQUE, same two columns, still the lookup path — and dedupes both shapes **before** constraining,
 > per tenant under `set_config('app.current_tenant', …)`: PP-067 measured `app.is_super_admin` **inert** on this table's loop-built policy,
@@ -4696,7 +4696,7 @@ into the column-drift PR. `0125`'s footer names the gap and leaves it here on pu
   (`utils.pk()` → `.primaryKey().defaultRandom()`, codebase-wide convention), so `0126` adds
   `PRIMARY KEY (id)`; `(segment_id, entity_id)` is the identity **in practice** — no code path
   addresses a member by `id` (the members routes query and delete by segment/tenant only) and
-  three bulk callers (`leads/bulk/route.ts:348 (re-pinned 2026-10-16 from `:326`: #2647 bulk gate)`, `contacts/bulk/route.ts:452 (re-pinned 2026-10-16 from `:436`: #2673 added the `contacts.view_all` scope 20 lines above; was `:414` for #2647. Re-pinned again the same day from `:456`: that scope moved into `lib/api/owner-scope.ts`, 4 lines shorter)`,
+  three bulk callers (`leads/bulk/route.ts:361 (re-pinned 2026-10-16 from `:326`: #2647 bulk gate; re-pinned again the same day from `:348`: #2692/#2693 added the lead owner scope 13 lines above)`, `contacts/bulk/route.ts:452 (re-pinned 2026-10-16 from `:436`: #2673 added the `contacts.view_all` scope 20 lines above; was `:414` for #2647. Re-pinned again the same day from `:456`: that scope moved into `lib/api/owner-scope.ts`, 4 lines shorter)`,
   `deals/bulk/route.ts:478 (re-pinned 2026-10-16 from `:472`: #2671 added the `deals.view_all` scope 6 lines above; was `:446` for #2616/#2641)`) already assume the pair is unique — so the misleading
   `idx_segment_members_pk` is replaced by `uq_segment_members_segment_entity`, a UNIQUE btree
   over the same two columns, which keeps AC4's lookup role in the same object.
