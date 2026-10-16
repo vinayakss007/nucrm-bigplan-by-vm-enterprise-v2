@@ -12,6 +12,7 @@ import { aliasedTable } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { logError } from '@/lib/errors-server';
 import { parseLimitOffset } from '@/lib/api/query-params';
+import { ownerScope } from '@/lib/api/owner-scope';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { enforceFieldRead } from '@/lib/rbac/enforce';
 
@@ -45,7 +46,14 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       .where(
         and(
           eq(leadAssignments.tenantId, ctx.tenantId),
-          leadId ? eq(leadAssignments.leadId, leadId) : undefined
+          leadId ? eq(leadAssignments.leadId, leadId) : undefined,
+          // #2696 — the trail joins `leads` for the name columns, so the lead's
+          // own owner rule is available right here and its absence meant a rep
+          // could read every handoff in the workspace (and, with `lead_id` set,
+          // confirm that an unfamiliar id exists and who held it). A `view_all`
+          // holder gets `undefined`, which drizzle's `and()` skips — see
+          // lib/api/owner-scope.ts.
+          ownerScope(ctx, 'leads.view_all', leads)
         )
       )
       .orderBy(desc(leadAssignments.createdAt))
