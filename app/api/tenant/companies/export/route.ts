@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { companies } from '@/drizzle/schema';
-import { eq, asc } from 'drizzle-orm';
+import { eq, and, isNull, asc } from 'drizzle-orm';
 import { escapeCSV } from '@/lib/export';
 import { enforceFieldRead } from '@/lib/rbac/enforce';
 import { withApiRoute } from '@/lib/api/with-api-route';
@@ -39,7 +39,14 @@ export const GET = withApiRoute(async (request: NextRequest) => {
         createdAt: companies.createdAt,
       })
       .from(companies)
-      .where(eq(companies.tenantId, ctx.tenantId))
+      // #2668: no tombstone filter, so a deleted company was written into the CSV
+      // with its website, phone, annual revenue and notes while the on-screen list
+      // it was exported from did not show it — the file was a strict superset of
+      // what the customer could see, and its row count matched nothing.
+      // `deals/export/route.ts:41-43` carries the same rule, added by #2291; the
+      // generic engine (`lib/export/index.ts:190`) and this route's own list
+      // (`companies/route.ts:40-43`) already filtered `deletedAt`.
+      .where(and(eq(companies.tenantId, ctx.tenantId), isNull(companies.deletedAt)))
       .orderBy(asc(companies.createdAt));
 
     // [CSV header, row key] in the order the file is written.
