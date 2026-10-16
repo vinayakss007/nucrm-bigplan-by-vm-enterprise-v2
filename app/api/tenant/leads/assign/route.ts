@@ -10,6 +10,7 @@ import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { contacts, tenantMembers, users } from '@/drizzle/schema';
 import { eq, and, inArray, sql } from 'drizzle-orm';
+import { ownerScope } from '@/lib/api/owner-scope';
 import { createNotification } from '@/lib/notifications';
 import { logAudit } from '@/lib/audit';
 import { apiError } from '@/lib/api-error';
@@ -62,6 +63,32 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       );
     }
 
+    // #2696 — despite the path, every row this route writes is a `contacts`
+    // row, so it is the contacts rule that applies: `contacts.view_all` off
+    // (sales_rep, lib/permissions/definitions.ts:132-144) means only contacts
+    // assigned to or created by the caller. Both statements below took
+    // `contact_ids` as handed and narrowed on tenant + tombstone only, so a
+    // caller with `contacts.assign` could re-point — or strip — any contact in
+    // the workspace. Resolving the set once also makes the reported count the
+    // number of rows actually touched. Same pre-read as the bulk routes (#2673).
+    const mine = ownerScope(ctx, 'contacts.view_all', contacts);
+    const touchable = await db
+      .select({ id: contacts.id })
+      .from(contacts)
+      .where(
+        and(
+          inArray(contacts.id, contact_ids),
+          eq(contacts.tenantId, ctx.tenantId),
+          sql`${contacts.deletedAt} IS NULL`,
+          mine
+        )
+      );
+
+    const validIds = touchable.map(r => r.id);
+    if (!validIds.length) {
+      return NextResponse.json({ error: 'No assignable contacts found' }, { status: 404 });
+    }
+
     // Bulk update
     const result = await db
       .update(contacts)
@@ -72,7 +99,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       })
       .where(
         and(
-          inArray(contacts.id, contact_ids),
+          inArray(contacts.id, validIds),
           eq(contacts.tenantId, ctx.tenantId),
           sql`${contacts.deletedAt} IS NULL`
         )
@@ -85,10 +112,12 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     // If these are contacts, we use sql to keep contact_id if the underlying table supports it, 
     // or map to leadId if they are used interchangeably in the new schema.
     // Based on the legacy code, we'll use sql to ensure we hit the right column.
-    if (contact_ids.length > 0) {
+    // #2696 — only the ids that were actually written: an assignment trail for a
+    // contact this caller does not own would claim a handoff that never happened.
+    if (validIds.length > 0) {
       const CHUNK_SIZE = 1000;
-      for (let i = 0; i < contact_ids.length; i += CHUNK_SIZE) {
-        const chunk = contact_ids.slice(i, i + CHUNK_SIZE);
+      for (let i = 0; i < validIds.length; i += CHUNK_SIZE) {
+        const chunk = validIds.slice(i, i + CHUNK_SIZE);
         const values = chunk.map(cid => sql`(${ctx.tenantId}, ${cid}, ${assign_to}, ${ctx.userId}, ${reason || null})`);
 
         await db.execute(sql`
@@ -148,12 +177,33 @@ export const DELETE = withApiRoute(async (request: NextRequest) => {
     const { contact_ids, reason } = dv;
     if (!contact_ids?.length) return NextResponse.json({ error:'contact_ids required' }, { status:400 });
 
+    // #2696 — unassigning is the more destructive half: it leaves a contact
+    // owned by nobody. Resolve the set against the same contacts rule as POST,
+    // so the raw trail update below only ever names rows the caller may touch.
+    const mine = ownerScope(ctx, 'contacts.view_all', contacts);
+    const touchable = await db
+      .select({ id: contacts.id })
+      .from(contacts)
+      .where(
+        and(
+          inArray(contacts.id, contact_ids),
+          eq(contacts.tenantId, ctx.tenantId),
+          sql`${contacts.deletedAt} IS NULL`,
+          mine
+        )
+      );
+
+    const validIds = touchable.map(r => r.id);
+    if (!validIds.length) {
+      return NextResponse.json({ error: 'No unassignable contacts found' }, { status: 404 });
+    }
+
     // Mark previous assignments as ended.
     // #1057: scope by tenant_id — without it, a user with contacts.assign in
     // one tenant could end assignment records in ANY tenant.
     await db.execute(sql`
       UPDATE public.lead_assignments SET unassigned_at=now()
-      WHERE contact_id = ANY(${contact_ids}::uuid[])
+      WHERE contact_id = ANY(${validIds}::uuid[])
         AND tenant_id = ${ctx.tenantId}
         AND unassigned_at IS NULL
     `);
@@ -161,14 +211,14 @@ export const DELETE = withApiRoute(async (request: NextRequest) => {
     // Unassign — set to null (unowned)
     const result = await db
       .update(contacts)
-      .set({ 
-        assignedTo: null, 
+      .set({
+        assignedTo: null,
         lastAssignedAt: new Date(),
         updatedAt: new Date()
       })
       .where(
         and(
-          inArray(contacts.id, contact_ids),
+          inArray(contacts.id, validIds),
           eq(contacts.tenantId, ctx.tenantId),
           sql`${contacts.deletedAt} IS NULL`
         )

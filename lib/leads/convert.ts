@@ -15,7 +15,7 @@ import {
   dealStages,
   tenants,
 } from '@/drizzle/schema';
-import { eq, and, sql, isNull } from 'drizzle-orm';
+import { eq, and, sql, isNull, type SQL } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { fireWebhooks } from '@/lib/webhooks';
 import { createNotification } from '@/lib/notifications';
@@ -31,6 +31,19 @@ export interface ConvertLeadParams {
   dealStage?: string;
   pipelineId?: string;
   assignedTo?: string;
+  /**
+   * #2696 — the caller's row-level narrowing, normally
+   * `ownerScope(ctx, 'leads.view_all', leads)`. It belongs on the lookup rather
+   * than on each write, because a conversion has no meaningful partial success:
+   * a lead the caller may not touch has to read as absent, and everything
+   * downstream (contact merge, deal insert, the `assigned_to` backfill) hangs
+   * off the row this selects. `undefined` for a `view_all` holder, which
+   * drizzle's `and()` skips, so their SQL is unchanged.
+   *
+   * Callers that already resolved their id set against the same rule —
+   * `leads/bulk` since #2692 — may leave it out.
+   */
+  leadScope?: SQL;
 }
 
 export type ConvertLeadResult =
@@ -70,6 +83,7 @@ export async function convertLeadCore(
     dealStage,
     pipelineId,
     assignedTo,
+    leadScope,
   } = params;
 
   // Load the lead
@@ -77,7 +91,8 @@ export async function convertLeadCore(
     where: and(
       eq(leads.id, id),
       eq(leads.tenantId, tenantId),
-      isNull(leads.deletedAt)
+      isNull(leads.deletedAt),
+      leadScope
     )
   });
 
@@ -238,7 +253,13 @@ export async function convertLeadCore(
 
     // Backfill the lead's contact_id pointer if it was missing (legacy lead path).
     if (!lead.contactId && contactId) {
-      await tx.update(leads).set({ contactId }).where(eq(leads.id, id));
+      // #2696 — these two writes addressed the lead by bare id. The row is
+      // already resolved tenant-scoped above, so RLS was the only thing between
+      // a wrong `id` and another tenant's lead; state the tenant in the
+      // statement like every other write in the codebase.
+      await tx.update(leads)
+        .set({ contactId })
+        .where(and(eq(leads.id, id), eq(leads.tenantId, tenantId)));
     }
 
     // ── 3. Mark lead as converted ───────────────────────────────────
@@ -249,7 +270,7 @@ export async function convertLeadCore(
       convertedContactId: contactId,
       lifecycleStage: 'opportunity',
       updatedAt: new Date()
-    }).where(eq(leads.id, id));
+    }).where(and(eq(leads.id, id), eq(leads.tenantId, tenantId)));
 
     // Log activity on the lead
     await tx.insert(leadActivities).values({

@@ -77,10 +77,23 @@ export const POST = withApiRoute(async (request: NextRequest, { params }: { para
         lastName: true,
         contactId: true,
         assignedTo: true,
+        createdBy: true,
       },
     });
     if (!lead) {
       return NextResponse.json({ error: 'Lead not found' }, { status: 404 });
+    }
+
+    // #2696 — the handoff dialog on the lead detail page is the cheapest way to
+    // move another rep's pipeline: `leads.edit` (which sales_rep holds,
+    // lib/permissions/definitions.ts:132-144) was the only gate, and the lookup
+    // above narrowed on tenant + tombstone alone. 404 for the same reason
+    // leads/[id] does (#2692): a lead you may not touch is not yours to know
+    // about, and reassigning one tells the target user a name.
+    if (!can(ctx, 'leads.view_all')) {
+      if (lead.assignedTo !== ctx.userId && lead.createdBy !== ctx.userId) {
+        return NextResponse.json({ error: 'Lead not found' }, { status: 404 });
+      }
     }
 
     if (lead.assignedTo === newAssignee) {

@@ -17,6 +17,8 @@ import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { convertLeadSchema } from '@/lib/api/schemas';
 import { requireAuth, can } from '@/lib/auth/middleware';
 import { convertLeadCore } from '@/lib/leads/convert';
+import { ownerScope } from '@/lib/api/owner-scope';
+import { leads } from '@/drizzle/schema';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { enforceFieldWrite, attachStrippedFields } from '@/lib/rbac/enforce';
 
@@ -60,6 +62,12 @@ export const POST = withApiRoute(async (request: NextRequest,
       dealStage: dealGate.stripped.includes('stage_id') ? undefined : (v.deal_stage ?? undefined),
       pipelineId: v.pipeline_id ?? undefined,
       assignedTo: assignGate.stripped.includes('assigned_to') ? undefined : (v.assigned_to ?? undefined),
+      // #2696 — the route never looked at the lead; convertLeadCore did, on
+      // tenant + tombstone alone. Converting a foreign lead created a contact
+      // and a deal owned by the attacker and re-pointed the existing contact's
+      // `assigned_to`, so the scope belongs on the core's lookup, where a lead
+      // the caller may not touch reads as absent (404 below).
+      leadScope: ownerScope(ctx, 'leads.view_all', leads),
     });
 
     if (!result.ok) {
