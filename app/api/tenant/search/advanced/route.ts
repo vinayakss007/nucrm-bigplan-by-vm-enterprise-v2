@@ -8,9 +8,11 @@ import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { contacts, deals, companies, tasks, leads } from '@/drizzle/schema';
-import { eq, and, or, gte, lte, desc, sql, inArray, type SQL, type SQLWrapper } from 'drizzle-orm';
+import { eq, and, or, gte, lte, desc, sql, inArray, isNull, type SQL, type SQLWrapper } from 'drizzle-orm';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
+import { ownerScope } from '@/lib/api/owner-scope';
+import { notArchived } from '@/lib/api/deals-archive-filter';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 // Postgres' default LIKE escape character is a backslash, and this database runs
@@ -73,6 +75,19 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     const tid = ctx.tenantId;
     const pattern = q ? likePattern(String(q)) : null;
 
+    // #2690 — this route is the Filters panel beside the search box that #2686
+    // narrowed, and it had none of the three predicates every list carries: the
+    // `<entity>.view_all` owner scope, the archive filter, and (for tasks and
+    // companies) the tombstone. A `sales_rep` whose contacts page, export,
+    // dashboard and search box all refuse another rep's rows got those rows,
+    // plus retired and trashed ones, from here. `ownerScope` returns `undefined`
+    // for a `view_all` holder and `and()` skips it, so a manager's read is
+    // byte-identical to what this file did before.
+    const contactScope = ownerScope(ctx, 'contacts.view_all', contacts);
+    const leadScope = ownerScope(ctx, 'leads.view_all', leads);
+    const dealScope = ownerScope(ctx, 'deals.view_all', deals);
+    const taskScope = ownerScope(ctx, 'tasks.view_all', tasks);
+
     let data: Record<string, unknown>[] = [];
     let total = 0;
 
@@ -81,7 +96,14 @@ export const POST = withApiRoute(async (request: NextRequest) => {
         const conditions: SQL[] = [
           eq(contacts.tenantId, tid),
           sql`${contacts.deletedAt} IS NULL`,
+          // An archived contact is out of the working set: the list hides it
+          // (app/api/tenant/contacts/route.ts:54), and so do search (#2684) and
+          // the export (#2677). (#2690)
+          eq(contacts.isArchived, false),
         ];
+        // `and()` skips an undefined argument, which is how a `view_all` holder
+        // keeps the tenant-wide read this file had before.
+        if (contactScope) conditions.push(contactScope);
 
         if (pattern) {
           conditions.push(or(
@@ -154,7 +176,10 @@ export const POST = withApiRoute(async (request: NextRequest) => {
         const conditions: SQL[] = [
           eq(deals.tenantId, tid),
           sql`${deals.deletedAt} IS NULL`,
+          // Deals are archived through metadata, not a column (#2684).
+          notArchived(),
         ];
+        if (dealScope) conditions.push(dealScope);
 
         if (pattern) {
           conditions.push(sql`${deals.title} ILIKE ${pattern}`);
@@ -230,6 +255,9 @@ export const POST = withApiRoute(async (request: NextRequest) => {
           eq(leads.tenantId, tid),
           sql`${leads.deletedAt} IS NULL`,
         ];
+        // Leads' `is_archived` is filtered by no list (#2684 left it alone for
+        // the same reason), so this route does not invent a rule for it either.
+        if (leadScope) conditions.push(leadScope);
 
         if (pattern) {
           conditions.push(or(
@@ -297,6 +325,11 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       case 'companies': {
         const conditions: SQL[] = [
           eq(companies.tenantId, tid),
+          // The list filters the tombstone (app/api/tenant/companies/route.ts:41)
+          // and this branch did not, so trashed companies came back as live.
+          // No owner predicate: `companies.view_all` is enforced nowhere (#2597),
+          // and narrowing only here would make search stricter than the list.
+          isNull(companies.deletedAt),
         ];
 
         if (pattern) {
@@ -351,7 +384,10 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       case 'tasks': {
         const conditions: SQL[] = [
           eq(tasks.tenantId, tid),
+          // tasks/route.ts:35 hides soft-deleted rows; this branch did not.
+          isNull(tasks.deletedAt),
         ];
+        if (taskScope) conditions.push(taskScope);
 
         if (pattern) {
           conditions.push(sql`${tasks.title} ILIKE ${pattern}`);
