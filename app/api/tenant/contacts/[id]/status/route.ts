@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { updateContactSchema } from '@/lib/api/schemas';
-import { requireAuth, requirePerm } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm, can } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { contacts, activities } from '@/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
@@ -48,12 +48,24 @@ export const PATCH = withApiRoute(async (request: NextRequest,
     if (guard) return guard;
 
     const prev = await db.query.contacts.findFirst({
-      columns: { leadStatus: true },
+      // The two owner columns ride along on a read the route already performs,
+      // so the rule below can be stated the way contacts/[id]:195 states it.
+      columns: { leadStatus: true, assignedTo: true, createdBy: true },
       where: and(eq(contacts.id, id), eq(contacts.tenantId, ctx.tenantId))
     });
 
     if (!prev) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
+
+    // #2698 — this route writes contacts.lead_status, the same column
+    // contacts/[id]:162 maps, and it was reachable by exactly the callers
+    // contacts/[id]:195-200 refuses: `sales_rep` holds contacts.edit
+    // (definitions.ts:133) and not contacts.view_all.
+    if (!can(ctx, 'contacts.view_all')) {
+      if (prev.assignedTo !== ctx.userId && prev.createdBy !== ctx.userId) {
+        return NextResponse.json({ error: 'Not found' }, { status: 404 });
+      }
     }
 
     const description = `Status: ${prev.leadStatus} → ${lead_status}${reason ? ` — ${reason}` : ''}`;
