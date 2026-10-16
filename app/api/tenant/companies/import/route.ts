@@ -13,6 +13,7 @@ import { apiError } from '@/lib/api-error';
 import { logError } from '@/lib/errors-server';
 import { readJsonBody } from '@/lib/api/validate';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { enforceFieldWrite } from '@/lib/rbac/enforce';
 
 function parseCSV(text: string): Record<string, string>[] {
   const lines = text.split(/\r?\n/).filter(l => l.trim());
@@ -79,14 +80,25 @@ export const POST = withApiRoute(async (request: NextRequest) => {
 
       for (const [index, row] of rows.entries()) {
         try {
-          const mapped: Record<string, string> = {};
+          const mappedRaw: Record<string, string> = {};
           for (const [key, val] of Object.entries(row)) {
             const dbCol = COLUMN_MAP[key.toLowerCase().trim()];
-            if (dbCol && val) mapped[dbCol] = val;
+            if (dbCol && val) mappedRaw[dbCol] = val;
           }
 
+          // #2618 — the CSV import wrote every mapped column the header named,
+          // ignoring field_permissions. Project the mapped row through
+          // enforceFieldWrite and report what the role may not write, per row.
+          const { body: gated, stripped } = await enforceFieldWrite(ctx, 'companies', mappedRaw);
+          if (stripped.length > 0) {
+            results.errors.push(`Row ${index + 2}: role restrictions dropped ${stripped.join(', ')}`);
+          }
+          const mapped = gated as Record<string, string>;
+
           if (!mapped.name) {
-            results.errors.push(`Row ${index + 2}: name is required`);
+            results.errors.push(stripped.includes('name')
+              ? `Row ${index + 2}: name is required and the role's field_permissions strip it`
+              : `Row ${index + 2}: name is required`);
             results.skipped++;
             continue;
           }

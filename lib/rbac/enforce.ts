@@ -68,6 +68,16 @@ const READ_ALIASES: Record<string, Record<string, string[]>> = {
     job_title: ['title'],              // PATCH accepts `title` for job_title
     created_by: ['user_id'],           // POST responses emit the creator as user_id
   },
+  // #2618 (companies/tasks half): the same rule — camelCase spellings already
+  // bridge through `normalize()`, so only the TRUE synonyms belong here.
+  companies: {
+    // the export CSV and the import column map both name the UI spelling
+    company_size: ['numberOfEmployees'],
+  },
+  tasks: {
+    // tasks POST emits the creator as `user_id`
+    created_by: ['user_id'],
+  },
 };
 
 // The UI's entity picker and the routes do not agree on singular/plural
