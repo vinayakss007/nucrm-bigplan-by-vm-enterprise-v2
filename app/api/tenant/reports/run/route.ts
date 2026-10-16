@@ -153,15 +153,41 @@ export function filterCondition(tableKey: string, field: string, raw: unknown): 
 }
 
 /**
+ * `filters` in the two shapes this API is actually called with, as
+ * `[field, raw]` pairs — see #2661.
+ *
+ * The record is what the builder posts since `toStoredFilters` existed; the
+ * `[{ column, op, value }]` array is what the builder posted before it, what
+ * `lib/reports/report-filters.ts` still decodes for display, and what
+ * `platform_settings` therefore still holds for reports saved back then. It used
+ * to be discarded here, so the UI showed a report's filter rows as applied while
+ * the query read the whole table — and a direct caller posting the array form got
+ * the same confident, unfiltered, still-labelled-as-filtered answer.
+ *
+ * Pairs rather than a record, because `fromStoredFilters` folds duplicate columns
+ * and rewrites an operator it does not offer to `equals`: a range filter
+ * (`amount gt 1000` and `amount lt 50000`) would lose one side, and `is_null` —
+ * which `filterCondition` answers as `is null`, not as equality on an empty string
+ * — would stop being a filter at all.
+ */
+export function filterPairs(filters: unknown): [string, unknown][] {
+  if (!filters || typeof filters !== 'object') return [];
+  if (!Array.isArray(filters)) return Object.entries(filters as Record<string, unknown>);
+  return (filters as Record<string, unknown>[])
+    // `field` as well as `column`: the declarative configs this file used to carry
+    // (`revenue`'s, removed in the #2389 round) spelled the key `field`.
+    .map(row => [String(row?.column ?? row?.field ?? ''), { value: row?.value, op: row?.op }] as [string, unknown])
+    .filter(([field]) => field !== '');
+}
+
+/**
  * One predicate per entry of the request's `filters`, resolved against
  * `tableKey`. Shared by both branches of `runReportForTenant` so an aggregate
  * cannot be added that reads its tenant, its tombstones and its own `where`
  * while throwing the customer's filters away (#2657).
  */
 export function filterConditions(tableKey: string, filters: unknown): SQL[] {
-  if (!filters || typeof filters !== 'object' || Array.isArray(filters)) return [];
-  return Object.entries(filters as Record<string, unknown>)
-    .map(([field, raw]) => filterCondition(tableKey, field, raw));
+  return filterPairs(filters).map(([field, raw]) => filterCondition(tableKey, field, raw));
 }
 
 // Aggregates keep their own selection because their shape is fixed: one
