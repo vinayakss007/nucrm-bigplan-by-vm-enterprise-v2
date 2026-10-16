@@ -15,10 +15,10 @@ import { escapeLike } from '@/lib/api/sanitize-like';
 import { NextRequest, NextResponse } from 'next/server';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { bulkUpdateSchema } from '@/lib/api/schemas';
-import { requireAuth, requirePerm, type AuthContext } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm, can, type AuthContext } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { contacts, tenantMembers, sequences, sequenceEnrollments, segments, segmentMembers, companies, tenants } from '@/drizzle/schema';
-import { eq, and, sql, inArray, isNull, or, ilike } from 'drizzle-orm';
+import { eq, and, sql, inArray, isNull, or, ilike, type SQL } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { logError } from '@/lib/errors-server';
 import { invalidateWidgetCache } from '@/lib/dashboard/widget-cache';
@@ -48,13 +48,30 @@ export const POST = withApiRoute(async (req: NextRequest) => {
     // In selectAll mode, resolve IDs from filters; otherwise require explicit IDs
     let contact_ids: string[] = rawBody.contact_ids ?? [];
 
+    // #2673 — `contacts/[id]/route.ts` answers 404 to a caller who lacks
+    // `contacts.view_all` when the contact is not theirs (`:82-87` GET, `:195-200`
+    // PATCH, `:304-311` DELETE), and the list narrows with `canViewAll`
+    // (`contacts/route.ts:28-30`). This route had no `view_all` reference at all:
+    // both of its id sets were scoped by tenant, archive flag and tombstone only.
+    // So "select all matching" enumerated the whole workspace and an explicit
+    // `contact_ids` list was accepted as-is — a user who cannot open a colleague's
+    // contact could delete it, re-own it, retag it, or write it to an export.
+    // `can()` rather than the list's local helper because the rule being mirrored
+    // is the one the single-record handlers use.
+    const ownedScope = can(ctx, 'contacts.view_all')
+      ? undefined
+      : or(eq(contacts.assignedTo, ctx.userId), eq(contacts.createdBy, ctx.userId))!;
+
     if (selectAll) {
       // Build filter conditions from the same logic as the contacts list endpoint
-      const whereConditions = [
+      const whereConditions: SQL[] = [
         eq(contacts.tenantId, ctx.tenantId),
         eq(contacts.isArchived, false),
         isNull(contacts.deletedAt),
       ];
+      // Before the caller's filters: `company_id`/`lead_status`/`assigned_to` may
+      // narrow this further, and naming another owner cannot widen it back.
+      if (ownedScope) whereConditions.push(ownedScope);
 
       if (filters?.lead_status) {
         whereConditions.push(eq(contacts.leadStatus, filters.lead_status));
@@ -106,7 +123,10 @@ export const POST = withApiRoute(async (req: NextRequest) => {
         and(
           inArray(contacts.id, contact_ids),
           eq(contacts.tenantId, ctx.tenantId),
-          sql`${contacts.deletedAt} IS NULL`
+          sql`${contacts.deletedAt} IS NULL`,
+          // Both id sets must narrow, or `selectAll` plus a foreign id walks
+          // through whichever one is unguarded.
+          ownedScope
         )
       );
     

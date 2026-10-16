@@ -4696,7 +4696,7 @@ into the column-drift PR. `0125`'s footer names the gap and leaves it here on pu
   (`utils.pk()` → `.primaryKey().defaultRandom()`, codebase-wide convention), so `0126` adds
   `PRIMARY KEY (id)`; `(segment_id, entity_id)` is the identity **in practice** — no code path
   addresses a member by `id` (the members routes query and delete by segment/tenant only) and
-  three bulk callers (`leads/bulk/route.ts:348 (re-pinned 2026-10-16 from `:326`: #2647 bulk gate)`, `contacts/bulk/route.ts:436 (re-pinned 2026-10-16 from `:414`: #2647 bulk gate)`,
+  three bulk callers (`leads/bulk/route.ts:348 (re-pinned 2026-10-16 from `:326`: #2647 bulk gate)`, `contacts/bulk/route.ts:456 (re-pinned 2026-10-16 from `:436`: #2673 added the `contacts.view_all` scope 20 lines above; was `:414` for #2647)`,
   `deals/bulk/route.ts:472 (re-pinned 2026-10-15 from `:446`: #2616/#2641 bulk gate added 26 lines above)`) already assume the pair is unique — so the misleading
   `idx_segment_members_pk` is replaced by `uq_segment_members_segment_entity`, a UNIQUE btree
   over the same two columns, which keeps AC4's lookup role in the same object.
