@@ -95,6 +95,16 @@ export const GET = withApiRoute(async (request: NextRequest,
       return NextResponse.json({ error: 'Lead not found' }, { status: 404 });
     }
 
+    // RBAC: if user lacks view_all, only allow access to own records. Leads was
+    // the one entity that read `view_all` for listing (leads/route.ts:90-92) and
+    // nowhere on the record path — contacts/[id]:82, deals/[id]:66 and
+    // tasks/[id]:55 all refused here (#2692).
+    if (!can(ctx, 'leads.view_all')) {
+      if (lead.assignedTo !== ctx.userId && lead.createdBy !== ctx.userId) {
+        return NextResponse.json({ error: 'Lead not found' }, { status: 404 });
+      }
+    }
+
     // Get assigned user details
     let assignedUser = null;
     if (lead.assignedTo) {
@@ -177,7 +187,7 @@ export const PATCH = withApiRoute(async (request: NextRequest,
 
     // Verify lead exists and belongs to tenant
     const [existing] = await db
-      .select({ id: leads.id, updatedAt: leads.updatedAt })
+      .select({ id: leads.id, updatedAt: leads.updatedAt, assignedTo: leads.assignedTo, createdBy: leads.createdBy })
       .from(leads)
       .where(and(
         eq(leads.id, id),
@@ -188,6 +198,13 @@ export const PATCH = withApiRoute(async (request: NextRequest,
     
     if (!existing) {
       return NextResponse.json({ error: 'Lead not found' }, { status: 404 });
+    }
+
+    // RBAC: if user lacks view_all, only allow editing own records (#2692).
+    if (!can(ctx, 'leads.view_all')) {
+      if (existing.assignedTo !== ctx.userId && existing.createdBy !== ctx.userId) {
+        return NextResponse.json({ error: 'Lead not found' }, { status: 404 });
+      }
     }
     
     // Update mapping (snake_case from body to camelCase for Drizzle)
@@ -294,7 +311,29 @@ export const DELETE = withApiRoute(async (request: NextRequest,
     }
 
     const { id } = await params;
-    
+
+    // RBAC: if user lacks view_all, only allow deleting own records (#2692).
+    // This handler wrote from the bare key, so unlike GET and PATCH there was
+    // no row to inspect — read it first, as contacts/[id]:304-316 does.
+    if (!can(ctx, 'leads.view_all')) {
+      const [existing] = await db
+        .select({ assignedTo: leads.assignedTo, createdBy: leads.createdBy })
+        .from(leads)
+        .where(and(
+          eq(leads.id, id),
+          eq(leads.tenantId, ctx.tenantId),
+          isNull(leads.deletedAt)
+        ))
+        .limit(1);
+
+      if (!existing) {
+        return NextResponse.json({ error: 'Lead not found' }, { status: 404 });
+      }
+      if (existing.assignedTo !== ctx.userId && existing.createdBy !== ctx.userId) {
+        return NextResponse.json({ error: 'Lead not found' }, { status: 404 });
+      }
+    }
+
     const [deleted] = await db.update(leads)
       .set({ 
         deletedAt: new Date(),

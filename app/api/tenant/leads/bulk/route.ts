@@ -15,6 +15,7 @@ import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { leads, tenantMembers, sequences, sequenceEnrollments, segments, segmentMembers, tenants, plans } from '@/drizzle/schema';
 import { eq, and, inArray, sql, isNull } from 'drizzle-orm';
+import { ownerScope } from '@/lib/api/owner-scope';
 import { logAudit } from '@/lib/audit';
 import { logError } from '@/lib/errors-server';
 import { readJsonBody } from '@/lib/api/validate';
@@ -41,7 +42,12 @@ export const POST = withApiRoute(async (req: NextRequest) => {
     if (lead_ids.length > MAX_BULK)
       return NextResponse.json({ error: `Max ${MAX_BULK} leads per bulk operation` }, { status: 400 });
 
-    // Validate all IDs belong to this tenant
+    // #2692 — into both id sets this route writes, as #2674/#2671/#2673 did for
+    // tasks/bulk:82, deals/bulk:81 and contacts/bulk:124. `and()` skips the
+    // `undefined` a `leads.view_all` holder gets, so their read is unchanged.
+    const mine = ownerScope(ctx, 'leads.view_all', leads);
+
+    // Validate all IDs belong to this tenant *and* to this caller
     const validLeads = await db
       .select({ id: leads.id })
       .from(leads)
@@ -49,7 +55,8 @@ export const POST = withApiRoute(async (req: NextRequest) => {
         and(
           inArray(leads.id, lead_ids),
           eq(leads.tenantId, ctx.tenantId),
-          sql`${leads.deletedAt} IS NULL`
+          sql`${leads.deletedAt} IS NULL`,
+          mine
         )
       );
     
@@ -297,7 +304,11 @@ export const POST = withApiRoute(async (req: NextRequest) => {
             and(
               inArray(leads.id, lead_ids),
               eq(leads.tenantId, ctx.tenantId),
-              sql`${leads.deletedAt} IS NOT NULL`
+              sql`${leads.deletedAt} IS NOT NULL`,
+              // Both id sets must narrow, or a foreign id walks through
+              // whichever one is unguarded (contacts/bulk:122-123; the same
+              // second query is scoped in deals/bulk:417).
+              mine
             )
           );
         const restorableIds = restorable.map(r => r.id);
@@ -331,7 +342,8 @@ export const POST = withApiRoute(async (req: NextRequest) => {
             and(
               inArray(leads.id, restorableIds),
               eq(leads.tenantId, ctx.tenantId),
-              sql`${leads.deletedAt} IS NOT NULL`
+              sql`${leads.deletedAt} IS NOT NULL`,
+              mine
             )
           );
         affected = res.rowCount ?? 0;
