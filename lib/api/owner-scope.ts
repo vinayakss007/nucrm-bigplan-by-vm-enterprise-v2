@@ -34,6 +34,27 @@ export function ownerScope(
 }
 
 /**
+ * `ownerScope` for the routes that build their own SQL against an aliased
+ * relation — `data-explorer` (#2704), on all three verbs.
+ *
+ * `ownerScope` renders the columns through drizzle, which qualifies them with the
+ * table's own name (`"contacts"."assigned_to"`). Postgres rejects that in
+ * `FROM contacts c`, so the alias has to come from the caller. Every caller passes
+ * a literal: the columns are the same `assigned_to` / `created_by` pair on all five
+ * CRM entities, so only the alias varies, and `sql.identifier` quotes it rather
+ * than splicing caller text.
+ */
+export function ownerScopeAlias(
+  ctx: AuthContext,
+  permission: string,
+  alias: string,
+): SQL | undefined {
+  if (can(ctx, permission)) return undefined;
+  const a = sql.identifier(alias);
+  return or(sql`${a}.assigned_to = ${ctx.userId}`, sql`${a}.created_by = ${ctx.userId}`)!;
+}
+
+/**
  * The cache key half of the same rule (#2688).
  *
  * `lib/dashboard/widget-cache.ts` keyed its entries by tenant and widget only,
