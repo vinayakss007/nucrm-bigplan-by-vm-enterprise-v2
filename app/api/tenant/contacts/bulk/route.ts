@@ -15,7 +15,8 @@ import { escapeLike } from '@/lib/api/sanitize-like';
 import { NextRequest, NextResponse } from 'next/server';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { bulkUpdateSchema } from '@/lib/api/schemas';
-import { requireAuth, requirePerm, can, type AuthContext } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm, type AuthContext } from '@/lib/auth/middleware';
+import { ownerScope } from '@/lib/api/owner-scope';
 import { db } from '@/drizzle/db';
 import { contacts, tenantMembers, sequences, sequenceEnrollments, segments, segmentMembers, companies, tenants } from '@/drizzle/schema';
 import { eq, and, sql, inArray, isNull, or, ilike, type SQL } from 'drizzle-orm';
@@ -48,19 +49,14 @@ export const POST = withApiRoute(async (req: NextRequest) => {
     // In selectAll mode, resolve IDs from filters; otherwise require explicit IDs
     let contact_ids: string[] = rawBody.contact_ids ?? [];
 
-    // #2673 — `contacts/[id]/route.ts` answers 404 to a caller who lacks
-    // `contacts.view_all` when the contact is not theirs (`:82-87` GET, `:195-200`
-    // PATCH, `:304-311` DELETE), and the list narrows with `canViewAll`
-    // (`contacts/route.ts:28-30`). This route had no `view_all` reference at all:
-    // both of its id sets were scoped by tenant, archive flag and tombstone only.
-    // So "select all matching" enumerated the whole workspace and an explicit
-    // `contact_ids` list was accepted as-is — a user who cannot open a colleague's
-    // contact could delete it, re-own it, retag it, or write it to an export.
-    // `can()` rather than the list's local helper because the rule being mirrored
-    // is the one the single-record handlers use.
-    const ownedScope = can(ctx, 'contacts.view_all')
-      ? undefined
-      : or(eq(contacts.assignedTo, ctx.userId), eq(contacts.createdBy, ctx.userId))!;
+    // #2673 — this route had no `view_all` reference at all: both of its id sets
+    // were scoped by tenant, archive flag and tombstone only, while
+    // `contacts/[id]` answers 404 to a caller who lacks `contacts.view_all` unless
+    // the contact is theirs (`:82-87` GET, `:195-200` PATCH, `:304-311` DELETE) and
+    // the list narrows with `canViewAll` (`contacts/route.ts:28-30`). So "select all
+    // matching" enumerated the whole workspace and an explicit `contact_ids` list was
+    // accepted as-is. See lib/api/owner-scope.ts for the shared predicate.
+    const ownedScope = ownerScope(ctx, 'contacts.view_all', contacts);
 
     if (selectAll) {
       // Build filter conditions from the same logic as the contacts list endpoint
