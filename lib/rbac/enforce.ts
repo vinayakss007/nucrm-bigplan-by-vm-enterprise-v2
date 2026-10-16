@@ -167,12 +167,18 @@ function passes(map: RestrictionMap, key: string, required: number): boolean {
  * handler exposes `amount` as both `amount` and `value`, so restricting the
  * field must clear both — an alias fails whenever its real field does, even
  * though no row was ever configured for the alias spelling.
+ *
+ * Matching is done on the NORMALIZED key too: the deals export row is keyed
+ * `stageName`, which camelizes to the `stage_name` alias of `stage_id`; a raw
+ * only match let that column sail past the restriction (live acceptance run
+ * 2026-10-16 caught the CSV still carrying a `stage` column).
  */
 function ownerField(entity: string, key: string): string {
   const aliases = READ_ALIASES[entity];
   if (!aliases) return key;
+  const nk = normalize(key);
   for (const [field, alts] of Object.entries(aliases)) {
-    if (alts.includes(key)) return field;
+    if (alts.includes(key) || alts.includes(nk)) return field;
   }
   return key;
 }

@@ -105,6 +105,17 @@ describe('alias vocabulary — true synonyms only normalize cannot bridge (#2618
     expect(rows).toEqual([{ id: 'h1', leadLastName: 'L', assignedAt: '2026-01-01' }]);
   });
 
+  it('deals: a stage_id restriction strips the camelCase `stageName` export key', async () => {
+    // Live acceptance run caught /deals/export still carrying a `stage`
+    // column: the row is keyed `stageName`, which only reaches the
+    // `stage_name` alias after normalize — ownerField used raw keys.
+    queue([{ id: ROLE_ID }], [{ fieldName: 'stage_id', accessLevel: 'none' }]);
+    const rows = await enforceFieldRead(ctx(), 'deals', [{
+      id: 'd1', title: 'A', stageName: 'Prospect', pipelineName: 'P',
+    }]);
+    expect(rows).toEqual([{ id: 'd1', title: 'A', pipelineName: 'P' }]);
+  });
+
   it('contacts: a job_title restriction strips `title` (PATCH) and jobTitle (detail row)', async () => {
     queue([{ id: ROLE_ID }], [{ fieldName: 'job_title', accessLevel: 'none' }]);
     const { stripped } = await enforceFieldWrite(ctx(), 'contacts', { title: 'CEO', email: 'a@x.io' });
