@@ -5,9 +5,10 @@
  */
 import { db } from '@/drizzle/db';
 import { contacts, companies, deals, tasks } from '@/drizzle/schema';
-import { eq, and, isNull, ilike, or, sql } from 'drizzle-orm';
+import { eq, and, isNull, ilike, or, sql, type SQL } from 'drizzle-orm';
 import { addJob } from '@/lib/queue';
 import { escapeLike } from '@/lib/api/sanitize-like';
+import { notArchived } from '@/lib/api/deals-archive-filter';
 import { csvEscapeValue } from '@/lib/csv';
 
 export type ExportEntityType = 'contacts' | 'deals' | 'tasks' | 'companies';
@@ -20,6 +21,16 @@ export interface ExportOptions {
  
   filters?: Record<string, string | undefined>;
   callbackUrl?: string;
+  /**
+   * #2677 — the row narrowing the caller's own list route applies, passed in by
+   * the route that holds an `AuthContext` (`ownerScope(ctx, 'contacts.view_all',
+   * contacts)`). This module has no context of its own and the async export job
+   * in `worker.ts` has none to pass, so it stays optional and `and()` skips the
+   * undefined: a cron running as a tenant-wide role keeps reading the tenant,
+   * while a `sales_rep` pressing Export stops reading rows the UI refuses to
+   * show them.
+   */
+  scope?: SQL | undefined;
   /**
    * #2618 — optional row projection (role field_permissions). Applied after
    * the row-cap check and before headers are derived, so a restricted column
@@ -89,7 +100,7 @@ export function escapeIlikeWildcards(input: string): string {
  * Generates CSV string for a given entity type and tenant
  */
 export async function generateExportData(opts: Omit<ExportOptions, 'callbackUrl'>): Promise<string> {
-  const { tenantId, entityType, filters = {} } = opts;
+  const { tenantId, entityType, filters = {}, scope } = opts;
   
  
  
@@ -120,12 +131,17 @@ export async function generateExportData(opts: Omit<ExportOptions, 'callbackUrl'
       .leftJoin(companies, eq(companies.id, contacts.companyId))
       .where(and(
         eq(contacts.tenantId, tenantId),
+        // #2677 — the contacts list hides archived rows (`contacts/route.ts:54`),
+        // the bulk routes hide them (`contacts/bulk/route.ts`), and this query
+        // did not, so the CSV carried rows the screen never showed.
+        eq(contacts.isArchived, false),
         isNull(contacts.deletedAt),
         q ? or(
           ilike(contacts.firstName, `%${escapeLike(q)}%`),
           ilike(contacts.lastName, `%${escapeLike(q)}%`),
           ilike(contacts.email, `%${escapeLike(q)}%`)
-        ) : undefined
+        ) : undefined,
+        scope
       ))
       // #H2: fetch at most MAX_EXPORT_ROWS + 1 so we can detect (and reject)
       // an over-limit export without loading the whole table into memory.
@@ -148,7 +164,11 @@ export async function generateExportData(opts: Omit<ExportOptions, 'callbackUrl'
       .leftJoin(companies, eq(companies.id, deals.companyId))
       .where(and(
         eq(deals.tenantId, tenantId),
-        isNull(deals.deletedAt)
+        isNull(deals.deletedAt),
+        // #2677 — `deals/route.ts:53` hides archived deals by default through
+        // `archiveFilter`; this branch read them all.
+        notArchived(),
+        scope
       ))
       .limit(MAX_EXPORT_ROWS + 1);
       break;
@@ -167,7 +187,8 @@ export async function generateExportData(opts: Omit<ExportOptions, 'callbackUrl'
       .leftJoin(contacts, eq(contacts.id, tasks.contactId))
       .where(and(
         eq(tasks.tenantId, tenantId),
-        isNull(tasks.deletedAt)
+        isNull(tasks.deletedAt),
+        scope
       ))
       .limit(MAX_EXPORT_ROWS + 1);
       break;
@@ -187,7 +208,8 @@ export async function generateExportData(opts: Omit<ExportOptions, 'callbackUrl'
       .from(companies)
       .where(and(
         eq(companies.tenantId, tenantId),
-        isNull(companies.deletedAt)
+        isNull(companies.deletedAt),
+        scope
       ))
       .limit(MAX_EXPORT_ROWS + 1);
       break;
