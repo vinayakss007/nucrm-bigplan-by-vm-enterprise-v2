@@ -128,12 +128,14 @@ function coerceFilterValue(expr: unknown, field: string, value: unknown): unknow
 /** `filters` accepts `"value"` (equals) or `{ value, op }`. */
 export function filterCondition(tableKey: string, field: string, raw: unknown): SQL {
   const expr = resolveField(tableKey, field) as never;
-  const value = typeof raw === 'object' && raw !== null && 'value' in raw
-    ? (raw as { value: unknown }).value
-    : raw;
-  const op = typeof raw === 'object' && raw !== null && 'op' in raw
-    ? String((raw as { op: unknown }).op)
-    : 'equals';
+  // #2662: either key marks the `{ value, op }` shape. Testing only `'value' in raw`
+  // meant `{ "op": "is_null" }` — a null test, which carries no value by definition —
+  // was read as "the object is the value": `"contacts"."city" = $1` bound to
+  // `{op:"is_null"}` on a text column, and `400 Filter value '[object Object]' is not
+  // a date` on a timestamp one. The `op` line below already recognised this shape.
+  const isOperatorObject = typeof raw === 'object' && raw !== null && ('value' in raw || 'op' in raw);
+  const value = isOperatorObject ? (raw as { value?: unknown }).value : raw;
+  const op = isOperatorObject ? String((raw as { op?: unknown }).op ?? 'equals') : 'equals';
 
   if (value === null || value === undefined || value === '') {
     return op === 'is_null' ? sql`${expr} is null` : sql`true`;
