@@ -9,6 +9,7 @@ import { db } from '@/drizzle/db';
 import { deals, dealStages, pipelines } from '@/drizzle/schema';
 import { eq, and, isNull, asc, sql } from 'drizzle-orm';
 import { notArchived } from '@/lib/api/deals-archive-filter';
+import { ownerScope, ownerCacheKey } from '@/lib/api/owner-scope';
 import { withCache } from '@/lib/dashboard/widget-cache';
 import { logError, tenantMeta } from '@/lib/errors-server';
 import { withApiRoute } from '@/lib/api/with-api-route';
@@ -19,6 +20,10 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
     const tid = ctx.tenantId;
+
+    // `ctx` is a `let`, so the narrowing the guard above establishes does not
+    // survive into the withCache closure (#2688).
+    const auth = ctx;
 
     return withCache(tid, 'deals-closing', 300, async () => {
       // Single round-trip: terminal-stage filter inlined as a subselect
@@ -38,6 +43,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
           eq(deals.tenantId, tid),
           isNull(deals.deletedAt),
           notArchived(),  // #2684
+          ownerScope(auth, 'deals.view_all', deals),  // #2688
           sql`${deals.stageId} NOT IN (
             SELECT ds.id FROM ${dealStages} ds
             INNER JOIN ${pipelines} p ON p.id = ds.pipeline_id
@@ -48,7 +54,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
         .limit(5);
 
       return NextResponse.json({ data: { items } });
-    });
+    }, ownerCacheKey(auth, 'deals.view_all'));
   } catch (err) {
     void logError({ error: err, context: 'GET /api/tenant/dashboard/widgets/deals/closing', ...tenantMeta(ctx) });
     return NextResponse.json({ error: 'Widget failed' }, { status: 500 });

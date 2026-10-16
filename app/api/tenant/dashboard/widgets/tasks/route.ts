@@ -8,6 +8,7 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { tasks } from '@/drizzle/schema';
 import { eq, and, isNull, asc } from 'drizzle-orm';
+import { ownerScope, ownerCacheKey } from '@/lib/api/owner-scope';
 import { withCache } from '@/lib/dashboard/widget-cache';
 import { logError, tenantMeta } from '@/lib/errors-server';
 import { withApiRoute } from '@/lib/api/with-api-route';
@@ -18,6 +19,10 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
     const tid = ctx.tenantId;
+
+    // `ctx` is a `let`, so the narrowing the guard above establishes does not
+    // survive into the withCache closure (#2688).
+    const auth = ctx;
 
     return withCache(tid, 'tasks-list', 120, async () => {
       const items = await db
@@ -34,12 +39,16 @@ export const GET = withApiRoute(async (request: NextRequest) => {
           eq(tasks.tenantId, tid),
           isNull(tasks.deletedAt),
           eq(tasks.status, 'pending'),
+          // #2688 — the tasks list narrows to the caller's own rows without
+          // tasks.view_all (app/api/tenant/tasks/route.ts:38-40). This widget
+          // handed out another rep's task titles and cached them per tenant.
+          ownerScope(auth, 'tasks.view_all', tasks),
         ))
         .orderBy(asc(tasks.dueDate))
         .limit(10);
 
       return NextResponse.json({ data: { items } });
-    });
+    }, ownerCacheKey(auth, 'tasks.view_all'));
   } catch (err) {
     void logError({ error: err, context: 'GET /api/tenant/dashboard/widgets/tasks', ...tenantMeta(ctx) });
     return NextResponse.json({ error: 'Widget failed' }, { status: 500 });
