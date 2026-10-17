@@ -11,7 +11,7 @@ import { updateContactSchema } from '@/lib/api/schemas';
 import { requireAuth, can } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { contacts, contactLifecycleHistory, users } from '@/drizzle/schema';
-import { eq, and, desc, sql, isNull } from 'drizzle-orm';
+import { eq, and, desc, isNull } from 'drizzle-orm';
 import { ownerScope } from '@/lib/api/owner-scope';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
@@ -76,8 +76,42 @@ export const POST = withApiRoute(async (request: NextRequest,
 
     const oldStage = contact.lifecycleStage;
 
-    // Update lifecycle stage using helper function (keeping sql.raw for DB function call)
-    await db.execute(sql`SELECT public.update_contact_lifecycle(${id}, ${lifecycle_stage}, ${ctx.userId}, ${reason || null})`);
+    // #2755 — `SELECT public.update_contact_lifecycle(...)` could not ever have worked.
+    // The function (drizzle/migrations/0032_missing_db_functions.sql:231-240) inserts
+    // its history row into `contact_lifecycle_events`, a table no migration creates —
+    // the real one is `contact_lifecycle_history` (drizzle/schema/crm.ts:691, which the
+    // GET two screens below reads) — so the call raised
+    // `relation "contact_lifecycle_events" does not exist`, and because that aborts the
+    // whole function the `UPDATE` above it rolled back with it: the stage never changed
+    // and the route answered 500. Measured by applying `0000_init.sql` plus `0032` to a
+    // scratch cluster and calling the function. Its second statement is wrong even once
+    // the table exists: it re-reads `lifecycle_stage` *after* the update, so every
+    // history row records `from_stage = to_stage` — which is what a hand-created table
+    // showed, `customer|customer` for a lead moved to customer. `oldStage` is the value
+    // the existence read above returned, taken before anything is written.
+    //
+    // The write is therefore this route's own, in one transaction, the way
+    // `contacts/merge` does it (app/api/tenant/contacts/merge/route.ts:73,176). Both
+    // tables isolate on `app.current_tenant` (`0031_rls_remaining_tables.sql:30,177-181`)
+    // and `db` pins that per request, so nothing here needs a session GUC of its own.
+    await db.transaction(async (tx) => {
+      await tx.update(contacts)
+        .set({ lifecycleStage: lifecycle_stage, updatedAt: new Date() })
+        .where(and(
+          eq(contacts.id, id),
+          eq(contacts.tenantId, ctx.tenantId),
+          isNull(contacts.deletedAt),
+        ));
+
+      await tx.insert(contactLifecycleHistory).values({
+        tenantId: ctx.tenantId,
+        contactId: id,
+        fromStage: oldStage,
+        toStage: lifecycle_stage,
+        changedBy: ctx.userId,
+        reason: typeof reason === 'string' ? reason : null,
+      });
+    });
 
     return NextResponse.json({
       ok: true,
