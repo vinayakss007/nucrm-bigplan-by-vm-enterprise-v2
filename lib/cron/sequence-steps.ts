@@ -238,14 +238,34 @@ export function buildSequenceEmailPayload(enrollment: DueEnrollment, step: Seque
  */
 export async function advanceOrCompleteStep(tx: DbTransaction, tenantId: string, enrollment: DueEnrollment): Promise<void> {
   const nextStepNumber = enrollment.currentStep + 1;
-  const nextStepResult = await tx.execute(sql`
-    SELECT public.calculate_sequence_step_date(now(), ${enrollment.sequenceId}::uuid, ${nextStepNumber}) as next_date
-  `);
 
-  const nextStepDate = nextStepResult.rows[0]?.['next_date'] as string | undefined;
+  // #2771 — `SELECT public.calculate_sequence_step_date(now(), …, …)` could not ever have worked,
+  // twice over. It binds three arguments to a function declared with two
+  // (drizzle/migrations/0032_missing_db_functions.sql:32), and Postgres resolves by signature, so the
+  // statement raises before its body runs — measured on a throwaway PG16 cluster with `0032:32-38`
+  // applied: `function public.calculate_sequence_step_date(timestamp with time zone, uuid, integer)
+  // does not exist`. And at its own arity the body is `RETURN NOW() + interval '1 day'` (`0032:37`):
+  // it ignores both parameters and can never return NULL, while the branch below keys on exactly that
+  // absence to decide a sequence has run out of steps. So the schedule was a flat day, whatever the
+  // step's own `delay_days` / `delay_hours` / `delay_minutes` (drizzle/schema/marketing.ts:41-43) say —
+  // and `app/api/tenant/sequences/route.ts:107-109` writes the caller's `delay_minutes` into the
+  // hours/minutes pair and leaves `delay_days` at 0.
+  //
+  // The row this function needs is the same row the cron already looks up to decide what to do at all:
+  // `app/api/cron/process-sequences/route.ts:141` resolves the current step from a map built with
+  // `activeStepWhere`, and treats "not in the map" as completion (`route.ts:143-153`). Reading the next
+  // step here with that same predicate makes the absence meaningful instead of a `NULL` no function can
+  // produce — and it subsumes the second lookup this function used to do for the log row's `step_id`.
+  const nextStep = await tx.query.sequenceSteps.findFirst({
+    columns: { id: true, delayDays: true, delayHours: true, delayMinutes: true },
+    where: and(
+      activeStepWhere(tenantId, [enrollment.sequenceId]),
+      eq(sequenceSteps.stepNumber, nextStepNumber)
+    )
+  });
 
-  if (!nextStepDate) {
-    // No more steps, mark as completed
+  if (!nextStep) {
+    // No more active steps, mark as completed
     await tx.update(sequenceEnrollments)
       .set({
         status: 'completed',
@@ -253,35 +273,31 @@ export async function advanceOrCompleteStep(tx: DbTransaction, tenantId: string,
         updatedAt: new Date()
       })
       .where(and(eq(sequenceEnrollments.id, enrollment.id), eq(sequenceEnrollments.tenantId, tenantId)));
-  } else {
-    // Schedule next step
-    await tx.update(sequenceEnrollments)
-      .set({
-        currentStep: nextStepNumber,
-        nextStepAt: new Date(nextStepDate),
-        updatedAt: new Date()
-      })
-      .where(and(eq(sequenceEnrollments.id, enrollment.id), eq(sequenceEnrollments.tenantId, tenantId)));
-
-    // Fetch next step ID to create log
-    const nextStep = await tx.query.sequenceSteps.findFirst({
-      where: and(
-        eq(sequenceSteps.tenantId, tenantId),
-        eq(sequenceSteps.sequenceId, enrollment.sequenceId),
-        eq(sequenceSteps.stepNumber, nextStepNumber)
-      )
-    });
-
-    if (nextStep) {
-      await tx.insert(sequenceStepLogs).values({
-        enrollmentId: enrollment.id,
-        stepId: nextStep.id,
-        tenantId: enrollment.tenantId,
-        status: 'pending',
-        scheduledAt: new Date(nextStepDate),
-      });
-    }
+    return;
   }
+
+  const nextStepAt = new Date(
+    Date.now()
+    + (nextStep.delayDays ?? 0) * 86400000
+    + (nextStep.delayHours ?? 0) * 3600000
+    + (nextStep.delayMinutes ?? 0) * 60000
+  );
+
+  await tx.update(sequenceEnrollments)
+    .set({
+      currentStep: nextStepNumber,
+      nextStepAt,
+      updatedAt: new Date()
+    })
+    .where(and(eq(sequenceEnrollments.id, enrollment.id), eq(sequenceEnrollments.tenantId, tenantId)));
+
+  await tx.insert(sequenceStepLogs).values({
+    enrollmentId: enrollment.id,
+    stepId: nextStep.id,
+    tenantId: enrollment.tenantId,
+    status: 'pending',
+    scheduledAt: nextStepAt,
+  });
 }
 
 /**
