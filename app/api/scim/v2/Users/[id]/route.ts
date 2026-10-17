@@ -28,6 +28,7 @@ import {
   type SCIMUser,
 } from '@/lib/scim';
 import { concurrencyGuard } from '@/lib/api/concurrency';
+import { isEntityId } from '@/lib/id';
 
 // ── Session revocation helper ─────────────────────────────────────────────────
 
@@ -109,6 +110,15 @@ export async function GET(
   const { tenantId } = authResult;
   const { id } = await params;
 
+  // #2787 — the handler's own catch would turn this segment's uuid cast into a 500.
+  // The body below is the row-missing one, so a malformed URL is not an existence oracle.
+  if (!isEntityId(id)) {
+    return NextResponse.json(
+      generateSCIMError('User not found', 404),
+      { status: 404, headers: { 'Content-Type': 'application/scim+json' } }
+    );
+  }
+
   try {
     const [user] = await db
       .select({
@@ -186,6 +196,15 @@ export async function PATCH(
   if (authResult instanceof NextResponse) return authResult;
   const { tenantId } = authResult;
   const { id } = await params;
+
+  // #2787 — the handler's own catch would turn this segment's uuid cast into a 500.
+  // The body below is the row-missing one, so a malformed URL is not an existence oracle.
+  if (!isEntityId(id)) {
+    return NextResponse.json(
+      generateSCIMError('User not found', 404),
+      { status: 404, headers: { 'Content-Type': 'application/scim+json' } }
+    );
+  }
 
   try {
     // Verify user exists and belongs to tenant
@@ -447,6 +466,15 @@ export async function DELETE(
   if (authResult instanceof NextResponse) return authResult;
   const { tenantId } = authResult;
   const { id } = await params;
+
+  // #2787 — the handler's own catch would turn this segment's uuid cast into a 500.
+  // The body below is the row-missing one, so a malformed URL is not an existence oracle.
+  if (!isEntityId(id)) {
+    return NextResponse.json(
+      generateSCIMError('User not found', 404),
+      { status: 404, headers: { 'Content-Type': 'application/scim+json' } }
+    );
+  }
 
   try {
     // Verify user exists and belongs to tenant
