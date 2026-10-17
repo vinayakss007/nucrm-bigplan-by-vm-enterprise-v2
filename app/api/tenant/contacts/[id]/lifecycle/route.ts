@@ -11,7 +11,8 @@ import { updateContactSchema } from '@/lib/api/schemas';
 import { requireAuth, can } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { contacts, contactLifecycleHistory, users } from '@/drizzle/schema';
-import { eq, and, desc, sql } from 'drizzle-orm';
+import { eq, and, desc, sql, isNull } from 'drizzle-orm';
+import { ownerScope } from '@/lib/api/owner-scope';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 /**
@@ -53,8 +54,20 @@ export const POST = withApiRoute(async (request: NextRequest,
     }
 
     // Verify contact exists
+    //
+    // #2752 — `contacts.edit` says the caller may re-stage a contact; it does not say
+    // which ones. Resolve by the same rule `contacts/[id]` answers with
+    // (app/api/tenant/contacts/[id]/route.ts:196-199), so a caller without
+    // `contacts.view_all` gets the 404 here that they already get on the read, instead
+    // of a write to a row they cannot open. `ownerScope` is `undefined` for a
+    // `view_all` holder, which `and()` skips, so their predicate is unchanged.
     const contact = await db.query.contacts.findFirst({
-      where: and(eq(contacts.id, id), eq(contacts.tenantId, ctx.tenantId))
+      where: and(
+        eq(contacts.id, id),
+        eq(contacts.tenantId, ctx.tenantId),
+        isNull(contacts.deletedAt),
+        ownerScope(ctx, 'contacts.view_all', contacts),
+      )
     });
 
     if (!contact) {
