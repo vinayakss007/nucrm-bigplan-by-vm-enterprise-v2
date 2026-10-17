@@ -64,7 +64,16 @@ export const GET = withApiRoute(async (req: NextRequest) => {
 
  
  
-    const filters: SQL[] = [eq(documents.tenantId, ctx.tenantId)];
+    const filters: SQL[] = [
+      eq(documents.tenantId, ctx.tenantId),
+      // #2785: the DELETE below tombstones the row (`deletedAt`) rather than
+      // removing it, and every other reader of this table filters — the click
+      // target at `documents/[id]/route.ts:40`, and `lib/esignature-internal.ts:98`.
+      // Without it the list and `count(*)` keep showing a file that 404s. The
+      // schema agrees: `idx_documents_active` (`drizzle/schema/documents.ts:54`)
+      // is partial on `deleted_at IS NULL`.
+      isNull(documents.deletedAt),
+    ];
 
     if (entityType) filters.push(eq(documents.entityType, entityType));
     if (entityId) filters.push(eq(documents.entityId, entityId));
