@@ -6,10 +6,10 @@
 /**
  * #2758 / #2759 — `app/api/tenant/analytics/usage/route.ts` answered the three
  * `lastMonth` counts over **every** row in the window, while their `thisMonth` and
- * `totals` siblings filtered `deleted_at IS NULL`. The card at
- * `app/tenant/settings/usage/page.tsx:56-59` renders
- * `<Trend current={thisMonth} previous={lastMonth} />`, so the two numbers being
- * divided were measurements of two different populations: a contact created Sep 20
+ * `totals` siblings filtered `deleted_at IS NULL`. The cards read those fields at
+ * `app/tenant/settings/usage/page.tsx:56-59` and `:93` renders
+ * `<Trend current={card.thisMonth} previous={card.lastMonth} />`, so the two numbers
+ * being divided were measurements of two different populations: a contact created Sep 20
  * and soft-deleted Oct 3 was in the baseline and in nothing else, which makes the
  * arrow report a loss the tenant already took — and reports it with a magnitude that
  * grows with however many tombstones the tenant has accumulated.
@@ -30,8 +30,10 @@
  * break this route: `support_tickets` and `email_log` have **no `deleted_at` column**
  * (`drizzle/schema/support.ts:95-137`, `drizzle/schema/comm.ts:218`), so their
  * fragments must NOT grow the term — `${supportTickets.deletedAt}` is `undefined`
- * there, and drizzle would bind `NULL` into `NULL IS NULL`, silently turning those
- * two counts into a boolean instead of raising.
+ * there, and measured through this repo's own dependency
+ * (`new PgDialect({} as never).sqlToQuery(…)` with an `undefined` chunk) drizzle
+ * renders it as **nothing**, leaving `… AND  IS NULL` with no left operand: a Postgres
+ * syntax error, so the endpoint 500s rather than answering a wrong number.
  *
  * Measured red against `main` (`4f82ec27`), the route restored from HEAD: **10 failed /
  * 3 passed here**, and **14 failed / 8 passed** across this file plus
@@ -290,10 +292,10 @@ describe('the lastMonth baseline reads the same population as its siblings (#275
 describe('the tables with no deleted_at column keep no tombstone term', () => {
   /**
    * The reverse guard. `support_tickets` (`drizzle/schema/support.ts:95-137`) and
-   * `email_log` (`drizzle/schema/comm.ts:218`) have no `deleted_at`, so a route
-   * reference there is `undefined` at runtime and drizzle binds `NULL` — turning
-   * `NULL IS NULL` into a constant true and the count into a full-table scan of the
-   * tenant. Symmetry with the fix above must not be "fixed" by adding the term here.
+   * `email_log` (`drizzle/schema/comm.ts:218`) have no `deleted_at`, so a reference
+   * there is `undefined` at runtime and drizzle emits nothing for it — the rendered
+   * SQL ends in `… AND  IS NULL`, which Postgres rejects, and the endpoint 500s.
+   * Symmetry with the fix above must not be "fixed" by adding the term here.
    */
   it.each(['Tickets', 'Emails'])(
     'the thisMonth%S fragment does NOT mention deleted_at',

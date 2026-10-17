@@ -40,8 +40,9 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     // nothing else, which made the arrow say "down" about a row the tenant has already
     // deleted. Every count here is now over live rows. `support_tickets` and
     // `email_log` carry no such term and keep none: neither table has a `deleted_at`
-    // column (`drizzle/schema/support.ts:95`, `drizzle/schema/comm.ts:218`), so adding
-    // one there would bind `undefined` into an `IS NULL` and 500 the endpoint.
+    // column (`drizzle/schema/support.ts:95-137`, `drizzle/schema/comm.ts:218`), so
+    // interpolating one there is `undefined`, which drizzle renders as nothing — the
+    // statement would end in `… AND  IS NULL` and Postgres would reject it.
     const aggRes = await db.execute<{
       thisMonthContacts: number; thisMonthDeals: number; thisMonthTasks: number;
       thisMonthTickets: number; thisMonthCompanies: number; thisMonthEmails: number;
