@@ -4840,8 +4840,8 @@ commit; that is what this is.
   the tenant. What leaks is retention: a GDPR-erasure or duplicate-merge soft-delete leaves the person
   in a CS to-do list with their email attached and `isActioned`/`recommendedActions` still actionable.
 - **The comparison that makes it the outlier.** `grep -rl 'from(contacts)' app/api` → **37** files;
-  **2** of them never mention `deletedAt`: `app/api/tenant/contacts/duplicates/route.ts:114` (re-pinned 2026-10-16 from `:113`: #2647 enforceFieldRead import shifted the fetch one line down) (an
-  enrichment fetch whose three upstream scans each end `AND deleted_at IS NULL` at `:32`, `:46`, `:61`
+  **2** of them never mention `deletedAt`: `app/api/tenant/contacts/duplicates/route.ts:132` (re-pinned 2026-10-17 from `:114`: #2745 added the owner-scope imports and comments above the same fetch) (an
+  enrichment fetch whose three upstream scans each filter `deleted_at IS NULL`, at `:45`, `:59`, `:74`
   — so it can only be handed live ids; not a leak, recorded here so nobody re-litigates it) and
   `app/api/superadmin/selective-restore/scope/route.ts:75`, which is *supposed* to see deleted rows.
   The forecast pair excludes them on both sides: `0115_rls_view_hardening.sql:57` and
