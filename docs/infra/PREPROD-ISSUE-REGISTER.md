@@ -137,7 +137,7 @@
 >   because #2555's ownership probe deliberately matched the `GET` beside it rather than fixing both
 >   (#2556's own caveat). Every other contact read excludes them: **37** files query `from(contacts)`,
 >   **2** omit `deletedAt` and both are explained below, and the deal side of this same feature filters
->   on both sides (`0115_rls_view_hardening.sql:57`, `analytics/forecast/route.ts:84`) — churn was the
+>   on both sides (`0115_rls_view_hardening.sql:57`, `analytics/forecast/route.ts:93` — re-pinned from the `:84` this carried on 2026-10-17, when **#2777** expanded that one-line `.where(and(…))` into one term per line and added an owner term above it, so the tombstone filter named here is now `:93` and the tenant term is `:92`) — churn was the
 >   outlier. Both handlers now carry `isNull(contacts.deletedAt)`; the two doc comments advertising
 >   `.../analytics/{churn,forecast}/calculate` named routes that do not exist, and this entry's
 >   re-pin of the `docs/README.md:75` pointer is what found the number stale (`:4534` -> `:4651`).
@@ -4845,7 +4845,8 @@ commit; that is what this is.
   — so it can only be handed live ids; not a leak, recorded here so nobody re-litigates it) and
   `app/api/superadmin/selective-restore/scope/route.ts:75`, which is *supposed* to see deleted rows.
   The forecast pair excludes them on both sides: `0115_rls_view_hardening.sql:57` and
-  `app/api/tenant/analytics/forecast/route.ts:84`.
+  `app/api/tenant/analytics/forecast/route.ts:93` (re-pinned from `:84` on 2026-10-17 with the
+  entry above, for the same **#2777** reflow).
 - **What this does NOT do.** `churn_predictions` keeps its rows — nothing in the repo deletes them (the
   only in-repo writer is this file's own `PATCH`, which flips `isActioned`), so this changes queue
   visibility, not stored data, and a purge of predictions for erased contacts stays an owner decision
