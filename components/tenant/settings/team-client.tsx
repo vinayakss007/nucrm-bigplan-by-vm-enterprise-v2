@@ -50,6 +50,33 @@ interface TeamRole {
   id: string; slug: string; name: string;
 }
 
+/**
+ * #2730 — the shape GET /api/tenant/members really answers with (route.ts:142-175).
+ * The props from team/page.tsx:26-54 are snake_case, so the old `TeamMember[]`
+ * typing on reload() let camelCase rows into snake_case state, and every reload
+ * after an invite, role change or remove rendered those rows blank. Timestamps
+ * are ISO strings — JSON has no Date.
+ */
+interface ApiMemberRow {
+  id: string; userId: string; email: string; roleSlug: string;
+  fullName: string | null; roleName: string | null; joinedAt: string | null;
+  emailVerified: boolean | null;
+  contactCount: number; dealCount: number; taskCount: number;
+}
+interface ApiInvitationRow { id: string; email: string; roleSlug: string; expiresAt: string; }
+
+const toTeamMember = (r: ApiMemberRow): TeamMember => ({
+  id: r.id, user_id: r.userId, email: r.email, role_slug: r.roleSlug,
+  full_name: r.fullName ?? undefined, role_name: r.roleName ?? undefined,
+  email_verified: r.emailVerified ?? undefined,
+  contact_count: r.contactCount, deal_count: r.dealCount, task_count: r.taskCount,
+  joined_at: r.joinedAt ?? undefined,
+});
+
+const toTeamInvitation = (r: ApiInvitationRow): TeamInvitation => ({
+  id: r.id, email: r.email, role_slug: r.roleSlug, expires_at: r.expiresAt,
+});
+
 const ROLE_COLORS: Record<string,string> = {
   admin:        'bg-amber-100 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400',
   lead_manager: 'bg-violet-100 text-violet-700 dark:bg-violet-900/20 dark:text-violet-400',
@@ -162,14 +189,14 @@ export default function TeamSettingsClient({ members: initialMembers, invitation
   // "0 active members" empty state — keep the previous rows and surface an
   // explicit error with retry instead.
   const reload = async () => {
-    const result = await fetchJsonSafe<{ data?: TeamMember[]; invitations?: TeamInvitation[] }>('/api/tenant/members');
+    const result = await fetchJsonSafe<{ data?: ApiMemberRow[]; invitations?: ApiInvitationRow[] }>('/api/tenant/members');
     if (result.status === 'error') {
       setRosterError(result.message);
       toast.error('Failed to refresh the team roster — showing previous data');
       return;
     }
     if (result.status === 'ok') {
-      setMembers(result.data.data || []); setInvitations(result.data.invitations || []);
+      setMembers((result.data.data || []).map(toTeamMember)); setInvitations((result.data.invitations || []).map(toTeamInvitation));
       setRosterError(null);
     }
   };
