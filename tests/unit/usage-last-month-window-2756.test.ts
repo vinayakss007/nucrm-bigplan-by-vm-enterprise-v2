@@ -212,12 +212,12 @@ describe('the usage window covers the whole of last month (#2756)', () => {
   it('counts the contacts created on the final day of the previous month', async () => {
     pin(at(2026, 9, 17, 12, 0, 0));
     const json = await getUsage();
-    // Sep 1, Sep 15, Sep 29, Sep 30 12:00, Sep 30 23:59:59 — plus the tombstoned
-    // Sep 20 row, because the three `lastMonth` subselects carry no
-    // `deleted_at IS NULL` term while their siblings do. That asymmetry is
-    // #2759, not this issue; it is asserted here so that closing #2759 turns
-    // this red on purpose rather than silently.
-    expect(json.data.lastMonth.contacts).toBe(6);
+    // Sep 1, Sep 15, Sep 29, Sep 30 12:00, Sep 30 23:59:59. The Sep 20 tombstone is
+    // NOT one of them: as of #2758 the three `lastMonth` subselects carry the same
+    // `deleted_at IS NULL` term their `thisMonth` siblings always had. Before that
+    // fix this expectation was 6, and it was written deliberately wrong so that
+    // closing #2758 would turn this red on purpose rather than silently.
+    expect(json.data.lastMonth.contacts).toBe(5);
   });
 
   it('binds the exclusive bound that this month starts at, not its last day', async () => {
@@ -234,10 +234,11 @@ describe('the usage window covers the whole of last month (#2756)', () => {
   it('the two windows tile the calendar — nothing falls between them, nothing lands in both', async () => {
     pin(at(2026, 9, 17, 12, 0, 0));
     const json = await getUsage();
-    // The population the `lastMonth` subselect actually reads: in-tenant rows,
-    // tombstone included (#2759). The window is what this test grades, so the
-    // fixtures are filtered the way the query filters them, not more.
-    const tenantRows = data.contacts.filter((r) => r.tenant_id === TENANT);
+    // The population both subselects read: in-tenant, live rows. As of #2758 the
+    // baseline filters the tombstone exactly like `thisMonth` and `totals` do, so
+    // one predicate serves all three and the tiling claim is about the windows
+    // rather than about two different populations.
+    const tenantRows = data.contacts.filter((r) => r.tenant_id === TENANT && r.deleted_at === null);
     const inLast = (r: Row) => r.created_at >= at(2026, 8, 1) && r.created_at < at(2026, 9, 1);
     const inThis = (r: Row) => r.created_at >= at(2026, 9, 1);
 
@@ -253,15 +254,18 @@ describe('the usage window covers the whole of last month (#2756)', () => {
     pin(at(2026, 9, 17, 12, 0, 0));
     const json = await getUsage();
     expect(json.data.thisMonth.contacts).toBe(2);   // Oct 1 00:00 and Oct 10
-    expect(json.data.lastMonth.contacts).toBe(6);   // and the Oct-1 row is not in there too
+    expect(json.data.lastMonth.contacts).toBe(5);   // and the Oct-1 row is not in there too
   });
 
   it('keeps the tenant and tombstone terms doing the same work they did before', async () => {
     pin(at(2026, 9, 17, 12, 0, 0));
     const json = await getUsage();
-    // The cross-tenant Sep 30 row is out of both, and the totals still exclude
-    // the tombstone the baseline does not (#2759).
-    expect(json.data.lastMonth.contacts).toBe(6);
+    // The cross-tenant Sep 30 row is out of both. The Sep 20 tombstone is now out
+    // of the baseline too (#2758): the trend divides `lastMonth` into `thisMonth`,
+    // and until both sides filtered `deleted_at` those were two different
+    // populations — a contact created Sep 20 and deleted Oct 3 counted in the
+    // denominator of a trend that says the tenant lost it.
+    expect(json.data.lastMonth.contacts).toBe(5);
     expect(json.data.totals.contacts).toBe(8);
   });
 
