@@ -30,11 +30,17 @@ interface Plan {
   max_users?: number;
   max_automations?: number;
 }
+// #2735 — the keys GET /api/tenant/members actually returns
+// (app/api/tenant/members/route.ts:142-161). This interface used to carry the
+// snake_case shape team/page.tsx selects for its own props, so `useApiQuery` was
+// asserting a shape the endpoint never sent and every read below fell through to
+// its fallback. fullName is nullable (users.full_name), roleSlug because roles is
+// leftJoined.
 interface Member {
   id: string;
-  full_name?: string | null;
+  fullName?: string | null;
   email?: string;
-  role_slug?: string;
+  roleSlug?: string | null;
 }
 interface Usage {
   current_contacts?: number;
@@ -306,16 +312,16 @@ export default function OrganizationAdminPage() {
             >
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-500 to-indigo-500 flex items-center justify-center text-white text-xs font-bold">
-                  {member.full_name?.charAt(0)?.toUpperCase() || member.email?.charAt(0)?.toUpperCase()}
+                  {member.fullName?.charAt(0)?.toUpperCase() || member.email?.charAt(0)?.toUpperCase()}
                 </div>
                 <div>
-                  <p className="text-sm font-medium">{member.full_name || 'User'}</p>
+                  <p className="text-sm font-medium">{member.fullName || 'User'}</p>
                   <p className="text-xs text-muted-foreground">{member.email}</p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-xs px-2 py-1 rounded-full bg-slate-500/10 text-slate-600 dark:text-slate-400 capitalize">
-                  {member.role_slug || 'member'}
+                  {member.roleSlug || 'member'}
                 </span>
               </div>
             </div>
