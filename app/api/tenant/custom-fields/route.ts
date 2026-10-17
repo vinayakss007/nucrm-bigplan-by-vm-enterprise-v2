@@ -190,12 +190,37 @@ export const POST = withApiRoute(async (req: NextRequest) => {
       return NextResponse.json({ error: 'featureName is required' }, { status: 400 });
     }
 
-    await db.execute(
-      sql`SELECT public.register_feature(${featureName}, ${description || null}, ${version || '1.0.0'}, 
-          ${metadataKeys ? JSON.stringify(metadataKeys) : '[]'}, 
-          ${entities ? JSON.stringify(entities) : '[]'}, 
-          ${requiresTables ? JSON.stringify(requiresTables) : '[]'})`
-    );
+    // #2768 — `SELECT public.register_feature(…)` could not ever have worked, in three
+    // separate ways. It passes six arguments to a function declared with three
+    // (drizzle/migrations/0032_missing_db_functions.sql:188), so Postgres resolves by
+    // signature and answers `function register_feature(unknown, unknown, unknown, jsonb,
+    // jsonb, jsonb) does not exist`. At the function's own arity its body inserts into
+    // `feature_flags` (`:193`), a table no migration creates — the one that exists is
+    // `feature_registry` (drizzle/migrations/0000_init.sql:51, drizzle/schema/core.ts:399)
+    // — and that column list is `(name, description, version, enabled)` with
+    // `ON CONFLICT (name)`, while the real unique column is `feature_name` (`0000_init.sql:64`).
+    // So the three jsonb lists this endpoint exists to collect — `metadata_keys`,
+    // `entities`, `requires_tables`, the payload auto-schema evolution reads — had no
+    // home at all, and the list at `:75-78` queries `featureRegistry`, not the table the
+    // function would have written. Measured on a scratch cluster with `0000_init.sql` and
+    // `0032` applied: both calls raise, `feature_registry` stays at 0 rows.
+    //
+    // `enabled: false` is the function's own stated intent (`VALUES (…, false)`):
+    // registering a feature is not activating one, and the read above filters on
+    // `enabled = true`, so activation stays a deliberate second step. The insert is
+    // allowed by the same caller that is allowed to make it — `feature_registry` gates
+    // writes behind a super-admin policy (`0054_rls_phase0.sql:33-35`, re-created at
+    // `0088_rls_bootstrap_and_isolation.sql:565-569`) and this branch already returns 403
+    // for anyone who is not one (`:182-184`).
+    await db.insert(featureRegistry).values({
+      featureName,
+      description: description ?? null,
+      version: version || '1.0.0',
+      enabled: false,
+      metadataKeys: metadataKeys ?? [],
+      entities: entities ?? [],
+      requiresTables: requiresTables ?? [],
+    }).onConflictDoNothing({ target: featureRegistry.featureName });
 
     return NextResponse.json({
       message: `Feature '${featureName}' registered`,
