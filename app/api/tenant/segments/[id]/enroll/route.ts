@@ -28,6 +28,7 @@ import { readJsonBody } from '@/lib/api/validate';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { logError } from '@/lib/errors-server';
 import { ownerScope } from '@/lib/api/owner-scope';
+import { isEntityId } from '@/lib/id';
 
 export const POST = withApiRoute(
   async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
@@ -41,6 +42,8 @@ export const POST = withApiRoute(
         return NextResponse.json({ error: 'Permission denied' }, { status: 403 });
       }
       const { id } = await params;
+      // #2781 — the handler's own catch would turn this segment's uuid cast into a 500.
+      if (!isEntityId(id)) return NextResponse.json({ error: 'Segment not found' }, { status: 404 });
 
       const body = await readJsonBody(req);
       const sequenceId = typeof body.sequence_id === 'string' ? body.sequence_id : '';

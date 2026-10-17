@@ -13,6 +13,7 @@ import { readJsonBody } from '@/lib/api/validate';
 import { concurrencyGuard } from '@/lib/api/concurrency';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { logError } from '@/lib/errors-server';
+import { isEntityId } from '@/lib/id';
 
 const LIMIT_FIELDS = [
   'maxUsers', 'maxContacts', 'maxDeals', 'maxStorageBytes',
@@ -29,6 +30,8 @@ export const GET = withApiRoute(async (request: NextRequest,
     if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
     const { id } = await params;
+    // #2781 — the handler's own catch would turn this segment's uuid cast into a 500.
+    if (!isEntityId(id)) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
     const tenant = await db.query.tenants.findFirst({
       where: eq(tenants.id, id),
@@ -91,6 +94,8 @@ export const PATCH = withApiRoute(async (request: NextRequest,
     if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
     const { id } = await params;
+    // #2781 — the handler's own catch would turn this segment's uuid cast into a 500.
+    if (!isEntityId(id)) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     const body = await readJsonBody(request);
 
     const tenant = await db.query.tenants.findFirst({
