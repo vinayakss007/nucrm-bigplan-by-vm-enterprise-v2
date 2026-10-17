@@ -14,9 +14,10 @@
  * arrow report a loss the tenant already took — and reports it with a magnitude that
  * grows with however many tombstones the tenant has accumulated.
  *
- * The asymmetry was an omission, not a rule: in the same statement all six
- * `thisMonth` counts, all three `totals` counts and both `dealValue` sums filter the
- * tombstone. The three `lastMonth` ones were the only reads in the file that did not.
+ * The asymmetry was an omission, not a rule. Of the thirteen reads in the statement
+ * over a table that has a `deleted_at` column — contacts, deals, tasks, companies —
+ * ten filtered it (four `thisMonth`, four `totals`, both `dealValue` sums) and exactly
+ * three did not: the `lastMonth` trio.
  *
  * Two kinds of assertion, because the bug was structural:
  *   - a **predicate-parity** check — strip the window terms out of a `lastMonth`

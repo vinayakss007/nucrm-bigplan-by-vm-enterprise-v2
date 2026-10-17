@@ -33,8 +33,9 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     // RTT (~4s against a remote DB) while holding a pinned pool connection.
     // One statement with scalar subselects returns the identical shape.
     //
-    // #2758 — the three `lastMonth` counts below used to be the only reads in this
-    // statement without `deleted_at IS NULL`. The trend card divides `lastMonth` into
+    // #2758 — of the thirteen reads in this statement over a table that HAS a
+    // `deleted_at` column (contacts, deals, tasks, companies), ten filtered it and
+    // these three `lastMonth` ones did not. The trend card divides `lastMonth` into
     // `thisMonth`, so that omission measured two different populations: a contact
     // created on Sep 12 and soft-deleted on Oct 3 counted in the baseline and in
     // nothing else, which made the arrow say "down" about a row the tenant has already
