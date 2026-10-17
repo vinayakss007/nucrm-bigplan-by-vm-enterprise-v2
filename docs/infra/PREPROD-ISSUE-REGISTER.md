@@ -2066,7 +2066,7 @@ NOW() - interval '30 days'`, each followed by `v_count := v_count + 1`, and `RET
 - **Stale part of the original report.** `default_tenant_id` is NULL but **irrelevant**: `requireAuth` reads only
   `users.lastTenantId` (`lib/auth/middleware.ts:377`); `defaultTenantId` appears nowhere in auth code — grepping it
   returns `drizzle/schema/core.ts:76`, `scripts/seed-dev.ts`, and a read-only projection at
-  `app/api/superadmin/users/[id]/route.ts:48`.
+  `app/api/superadmin/users/[id]/route.ts:52` (re-pinned 2026-10-17 from `:48` for **#2781**: the `isEntityId` guard that PR adds above this projection shifted it four lines, so `:48` now reads `locale: users.locale,` — still in the same `db.select` column list, but not the `defaultTenantId` read this sentence names).
 - **No platform workspace exists.** `select count(*), count(*) filter (where status='active') from tenants` →
   `183|9`, and those 9 active tenants are all `debug-/verify-/fresh-/my-/e2e-test-workspace-*`; a slug query for
   `platform|internal|system|admin|demo|seed` → **0 rows**. So option (b) below means either a brand-new tenant or

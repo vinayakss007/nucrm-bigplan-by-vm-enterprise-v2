@@ -11,6 +11,7 @@ import { eq, and, sql } from 'drizzle-orm';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { logError } from '@/lib/errors-server';
 import { withTenantContext } from '@/lib/db/rls';
+import { isEntityId } from '@/lib/id';
 
 export const GET = withApiRoute(async (request: NextRequest,
   { params }: { params: Promise<{ id: string }> }) => {
@@ -20,6 +21,8 @@ export const GET = withApiRoute(async (request: NextRequest,
     if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
     const { id } = await params;
+    // #2781 — the handler's own catch would turn this segment's uuid cast into a 500.
+    if (!isEntityId(id)) return NextResponse.json({ error: 'Tenant not found' }, { status: 404 });
 
     const [tenant] = await db
       .select({

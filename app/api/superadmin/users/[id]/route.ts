@@ -10,6 +10,7 @@ import { users, tenantMembers, tenants } from '@/drizzle/schema';
 import { eq, sql } from 'drizzle-orm';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { logError } from '@/lib/errors-server';
+import { isEntityId } from '@/lib/id';
 
 export const GET = withApiRoute(async (request: NextRequest,
   { params }: { params: Promise<{ id: string }> }) => {
@@ -19,6 +20,9 @@ export const GET = withApiRoute(async (request: NextRequest,
     if (!ctx.isSuperAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
     const { id } = await params;
+    // #2781 — a non-id segment reaches the uuid cast below, and this handler's own
+    // catch turns that into a 500 before withApiRoute's 22P02->404 mapping can run.
+    if (!isEntityId(id)) return NextResponse.json({ error: 'User not found' }, { status: 404 });
 
     const membershipsSubquery = db
       .select({
