@@ -12,7 +12,7 @@ import { db } from '@/drizzle/db';
 import { contacts, sequences, sequenceSteps, sequenceEnrollments } from '@/drizzle/schema';
 import { eq, and, asc, sql, isNull } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
-import { cancelOpenEnrollments } from '@/lib/cron/sequence-steps';
+import { cancelOpenEnrollments, stepDelayMs } from '@/lib/cron/sequence-steps';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 export const POST = withApiRoute(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
@@ -65,8 +65,7 @@ export const POST = withApiRoute(async (req: NextRequest, { params }: { params: 
       orderBy: [asc(sequenceSteps.stepNumber)]
     });
 
-    const firstDelay = steps[0]?.delayDays ?? 0;
-    const nextStepAt = new Date(Date.now() + firstDelay * 86400000);
+    const nextStepAt = new Date(Date.now() + stepDelayMs(steps[0] ?? {}));
 
     // Upsert enrollment + increment enroll count atomically
     const [enrollment] = await db.transaction(async (tx) => {
