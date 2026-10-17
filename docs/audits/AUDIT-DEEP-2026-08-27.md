@@ -190,8 +190,8 @@ correctly; these don't.
 
 ### M-6. Unvalidated date params → 500 on audit export
 
-`app/api/tenant/audit/export/route.ts:47-48` builds `new Date(from)` / `new Date(to)` straight from
-`searchParams` with no `isNaN(getTime())` guard; `?from=garbage` → `Invalid Date` → Postgres error → 500. `offers/[quoteId]/send/route.ts:88-90` shows the correct guarded pattern.
+`app/api/tenant/audit/export/route.ts:48-49` (re-pinned 2026-10-17 from `:47-48`: **#2766** added one import line above) builds `new Date(from)` / `new Date(to)` straight from
+`searchParams` with no `isNaN(getTime())` guard; `?from=garbage` → `Invalid Date` → Postgres error → 500. `offers/[quoteId]/send/route.ts:88-90` shows the correct guarded pattern. *(Status 2026-10-17: the guard this entry asked for is in place — `:61` and `:68` answer `400 Invalid 'from'/'to' date`; only the coordinate above moved, and this audit's finding is closed.)*
 
 ---
 

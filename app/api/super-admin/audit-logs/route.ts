@@ -15,6 +15,10 @@ import { superAdminAuditLogs } from '@/drizzle/schema';
 import { requireAuth } from '@/lib/auth/middleware';
 import { eq, and, or, gte, lte, ilike, desc, count } from 'drizzle-orm';
 import { withApiRoute } from '@/lib/api/with-api-route';
+// #2766 — this file's private `clampInt` was the shape the shared one was written from;
+// it now lives in `lib/api/query-params.ts` so the five routes that hand-rolled a
+// `Math.min`/`Math.max` clamp around a `parseInt` cannot re-grow their own `NaN`.
+import { clampInt } from '@/lib/api/query-params';
 import { escapeLike } from '@/lib/api/sanitize-like';
 import { logError } from '@/lib/errors-server';
 import { isUuid } from '@/lib/id';
@@ -24,12 +28,6 @@ import { verifySuperAdminAuditChain } from '@/lib/audit/super-admin';
 // old cap was 100 for both, so an export over more than a page silently wrote a
 // partial file.
 const MAX_LIMIT = 10000;
-
-function clampInt(raw: string | null, fallback: number, min: number, max: number): number {
-  const n = parseInt(raw ?? String(fallback), 10);
-  if (!Number.isFinite(n)) return fallback;
-  return Math.min(max, Math.max(min, n));
-}
 
 /** null = malformed, undefined = absent, otherwise the parsed date. */
 function parseDateParam(raw: string | null): Date | null | undefined {
