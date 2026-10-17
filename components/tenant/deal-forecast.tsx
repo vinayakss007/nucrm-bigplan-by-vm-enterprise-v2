@@ -10,14 +10,19 @@ import { TrendingUp, Calendar, Target, BarChart3 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import toast from 'react-hot-toast';
 
+// #2757 — the keys GET /api/tenant/deals/[id]/forecast actually answers: it is a raw
+// `db.select().from(dealForecasts)` (app/api/tenant/deals/[id]/forecast/route.ts:58-60,70),
+// so it carries Drizzle's column properties. win_probability and predicted_value are
+// numeric and no pg type parser is registered in this app, so they arrive as strings;
+// predicted_close_date is a date, so it arrives as 'YYYY-MM-DD'. The POST body below
+// keeps the snake_case vocabulary forecastSchema declares (route.ts:18-23) — only the
+// response is camelCase.
 interface Forecast {
   id: string;
-  expected_close_date: string | null;
-  probability: number | null;
-  forecast_amount: number | null;
-  confidence_level: string | null;
-  created_at: string;
-  updated_at: string;
+  predictedCloseDate: string | null;
+  winProbability: string | null;
+  predictedValue: string | null;
+  confidenceLevel: string | null;
 }
 
 export default function DealForecast({ dealId }: { dealId: string }) {
@@ -41,10 +46,10 @@ export default function DealForecast({ dealId }: { dealId: string }) {
       if (f) {
         setForecast(f);
         setForm({
-          expected_close_date: f.expected_close_date ? (new Date(f.expected_close_date).toISOString().split('T')[0] ?? '') : '',
-          probability: String(f.probability ?? 50),
-          forecast_amount: String(f.forecast_amount ?? ''),
-          confidence_level: f.confidence_level || 'medium',
+          expected_close_date: f.predictedCloseDate ?? '',
+          probability: String(f.winProbability === null ? 50 : Number(f.winProbability)),
+          forecast_amount: f.predictedValue === null ? '' : String(Number(f.predictedValue)),
+          confidence_level: f.confidenceLevel || 'medium',
         });
       }
     } catch (e) {
@@ -146,27 +151,27 @@ export default function DealForecast({ dealId }: { dealId: string }) {
           <Calendar className="w-4 h-4 text-muted-foreground" />
           <div>
             <p className="text-xs text-muted-foreground">Expected Close</p>
-            <p className="text-sm font-medium">{forecast?.expected_close_date ? new Date(forecast.expected_close_date).toLocaleDateString() : 'Not set'}</p>
+            <p className="text-sm font-medium">{forecast?.predictedCloseDate ? new Date(forecast.predictedCloseDate).toLocaleDateString() : 'Not set'}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
           <Target className="w-4 h-4 text-muted-foreground" />
           <div>
             <p className="text-xs text-muted-foreground">Probability</p>
-            <p className="text-sm font-medium">{forecast?.probability ?? 0}%</p>
+            <p className="text-sm font-medium">{Number(forecast?.winProbability ?? 0)}%</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
           <TrendingUp className="w-4 h-4 text-muted-foreground" />
           <div>
             <p className="text-xs text-muted-foreground">Forecast Amount</p>
-            <p className="text-sm font-medium">{forecast?.forecast_amount ? `$${Number(forecast.forecast_amount).toLocaleString()}` : 'Not set'}</p>
+            <p className="text-sm font-medium">{forecast?.predictedValue ? `$${Number(forecast.predictedValue).toLocaleString()}` : 'Not set'}</p>
           </div>
         </div>
         <div>
           <p className="text-xs text-muted-foreground mb-1">Confidence</p>
-          <span className={`px-2 py-0.5 rounded text-xs font-medium capitalize ${confidenceColors[forecast?.confidence_level || 'medium']}`}>
-            {forecast?.confidence_level || 'medium'}
+          <span className={`px-2 py-0.5 rounded text-xs font-medium capitalize ${confidenceColors[forecast?.confidenceLevel || 'medium']}`}>
+            {forecast?.confidenceLevel || 'medium'}
           </span>
         </div>
       </div>
