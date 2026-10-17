@@ -26,13 +26,16 @@ import pLimit from 'p-limit';
 
 export type DocumentEntityType = 'contact' | 'deal' | 'company' | 'lead' | 'ticket';
 
+/** The keys `GET /api/tenant/documents` actually answers with: a raw
+ *  `db.select().from(documents)` row (`app/api/tenant/documents/route.ts:82-88`), so
+ *  Drizzle column properties, camelCase — and no uploader, which the list route never
+ *  joins (#2782). */
 interface DocumentRow {
   id: string;
   name: string;
-  size_bytes: number;
-  mime_type: string;
-  uploaded_by_name: string | null;
-  created_at: string;
+  sizeBytes: number;
+  mimeType: string;
+  createdAt: string;
 }
 
 interface Props {
@@ -52,15 +55,21 @@ export default function DocumentsPanel({ entityType, entityId, readOnly = false 
   const load = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     try {
+      // #2782 — `route.ts:57-59` reads `entityType` / `entityId` / `folderId` and
+      // nothing else, so the `linked_entity_*` names this used to send matched no
+      // filter: `:73-75` then fell through to `isNull(folder_id)` and answered the
+      // whole tenant's loose files on a single deal's page.
       const params = new URLSearchParams({
-        linked_entity_type: entityType,
-        linked_entity_id: entityId,
+        entityType,
+        entityId,
       });
       const res = await fetch(`/api/tenant/documents?${params}`, { signal });
       const json = await res.json();
       if (signal?.aborted) return;
       if (!res.ok) throw new Error(json.error || 'Failed to load documents');
-      setDocs(json.data ?? []);
+      // The envelope is `{ data: { documents, folders }, page, limit, total }`
+      // (`route.ts:106`), the same one `app/tenant/documents/page.tsx:52-53` reads.
+      setDocs(json.data?.documents ?? []);
     } catch (err) {
       if ((err as Error)?.name === 'AbortError') return;
       toast.error(err instanceof Error ? err.message : 'Failed to load');
@@ -76,41 +85,36 @@ export default function DocumentsPanel({ entityType, entityId, readOnly = false 
     return () => controller.abort();
   }, [load]);
 
+  // #2782 — one round trip, the way `app/tenant/documents/page.tsx:77-95` uploads.
+  // The two-step flow this replaced signed a PUT through `/upload-url`, then POSTed
+  // metadata as `{ name, storage_key, mime_type, size_bytes }`; `route.ts:139-144`
+  // requires `mimeType` and `sizeBytes` and answered 400 every time, so no upload
+  // from this panel could complete. It also ignores `storage_key` and generates its
+  // own key (`route.ts:191`), so even a body that passed validation would have
+  // recorded a row pointing at bytes nobody uploaded.
   const uploadFile = async (file: File) => {
-    const signRes = await fetch('/api/tenant/documents/upload-url', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        name: file.name,
-        mime_type: file.type || 'application/octet-stream',
-        size_bytes: file.size,
-      }),
-    });
-    const sign = await signRes.json();
-    if (!signRes.ok) throw new Error(sign.error || 'Could not start upload');
-
-    const putRes = await fetch(sign.upload_url, {
-      method: 'PUT',
-      headers: sign.required_headers ?? {},
-      body: file,
-    });
-    if (!putRes.ok) throw new Error(`Upload failed (${putRes.status})`);
-
+    const contentType = file.type || 'application/octet-stream';
     const metaRes = await fetch('/api/tenant/documents', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         name: file.name,
-        storage_key: sign.storage_key,
-        mime_type: file.type || 'application/octet-stream',
-        size_bytes: file.size,
+        mimeType: contentType,
+        sizeBytes: file.size,
         // Pre-link to the parent record so the panel filter picks it up.
-        linked_entity_type: entityType,
-        linked_entity_id: entityId,
+        entityType,
+        entityId,
       }),
     });
     const meta = await metaRes.json();
     if (!metaRes.ok) throw new Error(meta.error || 'Could not record document');
+
+    const putRes = await fetch(meta.data.uploadUrl, {
+      method: 'PUT',
+      headers: { 'Content-Type': contentType },
+      body: file,
+    });
+    if (!putRes.ok) throw new Error(`Upload failed (${putRes.status})`);
   };
 
   const onFiles = async (files: FileList | null) => {
@@ -229,8 +233,8 @@ export default function DocumentsPanel({ entityType, entityId, readOnly = false 
                 <div className="min-w-0">
                   <div className="text-sm font-medium truncate">{d.name}</div>
                   <div className="text-xs text-foreground/50">
-                    {formatBytes(d.size_bytes)} · {d.uploaded_by_name ?? '—'} ·{' '}
-                    {new Date(d.created_at).toLocaleDateString()}
+                    {formatBytes(d.sizeBytes)} · {d.mimeType} ·{' '}
+                    {new Date(d.createdAt).toLocaleDateString()}
                   </div>
                 </div>
               </div>
