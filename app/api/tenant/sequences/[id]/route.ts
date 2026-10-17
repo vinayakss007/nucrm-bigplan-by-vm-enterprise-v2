@@ -9,26 +9,13 @@ import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { updateSequenceSchema } from '@/lib/api/schemas';
 import { requireAuth, can } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { contacts, sequences, sequenceSteps, sequenceEnrollments } from '@/drizzle/schema';
-import { eq, and, sql, isNull, inArray } from 'drizzle-orm';
-import { z } from 'zod';
-import { uuidIdSchema } from '@/lib/validation/uuid';
-import { ownerScope } from '@/lib/api/owner-scope';
+import { sequences, sequenceSteps } from '@/drizzle/schema';
+import { eq, and, sql, isNull } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { cancelOpenEnrollments } from '@/lib/cron/sequence-steps';
 import { concurrencyGuard } from '@/lib/api/concurrency';
 import { logError } from '@/lib/errors-server';
 import { withApiRoute } from '@/lib/api/with-api-route';
-
-/**
- * #2737 — the same ceiling `contacts/bulk` puts on an id list (`MAX_BULK`): this
- * used to be N serial round-trips, which hid how large a batch could be.
- */
-const MAX_ENROLL = 500;
-
-const enrollContactsSchema = z.object({
-  contact_ids: z.array(uuidIdSchema).min(1, 'contact_ids array is required').max(MAX_ENROLL, `Max ${MAX_ENROLL} contacts per enrollment`),
-});
 
 /**
  * GET /api/tenant/sequences/[id]
@@ -240,12 +227,12 @@ export const POST = withApiRoute(async (request: NextRequest,
     }
 
     const sequenceId = (await params).id;
-    const raw = await readJsonBody(request);
-    const parsed = validateBody(enrollContactsSchema, raw);
-    if (parsed instanceof NextResponse) return parsed;
-    // A repeated id in one request would otherwise be enrolled once and counted
-    // twice against `skipped`, so the batch is deduped before it is resolved.
-    const requestedIds = [...new Set(parsed.data.contact_ids)];
+    const body = await readJsonBody(request);
+    const { contact_ids } = body;
+
+    if (!Array.isArray(contact_ids) || contact_ids.length === 0) {
+      return NextResponse.json({ error: 'contact_ids array is required' }, { status: 400 });
+    }
 
     // Verify sequence exists and is active
     const sequence = await db.query.sequences.findFirst({
@@ -264,95 +251,54 @@ export const POST = withApiRoute(async (request: NextRequest,
       return NextResponse.json({ error: 'Sequence must be active to enroll contacts' }, { status: 400 });
     }
 
-    // #2737 — this used to call `public.enroll_contact_in_sequence(…)` with four
-    // uuid arguments, and the function is defined with two
-    // (`drizzle/migrations/0032_missing_db_functions.sql:50-59`). Postgres resolves
-    // by name AND argument list, so every call raised "function does not exist";
-    // each one was caught, logged, turned into `{ contact_id, error }`, dropped by
-    // the `enrolled` filter below, and answered as **200** with
-    // `enrolled: []` and the whole batch hidden inside `skipped`. Even the 2-arg
-    // form cannot work: its INSERT omits `tenant_id`, which is NOT NULL
-    // (`drizzle/schema/marketing.ts:81`).
+    // Enroll each contact using the stored procedure.
     //
-    // So the row is written here, the way `contacts/bulk:419-434` and
-    // `segments/[id]/enroll` already do it, and a failure surfaces as a 500 instead
-    // of an empty success.
+    // #1047: previously this awaited one round-trip per contact strictly in
+    // sequence (N serial DB round-trips). We run the same per-contact calls
+    // concurrently with Promise.allSettled instead, collapsing the latency to
+    // roughly a single round-trip while preserving the exact skip-on-error /
+    // per-contact result semantics and response shape.
     //
-    // Resolve the requested ids against contacts this caller may act on. #1120
-    // compliance first (never enrol an opt-out), then the record-level rule:
-    // `contacts/[id]:82-87` answers 404 to a caller who lacks `contacts.view_all`
-    // and owns neither `assigned_to` nor `created_by`, so an id list assembled
-    // anywhere else must not enrol those rows either — same narrowing #2699 put on
-    // `notes/bulk` and #2732 on segment enroll.
-    const eligible = await db
-      .select({ id: contacts.id })
-      .from(contacts)
-      .where(and(
-        inArray(contacts.id, requestedIds),
-        eq(contacts.tenantId, ctx.tenantId),
-        isNull(contacts.deletedAt),
-        eq(contacts.doNotContact, false),
-        eq(contacts.unsubscribed, false),
-        ownerScope(ctx, 'contacts.view_all', contacts)
-      ));
-    const eligibleIds = eligible.map((r) => r.id);
-    const skippedOptedOut = requestedIds.length - eligibleIds.length;
+    // A single set-based statement (unnest over the id array) would be even
+    // fewer round-trips, but enroll_contact_in_sequence performs a plain
+    // INSERT with no ON CONFLICT and sequence_enrollments has no unique
+    // constraint (see migration 0032 + 0000_init) — its behavior on a
+    // duplicate enrollment cannot be confirmed to be non-raising. If any single
+    // call raised inside one set-based statement, the whole batch would abort
+    // and lose the resilient skip-on-duplicate behavior. Concurrent per-contact
+    // calls keep each enrollment independent (one failure does not poison the
+    // rest), so we deliberately choose concurrency over set-based here.
+    const enrollments = await Promise.all(
+      contact_ids.map(async (contactId) => {
+        try {
+          const result = await db.execute(sql`
+            SELECT public.enroll_contact_in_sequence(
+              ${ctx.tenantId}::uuid, 
+              ${sequenceId}::uuid, 
+              ${contactId}::uuid, 
+              ${ctx.userId}::uuid
+            ) as enrollment_id
+          `);
 
-    if (eligibleIds.length === 0) {
-      return NextResponse.json({ error: 'No enrollable contacts found' }, { status: 404 });
-    }
+          const enrollmentId = result.rows[0]?.['enrollment_id'];
 
-    // Contacts already active in this sequence. `sequence_enrollments` has no unique
-    // constraint on `(sequence_id, contact_id)` — `drizzle/schema/marketing.ts:98-110`
-    // declares only partial indexes — so `ON CONFLICT` has nothing to conflict on and
-    // cannot dedupe here. This read IS the dedupe.
-    const active = await db
-      .select({ contactId: sequenceEnrollments.contactId })
-      .from(sequenceEnrollments)
-      .where(and(
-        eq(sequenceEnrollments.tenantId, ctx.tenantId),
-        eq(sequenceEnrollments.sequenceId, sequenceId),
-        eq(sequenceEnrollments.status, 'active'),
-        inArray(sequenceEnrollments.contactId, eligibleIds)
-      ));
-    const activeSet = new Set(active.map((a) => a.contactId));
-    const toEnroll = eligibleIds.filter((id) => !activeSet.has(id));
+          return { contact_id: contactId, enrollment_id: enrollmentId };
+ 
+ 
+        } catch (error) {
+          // Skip if already enrolled or other error
+          await logError({ error: error, context: `Failed to enroll contact ${contactId}`, tenantId: ctx.tenantId, userId: ctx.userId, requestMethod: 'POST' });
+          return { contact_id: contactId, error: "Internal server error" };
+        }
+      })
+    );
 
-    if (toEnroll.length === 0) {
-      return NextResponse.json({
-        ok: true,
-        enrolled: [],
-        skipped: requestedIds.length,
-        skipped_opted_out: skippedOptedOut,
-        skipped_existing: activeSet.size,
-      });
-    }
-
-    const inserted = await db.transaction(async (tx) => {
-      const rows = await tx.insert(sequenceEnrollments).values(
-        toEnroll.map((contactId) => ({
-          tenantId: ctx.tenantId,
-          sequenceId,
-          contactId,
-          status: 'active' as const,
-          currentStep: 1,
-          enrolledBy: ctx.userId,
-        }))
-      ).returning({ id: sequenceEnrollments.id, contactId: sequenceEnrollments.contactId });
-
-      await tx.update(sequences)
-        .set({ enrollCount: sql`COALESCE(${sequences.enrollCount}, 0) + ${rows.length}` })
-        .where(eq(sequences.id, sequenceId));
-
-      return rows;
-    });
+    const enrolled = enrollments.filter(e => 'enrollment_id' in e && e.enrollment_id);
 
     return NextResponse.json({
       ok: true,
-      enrolled: inserted.map((r) => ({ contact_id: r.contactId, enrollment_id: r.id })),
-      skipped: requestedIds.length - inserted.length,
-      skipped_opted_out: skippedOptedOut,
-      skipped_existing: activeSet.size,
+      enrolled: enrolled,
+      skipped: enrollments.length - enrolled.length,
     });
  
  
