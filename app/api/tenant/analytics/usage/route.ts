@@ -22,7 +22,12 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     const now = new Date();
     const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+    // #2756 — this bound is used with `<`, so it has to be the moment last month
+    // ENDS, which is the moment this month starts. Day 0 of the current month is
+    // the last calendar day at 00:00, so the old expression cut the window one
+    // full day short and every record created on the final day of the previous
+    // month vanished from the `lastMonth` counts the usage dashboard trends on.
+    const lastMonthEnd = thisMonthStart;
 
     // Single round-trip aggregate: 17 serial counts used to cost ~17x WAN
     // RTT (~4s against a remote DB) while holding a pinned pool connection.
