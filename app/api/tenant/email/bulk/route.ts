@@ -14,6 +14,7 @@ import { logAudit } from '@/lib/audit';
 import { readJsonBody } from '@/lib/api/validate';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { ownerScope } from '@/lib/api/owner-scope';
 
 const MAX_EMAILS = 50;
 
@@ -42,6 +43,16 @@ export const POST = withApiRoute(async (req: NextRequest) => {
     // Compliance (#1120): exclude contacts flagged unsubscribed / do-not-contact.
     // doNotContact is filtered in SQL; `unsubscribed` is fetched so we can report
     // exactly how many recipients were skipped for compliance reasons.
+    //
+    // #2728: `entity_ids` is a set the client assembled — "select all matching",
+    // or ids from a list the caller is not entitled to read — so the tenant and
+    // tombstone terms below scoped the batch to the workspace, not to the caller.
+    // `contacts/[id]:82-87` answers 404 for a `sales_rep`
+    // (`lib/permissions/definitions.ts:133`) reaching a row that is neither
+    // `assigned_to` nor `created_by` them, and a bulk send is a write to those
+    // rows with extra steps: the same rule #2699 put on `notes/bulk`. For a
+    // caller who holds `contacts.view_all`, `ownerScope` renders nothing and this
+    // query is byte-for-byte what it was.
     const ents = await db.select({
       id: contacts.id,
       email: contacts.email,
@@ -54,7 +65,8 @@ export const POST = withApiRoute(async (req: NextRequest) => {
         inArray(contacts.id, entity_ids),
         eq(contacts.tenantId, ctx.tenantId),
         isNull(contacts.deletedAt),
-        eq(contacts.doNotContact, false)
+        eq(contacts.doNotContact, false),
+        ownerScope(ctx, 'contacts.view_all', contacts)
       ));
 
     const skippedUnsubscribed = ents.filter(ent => ent.unsubscribed === true).length;
