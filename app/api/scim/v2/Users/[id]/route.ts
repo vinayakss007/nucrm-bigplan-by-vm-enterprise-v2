@@ -28,6 +28,19 @@ import {
   type SCIMUser,
 } from '@/lib/scim';
 import { concurrencyGuard } from '@/lib/api/concurrency';
+import { isEntityId } from '@/lib/id';
+
+/**
+ * #2787 — the not-found answer, in the envelope every reader here has to return: SCIM clients
+ * parse `application/scim+json`, and the row-missing body is deliberately what a malformed id
+ * gets too, so the status cannot be used to ask whether a user exists.
+ */
+function scimUserNotFound(): NextResponse {
+  return NextResponse.json(
+    generateSCIMError('User not found', 404),
+    { status: 404, headers: { 'Content-Type': 'application/scim+json' } }
+  );
+}
 
 // ── Session revocation helper ─────────────────────────────────────────────────
 
@@ -109,6 +122,10 @@ export async function GET(
   const { tenantId } = authResult;
   const { id } = await params;
 
+  // #2787 — a segment that cannot name a uuid row must not reach the cast this catch turns into 500.
+  // Same body as the row-missing branch, so a malformed URL is not an existence oracle.
+  if (!isEntityId(id)) return scimUserNotFound();
+
   try {
     const [user] = await db
       .select({
@@ -124,12 +141,7 @@ export async function GET(
       .where(and(eq(users.id, id), eq(tenantMembers.tenantId, tenantId)))
       .limit(1);
 
-    if (!user) {
-      return NextResponse.json(
-        generateSCIMError('User not found', 404),
-        { status: 404, headers: { 'Content-Type': 'application/scim+json' } }
-      );
-    }
+    if (!user) return scimUserNotFound();
 
     const url = new URL(request.url);
     const baseUrl = `${url.protocol}//${url.host}/api`;
@@ -187,6 +199,10 @@ export async function PATCH(
   const { tenantId } = authResult;
   const { id } = await params;
 
+  // #2787 — a segment that cannot name a uuid row must not reach the cast this catch turns into 500.
+  // Same body as the row-missing branch, so a malformed URL is not an existence oracle.
+  if (!isEntityId(id)) return scimUserNotFound();
+
   try {
     // Verify user exists and belongs to tenant
     const [existingUser] = await db
@@ -204,12 +220,7 @@ export async function PATCH(
       .where(and(eq(users.id, id), eq(tenantMembers.tenantId, tenantId)))
       .limit(1);
 
-    if (!existingUser) {
-      return NextResponse.json(
-        generateSCIMError('User not found', 404),
-        { status: 404, headers: { 'Content-Type': 'application/scim+json' } }
-      );
-    }
+    if (!existingUser) return scimUserNotFound();
 
     const parsedBody = scimPatchRequestSchema.safeParse(await readJsonBody(request));
     if (!parsedBody.success) {
@@ -448,6 +459,10 @@ export async function DELETE(
   const { tenantId } = authResult;
   const { id } = await params;
 
+  // #2787 — a segment that cannot name a uuid row must not reach the cast this catch turns into 500.
+  // Same body as the row-missing branch, so a malformed URL is not an existence oracle.
+  if (!isEntityId(id)) return scimUserNotFound();
+
   try {
     // Verify user exists and belongs to tenant
     const [existingUser] = await db
@@ -460,12 +475,7 @@ export async function DELETE(
       .where(and(eq(users.id, id), eq(tenantMembers.tenantId, tenantId)))
       .limit(1);
 
-    if (!existingUser) {
-      return NextResponse.json(
-        generateSCIMError('User not found', 404),
-        { status: 404, headers: { 'Content-Type': 'application/scim+json' } }
-      );
-    }
+    if (!existingUser) return scimUserNotFound();
 
     await db.transaction(async (tx) => {
       // Soft-delete: set THIS tenant's membership to inactive
