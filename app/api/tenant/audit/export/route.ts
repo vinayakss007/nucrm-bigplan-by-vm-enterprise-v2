@@ -12,6 +12,7 @@ import { eq, and, gte, lte, desc, isNull, type SQL } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { escapeCSV } from '@/lib/export';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { clampInt } from '@/lib/api/query-params';
 
 /**
  * GET /api/tenant/audit/export
@@ -47,7 +48,11 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     const from = searchParams.get('from');
     const to = searchParams.get('to');
     const format = searchParams.get('format') || 'json';
-    const limit = Math.min(50000, Number(searchParams.get('limit') || '5000'));
+    // #2766 — `Math.min(50000, Number('abc'))` is `NaN`, and drizzle renders a `NaN`
+    // limit as **no LIMIT clause at all** (`pg-core/dialect.js:286`), so the 50k cap
+    // this route exists to enforce was removed by typing three letters — or a minus
+    // sign, which `Math.min(50000, -1)` also let through to the same omission.
+    const limit = clampInt(searchParams.get('limit'), 5000, 1, 50000);
 
     // Build query filters
     const filters: SQL[] = [eq(auditLogs.tenantId, ctx.tenantId), isNull(auditLogs.deletedAt)];

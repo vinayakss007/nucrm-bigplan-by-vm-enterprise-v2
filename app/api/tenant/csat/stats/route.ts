@@ -10,6 +10,7 @@ import { db } from '@/drizzle/db';
 import { csatSurveys, supportTickets, users } from '@/drizzle/schema';
 import { eq, and, sql, desc } from 'drizzle-orm';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { clampInt } from '@/lib/api/query-params';
 
 export const GET = withApiRoute(async (request: NextRequest) => {
   try {
@@ -17,7 +18,13 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     if (ctx instanceof NextResponse) return ctx;
 
     const { searchParams } = new URL(request.url);
-    const days = Math.min(365, Math.max(1, parseInt(searchParams.get('days') ?? '30')));
+    // #2766 — the old `Math.min(365, Math.max(1, parseInt(…)))` answered `NaN` for
+    // `?days=abc` and for `?days=` (`?? '30'` only substitutes for an *absent*
+    // parameter; an empty one is `''`, and `parseInt('')` is `NaN`), and
+    // `Math.min`/`Math.max` propagate `NaN` rather than clamping it. That `NaN`
+    // reached `since.setDate(… - NaN)` as an Invalid Date, so a URL typo cost a 500
+    // and a CRITICAL_ERROR alert.
+    const days = clampInt(searchParams.get('days'), 30, 1, 365);
 
     const since = new Date();
     since.setDate(since.getDate() - days);
