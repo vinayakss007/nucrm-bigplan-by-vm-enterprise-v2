@@ -90,7 +90,19 @@ describe('TeamSettingsClient error vs empty (#2231)', () => {
       const url = String(input);
       if (url === '/api/tenant/invite/send' && init?.method === 'POST') return jsonResponse({ ok: true });
       if (url === '/api/tenant/members') {
-        return jsonResponse({ data: [...members, { id: 'm2', user_id: 'u2', full_name: 'Grace Newcomer', email: 'grace@corp.test', role_slug: 'viewer' }], invitations: [] });
+        // #2730: this fixture used to be snake_case, i.e. the shape the Server
+        // Component sends as props, not what GET /api/tenant/members returns.
+        // It only passed because reload() assigned the rows in unconverted.
+        const asApiRow = (m: typeof members[number]) => ({
+          id: m.id, userId: m.user_id, fullName: m.full_name, email: m.email,
+          roleSlug: m.role_slug, roleName: m.role_name, status: 'active',
+          joinedAt: new Date().toISOString(), avatarUrl: null, emailVerified: true,
+          contactCount: 0, dealCount: 0, taskCount: 0,
+        });
+        return jsonResponse({
+          data: [...members.map(asApiRow), asApiRow({ id: 'm2', user_id: 'u2', full_name: 'Grace Newcomer', email: 'grace@corp.test', role_slug: 'viewer', role_name: 'Viewer' })],
+          invitations: [],
+        });
       }
       return jsonResponse({ data: [] });
     });
