@@ -27,6 +27,7 @@ import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { logError } from '@/lib/errors-server';
+import { ownerScope } from '@/lib/api/owner-scope';
 
 export const POST = withApiRoute(
   async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
@@ -78,13 +79,51 @@ export const POST = withApiRoute(
         .from(segmentMembers)
         .where(and(eq(segmentMembers.segmentId, id), eq(segmentMembers.tenantId, ctx.tenantId)));
       const memberIds = memberRows.map((m) => m.entityId);
+      const totalMembers = memberIds.length;
 
       if (memberIds.length === 0) {
         return NextResponse.json({
           ok: true,
-          data: { enrolled: 0, skipped_opt_out: 0, skipped_existing: 0, total_members: 0 },
+          data: { enrolled: 0, skipped_opt_out: 0, skipped_not_owned: 0, skipped_existing: 0, total_members: 0 },
           message: 'Segment has no cached members. Refresh the segment first.',
         });
+      }
+
+      // #2732: every set below is assembled from rows the caller may never have been
+      // allowed to read, so `automations.manage` alone let a `sales_rep`
+      // (`lib/permissions/definitions.ts:133`, where `contacts.view_all` is explicitly
+      // false) enroll a colleague's contact into a live mail sequence — a write to a
+      // row that `contacts/[id]:82-87` answers 404 for. This is the owner rule
+      // `ownerScope` exists for, the same one #2699 put on `notes/bulk` and #2728 on
+      // `email/bulk`.
+      //
+      // The narrowing happens here, before the compliance filter below, rather than
+      // inside it: those five terms decide whether a contact may be mailed at all, and
+      // folding the owner rule in would make members this caller simply cannot reach
+      // come back as `skipped_opt_out`. Dropping them first keeps each counter meaning
+      // what its name says. For a `view_all` holder `ownerScope` renders nothing, this
+      // round-trip is skipped entirely, and the route behaves exactly as it did.
+      const ownedScope = ownerScope(ctx, 'contacts.view_all', contacts);
+      let enrollableIds = memberIds;
+      let skippedNotOwned = 0;
+      if (ownedScope) {
+        const visible = await db
+          .select({ id: contacts.id })
+          .from(contacts)
+          .where(and(
+            eq(contacts.tenantId, ctx.tenantId),
+            inArray(contacts.id, memberIds),
+            ownedScope,
+          ));
+        const visibleSet = new Set(visible.map((c) => c.id));
+        skippedNotOwned = memberIds.length - visibleSet.size;
+        enrollableIds = memberIds.filter((mid) => visibleSet.has(mid));
+        if (enrollableIds.length === 0) {
+          return NextResponse.json({
+            ok: true,
+            data: { enrolled: 0, skipped_opt_out: 0, skipped_not_owned: skippedNotOwned, skipped_existing: 0, total_members: totalMembers },
+          });
+        }
       }
 
       // Contactable members only: live, not opted out, not unsubscribed.
@@ -93,18 +132,18 @@ export const POST = withApiRoute(
         .from(contacts)
         .where(and(
           eq(contacts.tenantId, ctx.tenantId),
-          inArray(contacts.id, memberIds),
+          inArray(contacts.id, enrollableIds),
           isNull(contacts.deletedAt),
           eq(contacts.doNotContact, false),
           eq(contacts.unsubscribed, false),
         ));
       const contactableIds = contactable.map((c) => c.id);
-      const skippedOptOut = memberIds.length - contactableIds.length;
+      const skippedOptOut = enrollableIds.length - contactableIds.length;
 
       if (contactableIds.length === 0) {
         return NextResponse.json({
           ok: true,
-          data: { enrolled: 0, skipped_opt_out: skippedOptOut, skipped_existing: 0, total_members: memberIds.length },
+          data: { enrolled: 0, skipped_opt_out: skippedOptOut, skipped_not_owned: skippedNotOwned, skipped_existing: 0, total_members: totalMembers },
         });
       }
 
@@ -149,8 +188,9 @@ export const POST = withApiRoute(
         data: {
           enrolled: toEnroll.length,
           skipped_opt_out: skippedOptOut,
+          skipped_not_owned: skippedNotOwned,
           skipped_existing: existingSet.size,
-          total_members: memberIds.length,
+          total_members: totalMembers,
         },
       });
     } catch (err) {
