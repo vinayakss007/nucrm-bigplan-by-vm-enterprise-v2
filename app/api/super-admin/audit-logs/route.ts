@@ -15,6 +15,7 @@ import { superAdminAuditLogs } from '@/drizzle/schema';
 import { requireAuth } from '@/lib/auth/middleware';
 import { eq, and, or, gte, lte, ilike, desc, count } from 'drizzle-orm';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { escapeLike } from '@/lib/api/sanitize-like';
 import { logError } from '@/lib/errors-server';
 import { isUuid } from '@/lib/id';
 import { verifySuperAdminAuditChain } from '@/lib/audit/super-admin';
@@ -105,7 +106,10 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     // The panel's "Search action or type…" box has always sent this param and the
     // route never read it, so the box silently filtered nothing at all.
     if (search) {
-      const like = `%${search}%`;
+      // #2751 — `%` and `_` survive into the pattern as wildcards unless they
+      // are escaped: an action name typed with an underscore (`contact_view`)
+      // also matched `contactXview`, and `search=%` matched every row.
+      const like = `%${escapeLike(search)}%`;
       const searchCond = or(
         ilike(superAdminAuditLogs.action, like),
         ilike(superAdminAuditLogs.targetType, like),
