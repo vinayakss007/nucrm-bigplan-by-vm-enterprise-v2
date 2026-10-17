@@ -36,16 +36,19 @@ vi.mock('@/lib/errors-server', () => ({ logError: (...a: unknown[]) => logError(
 vi.mock('@/drizzle/schema', () => ({
   automations: { tenantId: 'a.tenantId', isActive: 'a.isActive', triggerType: 'a.trigger', createdAt: 'a.createdAt' },
   automationRuns: {},
-  contacts: { id: 'c.id', tenantId: 'c.tenantId', tags: 'c.tags' },
+  contacts: { id: 'c.id', tenantId: 'c.tenantId', tags: 'c.tags', deletedAt: 'c.deletedAt', doNotContact: 'c.doNotContact', unsubscribed: 'c.unsubscribed' },
   deals: { id: 'd.id', tenantId: 'd.tenantId' },
   tasks: { id: 'tk.id', tenantId: 'tk.tenantId' },
   callLogs: {},
   integrations: { tenantId: 'i.tenantId', type: 'i.type', isActive: 'i.isActive' },
+  sequences: { id: 's.id', tenantId: 's.tenantId', enrollCount: 's.enrollCount' },
+  sequenceEnrollments: { id: 'se.id', tenantId: 'se.tenantId', sequenceId: 'se.sequenceId', contactId: 'se.contactId', status: 'se.status', deletedAt: 'se.deletedAt' },
 }));
 vi.mock('@/drizzle/relations', () => ({}));
 vi.mock('drizzle-orm', () => ({
   eq: (a: unknown, b: unknown) => ({ __eq: [a, b] }),
   and: (...c: unknown[]) => ({ __and: c }),
+  isNull: (a: unknown) => ({ __isNull: a }),
   sql: (strings: TemplateStringsArray, ...v: unknown[]) => ({ __sql: strings.join('?'), values: v }),
 }));
 
@@ -55,6 +58,11 @@ interface Harness {
   inserts: Array<{ table: unknown; values: Record<string, unknown> }>;
   updates: Array<{ table: unknown; set: Record<string, unknown> }>;
   executes: unknown[];
+  /** The WHERE tree of every tx-level select, in the order they ran. */
+  selects: unknown[];
+  /** Rows written to `automation_runs` by the outer db (success/failed log). */
+  runLog: Record<string, unknown>[];
+  failInsert: boolean;
 }
 let h: Harness;
 
@@ -62,6 +70,7 @@ function makeTx() {
   return {
     insert: (table: unknown) => ({
       values: (values: Record<string, unknown>) => {
+        if (h.failInsert) return Promise.reject(new Error('enrollment write exploded'));
         h.inserts.push({ table, values });
         return Promise.resolve([{ id: 'row-1' }]);
       },
@@ -74,7 +83,10 @@ function makeTx() {
     }),
     select: () => ({
       from: () => ({
-        where: () => ({ limit: () => Promise.resolve(h.selectQueue.shift() ?? []) }),
+        where: (pred: unknown) => {
+          h.selects.push(pred);
+          return { limit: () => Promise.resolve(h.selectQueue.shift() ?? []) };
+        },
       }),
     }),
     execute: (q: unknown) => {
@@ -91,7 +103,12 @@ vi.mock('@/drizzle/db', () => ({
       integrations: { findFirst: (...a: unknown[]) => integrationsFindFirst(...a) },
     },
     // Top-level insert used only for the failed-run log path.
-    insert: () => ({ values: () => ({ catch: () => Promise.resolve() }) }),
+    insert: () => ({
+      values: (values: Record<string, unknown>) => {
+        h.runLog.push(values);
+        return { catch: () => Promise.resolve() };
+      },
+    }),
     transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn(makeTx()),
   },
 }));
@@ -115,7 +132,7 @@ const updated = () => h.updates;
 
 beforeEach(() => {
   vi.clearAllMocks();
-  h = { selectQueue: [], inserts: [], updates: [], executes: [] };
+  h = { selectQueue: [], inserts: [], updates: [], executes: [], selects: [], runLog: [], failInsert: false };
   integrationsFindFirst.mockResolvedValue(undefined);
 });
 
@@ -202,15 +219,76 @@ describe('create_deal', () => {
   });
 });
 
-describe('enroll_sequence', () => {
-  it('calls the enroll SQL function with tenant + sequence + contact', async () => {
+const LIVE_CONTACT = { id: 'c-1', deletedAt: null, doNotContact: false, unsubscribed: false };
+
+describe('enroll_sequence (#2739)', () => {
+  it('writes the enrollment row instead of calling a function that does not exist', async () => {
+    h.selectQueue = [[LIVE_CONTACT], []];
     await fire({ type: 'enroll_sequence', config: { sequence_id: 'seq-1' } }, { contact_id: 'c-1' }, { userId: 'u-1' });
-    expect(h.executes.length).toBe(1);
+
+    const row = inserted().find((i) => i.values.sequenceId === 'seq-1');
+    expect(row).toBeTruthy();
+    expect(row!.values).toMatchObject({
+      tenantId: 't-1', contactId: 'c-1', status: 'active', currentStep: 1, enrolledBy: 'u-1',
+    });
+    expect(h.executes).toHaveLength(0);
+  });
+
+  it('reads the contact within the tenant that fired the rule', async () => {
+    h.selectQueue = [[LIVE_CONTACT], []];
+    await fire({ type: 'enroll_sequence', config: { sequence_id: 'seq-1' } }, { contact_id: 'c-1' });
+    expect(h.selects[0]).toEqual({
+      __and: [{ __eq: ['c.id', 'c-1'] }, { __eq: ['c.tenantId', 't-1'] }],
+    });
+  });
+
+  it('moves the sequence enroll counter', async () => {
+    h.selectQueue = [[LIVE_CONTACT], []];
+    await fire({ type: 'enroll_sequence', config: { sequence_id: 'seq-1' } }, { contact_id: 'c-1' });
+    const bump = updated().find((u) => u.set.enrollCount !== undefined);
+    expect(bump).toBeTruthy();
+    expect((bump!.set.enrollCount as { __sql: string }).__sql).toMatch(/COALESCE\(\?, 0\) \+ 1/);
+  });
+
+  it('does not enroll a contact that has opted out of mail', async () => {
+    for (const over of [{ doNotContact: true }, { unsubscribed: true }, { deletedAt: new Date('2026-10-01') }]) {
+      h.selectQueue = [[{ ...LIVE_CONTACT, ...over }], []];
+      h.inserts = [];
+      await fire({ type: 'enroll_sequence', config: { sequence_id: 'seq-1' } }, { contact_id: 'c-1' });
+      expect(inserted().some((i) => i.values.sequenceId === 'seq-1')).toBe(false);
+    }
+  });
+
+  it('does not start a second drip when one is already active', async () => {
+    h.selectQueue = [[LIVE_CONTACT], [{ id: 'e-1' }]];
+    await fire({ type: 'enroll_sequence', config: { sequence_id: 'seq-1' } }, { contact_id: 'c-1' });
+    expect(inserted().some((i) => i.values.sequenceId === 'seq-1')).toBe(false);
+    expect(h.selects[1]).toEqual({
+      __and: [
+        { __eq: ['se.tenantId', 't-1'] },
+        { __eq: ['se.sequenceId', 'seq-1'] },
+        { __eq: ['se.contactId', 'c-1'] },
+        { __eq: ['se.status', 'active'] },
+        { __isNull: 'se.deletedAt' },
+      ],
+    });
+  });
+
+  it('a write that explodes is recorded as a failed run, not a silent success', async () => {
+    h.selectQueue = [[LIVE_CONTACT], []];
+    h.failInsert = true;
+    await fire({ type: 'enroll_sequence', config: { sequence_id: 'seq-1' } }, { contact_id: 'c-1' });
+    expect(captureError).toHaveBeenCalled();
+    expect(h.runLog.some((r) => r.status === 'failed')).toBe(true);
+    expect(h.runLog.some((r) => r.status === 'success')).toBe(false);
   });
 
   it('skips when sequence_id or contact is missing', async () => {
+    h.selectQueue = [[LIVE_CONTACT], []];
     await fire({ type: 'enroll_sequence', config: {} }, { contact_id: 'c-1' });
-    expect(h.executes.length).toBe(0);
+    await fire({ type: 'enroll_sequence', config: { sequence_id: 'seq-1' } }, {});
+    expect(h.executes).toHaveLength(0);
+    expect(inserted().some((i) => i.values.sequenceId === 'seq-1')).toBe(false);
   });
 });
 
