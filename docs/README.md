@@ -82,10 +82,8 @@ ones other documents make _into_ it; merging PP-064, then PP-066, PP-067 and PP-
 addendum and this **#2561**/PP-076 entry each moved the rule again before this line was committed,
 so the re-pin has now run fifteen times on this tree. **#2569** (**PP-075**), **#2578**
 (**PP-077**) and **#2587** (**PP-078**) are open with register sections of their own and re-pin this sentence from their own trees, so whoever merges last re-measures. Same here — these files are cited by PP numbers, ADRs, commit messages and each
-
-> > > > > > > origin/main
-> > > > > > > other. `MASTER_PLAN.md` and `ISSUES.md`
-> > > > > > > read like current state and are not; that is a labelling failure, and the fix is labelling, not `rm`.
+other. `MASTER_PLAN.md` and `ISSUES.md` read like current state and are not; that is a labelling
+failure, and the fix is labelling, not `rm`.
 
 **The test for history.** A date in the filename or title means history. A doc describing work that
 has not shipped means history. A doc quoting a count means: re-measure before you repeat it.
