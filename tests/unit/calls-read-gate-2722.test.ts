@@ -7,7 +7,8 @@
 /**
  * #2722 — GET /api/tenant/calls authenticates and then enforces nothing.
  *
- * `app/api/tenant/calls/route.ts:90-96` reads the session and follows it with:
+ * `app/api/tenant/calls/route.ts:90-96` (at `9dcebcef`, before this change)
+ * reads the session and follows it with:
  *
  *     if (!can(ctx, 'contacts.view_all')) {
  *       // Temporarily allow if they can at least view their own, but check later in filters
