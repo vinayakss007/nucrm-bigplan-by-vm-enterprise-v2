@@ -14,6 +14,30 @@ import { eq, and, desc, isNull } from 'drizzle-orm';
 import { processMentions } from '@/lib/notifications';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { ownerScope } from '@/lib/api/owner-scope';
+import { isEntityId } from '@/lib/id';
+import type { AuthContext } from '@/lib/auth/middleware';
+
+/**
+ * The trail of a record is read with the record's own rule: `contacts/[id]:82-87`
+ * answers 404 for a `sales_rep` (`lib/permissions/definitions.ts:132-137`)
+ * reaching a row that is neither `assigned_to` nor `created_by` them, and this
+ * says the same thing before a note is returned (#2724 — the POST and DELETE in
+ * this file both asked; the GET asked nothing).
+ */
+async function contactVisible(ctx: AuthContext, contactId: string): Promise<boolean> {
+  if (!isEntityId(contactId)) return false;
+  const [hit] = await db
+    .select({ id: contacts.id })
+    .from(contacts)
+    .where(and(
+      eq(contacts.id, contactId),
+      eq(contacts.tenantId, ctx.tenantId),
+      ownerScope(ctx, 'contacts.view_all', contacts),
+    ))
+    .limit(1);
+  return hit !== undefined;
+}
 
 export const GET = withApiRoute(async (request: NextRequest, 
   { params }: { params: Promise<{ id: string }> }) => {
@@ -22,6 +46,10 @@ export const GET = withApiRoute(async (request: NextRequest,
     if (ctx instanceof NextResponse) return ctx;
     
     const { id } = await params;
+
+    if (!(await contactVisible(ctx, id))) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
 
     const data = await db.select({
       id: activities.id,
