@@ -13,6 +13,7 @@ import { sql, type SQL } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { ownerScopeAlias, ownerScopeSql } from '@/lib/api/owner-scope';
+import { escapeLike } from '@/lib/api/sanitize-like';
 import { logError } from '@/lib/errors-server';
 import { parsePageLimit } from '@/lib/api/query-params';
 
@@ -105,14 +106,19 @@ export const GET = withApiRoute(async (req: NextRequest) => {
         : undefined;
       if (mine) conds.push(mine);
       if (q) {
-        const qPattern = `%${q}%`;
+        // #2751 — the pattern is a bound parameter, so Postgres still reads `%`
+        // and `_` inside it as wildcards: `q=%` matched every non-null value of
+        // every search field and the box looked like it filtered nothing. The
+        // admin twin of this panel already escapes
+        // (`app/api/superadmin/data-explorer/route.ts:224`).
+        const qPattern = `%${escapeLike(q)}%`;
         const searchConds = config.searchFields.map(f =>
           sql`${sql.identifier(tableAlias)}.${sql.identifier(f)} ILIKE ${qPattern}`
         );
         conds.push(sql`(${sql.join(searchConds, sql` OR `)})`);
       }
       if (field && fieldValue && config.searchFields.includes(field)) {
-        conds.push(sql`${sql.identifier(tableAlias)}.${sql.identifier(field)} ILIKE ${`%${fieldValue}%`}`);
+        conds.push(sql`${sql.identifier(tableAlias)}.${sql.identifier(field)} ILIKE ${`%${escapeLike(fieldValue)}%`}`);
       }
       return conds;
     };
