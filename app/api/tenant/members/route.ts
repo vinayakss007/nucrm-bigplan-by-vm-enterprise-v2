@@ -150,7 +150,12 @@ export const GET = withApiRoute(async (request: NextRequest) => {
         avatarUrl: users.avatarUrl,
         emailVerified: users.emailVerified,
         roleName: roles.name,
-        permissions: roles.permissions,
+        // #2726: `permissions: roles.permissions` used to sit here. POST (:36)
+        // and PATCH (:189) on this path are admin-only; this read was not, so
+        // any session got each member's email, role and every boolean that role
+        // grants. No consumer reads the field — the delegate and bulk-transfer
+        // pickers map userId/fullName/email only — and the role editor gets the
+        // same map from GET /api/tenant/roles instead.
         contactCount: sql<number>`(SELECT count(*)::int FROM contacts WHERE assigned_to = ${tenantMembers.userId} AND tenant_id = ${ctx.tenantId} AND deleted_at IS NULL)`,
         dealCount: sql<number>`(SELECT count(*)::int FROM deals WHERE assigned_to = ${tenantMembers.userId} AND tenant_id = ${ctx.tenantId} AND deleted_at IS NULL)`,
         taskCount: sql<number>`(SELECT count(*)::int FROM tasks WHERE assigned_to = ${tenantMembers.userId} AND tenant_id = ${ctx.tenantId} AND deleted_at IS NULL AND status = 'pending')`
