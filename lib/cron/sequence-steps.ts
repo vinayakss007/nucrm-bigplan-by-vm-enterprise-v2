@@ -45,6 +45,32 @@ export type SequenceStepRow = Pick<
 type DbTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 /**
+ * How long a step asks to be waited on, in ms — every delay column it carries.
+ *
+ * `sequence_steps` has three (`drizzle/schema/marketing.ts:41-43`) and the two
+ * step-writing routes fill them differently: `POST /api/tenant/sequences`
+ * (`app/api/tenant/sequences/route.ts:107-109`) flattens the caller's
+ * `delay_minutes` into the hours/minutes pair and pins `delayDays: 0`, while the
+ * update route (`PATCH /api/tenant/sequences/[id]`,
+ * `app/api/tenant/sequences/[id]/route.ts:154-156`) writes all three. So a reader
+ * that sums a subset is correct for one writer and silently wrong for the other —
+ * which is exactly #2772: the enroll route read only `delay_days`, so the first
+ * step of every POST-created sequence was due at `now` and the cron dispatched it
+ * on the next tick, whatever delay was asked for.
+ *
+ * Both schedulers call this so they cannot drift again.
+ */
+export function stepDelayMs(step: {
+  delayDays?: number | null;
+  delayHours?: number | null;
+  delayMinutes?: number | null;
+}): number {
+  return (step.delayDays ?? 0) * 86_400_000
+    + (step.delayHours ?? 0) * 3_600_000
+    + (step.delayMinutes ?? 0) * 60_000;
+}
+
+/**
  * Cancel every open enrollment matching `filter` and drop the step logs still
  * waiting on them (#2392).
  *
@@ -276,12 +302,7 @@ export async function advanceOrCompleteStep(tx: DbTransaction, tenantId: string,
     return;
   }
 
-  const nextStepAt = new Date(
-    Date.now()
-    + (nextStep.delayDays ?? 0) * 86400000
-    + (nextStep.delayHours ?? 0) * 3600000
-    + (nextStep.delayMinutes ?? 0) * 60000
-  );
+  const nextStepAt = new Date(Date.now() + stepDelayMs(nextStep));
 
   await tx.update(sequenceEnrollments)
     .set({
