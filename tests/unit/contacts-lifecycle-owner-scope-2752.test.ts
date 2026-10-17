@@ -7,26 +7,28 @@
 /**
  * #2752 — the lifecycle write reaches any contact in the workspace.
  *
- * `POST /api/tenant/contacts/[id]/lifecycle` (app/api/tenant/contacts/[id]/lifecycle/route.ts:21-84)
- * gates on `contacts.edit` (`:26`) and then resolves the row by
- * `id + tenant_id` only (`:56-58`) before calling
- * `SELECT public.update_contact_lifecycle(...)` (`:67`), which does
- * `UPDATE contacts SET lifecycle_stage = …` and inserts a history row
- * (drizzle/migrations/0032_missing_db_functions.sql:231-241).
+ * `POST /api/tenant/contacts/[id]/lifecycle` (app/api/tenant/contacts/[id]/lifecycle/route.ts:22-131)
+ * gates on `contacts.edit` (`:27`) and then resolves the row by
+ * `id + tenant_id` only — no owner term, no `deleted_at IS NULL` — before writing
+ * it. At filing that write was `SELECT public.update_contact_lifecycle(...)`;
+ * **#2755** replaced it with the route's own transaction (`:97`), which is the other
+ * half of the same paragraph and does not change what this file is for: the write at
+ * `:97-113` still runs on the row the existence read at `:64` resolved, so the scope
+ * has to be in that read.
  *
  * `sales_rep` holds `contacts.edit: true` with `contacts.view_all: false`
- * (lib/permissions/definitions.ts:132-133), and the entity's own rule — the one
+ * (lib/permissions/definitions.ts:133), and the entity's own rule — the one
  * `contacts/[id]` PATCH applies two routes away, at
  * `app/api/tenant/contacts/[id]/route.ts:195-200` — refuses that caller every row
- * they are neither `assigned_to` nor `created_by` on, with a 404. The existence
- * read here has no owner term, and no `deleted_at IS NULL` either, so a rep can
+ * they are neither `assigned_to` nor `created_by` on, with a 404. So a rep could
  * re-stage (and churn) a contact the same product answers 404 when they try to
  * read it, and record it in the lifecycle trail as their own doing.
  *
  * The reader below is not canned: it answers a contact only the way Postgres
  * would, from whether the statement the route actually rendered narrows to the
- * caller. So the route that never emits the owner predicate resolves the foreign
- * row and fails these assertions.
+ * caller, and it applies the write the route renders to the seeded row. So the
+ * route that never emits the owner predicate resolves the foreign row and fails
+ * these assertions.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
@@ -51,6 +53,7 @@ interface Row {
 let rows: Row[] = [];
 let lastWhere: { sql: string; params: unknown[] } | undefined;
 let executed: { sql: string; params: unknown[] }[] = [];
+let inserted: Record<string, unknown>[] = [];
 let body: Record<string, unknown> = {};
 
 function render(predicate: unknown) {
@@ -75,6 +78,34 @@ function rowsFor(query: { sql: string; params: unknown[] } | undefined): Row[] {
   return named.assignedTo === MINE || named.createdBy === MINE ? [named] : [];
 }
 
+/**
+ * The transaction the route opens (#2755), rendered and applied rather than
+ * recorded: `update(contacts).set(…).where(…)` changes the seeded row it names, so a
+ * write that reaches a contact the existence read refused shows up here exactly as it
+ * would in the database.
+ */
+const mockTx = {
+  update: () => ({
+    set: (values: Record<string, unknown>) => ({
+      where: (predicate: unknown) => {
+        const where = render(predicate);
+        executed.push(where);
+        const named = rows.find(r => where.params.includes(r.id));
+        if (named && where.params.includes(TENANT)) {
+          named.lifecycleStage = String(values.lifecycleStage);
+        }
+        return Promise.resolve({ rows: [] });
+      },
+    }),
+  }),
+  insert: () => ({
+    values: (row: Record<string, unknown>) => {
+      inserted.push(row);
+      return Promise.resolve({ rows: [] });
+    },
+  }),
+};
+
 const mockDb: Record<string, unknown> = {
   query: {
     contacts: {
@@ -84,6 +115,7 @@ const mockDb: Record<string, unknown> = {
       }),
     },
   },
+  transaction: vi.fn((cb: (tx: unknown) => Promise<unknown>) => cb(mockTx)),
   execute: vi.fn(),
 };
 
@@ -134,15 +166,12 @@ beforeEach(() => {
   ];
   lastWhere = undefined;
   executed = [];
+  inserted = [];
   body = { lifecycle_stage: 'customer', reason: 'won the deal' };
-  mockDb.execute.mockImplementation((fragment: unknown) => {
-    executed.push(render(fragment));
-    return Promise.resolve({ rows: [] });
-  });
 });
 
 describe('a rep cannot re-stage a contact they do not own (#2752)', () => {
-  it('a foreign contact is a 404 before the DB function runs', async () => {
+  it('a foreign contact is a 404 before any write runs', async () => {
     const res = await post(ctxWith(REP), FOREIGN);
     expect(res.status, await res.text()).toBe(404);
     expect(executed).toHaveLength(0);
@@ -169,17 +198,16 @@ describe('a rep cannot re-stage a contact they do not own (#2752)', () => {
     const json = await res.json() as { data: { from_stage: string; to_stage: string } };
     expect(res.status, JSON.stringify(json)).toBe(200);
     expect(executed).toHaveLength(1);
+    expect(inserted).toHaveLength(1);
     expect(json.data.from_stage).toBe('lead');
     expect(json.data.to_stage).toBe('customer');
   });
 
   it('the write targets the contact the read resolved', async () => {
     await post(ctxWith(REP), OWNED);
-    // Deliberately mechanism-agnostic: the function this route calls is broken and
-    // will be replaced by a transaction in a follow-up, and this assertion should
-    // survive that without an edit.
     expect(executed[0]!.params).toContain(OWNED);
     expect(executed[0]!.params).not.toContain(FOREIGN);
+    expect(inserted[0]!.contactId).toBe(OWNED);
   });
 });
 
