@@ -5,7 +5,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { logError } from '@/lib/errors-server';
-import { requireTenantCtx } from '@/lib/tenant/context';
+import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { scheduledReports } from '@/drizzle/schema';
 import { eq, desc, and, isNull } from 'drizzle-orm';
@@ -14,13 +14,15 @@ import { readJsonBody } from '@/lib/api/validate';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { rateLimitRead } from '@/lib/api/read-rate-limit';
 
-// #1838: wrapped in withApiRoute so requireTenantCtx()'s setTenantContext() and
+// #1838: wrapped in withApiRoute so requireAuth()'s setTenantContext() and
 // the tenant queries below share one pinned connection (RLS isolation).
 export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const limited = await rateLimitRead(request, 'analytics');
     if (limited) return limited;
-    const ctx = await requireTenantCtx();
+    // #2713: requireTenantCtx()'s refusal is a redirect() THROW, which this
+    // handler's own catch reported as a 500. requireAuth answers 401.
+    const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
 
     // Soft-deleted schedules (deletedAt) must not keep showing up as active
@@ -38,7 +40,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
 
 export const POST = withApiRoute(async (request: NextRequest) => {
   try {
-    const ctx = await requireTenantCtx();
+    const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
 
     const body = await readJsonBody(request);
