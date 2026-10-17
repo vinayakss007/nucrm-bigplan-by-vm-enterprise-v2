@@ -25,7 +25,12 @@ const EVENT_COLORS: Record<string,string> = {
 
 interface RevenueData {
   mrr?: { mrr?: number; paying?: number; trialing?: number; free_tier?: number };
-  events?: { id: string; event_type: string; tenant_name?: string; amount?: number; created_at: string }[];
+  // #2741 — these are the keys app/api/superadmin/revenue/route.ts:35-44 actually
+  // selects. They used to be snake_case, so e.event_type was undefined and
+  // :171's `.includes()` threw inside the map, taking the whole page into the
+  // app/superadmin error boundary. `amount` is a numeric column and no pg type
+  // parser is registered, so it arrives as a string.
+  events?: { id: string; eventType: string; tenantName?: string | null; amount?: string | null; createdAt: string }[];
 }
 
 interface Tenant {
@@ -163,17 +168,17 @@ export default function RevenuePage() {
             {(data?.events||[]).map((e) => (
               <div key={e.id} className="flex items-center gap-3 px-5 py-3 hover:bg-white/[0.02] transition-colors">
                 <div className={cn('w-2 h-2 rounded-full shrink-0',
-                  e.event_type.includes('paid')||e.event_type==='upgrade'?'bg-emerald-500':
-                  e.event_type.includes('fail')||e.event_type==='cancelled'?'bg-red-500':'bg-amber-500'
+                  e.eventType.includes('paid')||e.eventType==='upgrade'?'bg-emerald-500':
+                  e.eventType.includes('fail')||e.eventType==='cancelled'?'bg-red-500':'bg-amber-500'
                 )}/>
                 <div className="flex-1 min-w-0">
-                  <p className={cn('text-sm capitalize', EVENT_COLORS[e.event_type]||'text-white/60')}>
-                    {e.event_type.replace(/_/g,' ')}
+                  <p className={cn('text-sm capitalize', EVENT_COLORS[e.eventType]||'text-white/60')}>
+                    {e.eventType.replace(/_/g,' ')}
                   </p>
-                  <p className="text-xs text-white/30">{e.tenant_name||'Unknown tenant'}</p>
+                  <p className="text-xs text-white/30">{e.tenantName||'Unknown tenant'}</p>
                 </div>
-                {e.amount != null && e.amount>0 && <p className="text-sm font-bold text-emerald-400 shrink-0">{formatCurrency(e.amount)}</p>}
-                <p className="text-xs text-white/20 shrink-0">{formatRelativeTime(e.created_at)}</p>
+                {e.amount != null && Number(e.amount)>0 && <p className="text-sm font-bold text-emerald-400 shrink-0">{formatCurrency(e.amount)}</p>}
+                <p className="text-xs text-white/20 shrink-0">{formatRelativeTime(e.createdAt)}</p>
               </div>
             ))}
           </div>
