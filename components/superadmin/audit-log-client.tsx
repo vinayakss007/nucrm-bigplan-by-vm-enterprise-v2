@@ -29,24 +29,29 @@ const ACTION_CFG: Record<string, { color: string; bg: string }> = {
 const TARGET_TYPES = ['tenant', 'user', 'subscription', 'settings', 'backup', 'restore', 'api_key', 'role', 'module', 'announcement'];
 const PAGE_SIZE = 50;
 
+// #2744 — these are the keys GET /api/super-admin/audit-logs actually answers
+// with: a raw db.select().from(superAdminAuditLogs) (route.ts:126-132), so the
+// property names are the schema's (drizzle/schema/super-admin-audit.ts:8-34) and
+// createdAt arrives as an ISO string. The declaration used to be snake_case,
+// which made every field below `action` undefined.
 interface AuditLogEntry {
   id: string;
-  admin_id: string;
-  admin_email: string;
+  adminId: string;
+  adminEmail: string;
   action: string;
-  target_type: string | null;
-  target_id: string | null;
-  target_name: string | null;
-  tenant_id: string | null;
-  tenant_name: string | null;
-  ip_address: string | null;
-  user_agent: string | null;
-  old_data: string | null;
-  new_data: string | null;
+  targetType: string | null;
+  targetId: string | null;
+  targetName: string | null;
+  tenantId: string | null;
+  tenantName: string | null;
+  ipAddress: string | null;
+  userAgent: string | null;
+  oldData: string | null;
+  newData: string | null;
   metadata: string | null;
-  previous_hash: string | null;
+  previousHash: string | null;
   hash: string;
-  created_at: string;
+  createdAt: string;
 }
 
 interface AuditLogResponse {
@@ -74,14 +79,14 @@ function toCSV(logs: AuditLogEntry[]): string {
   const header = 'Timestamp,Admin Email,Action,Target Type,Target ID,Target Name,Tenant,IP Address\n';
   const rows = logs.map(l =>
     [
-      new Date(l.created_at).toISOString(),
-      l.admin_email ?? '',
+      new Date(l.createdAt).toISOString(),
+      l.adminEmail ?? '',
       l.action,
-      l.target_type ?? '',
-      l.target_id ?? '',
-      l.target_name ?? '',
-      l.tenant_name ?? '',
-      l.ip_address ?? '',
+      l.targetType ?? '',
+      l.targetId ?? '',
+      l.targetName ?? '',
+      l.tenantName ?? '',
+      l.ipAddress ?? '',
     ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')
   ).join('\n');
   return header + rows;
@@ -293,10 +298,10 @@ export default function AuditLogClient() {
           <div className="divide-y divide-border">
             {logs.map(log => {
               const cfg = ACTION_CFG[log.action] ?? { color: 'text-muted-foreground', bg: 'bg-muted/40' };
-              const hasDetail = Boolean(log.old_data || log.new_data);
+              const hasDetail = Boolean(log.oldData || log.newData);
               const isOpen = expanded === log.id;
-              const oldParsed = parseJsonSafe(log.old_data) as Record<string, unknown> | string | null;
-              const newParsed = parseJsonSafe(log.new_data) as Record<string, unknown> | string | null;
+              const oldParsed = parseJsonSafe(log.oldData) as Record<string, unknown> | string | null;
+              const newParsed = parseJsonSafe(log.newData) as Record<string, unknown> | string | null;
               return (
                 <div key={log.id} className={cn('hover:bg-accent/20 transition-colors', hasDetail ? 'cursor-pointer' : undefined)}
                   onClick={() => hasDetail && setExpanded(isOpen ? null : log.id)}>
@@ -306,26 +311,26 @@ export default function AuditLogClient() {
                     </span>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <p className="text-sm font-medium capitalize">{log.target_type ?? '—'}</p>
-                        {log.target_name && (
-                          <span className="text-xs text-muted-foreground">{log.target_name}</span>
+                        <p className="text-sm font-medium capitalize">{log.targetType ?? '—'}</p>
+                        {log.targetName && (
+                          <span className="text-xs text-muted-foreground">{log.targetName}</span>
                         )}
-                        {log.target_id && (
-                          <span className="text-[10px] font-mono text-muted-foreground/60">{log.target_id.slice(0, 8)}…</span>
+                        {log.targetId && (
+                          <span className="text-[10px] font-mono text-muted-foreground/60">{log.targetId.slice(0, 8)}…</span>
                         )}
                       </div>
                       <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1.5">
                         <User className="w-3 h-3 shrink-0" />
-                        {log.admin_email}
-                        {log.tenant_name && <span className="text-muted-foreground/50">· {log.tenant_name}</span>}
-                        {log.ip_address && <span className="text-muted-foreground/50">· {log.ip_address}</span>}
+                        {log.adminEmail}
+                        {log.tenantName && <span className="text-muted-foreground/50">· {log.tenantName}</span>}
+                        {log.ipAddress && <span className="text-muted-foreground/50">· {log.ipAddress}</span>}
                       </p>
                     </div>
                     <div className="shrink-0 text-right">
-                      <p className="text-xs text-muted-foreground" title={new Date(log.created_at).toLocaleString()}>
-                        {formatRelativeTime(log.created_at)}
+                      <p className="text-xs text-muted-foreground" title={new Date(log.createdAt).toLocaleString()}>
+                        {formatRelativeTime(log.createdAt)}
                       </p>
-                      <p className="text-[10px] text-muted-foreground/40">{formatDateTimeShort(log.created_at)}</p>
+                      <p className="text-[10px] text-muted-foreground/40">{formatDateTimeShort(log.createdAt)}</p>
                     </div>
                     {hasDetail && (
                       <ChevronDown className={cn('w-3.5 h-3.5 text-muted-foreground shrink-0 transition-transform', isOpen && 'rotate-180')} />
