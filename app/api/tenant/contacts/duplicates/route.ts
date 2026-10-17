@@ -8,9 +8,10 @@ import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { contacts } from '@/drizzle/schema';
-import { sql, inArray } from 'drizzle-orm';
+import { sql, inArray, and, eq, isNull } from 'drizzle-orm';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { enforceFieldRead } from '@/lib/rbac/enforce';
+import { ownerScope, ownerScopeSql } from '@/lib/api/owner-scope';
 
 /**
  * GET /api/tenant/contacts/duplicates
@@ -25,6 +26,15 @@ export const GET = withApiRoute(async (request: NextRequest) => {
 
     const tid = ctx.tenantId;
 
+    // #2745 — these three aggregates are the only reads that decide what the
+    // panel shows, and they were scoped to the workspace alone, so `match_value`
+    // (an e-mail address, a phone number, a full name) and `contact_ids` named
+    // rows the caller's own list refuses and contacts/[id] answers 404 for.
+    // Spliced as SQL because db.execute has no `and()` to skip an undefined term;
+    // a contacts.view_all holder gets the empty fragment, so their three queries
+    // stay byte-for-byte what they were.
+    const mineContact = ownerScopeSql(ownerScope(ctx, 'contacts.view_all', contacts));
+
     // Strategy 1: Exact email duplicates (most reliable)
     const emailDupes = await db.execute(sql`
       SELECT LOWER(email) as email, ARRAY_AGG(id::text) as contact_ids, count(*) as cnt
@@ -32,7 +42,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       WHERE tenant_id = ${tid}
         AND deleted_at IS NULL
         AND email IS NOT NULL
-        AND email != ''
+        AND email != ''${mineContact}
       GROUP BY LOWER(email)
       HAVING count(*) > 1
       ORDER BY count(*) DESC
@@ -46,7 +56,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       WHERE tenant_id = ${tid}
         AND deleted_at IS NULL
         AND phone IS NOT NULL
-        AND phone != ''
+        AND phone != ''${mineContact}
       GROUP BY phone
       HAVING count(*) > 1
       ORDER BY count(*) DESC
@@ -60,7 +70,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       FROM contacts
       WHERE tenant_id = ${tid}
         AND deleted_at IS NULL
-        AND first_name IS NOT NULL
+        AND first_name IS NOT NULL${mineContact}
       GROUP BY LOWER(first_name || ' ' || COALESCE(last_name, ''))
       HAVING count(*) > 1
       ORDER BY count(*) DESC
@@ -102,6 +112,9 @@ export const GET = withApiRoute(async (request: NextRequest) => {
 
     let contactDetails: Array<{ id: string; firstName: string | null; lastName: string | null; email: string | null; phone: string | null; createdAt: Date }> = [];
     if (allIds.length > 0) {
+      // #2745 — this read had no row term at all: today its ids come from the
+      // aggregates above, but a read that resolves any id handed to it should not
+      // depend on that ordering staying true.
       contactDetails = await db
         .select({
           id: contacts.id,
@@ -112,7 +125,12 @@ export const GET = withApiRoute(async (request: NextRequest) => {
           createdAt: contacts.createdAt,
         })
         .from(contacts)
-        .where(inArray(contacts.id, allIds));
+        .where(and(
+          eq(contacts.tenantId, tid),
+          isNull(contacts.deletedAt),
+          ownerScope(ctx, 'contacts.view_all', contacts),
+          inArray(contacts.id, allIds),
+        ));
     }
 
     // #2618 — duplicate groups embed whole contact records; project them
