@@ -5,10 +5,11 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
-import { requireAuth, requirePerm } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm, type AuthContext } from '@/lib/auth/middleware';
+import { ownerScope } from '@/lib/api/owner-scope';
 import { db } from '@/drizzle/db';
 import { contacts, deals, tasks, companies, leads, projects, tenants } from '@/drizzle/schema';
-import { eq, and, isNotNull, sql, desc } from 'drizzle-orm';
+import { eq, and, isNotNull, sql, desc, type Column } from 'drizzle-orm';
 import type { AnyPgTable, PgColumn } from 'drizzle-orm/pg-core';
 import { logAudit } from '@/lib/audit';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
@@ -36,9 +37,39 @@ type TrashTable = AnyPgTable & {
   updatedAt: PgColumn;
 };
 
-const TRASH_TABLES: Record<string, TrashTable> = {
-  contact: contacts, deal: deals, task: tasks, company: companies, lead: leads, project: projects,
+/**
+ * One entry per `resource_type`, holding the relation PATCH restores through, the
+ * permission that restore needs, and the row rule for the entity.
+ *
+ * Before #2716 this map was only the relation, and a single
+ * `requirePerm(ctx, 'contacts.edit')` answered for all six types — so holding a
+ * contacts permission let a caller restore a deal, a company or a project. Each
+ * type now asks the permission its own record route asks for.
+ *
+ * `scope` is absent where there is nothing to scope on, and that is a documented
+ * gap rather than an oversight: `companies.view_all` is defined
+ * (`lib/permissions/definitions.ts:43`) and enforced nowhere (#2597), and the
+ * catalogue has no `projects.*` id at all, so `projects` keeps the gate this
+ * route already used instead of losing it.
+ */
+const TRASH_TABLES: Record<string, {
+  table: TrashTable;
+  restorePerm: string;
+  scope?: { viewAll: string; columns: { assignedTo: Column; createdBy: Column } };
+}> = {
+  contact: { table: contacts, restorePerm: 'contacts.edit', scope: { viewAll: 'contacts.view_all', columns: contacts } },
+  company: { table: companies, restorePerm: 'companies.edit' },
+  deal: { table: deals, restorePerm: 'deals.edit', scope: { viewAll: 'deals.view_all', columns: deals } },
+  lead: { table: leads, restorePerm: 'leads.edit', scope: { viewAll: 'leads.view_all', columns: leads } },
+  task: { table: tasks, restorePerm: 'tasks.edit', scope: { viewAll: 'tasks.view_all', columns: tasks } },
+  project: { table: projects, restorePerm: 'contacts.edit' },
 };
+
+/** The row rule for a type, or nothing for the two entities that have none. */
+function trashScope(ctx: AuthContext, resourceType: string) {
+  const scope = TRASH_TABLES[resourceType]?.scope;
+  return scope ? ownerScope(ctx, scope.viewAll, scope.columns) : undefined;
+}
 
 export const GET = withApiRoute(async (req: NextRequest) => {
   try {
@@ -58,7 +89,7 @@ export const GET = withApiRoute(async (req: NextRequest) => {
         email: contacts.email,
       })
       .from(contacts)
-      .where(and(eq(contacts.tenantId, ctx.tenantId), isNotNull(contacts.deletedAt)));
+      .where(and(eq(contacts.tenantId, ctx.tenantId), isNotNull(contacts.deletedAt), trashScope(ctx, 'contact')));
 
     const dealQuery = db
       .select({
@@ -72,7 +103,7 @@ export const GET = withApiRoute(async (req: NextRequest) => {
         email: sql<string>`NULL`,
       })
       .from(deals)
-      .where(and(eq(deals.tenantId, ctx.tenantId), isNotNull(deals.deletedAt)));
+      .where(and(eq(deals.tenantId, ctx.tenantId), isNotNull(deals.deletedAt), trashScope(ctx, 'deal')));
 
     const taskQuery = db
       .select({
@@ -86,8 +117,11 @@ export const GET = withApiRoute(async (req: NextRequest) => {
         email: sql<string>`NULL`,
       })
       .from(tasks)
-      .where(and(eq(tasks.tenantId, ctx.tenantId), isNotNull(tasks.deletedAt)));
+      .where(and(eq(tasks.tenantId, ctx.tenantId), isNotNull(tasks.deletedAt), trashScope(ctx, 'task')));
 
+    // No trashScope: companies.view_all is defined and enforced nowhere, so this
+    // list stays tenant-wide for companies too (#2597 — the same call #2699 and
+    // #2704 make, rather than a product decision smuggled in as a bug fix).
     const companyQuery = db
       .select({
         resource_type: sql<string>`'company'`,
@@ -114,8 +148,11 @@ export const GET = withApiRoute(async (req: NextRequest) => {
         email: sql<string>`NULL`,
       })
       .from(leads)
-      .where(and(eq(leads.tenantId, ctx.tenantId), isNotNull(leads.deletedAt)));
+      .where(and(eq(leads.tenantId, ctx.tenantId), isNotNull(leads.deletedAt), trashScope(ctx, 'lead')));
 
+    // And none here either: the catalogue has no `projects.*` permission at all,
+    // and `projects` records its owner as `owner_id` rather than `assigned_to`
+    // (`drizzle/schema/projects.ts:22`), so there is no rule to borrow.
     const projectQuery = db
       .select({
         resource_type: sql<string>`'project'`,
@@ -170,14 +207,24 @@ export const PATCH = withApiRoute(async (req: NextRequest) => {
   if (limited) return limited;
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
-    const deny = requirePerm(ctx, 'contacts.edit');
-    if (deny) return deny;
 
     const { id, resource_type } = await readJsonBody(req);
     if (!id || !resource_type) return NextResponse.json({ error: 'id and resource_type required' }, { status: 400 });
 
-    const table = TRASH_TABLES[resource_type];
-    if (!table) return NextResponse.json({ error: 'Invalid resource_type' }, { status: 400 });
+    const entry = TRASH_TABLES[resource_type];
+    if (!entry) return NextResponse.json({ error: 'Invalid resource_type' }, { status: 400 });
+
+    // The permission belongs to the row being restored, not to whichever entity
+    // this route happened to ask about first (#2716).
+    const deny = requirePerm(ctx, entry.restorePerm);
+    if (deny) return deny;
+
+    const table = entry.table;
+    // A restore is an edit, so it takes the same row rule `deals/[id]` and
+    // `tasks/[id]` answer 404 on. Without it a `sales_rep` un-deleted any row in
+    // the workspace by id — and re-incremented the tenant's plan counter below
+    // while doing so.
+    const mine = trashScope(ctx, resource_type);
 
     const updateData: Partial<typeof contacts.$inferInsert> = { deletedAt: null, deletedBy: null, updatedAt: new Date() };
     if (resource_type === 'contact') updateData.isArchived = false;
@@ -185,7 +232,7 @@ export const PATCH = withApiRoute(async (req: NextRequest) => {
     const [current] = await db
       .select({ updatedAt: table.updatedAt })
       .from(table)
-      .where(and(eq(table.id, id), eq(table.tenantId, ctx.tenantId), isNotNull(table.deletedAt)))
+      .where(and(eq(table.id, id), eq(table.tenantId, ctx.tenantId), isNotNull(table.deletedAt), mine))
       .limit(1);
 
     // Row not in trash at all → 404
@@ -200,7 +247,7 @@ export const PATCH = withApiRoute(async (req: NextRequest) => {
     // members), so the dynamic table is handed over through `never`. Runtime
     // behavior is unchanged: the guard only reads table.updatedAt.
     const guard = concurrencyGuard(table as never, current.updatedAt as Date | string | null | undefined);
-    const conditions = [eq(table.id, id), eq(table.tenantId, ctx.tenantId), isNotNull(table.deletedAt)];
+    const conditions = [eq(table.id, id), eq(table.tenantId, ctx.tenantId), isNotNull(table.deletedAt), mine];
     if (guard) conditions.push(guard);
 
     const row = await db.transaction(async (tx) => {
@@ -305,12 +352,12 @@ export const DELETE = withApiRoute(async (req: NextRequest) => {
 
     if (!id || !resource_type) return NextResponse.json({ error: 'id and resource_type required' }, { status: 400 });
 
-    const table = TRASH_TABLES[resource_type];
-    if (!table) return NextResponse.json({ error: 'Invalid resource_type' }, { status: 400 });
+    const entry = TRASH_TABLES[resource_type];
+    if (!entry) return NextResponse.json({ error: 'Invalid resource_type' }, { status: 400 });
 
     const result = await db
-      .delete(table)
-      .where(and(eq(table.id, id), eq(table.tenantId, ctx.tenantId), isNotNull(table.deletedAt)));
+      .delete(entry.table)
+      .where(and(eq(entry.table.id, id), eq(entry.table.tenantId, ctx.tenantId), isNotNull(entry.table.deletedAt)));
       
     if (result.rowCount === 0) return NextResponse.json({ error: 'Not found in trash' }, { status: 404 });
     
