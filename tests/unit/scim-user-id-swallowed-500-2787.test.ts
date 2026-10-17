@@ -22,7 +22,7 @@
  * #2781 fixed ten handlers of exactly this shape. Those ten were `withApiRoute` handlers; this
  * file is not one, so it fell out of that scan by construction. `grep -rl "status: 500"
  * --include=route.ts app/api | grep '\[id\]' | xargs grep -L withApiRoute` returns two files:
- * this one, and `app/api/tenant/forms/public/[id]/route.ts`, whose guard at `:16` is the
+ * this one, and `app/api/tenant/forms/public/[id]/route.ts`, whose guard at `:15` is the
  * precedent copied here.
  *
  * The mock database answers a predicate the way Postgres does: a string bound against a column
