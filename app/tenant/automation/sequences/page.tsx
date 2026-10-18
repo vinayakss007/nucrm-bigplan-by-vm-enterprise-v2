@@ -7,6 +7,7 @@
 import { useState, useMemo } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import InlineErrorState, { FAILED_IS_NOT_EMPTY } from '@/components/shared/inline-error-state';
 import { Plus, Clock, Trash2, Loader2, X } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import { cn } from '@/lib/utils';
@@ -92,7 +93,7 @@ export default function SequencesPage() {
   });
 
   // #1328: list via TanStack Query (was raw fetch + useEffect).
-  const { data, isLoading: loading } = useApiQuery<{ data?: Sequence[] }>(
+  const { data, isLoading: loading, error: sequencesError, refetch: refetchSequences } = useApiQuery<{ data?: Sequence[] }>(
     SEQUENCES_QUERY,
     '/api/tenant/sequences',
   );
@@ -236,7 +237,9 @@ export default function SequencesPage() {
 
       {/* Sequences list */}
       {loading ? [...Array(3)].map((_,i) => <div key={i} className="h-24 bg-muted rounded-2xl animate-pulse" />) :
-      sequences.length === 0 ? (
+      sequencesError ? (
+        <InlineErrorState message={`Failed to load your sequences: ${sequencesError.message}`} onRetry={refetchSequences} detail={FAILED_IS_NOT_EMPTY} />
+      ) : sequences.length === 0 ? (
         <div className="text-center py-16 border border-dashed border-border rounded-2xl">
           <Clock className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
           <p className="font-medium">No sequences yet</p>

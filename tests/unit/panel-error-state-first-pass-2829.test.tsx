@@ -298,11 +298,14 @@ describe('the false-empty ratchet itself (#2829)', () => {
       count: number; panels: Record<string, { issue: string; sentences: string[] }>;
     };
     expect(doc.count).toBe(Object.keys(doc.panels).length);
-    // #2829 listed 36 outstanding. Five left the class in this pass and #2828's merged
-    // portal fixes took four more out, so the floor is 31 — below it, the sweep stopped
-    // matching rather than the app getting cleaner, which is the failure mode a ratchet
-    // has to be tested against.
-    expect(doc.count).toBeGreaterThan(31);
+    // This line used to read `expect(doc.count).toBeGreaterThan(31)` — a floor under the
+    // count so a sweep that stopped matching could not pass as a clean tree. That was a
+    // decay landmine: every honest fix lowers the count, so the assertion goes false the
+    // first time the ratchet does its job (the #2829 slices took it 42 → 38 → 32 → 25).
+    // "the class is still non-empty" is the part worth keeping; "proof the scan still
+    // matches real panels" is what the pinned findings in
+    // panel-error-state-crm-lists-2829 / -ops-pages-2829 do, one concrete file each.
+    expect(doc.count).toBeGreaterThan(0);
     for (const [file, entry] of Object.entries(doc.panels)) {
       expect(entry.sentences.length, `${file} is allowlisted with no sentence to point at`).toBeGreaterThan(0);
       expect(entry.issue, `${file} must name the issue that carries it`).toMatch(/^#\d+$/);

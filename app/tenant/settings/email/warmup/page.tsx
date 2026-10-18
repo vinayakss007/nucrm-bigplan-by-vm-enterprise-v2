@@ -7,6 +7,7 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import InlineErrorState, { FAILED_IS_NOT_EMPTY } from '@/components/shared/inline-error-state';
 import { Mail, TrendingUp, Users, Clock, Pause, Play, Loader2, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
@@ -53,7 +54,7 @@ export default function WarmupDashboardPage() {
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
 
   // #1328: load config + pool via TanStack Query (was raw fetch + useEffect).
-  const { data, isLoading: loading } = useApiQuery<{ config?: WarmupConfig | null; pool?: PoolParticipant[] }>(
+  const { data, isLoading: loading, error: warmupError, refetch: refetchWarmup } = useApiQuery<{ config?: WarmupConfig | null; pool?: PoolParticipant[] }>(
     WARMUP_QUERY,
     '/api/tenant/email-warmup',
   );
@@ -288,6 +289,8 @@ export default function WarmupDashboardPage() {
             )}
           </div>
         </>
+      ) : warmupError ? (
+        <InlineErrorState message={`Failed to load your warmup pool: ${warmupError.message}`} onRetry={refetchWarmup} detail={FAILED_IS_NOT_EMPTY} />
       ) : (
         /* No config - empty state */
         <div className="text-center py-12 border border-dashed border-border rounded-2xl">

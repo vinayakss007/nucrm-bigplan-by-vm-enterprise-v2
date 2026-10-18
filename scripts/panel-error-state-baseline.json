@@ -6,7 +6,7 @@
     "entry — the guard fails a NEW panel joining the class and prints a hint when a",
     "listed one leaves it, so the list only ever shrinks."
   ],
-  "count": 32,
+  "count": 25,
   "panels": {
     "app/superadmin/adoption/page.tsx": {
       "issue": "#2829",
@@ -80,18 +80,6 @@
         "No replies found"
       ]
     },
-    "app/tenant/automation/page.tsx": {
-      "issue": "#2829",
-      "sentences": [
-        "No custom automations yet"
-      ]
-    },
-    "app/tenant/automation/sequences/page.tsx": {
-      "issue": "#2829",
-      "sentences": [
-        "No sequences yet"
-      ]
-    },
     "app/tenant/chat/page.tsx": {
       "issue": "#2829",
       "sentences": [
@@ -126,13 +114,6 @@
         "No team members yet"
       ]
     },
-    "app/tenant/settings/billing/invoices/page.tsx": {
-      "issue": "#2829",
-      "sentences": [
-        "No invoices yet",
-        "Invoices will appear here"
-      ]
-    },
     "app/tenant/settings/csat/page.tsx": {
       "issue": "#2829",
       "sentences": [
@@ -143,12 +124,6 @@
       "issue": "#2829",
       "sentences": [
         "No custom fields yet"
-      ]
-    },
-    "app/tenant/settings/email/warmup/page.tsx": {
-      "issue": "#2829",
-      "sentences": [
-        "No pool participants configured"
       ]
     },
     "app/tenant/settings/hierarchy/page.tsx": {
@@ -192,26 +167,6 @@
       "sentences": [
         "No tags match",
         "No tags yet"
-      ]
-    },
-    "app/tenant/settings/usage/page.tsx": {
-      "issue": "#2829",
-      "sentences": [
-        "No recent activity"
-      ]
-    },
-    "app/tenant/settings/webhooks/logs/page.tsx": {
-      "issue": "#2829",
-      "sentences": [
-        "No delivery logs",
-        "Webhook delivery attempts will appear here"
-      ]
-    },
-    "app/tenant/settings/webhooks/page.tsx": {
-      "issue": "#2829",
-      "sentences": [
-        "No webhooks",
-        "No deliveries yet"
       ]
     }
   }

@@ -7,6 +7,7 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import InlineErrorState, { FAILED_IS_NOT_EMPTY } from '@/components/shared/inline-error-state';
 import { Plus, Globe, Check, X, Trash2, Loader2, ChevronDown, CheckCircle, XCircle, Clock, Copy, Play, ExternalLink } from 'lucide-react';
 import Link from 'next/link';
 import { AlertTriangle } from 'lucide-react';
@@ -53,13 +54,14 @@ export default function WebhooksPage() {
   const [editingWebhook, setEditingWebhook] = useState<Webhook|null>(null);
   const [expanded, setExpanded]   = useState<string|null>(null);
   const [deliveries, setDeliveries] = useState<Record<string,Delivery[]>>({});
+  const [deliveryErrors, setDeliveryErrors] = useState<Record<string,string>>({});
   const [form, setForm]           = useState({ name:'', url:'', events:[] as string[] });
   const [secretVisible, setSecretVisible] = useState<Record<string,string>>({});
   const [testResult, setTestResult] = useState<Record<string,{status:string; statusCode:number|null; duration:number; errorMessage?:string|null}>>({});
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
 
   // #1328: list read via TanStack Query (was fetch + useEffect + AbortController).
-  const { data: webhooksData, isLoading: loading } = useApiQuery<{ data?: Webhook[] }>(
+  const { data: webhooksData, isLoading: loading, error: webhooksError, refetch: refetchWebhooks } = useApiQuery<{ data?: Webhook[] }>(
     WEBHOOKS_QUERY,
     '/api/tenant/webhooks',
   );
@@ -71,6 +73,14 @@ export default function WebhooksPage() {
     if (deliveries[id]) return;
     const res = await fetch(`/api/tenant/webhooks/${id}/deliveries`);
     if (res.ok) { const d = await res.json(); setDeliveries(p => ({...p, [id]:d.data??[]})); }
+    // #2829: the `if (res.ok)` used to be the whole story — a refused read left
+    // deliveries[id] undefined, so the per-webhook panel sat on its spinner forever.
+    else { const d = await res.json().catch(() => null); setDeliveryErrors(p => ({ ...p, [id]: d?.error ?? `HTTP ${res.status}` })); }
+  };
+
+  const retryDeliveries = (id: string) => {
+    setDeliveryErrors(p => { const next = { ...p }; delete next[id]; return next; });
+    void loadDeliveries(id);
   };
 
   const toggleExpand = (id: string) => {
@@ -324,7 +334,9 @@ export default function WebhooksPage() {
 
       {/* Webhook list */}
       {loading ? [...Array(2)].map((_,i) => <div key={i} className="h-20 bg-muted rounded-2xl animate-pulse" />) :
-      webhooks.length === 0 ? (
+      webhooksError ? (
+        <InlineErrorState message={`Failed to load your webhooks: ${webhooksError.message}`} onRetry={refetchWebhooks} detail={FAILED_IS_NOT_EMPTY} />
+      ) : webhooks.length === 0 ? (
         <div className="text-center py-12 border border-dashed border-border rounded-2xl">
           <Globe className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
           <p className="font-medium">No webhooks</p>
@@ -390,7 +402,7 @@ export default function WebhooksPage() {
                     <Link href="/tenant/settings/webhooks/logs" className="text-xs font-medium text-muted-foreground hover:text-violet-600 border border-border rounded-lg px-2 py-1 hover:border-violet-300 transition-colors">
                       <ExternalLink className="w-3 h-3" />
                     </Link>
-                    <button onClick={() => toggleExpand(wh.id)} className="text-muted-foreground hover:text-foreground">
+                    <button onClick={() => toggleExpand(wh.id)} aria-label="Toggle recent deliveries" className="text-muted-foreground hover:text-foreground">
                       <ChevronDown className={cn('w-4 h-4 transition-transform', expanded === wh.id && 'rotate-180')} />
                     </button>
                     <button onClick={() => del(wh.id)} className="text-muted-foreground hover:text-red-500">
@@ -424,7 +436,10 @@ export default function WebhooksPage() {
                     <p className="text-xs font-semibold text-muted-foreground mb-2">Recent Deliveries</p>
                     {(() => {
                       const dels = deliveries[wh.id];
-                      if (!dels) return <div className="flex justify-center py-4"><Loader2 className="w-4 h-4 animate-spin text-muted-foreground" /></div>;
+                      if (!dels) {
+                        if (deliveryErrors[wh.id]) return <InlineErrorState message={`Failed to load this webhook's deliveries: ${deliveryErrors[wh.id]}`} onRetry={() => retryDeliveries(wh.id)} detail={FAILED_IS_NOT_EMPTY} />;
+                        return <div className="flex justify-center py-4"><Loader2 className="w-4 h-4 animate-spin text-muted-foreground" /></div>;
+                      }
                       if (dels.length === 0) return <p className="text-xs text-muted-foreground py-2">No deliveries yet</p>;
                       return (
                         <div className="space-y-1.5">

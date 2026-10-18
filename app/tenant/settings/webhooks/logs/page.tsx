@@ -7,6 +7,7 @@
 import { useState, useEffect } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import InlineErrorState, { FAILED_IS_NOT_EMPTY } from '@/components/shared/inline-error-state';
 import { Webhook, ChevronLeft, ChevronRight, AlertCircle, CheckCircle2, Clock, Loader2, RotateCcw } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { cn } from '@/lib/utils';
@@ -51,7 +52,7 @@ export default function WebhookLogsPage() {
   const params = new URLSearchParams({ page: String(page), limit: String(limit) });
   if (statusFilter !== 'all') params.set('status', statusFilter);
   if (eventFilter) params.set('event', eventFilter);
-  const { data, isLoading: loading } = useApiQuery<{ data?: WebhookLog[]; total?: number }>(
+  const { data, isLoading: loading, error: logsError, refetch: refetchLogs } = useApiQuery<{ data?: WebhookLog[]; total?: number }>(
     ['tenant', 'webhooks', 'logs', { page, statusFilter, eventFilter }],
     `/api/tenant/webhooks/logs?${params}`,
   );
@@ -142,6 +143,8 @@ export default function WebhookLogsPage() {
         <div className="admin-card p-5 space-y-4">
           {[...Array(5)].map((_, i) => <div key={i} className="h-12 bg-muted rounded-xl animate-pulse" />)}
         </div>
+      ) : logsError ? (
+        <InlineErrorState message={`Failed to load the delivery logs: ${logsError.message}`} onRetry={refetchLogs} detail={FAILED_IS_NOT_EMPTY} />
       ) : logs.length === 0 ? (
         <div className="text-center py-12 border border-dashed border-border rounded-2xl">
           <Webhook className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
