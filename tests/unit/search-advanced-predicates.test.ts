@@ -45,6 +45,9 @@ let lastStatus = 0;
 
 type QueryChain = {
   from: () => QueryChain;
+  // #2838: the deals branch joins deal_stages to answer `stage` with the stage
+  // name instead of its uuid, which is what the search page prints.
+  leftJoin: () => QueryChain;
   where: (w: unknown) => QueryChain;
   orderBy: () => QueryChain;
   groupBy: () => QueryChain;
@@ -56,6 +59,7 @@ type QueryChain = {
 function chain(): QueryChain {
   const self: QueryChain = {
     from: () => self,
+    leftJoin: () => self,
     where: (w: unknown) => { wheres.push(w); return self; },
     orderBy: () => self,
     groupBy: () => self,

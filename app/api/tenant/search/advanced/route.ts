@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { contacts, deals, companies, tasks, leads } from '@/drizzle/schema';
+import { contacts, deals, companies, tasks, leads, dealStages } from '@/drizzle/schema';
 import { eq, and, or, gte, lte, desc, sql, inArray, isNull, type SQL, type SQLWrapper } from 'drizzle-orm';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
@@ -220,11 +220,18 @@ export const POST = withApiRoute(async (request: NextRequest) => {
             title: deals.title,
             amount: deals.amount,
             stageId: deals.stageId,
+            // #2838: this field used to carry the stage *id* under the name
+            // `stage`, which is the key the search page's stage chip reads. The
+            // typeahead route (`app/api/tenant/search/route.ts:120`) returns
+            // `dealStages.name` for it, and both answers now render through one
+            // component — so a uuid here would have been printed as a label.
+            stageName: dealStages.name,
             metadata: deals.metadata,
             closeDate: deals.closeDate,
             createdAt: deals.createdAt,
           })
             .from(deals)
+            .leftJoin(dealStages, eq(dealStages.id, deals.stageId))
             .where(where)
             .orderBy(desc(deals.updatedAt))
             .limit(limit)
@@ -238,7 +245,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
           id: r.id,
           title: r.title,
           value: r.amount,
-          stage: r.stageId,
+          stage: r.stageName,
           probability: null,
           close_date: r.closeDate,
           created_at: r.createdAt,
@@ -357,6 +364,15 @@ export const POST = withApiRoute(async (request: NextRequest) => {
             domain: companies.domain,
             industry: companies.industry,
             size: companies.companySize,
+            // #2838: the search page prints "{n} contacts" for every company
+            // row, from either endpoint. The typeahead route counts them
+            // (app/api/tenant/search/route.ts:153) with the same live-row rule
+            // the contacts list uses; this branch returned no such field at
+            // all, so filtered company rows rendered "undefined contacts".
+            contact_count: sql<number>`(SELECT count(*)::int FROM ${contacts}
+              WHERE ${contacts.companyId} = ${companies.id}
+                AND ${contacts.deletedAt} IS NULL
+                AND ${contacts.isArchived} = false)`,
             createdAt: companies.createdAt,
           })
             .from(companies)
@@ -375,6 +391,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
           domain: r.domain,
           industry: r.industry,
           size: r.size,
+          contact_count: r.contact_count,
           created_at: r.createdAt,
         }));
         total = countResult[0]?.count ?? 0;
