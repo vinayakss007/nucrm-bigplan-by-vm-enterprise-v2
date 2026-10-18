@@ -176,15 +176,17 @@
       "required": ["email", "task", "delay"],
       "legacy": ["whatsapp"],
       "writers": {
-        "email": ["lib/api/schemas.ts"],
-        "task": ["lib/api/schemas.ts"],
-        "delay": ["lib/api/schemas.ts"]
+        "email": ["lib/api/schemas/automation.ts"],
+        "task": ["lib/api/schemas/automation.ts"],
+        "delay": ["lib/api/schemas/automation.ts"]
       },
       "note": [
         "No migration: the DB was always right. The bug was in code — the zod schema",
         "and the builder offered 'wait', which the constraint never allowed, so every",
         "sequence with a wait step failed on insert. Fixed in lib/api/schemas.ts,",
         "lib/api/schemas/automation.ts and components/tenant/sequence-builder.tsx.",
+        "#2819 then removed the schemas.ts copy, so automation.ts is the one place",
+        "the vocabulary is declared and lib/api/schemas.ts is not a citable writer.",
         "'call' and 'ab_test' are still offered by the builder UI and still rejected",
         "by zod — reported, not fixed."
       ]
