@@ -3593,7 +3593,12 @@ database`, and exactly two FAILs:
   the repo in that condition. Two of the five guards added since this entry was written — `coords` and
   `register-drift` — are the ones that read _this file_, which is why the re-count is in the entry rather than
   in a follow-up. (The fifth, **#2566**'s `guard:raw-sql`, reads the source tree rather than this file, and its
-  own coordinates are `ci.yml:86-87`.)
+  own coordinates are `ci.yml:86-87`.) (A sixth, **#2825**'s `guard:catch-empty` on 2026-10-18, also reads the source
+  tree rather than this file, and it is wired line-count-neutrally so that this paragraph's coordinates did not move:
+  it shares the portal-RLS-context step's `run:` line at `ci.yml:81` — the pattern **#2655** used at `:85` — and its
+  alias is appended at `package.json:156`, outside the `:47-69` block, next to **#2596**'s `guard:env-coverage`, which
+  `ci.yml` likewise calls as a bare `node` command at `:438`. The counts above predate it: one more `guard:*` script
+  exists, and one more is invoked.)
   (The 20/2/1 split is itself worth recording. A wiring audit that greps for `npm run guard:` reports
   **20 of 23** and mis-files `audit` and `semgrep` as unrun, because those two are called as direct `node`
   invocations rather than through their aliases. This entry said exactly that until its own PR's CI run
