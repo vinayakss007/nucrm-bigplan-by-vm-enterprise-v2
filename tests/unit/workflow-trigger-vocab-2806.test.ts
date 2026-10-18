@@ -13,8 +13,11 @@
  * zod enum that sits in front of it declared `('event','schedule','manual')`. `'webhook'`
  * satisfied the database and was refused by `POST /api/tenant/workflows`, so the one kind the
  * column documents as legal could be created only by writing SQL. Nothing in the suite noticed:
- * `guard:schemas` compares `z.object` *keys* against column names and never looks at enum
- * *values*, and `scripts/constraint-vocab.json` had no entry for this constraint at all.
+ * `guard:schemas` (#2819) only enforces "there must never be two copies of a schema", the #2255
+ * guard compares drizzle tables/columns/indexes against a committed DB inventory, and the one
+ * guard that does read vocabularies — `guard:vocab` over `scripts/constraint-vocab.json` — had no
+ * entry for this constraint at all. No screen anywhere compared a zod enum's *values* to the CHECK
+ * the enum is supposed to be guarding.
  *
  * The comparison is static — a migration file against a schema — because both sides are text.
  * It reads the admitted set out of `0050` instead of restating it here, since a third copy of the
