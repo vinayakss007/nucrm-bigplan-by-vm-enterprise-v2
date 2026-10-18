@@ -9,6 +9,7 @@ import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
 import { confirmThen } from '@/components/ui/confirm-dialog';
+import InlineErrorState from '@/components/shared/inline-error-state';
 
 interface DocumentFile {
   id: string;
@@ -44,7 +45,7 @@ export default function DocumentsPage() {
   // #1328: folder listing via TanStack Query (was raw fetch + useEffect). The
   // folder id is part of the query key so navigating folders refetches/caches.
   const DOCUMENTS_QUERY = ['tenant', 'documents', currentFolder] as const;
-  const { data: envelope, isLoading: loading } = useApiQuery<{ data?: DocumentsData }>(
+  const { data: envelope, isLoading: loading, error: envelopeError, refetch: refetchDocuments } = useApiQuery<{ data?: DocumentsData }>(
     DOCUMENTS_QUERY,
     `/api/tenant/documents?${new URLSearchParams(currentFolder ? { folderId: currentFolder } : {})}`,
   );
@@ -284,6 +285,8 @@ export default function DocumentsPage() {
             ))}
           </div>
         </div>
+      ) : envelopeError ? (
+        <InlineErrorState message={`Failed to load this folder: ${envelopeError.message}`} onRetry={refetchDocuments} />
       ) : (
         folders.length === 0 && (
           <div className="text-center py-12 text-muted-foreground">
