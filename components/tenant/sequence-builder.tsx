@@ -6,7 +6,7 @@
 "use client"
 
 import { useState } from 'react'
-import { Mail, Calendar, Clock, Phone, Trash2, Users, GripVertical, FlaskConical, Split } from 'lucide-react'
+import { Mail, Calendar, Clock, Trash2, Users, GripVertical } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -16,22 +16,70 @@ import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } 
 import { CSS } from '@dnd-kit/utilities'
 import toast from 'react-hot-toast'
 
+/**
+ * The step the builder holds while editing. It is a UI model, not the wire shape:
+ * `saveSequence()` converts it. The two differ on purpose — a person sets a wait in
+ * days and hours, while `createSequenceSchema` (`lib/api/schemas/automation.ts:51-58`)
+ * carries one field, `delay_minutes`, which is what the update route used to receive
+ * as nothing at all (#2794).
+ */
 export interface SequenceStep {
   id?: string
   step_number: number
-  type: 'email' | 'task' | 'delay' | 'call' | 'ab_test'
+  // 'call' and 'ab_test' were on this list. `chk_sequence_steps_step_type`
+  // (drizzle/migrations/0050_data_validation_checks.sql:121-122) admits only
+  // email|delay|task|whatsapp, so a saved call step failed on insert with 23514 —
+  // a 400 from a UI that offered the button — and nothing in
+  // app/api/cron/process-sequences/route.ts implements either of them anyway.
+  type: 'email' | 'task' | 'delay'
   subject?: string
   body?: string
-  delay_days?: number
-  delay_hours?: number
   task_title?: string
   task_description?: string
-  call_script?: string
-  ab_variant?: 'a' | 'b'
-  ab_subject_a?: string
-  ab_body_a?: string
-  ab_subject_b?: string
-  ab_body_b?: string
+  delay_days?: number
+  delay_hours?: number
+  /** Set when the step came back from the API; the form edits days and hours. */
+  delay_minutes?: number
+}
+
+/** One step as `createSequenceSchema` reads it (#2794). */
+export interface WireStep {
+  step_number: number
+  type: SequenceStep['type']
+  delay_minutes: number
+  subject?: string
+  body?: string
+}
+
+/**
+ * Days and hours on the form are one number on the wire. The create route splits
+ * `delay_minutes` back out into `delayHours` / `delayMinutes` and leaves
+ * `delayDays` at 0 (`app/api/tenant/sequences/route.ts:107-109`), and
+ * `stepDelayMs()` (`lib/cron/sequence-steps.ts:63`) sums all three columns, so the
+ * total is preserved whichever way the row lands.
+ */
+export function toWireStep(step: SequenceStep, index: number): WireStep {
+  const minutes = stepDelayMinutes(step)
+  const wire: WireStep = { step_number: index + 1, type: step.type, delay_minutes: minutes }
+  if (step.type === 'email') {
+    if (step.subject) wire.subject = step.subject
+    if (step.body) wire.body = step.body
+  } else if (step.type === 'task') {
+    // The processor titles a task step from `subject`
+    // (`app/api/cron/process-sequences/route.ts:261`).
+    if (step.task_title) wire.subject = step.task_title
+    if (step.task_description) wire.body = step.task_description
+  }
+  return wire
+}
+
+/**
+ * A step's wait, in minutes, whichever shape it arrived in: the builder edits
+ * days and hours, a row read back from the API carries `delay_minutes` alone.
+ */
+export function stepDelayMinutes(step: SequenceStep): number {
+  if (step.delay_minutes !== undefined) return step.delay_minutes
+  return (step.delay_days ?? 0) * 1440 + (step.delay_hours ?? 0) * 60
 }
 
 export interface Sequence {
@@ -54,8 +102,6 @@ const STEP_TYPES = [
   { value: 'email', label: 'Email', icon: Mail, color: 'text-blue-600' },
   { value: 'task', label: 'Task', icon: Calendar, color: 'text-violet-600' },
   { value: 'delay', label: 'Wait', icon: Clock, color: 'text-amber-600' },
-  { value: 'call', label: 'Call', icon: Phone, color: 'text-green-600' },
-  { value: 'ab_test', label: 'A/B Test', icon: Split, color: 'text-rose-600' },
 ] as const
 
 export function SequenceBuilder({ sequence, onSave, onCancel }: SequenceBuilderProps) {
@@ -79,11 +125,6 @@ export function SequenceBuilder({ sequence, onSave, onCancel }: SequenceBuilderP
       body: type === 'email' ? '' : undefined,
       task_title: type === 'task' ? '' : undefined,
       task_description: type === 'task' ? '' : undefined,
-      call_script: type === 'call' ? '' : undefined,
-      ab_subject_a: type === 'ab_test' ? '' : undefined,
-      ab_body_a: type === 'ab_test' ? '' : undefined,
-      ab_subject_b: type === 'ab_test' ? '' : undefined,
-      ab_body_b: type === 'ab_test' ? '' : undefined,
     }
     setSteps([...steps, newStep])
     setExpandedStep(steps.length)
@@ -127,12 +168,10 @@ export function SequenceBuilder({ sequence, onSave, onCancel }: SequenceBuilderP
       await onSave({
         name,
         description,
-        steps,
+        steps: steps.map(toWireStep),
         total_steps: steps.length,
         total_duration_days: Math.ceil(
-          steps.reduce((sum, step) => 
-            sum + (step.delay_days || 0) + (step.delay_hours || 0) / 24, 0
-          )
+          steps.reduce((sum, step) => sum + stepDelayMinutes(step) / 1440, 0)
         ),
       })
       toast.success('Sequence saved!')
@@ -143,9 +182,10 @@ export function SequenceBuilder({ sequence, onSave, onCancel }: SequenceBuilderP
   }
 
   const calculateTotalDuration = () => {
-    const days = steps.reduce((sum, step) => 
-      sum + (step.delay_days || 0) + (step.delay_hours || 0) / 24, 0
-    )
+    // #2794: this added `delay_days` and `delay_hours / 24` only. `delay_minutes`
+    // is the one field `createSequenceSchema` carries, so a sequence whose wait
+    // arrived from the API displayed as nothing while the steps did have one.
+    const days = steps.reduce((sum, step) => sum + stepDelayMinutes(step) / 1440, 0)
     if (days < 1) return '< 1 day'
     if (days < 7) return `${days.toFixed(1)} days`
     if (days < 30) return `${(days / 7).toFixed(1)} weeks`
@@ -335,15 +375,12 @@ function SortableStepCard({ id, step, StepIcon, stepColor, isExpanded, onToggle,
         <div className="flex-1">
           <div className="flex items-center gap-2">
             <span className="text-xs font-bold text-muted-foreground">Step {step.step_number}</span>
-            <Badge variant="outline" className="text-xs capitalize">{step.type === 'ab_test' ? 'A/B Test' : step.type}</Badge>
+            <Badge variant="outline" className="text-xs capitalize">{step.type}</Badge>
             {step.type === 'email' && step.subject && (
               <span className="text-xs text-muted-foreground truncate max-w-md">{step.subject}</span>
             )}
             {step.type === 'task' && step.task_title && (
               <span className="text-xs text-muted-foreground truncate max-w-md">{step.task_title}</span>
-            )}
-            {step.type === 'ab_test' && (
-              <span className="text-xs text-muted-foreground">50/50 split</span>
             )}
           </div>
         </div>
@@ -407,54 +444,6 @@ function SortableStepCard({ id, step, StepIcon, stepColor, isExpanded, onToggle,
                   className="w-full min-h-[100px] px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
               </div>
             </>
-          )}
-
-          {/* Call fields */}
-          {step.type === 'call' && (
-            <div>
-              <label className="block text-xs font-medium text-muted-foreground mb-1.5">Call Script</label>
-              <textarea value={step.call_script || ''} onChange={(e) => onUpdate({ call_script: e.target.value })}
-                placeholder="Call talking points"
-                className="w-full min-h-[200px] px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
-            </div>
-          )}
-
-          {/* A/B Test fields */}
-          {step.type === 'ab_test' && (
-            <div className="space-y-4">
-              <div className="flex items-center gap-2 mb-2">
-                <FlaskConical className="w-4 h-4 text-rose-600" />
-                <span className="text-sm font-medium">A/B Test — contacts will be split 50/50</span>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-3">
-                  <p className="text-xs font-bold text-muted-foreground uppercase">Variant A</p>
-                  <div>
-                    <label className="block text-xs font-medium text-muted-foreground mb-1">Subject</label>
-                    <Input value={step.ab_subject_a || ''} onChange={(e) => onUpdate({ ab_subject_a: e.target.value })} placeholder="Subject A" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-muted-foreground mb-1">Body</label>
-                    <textarea value={step.ab_body_a || ''} onChange={(e) => onUpdate({ ab_body_a: e.target.value })}
-                      placeholder="Email body A"
-                      className="w-full min-h-[120px] px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
-                  </div>
-                </div>
-                <div className="space-y-3">
-                  <p className="text-xs font-bold text-muted-foreground uppercase">Variant B</p>
-                  <div>
-                    <label className="block text-xs font-medium text-muted-foreground mb-1">Subject</label>
-                    <Input value={step.ab_subject_b || ''} onChange={(e) => onUpdate({ ab_subject_b: e.target.value })} placeholder="Subject B" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-muted-foreground mb-1">Body</label>
-                    <textarea value={step.ab_body_b || ''} onChange={(e) => onUpdate({ ab_body_b: e.target.value })}
-                      placeholder="Email body B"
-                      className="w-full min-h-[120px] px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
-                  </div>
-                </div>
-              </div>
-            </div>
           )}
         </div>
       )}

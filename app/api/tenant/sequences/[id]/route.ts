@@ -77,19 +77,17 @@ export const GET = withApiRoute(async (request: NextRequest,
  * PATCH /api/tenant/sequences/[id]
  * Update sequence
  */
+/**
+ * #2794 — the step shape the PATCH accepts. It used to be a hand-written union of
+ * every spelling every client had ever used (`stepType`, `delay_days`, `content`),
+ * which is exactly how the unvalidated body leaked into the table. It now mirrors
+ * `createSequenceSchema`'s item, and is read off `validated.data`.
+ */
 interface SequenceStepInput {
   type?: string;
-  stepType?: string;
   subject?: string | null;
   body?: string | null;
-  delayDays?: number;
-  delay_days?: number;
-  delayHours?: number;
-  delay_hours?: number;
-  delayMinutes?: number;
   delay_minutes?: number;
-  content?: string | null;
-  templateId?: string | null;
   template_id?: string | null;
 }
 
@@ -110,7 +108,15 @@ export const PATCH = withApiRoute(async (request: NextRequest,
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;
     const { name, description, status } = v;
-    const { steps } = body;
+    // #2794: `steps` came off the raw body while the rest came off `validated.data`,
+    // so the array never passed the schema. The route then read a dozen keys the
+    // schema does not declare — `delay_days`, `stepType`, `content` — straight into
+    // `sequence_steps`. The enum on `type` is enforced by
+    // `chk_sequence_steps_step_type` (`drizzle/migrations/0050_data_validation_checks.sql:121`)
+    // at insert time, so an unenforced value surfaced as a 400 from a 23514 rather
+    // than a validation error, and an over-long `body` or a non-integer delay was
+    // stored as-is. Read it from the validated data.
+    const { steps } = v;
 
     // Optimistic concurrency: reject if another update happened since client read
     const expectedUpdatedAt = body.expectedUpdatedAt ? new Date(body.expectedUpdatedAt) : null;
@@ -148,14 +154,18 @@ export const PATCH = withApiRoute(async (request: NextRequest,
             sequenceId,
             tenantId: ctx.tenantId,
             stepNumber: index + 1,
-            stepType: step.type || step.stepType || 'email',
+            stepType: step.type ?? 'email',
             subject: step.subject || null,
             body: step.body || null,
-            delayDays: step.delayDays || step.delay_days || 0,
-            delayHours: step.delayHours || step.delay_hours || 0,
-            delayMinutes: step.delayMinutes || step.delay_minutes || 0,
-            content: step.content || null,
-            templateId: step.templateId || step.template_id || null,
+            // POST (`sequences/route.ts:107-109`) splits `delay_minutes` into the
+            // three columns and the cron sums them back with `stepDelayMs()`
+            // (`lib/cron/sequence-steps.ts:63`); do the same here so the two write
+            // paths land a step on the same date.
+            delayHours: Math.floor((step.delay_minutes ?? 0) / 60),
+            delayMinutes: (step.delay_minutes ?? 0) % 60,
+            delayDays: 0,
+            content: null,
+            templateId: step.template_id || null,
             createdBy: ctx.userId,
           }));
 
