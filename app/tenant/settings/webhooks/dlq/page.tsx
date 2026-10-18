@@ -10,6 +10,7 @@ import { useApiQuery } from '@/lib/query/client';
 import { AlertTriangle, RotateCcw, Trash2, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import toast from 'react-hot-toast';
+import InlineErrorState from '@/components/shared/inline-error-state';
 
 interface DLQEntry {
   id: string;
@@ -32,7 +33,7 @@ export default function WebhookDLQPage() {
 
   // #1328: DLQ list via TanStack Query (was raw fetch + useEffect). page is part
   // of the key so paging refetches and caches per page.
-  const { data, isLoading: loading } = useApiQuery<{ data?: DLQEntry[]; total?: number }>(
+  const { data, isLoading: loading, error: dlqError, refetch } = useApiQuery<{ data?: DLQEntry[]; total?: number }>(
     ['tenant', 'webhooks', 'dlq', { page }],
     `/api/tenant/webhooks/dlq?${new URLSearchParams({ page: String(page), limit: String(limit) })}`,
   );
@@ -120,11 +121,20 @@ export default function WebhookDLQPage() {
           {[...Array(5)].map((_, i) => <div key={i} className="h-20 bg-muted rounded-2xl animate-pulse" />)}
         </div>
       ) : entries.length === 0 ? (
-        <div className="text-center py-12 border border-dashed border-border rounded-2xl">
-          <AlertTriangle className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
-          <p className="font-medium">No dead letter entries</p>
-          <p className="text-sm text-muted-foreground mt-1">Failed webhooks that exceed retry limits will appear here</p>
-        </div>
+        dlqError ? (
+          // #2829: "No dead letter entries" is the all-clear the DLQ exists to
+          // withhold — a failed read prints it over a real backlog.
+          <InlineErrorState
+            message="Could not load the dead letter queue — this is a failed request, not an empty queue."
+            onRetry={() => void refetch()}
+          />
+        ) : (
+          <div className="text-center py-12 border border-dashed border-border rounded-2xl">
+            <AlertTriangle className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
+            <p className="font-medium">No dead letter entries</p>
+            <p className="text-sm text-muted-foreground mt-1">Failed webhooks that exceed retry limits will appear here</p>
+          </div>
+        )
       ) : (
         <div className="space-y-3">
           {entries.map(entry => (

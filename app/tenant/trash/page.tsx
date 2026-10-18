@@ -11,6 +11,7 @@ import { Trash2, RotateCcw, AlertTriangle, X, Clock } from 'lucide-react';
 import { cn, formatRelativeTime } from '@/lib/utils';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import toast from 'react-hot-toast';
+import InlineErrorState from '@/components/shared/inline-error-state';
 
 const TYPE_CONFIG: Record<string, { label: string; color: string }> = {
   contact: { label: 'Contact',  color: 'text-violet-600 bg-violet-100 dark:bg-violet-900/20 dark:text-violet-400' },
@@ -35,7 +36,7 @@ export default function TrashPage() {
 
   // #1328: trash items via TanStack Query (was raw fetch + useEffect). filter is
   // part of the key so switching tabs refetches and caches per view.
-  const { data, isLoading: loading } = useApiQuery<{ data?: TrashItem[] }>(
+  const { data, isLoading: loading, error: trashError, refetch } = useApiQuery<{ data?: TrashItem[] }>(
     ['tenant', 'trash', { filter }],
     '/api/tenant/trash' + (filter !== 'all' ? `?type=${filter}` : ''),
   );
@@ -121,6 +122,12 @@ export default function TrashPage() {
           ))}
         </div>
       ) : !filtered.length ? (
+        trashError && !items.length ? (
+          // #2829: "Trash is empty" reads as "the retention sweep had nothing to
+          // purge". A failed read never looked at the tombstones. The filter tabs
+          // keep their own sentence — a miss there is honest, as on the KB page.
+          <div className="admin-card p-5"><InlineErrorState message="Could not load the trash — this is a failed request, not an empty one." onRetry={() => void refetch()} /></div>
+        ) : (
         <div className="admin-card py-16 text-center">
           <Trash2 className="w-12 h-12 text-muted-foreground/20 mx-auto mb-4" />
           <p className="font-semibold">Trash is empty</p>
@@ -128,6 +135,7 @@ export default function TrashPage() {
             {filter === 'all' ? 'Nothing has been deleted yet' : `No deleted ${filter}s`}
           </p>
         </div>
+        )
       ) : (
         <div className="admin-card overflow-hidden divide-y divide-border">
           {filtered.map(item => {

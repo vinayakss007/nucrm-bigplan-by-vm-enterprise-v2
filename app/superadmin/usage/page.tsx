@@ -9,6 +9,7 @@ import { useApiQuery } from '@/lib/query/client';
 import { BarChart3, RefreshCw, Search, AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import InlineErrorState from '@/components/shared/inline-error-state';
 
 interface TenantUsage {
   id: string;
@@ -49,7 +50,7 @@ export default function UsagePage() {
 
   // #1328: TanStack Query replaces fetch + useEffect + useState. The manual
   // refresh button calls refetch().
-  const { data, isLoading: loading, refetch } = useApiQuery<UsageData>(
+  const { data, isLoading: loading, error: usageError, refetch } = useApiQuery<UsageData>(
     ['superadmin', 'usage'],
     '/api/superadmin/usage',
   );
@@ -141,7 +142,12 @@ export default function UsagePage() {
           </tr></thead>
           <tbody>
             {loading && <tr><td colSpan={5} className="text-center py-8 text-white/30 text-sm">Loading...</td></tr>}
-            {!loading && !tenants.length && <tr><td colSpan={5} className="text-center py-8 text-white/30 text-sm">No tenants found</td></tr>}
+            {!loading && usageError && !tenants.length && (
+              // #2829: "No tenants found" is what the fleet table says when the
+              // read failed too — the platform panel has no other tell.
+              <tr><td colSpan={5} className="py-6 px-4"><InlineErrorState message="Could not load tenant usage — this is a failed request, not an empty fleet." onRetry={() => void refetch()} /></td></tr>
+            )}
+            {!loading && !usageError && !tenants.length && <tr><td colSpan={5} className="text-center py-8 text-white/30 text-sm">No tenants found</td></tr>}
             {tenants.map((t) => (
               <tr key={t.id} className="border-b border-white/5 last:border-0 hover:bg-white/[0.02] transition-colors">
                 <td className="px-4 py-3">
