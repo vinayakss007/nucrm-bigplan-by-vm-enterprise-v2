@@ -168,6 +168,33 @@ function parseFields(raw: string | null, config: QueryParamsConfig): string[] {
 }
 
 /**
+ * Clamp one query parameter to `[min, max]`, falling back when it is not a number.
+ *
+ * Shaped by the private copy it replaces in `app/api/super-admin/audit-logs/route.ts`
+ * (#2766), which was the third spelling of this logic in the repo and the only one a
+ * `NaN` could not reach. The `Number.isFinite` test is the whole point: `Math.min(100, Math.max(1,
+ * parseInt('abc', 10)))` evaluates to `NaN`, because `Math.min`/`Math.max` propagate `NaN`
+ * instead of clamping it, and drizzle then silently **omits the LIMIT clause** rather than
+ * rejecting the value (`pg-core/dialect.js:286`: `typeof limit === "number" && limit >= 0`
+ * is false for `NaN`, and `offsetSql = offset ? … ` does the same for `NaN`). A cap written
+ * as `Math.min(MAX, …)` therefore does not bound the query at all for the one input that
+ * should have been caught — see #2664's measurement at
+ * `app/api/tenant/reports/run/route.ts:82-88`.
+ *
+ * It parses with `Number`, not `parseInt`, for the same reason: `parseInt` stops at the
+ * first non-digit, so `?maxAgeMs=1e7` would answer `1` and `?days=30x` would answer `30` —
+ * guessing at input the caller did not send. `Number` calls those what they are, and a
+ * value that is not a number gets the documented default. `Math.trunc` keeps the result a
+ * whole number of rows, which `parseInt` got for free and `Number('10.9')` does not.
+ */
+export function clampInt(raw: string | null, fallback: number, min: number, max: number): number {
+  if (raw === null || raw.trim() === '') return fallback;
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(max, Math.max(min, Math.trunc(n)));
+}
+
+/**
  * Minimal, safe page/limit/offset parser for list endpoints that only need
  * offset pagination (not the full sort/filter/fields interface).
  *

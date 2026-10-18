@@ -31,6 +31,11 @@ export const automations = pgTable('automations', {
     updatedByFk2261Idx: index("automations_updated_by_fk_idx").on(table.updatedBy),
     tenantIdx: utils.tenantIdx(table),
     activeIdx: utils.activeIdx(table),
+    // #2633 / migration 0129: two live automations with the same name are a
+    // duplicate by definition; soft-deleted ones are free to collide.
+    liveNameUnique: uniqueIndex('automations_tenant_name_live_unique')
+      .on(table.tenantId, table.name)
+      .where(sql`${table.deletedAt} IS NULL`),
   
   drz2255_idx_automations_created_by: index('idx_automations_created_by').on(table.createdBy),};
 });

@@ -64,6 +64,39 @@ export class UnusableReportFilterValueError extends Error {
   }
 }
 
+/** A row count the endpoint cannot honour — bad input, answered 400. */
+export class UnusableReportLimitError extends Error {
+  constructor(value: unknown) {
+    super(`Limit '${String(value).slice(0, 40)}' is not a positive whole number of rows`);
+    this.name = 'UnusableReportLimitError';
+  }
+}
+
+export const REPORT_LIMIT_DEFAULT = 100;
+/** Server policy, not the caller's request: a report never reads more than this many rows. */
+export const REPORT_LIMIT_MAX = 1000;
+
+/**
+ * The rows a report is allowed to read.
+ *
+ * `Math.min(Number(limit) || 100, 1000)` got three answers wrong and hid all
+ * three: a non-positive or non-numeric limit fell through the `||` (only `0`,
+ * `''`, `NaN` are falsy, so `-1` survived as `-1`) and drizzle then **dropped the
+ * LIMIT clause entirely** — measured, not guessed: a negative or NaN argument
+ * emits `select … from "deals"` with no `limit` at all, and the endpoint answered
+ * 200 with the whole tenant. `0` silently became 100, and a fractional count was
+ * bound as given. Rejecting instead of guessing is the same treatment this file
+ * already gives an unknown field and an unusable date: bad input, not an outage —
+ * the alternative is a successful-looking wrong answer.
+ */
+export function resolveLimit(raw: unknown): number {
+  if (raw === undefined || raw === null || raw === '') return REPORT_LIMIT_DEFAULT;
+  if (typeof raw !== 'number' && typeof raw !== 'string') throw new UnusableReportLimitError(raw);
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n <= 0) throw new UnusableReportLimitError(raw);
+  return Math.min(n, REPORT_LIMIT_MAX);
+}
+
 /** Registry entry: a real pg table plus the columns this builder reads. */
 type RegistryTable = AnyPgTable & {
   tenantId: Column;
@@ -128,12 +161,14 @@ function coerceFilterValue(expr: unknown, field: string, value: unknown): unknow
 /** `filters` accepts `"value"` (equals) or `{ value, op }`. */
 export function filterCondition(tableKey: string, field: string, raw: unknown): SQL {
   const expr = resolveField(tableKey, field) as never;
-  const value = typeof raw === 'object' && raw !== null && 'value' in raw
-    ? (raw as { value: unknown }).value
-    : raw;
-  const op = typeof raw === 'object' && raw !== null && 'op' in raw
-    ? String((raw as { op: unknown }).op)
-    : 'equals';
+  // #2662: either key marks the `{ value, op }` shape. Testing only `'value' in raw`
+  // meant `{ "op": "is_null" }` — a null test, which carries no value by definition —
+  // was read as "the object is the value": `"contacts"."city" = $1` bound to
+  // `{op:"is_null"}` on a text column, and `400 Filter value '[object Object]' is not
+  // a date` on a timestamp one. The `op` line below already recognised this shape.
+  const isOperatorObject = typeof raw === 'object' && raw !== null && ('value' in raw || 'op' in raw);
+  const value = isOperatorObject ? (raw as { value?: unknown }).value : raw;
+  const op = isOperatorObject ? String((raw as { op?: unknown }).op ?? 'equals') : 'equals';
 
   if (value === null || value === undefined || value === '') {
     return op === 'is_null' ? sql`${expr} is null` : sql`true`;
@@ -152,16 +187,60 @@ export function filterCondition(tableKey: string, field: string, raw: unknown): 
   }
 }
 
+/**
+ * `filters` in the two shapes this API is actually called with, as
+ * `[field, raw]` pairs — see #2661.
+ *
+ * The record is what the builder posts since `toStoredFilters` existed; the
+ * `[{ column, op, value }]` array is what the builder posted before it, what
+ * `lib/reports/report-filters.ts` still decodes for display, and what
+ * `platform_settings` therefore still holds for reports saved back then. It used
+ * to be discarded here, so the UI showed a report's filter rows as applied while
+ * the query read the whole table — and a direct caller posting the array form got
+ * the same confident, unfiltered, still-labelled-as-filtered answer.
+ *
+ * Pairs rather than a record, because `fromStoredFilters` folds duplicate columns
+ * and rewrites an operator it does not offer to `equals`: a range filter
+ * (`amount gt 1000` and `amount lt 50000`) would lose one side, and `is_null` —
+ * which `filterCondition` answers as `is null`, not as equality on an empty string
+ * — would stop being a filter at all.
+ */
+export function filterPairs(filters: unknown): [string, unknown][] {
+  if (!filters || typeof filters !== 'object') return [];
+  if (!Array.isArray(filters)) return Object.entries(filters as Record<string, unknown>);
+  return (filters as Record<string, unknown>[])
+    // `field` as well as `column`: the declarative configs this file used to carry
+    // (`revenue`'s, removed in the #2389 round) spelled the key `field`.
+    .map(row => [String(row?.column ?? row?.field ?? ''), { value: row?.value, op: row?.op }] as [string, unknown])
+    .filter(([field]) => field !== '');
+}
+
+/**
+ * One predicate per entry of the request's `filters`, resolved against
+ * `tableKey`. Shared by both branches of `runReportForTenant` so an aggregate
+ * cannot be added that reads its tenant, its tombstones and its own `where`
+ * while throwing the customer's filters away (#2657).
+ */
+export function filterConditions(tableKey: string, filters: unknown): SQL[] {
+  return filterPairs(filters).map(([field, raw]) => filterCondition(tableKey, field, raw));
+}
+
 // Aggregates keep their own selection because their shape is fixed: one
 // dimension plus the counts. Exported only so the test can render them.
 export const REPORT_AGGREGATES: Record<string, {
   table: RegistryTable;
+  // The name `filters` are resolved against. `table` is a drizzle object and the
+  // registry that resolves a filter field is keyed by name, so an aggregate has
+  // to name its base table: a `pipeline` filter is a `deals` filter, and
+  // `pipeline` itself is not a key in `TABLES`.
+  filterKey: string;
   select: Record<string, unknown>;
   groupBy: SQL;
   where?: SQL;
 }> = {
   pipeline: {
     table: deals,
+    filterKey: 'deals',
     select: {
       stage: DEAL_STAGE_EXPR,
       count: sql`count(*)::int`,
@@ -171,6 +250,7 @@ export const REPORT_AGGREGATES: Record<string, {
   },
   revenue: {
     table: deals,
+    filterKey: 'deals',
     select: {
       stage: DEAL_STAGE_EXPR,
       count: sql`count(*)::int`,
@@ -207,9 +287,14 @@ export async function runReportForTenant(
 ): Promise<ReportRunSuccess | ReportRunFailure> {
   const reportType = typeof body.report_type === 'string' ? body.report_type : '';
   const filters = body.filters;
-  const limit = body.limit ?? 100;
 
   try {
+    // Resolved before the branch, so a caller cannot be told "here is your
+    // report" for a `limit` that the aggregate side then ignores. Aggregates are
+    // grouped by deal stage — a handful of rows — so the cap is not a truncation
+    // risk there, but an unusable request is still refused either way.
+    const limit = resolveLimit(body.limit);
+
     const aggregate = REPORT_AGGREGATES[reportType];
     if (!aggregate && !(reportType in REPORT_COLUMNS)) {
       return { error: 'Invalid report type', status: 400 };
@@ -228,6 +313,14 @@ export async function runReportForTenant(
         conditions.push(sql`${aggregate.table.deletedAt} IS NULL` as never);
       }
       if (aggregate.where) conditions.push(aggregate.where as never);
+      // #2657: the row branch below applied the request's `filters` and this one
+      // did not, so a pipeline chart "filtered" on stage, amount or owner drew
+      // every deal in the tenant and the response still reported `report_type:
+      // pipeline` as though it had honoured them. Tombstones in this same branch
+      // were the identical defect and got fixed in #2389; filters did not.
+      for (const predicate of filterConditions(aggregate.filterKey, filters)) {
+        conditions.push(predicate as never);
+      }
       query = db
         .select(aggregate.select as never)
         .from(aggregate.table as never)
@@ -244,10 +337,8 @@ export async function runReportForTenant(
       // handler used to look for four hard-coded keys and drop everything else,
       // so a report "filtered" on industry, amount or stage silently returned
       // the whole table and still presented itself as filtered.
-      if (filters && typeof filters === 'object' && !Array.isArray(filters)) {
-        for (const [field, raw] of Object.entries(filters as Record<string, unknown>)) {
-          conditions.push(filterCondition(reportType, field, raw) as never);
-        }
+      for (const predicate of filterConditions(reportType, filters)) {
+        conditions.push(predicate as never);
       }
       const names = REPORT_COLUMNS[reportType as keyof typeof REPORT_COLUMNS];
       if (!names) return { error: 'Invalid report type', status: 400 };
@@ -256,7 +347,7 @@ export async function runReportForTenant(
         .from(table)
         .where(and(...conditions))
         .orderBy(desc(table.createdAt))
-        .limit(Math.min(Number(limit) || 100, 1000));
+        .limit(limit);
     }
 
     const rows = (await query) as Record<string, unknown>[];
@@ -265,7 +356,7 @@ export async function runReportForTenant(
     // An unknown field is bad input, not an outage. It used to reach drizzle and
     // either overflow the stack (500) or throw inside Postgres. Resolution
     // happens while building the query, so this has to cover the build too.
-    if (err instanceof UnknownReportFieldError || err instanceof UnusableReportFilterValueError) {
+    if (err instanceof UnknownReportFieldError || err instanceof UnusableReportFilterValueError || err instanceof UnusableReportLimitError) {
       return { error: err.message, status: 400 };
     }
     throw err;

@@ -8,6 +8,7 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { contacts } from '@/drizzle/schema';
 import { eq, and, isNull, desc } from 'drizzle-orm';
+import { ownerScope, ownerCacheKey } from '@/lib/api/owner-scope';
 import { withCache } from '@/lib/dashboard/widget-cache';
 import { logError, tenantMeta } from '@/lib/errors-server';
 import { withApiRoute } from '@/lib/api/with-api-route';
@@ -18,6 +19,10 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
     const tid = ctx.tenantId;
+
+    // `ctx` is a `let`, so the narrowing the guard above establishes does not
+    // survive into the withCache closure (#2688).
+    const auth = ctx;
 
     return withCache(tid, 'contacts-recent', 300, async () => {
       const items = await db
@@ -30,12 +35,20 @@ export const GET = withApiRoute(async (request: NextRequest) => {
           createdAt: contacts.createdAt,
         })
         .from(contacts)
-        .where(and(eq(contacts.tenantId, tid), isNull(contacts.deletedAt)))
+        // #2684 — the strip showed archived contacts as freshly added.
+        .where(and(
+          eq(contacts.tenantId, tid),
+          isNull(contacts.deletedAt),
+          eq(contacts.isArchived, false),
+          // #2688 — the contacts list narrows to the caller's own rows without
+          // contacts.view_all (app/api/tenant/contacts/route.ts:58-60); this tile did not.
+          ownerScope(auth, 'contacts.view_all', contacts),
+        ))
         .orderBy(desc(contacts.createdAt))
         .limit(5);
 
       return NextResponse.json({ data: { items } });
-    });
+    }, ownerCacheKey(auth, 'contacts.view_all'));
   } catch (err) {
     void logError({ error: err, context: 'GET /api/tenant/dashboard/widgets/contacts/recent', ...tenantMeta(ctx) });
     return NextResponse.json({ error: 'Widget failed' }, { status: 500 });

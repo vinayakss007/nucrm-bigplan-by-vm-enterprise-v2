@@ -18,6 +18,7 @@ export const productTemplates = pgTable('product_templates', {
   customFields: jsonb('custom_fields').default([]),
   pipelines: jsonb('pipelines').default([]),
   automations: jsonb('automations').default([]),
+  defaultDashboardLayout: jsonb('default_dashboard_layout'),
   isBuiltin: boolean('is_builtin').default(false),
   status: text('status').notNull().default('active'), // active, draft, archived
   createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),

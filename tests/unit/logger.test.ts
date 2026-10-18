@@ -137,6 +137,9 @@ describe('logger', () => {
       expect.stringContaining('nucrm.log'),
       expect.stringContaining('"level":"info"')
     );
+    // #2621 — under the test runner the sink must not be the repo-root
+    // nucrm.log production tails; it is redirected to the OS temp dir.
+    expect(mockAppendFile.mock.calls[0]?.[0]).not.toContain(process.cwd());
   });
 });
 

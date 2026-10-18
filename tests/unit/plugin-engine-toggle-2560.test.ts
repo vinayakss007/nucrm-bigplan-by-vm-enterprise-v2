@@ -136,6 +136,10 @@ describe('#2560 — PATCH /api/tenant/plugin-engine assigns the field it guards 
       permissions: {},
       isAdmin: true,
       isSuperAdmin: false,
+      // #2581 (PP-076) put an in-handler `requireCsrf()` on the PATCH writer,
+      // exempt only for a credential `requireAuth()` verified itself. This file
+      // is about the toggle mapping; CSRF is pinned in its own spec.
+      authMethod: 'api_key',
     });
   });
 

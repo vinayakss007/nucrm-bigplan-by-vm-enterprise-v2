@@ -91,9 +91,14 @@ export const GET = withApiRoute(async (req: NextRequest) => {
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
-    if (!can(ctx, 'contacts.view_all')) {
-      // Temporarily allow if they can at least view their own, but check later in filters
-    }
+    // #2722: this used to be `if (!can(ctx, 'contacts.view_all')) { … }` with an
+    // empty body, so the only verb on call_logs without a gate was its own read.
+    // The list returns the joined contact's name and email (below) alongside the
+    // call notes, phone number and recording URL, which contacts/[id] refuses a
+    // caller without this permission. `view_all` keeps its old meaning here —
+    // whether you may see OTHER people's logs — and is applied further down.
+    const deny = requirePerm(ctx, 'contacts.view');
+    if (deny) return deny;
 
     const { searchParams } = new URL(req.url);
     const contactId = searchParams.get('contact_id');
@@ -101,7 +106,17 @@ export const GET = withApiRoute(async (req: NextRequest) => {
     const { limit, offset } = parseLimitOffset(searchParams, { defaultLimit: 50, maxLimit: 100 });
 
     const filters = [
-      eq(callLogs.tenantId, ctx.tenantId)
+      eq(callLogs.tenantId, ctx.tenantId),
+      // #2719: `DELETE /calls/:id` is a soft delete, so a tombstoned log kept
+      // listing — notes, phone number and recording URL and all — while PATCH
+      // and DELETE on that very row already refuse it.
+      isNull(callLogs.deletedAt),
+      // On the join partner, the way #2556 requires: a soft-deleted contact was
+      // still feeding firstName / lastName / email into every log that
+      // references them. An absent partner yields NULL for this column and
+      // `NULL IS NULL` is true, so a log whose contact was removed entirely
+      // (contactId is nullable, `onDelete: 'set null'`) stays visible.
+      isNull(contacts.deletedAt),
     ];
 
     if (contactId) {

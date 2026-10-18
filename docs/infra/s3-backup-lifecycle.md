@@ -124,12 +124,24 @@ BACKUP_ENCRYPTION_KEY=<64-char-hex>
 
 ## Monitoring
 
-The `/api/system/backup-status` endpoint checks:
+The `/api/system/backup-status` endpoint (superadmin) reports from the database
+records, without touching object storage:
 
-- Last backup age (alert if > 25 hours)
-- Backup file exists in S3
-- Total backup count
-- Next scheduled run
+- `healthy` — a `status = 'completed'` backup exists and completed < 25 hours ago
+- `last_backup` — that backup, with `size_bytes`, `storage_type`, and the
+  `verified_ok` / `last_verified_at` written by `/api/cron/backup-verify`
+- `last_failure` — the newest `status = 'failed'` row with a length-capped
+  `error_excerpt`, so a failed dump stays visible even while an older success
+  keeps `healthy` true (#2600)
+- `total_backups`, `active_schedules` (deleted schedules excluded), and
+  `next_scheduled` — the soonest pending run, not an arbitrary one
+- `open_alerts` — unresolved rows of `backup_alerts`: `count`,
+  `oldest_unresolved_at`, `by_type`. Before #2600 nothing could read this table
+  at all, so nightly alert writes accumulated forever.
+
+Proving a dump is *restorable* is `/api/cron/backup-verify`'s job rather than
+this endpoint's: it restores into a scratch database and answers 5xx when the
+restore fails, which is what makes `deploy/cron/run-cron.sh` report it.
 
 Set up CloudWatch alarm:
 

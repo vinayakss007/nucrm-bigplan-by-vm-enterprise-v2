@@ -22,6 +22,7 @@ import { logError } from '@/lib/errors-server';
 import { readJsonBody } from '@/lib/api/validate';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { enforceFieldWrite } from '@/lib/rbac/enforce';
 
 const MAX_BULK = 500;
 
@@ -81,6 +82,28 @@ export const POST = withApiRoute(async (req: NextRequest) => {
       return NextResponse.json({ error: 'No valid companies found' }, { status: 404 });
 
     let affected = 0;
+
+    // #2618 — same doctrine as the deals bulk gate (#2641): the action writes
+    // the column that IS the action, so a field_permissions restriction on it
+    // must reject (403) rather than perform a stripped, meaningless update.
+    const BULK_WATCHED_FIELDS: Record<string, string[]> = {
+      assign: ['assigned_to'],
+      status: ['status'],
+      tag: ['tags'],
+      update_field: ['custom_fields'],
+    };
+    const watched = BULK_WATCHED_FIELDS[action as string];
+    if (watched) {
+      const { stripped } = await enforceFieldWrite(
+        ctx, 'companies', Object.fromEntries(watched.map((f) => [f, true])),
+      );
+      if (stripped.length > 0) {
+        return NextResponse.json(
+          { error: `field_permissions restricts: ${stripped.join(', ')}` },
+          { status: 403 },
+        );
+      }
+    }
 
     switch (action) {
       case 'assign': {

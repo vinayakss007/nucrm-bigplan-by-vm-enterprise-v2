@@ -24,19 +24,23 @@ vi.mock('@/lib/modules/registry', () => ({
   ],
 }));
 
-vi.mock('@/lib/modules/industry-templates', () => ({
-  INDUSTRY_TEMPLATES: {
-    real_estate: {
-      id: 'real_estate', name: 'Real Estate', description: 'Property', icon: '🏠',
-      modules: ['core-crm', 'forms-builder'],
-      custom_fields: [], pipelines: [], automations: [],
-    },
-    saas: {
-      id: 'saas', name: 'SaaS', description: 'Software', icon: '💻',
-      modules: ['core-crm', 'automation-basic', 'ai-assistant'],
-      custom_fields: [], pipelines: [], automations: [],
-    },
-  },
+// #2633: template modules resolve from product_templates via
+// lib/templates/resolve — mock the resolver with the legacy fixtures.
+vi.mock('@/lib/templates/resolve', () => ({
+  resolveTemplate: vi.fn(async (id: string) => {
+    const fake: Record<string, { id: string; name: string; modules: string[] }> = {
+      real_estate: {
+        id: 'real_estate', name: 'Real Estate',
+        modules: ['core-crm', 'forms-builder'],
+      },
+      saas: {
+        id: 'saas', name: 'SaaS',
+        modules: ['core-crm', 'automation-basic', 'ai-assistant'],
+      },
+    };
+    const hit = fake[id];
+    return hit ? { ...hit, slug: id, description: null, icon: null, custom_fields: [], pipelines: [], automations: [], defaultDashboardLayout: [], isBuiltin: true } : null;
+  }),
 }));
 
 // auto-install now logs failures via the structured logger (not console.error).
@@ -92,19 +96,19 @@ describe('getModulesForPlanAndTemplate', () => {
 
   it('returns plan modules when no template is provided', async () => {
     const { getModulesForPlanAndTemplate } = await import('@/lib/modules/auto-install');
-    const result = getModulesForPlanAndTemplate('free');
+    const result = await getModulesForPlanAndTemplate('free');
     expect(result).toEqual(['core-crm', 'automation-basic']);
   });
 
   it('returns plan modules when template ID is undefined', async () => {
     const { getModulesForPlanAndTemplate } = await import('@/lib/modules/auto-install');
-    const result = getModulesForPlanAndTemplate('free', undefined);
+    const result = await getModulesForPlanAndTemplate('free', undefined);
     expect(result).toEqual(['core-crm', 'automation-basic']);
   });
 
   it('merges plan + template modules without duplicates', async () => {
     const { getModulesForPlanAndTemplate } = await import('@/lib/modules/auto-install');
-    const result = getModulesForPlanAndTemplate('free', 'real_estate');
+    const result = await getModulesForPlanAndTemplate('free', 'real_estate');
     // real_estate has ['core-crm', 'forms-builder'], free has ['core-crm', 'automation-basic']
     expect(result).toContain('core-crm');
     expect(result).toContain('automation-basic');
@@ -115,7 +119,7 @@ describe('getModulesForPlanAndTemplate', () => {
 
   it('returns plan modules for unknown template ID', async () => {
     const { getModulesForPlanAndTemplate } = await import('@/lib/modules/auto-install');
-    const result = getModulesForPlanAndTemplate('free', 'nonexistent_template');
+    const result = await getModulesForPlanAndTemplate('free', 'nonexistent_template');
     expect(result).toEqual(['core-crm', 'automation-basic']);
   });
 });
@@ -128,14 +132,14 @@ describe('getTemplateModules', () => {
 
   it('returns only valid built-in module IDs from template', async () => {
     const { getTemplateModules } = await import('@/lib/modules/auto-install');
-    const result = getTemplateModules('real_estate');
+    const result = await getTemplateModules('real_estate');
     // real_estate: ['core-crm', 'forms-builder'] — both exist in BUILTIN_MODULES mock
     expect(result).toEqual(['core-crm', 'forms-builder']);
   });
 
   it('filters out non-existent module IDs from template', async () => {
     const { getTemplateModules } = await import('@/lib/modules/auto-install');
-    const result = getTemplateModules('saas');
+    const result = await getTemplateModules('saas');
     // saas: ['core-crm', 'automation-basic', 'ai-assistant']
     // ai-assistant is NOT in the mock BUILTIN_MODULES
     expect(result).toEqual(['core-crm', 'automation-basic']);
@@ -143,7 +147,7 @@ describe('getTemplateModules', () => {
 
   it('returns empty array for unknown template ID', async () => {
     const { getTemplateModules } = await import('@/lib/modules/auto-install');
-    const result = getTemplateModules('nonexistent');
+    const result = await getTemplateModules('nonexistent');
     expect(result).toEqual([]);
   });
 });

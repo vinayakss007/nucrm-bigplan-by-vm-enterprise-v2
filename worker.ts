@@ -15,6 +15,7 @@ import { redactEmail, redactPhone, redactUrl } from '@/lib/logger/pii';
 import { escapeHtml } from '@/lib/email/escape-html';
 import { logError } from '@/lib/errors-server';
 import { materializeFileSecrets } from '@/lib/secrets-file';
+import { errorText } from '@/lib/error-redaction';
 
 // #2123: read bind-mounted secret files into process.env before any config is
 // captured below, so the worker can run without secrets in container metadata.
@@ -105,9 +106,8 @@ const emailWorker = new Worker(
       // set). Never store the raw recipient address there — return the masked
       // form so PII does not sit in Redis.
       return { sent: true, to: maskedEmail, messageId: result?.messageId };
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (error: any) {
-      console.error(`[Email Worker] Failed to send email to ${maskedEmail}:`, error.message);
+    } catch (error) {
+      console.error(`[Email Worker] Failed to send email to ${maskedEmail}:`, errorText(error));
       throw error;
     }
   },
@@ -133,9 +133,8 @@ const notificationWorker = new Worker(
       
       console.log(`[Notification Worker] Notification sent to user ${userId}`);
       return { sent: true, userId };
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (error: any) {
-      console.error(`[Notification Worker] Failed to send notification:`, error.message);
+    } catch (error) {
+      console.error(`[Notification Worker] Failed to send notification:`, errorText(error));
       throw error;
     }
   },
@@ -149,7 +148,9 @@ const BULK_BATCH_SIZE = 10;
 const bulkEmailWorker = new Worker(
   'send-bulk-emails',
   async (job) => {
-    const { recipients, subject, body, tenantId: _tenantId } = job.data;
+    const { subject, body, tenantId: _tenantId } = job.data;
+    type BulkEmailRecipient = { email: string; first_name?: string; last_name?: string };
+    const recipients = (job.data.recipients ?? []) as BulkEmailRecipient[];
     console.log(`[Bulk Email Worker] Processing job: ${job.id} - Sending to ${recipients.length} recipients`);
     
     // #1292/#1288: the per-recipient result is returned from the processor and
@@ -162,8 +163,7 @@ const bulkEmailWorker = new Worker(
     for (let i = 0; i < recipients.length; i += BULK_BATCH_SIZE) {
       const batch = recipients.slice(i, i + BULK_BATCH_SIZE);
       const batchResults = await Promise.allSettled(
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-        batch.map(async (recipient: any) => {
+        batch.map(async (recipient) => {
           // #1170/#1191/#1272: HTML-escape first_name before interpolating it
           // into the HTML body, otherwise a contact name containing markup
           // (e.g. <script>) is injected verbatim — stored XSS in outgoing mail.
@@ -217,9 +217,8 @@ const automationWorker = new Worker(
       
       console.log(`[Automation Worker] Automation ${automationId} completed successfully`);
       return { success: true, automationId };
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (error: any) {
-      console.error(`[Automation Worker] Failed:`, error.message);
+    } catch (error) {
+      console.error(`[Automation Worker] Failed:`, errorText(error));
       throw error;
     }
   },
@@ -264,8 +263,8 @@ const leadWarmingWorker = new Worker(
           return { sent: false, error: 'WhatsApp not configured' };
         }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const config = integration.config as any;
+        type WhatsAppIntegrationConfig = { phone_number_id?: string; access_token?: string; token_expires_at?: string | number | Date | null; expires_at?: string | number | Date | null; [key: string]: unknown };
+        const config = (integration.config ?? null) as WhatsAppIntegrationConfig | null;
         const phoneNumberId = config?.phone_number_id;
         const accessToken = config?.access_token;
 
@@ -412,9 +411,8 @@ const leadWarmingWorker = new Worker(
 
       // For email type, it's already handled by send-email queue
       return { sent: true };
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (error: any) {
-      console.error(`[Lead Warming Worker] Failed:`, error.message);
+    } catch (error) {
+      console.error(`[Lead Warming Worker] Failed:`, errorText(error));
       throw error;
     }
   },
@@ -465,9 +463,8 @@ const webhookWorker = new Worker(
       }
       
       return { delivered: true, url, status: response.status };
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (error: any) {
-      console.error(`[Webhook Worker] Failed to deliver webhook:`, error.message);
+    } catch (error) {
+      console.error(`[Webhook Worker] Failed to deliver webhook:`, errorText(error));
       throw error;
     }
   },
@@ -483,9 +480,8 @@ const tenantCleanupWorker = new Worker(
       const { processTenantCleanup } = await import('@/lib/tenant-cleanup');
       await processTenantCleanup(tenantId);
       return { cleaned: true, tenantId };
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (error: any) {
-      console.error(`[Tenant Cleanup Worker] Failed to clean up tenant:`, error.message);
+    } catch (error) {
+      console.error(`[Tenant Cleanup Worker] Failed to clean up tenant:`, errorText(error));
       throw error;
     }
   },

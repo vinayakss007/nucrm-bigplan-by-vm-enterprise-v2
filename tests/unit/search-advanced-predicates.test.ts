@@ -12,11 +12,29 @@ import { PgDialect } from 'drizzle-orm/pg-core';
 vi.mock('@/drizzle/db', () => ({ db: { select: () => chain() } }));
 vi.mock('@/lib/api/with-api-route', () => ({ withApiRoute: (fn: unknown) => fn }));
 vi.mock('@/lib/rate-limit', () => ({ checkRateLimit: async () => null }));
-vi.mock('@/lib/auth/middleware', () => ({
-  requireAuth: async () => ({ tenantId: TENANT, userId: 'user-1', email: 'a@b.c' }),
-}));
+vi.mock('@/lib/auth/middleware', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/auth/middleware')>('@/lib/auth/middleware');
+  return { ...actual, requireAuth: async () => VIEW_ALL };
+});
+// Partial, like the middleware: the route now reaches `can()` through
+// `ownerScope` (#2690), and a full mock of a module other files import
+// transitively (`InvalidJsonBodyError`) turns those reads into 500s. The
+// fixture is a `view_all` holder so this file keeps pinning the *predicate*
+// text it was written for; the caller narrowing is #2690's own suite.
+vi.mock('@/lib/api/validate', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/api/validate')>('@/lib/api/validate');
+  return { ...actual, readJsonBody: async () => body };
+});
 
 const TENANT = '11111111-1111-1111-1111-111111111111';
+
+const VIEW_ALL = {
+  tenantId: TENANT, userId: 'user-1', email: 'a@b.c', roleSlug: 'manager',
+  permissions: {
+    'contacts.view_all': true, 'deals.view_all': true,
+    'tasks.view_all': true, 'leads.view_all': true,
+  },
+};
 
 let body: Record<string, unknown> = {};
 vi.mock('@/lib/api/validate', () => ({ readJsonBody: async () => body }));

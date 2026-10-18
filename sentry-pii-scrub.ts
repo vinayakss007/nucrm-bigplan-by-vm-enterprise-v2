@@ -142,15 +142,15 @@ export function scrubPii(event: any): any {
     for (const bc of event.breadcrumbs) {
       if (typeof bc.message === 'string') bc.message = redactString(bc.message);
       if (bc.data && typeof bc.data === 'object') {
-        for (const k of Object.keys(bc.data)) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const v = (bc.data as any)[k];
+        const dataRecord = bc.data as Record<string, unknown>;
+        for (const k of Object.keys(dataRecord)) {
+          const v = dataRecord[k];
           // Unconditional, not `if (EMAIL_RE.test(v))`: EMAIL_RE is /g, and a global
           // regex carries `lastIndex` between `.test()` calls, so the guard returned
           // false for a value whose email sat before the previous match's end position
           // and let that address go out unredacted. `replace` resets `lastIndex` itself.
-          if (typeof v === 'string') bc.data[k] = redactString(v);
-          if (SENSITIVE_KEYS.test(k)) bc.data[k] = '[redacted]';
+          if (typeof v === 'string') dataRecord[k] = redactString(v);
+          if (SENSITIVE_KEYS.test(k)) dataRecord[k] = '[redacted]';
         }
       }
     }

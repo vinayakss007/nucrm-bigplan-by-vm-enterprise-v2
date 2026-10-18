@@ -8,6 +8,7 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { leads } from '@/drizzle/schema';
 import { sql } from 'drizzle-orm';
+import { ownerScope, ownerScopeSql, ownerCacheKey } from '@/lib/api/owner-scope';
 import { withCache } from '@/lib/dashboard/widget-cache';
 import { logError, tenantMeta } from '@/lib/errors-server';
 import { withApiRoute } from '@/lib/api/with-api-route';
@@ -19,15 +20,23 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     if (ctx instanceof NextResponse) return ctx;
     const tid = ctx.tenantId;
 
+    // `ctx` is a `let`, so the narrowing the guard above establishes does not
+    // survive into the withCache closure (#2688).
+    const auth = ctx;
+
     return withCache(tid, 'widget-leads', 300, async () => {
+      // #2688 — the leads list narrows to the caller's own rows without
+      // leads.view_all (app/api/tenant/leads/route.ts:90-92); these six counts did
+      // not, and the entry was cached under the tenant alone.
+      const mine = ownerScopeSql(ownerScope(auth, 'leads.view_all', leads));
       const result = await db.execute(sql`
         SELECT
-          (SELECT COUNT(*)::int FROM ${leads} WHERE tenant_id = ${tid} AND deleted_at IS NULL) AS total,
-          (SELECT COUNT(*)::int FROM ${leads} WHERE tenant_id = ${tid} AND deleted_at IS NULL AND lead_status = 'new') AS new,
-          (SELECT COUNT(*)::int FROM ${leads} WHERE tenant_id = ${tid} AND deleted_at IS NULL AND lead_status = 'contacted') AS contacted,
-          (SELECT COUNT(*)::int FROM ${leads} WHERE tenant_id = ${tid} AND deleted_at IS NULL AND lead_status = 'qualified') AS qualified,
-          (SELECT COUNT(*)::int FROM ${leads} WHERE tenant_id = ${tid} AND deleted_at IS NULL AND lead_status = 'converted') AS converted,
-          (SELECT COUNT(*)::int FROM ${leads} WHERE tenant_id = ${tid} AND deleted_at IS NULL AND created_at >= date_trunc('month', now())) AS new_this_month
+          (SELECT COUNT(*)::int FROM ${leads} WHERE tenant_id = ${tid} AND deleted_at IS NULL${mine}) AS total,
+          (SELECT COUNT(*)::int FROM ${leads} WHERE tenant_id = ${tid} AND deleted_at IS NULL${mine} AND lead_status = 'new') AS new,
+          (SELECT COUNT(*)::int FROM ${leads} WHERE tenant_id = ${tid} AND deleted_at IS NULL${mine} AND lead_status = 'contacted') AS contacted,
+          (SELECT COUNT(*)::int FROM ${leads} WHERE tenant_id = ${tid} AND deleted_at IS NULL${mine} AND lead_status = 'qualified') AS qualified,
+          (SELECT COUNT(*)::int FROM ${leads} WHERE tenant_id = ${tid} AND deleted_at IS NULL${mine} AND lead_status = 'converted') AS converted,
+          (SELECT COUNT(*)::int FROM ${leads} WHERE tenant_id = ${tid} AND deleted_at IS NULL${mine} AND created_at >= date_trunc('month', now())) AS new_this_month
       `);
       const row = result.rows?.[0] || {};
       return NextResponse.json({
@@ -40,7 +49,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
           newThisMonth: Number(row['new_this_month'] ?? 0),
         },
       });
-    });
+    }, ownerCacheKey(auth, 'leads.view_all'));
   } catch (err) {
     void logError({ error: err, context: 'GET /api/tenant/dashboard/widgets/leads', ...tenantMeta(ctx) });
     return NextResponse.json({ error: 'Widget failed' }, { status: 500 });

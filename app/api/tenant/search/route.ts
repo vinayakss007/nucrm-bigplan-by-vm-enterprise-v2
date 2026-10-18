@@ -12,9 +12,11 @@ import { db } from '@/drizzle/db';
 import { contacts, leads, deals, dealStages, companies } from '@/drizzle/schema';
 import { tasks } from '@/drizzle/schema';
 import { eq, and, or, ilike, desc, sql, asc } from 'drizzle-orm';
+import { notArchived } from '@/lib/api/deals-archive-filter';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { parseLimitOffset } from '@/lib/api/query-params';
+import { ownerScope } from '@/lib/api/owner-scope';
 
 export const GET = withApiRoute(async (request: NextRequest) => {
   try {
@@ -37,6 +39,17 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     const pattern = `%${escapeLike(q)}%`;
     const tid = ctx.tenantId;
 
+    // #2686 — the four entity branches below were the only reads in the app with
+    // no record-level narrowing: a caller who cannot open another rep's record
+    // (list, [id] handler, bulk, export all refuse) could search for it, and the
+    // header dropdown prints the email. Each branch now carries the same
+    // ownerScope its own list route applies. `view_all` holders get `undefined`,
+    // which `and()` skips, so their search stays tenant-wide.
+    const contactScope = ownerScope(ctx, 'contacts.view_all', contacts);
+    const leadScope = ownerScope(ctx, 'leads.view_all', leads);
+    const dealScope = ownerScope(ctx, 'deals.view_all', deals);
+    const taskScope = ownerScope(ctx, 'tasks.view_all', tasks);
+
     const [contactResults, leadResults, dealResults, companyResults, taskResults] = await Promise.all([
       (type === 'all' || type === 'contacts')
         ? db.select({
@@ -53,6 +66,11 @@ export const GET = withApiRoute(async (request: NextRequest) => {
           .where(and(
             eq(contacts.tenantId, tid),
             sql`${contacts.deletedAt} IS NULL`,
+            // An archived contact is out of the working set: the list hides it
+            // (app/api/tenant/contacts/route.ts:54) and so does the export
+            // (#2677). Search was the way back to it. (#2684)
+            eq(contacts.isArchived, false),
+            contactScope,
             or(
               ilike(contacts.firstName, pattern),
               ilike(contacts.lastName, pattern),
@@ -80,6 +98,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
           .where(and(
             eq(leads.tenantId, tid),
             sql`${leads.deletedAt} IS NULL`,
+            leadScope,
             or(
               ilike(leads.firstName, pattern),
               ilike(leads.lastName, pattern),
@@ -110,6 +129,8 @@ export const GET = withApiRoute(async (request: NextRequest) => {
           .where(and(
             eq(deals.tenantId, tid),
             sql`${deals.deletedAt} IS NULL`,
+            notArchived(),  // #2684 — deals are archived via metadata, not a column
+            dealScope,
             or(
               ilike(deals.title, pattern),
               ilike(contacts.firstName, pattern),
@@ -129,7 +150,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
             industry: companies.industry,
             phone: companies.phone,
             website: companies.website,
-            contact_count: sql<number>`(SELECT count(*)::int FROM ${contacts} WHERE ${contacts.companyId} = ${companies.id} AND ${contacts.deletedAt} IS NULL)`
+            contact_count: sql<number>`(SELECT count(*)::int FROM ${contacts} WHERE ${contacts.companyId} = ${companies.id} AND ${contacts.deletedAt} IS NULL AND ${contacts.isArchived} = false)`
           })
           .from(companies)
           .where(and(
@@ -163,6 +184,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
           .where(and(
             eq(tasks.tenantId, tid),
             sql`${tasks.deletedAt} IS NULL`,
+            taskScope,
             or(
               ilike(tasks.title, pattern),
               ilike(tasks.description, pattern),

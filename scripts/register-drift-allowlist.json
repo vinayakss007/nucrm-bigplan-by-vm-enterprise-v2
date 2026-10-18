@@ -1,30 +1,20 @@
 {
-  "_comment": "Register pointers whose cited LINE CONTENT differs from the revision that wrote them, each with a written `reason` saying which PR re-pins it or why nothing does. The screen FAILS on any drift not listed here and reports entries that no longer drift as STALE (non-failing, prune them). `regLines` are the register sentences the cite silences \u2014 the screen matches on cite, so one entry can cover several. Regenerate preserving reasons: node scripts/check-register-drift.mjs --update",
+  "_comment": "Register pointers whose cited LINE CONTENT differs from the revision that wrote them, each with a written `reason` saying which PR re-pins it or why nothing does. The screen FAILS on any drift not listed here and reports entries that no longer drift as STALE (non-failing, prune them). `regLines` are the register sentences the cite silences — the screen matches on cite, so one entry can cover several. Regenerate preserving reasons: node scripts/check-register-drift.mjs --update",
   "entries": [
     {
       "cite": "app/api/cron/auto-backup/route.ts:55",
-      "regLines": [2801],
-      "reason": "Read-log, not a pointer: PP-055 lists the auto-backup line set (55, 147, 243, 256-257, 297) as ranges somebody read, and #2441 declined to re-pin it for exactly that reason \u2014 re-pinning would invent an intent the entry never stated. Listed here so the decision is on the record instead of silent drift."
-    },
-    {
-      "cite": "deploy.yml:349",
-      "regLines": [3670],
-      "reason": "Moved by **#2542** (`f5e238cf`), which inserted the SENTRY_RELEASE pin above it: the `db:migrate` comment is now `deploy.yml:382`. Not re-pinned in this PR because the sentence that cites it (PP-060's mechanism read-log) also carries a count \u2014 `db:migrate` 'matches once across `.github/workflows`' \u2014 and **#2542** made that **twice** (`ci.yml:342` is the second, also a comment). Re-pinning the number while leaving the count would leave the sentence half-true; it belongs in a docs-only pass that re-measures both."
-    },
-    {
-      "cite": "deploy.yml:356",
-      "regLines": [333, 3417, 3776, 4239],
-      "reason": "Same commit moved it: the only executable `deploy-migrate.ts --yes` in the repo's automation is now `deploy.yml:389`. Two closed entries cite it as a live pointer (PP-060's chain sentence at `:3776`, PP-063's exit (D2) at `:4239`), and PP-060's neighbouring count \u2014 `migrate.ts` 'matches twice, at `:340` and `:356`' \u2014 is now `:373` and `:389`. Listed so the decision is on the record; re-pin all four numbers in one docs-only PR rather than inside #2560's delta."
+      "regLines": [2831],
+      "reason": "Read-log, not a pointer: PP-055 lists the auto-backup line set (55, 147, 243, 256-257, 297) as ranges somebody read, and #2441 declined to re-pin it for exactly that reason — re-pinning would invent an intent the entry never stated. Listed here so the decision is on the record instead of silent drift."
     },
     {
       "cite": "docs/README.md:71",
-      "regLines": [203],
-      "reason": "History, not a live pointer: the register's PP-068 bullet reports the coordinate as it found it \u2014 `docs/README.md:71` was where the README's kept-rather-than-deleted paragraph sat then, and the sentence it named now sits at `docs/README.md:75`, whose own re-pin chain has run PP-071 -> PP-072 (rule at :4651) -> PP-073 (:4774) -> PP-065 (#2507, then :4810) -> PP-074 (#2526, shipped as #2568, then :4940) -> PP-070 (#2534, then :5013) -> this #2566 addendum (:5079) -> PP-075 (#2560, shipped as #2569, now :5172). Re-writing PP-068's sentence would falsify the measurement it reports. #2581 (PP-076), #2578 (PP-077), #2587 (PP-078) and #2595 re-pin the same live cite from their own trees, so whichever docs PR merges last re-derives this entry; prune it the day the README names the rule by heading text instead of a line number."
+      "regLines": [232],
+      "reason": "History, not a live pointer: the register's PP-068 bullet reports the coordinate as it found it - `docs/README.md:71` was where the README's kept-rather-than-deleted paragraph sat then, and the sentence it named now sits at `docs/README.md:75`, whose own re-pin chain has run PP-071 -> PP-072 (rule at :4651) -> PP-073 (:4774) -> PP-065 (#2507, then :4810) -> PP-074 (#2526, shipped as #2568, then :4940) -> PP-070 (#2534, then :5013) -> the #2566 addendum (:5079) -> PP-076 (#2561, shipped as #2581, then :5194) -> this #2569/PP-075 merge, now :5288. Re-writing PP-068's sentence would falsify the measurement it reports. #2578 (PP-077) and #2587 (PP-078) re-pin the same live cite from their own trees, so whichever docs PR merges last re-derives this entry; prune it the day the README names the rule by heading text instead of a line number."
     },
     {
       "cite": "docs/README.md:75",
-      "regLines": [25, 41, 68, 86, 119, 135, 5086, 5159],
-      "reason": "Chronic, not accidental: the register's header bullets and entry sections quote this README sentence, and that sentence is the README's own re-pin of a pointer INTO the register \u2014 so any entry that adds register header text moves the line the pointer names, and this cite reads as drift by construction. PP-072 (#2558) minted it with the rule at :4651, PP-073 (#2567) moved it to :4774, PP-065 (#2507) to :4810, PP-074 (#2526, shipped as #2568) to :4940, PP-070 (#2534, since merged) to :5013, PR #2566's register-only addendum re-pinned it to :5079 \u2014 the fourteenth, and the first that minted no entry of its own \u2014 and this PR's PP-075 entry re-pins it to :5172, the fifteenth. The number is per-tree: #2578 measures :5108, #2581 :5128 and #2587 and #2595 each measure their own, because they all edit the same header, so whichever merges last re-derives this entry. Prune it the day the README points at the rule by heading text instead of a line number."
+      "regLines": [32, 54, 70, 97, 115, 148, 164, 5117, 5190],
+      "reason": "Chronic, not accidental: the register's header bullets and entry sections quote this README sentence, and that sentence is the README's own re-pin of a pointer INTO the register - so any entry that adds register header text moves the line the pointer names, and this cite reads as drift by construction. PP-072 (#2558) minted it with the rule at :4651, PP-073 (#2567) moved it to :4774, PP-065 (#2507) to :4810, PP-074 (#2526, shipped as #2568) to :4940, PP-070 (#2534, since merged) to :5013, the #2566 addendum to :5079 (the fourteenth, and the first that mints no entry of its own), PP-075 (#2560, shipped as #2569) to :5172, PP-076 (#2561, shipped as #2581) re-pinned it to :5194 and this merge of #2569 adds PP-075's header bullet, summary row and section above it, so the sentence now reads :5288. The number is per-tree: #2578 and #2587 measure their own lines because all three edit the same header, so whichever merges last re-derives this entry. Prune it the day the README points at the rule by heading text instead of a line number."
     }
   ]
 }

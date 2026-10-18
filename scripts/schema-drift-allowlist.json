@@ -41,21 +41,6 @@
       "key": "nullability:custom_entity_data.created_at",
       "reason": "Declared NOT NULL; the chain builds it nullable and pre-prod has it NOT NULL. Measured 0 rows on both.",
       "filedAs": "#2509"
-    },
-    {
-      "key": "type:super_admin_audit_logs.old_data",
-      "reason": "drizzle/schema declares jsonb; 0002_flat_sir_ram.sql created the column text and 0007_super_admin_audit_logs.sql:16's jsonb is an inert `CREATE TABLE IF NOT EXISTS`. text in the chain build and text on pre-prod; the hand-written SQL in lib/audit/super-admin.ts:194 writes JSON.stringify and :390 reads `string | null`, so the schema is the liar. 141 rows, old_data non-null in 0.",
-      "filedAs": "#2510"
-    },
-    {
-      "key": "type:super_admin_audit_logs.new_data",
-      "reason": "Same as old_data: jsonb declared, text built (0002 vs 0007:17). 141 rows, new_data non-null in 0.",
-      "filedAs": "#2510"
-    },
-    {
-      "key": "type:super_admin_audit_logs.metadata",
-      "reason": "Same pair (0002 text vs 0007:18 jsonb, with `DEFAULT '{}'`). All 141 live rows carry text that `jsonb_typeof` reads as `object`, so re-typing is possible today; the owner has to choose between ALTER COLUMN TYPE jsonb and declaring text in the schema. See #2510 for both dispositions and the 0057 CHECK constraints that assume text.",
-      "filedAs": "#2510"
     }
   ]
 }

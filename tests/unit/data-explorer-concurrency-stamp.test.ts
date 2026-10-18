@@ -25,6 +25,11 @@ vi.mock('@/lib/errors-server', () => ({ logError: async () => undefined }));
 vi.mock('@/lib/auth/middleware', () => ({
   requireAuth: async () => ({ tenantId: TENANT, userId: 'user-1', email: 'a@b.c', isAdmin: true }),
   requirePerm: () => null,
+  // The route now asks `can(ctx, '<entity>.view_all')` to decide whether to
+  // narrow (#2704). This file is about the stamp round-trip, so its caller is a
+  // full-scope holder and the SQL shape it asserts stays the one it always was;
+  // the owner rule itself is asserted in data-explorer-owner-scope-2704.test.ts.
+  can: () => true,
 }));
 vi.mock('@/lib/api/validate', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/api/validate')>();

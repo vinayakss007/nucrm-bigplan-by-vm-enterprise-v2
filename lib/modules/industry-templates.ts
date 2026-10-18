@@ -4,12 +4,11 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 /**
- * Industry Templates — NuCRM No-Code Setup
- * 
- * Defines pre-configured CRM structures for specific niches.
- * Each template provides the exact modules, fields, pipelines, and automations
- * relevant to a specific business type. The platform acts as a modular backend
- * where each tenant only receives the features their use-case requires.
+ * Industry Templates — NuCRM No-Code Setup (seed source for migration 0128).
+ * @deprecated #2633: runtime code must resolve from product_templates via
+ * lib/templates/resolve.ts — superadmin edits live only in the DB, and
+ * tests/unit/templates-import-guard-2633.test.ts bans importing this map
+ * from app/, lib/ or components/.
  */
 
 export interface IndustryTemplate {

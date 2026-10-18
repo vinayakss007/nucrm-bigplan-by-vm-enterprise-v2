@@ -21,6 +21,9 @@ import { readJsonBody } from '@/lib/api/validate';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { convertLeadCore } from '@/lib/leads/convert';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { enforceFieldWrite } from '@/lib/rbac/enforce';
+import { ownerScope } from '@/lib/api/owner-scope';
+import { firstStepDueAt } from '@/lib/cron/sequence-steps';
 
 const MAX_BULK = 500;
 
@@ -40,7 +43,14 @@ export const POST = withApiRoute(async (req: NextRequest) => {
     if (lead_ids.length > MAX_BULK)
       return NextResponse.json({ error: `Max ${MAX_BULK} leads per bulk operation` }, { status: 400 });
 
-    // Validate all IDs belong to this tenant
+    // #2692 — into both id sets this route writes, the way #2671/#2673/#2674 put
+    // it into deals, contacts and tasks. Without it a `sales_rep` (whose
+    // `leads.view_all` is off, lib/permissions/definitions.ts:134) could name up
+    // to MAX_BULK of another rep's lead ids and have nine actions write them.
+    // `and()` skips the undefined a `view_all` holder gets — see lib/api/owner-scope.ts.
+    const mine = ownerScope(ctx, 'leads.view_all', leads);
+
+    // Validate all IDs belong to this tenant — and to this caller.
     const validLeads = await db
       .select({ id: leads.id })
       .from(leads)
@@ -48,7 +58,8 @@ export const POST = withApiRoute(async (req: NextRequest) => {
         and(
           inArray(leads.id, lead_ids),
           eq(leads.tenantId, ctx.tenantId),
-          sql`${leads.deletedAt} IS NULL`
+          sql`${leads.deletedAt} IS NULL`,
+          mine
         )
       );
     
@@ -58,6 +69,27 @@ export const POST = withApiRoute(async (req: NextRequest) => {
     // restorable ids, so don't bail out here for that action.
     if (!validIds.length && action !== 'restore')
       return NextResponse.json({ error: 'No valid leads found' }, { status: 404 });
+
+    // #2618 — mirror of the deals bulk gate (#2641): status/assign write real
+    // lead columns straight from payload keys, and stripping the action's only
+    // value would leave the action meaningless, so reject (403) when
+    // field_permissions restricts them.
+    const BULK_WATCHED_FIELDS: Record<string, string[]> = {
+      status: ['lead_status'],
+      assign: ['assigned_to'],
+    };
+    const watched = BULK_WATCHED_FIELDS[action as string];
+    if (watched) {
+      const { stripped } = await enforceFieldWrite(
+        ctx, 'leads', Object.fromEntries(watched.map((f) => [f, true])),
+      );
+      if (stripped.length > 0) {
+        return NextResponse.json(
+          { error: `field_permissions restricts: ${stripped.join(', ')}` },
+          { status: 403 },
+        );
+      }
+    }
 
     let affected = 0;
     let skippedAlreadyConverted = 0;
@@ -268,6 +300,9 @@ export const POST = withApiRoute(async (req: NextRequest) => {
         // Restore targets SOFT-DELETED/archived rows. The `validIds` set above is
         // built with `deletedAt IS NULL`, so it never contains an archived lead —
         // reusing it made bulk restore a no-op. Re-resolve against the trashed set.
+        // #2692 — and narrow that second set the same way: `deals/bulk` carries
+        // `mine` into its restore for exactly this reason. Trash is not a
+        // permission boundary; a foreign id here restores another rep's lead.
         const restorable = await db
           .select({ id: leads.id })
           .from(leads)
@@ -275,7 +310,8 @@ export const POST = withApiRoute(async (req: NextRequest) => {
             and(
               inArray(leads.id, lead_ids),
               eq(leads.tenantId, ctx.tenantId),
-              sql`${leads.deletedAt} IS NOT NULL`
+              sql`${leads.deletedAt} IS NOT NULL`,
+              mine
             )
           );
         const restorableIds = restorable.map(r => r.id);
@@ -354,6 +390,9 @@ export const POST = withApiRoute(async (req: NextRequest) => {
           return NextResponse.json({ error: 'No leads with linked contacts found' }, { status: 400 });
         
         await db.transaction(async (tx) => {
+          // #2793: without a due date the row is `active` but the cron's due sweep
+          // can never select it, so the lead's drip silently never sent.
+          const nextStepAt = await firstStepDueAt(tx, ctx.tenantId, sequenceId);
           const enrollValues = contactIds.map(contactId => ({
             tenantId: ctx.tenantId,
             sequenceId,
@@ -361,6 +400,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
             enrolledBy: ctx.userId,
             status: 'active',
             currentStep: 1,
+            nextStepAt,
           }));
           
           const res = await tx.insert(sequenceEnrollments).values(enrollValues).onConflictDoNothing();

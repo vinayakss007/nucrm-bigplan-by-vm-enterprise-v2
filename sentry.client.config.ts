@@ -64,8 +64,7 @@ export const sentryConfig = {
   },
 
   // Only track meaningful requests
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  beforeSendTransaction(event: any) {
+  beforeSendTransaction(event: Parameters<NonNullable<Sentry.BrowserOptions['beforeSendTransaction']>>[0]) {
     // Ignore health check endpoints
     if (event.transaction === '/api/health') {
       return null;

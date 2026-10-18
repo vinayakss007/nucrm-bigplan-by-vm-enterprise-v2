@@ -14,6 +14,7 @@ import { z } from 'zod';
 import { concurrencyGuard } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody, validateBody, uuidField } from '@/lib/api/validate';
+import { ownerScope } from '@/lib/api/owner-scope';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { logError } from '@/lib/errors-server';
 
@@ -111,6 +112,11 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     // #2556 — and prove it is not soft-deleted, so the two halves of this page
     // cannot disagree: the GET above stopped listing rows this POST would still
     // happily score. Matches the deal-side probe's `deletedAt IS NULL`.
+    // #2777 — and prove it is *owned*. `contacts.edit` is the only gate here and
+    // `sales_rep` holds it with `contacts.view_all` false
+    // (`lib/permissions/definitions.ts:133`), so a rep could score a colleague's
+    // contact and read back their churn profile — the same contact
+    // `contacts/[id]/route.ts:82-87` answers 404 for.
     const [ownedContact] = await db
       .select({ id: contacts.id })
       .from(contacts)
@@ -118,6 +124,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
         eq(contacts.id, contact_id),
         eq(contacts.tenantId, ctx.tenantId),
         isNull(contacts.deletedAt),
+        ownerScope(ctx, 'contacts.view_all', contacts),
       ))
       .limit(1);
     if (!ownedContact) {
@@ -125,7 +132,13 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     }
 
     const result = await db.execute(sql`SELECT public.calculate_churn_risk(${contact_id}) as probability`);
-    const probability = (result.rows[0] as Record<string, unknown>)?.probability as number || 0;
+    // #2774: node-postgres returns `numeric` as a STRING (no setTypeParser in
+    // this repo), so `as number || 0` was doubly wrong — the body carried
+    // "0.1" while the cast said number, and `|| 0` could never fire because
+    // every non-empty string is truthy. Coerce, then fall back on the number.
+    const raw = (result.rows[0] as Record<string, unknown> | undefined)?.['probability'];
+    const parsed = Number(raw);
+    const probability = Number.isFinite(parsed) ? parsed : 0;
 
     const [prediction] = await db.select()
       .from(churnPredictions)

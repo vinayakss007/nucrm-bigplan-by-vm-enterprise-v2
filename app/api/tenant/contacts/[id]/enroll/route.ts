@@ -9,10 +9,10 @@ import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { updateContactSchema } from '@/lib/api/schemas';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { contacts, sequences, sequenceSteps, sequenceEnrollments } from '@/drizzle/schema';
-import { eq, and, asc, sql, isNull } from 'drizzle-orm';
+import { contacts, sequences, sequenceEnrollments } from '@/drizzle/schema';
+import { eq, and, sql, isNull } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
-import { cancelOpenEnrollments } from '@/lib/cron/sequence-steps';
+import { cancelOpenEnrollments, firstStepDueAt } from '@/lib/cron/sequence-steps';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 export const POST = withApiRoute(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
@@ -54,19 +54,9 @@ export const POST = withApiRoute(async (req: NextRequest, { params }: { params: 
     });
     if (!seq) return NextResponse.json({ error: 'Sequence not found or inactive' }, { status: 404 });
 
-    // Fetch sequence steps
-    const steps = await db.query.sequenceSteps.findMany({
-        limit: 200,
-      where: and(
-        eq(sequenceSteps.sequenceId, sequence_id),
-        eq(sequenceSteps.isActive, true),
-        isNull(sequenceSteps.deletedAt)
-      ),
-      orderBy: [asc(sequenceSteps.stepNumber)]
-    });
-
-    const firstDelay = steps[0]?.delayDays ?? 0;
-    const nextStepAt = new Date(Date.now() + firstDelay * 86400000);
+    // #2793 / #2772: the wait before step 1, from the shared helper the other
+    // five writers use and the cron's own scheduler mirrors.
+    const nextStepAt = await firstStepDueAt(db, ctx.tenantId, sequence_id);
 
     // Upsert enrollment + increment enroll count atomically
     const [enrollment] = await db.transaction(async (tx) => {
@@ -82,6 +72,12 @@ export const POST = withApiRoute(async (req: NextRequest, { params }: { params: 
         })
         .onConflictDoUpdate({
           target: [sequenceEnrollments.sequenceId, sequenceEnrollments.contactId],
+          // #2740 / migration 0130: `sequence_enrollments_seq_contact_active_unique` is a PARTIAL
+          // index, and Postgres cannot infer one from the conflict columns alone — the statement
+          // has to restate the predicate or it is rejected with 42P10 before it runs, which is
+          // exactly how this route 500s today. Same reason `targetWhere` sits on every
+          // platform_settings upsert (tests/unit/platform-settings-upsert-predicate.test.ts).
+          targetWhere: sql`${sequenceEnrollments.status} = 'active' AND ${sequenceEnrollments.deletedAt} IS NULL`,
           set: {
             status: 'active',
             currentStep: 1,

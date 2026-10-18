@@ -10,6 +10,7 @@ import { eq, sql, and, gte } from 'drizzle-orm';
 import { requireAuth } from '@/lib/auth/middleware';
 import { readJsonBody } from '@/lib/api/validate';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { isEntityId } from '@/lib/id';
 import { getFieldIdentity } from '@/lib/forms/field-shape';
 
 interface FormField {
@@ -100,6 +101,8 @@ export const GET = withApiRoute(async (req: NextRequest,
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
     const { id } = await params;
+    // #2781 — the handler's own catch would turn this segment's uuid cast into a 500.
+    if (!isEntityId(id)) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
     const form = await db.query.forms.findFirst({
       where: and(eq(forms.id, id), eq(forms.tenantId, ctx.tenantId)),
@@ -151,6 +154,8 @@ export const POST = withApiRoute(async (req: NextRequest,
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
     const { id } = await params;
+    // #2781 — the handler's own catch would turn this segment's uuid cast into a 500.
+    if (!isEntityId(id)) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
     // Only track analytics for forms owned by the caller's tenant
     const owned = await db.query.forms.findFirst({

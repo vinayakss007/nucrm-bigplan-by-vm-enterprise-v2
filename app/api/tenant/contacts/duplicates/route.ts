@@ -8,8 +8,10 @@ import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { contacts } from '@/drizzle/schema';
-import { sql, inArray } from 'drizzle-orm';
+import { sql, inArray, and, eq } from 'drizzle-orm';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { enforceFieldRead } from '@/lib/rbac/enforce';
+import { ownerScope, ownerScopeSql } from '@/lib/api/owner-scope';
 
 /**
  * GET /api/tenant/contacts/duplicates
@@ -24,6 +26,17 @@ export const GET = withApiRoute(async (request: NextRequest) => {
 
     const tid = ctx.tenantId;
 
+    // #2745 — every group below is built from the whole workspace, and each
+    // group row carries `match_value`: the shared email, phone or name itself.
+    // A rep without `contacts.view_all` therefore read other owners' contact
+    // details straight out of the response, while `contacts/[id]/route.ts:84-86`
+    // 404s those same rows and `contacts/route.ts:59` hides them without
+    // `contacts.view_all` (route.ts:29). Narrow the aggregates to the rows the
+    // caller may touch, exactly as `dashboard/stats/route.ts:35-36` does for its
+    // `db.execute` counts; `ownerScopeSql` renders nothing for a `view_all`
+    // holder, whose SQL is unchanged byte-for-byte.
+    const mine = ownerScopeSql(ownerScope(ctx, 'contacts.view_all', contacts));
+
     // Strategy 1: Exact email duplicates (most reliable)
     const emailDupes = await db.execute(sql`
       SELECT LOWER(email) as email, ARRAY_AGG(id::text) as contact_ids, count(*) as cnt
@@ -31,7 +44,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       WHERE tenant_id = ${tid}
         AND deleted_at IS NULL
         AND email IS NOT NULL
-        AND email != ''
+        AND email != ''${mine}
       GROUP BY LOWER(email)
       HAVING count(*) > 1
       ORDER BY count(*) DESC
@@ -45,7 +58,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       WHERE tenant_id = ${tid}
         AND deleted_at IS NULL
         AND phone IS NOT NULL
-        AND phone != ''
+        AND phone != ''${mine}
       GROUP BY phone
       HAVING count(*) > 1
       ORDER BY count(*) DESC
@@ -59,7 +72,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       FROM contacts
       WHERE tenant_id = ${tid}
         AND deleted_at IS NULL
-        AND first_name IS NOT NULL
+        AND first_name IS NOT NULL${mine}
       GROUP BY LOWER(first_name || ' ' || COALESCE(last_name, ''))
       HAVING count(*) > 1
       ORDER BY count(*) DESC
@@ -101,6 +114,12 @@ export const GET = withApiRoute(async (request: NextRequest) => {
 
     let contactDetails: Array<{ id: string; firstName: string | null; lastName: string | null; email: string | null; phone: string | null; createdAt: Date }> = [];
     if (allIds.length > 0) {
+      // The ids above already came from the narrowed aggregates, so this is the
+      // same predicate rather than a second filter: it keeps the read correct if
+      // an id is ever supplied from elsewhere, and adds the tenant term the
+      // original query never had. `enforceFieldRead` below restricts *columns*,
+      // not rows (#2618), so it was never the guard for this.
+      const ownedScope = ownerScope(ctx, 'contacts.view_all', contacts);
       contactDetails = await db
         .select({
           id: contacts.id,
@@ -111,10 +130,17 @@ export const GET = withApiRoute(async (request: NextRequest) => {
           createdAt: contacts.createdAt,
         })
         .from(contacts)
-        .where(inArray(contacts.id, allIds));
+        .where(and(
+          eq(contacts.tenantId, tid),
+          inArray(contacts.id, allIds),
+          ownedScope,
+        ));
     }
 
-    const contactMap = new Map(contactDetails.map(c => [c.id, c]));
+    // #2618 — duplicate groups embed whole contact records; project them
+    // through the role's read restrictions before mapping them back in.
+    const visibleContacts = await enforceFieldRead(ctx, 'contacts', contactDetails);
+    const contactMap = new Map(visibleContacts.map(c => [c.id, c]));
 
     const enrichedGroups = topGroups.map(g => ({
       ...g,

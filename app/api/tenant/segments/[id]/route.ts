@@ -12,6 +12,7 @@ import { logAudit } from '@/lib/audit';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { logError } from '@/lib/errors-server';
+import { isEntityId } from '@/lib/id';
 
 export const DELETE = withApiRoute(
   async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
@@ -23,6 +24,8 @@ export const DELETE = withApiRoute(
       if (ctx instanceof NextResponse) return ctx;
 
       const { id } = await params;
+      // #2781 — the handler's own catch would turn this segment's uuid cast into a 500.
+      if (!isEntityId(id)) return NextResponse.json({ error: 'Segment not found' }, { status: 404 });
 
       // Delete only within the caller's tenant. segment_members rows are
       // removed automatically via the ON DELETE CASCADE FK on segment_id.

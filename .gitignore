@@ -95,3 +95,6 @@ secrets/
 # #2301 — local run artifacts of the security gates (CI regenerates them)
 semgrep.sarif
 *.sarif.local
+
+# #2621 — the runtime log the logger writes to cwd; never a commit candidate
+nucrm.log

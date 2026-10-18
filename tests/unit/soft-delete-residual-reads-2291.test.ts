@@ -121,8 +121,11 @@ const ACTIVE_SVC = { id: 'svc-active', tenantId: TENANT, name: 'Active Service',
 const DELETED_SVC = { id: 'svc-deleted', tenantId: TENANT, name: 'Deleted Service', deletedAt: new Date() };
 const ACTIVE_CANNED = { id: 'cr-active', tenantId: TENANT, title: 'Hello', category: 'greeting', createdAt: new Date(), deletedAt: null };
 const DELETED_CANNED = { id: 'cr-deleted', tenantId: TENANT, title: 'Old', category: 'greeting', createdAt: new Date(), deletedAt: new Date() };
-const ACTIVE_SEG = { id: 'seg-active', tenantId: TENANT, name: 'Vip', entityType: 'contact', description: null, config: {}, createdAt: new Date(), lastRefreshedAt: null, deletedAt: null };
-const DELETED_SEG = { id: 'seg-deleted', tenantId: TENANT, name: 'Stale', entityType: 'contact', description: null, config: {}, createdAt: new Date(), lastRefreshedAt: null, deletedAt: new Date() };
+// #2781: the members and enroll routes now refuse a path segment that cannot name
+// a uuid row before they query, so these fixtures use seed-shaped ids (the app's
+// own, per #2286) — otherwise the tombstone term these tests pin never runs.
+const ACTIVE_SEG = { id: '50000000-0000-0000-0000-0000000000a1', tenantId: TENANT, name: 'Vip', entityType: 'contact', description: null, config: {}, createdAt: new Date(), lastRefreshedAt: null, deletedAt: null };
+const DELETED_SEG = { id: '50000000-0000-0000-0000-0000000000a2', tenantId: TENANT, name: 'Stale', entityType: 'contact', description: null, config: {}, createdAt: new Date(), lastRefreshedAt: null, deletedAt: new Date() };
 const ACTIVE_KB = { id: 'kb-active', tenantId: TENANT, title: 'How-to', slug: 'how-to', content: 'body', excerpt: null, status: 'published', views: 1, helpful: 0, notHelpful: 0, tags: [], createdAt: new Date(), publishedAt: new Date(), categoryId: null, deletedAt: null };
 const DELETED_KB = { id: 'kb-deleted', tenantId: TENANT, title: 'Gone', slug: 'gone', content: 'body', excerpt: null, status: 'published', views: 1, helpful: 0, notHelpful: 0, tags: [], createdAt: new Date(), publishedAt: new Date(), categoryId: null, deletedAt: new Date() };
 const ACTIVE_ANN = { id: 'ann-active', title: 'Maintenance', content: 'c', type: 'info', isActive: true, target: 'all', startsAt: new Date(), endsAt: null, createdAt: new Date(), updatedAt: new Date(), deletedAt: null };
@@ -147,8 +150,8 @@ beforeEach(() => {
     canned_responses: [ACTIVE_CANNED, DELETED_CANNED],
     segments: [ACTIVE_SEG, DELETED_SEG],
     segment_members: [
-      { segmentId: 'seg-active', tenantId: TENANT, entityId: 'contact-1', addedAt: new Date() },
-      { segmentId: 'seg-active', tenantId: TENANT, entityId: 'contact-2', addedAt: new Date() },
+      { segmentId: '50000000-0000-0000-0000-0000000000a1', tenantId: TENANT, entityId: 'contact-1', addedAt: new Date() },
+      { segmentId: '50000000-0000-0000-0000-0000000000a1', tenantId: TENANT, entityId: 'contact-2', addedAt: new Date() },
     ],
     kb_articles: [ACTIVE_KB, DELETED_KB],
     announcements: [ACTIVE_ANN, DELETED_ANN],
@@ -198,12 +201,12 @@ describe('segments reads (#2291)', () => {
   it('list GET excludes the soft-deleted segment', async () => {
     const { res, body } = await getJson('http://localhost/api/tenant/segments', segmentsRoute);
     expect(res.status).toBe(200);
-    expect((body.data as Record<string, unknown>[]).map(r => r.id)).toEqual(['seg-active']);
+    expect((body.data as Record<string, unknown>[]).map(r => r.id)).toEqual(['50000000-0000-0000-0000-0000000000a1']);
     expect(harness.state.whereSqls[0]).toContain('"segments"."deleted_at" is null');
   });
 
   it('members GET still lists cached members of a live segment (count intact)', async () => {
-    const { res, body } = await getJson('http://localhost/api/tenant/segments/seg-active/members', segmentMembersRoute, 'seg-active');
+    const { res, body } = await getJson('http://localhost/api/tenant/segments/50000000-0000-0000-0000-0000000000a1/members', segmentMembersRoute, '50000000-0000-0000-0000-0000000000a1');
     expect(res.status).toBe(200);
     expect(body.data).toEqual(['contact-1', 'contact-2']);
     expect((body.meta as Record<string, unknown>).count).toBe(2);
@@ -211,20 +214,20 @@ describe('segments reads (#2291)', () => {
 
   it('members GET 404s for a soft-deleted segment', async () => {
     harness.state.tables.segments = [DELETED_SEG];
-    const { res } = await getJson('http://localhost/api/tenant/segments/seg-deleted/members', segmentMembersRoute, 'seg-deleted');
+    const { res } = await getJson('http://localhost/api/tenant/segments/50000000-0000-0000-0000-0000000000a2/members', segmentMembersRoute, '50000000-0000-0000-0000-0000000000a2');
     expect(res.status).toBe(404);
     expect(harness.state.whereSqls[0]).toContain('"segments"."deleted_at" is null');
   });
 
   it('enroll POST refuses a soft-deleted segment', async () => {
     harness.state.tables.segments = [DELETED_SEG];
-    const req = new Request('http://localhost/api/tenant/segments/seg-deleted/enroll', {
+    const req = new Request('http://localhost/api/tenant/segments/50000000-0000-0000-0000-0000000000a2/enroll', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ sequence_id: '00000000-0000-4000-8000-000000000000' }),
     }) as NextRequest;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- wrapped handler signature
-    const res = await (segmentEnrollRoute.POST as any)(req, { params: Promise.resolve({ id: 'seg-deleted' }) }) as Response;
+    const res = await (segmentEnrollRoute.POST as any)(req, { params: Promise.resolve({ id: '50000000-0000-0000-0000-0000000000a2' }) }) as Response;
     expect(res.status).toBe(404);
   });
 });

@@ -41,17 +41,17 @@ export default function RBACSettingsPage() {
   const [message] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // #1328: reads via TanStack Query (were parallel raw fetch + useEffect).
-  const { data: fpData, isLoading: fpLoading } = useApiQuery<{ data?: FieldPermission[] }>(
+  const { data: fpData, isLoading: fpLoading, error: fpError } = useApiQuery<{ data?: FieldPermission[] }>(
     ['tenant', 'rbac', 'field-permissions'],
     '/api/tenant/rbac/field-permissions',
     { retry: false },
   );
-  const { data: rpData, isLoading: rpLoading } = useApiQuery<{ data?: RecordPermission[] }>(
+  const { data: rpData, isLoading: rpLoading, error: rpError } = useApiQuery<{ data?: RecordPermission[] }>(
     ['tenant', 'rbac', 'record-permissions'],
     '/api/tenant/rbac/record-permissions',
     { retry: false },
   );
-  const { data: arData, isLoading: arLoading } = useApiQuery<{ data?: ApprovalRule[] }>(
+  const { data: arData, isLoading: arLoading, error: arError } = useApiQuery<{ data?: ApprovalRule[] }>(
     ['tenant', 'rbac', 'approval-rules'],
     '/api/tenant/rbac/approval-rules',
     { retry: false },
@@ -141,6 +141,10 @@ export default function RBACSettingsPage() {
                 </tbody>
               </table>
             </div>
+          ) : fpError ? (
+            <div role="alert" className="rounded-lg border border-red-300 bg-red-50 p-4 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300">
+              Failed to load field permissions: {fpError.message}
+            </div>
           ) : (
             <div className="rounded-lg border border-dashed border-gray-300 p-8 text-center dark:border-gray-600">
               <p className="text-sm text-gray-500 dark:text-gray-400">
@@ -179,6 +183,10 @@ export default function RBACSettingsPage() {
                 </tbody>
               </table>
             </div>
+          ) : rpError ? (
+            <div role="alert" className="rounded-lg border border-red-300 bg-red-50 p-4 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300">
+              Failed to load record permissions: {rpError.message}
+            </div>
           ) : (
             <div className="rounded-lg border border-dashed border-gray-300 p-8 text-center dark:border-gray-600">
               <p className="text-sm text-gray-500 dark:text-gray-400">
@@ -213,6 +221,11 @@ export default function RBACSettingsPage() {
                   </p>
                 </div>
               ))}
+            </div>
+          ) : arError ? (
+            <div role="alert" className="rounded-lg border border-red-300 bg-red-50 p-4 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300">
+              Failed to load approval rules: {arError.message}. An empty list here means the
+              endpoint responded successfully with no rules; this message means it did not.
             </div>
           ) : (
             <div className="rounded-lg border border-dashed border-gray-300 p-8 text-center dark:border-gray-600">

@@ -12,13 +12,21 @@ import { useApiQuery } from '@/lib/query/client';
 
 interface PortalSession { email: string; name: string; permissions: { quotes: boolean; invoices: boolean; cases: boolean }; }
 
+// #2747 — the keys GET /api/public/invoices actually projects
+// (app/api/public/invoices/route.ts:44-55). totalAmount is a decimal column and
+// no pg type parser is registered in this app, so the money arrives as a string;
+// the invoice's own date is issueDate, and the route sends no createdAt at all.
 interface PortalInvoice {
   id: string;
-  invoice_number?: string | null;
-  created_at?: string | null;
-  total?: number | null;
-  amount?: number | null;
-  status?: string | null;
+  invoiceNumber: string;
+  status: string;
+  totalAmount: string;
+  amountPaid: string | null;
+  balanceDue: string | null;
+  currency: string | null;
+  issueDate: string;
+  dueDate: string | null;
+  paidAt: string | null;
 }
 
 export default function PortalInvoicesPage() {
@@ -84,10 +92,10 @@ export default function PortalInvoicesPage() {
               {invoices.map(inv => (
                 <tr key={inv.id} className="border-b border-border last:border-0 hover:bg-muted/20 transition-colors">
                   <td className="px-4 py-3">
-                    <p className="text-sm font-semibold">{inv.invoice_number || `#${inv.id.slice(0, 8)}`}</p>
+                    <p className="text-sm font-semibold">{inv.invoiceNumber}</p>
                   </td>
-                  <td className="px-4 py-3 text-sm text-muted-foreground">{formatDate(inv.created_at)}</td>
-                  <td className="px-4 py-3 text-sm font-semibold">{formatCurrency(inv.total || inv.amount || 0)}</td>
+                  <td className="px-4 py-3 text-sm text-muted-foreground">{formatDate(inv.issueDate)}</td>
+                  <td className="px-4 py-3 text-sm font-semibold">{formatCurrency(inv.totalAmount)}</td>
                   <td className="px-4 py-3">
                     <span className={cn('text-[10px] font-bold px-2 py-0.5 rounded-full capitalize', statusColor[inv.status ?? 'pending'] || statusColor['pending'])}>
                       {inv.status}

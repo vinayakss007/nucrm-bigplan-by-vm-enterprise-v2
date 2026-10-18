@@ -25,6 +25,8 @@ vi.mock('pg', () => ({
 
 // Each db.select(...).from(...)... .limit(1) consumes the next queued row set:
 // [0] the completed-backup lookup, [1] the last-attempt lookup.
+// `query.backupAlerts.findFirst` answers #2600's duplicate guard — returning
+// undefined means "no alert of this type is open yet", so the insert below runs.
 let selectQueue: unknown[][] = [];
 vi.mock('@/drizzle/db', () => ({
   db: {
@@ -35,6 +37,9 @@ vi.mock('@/drizzle/db', () => ({
       chain.orderBy = () => chain;
       chain.limit = () => Promise.resolve(selectQueue.shift() ?? []);
       return chain;
+    },
+    query: {
+      backupAlerts: { findFirst: async () => undefined },
     },
   },
 }));

@@ -8,6 +8,7 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { contacts, companies } from '@/drizzle/schema';
 import { sql } from 'drizzle-orm';
+import { ownerScope, ownerScopeSql, ownerCacheKey } from '@/lib/api/owner-scope';
 import { withCache } from '@/lib/dashboard/widget-cache';
 import { logError, tenantMeta } from '@/lib/errors-server';
 import { withApiRoute } from '@/lib/api/with-api-route';
@@ -19,11 +20,21 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     if (ctx instanceof NextResponse) return ctx;
     const tid = ctx.tenantId;
 
+    // `ctx` is a `let`, so the narrowing the guard above establishes does not
+    // survive into the withCache closure (#2688).
+    const auth = ctx;
+
     return withCache(tid, 'stats-contacts', 30, async () => {
+      // #2688 — the counts covered the workspace for a caller whose contacts
+      // list shows only their own rows. Spliced as text; a template has nothing
+      // to skip the way `and()` skips an undefined argument.
+      const mine = ownerScopeSql(ownerScope(auth, 'contacts.view_all', contacts));
       const result = await db.execute(sql`
         SELECT
-          (SELECT COUNT(*)::int FROM ${contacts} WHERE tenant_id = ${tid} AND deleted_at IS NULL) AS count,
-          (SELECT COUNT(*)::int FROM ${contacts} WHERE tenant_id = ${tid} AND deleted_at IS NULL AND created_at >= date_trunc('month', now())) AS new_this_month,
+          -- #2684 — the tile counted archived contacts, which the contacts list
+          -- (app/api/tenant/contacts/route.ts:54) and the export (#2677) both hide.
+          (SELECT COUNT(*)::int FROM ${contacts} WHERE tenant_id = ${tid} AND deleted_at IS NULL AND is_archived = false${mine}) AS count,
+          (SELECT COUNT(*)::int FROM ${contacts} WHERE tenant_id = ${tid} AND deleted_at IS NULL AND is_archived = false${mine} AND created_at >= date_trunc('month', now())) AS new_this_month,
           (SELECT COUNT(*)::int FROM ${companies} WHERE tenant_id = ${tid} AND deleted_at IS NULL) AS company_count
       `);
       const row = result.rows?.[0] || {};
@@ -34,7 +45,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
           companyCount: Number(row['company_count'] ?? 0),
         },
       });
-    });
+    }, ownerCacheKey(auth, 'contacts.view_all'));
   } catch (err) {
     void logError({ error: err, context: 'GET /api/tenant/dashboard/widgets/stats/contacts', ...tenantMeta(ctx) });
     return NextResponse.json({ error: 'Widget failed' }, { status: 500 });
