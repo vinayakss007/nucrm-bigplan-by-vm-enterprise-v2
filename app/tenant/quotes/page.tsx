@@ -7,6 +7,7 @@
 import { useState, useEffect, useMemo, Suspense } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Plus, Search, FileText, X, Send, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -66,7 +67,7 @@ function QuotesPageInner() {
   });
 
   // #1328: reads via TanStack Query (were raw fetch + useEffect).
-  const { data: quotesData, isLoading: loading, error: quotesError } = useApiQuery<{ quotes?: Quote[] }>(
+  const { data: quotesData, isLoading: loading, error: quotesError, refetch: refetchQuotes } = useApiQuery<{ quotes?: Quote[] }>(
     QUOTES_QUERY,
     '/api/tenant/quotes',
   );
@@ -207,6 +208,8 @@ function QuotesPageInner() {
       {/* Table */}
       {loading ? (
         <div className="flex items-center justify-center py-12 text-muted-foreground"><Loader2 className="w-5 h-5 animate-spin mr-2" />Loading quotes...</div>
+      ) : quotesError ? (
+        <InlineErrorState message={`Failed to load quotes: ${quotesError.message}`} onRetry={refetchQuotes} />
       ) : filtered.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground">
           <FileText className="w-10 h-10 mx-auto mb-3 text-muted-foreground/30" />

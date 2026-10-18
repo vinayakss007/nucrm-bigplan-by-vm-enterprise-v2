@@ -7,6 +7,7 @@
 import { useState, useEffect, useMemo, Suspense } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import { useSearchParams } from 'next/navigation';
 import { Plus, Search, Package, X, FileText, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -66,7 +67,7 @@ function OrdersPageInner() {
   });
 
   // #1328: reads via TanStack Query (were raw fetch + useEffect).
-  const { data: ordersData, isLoading: loading, error: ordersError } = useApiQuery<{ orders?: Order[] }>(
+  const { data: ordersData, isLoading: loading, error: ordersError, refetch: refetchOrders } = useApiQuery<{ orders?: Order[] }>(
     ORDERS_QUERY,
     '/api/tenant/orders',
   );
@@ -165,14 +166,15 @@ function OrdersPageInner() {
         </button>
       </div>
 
-      {/* Stats */}
+      {/* Stats — every number here is computed from the list, so a failed read would report
+          this tenant's orders and revenue as zero (#2829). Unread renders unavailable, not 0. */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         {[
-          { label: 'Total', value: orders.length, color: '' },
-          { label: 'Processing', value: orders.filter(o => o.status === 'processing').length, color: 'text-indigo-600' },
-          { label: 'Shipped', value: orders.filter(o => o.status === 'shipped').length, color: 'text-violet-600' },
-          { label: 'Delivered', value: orders.filter(o => o.status === 'delivered').length, color: 'text-green-600' },
-          { label: 'Revenue', value: `$${totalRevenue}`, color: 'text-emerald-600' },
+          { label: 'Total', value: ordersError ? '—' : orders.length, color: '' },
+          { label: 'Processing', value: ordersError ? '—' : orders.filter(o => o.status === 'processing').length, color: 'text-indigo-600' },
+          { label: 'Shipped', value: ordersError ? '—' : orders.filter(o => o.status === 'shipped').length, color: 'text-violet-600' },
+          { label: 'Delivered', value: ordersError ? '—' : orders.filter(o => o.status === 'delivered').length, color: 'text-green-600' },
+          { label: 'Revenue', value: ordersError ? '—' : `$${totalRevenue}`, color: 'text-emerald-600' },
         ].map(s => (
           <div key={s.label} className="admin-card p-3">
             <p className="text-xs text-muted-foreground">{s.label}</p>
@@ -211,6 +213,8 @@ function OrdersPageInner() {
       {/* Table */}
       {loading ? (
         <div className="flex items-center justify-center py-12 text-muted-foreground"><Loader2 className="w-5 h-5 animate-spin mr-2" />Loading orders...</div>
+      ) : ordersError ? (
+        <InlineErrorState message={`Failed to load orders: ${ordersError.message}`} onRetry={refetchOrders} />
       ) : filtered.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground">
           <Package className="w-10 h-10 mx-auto mb-3 text-muted-foreground/30" />

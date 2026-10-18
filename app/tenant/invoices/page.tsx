@@ -7,6 +7,7 @@
 import { useState, useEffect, useMemo, Suspense } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Plus, Search, Eye, Download, FileText, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -66,7 +67,7 @@ function InvoicesPageInner() {
   });
 
   // #1328: reads via TanStack Query (were raw fetch + useEffect).
-  const { data: invoicesData, isLoading: loading, error: invoicesError } = useApiQuery<{ data?: Invoice[] }>(
+  const { data: invoicesData, isLoading: loading, error: invoicesError, refetch: refetchInvoices } = useApiQuery<{ data?: Invoice[] }>(
     INVOICES_QUERY,
     '/api/tenant/invoices',
   );
@@ -166,13 +167,14 @@ function InvoicesPageInner() {
         </button>
       </div>
 
-      {/* Stats */}
+      {/* Stats — every number here is computed from the list, so a failed read would report
+          this tenant's money as zero (#2829). Unread renders unavailable, not 0. */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { label: 'Total', value: invoices.length, color: '' },
-          { label: 'Outstanding', value: `$${totalOutstanding.toFixed(2)}`, color: 'text-amber-600' },
-          { label: 'Paid', value: invoices.filter(i => i.status === 'paid').length, color: 'text-green-600' },
-          { label: 'Overdue', value: invoices.filter(i => i.status === 'overdue').length, color: 'text-red-600' },
+          { label: 'Total', value: invoicesError ? '—' : invoices.length, color: '' },
+          { label: 'Outstanding', value: invoicesError ? '—' : `$${totalOutstanding.toFixed(2)}`, color: 'text-amber-600' },
+          { label: 'Paid', value: invoicesError ? '—' : invoices.filter(i => i.status === 'paid').length, color: 'text-green-600' },
+          { label: 'Overdue', value: invoicesError ? '—' : invoices.filter(i => i.status === 'overdue').length, color: 'text-red-600' },
         ].map(s => (
           <div key={s.label} className="admin-card p-3">
             <p className="text-xs text-muted-foreground">{s.label}</p>
@@ -213,6 +215,8 @@ function InvoicesPageInner() {
       {/* Table */}
       {loading ? (
         <ListSkeleton />
+      ) : invoicesError ? (
+        <InlineErrorState message={`Failed to load invoices: ${invoicesError.message}`} onRetry={refetchInvoices} />
       ) : filtered.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground">
           <FileText className="w-10 h-10 mx-auto mb-3 text-muted-foreground/30" />

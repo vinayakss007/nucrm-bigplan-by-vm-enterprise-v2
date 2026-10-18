@@ -7,6 +7,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import {
   LifeBuoy, Plus, Search,
   Clock, CheckCircle2, AlertCircle,
@@ -55,7 +56,7 @@ export default function TicketsPage() {
   if (filter !== 'all') ticketsParams.set('status', filter);
   if (search) ticketsParams.set('q', search);
   const TICKETS_QUERY = ['tenant', 'tickets', { filter, search, offset }] as const;
-  const { data: ticketsResp, isLoading: loading, error: ticketsError } = useApiQuery<{ data?: Ticket[]; total?: number }>(
+  const { data: ticketsResp, isLoading: loading, error: ticketsError, refetch: refetchTickets } = useApiQuery<{ data?: Ticket[]; total?: number }>(
     TICKETS_QUERY,
     `/api/tenant/tickets?${ticketsParams}`,
   );
@@ -219,6 +220,10 @@ export default function TicketsPage() {
           <div className="p-4">
             <ListSkeleton />
           </div>
+        ) : ticketsError ? (
+          <div className="p-4">
+            <InlineErrorState message={`Failed to load tickets: ${ticketsError.message}`} onRetry={refetchTickets} />
+          </div>
         ) : filtered.length === 0 ? (
           <div className="p-16 text-center">
             <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
@@ -317,7 +322,7 @@ export default function TicketsPage() {
       </div>
 
       {/* Module Upsell (if applicable) */}
-      {!loading && tickets.length === 0 && filter === 'all' && !search && (
+      {!loading && !ticketsError && tickets.length === 0 && filter === 'all' && !search && (
         <div className="bg-violet-50 dark:bg-violet-950/20 border border-violet-100 dark:border-violet-900/50 p-6 rounded-2xl flex flex-col items-center text-center">
           <div className="w-12 h-12 bg-white dark:bg-violet-900 rounded-xl shadow-sm flex items-center justify-center mb-4">
             <CheckCircle2 className="w-6 h-6 text-violet-600" />
