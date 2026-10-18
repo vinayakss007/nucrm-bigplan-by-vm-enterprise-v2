@@ -79,9 +79,23 @@ function makeTx() {
   return {
     insert: (table: unknown) => ({
       values: (values: Record<string, unknown>) => {
-        if (h.failInsert) return Promise.reject(new Error('enrollment write exploded'));
-        h.inserts.push({ table, values });
-        return Promise.resolve([{ id: 'row-1' }]);
+        // #2740: `enroll_sequence` reads back the row it wrote
+        // (`.onConflictDoNothing().returning({ id })`) so a racing duplicate does not move the
+        // enroll counter. The fake is awaitable directly AND chainable, and explodes on both
+        // paths when the harness asks for a failed write.
+        const settle = () =>
+          h.failInsert
+            ? Promise.reject(new Error('enrollment write exploded'))
+            : Promise.resolve([{ id: 'row-1' }]);
+        if (!h.failInsert) h.inserts.push({ table, values });
+        const chain = {
+          returning: settle,
+          then: (ok: (v: unknown) => unknown, err?: (e: unknown) => unknown) => settle().then(ok, err),
+        };
+        return {
+          onConflictDoNothing: () => chain,
+          then: (ok: (v: unknown) => unknown, err?: (e: unknown) => unknown) => settle().then(ok, err),
+        };
       },
     }),
     update: (table: unknown) => ({

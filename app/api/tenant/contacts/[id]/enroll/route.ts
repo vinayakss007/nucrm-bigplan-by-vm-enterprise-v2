@@ -72,6 +72,12 @@ export const POST = withApiRoute(async (req: NextRequest, { params }: { params: 
         })
         .onConflictDoUpdate({
           target: [sequenceEnrollments.sequenceId, sequenceEnrollments.contactId],
+          // #2740 / migration 0130: `sequence_enrollments_seq_contact_active_unique` is a PARTIAL
+          // index, and Postgres cannot infer one from the conflict columns alone — the statement
+          // has to restate the predicate or it is rejected with 42P10 before it runs, which is
+          // exactly how this route 500s today. Same reason `targetWhere` sits on every
+          // platform_settings upsert (tests/unit/platform-settings-upsert-predicate.test.ts).
+          targetWhere: sql`${sequenceEnrollments.status} = 'active' AND ${sequenceEnrollments.deletedAt} IS NULL`,
           set: {
             status: 'active',
             currentStep: 1,

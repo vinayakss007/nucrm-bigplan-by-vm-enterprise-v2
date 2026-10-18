@@ -3,7 +3,7 @@
  * Copyright (c) 2026 abetworks.in. All Rights Reserved.
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
-import { pgTable, uuid, text, timestamp, index, integer, boolean } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, timestamp, index, integer, boolean, uniqueIndex } from 'drizzle-orm/pg-core';
 import { sql, relations } from 'drizzle-orm';
 import { users } from './core';
 import { contacts } from './crm';
@@ -101,6 +101,12 @@ export const sequenceEnrollments = pgTable('sequence_enrollments', {
     contactIdx: index('idx_seq_enroll_contact').on(table.contactId),
     sequenceIdx: index('idx_seq_enroll_seq').on(table.sequenceId),
     statusIdx: index('idx_seq_enroll_status').on(table.status),
+    // #2740 / migration 0130: one LIVE drip per (sequence, contact). The predicate is the due
+    // sweep's own filter, so a completed, unsubscribed or cancelled row never constrains a
+    // re-enroll — which is what contacts/[id]/enroll's upsert relies on.
+    activeSeqContactUnique: uniqueIndex('sequence_enrollments_seq_contact_active_unique')
+      .on(table.sequenceId, table.contactId)
+      .where(sql`${table.status} = 'active' AND ${table.deletedAt} IS NULL`),
     metadataGinIdx: utils.metadataIdx(table),
   
   drz2255_idx_sequence_enrollments_active: index('idx_sequence_enrollments_active').on(table.tenantId, table.status).where(sql`(status = 'active'::text)`),

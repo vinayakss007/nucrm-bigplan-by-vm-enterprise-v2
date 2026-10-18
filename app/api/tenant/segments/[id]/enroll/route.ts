@@ -164,11 +164,16 @@ export const POST = withApiRoute(
       const existingSet = new Set(existing.map((e) => e.contactId));
       const toEnroll = contactableIds.filter((cid) => !existingSet.has(cid));
 
+      let enrolled = 0;
+
       if (toEnroll.length) {
         // #2793: without a due date the sweep can never select the row, so the
         // enrollment is active and silent forever.
         const nextStepAt = await firstStepDueAt(db, ctx.tenantId, sequenceId);
-        await db.insert(sequenceEnrollments).values(
+        // #2740: the pre-read above is the dedupe for the normal case; migration 0130's partial
+        // unique index is what makes a racing second request a skipped row instead of a 23505
+        // that aborts the batch. `rowCount` is then the honest count of what was enrolled.
+        const inserted = await db.insert(sequenceEnrollments).values(
           toEnroll.map((contactId) => ({
             tenantId: ctx.tenantId,
             sequenceId,
@@ -179,7 +184,8 @@ export const POST = withApiRoute(
             enrolledBy: ctx.userId,
             metadata: { source: 'segment', segment_id: id },
           })),
-        );
+        ).onConflictDoNothing();
+        enrolled = inserted.rowCount ?? toEnroll.length;
       }
 
       await logAudit({
@@ -188,13 +194,13 @@ export const POST = withApiRoute(
         action: 'enroll',
         entityType: 'segment',
         entityId: id,
-        newData: { sequence_id: sequenceId, enrolled: toEnroll.length },
+        newData: { sequence_id: sequenceId, enrolled },
       });
 
       return NextResponse.json({
         ok: true,
         data: {
-          enrolled: toEnroll.length,
+          enrolled,
           skipped_opt_out: skippedOptOut,
           skipped_not_owned: skippedNotOwned,
           skipped_existing: existingSet.size,

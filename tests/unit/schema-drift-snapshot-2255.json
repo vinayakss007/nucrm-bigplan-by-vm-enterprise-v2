@@ -4622,6 +4622,7 @@
   "segments_deleted_by_fk_idx",
   "segments_updated_by_fk_idx",
   "selective_restore_logs_backup_id_fk_idx",
+  "sequence_enrollments_seq_contact_active_unique",
   "sequences_deleted_by_fk_idx",
   "sequences_updated_by_fk_idx",
   "service_categories_deleted_by_fk_idx",

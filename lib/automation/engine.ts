@@ -243,11 +243,11 @@ async function executeAction(dbOrTx: NodePgDatabase | typeof db, action: Automat
       // `evaluateAutomations` logs the run as failed rather than passing it off as
       // done.
       //
-      // Two reads stand in for the constraint the table does not have:
-      // `sequence_enrollments` has no unique `(sequence_id, contact_id)` (#2740), so
-      // `ON CONFLICT` cannot dedupe a drip that is already running; and the contact is
-      // re-read at write time because a `do_not_contact` / `unsubscribed` flag or a
-      // tombstone set between the trigger and this action must stop the mail (#1120).
+      // Two reads, for two different reasons: the enrollment pre-read is the cheap early-out that
+      // skips a contact already in the drip (the partial unique index from #2740 is what makes a
+      // racing pair safe, below); and the contact is re-read at write time because a
+      // `do_not_contact` / `unsubscribed` flag or a tombstone set between the trigger and this
+      // action must stop the mail (#1120).
       const [contact] = await dbOrTx.select({
         id: contacts.id,
         deletedAt: contacts.deletedAt,
@@ -275,7 +275,11 @@ async function executeAction(dbOrTx: NodePgDatabase | typeof db, action: Automat
       // `next_step_at <= NOW()` — a NULL never selects, so an automation that
       // enrolled without it left the contact in a drip that sent nothing, forever.
       const nextStepAt = await firstStepDueAt(dbOrTx, payload.tenantId, sequenceId);
-      await dbOrTx.insert(sequenceEnrollments).values({
+      // #2740: the read above cannot be the only guard — two triggers firing on the same contact
+      // both pass it, and migration 0130's partial unique index then rejects the second insert.
+      // Skipped (not failed) is the right outcome: the contact is already in the drip, so the
+      // enroll counter must not move for a row that was never written.
+      const enrolled = await dbOrTx.insert(sequenceEnrollments).values({
         tenantId: payload.tenantId,
         sequenceId,
         contactId,
@@ -283,7 +287,8 @@ async function executeAction(dbOrTx: NodePgDatabase | typeof db, action: Automat
         currentStep: 1,
         nextStepAt,
         enrolledBy: payload.userId || null,
-      });
+      }).onConflictDoNothing().returning({ id: sequenceEnrollments.id });
+      if (enrolled.length === 0) return;
 
       await dbOrTx.update(sequences)
         .set({ enrollCount: sql`COALESCE(${sequences.enrollCount}, 0) + 1` })
