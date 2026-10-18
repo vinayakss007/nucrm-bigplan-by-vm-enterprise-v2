@@ -8,11 +8,22 @@ import { apiError } from '@/lib/api-error';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { contacts, companies, deals, tasks, leads, platformSettings } from '@/drizzle/schema';
-import { eq, and, isNotNull, lt, sql } from 'drizzle-orm';
+import { eq, and, isNotNull, lt, count } from 'drizzle-orm';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { logError } from '@/lib/errors-server';
 
 const TRASH_RETENTION_KEY = 'trash_retention_days';
+
+/**
+ * `count(*)` is `int8`, and node-postgres returns `int8` as a decimal string — this repo
+ * registers no `pg.setTypeParser` (#2774). So the number these responses promise is made
+ * here, at the boundary that makes the promise: `#2826` summed five of those strings with
+ * `+` and answered `"32014"` for 10 pending records.
+ */
+function toCount(rows: { count?: unknown }[] | undefined): number {
+  const value = Number(rows?.[0]?.count);
+  return Number.isFinite(value) ? value : 0;
+}
 
 async function getRetentionDays(tenantId: string): Promise<number> {
   const [setting] = await db
@@ -82,7 +93,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       table: typeof contacts | typeof companies | typeof deals | typeof tasks | typeof leads,
       tenantId: string
     ) => 
-      db.select({ count: sql<number>`count(*)` })
+      db.select({ count: count() })
         .from(table)
         .where(and(eq(table.tenantId, tenantId), isNotNull(table.deletedAt)));
 
@@ -103,11 +114,11 @@ export const POST = withApiRoute(async (request: NextRequest) => {
         leads: leadResult.rowCount || 0
       },
       remaining_in_trash: {
-        contacts: contactCount[0]?.count || 0,
-        companies: companyCount[0]?.count || 0,
-        deals: dealCount[0]?.count || 0,
-        tasks: taskCount[0]?.count || 0,
-        leads: leadCount[0]?.count || 0
+        contacts: toCount(contactCount),
+        companies: toCount(companyCount),
+        deals: toCount(dealCount),
+        tasks: toCount(taskCount),
+        leads: toCount(leadCount)
       },
       retention_days: retentionDays,
       cutoff_date: cutoffDate.toISOString()
@@ -130,38 +141,35 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
 
     const [contactCount, companyCount, dealCount, taskCount, leadCount] = await Promise.all([
-      db.select({ count: sql<number>`count(*)` })
+      db.select({ count: count() })
         .from(contacts)
         .where(and(eq(contacts.tenantId, ctx.tenantId), isNotNull(contacts.deletedAt), lt(contacts.deletedAt, cutoffDate))),
-      db.select({ count: sql<number>`count(*)` })
+      db.select({ count: count() })
         .from(companies)
         .where(and(eq(companies.tenantId, ctx.tenantId), isNotNull(companies.deletedAt), lt(companies.deletedAt, cutoffDate))),
-      db.select({ count: sql<number>`count(*)` })
+      db.select({ count: count() })
         .from(deals)
         .where(and(eq(deals.tenantId, ctx.tenantId), isNotNull(deals.deletedAt), lt(deals.deletedAt, cutoffDate))),
-      db.select({ count: sql<number>`count(*)` })
+      db.select({ count: count() })
         .from(tasks)
         .where(and(eq(tasks.tenantId, ctx.tenantId), isNotNull(tasks.deletedAt), lt(tasks.deletedAt, cutoffDate))),
-      db.select({ count: sql<number>`count(*)` })
+      db.select({ count: count() })
         .from(leads)
         .where(and(eq(leads.tenantId, ctx.tenantId), isNotNull(leads.deletedAt), lt(leads.deletedAt, cutoffDate)))
     ]);
 
-    const pendingDeletion = 
-      (contactCount[0]?.count || 0) +
-      (companyCount[0]?.count || 0) +
-      (dealCount[0]?.count || 0) +
-      (taskCount[0]?.count || 0) +
-      (leadCount[0]?.count || 0);
+    const pending = {
+      contacts: toCount(contactCount),
+      companies: toCount(companyCount),
+      deals: toCount(dealCount),
+      tasks: toCount(taskCount),
+      leads: toCount(leadCount)
+    };
 
     return NextResponse.json({
       pending_deletion: {
-        contacts: contactCount[0]?.count || 0,
-        companies: companyCount[0]?.count || 0,
-        deals: dealCount[0]?.count || 0,
-        tasks: taskCount[0]?.count || 0,
-        leads: leadCount[0]?.count || 0,
-        total: pendingDeletion
+        ...pending,
+        total: Object.values(pending).reduce((sum, n) => sum + n, 0)
       },
       retention_days: retentionDays,
       cutoff_date: cutoffDate.toISOString()
