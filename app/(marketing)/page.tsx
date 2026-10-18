@@ -19,7 +19,6 @@ import { Faq } from '@/components/marketing/faq';
 import { ProductTour, type TourTab } from '@/components/marketing/product-tour';
 import { AppPreview } from '@/components/marketing/mocks';
 import {
-  Aurora,
   CheckList,
   Chip,
   Container,
@@ -165,89 +164,64 @@ export default function LandingPage() {
   const builtIn = CONNECTORS.filter((c) => c.builtIn).slice(0, 16);
 
   return (
-    <div className="mk-noise">
+    <div className="mk-home mk-noise">
       {/* ══════════════════════════ HERO ══════════════════════════ */}
-      <section className="relative overflow-hidden pt-28 sm:pt-36 mk-spotlight">
-        <Aurora />
-        <Container>
-          <div className="mx-auto max-w-3xl text-center">
-            <Reveal>
-              <Link
-                href="/features/ai"
-                className="mk-chip group !border-sky-400/25 !bg-sky-500/10 !text-sky-200"
-              >
-                <span className="relative flex h-1.5 w-1.5 text-sky-400">
-                  <span className="mk-ping absolute inset-0 rounded-full" />
-                  <span className="h-1.5 w-1.5 rounded-full bg-sky-400" />
-                </span>
-                AI assistant, automation builder and billing — all included
-                <Icon name="ArrowRight" className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
-              </Link>
-            </Reveal>
+      <section className="mk-home-hero relative overflow-hidden">
+        <div className="mk-home-orbit" aria-hidden="true" />
+        <Container className="relative z-10">
+          <div className="mk-home-hero-grid">
+            <div className="mk-home-copy">
+              <Reveal>
+                <Link href="/features/ai" className="mk-home-kicker group">
+                  <span className="mk-home-kicker-dot" />
+                  The customer operating system
+                  <Icon name="ArrowUpRight" className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+                </Link>
+              </Reveal>
+              <Reveal delay={70}>
+                <h1 className="mk-home-title">
+                  <StaggerText text="Every customer." wordDelay={75} />
+                  <br />
+                  <em><StaggerText text="One clear picture." wordDelay={75} startDelay={260} /></em>
+                </h1>
+              </Reveal>
+              <Reveal delay={140}>
+                <p className="mk-home-lead">
+                  Sales, support, billing and marketing come together around one customer record. Your team sees the whole story, knows what to do next, and can get back to work.
+                </p>
+              </Reveal>
+              <Reveal delay={210}>
+                <div className="mk-home-actions">
+                  <MagneticButton><PrimaryCta>Start free — no card</PrimaryCta></MagneticButton>
+                  <MagneticButton><GhostCta href="/features">Explore the platform</GhostCta></MagneticButton>
+                </div>
+                <div className="mk-home-proof">
+                  <span><Icon name="Check" /> Free plan, always</span>
+                  <span><Icon name="Check" /> Your data stays yours</span>
+                  <span><Icon name="Check" /> Ready in an afternoon</span>
+                </div>
+              </Reveal>
+              <Reveal delay={280}>
+                <div className="mk-home-note">
+                  <span className="mk-home-note-mark">N</span>
+                  <span><strong>One workspace.</strong> A lot less busywork.</span>
+                </div>
+              </Reveal>
+            </div>
 
-            <Reveal delay={70}>
-              <h1 className="mk-display mt-7">
-                <span className="mk-grad">
-                  <StaggerText text="Your whole revenue" wordDelay={70} />
-                </span>
-                <br />
-                <span className="text-white">
-                  <StaggerText text="operation. One place." wordDelay={70} startDelay={280} />
-                </span>
-              </h1>
-            </Reveal>
-
-            <Reveal delay={140}>
-              <p className="mk-lead mx-auto mt-6 max-w-xl">
-                NuCRM runs sales, support, billing and marketing on a single customer record — with an AI assistant, a
-                visual automation builder and enterprise governance in the box. {BRAND.tagline}
-              </p>
-            </Reveal>
-
-            <Reveal delay={210}>
-              <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
-                <MagneticButton className="w-full sm:w-auto">
-                  <PrimaryCta>Start free — no card</PrimaryCta>
-                </MagneticButton>
-                <MagneticButton className="w-full sm:w-auto">
-                  <GhostCta href="/features">
-                    See everything it does
-                  </GhostCta>
-                </MagneticButton>
-              </div>
-              <div className="mk-tiny mt-6 flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
-                <span className="flex items-center gap-1.5">
-                  <Icon name="Check" className="h-3.5 w-3.5 text-emerald-400" strokeWidth={2.6} /> Free plan forever
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <Icon name="Check" className="h-3.5 w-3.5 text-emerald-400" strokeWidth={2.6} /> Set up in an
-                  afternoon
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <Icon name="Check" className="h-3.5 w-3.5 text-emerald-400" strokeWidth={2.6} /> Export your data any
-                  time
-                </span>
-              </div>
-            </Reveal>
-          </div>
-
-          {/* product shot */}
-          <Reveal delay={280} className="relative mt-14 sm:mt-20">
-            <div
-              className="pointer-events-none absolute -inset-x-10 -top-10 bottom-10 -z-10 rounded-[40px] bg-gradient-to-b from-blue-600/30 via-sky-500/12 to-transparent blur-3xl"
-              aria-hidden
-            />
-            <div style={{ perspective: '2200px' }}>
-              <div style={{ transform: 'rotateX(6deg)' }} className="origin-top">
+            <Reveal delay={170} className="mk-home-product-wrap">
+              <div className="mk-home-product-label"><span>01 / SALES OVERVIEW</span><span>LIVE WORKSPACE</span></div>
+              <div className="mk-home-product">
                 <AppPreview />
               </div>
-            </div>
-            {/* reflection fading into the page */}
-            <div
-              className="pointer-events-none mx-auto h-24 w-[92%] rounded-b-[40px] bg-gradient-to-b from-sky-500/12 to-transparent blur-2xl"
-              aria-hidden
-            />
-          </Reveal>
+              <div className="mk-home-float-card">
+                <span className="mk-home-float-icon"><Icon name="Sparkles" /></span>
+                <span><strong>Next step, found.</strong><small>3 follow-ups ready for review</small></span>
+                <Icon name="ArrowUpRight" className="mk-home-float-arrow" />
+              </div>
+              <div className="mk-home-product-caption"><span>One customer record, from first hello to paid invoice.</span><span>Scroll to explore ↓</span></div>
+            </Reveal>
+          </div>
         </Container>
       </section>
 

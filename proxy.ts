@@ -452,6 +452,10 @@ export async function proxy(request: NextRequest) {
   const authHeader = request.headers.get('authorization');
   const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
 
+  // #2215: `ak_` values are API-key bearer credentials only — they were never
+  // valid session cookies, and must not enter the JWT path from either source.
+  const cookieToken = cookieTokenRaw && !cookieTokenRaw.startsWith('ak_') ? cookieTokenRaw : null;
+
   // #2215: the ak_* pass-through is NO LONGER unconditional. It used to skip
   // JWT verification, CSRF and edge rate limiting on EVERY path, which turned
   // every protected route — including the deprecated, auth-adjacent
@@ -463,7 +467,21 @@ export async function proxy(request: NextRequest) {
   // there they get an IP-keyed edge budget so an unvalidated junk key cannot
   // flood the origin. Key validity itself is still checked by tryApiKeyAuth()
   // in the route layer — the edge cannot do DB lookups.
-  if (bearerToken?.startsWith('ak_') && isApiRequest(pathname)) {
+  //
+  // #2579: and the pass-through does not apply when the request also carries a
+  // session cookie. `requireAuth()` tries the key first and, on a key that is not
+  // in `api_keys`, falls through to `extractToken()` — which prefers
+  // `nucrm_session` (`lib/auth/middleware.ts:241` then `:262`). So a junk bearer
+  // alongside a live cookie was not an API-key request at all: it was a
+  // cookie-authenticated mutation that left this file having never met the CSRF
+  // check below. Anything running on the site's own origin (stored XSS, a pasted
+  // bookmarklet) or on an origin in `ALLOWED_ORIGINS` — the only origins whose
+  // cross-site `Authorization` header survives preflight — could then write to any
+  // `/api/tenant/*` route as the logged-in admin. A genuine API-key client sends a
+  // bearer and no cookie, so it keeps the early pass-through and its `api_key`
+  // rate-limit bucket unchanged. The invariant to preserve here: **the edge may
+  // skip CSRF only for a credential the edge can see is not ambient.**
+  if (bearerToken?.startsWith('ak_') && isApiRequest(pathname) && !cookieToken) {
     if (!isApiKeyAllowedPath(pathname)) {
       return NextResponse.json(
         { error: 'API keys are only accepted on /api/v1, /api/v2 and /api/tenant data routes' },
@@ -488,9 +506,6 @@ export async function proxy(request: NextRequest) {
     return response;
   }
 
-  // #2215: `ak_` values are API-key bearer credentials only — they were never
-  // valid session cookies, and must not enter the JWT path from either source.
-  const cookieToken = cookieTokenRaw && !cookieTokenRaw.startsWith('ak_') ? cookieTokenRaw : null;
   const token = cookieToken || (isApiRequest(pathname) ? bearerToken : null);
 
   if (!token) {
@@ -528,7 +543,15 @@ export async function proxy(request: NextRequest) {
 
     // CSRF protection for state-changing API requests
     if (isApiRequest(pathname)) {
-      const authMethod = request.headers.get('x-auth-method') || undefined;
+      // #2579: `x-auth-method` is set by the caller, and its only consequence
+      // here is that CSRF is skipped. That is unsound the moment the request
+      // carries the ambient cookie it would then be allowed to mutate with, so the
+      // header is only consulted when there is no session cookie to protect — a
+      // caller cannot volunteer its way out of the check that exists for it.
+      // Nothing first-party sends this header (`app/`, `lib/`, `postman/` and
+      // `scripts/` contain no writer of it; only this file and `requireCsrf()`
+      // read it), so honouring it for cookie requests was pure attack surface.
+      const authMethod = cookieToken ? undefined : (request.headers.get('x-auth-method') || undefined);
       if (needsCsrfValidation(request.method, pathname, authMethod)) {
         const cookieCsrf = getCsrfTokenFromCookie(request.headers.get('cookie') || null);
         const headerCsrf = getCsrfTokenFromHeader(request.headers);

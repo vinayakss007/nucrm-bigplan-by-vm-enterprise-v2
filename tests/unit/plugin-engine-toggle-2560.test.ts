@@ -32,6 +32,9 @@ const USER_A = '22222222-2222-4222-8222-222222222222';
 
 let setPayloads: Record<string, unknown>[] = [];
 let updateCalls = 0;
+// The row `#2562` made PATCH read before it writes. Empty by default so the
+// toggle tests stay about the toggle; a test that cares sets it explicitly.
+let storedConfig: Record<string, unknown> = {};
 
 const mockDb = {
   update: vi.fn(() => {
@@ -46,7 +49,13 @@ const mockDb = {
     return builder;
   }),
   insert: vi.fn(() => ({ values: vi.fn(() => ({ returning: vi.fn(() => Promise.resolve([])) })) })),
-  select: vi.fn(() => ({ from: vi.fn(() => ({ where: vi.fn(() => []) })) })),
+  select: vi.fn(() => ({
+    from: vi.fn(() => ({
+      where: vi.fn(() => ({
+        limit: vi.fn(() => [{ config: storedConfig }]),
+      })),
+    })),
+  })),
   query: {},
 };
 
@@ -119,6 +128,7 @@ describe('#2560 — PATCH /api/tenant/plugin-engine assigns the field it guards 
     vi.clearAllMocks();
     setPayloads = [];
     updateCalls = 0;
+    storedConfig = {};
     mockRequireAuth.mockResolvedValue({
       userId: USER_A,
       tenantId: TENANT_A,
@@ -183,6 +193,12 @@ describe('#2560 — PATCH /api/tenant/plugin-engine assigns the field it guards 
   });
 
   it('config + toggle applies BOTH — the half-applied write cannot recur', async () => {
+    // Reconciled with **#2562** (PR #2595), which landed after this test was
+    // written: PATCH no longer assigns the body's bag, it merges over the stored
+    // row. Both fixes are about the same request shape, so the assertion now
+    // carries both properties — the flag lands, and a credential the caller
+    // could not have read (`splitConfigCredentials` withholds it) survives.
+    storedConfig = { url: 'https://old.test/hook', secret: 'whsec_live_abc' };
     const res = await patch({
       id: 'integration-1',
       config: { url: 'https://example.test/hook' },
@@ -190,7 +206,7 @@ describe('#2560 — PATCH /api/tenant/plugin-engine assigns the field it guards 
     });
     expect(res.status).toBe(200);
     expect(setPayloads[0]).toEqual({
-      config: { url: 'https://example.test/hook' },
+      config: { url: 'https://example.test/hook', secret: 'whsec_live_abc' },
       isActive: true,
     });
   });
