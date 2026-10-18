@@ -5,14 +5,20 @@
  */
 'use client';
 import { useState, useEffect, useRef, Suspense } from 'react';
-import { useMutation } from '@tanstack/react-query';
-import { useApiQuery } from '@/lib/query/client';
+import { useQuery } from '@tanstack/react-query';
+import { ApiQueryError, useApiQuery } from '@/lib/query/client';
 import { useSearchParams, useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { Search, Users, TrendingUp, Building2, CheckSquare, Loader2, X, Target } from 'lucide-react';
-import { cn, formatCurrency, formatDate } from '@/lib/utils';
+import { cn, apiFetch } from '@/lib/utils';
 import { AdvancedSearchFilters } from '@/components/tenant/advanced-search';
+import Pagination from '@/components/tenant/pagination';
 import { ListSkeleton } from '@/components/shared/page-skeleton';
+import InlineErrorState from '@/components/shared/inline-error-state';
+import {
+  SearchResultGroups,
+  type SearchResults,
+  type SearchRow,
+} from '@/components/tenant/search-result-groups';
 
 interface SearchFilters {
   status?: string[];
@@ -27,57 +33,35 @@ interface SearchFilters {
   tags?: string[];
 }
 
-interface SearchResultContact {
-  id: string; first_name: string; last_name: string;
-  email?: string; company_name?: string; lead_status: string;
-}
-interface SearchResultLead {
-  id: string; first_name: string; last_name: string;
-  email?: string; company_name?: string; lead_status: string;
-}
-interface SearchResultDeal {
-  id: string; title: string;
-  first_name?: string; last_name?: string;
-  value: number; stage: string;
-}
-interface SearchResultCompany {
-  id: string; name: string;
-  industry?: string; contact_count: number;
-}
-interface SearchResultTask {
-  id: string; title: string;
-  first_name?: string; last_name?: string;
-  due_date?: string; completed: boolean; priority: string;
-}
-interface SearchResults {
-  contacts?: SearchResultContact[];
-  leads?: SearchResultLead[];
-  deals?: SearchResultDeal[];
-  companies?: SearchResultCompany[];
-  tasks?: SearchResultTask[];
+interface AdvancedPagination {
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+  hasMore: boolean;
 }
 
-const STATUS_COLORS: Record<string,string> = {
-  new:'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300', contacted:'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
-  qualified:'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400', converted:'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
-  lost:'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400', unqualified:'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400',
-};
-const STAGE_COLORS: Record<string,string> = {
-  lead:'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300', qualified:'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
-  proposal:'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400', negotiation:'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
-  won:'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400', lost:'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400',
-};
-
-function Highlight({ text, query }: { text: string; query: string }) {
-  if (!query || !text) return <>{text}</>;
-  const idx = text.toLowerCase().indexOf(query.toLowerCase());
-  if (idx === -1) return <>{text}</>;
-  return <>
-    {text.slice(0, idx)}
-    <mark className="bg-violet-200 dark:bg-violet-800/60 text-violet-900 dark:text-violet-100 rounded px-0.5">{text.slice(idx, idx + query.length)}</mark>
-    {text.slice(idx + query.length)}
-  </>;
+/** `/api/tenant/search/advanced` answers one type at a time, flat. */
+interface AdvancedSearchResponse {
+  data: SearchRow[];
+  pagination: AdvancedPagination;
 }
+
+/**
+ * The request the rows on screen actually answer. Kept apart from `query` /
+ * `filters`, which are the panel being edited: the list must not silently
+ * change meaning while a chip is being toggled, and the rows have to be
+ * attributable to the exact body that produced them.
+ */
+interface SubmittedSearch {
+  type: string;
+  query: string;
+  filters: SearchFilters;
+  page: number;
+}
+
+/** Rows per advanced-search page. The route caps it at 100; 25 is the panel's. */
+const ADVANCED_LIMIT = 25;
 
 function SearchPageContent() {
   const searchParams = useSearchParams();
@@ -86,22 +70,25 @@ function SearchPageContent() {
   const [debouncedQuery, setDebouncedQuery] = useState(searchParams.get('q') ?? '');
   const [activeType, setActiveType] = useState('all');
   const [filters, setFilters] = useState<SearchFilters>({});
-  const [_advancedResults, setAdvancedResults] = useState<unknown[] | null>(null);
-  const [_advancedTotal, setAdvancedTotal] = useState(0);
-  const [page] = useState(1);
+  const [submitted, setSubmitted] = useState<SubmittedSearch | null>(null);
+  const [editedAfterApply, setEditedAfterApply] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const timerRef = useRef<NodeJS.Timeout | undefined>(undefined);
 
   // #1328: quick search via TanStack Query (was a debounced fetch in an
   // effect). The debounced term + type form the key so results cache per query
-  // and stale requests are superseded automatically.
+  // and stale requests are superseded automatically. While a filtered answer is
+  // on screen the typeahead stands down: its rows are not what the page is
+  // showing, and letting it fetch would flash "Searching…" over an answer that
+  // did not change.
   const trimmed = debouncedQuery.trim();
-  const { data: results = null, isFetching } = useApiQuery<SearchResults>(
+  const quickQuery = useApiQuery<SearchResults>(
     ['tenant', 'search', activeType, trimmed],
     `/api/tenant/search?${new URLSearchParams({ q: trimmed, type: activeType, limit: '12' })}`,
-    { enabled: trimmed.length > 0 },
+    { enabled: trimmed.length > 0 && submitted === null },
   );
-  const loadingQuery = isFetching && trimmed.length > 0;
+  const quickResults = quickQuery.data ?? null;
+  const loadingQuery = quickQuery.isFetching && trimmed.length > 0;
 
   // Sync the input from the URL and focus on mount.
   useEffect(() => {
@@ -112,8 +99,9 @@ function SearchPageContent() {
 
   const handleInput = (val: string) => {
     setQuery(val);
+    if (submitted) setEditedAfterApply(true);
     clearTimeout(timerRef.current);
-    if (!val.trim()) { setDebouncedQuery(''); return; }
+    if (!val.trim()) { setDebouncedQuery(''); setSubmitted(null); setEditedAfterApply(false); return; }
     timerRef.current = setTimeout(() => {
       router.replace(`/tenant/search?q=${encodeURIComponent(val)}`, { scroll: false });
       setDebouncedQuery(val);
@@ -122,41 +110,88 @@ function SearchPageContent() {
 
   const handleTypeChange = (type: string) => {
     setActiveType(type);
+    setEditedAfterApply(false);
+    // Filtered rows belong to the type that was asked for. Switching tabs
+    // under them would re-labour someone else's answer as this one's (#2838).
+    setSubmitted(null);
   };
 
-  // Advanced search with filters (POST) — a mutation whose result is held
-  // locally (it powers a separate advanced-results view).
-  const advancedMutation = useMutation({
-    mutationFn: async () => {
-      const res = await fetch('/api/tenant/search/advanced', {
+  // The panel edits `query` / `filters`; `submitted` is what the rows answer.
+  // Editing after applying is flagged rather than guessed at, so the hint is
+  // only ever shown when the chips genuinely outran the list (#2838).
+  const handleQueryChange = (val: string) => { setQuery(val); setEditedAfterApply(submitted !== null); };
+  const handleFiltersChange = (f: SearchFilters) => { setFilters(f); setEditedAfterApply(submitted !== null); };
+
+  // #2838: the Filters panel has POSTed here since #2690, and the response went
+  // into a `_advancedResults` variable that nothing read — so the list kept
+  // showing the unfiltered typeahead rows underneath chips that claimed a
+  // filter. It is a query, not a mutation: the submitted body is the cache key,
+  // so the rows on screen are attributable to a request, a re-run supersedes
+  // the stale one, and a non-2xx is an `error` rather than an empty `data`.
+  const advancedQuery = useQuery<AdvancedSearchResponse, ApiQueryError>({
+    queryKey: ['tenant', 'search', 'advanced', submitted],
+    queryFn: async () => {
+      if (!submitted) throw new ApiQueryError('No search has been submitted.', 400, {});
+      const res = await apiFetch('/api/tenant/search/advanced', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ query: query.trim() || undefined, type: activeType, filters, page, limit: 25 }),
+        body: JSON.stringify({
+          query: submitted.query || undefined,
+          type: submitted.type,
+          filters: submitted.filters,
+          page: submitted.page,
+          limit: ADVANCED_LIMIT,
+        }),
       });
-      return res.json();
+      if (!res.ok) {
+        const info = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new ApiQueryError(
+          typeof info?.error === 'string' ? info.error : `Search failed (${res.status})`,
+          res.status,
+          info,
+        );
+      }
+      return res.json() as Promise<AdvancedSearchResponse>;
     },
-    onSuccess: (data) => {
-      setAdvancedResults(data.data ?? []);
-      setAdvancedTotal(data.pagination?.total ?? 0);
-    },
+    enabled: submitted !== null,
+    retry: 0,
   });
+
   const advancedSearch = () => {
     if (!query.trim() && Object.keys(filters).length === 0) return;
     if (activeType === 'all') return; // Advanced search requires a specific type
-    advancedMutation.mutate();
+    setSubmitted({ type: activeType, query: query.trim(), filters, page: 1 });
+    setEditedAfterApply(false);
   };
 
-  const loading = loadingQuery || advancedMutation.isPending;
-  const total = results ? (results.contacts?.length ?? 0) + (results.leads?.length ?? 0) + (results.deals?.length ?? 0) + (results.companies?.length ?? 0) + (results.tasks?.length ?? 0) : 0;
+  const setAdvancedPage = (next: number) => {
+    setSubmitted((s) => (s ? { ...s, page: Math.max(1, next) } : s));
+  };
+
+  // Which rows the page is allowed to speak for: the filtered set once an
+  // advanced search has answered, otherwise the typeahead. While the filtered
+  // one is in flight or has failed there is no set, and the arms below say so
+  // instead of reusing the previous answer.
+  const groups: SearchResults | null = submitted
+    ? (advancedQuery.data ? ({ [submitted.type]: advancedQuery.data.data } as SearchResults) : null)
+    : quickResults;
+  // Tab chips are navigation, so they may fall back to the typeahead's counts
+  // while the filtered read is in flight; the panels below never mix sources.
+  const view = groups ?? quickResults;
+  const loading = loadingQuery || (submitted !== null && advancedQuery.isPending);
+  const countOf = (r: SearchResults | null) => (r?.contacts?.length ?? 0) + (r?.leads?.length ?? 0) + (r?.deals?.length ?? 0) + (r?.companies?.length ?? 0) + (r?.tasks?.length ?? 0);
+  const total = countOf(groups);
+  const quickTotal = countOf(quickResults);
+  const pagination = submitted ? advancedQuery.data?.pagination : undefined;
 
   const TYPES = [
-    { id:'all', label:'All', count: total },
-    { id:'contacts', label:'Contacts', count: results?.contacts?.length ?? 0, icon: Users },
-    { id:'leads', label:'Leads', count: results?.leads?.length ?? 0, icon: Target },
-    { id:'deals', label:'Deals', count: results?.deals?.length ?? 0, icon: TrendingUp },
-    { id:'companies', label:'Companies', count: results?.companies?.length ?? 0, icon: Building2 },
-    { id:'tasks', label:'Tasks', count: results?.tasks?.length ?? 0, icon: CheckSquare },
+    { id:'all', label:'All', count: groups ? total : quickTotal },
+    { id:'contacts', label:'Contacts', count: view?.contacts?.length ?? 0, icon: Users },
+    { id:'leads', label:'Leads', count: view?.leads?.length ?? 0, icon: Target },
+    { id:'deals', label:'Deals', count: view?.deals?.length ?? 0, icon: TrendingUp },
+    { id:'companies', label:'Companies', count: view?.companies?.length ?? 0, icon: Building2 },
+    { id:'tasks', label:'Tasks', count: view?.tasks?.length ?? 0, icon: CheckSquare },
   ];
 
   return (
@@ -178,7 +213,7 @@ function SearchPageContent() {
           autoFocus
         />
         {query && (
-          <button onClick={() => { setQuery(''); setDebouncedQuery(''); inputRef.current?.focus(); }}
+          <button onClick={() => { setQuery(''); setDebouncedQuery(''); setSubmitted(null); setEditedAfterApply(false); inputRef.current?.focus(); }}
             className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors">
             <X className="w-4 h-4" />
           </button>
@@ -186,7 +221,7 @@ function SearchPageContent() {
       </div>
 
       {/* Type filter tabs */}
-      {results && (
+      {view && (
         <div className="flex gap-1 flex-wrap">
           {TYPES.map(t => (
             <button key={t.id} onClick={() => handleTypeChange(t.id)}
@@ -206,10 +241,17 @@ function SearchPageContent() {
           type={activeType}
           query={query}
           filters={filters}
-          onQueryChange={setQuery}
-          onFiltersChange={setFilters}
+          onQueryChange={handleQueryChange}
+          onFiltersChange={handleFiltersChange}
           onSearch={advancedSearch}
         />
+      )}
+
+      {editedAfterApply && submitted && !loading && (
+        <p className="text-xs text-amber-600 dark:text-amber-400">
+          The list below still answers the search that was applied — not the term
+          and chips showing now. Press Apply Filters to ask this one.
+        </p>
       )}
 
       {loading && (
@@ -218,178 +260,53 @@ function SearchPageContent() {
         </div>
       )}
 
-      {results && !loading && total === 0 && (
+      {/* #2829/#2838: a search that did not succeed has to look different from
+          one that succeeded and matched nothing — and different from showing
+          nothing at all, which is what a failed typeahead used to render. */}
+      {submitted && !loading && advancedQuery.isError && (
+        <InlineErrorState
+          message={`The filtered ${submitted.type} search did not run${advancedQuery.error ? `: ${advancedQuery.error.message}` : ''}. Whether anything matches these filters is still unknown.`}
+          onRetry={() => void advancedQuery.refetch()}
+        />
+      )}
+
+      {!submitted && !loading && trimmed.length > 0 && quickQuery.isError && (
+        <InlineErrorState
+          message={`Search failed${quickQuery.error ? `: ${quickQuery.error.message}` : ''}. These are not "no results" — nothing was counted.`}
+          onRetry={() => void quickQuery.refetch()}
+        />
+      )}
+
+      {groups && !loading && total === 0 && (
         <div className="text-center py-16">
           <Search className="w-12 h-12 text-muted-foreground/20 mx-auto mb-4" />
-          <p className="text-base font-semibold">No results for "{query}"</p>
-          <p className="text-sm text-muted-foreground mt-1">Try a different search term or check the spelling</p>
+          <p className="text-base font-semibold">
+            {submitted ? `No ${submitted.type} match this search` : `No results for "${query}"`}
+          </p>
+          <p className="text-sm text-muted-foreground mt-1">
+            {submitted
+              ? 'The request succeeded and counted nothing. Widen a filter, or clear the term.'
+              : 'Try a different search term or check the spelling'}
+          </p>
         </div>
       )}
 
-      {results && !loading && total > 0 && (
-        <div className="space-y-5">
-          {/* Contacts */}
-          {(activeType === 'all' || activeType === 'contacts') && (results.contacts?.length ?? 0) > 0 && (
-            <div>
-              <div className="flex items-center gap-2 mb-3">
-                <Users className="w-4 h-4 text-muted-foreground" />
-                <h2 className="text-sm font-semibold">Contacts</h2>
-                <span className="text-xs text-muted-foreground">({results.contacts?.length})</span>
-              </div>
-              <div className="admin-card divide-y divide-border overflow-hidden">
-                {results.contacts?.map((c: SearchResultContact) => (
-                  <Link key={c.id} href={`/tenant/contacts/${c.id}`}
-                    className="flex items-center gap-3 px-4 py-3 hover:bg-accent/30 transition-colors">
-                    <div className="w-9 h-9 rounded-full bg-gradient-to-br from-violet-500 to-indigo-500 flex items-center justify-center text-white text-sm font-bold shrink-0">
-                      {c.first_name?.charAt(0)?.toUpperCase()}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium">
-                        <Highlight text={`${c.first_name} ${c.last_name}`} query={query} />
-                      </p>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        {c.email && <span className="text-xs text-muted-foreground truncate"><Highlight text={c.email} query={query} /></span>}
-                        {c.company_name && <span className="text-xs text-muted-foreground">· <Highlight text={c.company_name} query={query} /></span>}
-                      </div>
-                    </div>
-                    <span className={cn('text-[10px] font-semibold px-2 py-0.5 rounded-full capitalize shrink-0', STATUS_COLORS[c.lead_status] ?? STATUS_COLORS["new"])}>
-                      {c.lead_status}
-                    </span>
-                  </Link>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Leads (separate table) */}
-          {(activeType === 'all' || activeType === 'leads') && (results.leads?.length ?? 0) > 0 && (
-            <div>
-              <div className="flex items-center gap-2 mb-3">
-                <Target className="w-4 h-4 text-muted-foreground" />
-                <h2 className="text-sm font-semibold">Leads</h2>
-                <span className="text-xs text-muted-foreground">({results.leads?.length})</span>
-              </div>
-              <div className="admin-card divide-y divide-border overflow-hidden">
-                {results.leads?.map((l: SearchResultLead) => (
-                  <Link key={l.id} href={`/tenant/leads/${l.id}`}
-                    className="flex items-center gap-3 px-4 py-3 hover:bg-accent/30 transition-colors">
-                    <div className="w-9 h-9 rounded-xl bg-violet-100 dark:bg-violet-900/30 flex items-center justify-center text-violet-600 text-sm font-bold shrink-0">
-                      {l.first_name?.charAt(0)?.toUpperCase()}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium">
-                        <Highlight text={`${l.first_name} ${l.last_name}`} query={query} />
-                      </p>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        {l.email && <span className="text-xs text-muted-foreground truncate"><Highlight text={l.email} query={query} /></span>}
-                        {l.company_name && <span className="text-xs text-muted-foreground">· <Highlight text={l.company_name} query={query} /></span>}
-                      </div>
-                    </div>
-                    <span className={cn('text-[10px] font-semibold px-2 py-0.5 rounded-full capitalize shrink-0', STATUS_COLORS[l.lead_status] ?? STATUS_COLORS["new"])}>
-                      {l.lead_status}
-                    </span>
-                  </Link>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Deals */}
-          {(activeType === 'all' || activeType === 'deals') && (results.deals?.length ?? 0) > 0 && (
-            <div>
-              <div className="flex items-center gap-2 mb-3">
-                <TrendingUp className="w-4 h-4 text-muted-foreground" />
-                <h2 className="text-sm font-semibold">Deals</h2>
-                <span className="text-xs text-muted-foreground">({results.deals?.length})</span>
-              </div>
-              <div className="admin-card divide-y divide-border overflow-hidden">
-                {results.deals?.map((d: SearchResultDeal) => (
-                  <Link key={d.id} href="/tenant/deals"
-                    className="flex items-center gap-3 px-4 py-3 hover:bg-accent/30 transition-colors">
-                    <div className="w-9 h-9 rounded-xl bg-amber-100 dark:bg-amber-900/20 flex items-center justify-center shrink-0">
-                      <TrendingUp className="w-4 h-4 text-amber-600" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium"><Highlight text={d.title} query={query} /></p>
-                      {(d.first_name || d.last_name) && (
-                        <p className="text-xs text-muted-foreground">{d.first_name} {d.last_name}</p>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span className="text-sm font-bold text-violet-600">{formatCurrency(Number(d.value))}</span>
-                      <span className={cn('text-[10px] font-semibold px-2 py-0.5 rounded-full capitalize', STAGE_COLORS[d.stage] ?? STAGE_COLORS["lead"])}>{d.stage}</span>
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Companies */}
-          {(activeType === 'all' || activeType === 'companies') && (results.companies?.length ?? 0) > 0 && (
-            <div>
-              <div className="flex items-center gap-2 mb-3">
-                <Building2 className="w-4 h-4 text-muted-foreground" />
-                <h2 className="text-sm font-semibold">Companies</h2>
-                <span className="text-xs text-muted-foreground">({results.companies?.length})</span>
-              </div>
-              <div className="admin-card divide-y divide-border overflow-hidden">
-                {results.companies?.map((c: SearchResultCompany) => (
-                  <Link key={c.id} href={`/tenant/companies/${c.id}`}
-                    className="flex items-center gap-3 px-4 py-3 hover:bg-accent/30 transition-colors">
-                    <div className="w-9 h-9 rounded-xl bg-blue-100 dark:bg-blue-900/20 flex items-center justify-center text-blue-600 font-bold text-sm shrink-0">
-                      {c.name?.charAt(0)?.toUpperCase()}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium"><Highlight text={c.name} query={query} /></p>
-                      {c.industry && <p className="text-xs text-muted-foreground capitalize">{c.industry}</p>}
-                    </div>
-                    <span className="text-xs text-muted-foreground shrink-0">{c.contact_count} contact{c.contact_count !== 1 ? 's' : ''}</span>
-                  </Link>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Tasks */}
-          {(activeType === 'all' || activeType === 'tasks') && (results.tasks?.length ?? 0) > 0 && (
-            <div>
-              <div className="flex items-center gap-2 mb-3">
-                <CheckSquare className="w-4 h-4 text-muted-foreground" />
-                <h2 className="text-sm font-semibold">Tasks</h2>
-                <span className="text-xs text-muted-foreground">({results.tasks?.length})</span>
-              </div>
-              <div className="admin-card divide-y divide-border overflow-hidden">
-                {results.tasks?.map((t: SearchResultTask) => {
-                  const overdue = !t.completed && t.due_date && t.due_date < new Date().toLocaleDateString('en-CA');
-                  return (
-                    <Link key={t.id} href="/tenant/tasks"
-                      className="flex items-center gap-3 px-4 py-3 hover:bg-accent/30 transition-colors">
-                      <div className={cn('w-2 h-2 rounded-full shrink-0',
-                        t.priority==='high' ? 'bg-red-500' : t.priority==='medium' ? 'bg-amber-500' : 'bg-slate-400')} />
-                      <div className="flex-1 min-w-0">
-                        <p className={cn('text-sm font-medium', t.completed && 'line-through text-muted-foreground')}>
-                          <Highlight text={t.title} query={query} />
-                        </p>
-                        {(t.first_name || t.last_name) && (
-                          <p className="text-xs text-muted-foreground">{t.first_name} {t.last_name}</p>
-                        )}
-                      </div>
-                      {t.due_date && (
-                        <p className={cn('text-xs shrink-0', overdue ? 'text-red-500 font-semibold' : 'text-muted-foreground')}>
-                          {overdue ? '⚠ ' : ''}{formatDate(t.due_date)}
-                        </p>
-                      )}
-                    </Link>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-        </div>
+      {/* The route counted the whole match; this page holds one slice of it.
+          The app's shared control says which slice and asks for another (#2838). */}
+      {pagination && !loading && (
+        <Pagination
+          total={pagination.total}
+          offset={(pagination.page - 1) * pagination.limit}
+          limit={pagination.limit}
+          onChange={(offset) => setAdvancedPage(Math.floor(offset / pagination.limit) + 1)}
+        />
       )}
 
-      {!query && !loading && (
+      {groups && !loading && total > 0 && (
+        <SearchResultGroups query={query} activeType={activeType} groups={groups} />
+      )}
+
+      {!query && !loading && !submitted && (
         <div className="text-center py-16">
           <Search className="w-12 h-12 text-muted-foreground/20 mx-auto mb-4" />
           <p className="text-base font-semibold text-muted-foreground">Start typing to search</p>
