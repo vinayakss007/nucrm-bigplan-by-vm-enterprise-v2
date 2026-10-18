@@ -41,14 +41,19 @@ export const POST = withApiRoute(async (request: NextRequest) => {
 
     const url = `${process.env.NEXT_PUBLIC_APP_URL}/auth/verify-email?token=${token}`;
     
-    await sendEmail({
+    const sent = await sendEmail({
       to: user.email,
       subject: 'Verify your NuCRM email address',
       html: `<div style="font-family:sans-serif;max-width:520px;margin:0 auto"><div style="height:4px;background:linear-gradient(90deg,#7c3aed,#4f46e5);border-radius:4px 4px 0 0"></div><div style="padding:40px 32px;background:#fff;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px"><h2 style="margin:0 0 8px;color:#111827">Verify your email</h2><p style="color:#6b7280;margin:0 0 24px">Hi ${user.fullName ?? 'there'}, click below to verify your NuCRM account.</p><a href="${url}" style="display:inline-block;background:#7c3aed;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600">Verify Email →</a><p style="color:#9ca3af;font-size:12px;margin-top:24px">Link expires in 24 hours.</p></div></div>`,
       text: `Verify your NuCRM email: ${url}`,
     });
 
-    return NextResponse.json({ ok: true });
+    // #2126: `sendEmail` reports failure as a returned result and does not throw,
+    // so awaiting and discarding it made a rejected send look delivered. The
+    // verification row above is real either way, so the answer keeps the two
+    // claims apart — `ok` for the record, `email_failed` for the delivery —
+    // matching `app/api/tenant/invite/send/route.ts`.
+    return NextResponse.json({ ok: true, email_failed: !sent?.success });
  
  
   } catch (err) { 
