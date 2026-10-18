@@ -13,6 +13,7 @@ import {
 import { formatCurrency, formatDate, cn } from '@/lib/utils';
 import { csvRow } from '@/lib/csv';
 import { useApiQuery } from '@/lib/query/client';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import toast from 'react-hot-toast';
 
 const REPORT_TYPES = [
@@ -212,6 +213,14 @@ export default function ReportsPage() {
 
               {loading ? (
                 <div className="p-8 text-center text-sm text-muted-foreground">Generating report...</div>
+              ) : !results.length && reportQuery.isError ? (
+                // #2829: the toast above speaks for four seconds and this panel
+                // stays on screen. "No data found for this period" is then the
+                // permanent answer about a report that never ran.
+                <InlineErrorState
+                  message="This report did not run — the rows below are not missing, the query failed."
+                  onRetry={() => void reportQuery.refetch()}
+                />
               ) : !results.length ? (
                 <div className="p-8 text-center">
                   <FileText className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />

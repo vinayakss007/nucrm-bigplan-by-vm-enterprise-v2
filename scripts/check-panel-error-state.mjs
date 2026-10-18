@@ -19,10 +19,21 @@
  * affordance (`InlineErrorState`, an `role="alert"` block, or `ErrorFallback`).
  * A page that binds `error` and never shows it is the hole a proxy cannot close
  * — that half is carried by the render tests (`panel-fetch-error-not-empty-2823`,
- * `portal-page-error-not-empty-2825`, `panel-page-error-not-empty-2829`), which
- * fail the same sentence against a stubbed 500, and by
- * `panel-error-state-guard-2829`, which plants each shape in this screen against
- * sources so a regex that stops matching cannot pass silently.
+ * `portal-page-error-not-empty-2825`, `panel-page-error-not-empty-2829`,
+ * `panel-page-error-not-empty-object-2829`), which fail the same sentence against
+ * a stubbed 500, and by `panel-error-state-guard-2829`, which plants each shape in
+ * this screen against sources so a regex that stops matching cannot pass silently.
+ *
+ * "Binds `error`" has two spellings, and the first pass of this guard knew only
+ * one of them. A page may destructure (`const { data, error } = useApiQuery(...)`)
+ * or bind the whole result object (`const q = useApiQuery(...)`, then `q.data`).
+ * Eighteen files use the second and the guard counted zero queries in all of
+ * them, so it reported the tree as 54 panels when the honest count was 58: the
+ * super-admin's own user list, organization list and backup panel each answered
+ * a failed read with "No users found", "No organizations found" and
+ * "All critical data is intact". Both spellings are checked now, and the second
+ * one is checked against the object it was bound to — `toast.error(d.error)` in
+ * some unrelated mutation handler is not the page seeing its read fail.
  *
  * Ratcheting, the way `guard:filesize` and `schema-drift-allowlist` do it: the
  * pages still outstanding are listed in `scripts/panel-error-state-baseline.json`,
@@ -37,8 +48,27 @@ import { join, relative } from 'node:path';
 const ROOT = process.cwd();
 const BASELINE_PATH = 'scripts/panel-error-state-baseline.json';
 
-/** The hook call whose result the page reads. */
+/** The hook call whose result the page reads, destructured. */
 export const QUERY_RE = /const\s*\{([^}]*)\}\s*=\s*(?:useApiQuery|useQuery)\b/g;
+/**
+ * …or bound as the whole result object (`const q = useApiQuery(...)`), which is
+ * what the super-admin panels do. #2829's first pass read only the shape above
+ * and so missed 18 files, six of which print an empty sentence — including
+ * `superadmin/tenants` ("No organizations found") and `superadmin/users`
+ * ("No users found"), where the failure is indistinguishable from an empty
+ * install. The error half of the proxy has to follow the same object: `q.error`
+ * is the page seeing the failure, and a `toast.error(d.error)` in some unrelated
+ * mutation handler is not.
+ */
+export const OBJECT_QUERY_RE = /const\s+(\w+)\s*=\s*(?:useApiQuery|useQuery)\b/g;
+
+/** Does this page read the failure off that query object? */
+export function readsQueryError(id, src) {
+  return (
+    new RegExp(`\\b${id}\\.(?:error|isError)\\b`).test(src) ||
+    new RegExp(`\\bconst\\s*\\{[^}]*\\berror\\b[^}]*\\}\\s*=\\s*${id}\\b`).test(src)
+  );
+}
 /** A sentence that asserts the tenant has none of a thing. */
 export const EMPTY_SENTENCE =
   /(?:\bNo\s+[A-Za-z][\w /-]{1,40}?\b(?:yet|found|here|configured|recorded|logged|sent|match|match your search)\b|\bis empty\b|\bNothing here\b|\bTrash is empty\b)/i;
@@ -101,7 +131,9 @@ export function rendersFalseEmpty(lines) {
  * Two shapes reach the same sentence, and the message names whichever it found:
  * a page whose hook never binds `error`, and a page that binds it and routes it
  * to a `useEffect` toast — which says the read failed for four seconds and then
- * leaves the false sentence on screen permanently.
+ * leaves the false sentence on screen permanently. A page that binds the whole
+ * result object (`const q = useApiQuery(...)`) is a third spelling of the first:
+ * what it has to do is read `q.error`, and that is what is checked.
  *
  * @param {string} rel path relative to ROOT
  * @param {string} src file contents
@@ -114,15 +146,26 @@ export function inspect(rel, src) {
 
   let queries = 0;
   let bindsError = false;
+  let destructured = false;
   QUERY_RE.lastIndex = 0;
   let m;
   while ((m = QUERY_RE.exec(src))) {
     queries++;
+    destructured = true;
     if (/\berror\b|\bisError\b/.test(m[1])) bindsError = true;
+  }
+  OBJECT_QUERY_RE.lastIndex = 0;
+  while ((m = OBJECT_QUERY_RE.exec(src))) {
+    queries++;
+    if (readsQueryError(m[1], src)) bindsError = true;
   }
   if (!queries) return { offends: false };
   // The proxy: the page must both see the failure and show something for it.
   if (bindsError && FAILURE_AFFORDANCE.test(src)) return { offends: false };
+
+  const missed = destructured
+    ? '`error` never bound'
+    : '`error` never read off the bound result object';
 
   return {
     offends: true,
@@ -130,7 +173,7 @@ export function inspect(rel, src) {
     why:
       `${rel}:${empty.line} says "${empty.text}" with no failure branch ` +
       `(${queries} query hook${queries > 1 ? 's' : ''}, ` +
-      `${bindsError ? '`error` bound but never rendered' : '`error` never bound'})`,
+      `${bindsError ? '`error` bound but never rendered' : missed})`,
   };
 }
 

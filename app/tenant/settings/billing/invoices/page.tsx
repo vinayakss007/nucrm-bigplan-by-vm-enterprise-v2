@@ -6,6 +6,7 @@
 'use client';
 import type { ComponentType } from 'react';
 import { useApiQuery } from '@/lib/query/client';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import { FileText, ExternalLink, ArrowLeft, AlertCircle, CheckCircle, Clock } from 'lucide-react';
 import { formatDate, cn } from '@/lib/utils';
 import { isRenderableCurrencyCode } from '@/lib/billing-currency';
@@ -46,7 +47,7 @@ const STATUS_COLORS: Record<string, string> = {
 
 export default function InvoicesPage() {
   // #1328: TanStack Query replaces the fetch + useEffect + useState pattern.
-  const { data, isLoading: loading } = useApiQuery<{ data?: Invoice[] }>(
+  const { data, isLoading: loading, error: invoicesError, refetch: refetchInvoices } = useApiQuery<{ data?: Invoice[] }>(
     ['tenant', 'billing', 'invoices'],
     '/api/tenant/billing/invoices',
   );
@@ -69,7 +70,9 @@ export default function InvoicesPage() {
           {[1, 2, 3, 4].map(i => <div key={i} className="h-14 bg-card border border-border rounded-xl animate-pulse" />)}
         </div>
       ) : invoices.length === 0 ? (
-        <div className="admin-card flex flex-col items-center justify-center py-16">
+        invoicesError
+          ? <InlineErrorState message={`Failed to load your invoices: ${invoicesError.message}`} onRetry={refetchInvoices} />
+          : <div className="admin-card flex flex-col items-center justify-center py-16">
           <FileText className="w-12 h-12 text-muted-foreground/30 mb-4" />
           <p className="font-semibold mb-1">No invoices yet</p>
           <p className="text-sm text-muted-foreground">Invoices will appear here after your first payment</p>

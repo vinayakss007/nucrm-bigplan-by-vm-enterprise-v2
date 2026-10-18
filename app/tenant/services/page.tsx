@@ -10,6 +10,7 @@ import { useApiQuery } from '@/lib/query/client';
 import { Plus, Search, Trash2, X, DollarSign, Clock, Package, Building2, User, Users } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import { ListSkeleton } from '@/components/shared/page-skeleton';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import toast from 'react-hot-toast';
 
 interface Service {
@@ -79,7 +80,7 @@ export default function ServicesPage() {
   });
 
   // #1328: reads via TanStack Query (were raw fetch + useEffect).
-  const { data: servicesData, isLoading: loading } = useApiQuery<{ services?: Service[] }>(
+  const { data: servicesData, isLoading: loading, error: servicesError } = useApiQuery<{ services?: Service[] }>(
     SERVICES_QUERY,
     '/api/tenant/services',
   );
@@ -326,10 +327,9 @@ export default function ServicesPage() {
             {loading ? (
               <ListSkeleton />
             ) : filteredServices.length === 0 ? (
-              <div className="text-center py-12 text-muted-foreground">
-                <Package className="w-10 h-10 mx-auto mb-3 text-muted-foreground/30" />
-                <p className="text-sm font-medium">No services found. Create your first service!</p>
-              </div>
+              servicesError
+                ? <InlineErrorState message={`Failed to load services: ${servicesError.message}`} onRetry={reloadServices} />
+                : <div className="text-center py-12 text-muted-foreground"><Package className="w-10 h-10 mx-auto mb-3 text-muted-foreground/30" /><p className="text-sm font-medium">No services found. Create your first service!</p></div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {filteredServices.map((service) => (

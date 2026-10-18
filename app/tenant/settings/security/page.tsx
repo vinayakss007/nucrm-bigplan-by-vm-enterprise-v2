@@ -14,14 +14,13 @@ import toast from 'react-hot-toast';
 import { cn } from '@/lib/utils';
 import { sanitizeHTML } from '@/lib/sanitize';
 
-interface PendingDeletion {
-  total?: number | null;
-  cutoff_date?: string | null;
-}
+interface PendingDeletion { contacts?: number; companies?: number; deals?: number; tasks?: number; leads?: number; total?: number }
 
 interface MeResponse { user?: { totp_enabled?: boolean } & Record<string, unknown> }
 interface TrashSettingsResponse { data?: { retention_days?: number } }
-interface AutoCleanupResponse { data?: PendingDeletion | null }
+// #2826: the counts are `pending_deletion` and the date is its sibling — typing this as
+// `{ data }` is why the banner below never rendered.
+interface AutoCleanupResponse { pending_deletion?: PendingDeletion | null; retention_days?: number; cutoff_date?: string | null }
 interface IpWhitelistResponse { data?: { ips?: string[]; enabled?: boolean } }
 
 const ME_QUERY = ['tenant', 'me'] as const;
@@ -89,7 +88,8 @@ export default function SecuritySettingsPage() {
   );
 
   const loading = meLoading;
-  const pendingDeletion: PendingDeletion | null = cleanupData?.data ?? null;
+  const pendingDeletion: PendingDeletion | null = cleanupData?.pending_deletion ?? null;
+  const cleanupCutoffDate = cleanupData?.cutoff_date ?? null;
 
   if (meError) toast.error('Failed to load user data');
 
@@ -586,7 +586,7 @@ export default function SecuritySettingsPage() {
                 <span className="text-sm font-medium">{pendingDeletion.total} items pending permanent deletion</span>
               </div>
               <p className="text-xs text-orange-600 mt-1">
-                These items will be deleted on {pendingDeletion.cutoff_date ? new Date(pendingDeletion.cutoff_date).toLocaleDateString() : 'N/A'}
+                These items will be deleted on {cleanupCutoffDate ? new Date(cleanupCutoffDate).toLocaleDateString() : 'N/A'}
               </p>
             </div>
           )}

@@ -11,6 +11,7 @@ import { Check, Download, Settings, ChevronRight, Loader2, X, Puzzle } from 'luc
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import { confirmThen } from '@/components/ui/confirm-dialog';
+import InlineErrorState from '@/components/shared/inline-error-state';
 
 const CATEGORY_LABELS: Record<string,string> = {
   all:'All', utility:'Core Tools', automation:'Automation',
@@ -44,7 +45,7 @@ export default function ModulesPage() {
   const [settingsForm, setSettingsForm] = useState<Record<string,string>>({});
 
   // #1328: list via TanStack Query (was raw fetch + useEffect).
-  const { data, isLoading: loading } = useApiQuery<{ data?: ModuleData[] }>(
+  const { data, isLoading: loading, error: modulesError, refetch: refetchModules } = useApiQuery<{ data?: ModuleData[] }>(
     MODULES_QUERY,
     '/api/tenant/modules',
   );
@@ -135,7 +136,9 @@ export default function ModulesPage() {
           ))}
         </div>
       ) : filtered.length === 0 ? (
-        <div className="py-20 text-center">
+        modulesError
+          ? <InlineErrorState message={`Failed to load the modules for this category: ${modulesError.message}`} onRetry={refetchModules} />
+          : <div className="py-20 text-center">
           <Puzzle className="w-12 h-12 text-muted-foreground/20 mx-auto mb-4" />
           <p className="text-sm font-medium text-muted-foreground">No modules in this category</p>
           <p className="text-xs text-muted-foreground/60 mt-1">Try selecting a different category</p>
