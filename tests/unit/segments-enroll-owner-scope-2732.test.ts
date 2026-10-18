@@ -172,7 +172,12 @@ const mockDb: Record<string, unknown> = {
           });
         }
       }
-      return Promise.resolve();
+      return Object.assign(Promise.resolve({ rowCount: list.length }), {
+        // #2740: the route now ends its insert with `.onConflictDoNothing()`, because the partial
+        // unique index added by migration 0130 makes a racing duplicate a real conflict. `rowCount`
+        // is what the route reports as `enrolled`, so the fake has to carry it.
+        onConflictDoNothing: () => Promise.resolve({ rowCount: list.length }),
+      });
     },
   })),
   update: vi.fn(), delete: vi.fn(), transaction: vi.fn(), execute: vi.fn(), query: {},

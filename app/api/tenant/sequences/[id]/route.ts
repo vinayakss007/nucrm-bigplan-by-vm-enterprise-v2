@@ -312,10 +312,11 @@ export const POST = withApiRoute(async (request: NextRequest,
       return NextResponse.json({ error: 'No enrollable contacts found' }, { status: 404 });
     }
 
-    // Contacts already active in this sequence. `sequence_enrollments` has no unique
-    // constraint on `(sequence_id, contact_id)` — `drizzle/schema/marketing.ts:98-110`
-    // declares only partial indexes — so `ON CONFLICT` has nothing to conflict on and
-    // cannot dedupe here. This read IS the dedupe.
+    // Contacts already active in this sequence. Migration 0130 (#2740) added the partial unique
+    // index `sequence_enrollments_seq_contact_active_unique` on (sequence_id, contact_id), so a
+    // duplicate insert is now rejected outright — but this read is still the dedupe that matters
+    // here: it is what produces `skipped_existing`, and it keeps the batch a no-conflict insert
+    // instead of a 23505 that aborts the whole transaction.
     const active = await db
       .select({ contactId: sequenceEnrollments.contactId })
       .from(sequenceEnrollments)
@@ -353,7 +354,12 @@ export const POST = withApiRoute(async (request: NextRequest,
           nextStepAt,
           enrolledBy: ctx.userId,
         }))
-      ).returning({ id: sequenceEnrollments.id, contactId: sequenceEnrollments.contactId });
+      // #2740: migration 0130's partial unique index is the belt to the read above. A concurrent
+      // duplicate is now rejected rather than written, and `returning()` reports only the rows
+      // actually inserted — so `rows.length`, the response and the enroll_count delta all stay
+      // honest while the request that lost the race still succeeds.
+      ).onConflictDoNothing()
+       .returning({ id: sequenceEnrollments.id, contactId: sequenceEnrollments.contactId });
 
       await tx.update(sequences)
         .set({ enrollCount: sql`COALESCE(${sequences.enrollCount}, 0) + ${rows.length}` })

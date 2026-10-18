@@ -146,15 +146,23 @@ function makeSelectBuilder(onQuery?: (q: Q) => unknown[]) {
   return builder;
 }
 
+/** A drizzle insert chain. `.onConflictDoNothing()` is in it because #2740's unique index made
+ * the route tolerate a racing duplicate, and it has to sit before `.returning()`. */
+function insertChain(resolve: () => Promise<unknown>): Record<string, unknown> {
+  const chain: Record<string, unknown> = { returning: resolve };
+  chain['onConflictDoNothing'] = () => chain;
+  return chain;
+}
+
 function makeTx() {
   const tx: Record<string, unknown> = {};
   tx['select'] = () => makeSelectBuilder();
   tx['insert'] = (t: object) => ({
     values: (rows: Record<string, unknown> | Record<string, unknown>[]) => {
       const table = getTableName(t as never);
-      if (failInsert) return { returning: () => Promise.reject(new Error('insert exploded')) };
+      if (failInsert) return insertChain(() => Promise.reject(new Error('insert exploded')));
       const list = Array.isArray(rows) ? rows : [rows];
-      if (table !== 'sequence_enrollments') return { returning: () => Promise.resolve([]) };
+      if (table !== 'sequence_enrollments') return insertChain(() => Promise.resolve([]));
       const out: { id: string; contactId: string }[] = [];
       for (const row of list) {
         const id = `enr-${++enrollmentSeq}`;
@@ -165,7 +173,7 @@ function makeTx() {
         });
         out.push({ id, contactId: String(row.contactId) });
       }
-      return { returning: () => Promise.resolve(out) };
+      return insertChain(() => Promise.resolve(out));
     },
   });
   tx['update'] = (t: object) => ({
@@ -353,7 +361,7 @@ describe('the batch is resolved against contacts the caller may act on (#2737)',
 });
 
 describe('a contact already in the sequence is not enrolled twice (#2737)', () => {
-  it('an active enrollment is skipped, because ON CONFLICT has no constraint to work on', async () => {
+  it('an active enrollment is skipped by the read, not by a rejected insert', async () => {
     enrollments = [{ tenantId: TENANT, sequenceId: SEQ, contactId: CONTACT_MINE, status: 'active' }];
     const r = await json(await send(SEES_ALL, SEQ, { contact_ids: [CONTACT_MINE, CONTACT_OTHER] }));
     expect(wroteIds()).toEqual([CONTACT_OTHER]);
