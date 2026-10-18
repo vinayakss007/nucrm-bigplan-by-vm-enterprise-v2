@@ -81,7 +81,9 @@ export default async function TasksPage() {
   ]);
 
   // Normalize DB rows to the shape TasksDataTable expects: ISO-string dates and
-  // a computed contact_name (#1341 — replaces the previous `as any` casts).
+  // the contact name pair `GET /api/tenant/tasks` also sends (#1341 — replaces
+  // the previous `as any` casts; #2808 — the table derives the display name, so
+  // this page hands it the same two fields instead of a third shape).
   const tasksList = tasksRaw.map((t) => ({
     id: t.id,
     title: t.title,
@@ -93,7 +95,8 @@ export default async function TasksPage() {
     due_date: t.dueDate ? new Date(t.dueDate).toISOString() : null,
     completed_at: t.completedAt ? new Date(t.completedAt).toISOString() : null,
     created_at: t.createdAt ? new Date(t.createdAt).toISOString() : new Date().toISOString(),
-    contact_name: [t.firstName, t.lastName].filter(Boolean).join(' ') || null,
+    first_name: t.firstName,
+    last_name: t.lastName,
   }));
 
   return (
