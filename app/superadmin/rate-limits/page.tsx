@@ -10,6 +10,7 @@ import { useApiQuery } from '@/lib/query/client';
 import { Shield, Save, Loader2, RotateCcw, Users, CreditCard, Zap, Info, Check, Globe } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import toast from 'react-hot-toast';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import { cn } from '@/lib/utils';
 
 interface RateLimitEndpoint {
@@ -55,7 +56,7 @@ export default function SuperAdminRateLimitsPage() {
 
   // #1328: reads via TanStack Query (were raw fetch + useEffect). The editable
   // state is seeded once from the fetched config; mutations invalidate this key.
-  const { data: rlData, isLoading: loading } = useApiQuery<RateLimitsResponse>(
+  const { data: rlData, isLoading: loading, error: rlError, refetch } = useApiQuery<RateLimitsResponse>(
     RATE_LIMITS_QUERY,
     '/api/superadmin/rate-limits',
   );
@@ -201,6 +202,12 @@ export default function SuperAdminRateLimitsPage() {
         <h1 className="text-lg font-bold text-white flex items-center gap-2"><Shield className="w-5 h-5 text-violet-400" />Rate Limit Configuration</h1>
         <p className="text-xs text-white/40">All limits are stored in the database. Zero hardcoded values. Changes take effect immediately.</p>
       </div>
+
+      {rlError && (
+        // #2829: a failed read renders this page as an all-empty configuration,
+        // and the save control underneath would write that emptiness back.
+        <InlineErrorState message="Could not load the rate-limit configuration — the limits shown below are not the live ones." onRetry={() => void refetch()} />
+      )}
 
       {/* Super Admin Bypass Section */}
       <div className="rounded-xl border border-white/10 bg-white/[0.03]">

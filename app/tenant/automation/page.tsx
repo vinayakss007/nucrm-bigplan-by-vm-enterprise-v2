@@ -7,6 +7,7 @@
 import { useState, useMemo } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import { Plus, Zap, ToggleLeft, ToggleRight, Trash2,
   Mail, Users, Calendar, TrendingUp, X, Loader2, Workflow,
   type LucideIcon } from 'lucide-react';
@@ -87,11 +88,11 @@ export default function AutomationPage() {
   });
 
   // #1328: parallel on-mount reads via TanStack Query (was raw fetch + useEffect).
-  const { data: pbData, isLoading: pbLoading } = useApiQuery<{ data?: PrebuiltRow[] }>(
+  const { data: pbData, isLoading: pbLoading, error: workflowsError, refetch: refetchWorkflows } = useApiQuery<{ data?: PrebuiltRow[] }>(
     WORKFLOWS_QUERY,
     '/api/tenant/automation/workflows',
   );
-  const { data: cuData, isLoading: cuLoading } = useApiQuery<{ data?: AutomationWorkflow[] }>(
+  const { data: cuData, isLoading: cuLoading, error: automationsError, refetch: refetchAutomations } = useApiQuery<{ data?: AutomationWorkflow[] }>(
     AUTOMATIONS_QUERY,
     '/api/tenant/automations',
   );
@@ -294,7 +295,9 @@ export default function AutomationPage() {
       {tab === 'prebuilt' && (
         <div className="space-y-3">
           {loading ? [...Array(5)].map((_,i) => <div key={i} className="h-20 bg-muted rounded-2xl animate-pulse" />) :
-          prebuilts.map(w => {
+          workflowsError ? (
+            <InlineErrorState message={`Failed to load which automations are running: ${workflowsError.message}. The ON/OFF state in this list is then the shipped default, not your tenant's.`} onRetry={refetchWorkflows} />
+          ) : prebuilts.map(w => {
             const Icon = TRIGGER_ICONS[w.trigger_type ?? ''] ?? Zap;
             return (
               <div key={w.id} className={cn('flex items-center gap-4 p-4 rounded-2xl border transition-all',
@@ -329,7 +332,9 @@ export default function AutomationPage() {
       {tab === 'custom' && (
         <div className="space-y-3">
           {loading ? [...Array(3)].map((_,i) => <div key={i} className="h-20 bg-muted rounded-2xl animate-pulse" />) :
-          customs.length === 0 ? (
+          automationsError ? (
+            <InlineErrorState message={`Failed to load your automations: ${automationsError.message}`} onRetry={refetchAutomations} />
+          ) : customs.length === 0 ? (
             <div className="text-center py-16 border border-dashed border-border rounded-2xl">
               <Zap className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
               <p className="font-medium">No custom automations yet</p>

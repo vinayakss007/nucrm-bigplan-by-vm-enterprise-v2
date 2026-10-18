@@ -282,6 +282,34 @@
         "it because the CHECK never allowed it. It was removed from zod so the",
         "API answers 400 with the allowed list instead of 23514."
       ]
+    },
+    {
+      "id": "workflows.trigger_type",
+      "constraint": "chk_workflows_trigger_type",
+      "table": "workflows",
+      "column": "trigger_type",
+      "migration": null,
+      "declaredIn": ["lib/api/schemas/automation.ts"],
+      "required": ["manual", "schedule", "event", "webhook"],
+      "legacy": [],
+      "writers": {},
+      "note": [
+        "No migration: the DB was always right, the code was the copy that drifted.",
+        "createWorkflowSchema declared ('event','schedule','manual') and had lost",
+        "'webhook', so the one kind this CHECK documents as legal answered 400 at",
+        "the schema and could only be created by writing SQL (#2806). The enum is",
+        "now a guard on the constraint rather than a narrower restatement of it,",
+        "so out-of-set values are a 400 naming the allowed list, never a 23514",
+        "raised at insert.",
+        "OPEN, and deliberately not this entry's call: the builder",
+        "(components/tenant/workflow-builder.tsx) offers nine dotted event names",
+        "('contact.created', 'deal.won', ...) and posts them as trigger_type, so",
+        "saving a new workflow from the UI is still a 400. #2806 asks the owner to",
+        "pick trigger_type-as-kind with the event in trigger_config, a widening",
+        "migration over the event names, or a properly typed second column.",
+        "Whichever lands, this entry, the enum, and",
+        "tests/unit/workflow-trigger-vocab-2806.test.ts move together."
+      ]
     }
   ]
 }

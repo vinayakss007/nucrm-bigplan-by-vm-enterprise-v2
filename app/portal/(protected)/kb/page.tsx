@@ -35,7 +35,7 @@ export default function PortalKBPage() {
     } catch { router.replace('/portal/login'); return; }
   }, [router]);
 
-  const { data, isLoading } = useApiQuery<{ data: PortalArticle[] }>(
+  const { data, isLoading, error } = useApiQuery<{ data: PortalArticle[] }>(
     ['portal-kb-articles'],
     '/api/public/kb/articles?status=published',
     { enabled: sessionReady },
@@ -65,6 +65,13 @@ export default function PortalKBPage() {
       {loading ? (
         <div className="space-y-3">
           {[1, 2, 3, 4].map(i => <div key={i} className="h-20 bg-card border border-border rounded-xl animate-pulse" />)}
+        </div>
+      ) : error && !(data?.data?.length) ? (
+        // #2825: "No articles found" also serves a search miss, which is honest —
+        // so the alert only fires when there are no rows to search either.
+        <div role="alert" className="p-4 rounded-xl bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 text-sm">
+          We could not load the knowledge base. That is a failed request, not an
+          empty list — reload the page to try again.
         </div>
       ) : filtered.length === 0 ? (
         <div className="text-center py-12">

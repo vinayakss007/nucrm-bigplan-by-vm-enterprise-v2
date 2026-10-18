@@ -73,7 +73,7 @@ export default function PortalQuotesPage() {
     setSession(s);
   }, [router]);
 
-  const { data, isLoading } = useQuery<{ data: PortalQuote[] }, ApiQueryError>({
+  const { data, isLoading, error } = useQuery<{ data: PortalQuote[] }, ApiQueryError>({
     queryKey: ['portal-quotes', session?.email],
     enabled: !!session?.email,
     queryFn: async () => {
@@ -160,10 +160,19 @@ export default function PortalQuotesPage() {
       </div>
 
       {quotes.length === 0 ? (
-        <div className="text-center py-12">
-          <FileText className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
-          <p className="text-sm text-muted-foreground">No quotes yet</p>
-        </div>
+        error ? (
+          // #2825: "No quotes yet" is a claim about the customer's data; a
+          // failed read may not make it.
+          <div role="alert" className="p-4 rounded-xl bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 text-sm">
+            We could not load your quotes. That is a failed request, not an empty
+            list — reload the page to try again.
+          </div>
+        ) : (
+          <div className="text-center py-12">
+            <FileText className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
+            <p className="text-sm text-muted-foreground">No quotes yet</p>
+          </div>
+        )
       ) : (
         <div className="space-y-3">
           {quotes.map(quote => {

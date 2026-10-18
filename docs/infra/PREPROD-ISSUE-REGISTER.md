@@ -4,7 +4,27 @@
 > here, with the evidence that proves it and the verification that closed it.
 > Update the status the moment it changes; IDs are never reused.
 >
-> - **Last updated:** 2026-10-12 (UTC) — **PP-077**: **#2530**'s second half. Both compliance routes
+> - **Last updated:** 2026-10-12 (UTC) — **PP-078**: the backup story stops being an interface problem. Measured
+> on the host and in the live database the same day: `backup-verify` failed **28 of 28** nights in the retained
+> `nucrm-cron` window (2026-09-15 → 2026-10-12, every line an `HTTP/1.1 500` from the deployed build), and
+> `auto-backup` has written **zero rows for nine consecutive nights** while answering **200** — because the thing
+> that reports both, `run-cron.sh`, prints **only on failure** (`wget -q -O /dev/null … || echo "CRON FAILED"`),
+> so a night that does nothing is byte-identical to a night that worked. The two record tables disagree exactly
+> the way **#79** said they would, now with numbers: `backup_records` holds **4** rows, all `failed`,
+> `storage_type = local`, 0 bytes, no path; `tenant_backup_records` holds **144** rows, **138** `completed`,
+> **2,150,042 B** of **inline** `backup_data` (max single payload 60,523 B) and **no `storage_path` column at
+> all** — so every "completed" backup lives inside the database it backs up. Off-box: both MinIO buckets exist
+> and are **empty**. Consequence for the board: **#2540**'s "verified backup first" precondition cannot be
+> satisfied by pointing at this host, because there is nothing here to verify. Also re-measured on the same
+> pass, for **#74**/**#137**: `db:status` → **Applied 99 · Pending 28 · Total 127**, which supersedes this file's
+> own **22 pending at `32d252b9`** and PP-060's 24 — see PP-057's 2026-10-12 bullet. And the deploy-hop
+> history now has its full walk (**1,359 runs · 3 successes**, **#2582**), superseding PP-060's windowed
+> 778/0 and PP-063's 1,319. This bullet re-pins the `docs/README.md:75` pointer to the keep-the-entry
+> rule's line here (`docs/infra/PREPROD-ISSUE-REGISTER.md:5312`) — the sixteenth such re-pin; **#2566**,
+> **#2569**, **#2578** and **#2581** each re-pin the same sentence from their own trees, so whichever docs
+> PR merges last re-derives it. Filed beside the host inventory **#2585**. **PP-075** and **PP-077** sit
+> with the open PRs **#2569** and **#2578**; **PP-076** shipped as **#2581**, so this takes **078** and **079** is free.
+> - **Previous:** 2026-10-12 (UTC) — **PP-077**: **#2530**'s second half. Both compliance routes
 >   wrote a `processing` row, did the work, then wrote a terminal marker, and every death between those
 >   two writes left the row saying `processing` forever — including the marker `UPDATE` itself throwing,
 >   which is the path that mattered, because the marker sat *inside* the work `try` whose `catch` writes
@@ -16,8 +36,8 @@
 >   back also deletes the row that says it was attempted), **not** a new status (**0050**'s CHECK is a
 >   closed vocabulary), and **not** a cron (**PP-051**, **PP-049**). Filed as **PP-077** (PR **#2578**; **#2569** was the earliest claimant of 075, so this number moves; **#2581** holds 076), on the issue **#2530**, measured
 >   on merge `59725908` (**#2575**) — the tree this branch is rebased onto. This bullet re-pins the `docs/README.md:75` pointer to the keep-the-entry
->   rule's line on this merged tree (`:5290`); **#2569** (**PP-075**) and **#2587** (**PP-078**)
->   re-pin it from their own trees, so whoever merges last re-measures.
+>   rule's line on this merged tree (`:5425`); **#2569** (**PP-075**) is the last open PR still
+>   re-pinning it from its own tree, so whichever merges last re-measures.
 > - **Previous:** 2026-10-12 (UTC) — **PP-076**: **#2561**'s "no CSRF check on
 >   `/api/tenant/plugin-engine`" was measured through the one file its evidence list never opened.
 >   `proxy.ts` **is** the root Next.js middleware, and validates the double-submit token for every
@@ -44,7 +64,7 @@
 >   its number and this entry sits between them; **#2587** takes **PP-078**. The pass-through is **#2579** and the
 >   dead-flag decision is **#2580**, both left open on purpose; the retraction of the "no token at all
 >   cross-origin" impact line is posted on **#2561**. This bullet re-pins the `docs/README.md:75`
->   pointer to the keep-the-entry rule's line here (`:5290`, re-measured once **PP-077** merged above it in
+>   pointer to the keep-the-entry rule's line here (`:5425`, re-measured once **PP-078** merged above it in
 >   this tree) — it overtakes **PP-070**'s `:5013`, which moved because this entry added a header bullet, a
 >   summary row and a section above it.
 > - **Previous:** 2026-10-11 (UTC) — **PP-070**: `segment_members` has been keyed by nothing since `0000_init` created it without
@@ -350,7 +370,7 @@ Severity: **S1** blocks go-live · **S2** broken feature or security weakness ·
 | PP-054 | S3  | Sentry + observability      | NUCRM-3J (`analytics_events` 42501) has been fixed and live since PR #2162, yet the watchdog filed it "NEW" on 2026-10-04 — because `NEW` means "rotated into the top-25-by-date list", not "new failure", and `events=` is a cumulative count                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | 🚨 OPEN · watchdog semantics + two side findings (`error_logs` empty all-time, INSERT…RETURNING refused)                                                                                                |
 | PP-055 | S2  | Backup + restore            | The pre-restore wipe deletes **six tables the import allowlist refuses to re-insert**, so `POST /api/admin/tenant-restore` deletes a tenant's rows, hits `Table 'pipelines' is not allowed for import`, and rolls the whole restore back — permanently, for 177 of 183 tenants                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | 🔧 FIXED (wipe-side), PR **#2354** · the two divergent allowlists stay an owner decision (#79, #90)                                                                                                     |
 | PP-056 | S3  | Host / tooling              | `/tmp` is a **3.9 GB tmpfs** and vitest leaves a ~22 MB temp dir on **every** run: 88 of them held **1.9 GB**, which filled it. `npx vitest run` then exited **1 with no `Test Files`/`Tests` summary at all** — a scratch-space outage is indistinguishable from a red suite. Sweeping the suite after fixing it found **three assertions that only pass when `.env.local` is absent** (2 × CSRF + rate-limit) — and a fourth that turned out to be a **stale-clone-base artifact**, which is its own harness lesson                                                                                                                                                                                                                                                                                                                                                                                                                          | 🔧 MITIGATED (1.5 GB of stale clones moved off tmpfs, `TMPDIR` pinned to the root fs) · CSRF pair in PR **#2359**, rate-limit + this entry in **#2365** · four exits, all owner's call                  |
-| PP-057 | S2  | Migrations + tooling        | The repo has exactly one "what is applied?" command and it cannot see the ledger: `db:status` queries `__drizzle_migrations(name, applied_at)` — no such table, no such columns — and maps **any** failure to "history table does not exist", so against preprod it printed **`Applied: 0 / Pending: <every journal entry>`** on a database with **99 applied and 18 outstanding**. `db:migrate --dry-run` compounds it: its first line counts journal entries (**`116 pending migration(s)`**) before reading anything, and that number is what the y/N apply prompt offers. Nothing in CI or the runbooks would ever have revealed the 18-behind state, which includes `0091` (the usage-snapshot bypass **#56** shipped), `0059` (**#74**'s still-unstamped entry) and now `0116` (**#2367**, merged while this PR was open)                                                                                                                | 🔧 SCRIPTS FIXED in this PR (verified 99/18 against two instruments) · applying the 18 is an **owner decision** · also measured: `0115`'s absence is **not** a live cross-tenant read                   |
+| PP-057 | S2  | Migrations + tooling        | The repo has exactly one "what is applied?" command and it cannot see the ledger: `db:status` queries `__drizzle_migrations(name, applied_at)` — no such table, no such columns — and maps **any** failure to "history table does not exist", so against preprod it printed **`Applied: 0 / Pending: <every journal entry>`** on a database with **99 applied and 18 outstanding**. `db:migrate --dry-run` compounds it: its first line counts journal entries (**`116 pending migration(s)`**) before reading anything, and that number is what the y/N apply prompt offers. Nothing in CI or the runbooks would ever have revealed the 18-behind state, which includes `0091` (the usage-snapshot bypass **#56** shipped), `0059` (**#74**'s still-unstamped entry) and now `0116` (**#2367**, merged while this PR was open)                                                                                                                | 🔧 SCRIPTS FIXED in this PR (verified 99/18 against two instruments) · applying the 18 is an **owner decision** · also measured: `0115`'s absence is **not** a live cross-tenant read · **re-measured 2026-10-12 against the live DB: `Applied 99 · Pending 28 · Total 127`** — the set is `0059`, `0091`, `0101`–`0126`, 26 guarded and `0111`/`0117` not (PP-057's own bullet) |
 | PP-058 | S2  | Migrations + tooling        | `db:migrate` connects as the tables' **owner** (`nucrm`) with `FORCE ROW LEVEL SECURITY` active on 48 of the 49 tables the pending set names, and `scripts/migrate.ts:198` sets **no tenant GUC** — so every data-correcting statement in a migration matches **0 rows** and silently corrects nothing, while the DDL built on top of it (`CREATE UNIQUE INDEX`, `SET NOT NULL`) reads the whole heap regardless. Measured on preprod: `0114_leads_tenant_oid_unique` (pending) dedupes `(tenant_id, lead_oid)` before creating the unique index, but its own CTE sees 0 of 25 leads while the truth is **1 duplicate group / 5 rows / 4 losers** (all five soft-deleted, all nine days older than the header's own "measured 0"), so the pending 21-entry run **aborts on 23505** — the exact failure its header says the dedupe exists to prevent                                                                                            | 🚨 OPEN · owner decision · no historical damage demonstrated · `0109` already proves the fix is one `set_config` line                                                                                   |
 | PP-059 | S2  | CHECK vs code               | `guard:vocab` — the only command in the repo that asks the **live database** what it will reject — exits **1** on `main` — measured at `38ae90e2`, re-measured at `f3787f32` — with **2 of 9** constraints disagreeing: `chk_sequence_enrollments_status` (5 values) refuses `'cancelled'`, which `/api/unsubscribe` has written since the repo's first commit `ecbba74e`, and `chk_invoices_status` (8 values) refuses `'void'`, which `INVOICE_STATUSES` offers and `PATCH /api/tenant/invoices/[id]` passes through. Its own fixes, `0120` and `0112`, are two of the **24** entries PP-057 says nobody has agreed to apply (the count was **22** when this row was written; `0121` landed since, then `0122` with **#2446**) — and it is the **only one of the 23 `guard:*` scripts no automation invokes** (23 re-measured on 2026-10-11 by **#2566**, which adds `guard:raw-sql` **with** a runner — the count was 22 when this row was written, counting **#2539**'s `guard:cron-lock` as new: 20 called by `npm run guard:*` alias, 2 by direct `node` command): workflows call 20 by alias — 17 in `ci.yml` at `:45` through `:87` and 3 in `nightly-soak.yml` — and 2 by direct `node` command (`ci.yml:221`, `:254` — re-pinned from `:219`/`:252`, themselves re-pinned from `:217`/`:250` on 2026-10-10 by **#2539**, on 2026-10-11 by **#2566**'s step two lines above them), while `grep -rn check-constraint-vocab .github/workflows` returns **0** | 🚨 OPEN · guard wired nowhere · latent **on this DB** (both tables hold 0 rows, measured `--superadmin`) · CI green proves only that the `.sql` text says the right thing                               |
 | PP-060 | S2  | Deploy                      | The 24-entry backlog (23 until `0122` landed with **#2446**) has **no automated apply path that could reach this database**: the only executable migrate in the repo's automation is `deploy.yml:389 (re-pinned 2026-10-13: **#2542** shifted it from :356)` (`scripts/deploy-migrate.ts --yes`, which spawns `migrate.ts --yes` at `:96`), inside the single `script:` block opened at `:138` — so it runs over SSH on the **pm2 production VM**, not on this Docker preprod host. That hop has failed every run since the last success (`30748691555`, 2026-08-02T12:51:06Z): **778 runs · 0 success** (667 failure / 63 cancelled / 48 skipped), 15 of 15 sampled recent runs contain `dial tcp ***:22: i/o timeout`, and the full retained history is **3 successes in 1,319 runs**. No workflow mentions `db:status` (grep: 0 hits in all 5), `ci.yml` and `backup-drill.yml` build their databases with `db:sync`, and this host has no deploy cron or timer                                                                                    | 🚨 OPEN · owner action (`gh secret set DEPLOY_HOST`, the remedy AGENTS.md already documents) · even a healthy deploy migrates a **different database**, so PP-057's exit (a) has no mechanism behind it · **PP-063** measured the hop over the whole history and found a second defect behind this one |
@@ -370,6 +390,7 @@ Severity: **S1** blocks go-live · **S2** broken feature or security weakness ·
 | PP-074 | S3  | Email / public edge | **#2526** reported `/api/tenant/email/track` as an unauthenticated pixel/click sink taking `tid`/`cid`/`cpid`/`eid` off the query string. Measured: the path was never in `PUBLIC_PATHS`/`PUBLIC_PREFIXES` (anonymous requests die at the edge with **401**), and both inserts were refused by `0031`'s `tenant_isolation` `WITH CHECK` because the handler sets no tenant context — so it had no working behaviour to forge, and the "public, no auth required" wording lived in two doc comments. What it did do is 302 to any caller-chosen public `?url=` off the CRM's own domain (the #2218 shape), and the two tables it names have had exactly that one writer | 🔧 FIXED in this PR (route + its 12-test #2267 suite deleted; `app/api/tenant/email/analytics/route.ts` docblock corrected to name the token pair; `tests/unit/legacy-email-track-retired-2526.test.ts`, **11** tests, reproduces `isPublic()`'s rules from the arrays in `proxy.ts` and pins that `/api/track/open` + `/api/track/click` read only `?t` and write under `withTenantContext(<row>.tenantId)` · the zero-writer consequence for `email_opens`/`email_clicks` is recorded in the section, not fixed here) |
 | PP-076 | S2  | Auth / CSRF | **#2561** reported `/api/tenant/plugin-engine` POST/PATCH/DELETE as having no CSRF check. Measured, the *coverage* half of that is wrong and the *guard* is the real defect: `proxy.ts:545-561` (re-pinned 2026-10-15: **#2579/#2599/#2603** shifted it) validates the double-submit pair for **every** `/api/` mutation that carries a token and answers the 403 itself, so of **302** non-exempt mutating route files **289** were covered after all — by the proxy, not by the `requireAuth()` backstop the guard cites (`CSRF_ENFORCE_CENTRAL`, set nowhere: **3** repo-wide hits, all code or comments) — while the guard's own header asserted "There is no root Next.js middleware". The hole that is real sits upstream: the `Bearer ak_*` pass-through returns at `proxy.ts:484`, **above** that block, and a junk key then falls through to `requireAuth()`'s cookie path (`lib/auth/middleware.ts:241` → `:262`), producing a cookie-authenticated mutation no CSRF check ever inspected | 🔧 FIXED in this PR (**#2581**): in-handler `requireCsrf()` on all three mutating handlers, exempt only when `ctx.authMethod === 'api_key'` — the credential `requireAuth()` actually verified (`lib/auth/middleware.ts:252`), not `requireCsrf()`'s **client-settable** `x-auth-method` header (`:482`, which nothing in this repo ever sends) · `scripts/check-csrf-coverage.mjs` rewritten to three assertions (the edge call exists, is not behind a `process.env` test, and its exempt lists agree with the literals inside `needsCsrfValidation()` in both directions) plus honest populations (**14** in-handler / **288** proxy-covered / **34** baseline) and **deliberately no ratchet** · `tests/unit/plugin-engine-csrf-2561.test.ts`, **12** tests, **4** red at `79cc642f` against the real `requireCsrf` (only `requireAuth` stubbed, via `importOriginal`) · the pass-through itself is **#2579** and the dead-flag call is **#2580**, both left open on purpose |
 | PP-077 | S2  | Compliance / data integrity | **#2530**'s two compliance routes still had a path that never resolves: `POST` writes a `processing` row, does the work, then writes a terminal marker, and anything dying between those writes — SIGTERM past the drain (**PP-029**), an OOM kill, a redeploy, or the marker `UPDATE` itself throwing — left the row saying `processing` forever. Because the marker sat *inside* the work `try` whose `catch` writes the *other* marker, the failure was not a stuck row but a false record: an Article 17 erasure that ran, and whose `completed` write threw, was logged as `failed`. **2** sites in `app/` mint `processing` and nothing else in the tree writes the table | 🔧 FIXED in this PR (**#2578**): `lib/compliance/request-lifecycle.ts` — `isStaleProcessing` (a `processing` row strictly older than 15 min, sized from **8** parallel SELECTs + **5** sequential UPDATEs at **PP-028**'s ~200 ms/statement) · `reapStaleProcessing` answers it as `failed` + `stale`/`staleReason` and best-effort persists behind a CAS `WHERE id AND tenant_id AND status='processing'` · both markers moved out of the work `try` and return `false` instead of throwing, surfaced as `recordUpdateFailed` · deliberately **not** part 1's transaction (a rollback deletes the evidence that the erasure was attempted), **not** a new status (**0050**'s `chk_compliance_requests_status` is closed), `completed_at` never minted, reap-on-read not cron (**PP-051**/**PP-049**) · `tests/unit/compliance-processing-reaper-2530.test.ts`, **26** tests, **8** of them red with the routes at `11802dcc` · how many rows are stuck today is **not** measured here |
+| PP-078 | S2  | Backup / restore readiness | **The nightly backup has been answering 200 and doing nothing, and what it ever wrote sits inside the database it is supposed to protect.** Measured 2026-10-12 on the host and in the live DB: the retained `nucrm-cron` log (2026-09-15 → 2026-10-12) records `backup-verify` **CRON FAILED on 28 of 28 nights** (every one an `HTTP/1.1 500` from the deployed build, i.e. **#49**'s bug still live) and `auto-backup` **8** failures, `process-sequences` 15, `retry-webhooks` 5, `detect-missed-followups` 4, `task-reminders` 3, `ai-auto-followup` 2, `usage-snapshot` 1, `backup-health` 1 — but `run-cron.sh` is `wget -q -O /dev/null … \|\| echo "[date] CRON FAILED: $JOB" >&2`, so **a 200 that did zero work emits no line at all**, and that is the whole reason the outage was invisible: `tenant_backup_records` has written **0 rows since 2026-10-03T09:26:50Z** (nine nights; only three days ever have rows — 09-25, 10-02, 10-03). The two surfaces disagree exactly as **#79** describes, now quantified: `backup_records` = **4** rows, all `status=failed`, `storage_type=local`, `size_bytes=0`, `storage_path` NULL on all four (the **#50** signature: no `pg_dump` in the image); `tenant_backup_records` = **144** rows, **138** `completed`, all `initiated_auto`, summing **2,150,042 B** of inline `backup_data` (max payload 60,523 B, `sum(data_size)` 1,986,199 B) and it has **no `storage_path`/`storage_type` column at all**, so a nightly backup cannot be pointed off-box even in principle. Payloads are honest where they exist (`rows_actually_stored` == `record_count`, 16–19 rows for a tenant whose live tables hold 1 contact + 1 activity), so the cap **#71** describes is not truncating anything — there is simply almost nothing to back up here, and none of it leaves the machine: `nucrm-minio` holds two buckets (`nucrm-backups`, `nucrm-documents`), created 2026-09-14, **both empty**. `nucrm-app` is image `nucrm-app:preprod`, built **2026-10-03T15:43:25Z** and started 16:03Z — so everything merged after that timestamp (**#49**, **#51**/**#52**, **#139**) is undeployed, and this is **PP-060**'s deploy gap observed on the one surface where it costs data rather than features | 🚨 OPEN · **owner decision**: an off-box destination for either table (and a `storage_path` on the nightly one), plus one *restored* artifact before **#2540** can be called satisfied · the runner's silence is fixable in-repo (`run-cron.sh` should assert the response body, which is also **#77**/PP-049's `ok:true` masking) · no endpoint, credential or bucket key is recorded here — the object-store pair lives in one mode-600 file on the host being decommissioned (**#2585** §2 + addendum) and is an owner custody action, not a repo one |
 
 ## Sentry issues → register entries
 
@@ -3288,6 +3309,33 @@ Pending: 22 · Total: 121 journal entr(ies)`, exit 0, and the `Invisible:` secti
   its report still exits 1 — and the env-file caveat above is the same lesson from the other side),
   **#2254**, **#2306**, **#2366**, **#2367**.
 
+- **Re-measured 2026-10-12 (UTC), from a checkout at `main` = `59725908`, against the live database.**
+  `npm run db:status` → **`Applied: 99 · Pending: 28 · Total: 127 journal entries`**; `npm run db:migrate -- --dry-run`
+  → **`99 [skip-stamped] · 28 [replay] · 0 missing file(s)`**; `select count(*), max(created_at) from
+  drizzle.__drizzle_migrations` → **99** rows, last **2026-09-07T12:00:00Z**. This supersedes the **18** this entry
+  was written against, the **22** at `32d252b9` (**#2408**), the **24**/26 in PP-060/**#2444**, and the **26 · Total 125**
+  PP-062/PP-066 recorded — the pile grows because merges add files while nothing stamps them.
+  - **The outstanding set is not the contiguous block the prose implies:** `0059_custom_entities`,
+    `0091_usage_snapshots_superadmin_bypass` and `0101`–`0126`. Of the 28, **26 contain an idempotency guard**
+    (`IF NOT EXISTS` / `DO $$` / `IF EXISTS`) and **2 do not** — `0111_money_check_constraints` and
+    `0117_validate_fk_constraints` — so those two are the ones that hard-error if the constraint they add already
+    exists, and they are the reason **#137** needs a hand-check before an unattended apply, not just an approval.
+  - **Two of them disagree with their own ledger state, and only one of the two is harmless.** `0059`'s tables
+    (`custom_entities`, `custom_entity_data`) **already exist** and the file is `IF NOT EXISTS`, so its replay is a
+    guarded no-op — an unstamped row, not an unapplied change (**#74**'s "invisible to `db:migrate`" framing is about
+    the journal, and the journal does now list it: 127 entries). `0091` is the opposite: `usage_snapshots` carries
+    **1** RLS policy and **0** whose name matches super/bypass, so the bypass **#56** shipped has genuinely never
+    reached this database, and the first real deploy changes **access behaviour**, not only shape.
+  - **A measurement trap, recorded so the next person does not file the false alarm this pass nearly filed.**
+    Hashing each `.sql` yourself (`sha256` of the file bytes) and reconciling against
+    `drizzle.__drizzle_migrations.hash` reports **116** pending — including `0000_init`'s 446 bare DDL statements —
+    which reads as "the first deploy replays the entire schema". It does not: the runner's hash is not
+    `sha256(file bytes)`, and `_journal.json` entries carry only `breakpoints, idx, tag, version, when` — **there is
+    no hash field to join on**. Trust `--dry-run`; never trust a hand-rolled join against the ledger.
+  - **`created_at` is not an application timestamp.** Every stamp is `12:00:00 UTC` and 16 rows share 2026-09-07, so
+    the ledger records backfilled **days**. It cannot answer "when did this actually run", which is the question a
+    restore decision needs.
+
 ## PP-058 — 🚨 The migration runner is RLS-blind to every tenant row: it connects as the tables' owner with `FORCE ROW LEVEL SECURITY` active and sets no tenant GUC, so the data-correcting half of a migration silently fixes 0 rows while the DDL half — which RLS cannot blind — then aborts on the damage it was written to repair. `0114` is the demonstrated case, and the pending 21-entry run cannot complete _(S2 · Migrations + tooling)_
 
 - **Found by:** following **PP-057**'s `Pending: 20` into _what those files actually do_. `db:status` now
@@ -3609,7 +3657,25 @@ database`, and exactly two FAILs:
   the repo in that condition. Two of the five guards added since this entry was written — `coords` and
   `register-drift` — are the ones that read _this file_, which is why the re-count is in the entry rather than
   in a follow-up. (The fifth, **#2566**'s `guard:raw-sql`, reads the source tree rather than this file, and its
-  own coordinates are `ci.yml:86-87`.)
+  own coordinates are `ci.yml:86-87`.) (A sixth — **#2825**'s `guard:catch-empty`, on 2026-10-18 — and a seventh,
+  **#2829**'s `guard:panel-error-state` the next day, both read the source tree rather than this file, and both are
+  wired line-count-neutrally so that no coordinate in this paragraph moved. The shape, for whoever folds in the next:
+  the invocation joins the portal-RLS-context step's `run:` line — the pattern **#2655** used at `:85`, and since the
+  seventh arrived `ci.yml:81` runs three guards rather than one — and the alias goes at the very end of the `scripts`
+  block, outside the `:47-69` region, so the sixth reads `package.json:156` and the seventh `package.json:157`, next to
+  **#2596**'s `guard:env-coverage`, which `ci.yml` likewise calls as a bare `node` command at `:438`.
+  Line-count-neutral wiring keeps those _numbers_ true and cannot keep their _content_. Appending to a shared `run:`
+  line rewrites that line; appending to a JSON object leaves the alias before it intact but for the comma the new key
+  requires. So both coordinates read as drift to `check-register-drift`, which compares a cited line with what it held
+  in the revision that wrote the sentence, while `guard:coords`, which only asks whether the line is live, passes both.
+  That screen runs on main, nightly, and never in PR CI, because its answer is branch-dependent. Both are re-pinned
+  here, inside the sentences that name them, because an entry in `scripts/register-drift-allowlist.json` is for drift
+  that waits on another PR and this PR is the one that finished the move. The trap is permanent by construction:
+  whoever appends the next alias re-pins `package.json:157`, whoever joins that step re-pins `ci.yml:81`, and each
+  writes the correction into the sentence rather than minting a fresh pointer. The seventh also carries a ratcheting
+  allowlist of its own, `scripts/panel-error-state-baseline.json` — data rather than a coordinate, so it is named
+  without a line number. The counts above predate the sixth and the seventh: two more `guard:*` scripts exist, and two
+  more are invoked.)
   (The 20/2/1 split is itself worth recording. A wiring audit that greps for `npm run guard:` reports
   **20 of 23** and mis-files `audit` and `semgrep` as unrun, because those two are called as direct `node`
   invocations rather than through their aliases. This entry said exactly that until its own PR's CI run
@@ -3854,6 +3920,18 @@ docker exec -w /app nucrm-app node --experimental-strip-types scripts/simulate-p
 Exit code is non-zero on any failed check, so it can gate a deploy once CI has a database service
 (CI today has none — `ci.yml` runs only the static guards, and `db:verify-isolation` is likewise
 not wired in).
+
+- **The run history is now measured in full, and both numbers this entry carries are windowed.**
+  Walking `deploy.yml`'s retained history (14 pages of `/actions/workflows/deploy.yml/runs`, `total_count` read
+  rather than inferred) gives **1,359 runs: 3 succeeded · 1,048 failed · 250 cancelled · 58 skipped**, the workflow's
+  first run on 2026-06-05 (added in `c5d2c12e`, 2026-06-04) and the **last success 2026-08-02** (`30748691555`,
+  12:51:06Z). That supersedes the **778 runs · 0 success** headline written into this entry (a window, not a history)
+  and PP-063's 1,319. Since the Pre-flight step landed (`47be945f`, **#2299**, 2026-10-10T06:55:20Z) the job has run
+  39 times: **37** end in Pre-flight, **1** reaches `Deploy via SSH`, **1** has no job — i.e. the diagnosability fix
+  works and the hop itself is still broken. The undeployed delta is **1,946 commits / 843 first-parent merges**
+  (`git rev-list --count 46123b72..origin/main`), not the ~98 an earlier board comment guessed. Full walk: **#2582**
+  comment 6121784446. **PP-078** is this same gap observed on backups rather than migrations — the deployed image was
+  cut 2026-10-03T15:43Z, so the cron fixes merged since are undeployed and `backup-verify` has failed 28 of 28 nights.
 
 ## PP-061 — 🔧 Six endpoints that authenticate with something other than a session were unreachable on this host: `POST` to the two OAuth exchange routes and to all four inbound receivers — both payment providers, the Telegram bot and the plugin integrator endpoint — answered `401 {"error":"Authentication required"}` — the middleware's own body, so **no handler ran** — and the same screen found that the row the plugin receiver loads **before** it checks the caller's HMAC was a full `SELECT` over all **19** columns of `custom_plugins`, three of which hold that plugin's own upstream credentials _(S2 · Edge / auth surface)_
 
@@ -5202,6 +5280,63 @@ no space, no semicolon, no dash, no `-`-comment, and a length under Postgres's o
   `CSRF_ENFORCE_CENTRAL` branch, or turn it on — the latter is a silent-403 risk for any
   cookie-authenticated caller outside `csrf-provider.tsx`, which is not a call to make inside a
   security PR). Both are cited from this entry; neither is fixed by it.
+## PP-078 — 🔧 The nightly backup answers **200** and writes nothing for nine nights straight, and the only log that could have said so prints **exclusively on failure** — meanwhile the 138 backups that *do* exist are inline `jsonb` rows **inside the database they back up**, the table that stores them has **no `storage_path` column to point elsewhere**, and both object-store buckets are **empty** _(S2 · Backup / restore readiness · host inventory **#2585**)_
+
+**Measured 2026-10-12 (UTC) on the preprod host and against its live database. Sanitized: no endpoint, no bucket key, no credential value appears in this entry or in the file it cites.**
+
+- **What the cron container says.** `docker logs nucrm-cron` retains 2026-09-15 → 2026-10-12. Counting its failure lines:
+  ```
+  28 CRON FAILED: backup-verify          15 CRON FAILED: process-sequences
+   8 CRON FAILED: auto-backup             5 CRON FAILED: retry-webhooks
+   4 CRON FAILED: detect-missed-followups 3 CRON FAILED: task-reminders
+   2 CRON FAILED: ai-auto-followup        1 CRON FAILED: usage-snapshot
+   1 CRON FAILED: backup-health
+  ```
+  Each is preceded by `wget: server returned error: HTTP/1.1 500 Internal Server Error`. `backup-verify` has failed **every single night** in the window — 28 of 28 — which is **#49**'s defect, still live, because the deployed image predates its fix.
+- **The silence is the bug.** `deploy/cron/crontab:16` (`auto-backup`, `0 2 * * *`) and `:18` (`backup-verify`, `0 4 * * *`) both go through `/usr/local/bin/run-cron.sh`:
+  ```sh
+  wget -q -O /dev/null --header="x-cron-secret: ${CRON_SECRET}" \
+    --post-data="" "${APP_URL}/api/cron/${JOB}" 2>&1 || \
+    echo "[$(date)] CRON FAILED: ${JOB}" >&2
+  ```
+  The success condition is **HTTP 200**, not work performed. A route that returns `ok:true` after visiting zero tenants (PP-049's exact mask, and the reason **#139** had to add a 423 contract) emits **no line anywhere**. So the nine-night gap below is invisible by construction.
+- **What the database says.** `npm run probe:sql -- --superadmin` against the live DB (`DATABASE_URL` aimed at the loopback front-end, not at the managed host — the front-end is what the app uses):
+  ```
+  tenant_backup_records   rows=144  has_inline=138  max_inline=60,523 B  sum(data_size)=1,986,199 B
+                                 last row 2026-10-03T09:26:50.980Z   rows created on/after 2026-10-04: 0
+  per day                  2026-09-25: 33 (all auto, all completed)
+                           2026-10-02: 29 (28 completed, 1 failed)
+                           2026-10-03: 82 (77 completed, 5 failed)
+  backup_records (the panel's table)
+                           rows=4  status=failed on all 4  storage_type=local
+                           storage_path NOT NULL on: 0 of 4   size_bytes max: 0
+                           last row 2026-10-03T05:36:05.133Z
+  ```
+  `backup_records`' four failures with `storage_type = local`, 0 bytes and no path are **#50** measured: the image has no `pg_dump`, so the panel's own backup button has never produced an artifact.
+- **`tenant_backup_records` cannot leave the box.** Its 20 columns are `id, tenant_id, status, backup_type, data_size, table_count, record_count, backup_data, backup_note, include_tables, initiated_by, initiated_auto, duration_ms, error_message, retention_days, expires_at, created_at, updated_at, deleted_at, completed_at`. There is **no `storage_path` and no `storage_type`** — those exist only on `backup_records`, the table **#79** says the panel reads and the nightly job does not write. So the 138 "completed" backups are `backup_data jsonb` rows in the same schema as the data they copy, and the object store that the compose stack runs MinIO for holds **nothing**: both buckets were created 2026-09-14 and `ls -R` of their prefixes returns empty.
+- **The payloads themselves are not lying.** For the newest completed rows, walking `jsonb_each(backup_data)` and counting `… › rows` arrays gives `rows_stored = 19 / 19 / 16` against `record_count = 19 / 19 / 16`, with 86 table keys under `table_count = 88` — and the live tenant really does hold 1 contact and 1 activity. So this is **not** the **#71** 64 KB cap truncating a large export; it is a near-empty synthetic tenant, faithfully serialized, into the wrong place.
+- **Why the deployed build is the cause of the visible half.** `nucrm-app` runs image `nucrm-app:preprod`, `docker image inspect` → created **2026-10-03T15:43:25Z**, container started 16:03Z. The last nightly backup row is **09:26Z that same day** — six hours *before* the restart. Everything merged after the image was cut is therefore undeployed on this host: **#49** (the `backup-verify` 500), **#51**/**#52** (the RLS-blind cron sweeps — precisely the class that would make `auto-backup` see tenants), **#139** (lock refusal must answer 423 instead of `ok:true`). **PP-060**'s "no automated path reaches this database" is normally argued about migrations; this entry is the same gap argued about **backups**, where the cost is not a missing feature but a missing copy.
+- **Consequence for the go-live board.** **#2540** ("verified backup, then apply the migration backlog") is step 5 of the order on **#2543**, and blocker #2 is the 28-entry backlog this pass re-measured. Neither can be satisfied by pointing at this machine: there is no restorable artifact here, none off it, and `backup-verify` — the thing whose entire job is to prove an artifact is good — has not returned 200 in 28 nights. The honest reading is that **restore readiness is 0% measured**, and the only backup the product has ever produced is a row in the database it is supposed to protect.
+- **Also re-measured on this pass, recorded in PP-057 and PP-060's 2026-10-12 bullets:** `db:status` → `Applied 99 · Pending 28 · Total 127` (the outstanding set is `0059`, `0091` and `0101`–`0126`; 26 of the 28 carry an idempotency guard and `0111`/`0117` do not), and the deploy hop's full history is **1,359 runs · 3 successes · 1,048 failures · 250 cancelled · 58 skipped**, superseding this file's 778/0 and PP-063's 1,319.
+- **Not fixed here, and why.** No file in this repository re-binds MinIO, creates an off-box destination, or rotates the credential that would let it: the buckets, the destination and the access key are host state, and the key is the sole content of one mode-600 file on the machine being decommissioned (**#2585** addendum). Editing `run-cron.sh` to assert the response body **is** repo-side and is the cheap prevention, but it belongs with **#77**/PP-049 (the `ok:true` mask is the same lie told by the route, not the runner) rather than smuggled into a docs PR.
+- **Files:** none changed — this is a host + live-database measurement. Read: `deploy/cron/crontab`, `deploy/docker-compose.production.yml`, `deploy/docker-compose.preprod.yml`, the MinIO data directory, `docker logs`/`docker inspect` on `nucrm-cron` + `nucrm-app`, and `information_schema` + the two record tables in the live DB via `npm run probe:sql -- --superadmin`.
+- **Related:** **#79** (the two tables disagree — this entry supplies the counts), **#50** (no `pg_dump` in the image — this entry supplies the 4 failed rows), **#49** (the `backup-verify` 500, 28 of 28 nights, merged and undeployed), **#71** (the 64 KB inline cap — measured here as *not* the binding constraint), **#77**/**PP-049** (`ok:true` masking, which is what makes the runner's silence total), **#54** (wave-2 routes are on the live schedule — the schedule is not the problem, the receipt is), **PP-060** (the deploy gap this entry reproduces on the backup surface), **#2540**/**#2543** (the precondition this blocks), **#2585** (the host inventory this was measured with).
+<!-- coordinate corrections for the 2026-10-12 host-decommission pass (this section, and issue
+       #2585). Seven sentences elsewhere in this register cited lines that had moved underneath them:
+       three named the eight-`set_config` reset in the connection-pool module (PP-048 says it twice, once
+       in the body and once in its read-only file list, and PP-058 names it again in its own read-log —
+       from 233 to 241); two named the scratch-database name gate in the nightly verify route (PP-048's
+       injection-surface survey and its file list — from the range 239 through 241 to 267 through 269); one
+       named that route's fire-and-forget trio (PP-050's latent-multiplier paragraph — from 277, 311 and
+       329 to 305, 339 and 357); and one named the very same shape guard again (PP-073's
+       "three sinks, one rule" — from 248 to 268). Every new number was read off the current file rather
+       than translated, and the measurement is that the verify route moved by a uniform 28 lines and the
+       pool module by a uniform 8. These are exactly the drifts the content-vs-authoring screen fails on
+       and the liveness screen passes: each superseded target is still a non-blank, in-range line — a
+       pooling branch in one file, a libpq-credentials comment in the other — and none of them is the
+       statement the sentence describes. They are re-pinned here rather than allowlisted with a
+       "TODO: justify" reason, because an unowned allowlist entry is how a wrong pointer stays believed
+       for weeks, which is the failure this file's own #2416 correction comment exists to record -->
 
 ## PP-077 — 🔧 **#2530**'s second half: both compliance routes could still leave a row saying `processing` **forever** — the POST writes the row, does the work, then writes a terminal marker, and every death between those two writes left the record unresolved. The marker sat *inside* the work `try` whose `catch` writes the *other* marker, so the worst path was not a stuck row but a compliance log that actively **lied**: an Article 17 erasure that ran and whose `completed` UPDATE threw was recorded as `failed` _(S2 · Compliance / data integrity · PR **#2578**)_
 

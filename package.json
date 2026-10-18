@@ -152,7 +152,9 @@
     "build-storybook": "storybook build -o storybook-static",
     "prepare": "husky",
     "lint-staged": "lint-staged",
-    "guard:env-coverage": "node scripts/check-env-coverage.mjs"
+    "guard:env-coverage": "node scripts/check-env-coverage.mjs",
+    "guard:catch-empty": "node scripts/check-catch-empty.mjs",
+    "guard:panel-error-state": "node scripts/check-panel-error-state.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.1148.0",

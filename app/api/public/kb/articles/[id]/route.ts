@@ -9,6 +9,7 @@ import { eq, and, isNull, sql } from 'drizzle-orm';
 import { resolvePortalIdentity } from '@/lib/portal-auth';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { withTenantContext, NO_USER_SENTINEL } from '@/lib/db/rls';
+import { logError } from '@/lib/errors-server';
 
 /**
  * Public KB article detail — DECISION (#2284, follow-up to #2221 / PR #2283):
@@ -77,5 +78,18 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     if (!article) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
     return NextResponse.json({ data: article });
-  } catch { return NextResponse.json({ error: 'Not found' }, { status: 404 }); }
+  } catch (err) {
+    // #2825: this answered 404 for EVERY throw, so "the read failed" and "no
+    // such published article" shared a status. 404 stays reserved for the
+    // `!article` exit above — that is the branch carrying #2284's
+    // anti-enumeration property (a foreign id and a missing id both land there).
+    void logError({
+      error: err,
+      context: 'public/kb/articles/[id]',
+      level: 'warning',
+      requestUrl: request.url,
+      requestMethod: 'GET',
+    });
+    return NextResponse.json({ error: 'Failed to load article' }, { status: 500 });
+  }
 }

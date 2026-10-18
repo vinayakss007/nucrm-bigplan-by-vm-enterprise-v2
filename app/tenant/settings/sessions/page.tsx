@@ -12,6 +12,7 @@ import { confirmThen } from '@/components/ui/confirm-dialog';
 import { cn, formatRelativeTime } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import SettingsEmptyState from '@/components/shared/settings-empty-state';
+import InlineErrorState from '@/components/shared/inline-error-state';
 
 interface UserSession {
   id: string;
@@ -28,7 +29,7 @@ export default function SessionsPage() {
   const [revoking, setRevoking] = useState<string|null>(null);
 
   // #1328: list via TanStack Query (types the sessions, removes an `any`).
-  const { data, isLoading: loading } = useApiQuery<{ data?: UserSession[] }>(
+  const { data, isLoading: loading, error: sessionsError, refetch } = useApiQuery<{ data?: UserSession[] }>(
     SESSIONS_QUERY,
     '/api/user/sessions',
   );
@@ -94,7 +95,16 @@ export default function SessionsPage() {
           ))}
         </div>
       ) : !sessions.length ? (
-        <SettingsEmptyState icon={Monitor} title="No sessions found" description="Active sessions will appear here" />
+        sessionsError ? (
+          // #2829: "No sessions found" is a claim about who is logged in. A read
+          // that never reached the sessions table may not make it.
+          <InlineErrorState
+            message="Could not load your active sessions — this is a failed request, not an empty list."
+            onRetry={() => void refetch()}
+          />
+        ) : (
+          <SettingsEmptyState icon={Monitor} title="No sessions found" description="Active sessions will appear here" />
+        )
       ) : (
         <div className="admin-card divide-y divide-border overflow-hidden">
           {sessions.map(s => {

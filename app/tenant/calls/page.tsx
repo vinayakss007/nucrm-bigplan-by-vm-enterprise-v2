@@ -11,6 +11,7 @@ import { Phone, PhoneIncoming, PhoneOutgoing, Plus, Clock, X, Pencil, Trash2, Se
 import { cn, formatDate } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import { confirmThen } from '@/components/ui/confirm-dialog';
+import InlineErrorState from '@/components/shared/inline-error-state';
 
 function formatDuration(seconds: number): string {
   const m = Math.floor(seconds / 60);
@@ -43,7 +44,7 @@ export default function CallsPage() {
   const [directionFilter, setDirectionFilter] = useState<'all' | 'inbound' | 'outbound'>('all');
 
   // #1328: reads via TanStack Query (were raw fetch + useEffect).
-  const { data: callsData, isLoading: loading } = useApiQuery<{ data?: CallLog[] }>(
+  const { data: callsData, isLoading: loading, error: callsError, refetch: refetchCalls } = useApiQuery<{ data?: CallLog[] }>(
     CALLS_QUERY,
     '/api/tenant/calls?limit=100',
   );
@@ -161,8 +162,12 @@ export default function CallsPage() {
             ) : filteredCalls.length === 0 ? (
               <tr>
                 <td colSpan={6} className="px-4 py-12 text-center text-muted-foreground">
-                  <Phone className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                  <p className="text-sm">{calls.length === 0 ? 'No calls logged yet' : 'No calls match your search'}</p>
+                  {callsError
+                    ? <InlineErrorState message={`Failed to load calls: ${callsError.message}`} onRetry={refetchCalls} />
+                    : <>
+                        <Phone className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                        <p className="text-sm">{calls.length === 0 ? 'No calls logged yet' : 'No calls match your search'}</p>
+                      </>}
                 </td>
               </tr>
             ) : (
