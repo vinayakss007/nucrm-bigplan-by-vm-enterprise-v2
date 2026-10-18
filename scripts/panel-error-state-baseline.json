@@ -1,5 +1,5 @@
 {
-  "_comment": "Panels that still print a 'there are none' sentence when the read failed (#2829). Each entry names the issue carrying it and which of the two shapes the page has: one that destructures no `error`, or one that binds it and routes it to a toast that fades while the sentence stays. The list may only SHRINK: fix the page, delete its entry, and guard:panel-error-state turns the next one red.",
+  "_comment": "Panels that still print a 'there are none' sentence when the read failed (#2829). Each entry names the issue carrying it and which of the two shapes the page has: one that destructures no `error`, or one that binds it and routes it to a toast that fades while the sentence stays. The binding spelling does not matter: a page that keeps the whole result object (`const q = useApiQuery(...)`) is judged on whether it reads `q.error`, which is how four super-admin panels that the first pass counted as clean were found. The list may only SHRINK: fix the page, delete its entry, and guard:panel-error-state turns the next one red.",
   "files": {
     "app/superadmin/billing/dunning/page.tsx": "#2829: prints 'No dunning attempts found' for a failed read — binds `error` and toasts it, then prints the sentence anyway",
     "app/superadmin/modules/page.tsx": "#2829: prints 'No modules match' for a failed read — destructures no `error` at all",

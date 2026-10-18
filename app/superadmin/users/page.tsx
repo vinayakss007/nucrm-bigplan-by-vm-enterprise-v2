@@ -10,6 +10,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Users, Search, Crown, Plus, ArrowRight, AlertTriangle, Loader2, Edit, UserX, X, Save } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
 import { useApiQuery } from '@/lib/query/client';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import toast from 'react-hot-toast';
 import { createUserSchema, validateForm } from '@/lib/validation/forms';
 
@@ -296,7 +297,18 @@ export default function SuperAdminUsersPage() {
           </tr></thead>
           <tbody>
             {loading&&<tr><td colSpan={5} className="text-center py-8 text-muted-foreground text-sm">Loading...</td></tr>}
-            {!loading&&!filtered.length&&<tr><td colSpan={5} className="text-center py-12 text-muted-foreground text-sm">No users found</td></tr>}
+            {!loading&&usersQuery.error&&!filtered.length&&(
+              <tr><td colSpan={5}>
+                {/* #2829: this table lists every super-admin account. "No users
+                    found" after a read that never reached the users table tells
+                    the one person who can fix it that there is nothing to fix. */}
+                <InlineErrorState
+                  message="Could not load the user list — this is a failed request, not an empty table."
+                  onRetry={() => void usersQuery.refetch()}
+                />
+              </td></tr>
+            )}
+            {!loading&&!usersQuery.error&&!filtered.length&&<tr><td colSpan={5} className="text-center py-12 text-muted-foreground text-sm">No users found</td></tr>}
             {filtered.map(u=>(
               <tr key={u.id} className="border-b border-border last:border-0 hover:bg-muted/20 transition-colors">
                 <td className="px-4 py-3">

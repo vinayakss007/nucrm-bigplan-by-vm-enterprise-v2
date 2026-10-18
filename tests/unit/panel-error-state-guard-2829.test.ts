@@ -22,6 +22,8 @@ import {
   rendersFalseEmpty,
   walk,
   QUERY_RE,
+  OBJECT_QUERY_RE,
+  readsQueryError,
   EMPTY_SENTENCE,
   EMPTY_TEST,
   FAILURE_AFFORDANCE,
@@ -97,6 +99,32 @@ describe('panel-error-state guard (#2829) — offenders', () => {
 }`;
     expect(inspect('app/tenant/z/page.tsx', src).offends).toBe(true);
   });
+
+  it('catches the object-bound spelling — `const q = useApiQuery(...)`', () => {
+    const src = `function P() {
+  const q = useApiQuery(['superadmin', 'users'], '/api/superadmin/users');
+  const rows = q.data?.data ?? [];
+  return <div>{!rows.length ? <p>No users found</p> : <Table rows={rows} />}</div>;
+}`;
+    const res = inspect('app/superadmin/users/page.tsx', src);
+    expect(res.offends).toBe(true);
+    // the message says what is missing in *this* shape: not a binding that was
+    // left out of a destructuring list, a read that never happens.
+    expect(res.why).toContain('never read off the bound result object');
+  });
+
+  it('does not count a mutation handler\'s toast.error(d.error) as seeing the read fail', () => {
+    const src = `function P() {
+  const q = useApiQuery(['superadmin', 'tenants'], '/api/superadmin/tenants');
+  const rows = q.data?.data ?? [];
+  const m = useMutation({
+    mutationFn: patch,
+    onSuccess: async (res) => { const d = await res.json(); if (!res.ok) toast.error(d.error); },
+  });
+  return <div>{!rows.length ? <p>No organizations found</p> : <Table rows={rows} />}</div>;
+}`;
+    expect(inspect('app/superadmin/tenants/page.tsx', src).offends).toBe(true);
+  });
 });
 
 describe('panel-error-state guard (#2829) — honest shapes it must not flag', () => {
@@ -146,6 +174,34 @@ describe('panel-error-state guard (#2829) — honest shapes it must not flag', (
   const m = useMutation({ mutationFn: save, onError: () => setError('No rows found') });
   return <div>{!rows.length ? <p>No sessions found</p> : <Table rows={rows} />}</div>;
 }`,
+    // the object bound whole, then its error read off it — what #2823 did and the
+    // first pass of this guard could not see
+    () => `function P() {
+  const q = useApiQuery(['superadmin', 'backups', 'schedules'], '/api/superadmin/backups');
+  const rows = q.data?.data ?? [];
+  return <div>{!rows.length ? (
+    q.error ? <InlineErrorState message="Could not load the backup schedules." onRetry={() => void q.refetch()} />
+      : <p>No backup schedules configured</p>
+  ) : <Table rows={rows} />}</div>;
+}`,
+    // …the same read spelled `isError`, which TanStack also offers
+    () => `function P() {
+  const q = useApiQuery(['superadmin', 'users'], '/api/superadmin/users');
+  const rows = q.data?.data ?? [];
+  return <div>{!rows.length && q.isError ? (
+    <div role="alert">Failed to load users: {q.error.message}. An empty table would mean no account exists.</div>
+  ) : !rows.length ? <p>No users found</p> : <Table rows={rows} />}</div>;
+}`,
+    // …or destructured off the object one line later
+    () => `function P() {
+  const q = useApiQuery(['superadmin', 'tenants'], '/api/superadmin/tenants');
+  const { error } = q;
+  const rows = q.data?.data ?? [];
+  return <div>{!rows.length ? (
+    error ? <InlineErrorState message="Could not load organizations." onRetry={() => void q.refetch()} />
+      : <p>No organizations found</p>
+  ) : <Table rows={rows} />}</div>;
+}`,
   ];
   for (const [i, build] of clean.entries()) {
     it(`clean #${i + 1}: ${build().match(EMPTY_SENTENCE)?.[0] ?? ''}`, () => {
@@ -169,12 +225,48 @@ describe('the guard against the real tree (#2829)', () => {
   it('is not vacuous: the walker and each regex work', () => {
     const files = [...walk(`${process.cwd()}/app`)].filter((f) => f.endsWith('.tsx'));
     expect(files.length, 'the walk found no .tsx — a screen over nothing prints OK').toBeGreaterThan(200);
-    expect(QUERY_RE.test("const { data, isLoading } = useApiQuery({")).toBe(true);
+    expect(QUERY_RE.test('const { data, isLoading } = useApiQuery({')).toBe(true);
+    expect(OBJECT_QUERY_RE.test('const usersQuery = useApiQuery([\'a\', \'b\'], \'/api/b\')')).toBe(true);
+    expect(readsQueryError('q', 'if (q.error) throw q;')).toBe(true);
+    expect(readsQueryError('q', 'toast.error(d.error)')).toBe(false);
     expect(EMPTY_SENTENCE.test('No sessions found')).toBe(true);
     expect(EMPTY_TEST.test('{!rows.length ? (')).toBe(true);
     expect(FAILURE_AFFORDANCE.test('<InlineErrorState message="x" />')).toBe(true);
     expect(rendersFalseEmpty(['  const rows = data?.data ?? [];', '  {!rows.length ? (', '    <p>No sessions found</p>']).line)
       .toBe(3);
+  });
+
+  it('the object-bound spelling is not hypothetical: the tree is full of it', () => {
+    // #2829's first pass reported 54 panels and the true count was 58, because
+    // every super-admin panel reads `const q = useApiQuery(...)` and the screen
+    // only recognised a destructuring list. If that shape ever disappears from
+    // the tree the regex should be deleted, not left to pass silently.
+    const objectBound = [...walk(`${process.cwd()}/app`)]
+      .filter((f) => f.endsWith('.tsx'))
+      .filter((f) => {
+        OBJECT_QUERY_RE.lastIndex = 0;
+        return OBJECT_QUERY_RE.test(readFileSync(f, 'utf8'));
+      });
+    expect(objectBound.length, 'no file binds a query result as an object').toBeGreaterThan(10);
+  });
+
+  it('the four object-bound panels this slice fixed are clean and unlisted', () => {
+    const baseline = loadBaseline(process.cwd());
+    for (const rel of [
+      'app/superadmin/users/page.tsx',
+      'app/superadmin/tenants/page.tsx',
+      'app/superadmin/backups/page.tsx',
+      'app/tenant/reports/page.tsx',
+    ]) {
+      const src = readFileSync(`${process.cwd()}/${rel}`, 'utf8');
+      expect(inspect(rel, src).offends, `${rel} still prints an empty sentence over a failed read`).toBe(false);
+      expect(baseline.has(rel), `${rel} must not be allowlisted`).toBe(false);
+      // and the guard is looking at the read the page actually has: a query
+      // object whose error the page now reads.
+      const ids = [...src.matchAll(OBJECT_QUERY_RE)].map((m) => m[1]);
+      expect(ids.length, `${rel} no longer binds a query object — update this test`).toBeGreaterThan(0);
+      expect(ids.some((id) => readsQueryError(id, src)), `${rel} reads no query error`).toBe(true);
+    }
   });
 
   it('reads the copy under the branch above it, not the line it happens to sit on', () => {
