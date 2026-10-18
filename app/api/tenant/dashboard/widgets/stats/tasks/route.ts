@@ -25,19 +25,20 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     const auth = ctx;
 
     return withCache(tid, 'stats-tasks', 120, async () => {
-      const today = new Date().toISOString().split('T')[0];
       // Raw template, so the scope is spliced as text: `and()` would skip an
       // undefined argument, a template has nothing to skip (#2688).
       const mine = ownerScopeSql(ownerScope(auth, 'tasks.view_all', tasks));
 
+      // `due_date` is a timestamptz: cast the column, never bind a bare date against it,
+      // or only rows stored at exactly local midnight compare equal (#2811).
       const result = await db.execute(sql`
         SELECT
           (SELECT COUNT(*)::int FROM ${tasks}
            WHERE tenant_id = ${tid} AND deleted_at IS NULL AND status != 'completed'
-           ${mine} AND due_date = ${today}::date) AS due_today,
+           ${mine} AND due_date::date = CURRENT_DATE) AS due_today,
           (SELECT COUNT(*)::int FROM ${tasks}
            WHERE tenant_id = ${tid} AND deleted_at IS NULL AND status != 'completed'
-           ${mine} AND due_date < ${today}::date) AS overdue,
+           ${mine} AND due_date::date < CURRENT_DATE) AS overdue,
           (SELECT COUNT(*)::int FROM ${tasks}
            WHERE tenant_id = ${tid} AND deleted_at IS NULL AND status != 'completed'${mine}) AS total_open
       `);
