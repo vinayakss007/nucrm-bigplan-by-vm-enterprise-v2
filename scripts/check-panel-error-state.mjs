@@ -17,8 +17,10 @@
  * affordance (`InlineErrorState`, an `role="alert"` block, or `ErrorFallback`).
  * A page that binds `error` and never shows it is the hole a proxy cannot close
  * — that half is carried by the render tests (`panel-fetch-error-not-empty-2823`,
- * `portal-page-error-not-empty-2825`, `panel-error-state-2829`), which fail the
- * same sentence against a stubbed 500.
+ * `portal-page-error-not-empty-2825`, `panel-page-error-not-empty-2829`), which
+ * fail the same sentence against a stubbed 500, and by
+ * `panel-error-state-guard-2829`, which plants each shape in this screen against
+ * sources so a regex that stops matching cannot pass silently.
  *
  * Ratcheting, the way `guard:filesize` and `schema-drift-allowlist` do it: the
  * pages still outstanding are listed in `scripts/panel-error-state-baseline.json`,
@@ -34,16 +36,25 @@ const ROOT = process.cwd();
 const BASELINE_PATH = 'scripts/panel-error-state-baseline.json';
 
 /** The hook call whose result the page reads. */
-const QUERY_RE = /const\s*\{([^}]*)\}\s*=\s*(?:useApiQuery|useQuery)\b/g;
+export const QUERY_RE = /const\s*\{([^}]*)\}\s*=\s*(?:useApiQuery|useQuery)\b/g;
 /** A sentence that asserts the tenant has none of a thing. */
-const EMPTY_SENTENCE =
+export const EMPTY_SENTENCE =
   /(?:\bNo\s+[A-Za-z][\w /-]{1,40}?\b(?:yet|found|here|configured|recorded|logged|sent|match|match your search)\b|\bis empty\b|\bNothing here\b|\bTrash is empty\b)/i;
 /** The branch that decides to say it. */
-const EMPTY_TEST = /(?:\.length\s*===\s*0|\.length\s*<=\s*0|!\w+(?:\.\w+)*\.length\b|!\w+\.data\?\.length\b)/;
+export const EMPTY_TEST = /(?:\.length\s*===\s*0|\.length\s*<=\s*0|!\w+(?:\.\w+)*\.length\b|!\w+\.data\?\.length\b)/;
 /** Anything that tells the user the read failed instead. */
-const FAILURE_AFFORDANCE = /InlineErrorState|ErrorFallback|role=["']alert["']/;
+export const FAILURE_AFFORDANCE = /InlineErrorState|ErrorFallback|role=["']alert["']/;
 
-function* walk(dir) {
+/** JSX text: the words follow an opening tag on the same line… */
+const AFTER_TAG = />\s*$/;
+/** …or are passed in as the copy prop of an empty-state component. */
+const AFTER_PROP = /\b(?:title|description|label|message)=["'`{]\s*$/;
+/** …or a quoted string arm of a ternary inside a JSX expression. */
+const AFTER_QUOTED = /[?:(|&{=,>]\s*["'`]\s*$/;
+/** A failure the page already surfaces through some other channel. */
+const HANDLED_INLINE = /toast(?:\.error)?\(|setError\(/;
+
+export function* walk(dir) {
   for (const name of readdirSync(dir)) {
     const p = join(dir, name);
     if (!statSync(p).isDirectory()) {
@@ -54,19 +65,34 @@ function* walk(dir) {
   }
 }
 
-/** True when some empty-array branch within `window` lines renders the sentence. */
-function rendersFalseEmpty(lines) {
+/**
+ * The first "there are none" sentence that sits under an emptiness test. Looking
+ * backwards rather than forwards is what keeps the screen honest: the branch is
+ * the `{!rows.length ? (` ABOVE the words, and copy that lives in a comment, a
+ * toast, or a `setError()` the page renders elsewhere is not a panel asserting
+ * that the tenant has none.
+ */
+export function rendersFalseEmpty(lines) {
   for (let i = 0; i < lines.length; i++) {
-    if (!EMPTY_TEST.test(lines[i])) continue;
-    const window = lines.slice(i, i + 8).join(' ');
-    if (EMPTY_SENTENCE.test(window)) return { line: i + 1, text: firstSentence(window) };
+    const line = lines[i];
+    if (HANDLED_INLINE.test(line)) continue;
+    const m = EMPTY_SENTENCE.exec(line);
+    if (!m) continue;
+    const before = line.slice(0, m.index);
+    // The words are rendered only if they follow an opening tag or a copy prop —
+    // on this line, or as the text node directly under one on the line above.
+    const above = lines.slice(0, i).reverse().find((l) => l.trim() !== '');
+    const rendered =
+      AFTER_TAG.test(before) ||
+      AFTER_PROP.test(before) ||
+      AFTER_QUOTED.test(before) ||
+      (before.trim() === '' && />\s*$/.test(above ?? ''));
+    if (!rendered) continue;
+    const back = lines.slice(Math.max(0, i - 10), i + 1).join(' ');
+    if (!EMPTY_TEST.test(back)) continue;
+    return { line: i + 1, text: m[0].replace(/\s+/g, ' ').slice(0, 48) };
   }
   return null;
-}
-
-function firstSentence(chunk) {
-  const m = chunk.match(EMPTY_SENTENCE);
-  return m ? m[0].replace(/\s+/g, ' ').slice(0, 48) : '';
 }
 
 /**

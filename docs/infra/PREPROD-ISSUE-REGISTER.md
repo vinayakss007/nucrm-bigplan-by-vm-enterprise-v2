@@ -3599,6 +3599,11 @@ database`, and exactly two FAILs:
   alias is appended at `package.json:156`, outside the `:47-69` block, next to **#2596**'s `guard:env-coverage`, which
   `ci.yml` likewise calls as a bare `node` command at `:438`. The counts above predate it: one more `guard:*` script
   exists, and one more is invoked.)
+  (A seventh, **#2829**'s `guard:panel-error-state` on 2026-10-18, reads the source tree the same way and is wired the
+  same way — its `npm run` joins that same step's `run:` line at `ci.yml:81`, which is why the step now names three
+  guards instead of two, and its alias is appended below the sixth at `package.json:157`. It carries a ratcheting
+  allowlist of its own, `scripts/panel-error-state-baseline.json`, which is data rather than a coordinate and so is
+  not cited here. The counts above predate it too: one more `guard:*` script exists, and one more is invoked.)
   (The 20/2/1 split is itself worth recording. A wiring audit that greps for `npm run guard:` reports
   **20 of 23** and mis-files `audit` and `semgrep` as unrun, because those two are called as direct `node`
   invocations rather than through their aliases. This entry said exactly that until its own PR's CI run

@@ -1,0 +1,223 @@
+/*!
+ * NuCRM Enterprise — Property of abetworks.in
+ * Copyright (c) 2026 abetworks.in. All Rights Reserved.
+ * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
+ */
+/**
+ * The #2829 guard tested against sources, not just against the tree.
+ *
+ * A screen like this fails in one direction only: a regex that quietly stops
+ * matching prints "OK" over the panel it exists to catch. So each offender shape
+ * is planted and must be named, and each honest shape — including the ones a
+ * sloppier screen would flag and the maintainers would then delete — must not
+ * be. The last block holds the baseline to account: an entry that has been fixed
+ * is dead weight that hides the next offender.
+ */
+import { describe, it, expect } from 'vitest';
+import { readFileSync, existsSync } from 'node:fs';
+import {
+  inspect,
+  scan,
+  loadBaseline,
+  rendersFalseEmpty,
+  walk,
+  QUERY_RE,
+  EMPTY_SENTENCE,
+  EMPTY_TEST,
+  FAILURE_AFFORDANCE,
+} from '../../scripts/check-panel-error-state.mjs';
+
+const page = (body: string) => `export default function P() {
+  const { data, isLoading } = useApiQuery({ queryKey: ['x'], queryFn: fetchX });
+  const rows = data?.data ?? [];
+  return (
+    <div>
+      {!rows.length ? (
+        ${body}
+      ) : <Table rows={rows} />}
+    </div>
+  );
+}`;
+
+describe('panel-error-state guard (#2829) — offenders', () => {
+  it('names the shape the issue describes: an empty-state component under a length test', () => {
+    const res = inspect(
+      'app/tenant/settings/sessions/page.tsx',
+      page('<SettingsEmptyState icon={Monitor} title="No sessions found" description="Active sessions will appear here" />'),
+    );
+    expect(res.offends).toBe(true);
+    expect(res.why).toContain('No sessions found');
+    expect(res.why, 'pointed at the wrong line').toContain(':7');
+  });
+
+  it('names bare JSX text, a ternary string arm, and the "is empty" phrasing', () => {
+    const cases = [
+      '<p className="muted">No API keys yet</p>',
+      '{calls.length === 0 ? <p>No calls logged yet</p> : <List />}',
+      '<p>Trash is empty</p>',
+      '<SettingsEmptyState title="Nothing here" description="No backups configured yet" />',
+    ];
+    for (const body of cases) {
+      const res = inspect('app/tenant/x/page.tsx', page(body));
+      expect(res.offends, body).toBe(true);
+    }
+  });
+
+  it('catches a page that binds error but never renders anything for it', () => {
+    // The half the proxy cannot close by binding alone: the failure is destructured
+    // and dropped on the floor.
+    const src = `function P() {
+  const { data, isLoading, error } = useApiQuery({ queryKey: ['x'], queryFn: fetchX });
+  const rows = data?.data ?? [];
+  return <div>{!rows.length ? <p>No sessions found</p> : <Table rows={rows} />}</div>;
+}`;
+    expect(inspect('app/tenant/y/page.tsx', src).offends).toBe(true);
+  });
+
+  it('catches the hand-written queryFn form too', () => {
+    const src = `function P() {
+  const { data, isLoading } = useQuery({ queryKey: ['k'], queryFn: async () => (await fetch('/api/k')).json() });
+  const rows = data ?? [];
+  return <div>{!rows.length ? <p>No keys configured</p> : <Table rows={rows} />}</div>;
+}`;
+    expect(inspect('app/tenant/z/page.tsx', src).offends).toBe(true);
+  });
+});
+
+describe('panel-error-state guard (#2829) — honest shapes it must not flag', () => {
+  const clean = [
+    // what the fix looks like: error bound, shared failure state rendered
+    () =>
+      page(`<sessionsError ? (
+        <InlineErrorState message="Could not load your active sessions." onRetry={() => void refetch()} />
+      ) : (
+        <SettingsEmptyState title="No sessions found" description="Active sessions will appear here" />
+      )`).replace('const { data, isLoading }', 'const { data, isLoading, error: sessionsError, refetch }'),
+    // ...or a hand-rolled alert block, which is what the portal pages use
+    () => `function P() {
+  const { data, isLoading, error } = useApiQuery({ queryKey: ['trash'], queryFn: fetchTrash });
+  const items = data?.data ?? [];
+  if (isLoading) return <Spinner />;
+  return (
+    <div>
+      {error && !items.length ? (
+        <div role="alert"><p>Could not load the trash. This is a failed request, not an empty one.</p></div>
+      ) : !items.length ? (
+        <p>Trash is empty</p>
+      ) : <Table rows={items} />}
+    </div>
+  );
+}`,
+    // copy in a comment is not a panel asserting anything
+    () => `function P() {
+  const { data } = useApiQuery({ queryKey: ['x'], queryFn: fetchX });
+  const rows = data?.data ?? [];
+  // if there are no rows we used to print "No sessions found" here
+  return <div>{!rows.length ? <Spinner /> : <Table rows={rows} />}</div>;
+}`,
+    // a failure the page routes to a toast, with no empty sentence rendered at all
+    () => `function P() {
+  const { data } = useApiQuery({ queryKey: ['x'], queryFn: fetchX });
+  const rows = data?.data ?? [];
+  if (!rows.length) toast.error('No sessions found');
+  return <div><Table rows={rows} /></div>;
+}`,
+    // no query hook: a purely local emptiness test cannot be a failed read
+    () => `function P({ items }) {
+  return <div>{!items.length ? <p>No drafts found</p> : <Table rows={items} />}</div>;
+}`,
+    // a mutation's onError, which already has a channel
+    () => `function P() {
+  const m = useMutation({ mutationFn: save, onError: () => setError('No rows found') });
+  return <div>{!rows.length ? <p>No sessions found</p> : <Table rows={rows} />}</div>;
+}`,
+  ];
+  for (const [i, build] of clean.entries()) {
+    it(`clean #${i + 1}: ${build().match(EMPTY_SENTENCE)?.[0] ?? ''}`, () => {
+      expect(inspect('app/tenant/clean/page.tsx', build()).offends).toBe(false);
+    });
+  }
+
+  it('does not treat a sentence that is not rendered as copy', () => {
+    // The words are a variable the page never prints.
+    const src = `const LABEL = 'No sessions found';
+function P() {
+  const { data } = useApiQuery({ queryKey: ['x'], queryFn: fetchX });
+  const rows = data?.data ?? [];
+  return <div>{!rows.length ? <Spinner /> : <Table rows={rows} />}</div>;
+}`;
+    expect(inspect('app/tenant/w/page.tsx', src).offends).toBe(false);
+  });
+});
+
+describe('the guard against the real tree (#2829)', () => {
+  it('is not vacuous: the walker and each regex work', () => {
+    const files = [...walk(`${process.cwd()}/app`)].filter((f) => f.endsWith('.tsx'));
+    expect(files.length, 'the walk found no .tsx — a screen over nothing prints OK').toBeGreaterThan(200);
+    expect(QUERY_RE.test("const { data, isLoading } = useApiQuery({")).toBe(true);
+    expect(EMPTY_SENTENCE.test('No sessions found')).toBe(true);
+    expect(EMPTY_TEST.test('{!rows.length ? (')).toBe(true);
+    expect(FAILURE_AFFORDANCE.test('<InlineErrorState message="x" />')).toBe(true);
+    expect(rendersFalseEmpty(['  const rows = data?.data ?? [];', '  {!rows.length ? (', '    <p>No sessions found</p>']).line)
+      .toBe(3);
+  });
+
+  it('reads the copy under the branch above it, not the line it happens to sit on', () => {
+    // Looking forwards from the test would miss this: the sentence is three lines
+    // below the `{!rows.length ? (` that decides it.
+    const lines = ['{!rows.length ? (', '  <Card>', '    <Icon />', '    <p>No backups yet</p>'];
+    expect(rendersFalseEmpty(lines)).toMatchObject({ line: 4, text: 'No backups yet' });
+  });
+
+  it('passes on this tree, which is the point of the fix', () => {
+    const { novel, stale } = scan(process.cwd(), { baseline: loadBaseline(process.cwd()) });
+    expect(novel.map((o) => o.why)).toEqual([]);
+    expect(stale).toEqual([]);
+  });
+
+  it('the baseline is a real list: every entry exists, names an issue, and still offends', () => {
+    const baseline = loadBaseline(process.cwd());
+    expect(baseline.size, 'an empty baseline means this test proves nothing').toBeGreaterThan(10);
+    const offending = new Map(scan(process.cwd()).offenders.map((o) => [o.why.split(':')[0], o.why]));
+    for (const [rel, reason] of baseline) {
+      expect(existsSync(`${process.cwd()}/${rel}`), `${rel} is gone — drop the entry`).toBe(true);
+      expect(reason, `${rel} needs the issue that carries it`).toMatch(/^#\d{4}:/);
+      expect(offending.get(rel), `${rel} is allowlisted but no longer prints an empty sentence over a failed read`).toBeTruthy();
+    }
+  });
+
+  it('the files this slice fixed are no longer in the baseline', () => {
+    const baseline = loadBaseline(process.cwd());
+    for (const rel of [
+      'app/tenant/settings/sessions/page.tsx',
+      'app/tenant/settings/api-keys/page.tsx',
+      'app/tenant/settings/webhooks/dlq/page.tsx',
+      'app/tenant/trash/page.tsx',
+      'app/tenant/settings/backup/page.tsx',
+      'app/superadmin/announcements/page.tsx',
+      'app/superadmin/rate-limits/page.tsx',
+      'app/superadmin/usage/page.tsx',
+    ]) {
+      expect(baseline.has(rel), `${rel} was fixed in this PR and must not stay listed`).toBe(false);
+    }
+    for (const rel of [
+      'app/tenant/settings/sessions/page.tsx',
+      'app/tenant/settings/api-keys/page.tsx',
+      'app/tenant/settings/webhooks/dlq/page.tsx',
+      'app/tenant/trash/page.tsx',
+      'app/tenant/settings/backup/page.tsx',
+      'app/superadmin/announcements/page.tsx',
+      'app/superadmin/rate-limits/page.tsx',
+      'app/superadmin/usage/page.tsx',
+    ]) {
+      expect(inspect(rel, readFileSync(`${process.cwd()}/${rel}`, 'utf8')).offends, `${rel} still offends`).toBe(false);
+    }
+  });
+
+  it('wiring: the guard is reachable from npm and from CI', () => {
+    const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
+    expect(pkg.scripts['guard:panel-error-state']).toBe('node scripts/check-panel-error-state.mjs');
+    const ci = readFileSync('.github/workflows/ci.yml', 'utf8');
+    expect(ci).toContain('npm run guard:panel-error-state');
+  });
+});
