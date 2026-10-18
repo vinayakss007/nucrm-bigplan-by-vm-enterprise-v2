@@ -94,6 +94,15 @@ export default function SuperAdminTokenControl() {
     keysQuery.refetch();
   };
 
+  /* #2841: three of this page's four reads had no failure branch, so a refused
+     or dead read reported ₹0 spent, no budgets, no keys and — worst — a green
+     checkmark saying "everything is within budget". An unread array is not a
+     zero. Where the page asserts a number it now shows '—', and where it would
+     show an empty list it names the request that failed. */
+  const budgetsUnread = Boolean(budgetsQuery.error);
+  const alertsUnread = Boolean(alertsQuery.error);
+  const keysUnread = Boolean(keysQuery.error);
+
   const formatCurrency = (cents: number) => {
     const rupees = cents / 100;
     return `₹${rupees.toLocaleString('en-IN')}`;
@@ -128,29 +137,29 @@ export default function SuperAdminTokenControl() {
         <SummaryCard
           icon={<Coins className="w-5 h-5" />}
           label="Total Spent"
-          value={formatCurrency(totalSpent)}
-          subtext={`of ${formatCurrency(totalBudget)} budget`}
+          value={budgetsUnread ? '—' : formatCurrency(totalSpent)}
+          subtext={budgetsUnread ? 'spend not read' : `of ${formatCurrency(totalBudget)} budget`}
           color={totalSpent / totalBudget > 0.8 ? 'red' : 'blue'}
         />
         <SummaryCard
           icon={<TrendingUp className="w-5 h-5" />}
           label="OpenAI"
-          value={formatCurrency(budgets.find(b => b.service === 'openai')?.current_month_cents || 0)}
-          subtext={`${budgets.find(b => b.service === 'openai')?.monthly_budget_cents ? formatCurrency(budgets.find(b => b.service === 'openai')?.monthly_budget_cents || 0) : 'No budget'}`}
+          value={budgetsUnread ? '—' : formatCurrency(budgets.find(b => b.service === 'openai')?.current_month_cents || 0)}
+          subtext={budgetsUnread ? 'not read' : `${budgets.find(b => b.service === 'openai')?.monthly_budget_cents ? formatCurrency(budgets.find(b => b.service === 'openai')?.monthly_budget_cents || 0) : 'No budget'}`}
           color="purple"
         />
         <SummaryCard
           icon={<Zap className="w-5 h-5" />}
           label="WhatsApp"
-          value={formatCurrency(budgets.find(b => b.service === 'whatsapp')?.current_month_cents || 0)}
-          subtext={`of ${formatCurrency(budgets.find(b => b.service === 'whatsapp')?.monthly_budget_cents || 0)}`}
+          value={budgetsUnread ? '—' : formatCurrency(budgets.find(b => b.service === 'whatsapp')?.current_month_cents || 0)}
+          subtext={budgetsUnread ? 'not read' : `of ${formatCurrency(budgets.find(b => b.service === 'whatsapp')?.monthly_budget_cents || 0)}`}
           color="green"
         />
         <SummaryCard
           icon={<AlertTriangle className="w-5 h-5" />}
           label="Active Alerts"
-          value={String(alerts.filter(a => !a.acknowledged).length)}
-          subtext={`${alerts.length} total`}
+          value={alertsUnread ? '—' : String(alerts.filter(a => !a.acknowledged).length)}
+          subtext={alertsUnread ? 'alerts not read' : `${alerts.length} total`}
           color="amber"
         />
       </div>
@@ -184,6 +193,10 @@ export default function SuperAdminTokenControl() {
       {/* ── Budgets Tab ─────────────────────────────────────────────────── */}
       {!loading && activeTab === 'budgets' && (
         <div className="space-y-4">
+          {budgetsUnread && (
+            <ReadFailure what="token budgets" error={budgetsQuery.error} emptyMeans="no service has a budget"
+              onRetry={() => void budgetsQuery.refetch()} />
+          )}
           {budgets.map(budget => {
             const monthlyBudget = budget.monthly_budget_cents ?? 0;
             const currentMonth = budget.current_month_cents ?? 0;
@@ -356,6 +369,10 @@ export default function SuperAdminTokenControl() {
                     </td>
                   </tr>
                 ))}
+                {keysUnread && (
+                  <tr><td colSpan={6} className="p-0"><ReadFailure what="API keys" error={keysQuery.error}
+                    emptyMeans="no key is live" onRetry={() => void keysQuery.refetch()} /></td></tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -368,7 +385,7 @@ export default function SuperAdminTokenControl() {
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-white">Usage Alerts</h2>
             <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-400">{alerts.filter(a => !a.acknowledged).length} unacknowledged</span>
+              <span className="text-sm text-gray-400">{alertsUnread ? 'alerts not read' : `${alerts.filter(a => !a.acknowledged).length} unacknowledged`}</span>
             </div>
           </div>
 
@@ -405,14 +422,35 @@ export default function SuperAdminTokenControl() {
             ))}
           </div>
 
-          {alerts.length === 0 && (
+          {alerts.length === 0 && (alertsUnread ? (
+            <ReadFailure what="usage alerts" error={alertsQuery.error}
+              emptyMeans="no budget has been exceeded" onRetry={() => void alertsQuery.refetch()} />
+          ) : (
             <div className="text-center py-12 bg-gray-900 rounded-xl border border-gray-800">
               <CheckCircle className="w-12 h-12 text-green-600 mx-auto mb-3" />
               <p className="text-gray-400">No alerts — everything is within budget</p>
             </div>
-          )}
+          ))}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * #2841 — the shape #2823 introduced for the Top Spenders tab, reused for the
+ * three reads on this page that had no failure branch at all.
+ */
+function ReadFailure({ what, error, emptyMeans, onRetry }: {
+  what: string; error: Error | null; emptyMeans: string; onRetry: () => void;
+}) {
+  return (
+    <div role="alert" className="m-4 rounded-lg border border-red-800 bg-red-900/20 p-4 text-sm text-red-300 flex items-start justify-between gap-3">
+      <span>
+        Failed to load {what}: {error?.message}. An empty list would mean {emptyMeans};
+        this message means the request did not succeed.
+      </span>
+      <button onClick={onRetry} className="underline shrink-0">Try again</button>
     </div>
   );
 }

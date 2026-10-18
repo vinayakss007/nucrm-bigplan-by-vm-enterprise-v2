@@ -537,7 +537,7 @@ export default function SelectiveRestorePage() {
             {backups.length === 0 ? (
               <div className="text-center py-12 bg-gray-900 rounded-xl border border-gray-800">
                 <Database className="w-12 h-12 text-gray-600 mx-auto mb-3" />
-                <p className="text-gray-400">No backups uploaded yet</p>
+                <p className="text-gray-400">{backupsQuery.error ? <span role="alert" className="text-red-300">Failed to load the backup list: {backupsQuery.error.message}. An empty list would mean nothing has been uploaded; this message means the request did not succeed. <button onClick={() => void backupsQuery.refetch()} className="underline">Try again</button></span> : 'No backups uploaded yet'}</p>
               </div>
             ) : (
               <div className="grid gap-3">

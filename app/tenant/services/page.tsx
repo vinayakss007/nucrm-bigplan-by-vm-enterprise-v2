@@ -86,13 +86,13 @@ export default function ServicesPage() {
   );
   const services: Service[] = servicesData?.services ?? [];
 
-  const { data: contactsData } = useApiQuery<{ data?: Contact[] }>(
+  const { data: contactsData, error: contactsError } = useApiQuery<{ data?: Contact[] }>(
     CONTACTS_QUERY,
     '/api/tenant/contacts?limit=500',
   );
   const contacts: Contact[] = contactsData?.data ?? [];
 
-  const { data: companiesData } = useApiQuery<{ data?: Company[] }>(
+  const { data: companiesData, error: companiesError } = useApiQuery<{ data?: Company[] }>(
     COMPANIES_QUERY,
     '/api/tenant/companies?limit=500',
   );
@@ -389,7 +389,7 @@ export default function ServicesPage() {
             {servicesWithContacts.length === 0 ? (
               <div className="p-8 text-center text-muted-foreground">
                 <Users className="w-12 h-12 mx-auto mb-4 opacity-30" />
-                <p className="text-sm">No contacts linked to services yet</p>
+                <p className="text-sm">{servicesError ? <span role="alert" className="text-red-600 dark:text-red-400">Failed to load services: {servicesError.message}. "No contacts linked to services yet" would mean none are; this message means the request did not succeed. <button onClick={reloadServices} className="underline">Try again</button></span> : 'No contacts linked to services yet'}</p>
               </div>
             ) : (
               <div className="divide-y divide-border">
@@ -511,7 +511,7 @@ export default function ServicesPage() {
                   <div className="flex gap-2">
                     <select value={form.contactId} onChange={(e) => setForm({ ...form, contactId: e.target.value })}
                       className="flex-1 px-3 py-2 border border-border rounded-lg bg-transparent">
-                      <option value="">No contact</option>
+                      <option value="">{contactsError ? `Contacts could not be loaded (${contactsError.message})` : 'No contact'}</option>
                       {contacts.map(c => (
                         <option key={c.id} value={c.id}>{c.firstName} {c.lastName}</option>
                       ))}
@@ -525,7 +525,7 @@ export default function ServicesPage() {
                   <label className="block text-sm font-medium mb-1">Link to Company</label>
                   <select value={form.companyId} onChange={(e) => setForm({ ...form, companyId: e.target.value })}
                     className="w-full px-3 py-2 border border-border rounded-lg bg-transparent">
-                    <option value="">No company</option>
+                    <option value="">{companiesError ? `Companies could not be loaded (${companiesError.message})` : 'No company'}</option>
                     {companies.map(c => (
                       <option key={c.id} value={c.id}>{c.name}</option>
                     ))}
