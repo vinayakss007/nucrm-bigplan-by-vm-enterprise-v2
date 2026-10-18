@@ -7,44 +7,68 @@ import { apiError } from '@/lib/api-error';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
-import { requireAuth, requirePerm } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm, type AuthContext } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { sql } from 'drizzle-orm';
+import { sql, type SQL } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { ownerScopeAlias, ownerScopeSql } from '@/lib/api/owner-scope';
+import { escapeLike } from '@/lib/api/sanitize-like';
 import { logError } from '@/lib/errors-server';
 import { parsePageLimit } from '@/lib/api/query-params';
 
-const ENTITY_CONFIG: Record<string, { label: string; searchFields: string[]; sortFields: string[]; defaultSort: string }> = {
+const ENTITY_CONFIG: Record<string, {
+  label: string;
+  searchFields: string[];
+  sortFields: string[];
+  defaultSort: string;
+  alias: string;
+  viewAll: string | null;
+}> = {
   contacts: {
     label: 'Contacts',
     searchFields: ['first_name', 'last_name', 'email', 'phone', 'lead_status', 'lead_source'],
     sortFields: ['created_at', 'updated_at', 'first_name', 'last_name', 'email'],
     defaultSort: 'created_at',
+    alias: 'c',
+    viewAll: 'contacts.view_all',
   },
   leads: {
     label: 'Leads',
     searchFields: ['first_name', 'last_name', 'email', 'phone', 'lead_status'],
     sortFields: ['created_at', 'first_name', 'last_name', 'email'],
     defaultSort: 'created_at',
+    alias: 'l',
+    viewAll: 'leads.view_all',
   },
   deals: {
     label: 'Deals',
     searchFields: ['title'],
     sortFields: ['created_at', 'updated_at', 'title', 'amount'],
     defaultSort: 'created_at',
+    alias: 'd',
+    viewAll: 'deals.view_all',
   },
+  // #2704 — `companies.view_all` is defined (lib/permissions/definitions.ts:43)
+  // and enforced nowhere: neither companies/route.ts nor companies/[id]/route.ts
+  // references it. Narrowing only this tool would invent an owner rule the rest of
+  // the entity does not have, so companies stay tenant-scoped until that decision
+  // is made (#2597).
   companies: {
     label: 'Companies',
     searchFields: ['name', 'industry', 'website', 'phone'],
     sortFields: ['created_at', 'updated_at', 'name'],
     defaultSort: 'created_at',
+    alias: 'co',
+    viewAll: null,
   },
   tasks: {
     label: 'Tasks',
     searchFields: ['title', 'description'],
     sortFields: ['created_at', 'updated_at', 'title', 'due_date'],
     defaultSort: 'created_at',
+    alias: 't',
+    viewAll: 'tasks.view_all',
   },
 };
 
@@ -72,24 +96,38 @@ export const GET = withApiRoute(async (req: NextRequest) => {
     const buildConditions = (tableAlias: string) => {
       const conds = [sql`${sql.identifier(tableAlias)}.tenant_id = ${ctx.tenantId}`];
       conds.push(sql`${sql.identifier(tableAlias)}.deleted_at IS NULL`);
+      // #2704 — the owner narrowing goes here, in the one place both the count
+      // query and all five data branches read from, because every entity this
+      // tool serves answers 404 on its own record path unless the row is
+      // `assigned_to` or `created_by` the caller (#2671, #2673, #2674, #2692).
+      // Tenant alone was a tenant-wide CRUD panel for a `sales_rep`.
+      const mine = config.viewAll
+        ? ownerScopeAlias(ctx, config.viewAll, tableAlias)
+        : undefined;
+      if (mine) conds.push(mine);
       if (q) {
-        const qPattern = `%${q}%`;
+        // #2751 — the pattern is a bound parameter, so Postgres still reads `%`
+        // and `_` inside it as wildcards: `q=%` matched every non-null value of
+        // every search field and the box looked like it filtered nothing. The
+        // admin twin of this panel already escapes
+        // (`app/api/superadmin/data-explorer/route.ts:224`).
+        const qPattern = `%${escapeLike(q)}%`;
         const searchConds = config.searchFields.map(f =>
           sql`${sql.identifier(tableAlias)}.${sql.identifier(f)} ILIKE ${qPattern}`
         );
         conds.push(sql`(${sql.join(searchConds, sql` OR `)})`);
       }
       if (field && fieldValue && config.searchFields.includes(field)) {
-        conds.push(sql`${sql.identifier(tableAlias)}.${sql.identifier(field)} ILIKE ${`%${fieldValue}%`}`);
+        conds.push(sql`${sql.identifier(tableAlias)}.${sql.identifier(field)} ILIKE ${`%${escapeLike(fieldValue)}%`}`);
       }
       return conds;
     };
 
-    const where = sql`WHERE ${sql.join(buildConditions(type === 'deals' ? 'd' : type === 'companies' ? 'co' : type === 'tasks' ? 't' : type === 'leads' ? 'l' : 'c'), sql` AND `)}`;
+    const where = sql`WHERE ${sql.join(buildConditions(config.alias), sql` AND `)}`;
 
     const orderSql = order === 'ASC' ? sql`ASC` : sql`DESC`;
     let dataRes;
-    const countQuery = sql`SELECT count(*) FROM ${sql.identifier(type === 'deals' ? 'deals' : type === 'companies' ? 'companies' : type === 'tasks' ? 'tasks' : type === 'leads' ? 'leads' : 'contacts')} ${type === 'deals' ? sql`d` : type === 'companies' ? sql`co` : type === 'tasks' ? sql`t` : type === 'leads' ? sql`l` : sql`c`} ${where}`;
+    const countQuery = sql`SELECT count(*) FROM ${sql.identifier(type)} ${sql.identifier(config.alias)} ${where}`;
     const totalRes = await db.execute(countQuery);
     const totalRows = parseInt(((totalRes.rows[0] as Record<string, unknown>)?.count as string) || '0', 10);
 
@@ -135,7 +173,9 @@ export const GET = withApiRoute(async (req: NextRequest) => {
         dataRes = await db.execute(sql`
           SELECT co.id, co.name, co.industry, co.website, co.phone,
                  co.created_at, co.updated_at,
-                 (SELECT count(*) FROM contacts WHERE company_id = co.id AND deleted_at IS NULL) as contact_count
+                 (SELECT count(*) FROM contacts cc
+                    WHERE cc.company_id = co.id AND cc.deleted_at IS NULL
+                      AND cc.tenant_id = ${ctx.tenantId}) as contact_count
           FROM companies co
           ${where}
           ORDER BY ${sql.identifier('co')}.${sql.identifier(safeSort)} ${orderSql}
@@ -173,6 +213,19 @@ export const GET = withApiRoute(async (req: NextRequest) => {
     return apiError(err);
   }
 });
+
+/**
+ * The row rule for a verb that addresses a single row by id (#2704). PUT and
+ * DELETE are gated on `${table}.edit` / `${table}.delete`, which are capability
+ * checks: they say nothing about *which* rows. This is the predicate the same
+ * entity's record path uses, so `PUT /data-explorer` cannot edit what
+ * `PATCH /contacts/[id]` refuses. Companies carry `null` above and stay
+ * tenant-only, for the reason given there.
+ */
+function ownerSql(ctx: AuthContext, table: string): SQL {
+  const viewAll = ENTITY_CONFIG[table]?.viewAll;
+  return ownerScopeSql(viewAll ? ownerScopeAlias(ctx, viewAll, table) : undefined);
+}
 
 // Accepted as text and handed to Postgres for the `::timestamptz` cast, which
 // knows how to read its own output format (including the microsecond digits).
@@ -264,7 +317,7 @@ export const PUT = withApiRoute(async (req: NextRequest) => {
 
     const result = await db.execute(sql`
       UPDATE ${sql.identifier(table)} SET ${sql.identifier(safeField)} = ${value}, updated_at = now()
-      WHERE id = ${id} AND tenant_id = ${ctx.tenantId}${versionCond}
+      WHERE id = ${id} AND tenant_id = ${ctx.tenantId}${ownerSql(ctx, table)}${versionCond}
       RETURNING id, ${sql.identifier(safeField)}
     `);
 
@@ -273,7 +326,7 @@ export const PUT = withApiRoute(async (req: NextRequest) => {
       // rather than not existing — distinguish so the client can refresh.
       if (expectedUpdatedAt) {
         const [exists] = (await db.execute(sql`
-          SELECT 1 FROM ${sql.identifier(table)} WHERE id = ${id} AND tenant_id = ${ctx.tenantId} LIMIT 1
+          SELECT 1 FROM ${sql.identifier(table)} WHERE id = ${id} AND tenant_id = ${ctx.tenantId}${ownerSql(ctx, table)} LIMIT 1
         `)).rows;
         if (exists) {
           return NextResponse.json(
@@ -315,7 +368,7 @@ export const DELETE = withApiRoute(async (req: NextRequest) => {
     if (deleteDeny) return deleteDeny;
 
     const result = await db.execute(sql`
-      UPDATE ${sql.identifier(table)} SET deleted_at = NOW() WHERE id = ${id} AND tenant_id = ${ctx.tenantId} RETURNING id
+      UPDATE ${sql.identifier(table)} SET deleted_at = NOW() WHERE id = ${id} AND tenant_id = ${ctx.tenantId}${ownerSql(ctx, table)} RETURNING id
     `);
 
     if (result.rows.length === 0) {

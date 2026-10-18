@@ -6,17 +6,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
 import { logError } from '@/lib/errors-server';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm, can, type AuthContext } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { activities } from '@/drizzle/schema';
 import { users } from '@/drizzle/schema';
+import { companies, contacts, deals, supportTickets, tasks } from '@/drizzle/schema';
 import { eq, and, desc, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { uuidIdSchema } from '@/lib/validation/uuid';
+import { isEntityId } from '@/lib/id';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { parseLimitOffset } from '@/lib/api/query-params';
+import { ownerScope } from '@/lib/api/owner-scope';
 
 const createActivitySchema = z.object({
   type: z.string().min(1, 'type is required'),
@@ -27,37 +30,101 @@ const createActivitySchema = z.object({
   eventType: z.string().optional(),
 });
 
+/** The five records a feed request can name, and the rules they answer for. */
+type FeedTarget = {
+  param: string;
+  entityType: string;
+  table: typeof contacts | typeof deals | typeof tasks | typeof companies | typeof supportTickets;
+  /** The `<entity>.view_all` the entity's own routes enforce, or null where there is none. */
+  viewAll: string | null;
+  /** Set only on the two targets POST can name; null means the target is not postable. */
+  editPerm: string | null;
+};
+
+/**
+ * `activities` has no owner column of its own — it carries the polymorphic
+ * `entity_type`/`entity_id` pair plus four denormalised FKs (`activity.ts:16-26`),
+ * and this route's own writes populate only the pair. So the feed borrows the
+ * rule of whichever record a request names, which is exactly what makes the
+ * borrow sound: `?deal_id=` answers for a deal, so it answers with the deal's
+ * rule.
+ *
+ * `companies` and `tickets` carry `viewAll: null`. `companies.view_all` is defined
+ * (`lib/permissions/definitions.ts:43`) and enforced nowhere (#2597), and there is
+ * no `tickets.view_all` in the catalogue at all, so a timeline of either stays
+ * tenant-wide — the same stated gap #2699, #2704, #2712 and #2716 leave rather
+ * than inventing a rule.
+ *
+ * The order is the old if/else chain's precedence, unchanged.
+ */
+const FEED_TARGETS: FeedTarget[] = [
+  { param: 'contact_id', entityType: 'contact', table: contacts, viewAll: 'contacts.view_all', editPerm: 'contacts.edit' },
+  { param: 'deal_id', entityType: 'deal', table: deals, viewAll: 'deals.view_all', editPerm: 'deals.edit' },
+  { param: 'company_id', entityType: 'company', table: companies, viewAll: null, editPerm: null },
+  { param: 'task_id', entityType: 'task', table: tasks, viewAll: 'tasks.view_all', editPerm: null },
+  { param: 'ticket_id', entityType: 'ticket', table: supportTickets, viewAll: null, editPerm: null },
+];
+
+/** The rights that make a caller a reader of other people's records. */
+const FEED_VIEW_ALL = ['contacts.view_all', 'leads.view_all', 'deals.view_all', 'tasks.view_all', 'companies.view_all'];
+
+/**
+ * Can this caller name the record behind the timeline they are asking for?
+ *
+ * The gate is the entity's own: `contacts/[id]:82-87`, `deals/[id]:66-71` and
+ * `tasks/[id]:55-59` answer 404 for a `sales_rep`
+ * (`lib/permissions/definitions.ts:132-137`) reaching a row that is neither
+ * `assigned_to` nor `created_by` them, and this says the same thing. It
+ * deliberately does not ask a `*.view` permission — `contacts.view` and
+ * `tasks.view` are not in the catalogue (#2597), so asking them here would 403
+ * the one role whose timelines these components render.
+ */
+async function targetVisible(ctx: AuthContext, target: FeedTarget, entityId: string): Promise<boolean> {
+  const [hit] = await db
+    .select({ id: target.table.id })
+    .from(target.table)
+    .where(and(
+      eq(target.table.id, entityId),
+      eq(target.table.tenantId, ctx.tenantId),
+      target.viewAll ? ownerScope(ctx, target.viewAll, target.table) : undefined,
+    ))
+    .limit(1);
+  return hit !== undefined;
+}
+
 export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
 
     const { searchParams } = new URL(request.url);
-    const contactId = searchParams.get('contact_id');
-    const dealId = searchParams.get('deal_id');
-    const companyId = searchParams.get('company_id');
-    const taskId = searchParams.get('task_id');
-    const ticketId = searchParams.get('ticket_id');
     const eventType = searchParams.get('event_type');
     const { limit, offset } = parseLimitOffset(searchParams, { defaultLimit: 50, maxLimit: 200 });
 
     const conditions = [eq(activities.tenantId, ctx.tenantId)];
 
-    if (contactId) {
-      conditions.push(eq(activities.entityType, 'contact'));
-      conditions.push(eq(activities.entityId, contactId));
-    } else if (dealId) {
-      conditions.push(eq(activities.entityType, 'deal'));
-      conditions.push(eq(activities.entityId, dealId));
-    } else if (companyId) {
-      conditions.push(eq(activities.entityType, 'company'));
-      conditions.push(eq(activities.entityId, companyId));
-    } else if (taskId) {
-      conditions.push(eq(activities.entityType, 'task'));
-      conditions.push(eq(activities.entityId, taskId));
-    } else if (ticketId) {
-      conditions.push(eq(activities.entityType, 'ticket'));
-      conditions.push(eq(activities.entityId, ticketId));
+    // Naming a record is answered with that record's own rule, and a name that
+    // does not resolve is a 404 rather than an empty 200 — the empty 200 tells
+    // the caller the id is someone else's, which is what a timeline of a record
+    // they cannot open should not do.
+    const named = FEED_TARGETS.find((t) => searchParams.get(t.param));
+    const namedId = named ? searchParams.get(named.param) : null;
+    if (named && namedId) {
+      if (!isEntityId(namedId) || !(await targetVisible(ctx, named, namedId))) {
+        return NextResponse.json({ error: 'Record not found' }, { status: 404 });
+      }
+      conditions.push(eq(activities.entityType, named.entityType));
+      conditions.push(eq(activities.entityId, namedId));
+    } else if (!FEED_VIEW_ALL.some((perm) => can(ctx, perm))) {
+      // The unfiltered feed is the one question with no record to borrow a rule
+      // from, so it falls back to the actor: `activities` has no owner column,
+      // but every row states who did it, and `idx_activities_user`
+      // (`activity.ts:44`) already indexes tenant + actor + recency. A caller who
+      // holds none of the five `view_all` rights — `sales_rep` among them — reads
+      // their own trail; a manager or viewer, who holds them, reads the tenant's.
+      // Per-record history is not lost either way: `?deal_id=` above still returns
+      // every actor's entry on a record the caller can open.
+      conditions.push(eq(activities.userId, ctx.userId));
     }
 
     if (eventType) {
@@ -114,15 +181,29 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     if (parsed instanceof NextResponse) return parsed;
     const { type, description, deal_id, contact_id, metadata } = parsed.data;
 
-    const entity_type = deal_id ? 'deal' : (contact_id ? 'contact' : 'other');
-    const entity_id = deal_id || contact_id || ctx.userId;
+    // A timeline entry names a record, so it is written under that record's two
+    // rules: the edit right its route asks for, and the row rule that record
+    // answers 404 on. Before this, POST validated the shape of the body and
+    // stamped whatever `entity_id` arrived — no existence check (`entityId` has
+    // no FK, `activity.ts:17`), no owner rule, no permission — so any signed-in
+    // user could forge an entry onto any id in the tenant.
+    const targetType = deal_id ? 'deal' : contact_id ? 'contact' : null;
+    const entityId = deal_id || contact_id || null;
+    const target = targetType ? FEED_TARGETS.find((t) => t.entityType === targetType) : undefined;
+    if (target?.editPerm && entityId) {
+      const deny = requirePerm(ctx, target.editPerm);
+      if (deny) return deny;
+      if (!(await targetVisible(ctx, target, entityId))) {
+        return NextResponse.json({ error: 'Record not found' }, { status: 404 });
+      }
+    }
 
     const [newActivity] = await db.insert(activities)
       .values({
         tenantId: ctx.tenantId,
         userId: ctx.userId,
-        entityType: entity_type,
-        entityId: entity_id,
+        entityType: target?.entityType ?? 'other',
+        entityId: entityId ?? ctx.userId,
         eventType: type,
         description,
         metadata

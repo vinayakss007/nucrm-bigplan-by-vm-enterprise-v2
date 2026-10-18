@@ -14,6 +14,7 @@ import { apiError } from '@/lib/api-error';
 import { escapeLike } from '@/lib/api/sanitize-like';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, requirePerm, type AuthContext } from '@/lib/auth/middleware';
+import { ownerScope } from '@/lib/api/owner-scope';
 import { db } from '@/drizzle/db';
 import { deals, dealStages, pipelines, tenantMembers, segments, segmentMembers, tenants, plans } from '@/drizzle/schema';
 import { eq, and, inArray, sql, or, ilike, isNull } from 'drizzle-orm';
@@ -22,6 +23,7 @@ import { logError } from '@/lib/errors-server';
 import { readJsonBody } from '@/lib/api/validate';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { enforceFieldWrite } from '@/lib/rbac/enforce';
 
 const MAX_BULK = 500;
 
@@ -43,6 +45,9 @@ export const POST = withApiRoute(async (req: NextRequest) => {
 
     let deal_ids: string[] = body.deal_ids ?? [];
 
+    // #2671 — into every id set this route writes, ahead of the caller's filters
+    // (`and()` skips the undefined a `view_all` holder gets). See lib/api/owner-scope.ts.
+    const mine = ownerScope(ctx, 'deals.view_all', deals);
     if (selectAll) {
       const whereConditions = [
         eq(deals.tenantId, ctx.tenantId),
@@ -56,7 +61,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
           ilike(deals.title, `%${escapeLike(filters.q)}%`),
         )!);
       }
-      const matched = await db.select({ id: deals.id }).from(deals).where(and(...whereConditions));
+      const matched = await db.select({ id: deals.id }).from(deals).where(and(mine, ...whereConditions));
       deal_ids = matched.map(r => r.id);
       if (!deal_ids.length) return NextResponse.json({ error: 'No deals match the provided filters' }, { status: 404 });
       if (deal_ids.length > MAX_BULK) return NextResponse.json({ error: `Max ${MAX_BULK} deals per bulk operation (matched ${deal_ids.length})` }, { status: 400 });
@@ -75,7 +80,8 @@ export const POST = withApiRoute(async (req: NextRequest) => {
         and(
           inArray(deals.id, deal_ids),
           eq(deals.tenantId, ctx.tenantId),
-          sql`${deals.deletedAt} IS NULL`
+          sql`${deals.deletedAt} IS NULL`,
+          mine
         )
       );
 
@@ -87,6 +93,31 @@ export const POST = withApiRoute(async (req: NextRequest) => {
       return NextResponse.json({ error: 'No valid deals found' }, { status: 404 });
 
     let affected = 0;
+
+    // #2616 — assign/transfer/stage/close write real deals columns
+    // (assigned_to / stage_id) straight from payload keys with no
+    // enforceFieldWrite on the path, so a role with those fields hidden via
+    // field_permissions could still bulk-move or bulk-assign deals. Unlike
+    // PATCH, stripping the action's only payload value would leave the
+    // action meaningless, so reject the whole request (403) instead.
+    const BULK_WATCHED_FIELDS: Record<string, string[]> = {
+      assign: ['assigned_to'],
+      transfer: ['assigned_to'],
+      stage: ['stage_id'],
+      close: ['stage_id'],
+    };
+    const watched = BULK_WATCHED_FIELDS[action as string];
+    if (watched) {
+      const { stripped } = await enforceFieldWrite(
+        ctx, 'deals', Object.fromEntries(watched.map((f) => [f, true])),
+      );
+      if (stripped.length > 0) {
+        return NextResponse.json(
+          { error: `field_permissions restricts: ${stripped.join(', ')}` },
+          { status: 403 },
+        );
+      }
+    }
 
     switch (action) {
       case 'assign':
@@ -382,7 +413,8 @@ export const POST = withApiRoute(async (req: NextRequest) => {
             and(
               inArray(deals.id, deal_ids),
               eq(deals.tenantId, ctx.tenantId),
-              sql`${deals.deletedAt} IS NOT NULL`
+              sql`${deals.deletedAt} IS NOT NULL`,
+              mine
             )
           );
         const restorableIds = restorable.map(r => r.id);

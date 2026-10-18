@@ -16,6 +16,7 @@ import { fireWebhooks } from '@/lib/webhooks';
 import { logError } from '@/lib/errors-server';
 import { escapeLike } from '@/lib/api/sanitize-like';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { enforceFieldRead, enforceFieldWrite, attachStrippedFields } from '@/lib/rbac/enforce';
 
 export const GET = withApiRoute(async (request: NextRequest) => {
   try {
@@ -53,7 +54,13 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       count: sql<number>`count(*)::int`.as('contact_count')
     })
     .from(contacts)
-    .where(eq(contacts.tenantId, ctx.tenantId))
+    // #2667: the outer `filters` above exclude tombstoned *companies* and this
+    // aggregate excluded nothing, so a company's list row counted its deleted
+    // contacts while the same company's detail page (`companies/[id]/route.ts`,
+    // `contacts/route.ts`, `search/route.ts`, both `data-explorer` routes) did
+    // not. Trash three contacts on a ten-contact company and the two screens
+    // disagreed, with nothing in the UI to explain which number was right.
+    .where(and(eq(contacts.tenantId, ctx.tenantId), isNull(contacts.deletedAt)))
     .groupBy(contacts.companyId)
     .as('cnt');
     
@@ -85,7 +92,8 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     ]);
 
     // Map camelCase to snake_case for frontend compatibility
-    const data = rawData.map(c => ({
+    // #2597 A2: project the list through the role's read restrictions.
+    const data = await enforceFieldRead(ctx, 'companies', rawData.map(c => ({
       id: c.id,
       name: c.name,
       industry: c.industry,
@@ -98,7 +106,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       created_at: c.createdAt,
       updated_at: c.updatedAt,
       contact_count: c.contactCount,
-    }));
+    })));
 
     return NextResponse.json({ data, total: totalResult[0]?.count ?? 0, limit, offset });
  
@@ -120,7 +128,9 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     const limited = await checkRateLimit(request, { action: 'companies_create', max: 100, windowMinutes: 60 });
     if (limited) return limited;
 
-    const body = await readJsonBody(request);
+    const rawBody = await readJsonBody(request);
+    // #2597 A2: drop keys the role may not write (STRIP, not 403) before the column map.
+    const { body, stripped } = await enforceFieldWrite(ctx, 'companies', rawBody);
     const validated = validateBody(createCompanySchema, body);
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;
@@ -158,7 +168,9 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       fireWebhooks(ctx.tenantId, 'company.created', { id: row.id, name: v.name }).catch((err) => logError({ error: err, context: 'tenant/companies POST fireWebhooks company.created' }));
     }
 
-    return NextResponse.json({ data: row }, { status: 201 });
+    // #2597 A2: project the created company through the read restrictions.
+    const [created] = row ? await enforceFieldRead(ctx, 'companies', [row]) : [row];
+    return attachStrippedFields(NextResponse.json({ data: created }, { status: 201 }), stripped);
  
  
   } catch (err) {

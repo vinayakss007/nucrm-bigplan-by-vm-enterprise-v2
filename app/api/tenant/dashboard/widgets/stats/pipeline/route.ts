@@ -8,6 +8,8 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { deals, dealStages } from '@/drizzle/schema';
 import { eq, and, isNull, sql, notInArray } from 'drizzle-orm';
+import { notArchived } from '@/lib/api/deals-archive-filter';
+import { ownerScope, ownerCacheKey } from '@/lib/api/owner-scope';
 import { withCache } from '@/lib/dashboard/widget-cache';
 import { logError, tenantMeta } from '@/lib/errors-server';
 import { withApiRoute } from '@/lib/api/with-api-route';
@@ -18,6 +20,10 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
     const tid = ctx.tenantId;
+
+    // `ctx` is a `let`, so the narrowing the guard above establishes does not
+    // survive into the withCache closure (#2688).
+    const auth = ctx;
 
     return withCache(tid, 'stats-pipeline', 300, async () => {
       // Subquery to get terminal stage IDs (won/lost) scoped to this tenant
@@ -38,6 +44,9 @@ export const GET = withApiRoute(async (request: NextRequest) => {
         .where(and(
           eq(deals.tenantId, tid),
           isNull(deals.deletedAt),
+          // #2684 — an archived deal still held pipeline value here.
+          notArchived(),
+          ownerScope(auth, 'deals.view_all', deals),  // #2688
           notInArray(deals.stageId, terminalStageIds)
         ));
 
@@ -47,7 +56,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
           openDealsCount: Number(result?.openDealsCount ?? 0),
         },
       });
-    });
+    }, ownerCacheKey(auth, 'deals.view_all'));
   } catch (err) {
     void logError({ error: err, context: 'GET /api/tenant/dashboard/widgets/stats/pipeline', ...tenantMeta(ctx) });
     return NextResponse.json({ error: 'Widget failed' }, { status: 500 });

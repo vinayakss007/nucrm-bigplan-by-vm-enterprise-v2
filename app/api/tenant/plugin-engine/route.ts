@@ -5,7 +5,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth, requireCsrf } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { integrations } from '@/drizzle/schema';
 import { eq, and, isNull } from 'drizzle-orm';
@@ -14,7 +14,7 @@ import { concurrencyGuard } from '@/lib/api/concurrency';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
 import { withApiRoute } from '@/lib/api/with-api-route';
-import { splitConfigCredentials } from '@/lib/integrations/config-credentials';
+import { splitConfigCredentials, mergeKeepingSecretKeys } from '@/lib/integrations/config-credentials';
 
 export const GET = withApiRoute(async (request: NextRequest) => {
   try {
@@ -80,6 +80,18 @@ export const POST = withApiRoute(async (request: NextRequest) => {
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+    // #2561: in-handler CSRF, the placement `app/api/tenant/integrations/route.ts:74`
+    // (#1835) uses. The proxy does check this surface (`proxy.ts:530-532`), but a
+    // `Bearer ak_*` request on an allowed path is passed through before that block
+    // (`proxy.ts:466`) and `requireAuth` then falls back to the ambient session cookie
+    // (`lib/auth/middleware.ts:262`) — on that path nothing has validated CSRF. The
+    // exemption keys on the *verified* credential, not on the client-settable
+    // `x-auth-method` header `requireCsrf` alone would trust, so an API-key client that
+    // sends no CSRF cookie keeps working.
+    if (ctx.authMethod !== 'api_key') {
+      const csrf = requireCsrf(request);
+      if (csrf) return csrf;
+    }
 
     const body = await readJsonBody(request);
     if (!body.provider_id || !body.name) {
@@ -135,6 +147,10 @@ export const PATCH = withApiRoute(async (request: NextRequest) => {
   if (limited) return limited;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+    if (ctx.authMethod !== 'api_key') {
+      const csrf = requireCsrf(request); // #2561: see the POST handler for why
+      if (csrf) return csrf;
+    }
 
     const body = await readJsonBody(request);
     if (!body.id) return NextResponse.json({ error: 'id is required' }, { status: 400 });
@@ -143,8 +159,27 @@ export const PATCH = withApiRoute(async (request: NextRequest) => {
  
     const updates: Partial<typeof integrations.$inferInsert> = {};
     if (body['name']) updates['name'] = body['name'];
-    if (body['config']) updates['config'] = body['config'];
-    if (body['enabled'] !== undefined) updates['isActive'] = body['isActive'];
+    if (body['config']) {
+      // #2562: `GET` above withholds every credential key (#2559) and reports only
+      // their names, so the documented read→edit→write cycle cannot round-trip the
+      // stored bag. Assigning the body wholesale deleted the webhook signing secret
+      // (`app/api/tenant/webhooks/route.ts:108`) and the calendar refresh token
+      // (`lib/calendar-sync/service.ts:50`) while answering `success: true`.
+      // Merge over the stored row so a PATCH changes only keys the caller named.
+      if (typeof body['config'] !== 'object' || Array.isArray(body['config'])) {
+        return NextResponse.json({ error: 'config must be an object' }, { status: 400 });
+      }
+      const [existing] = await db
+        .select({ config: integrations.config })
+        .from(integrations)
+        .where(and(eq(integrations.tenantId, ctx.tenantId), eq(integrations.id, body.id)))
+        .limit(1);
+      updates['config'] = mergeKeepingSecretKeys(existing?.config, body['config']);
+    }
+    // #2560: guarded on `enabled` but assigned `body['isActive']`, which no
+    // caller sends — the toggle stored undefined and the UI 500ed. The wire
+    // name is `enabled`; the column is `is_active`.
+    if (body['enabled'] !== undefined) updates['isActive'] = body['enabled'];
 
     const expectedUpdatedAt = body.expectedUpdatedAt ? new Date(body.expectedUpdatedAt) : null;
     const guard = await concurrencyGuard(db, integrations, body.id, ctx.tenantId, expectedUpdatedAt);
@@ -169,6 +204,10 @@ export const DELETE = withApiRoute(async (request: NextRequest) => {
   if (limited) return limited;
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
+    if (ctx.authMethod !== 'api_key') {
+      const csrf = requireCsrf(request); // #2561: see the POST handler for why
+      if (csrf) return csrf;
+    }
 
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');

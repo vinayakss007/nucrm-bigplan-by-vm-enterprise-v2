@@ -27,6 +27,9 @@ import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { logError } from '@/lib/errors-server';
+import { ownerScope } from '@/lib/api/owner-scope';
+import { firstStepDueAt } from '@/lib/cron/sequence-steps';
+import { isEntityId } from '@/lib/id';
 
 export const POST = withApiRoute(
   async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
@@ -40,6 +43,8 @@ export const POST = withApiRoute(
         return NextResponse.json({ error: 'Permission denied' }, { status: 403 });
       }
       const { id } = await params;
+      // #2781 — the handler's own catch would turn this segment's uuid cast into a 500.
+      if (!isEntityId(id)) return NextResponse.json({ error: 'Segment not found' }, { status: 404 });
 
       const body = await readJsonBody(req);
       const sequenceId = typeof body.sequence_id === 'string' ? body.sequence_id : '';
@@ -78,13 +83,51 @@ export const POST = withApiRoute(
         .from(segmentMembers)
         .where(and(eq(segmentMembers.segmentId, id), eq(segmentMembers.tenantId, ctx.tenantId)));
       const memberIds = memberRows.map((m) => m.entityId);
+      const totalMembers = memberIds.length;
 
       if (memberIds.length === 0) {
         return NextResponse.json({
           ok: true,
-          data: { enrolled: 0, skipped_opt_out: 0, skipped_existing: 0, total_members: 0 },
+          data: { enrolled: 0, skipped_opt_out: 0, skipped_not_owned: 0, skipped_existing: 0, total_members: 0 },
           message: 'Segment has no cached members. Refresh the segment first.',
         });
+      }
+
+      // #2732: every set below is assembled from rows the caller may never have been
+      // allowed to read, so `automations.manage` alone let a `sales_rep`
+      // (`lib/permissions/definitions.ts:133`, where `contacts.view_all` is explicitly
+      // false) enroll a colleague's contact into a live mail sequence — a write to a
+      // row that `contacts/[id]:82-87` answers 404 for. This is the owner rule
+      // `ownerScope` exists for, the same one #2699 put on `notes/bulk` and #2728 on
+      // `email/bulk`.
+      //
+      // The narrowing happens here, before the compliance filter below, rather than
+      // inside it: those five terms decide whether a contact may be mailed at all, and
+      // folding the owner rule in would make members this caller simply cannot reach
+      // come back as `skipped_opt_out`. Dropping them first keeps each counter meaning
+      // what its name says. For a `view_all` holder `ownerScope` renders nothing, this
+      // round-trip is skipped entirely, and the route behaves exactly as it did.
+      const ownedScope = ownerScope(ctx, 'contacts.view_all', contacts);
+      let enrollableIds = memberIds;
+      let skippedNotOwned = 0;
+      if (ownedScope) {
+        const visible = await db
+          .select({ id: contacts.id })
+          .from(contacts)
+          .where(and(
+            eq(contacts.tenantId, ctx.tenantId),
+            inArray(contacts.id, memberIds),
+            ownedScope,
+          ));
+        const visibleSet = new Set(visible.map((c) => c.id));
+        skippedNotOwned = memberIds.length - visibleSet.size;
+        enrollableIds = memberIds.filter((mid) => visibleSet.has(mid));
+        if (enrollableIds.length === 0) {
+          return NextResponse.json({
+            ok: true,
+            data: { enrolled: 0, skipped_opt_out: 0, skipped_not_owned: skippedNotOwned, skipped_existing: 0, total_members: totalMembers },
+          });
+        }
       }
 
       // Contactable members only: live, not opted out, not unsubscribed.
@@ -93,18 +136,18 @@ export const POST = withApiRoute(
         .from(contacts)
         .where(and(
           eq(contacts.tenantId, ctx.tenantId),
-          inArray(contacts.id, memberIds),
+          inArray(contacts.id, enrollableIds),
           isNull(contacts.deletedAt),
           eq(contacts.doNotContact, false),
           eq(contacts.unsubscribed, false),
         ));
       const contactableIds = contactable.map((c) => c.id);
-      const skippedOptOut = memberIds.length - contactableIds.length;
+      const skippedOptOut = enrollableIds.length - contactableIds.length;
 
       if (contactableIds.length === 0) {
         return NextResponse.json({
           ok: true,
-          data: { enrolled: 0, skipped_opt_out: skippedOptOut, skipped_existing: 0, total_members: memberIds.length },
+          data: { enrolled: 0, skipped_opt_out: skippedOptOut, skipped_not_owned: skippedNotOwned, skipped_existing: 0, total_members: totalMembers },
         });
       }
 
@@ -121,18 +164,28 @@ export const POST = withApiRoute(
       const existingSet = new Set(existing.map((e) => e.contactId));
       const toEnroll = contactableIds.filter((cid) => !existingSet.has(cid));
 
+      let enrolled = 0;
+
       if (toEnroll.length) {
-        await db.insert(sequenceEnrollments).values(
+        // #2793: without a due date the sweep can never select the row, so the
+        // enrollment is active and silent forever.
+        const nextStepAt = await firstStepDueAt(db, ctx.tenantId, sequenceId);
+        // #2740: the pre-read above is the dedupe for the normal case; migration 0130's partial
+        // unique index is what makes a racing second request a skipped row instead of a 23505
+        // that aborts the batch. `rowCount` is then the honest count of what was enrolled.
+        const inserted = await db.insert(sequenceEnrollments).values(
           toEnroll.map((contactId) => ({
             tenantId: ctx.tenantId,
             sequenceId,
             contactId,
             status: 'active' as const,
             currentStep: 1,
+            nextStepAt,
             enrolledBy: ctx.userId,
             metadata: { source: 'segment', segment_id: id },
           })),
-        );
+        ).onConflictDoNothing();
+        enrolled = inserted.rowCount ?? toEnroll.length;
       }
 
       await logAudit({
@@ -141,16 +194,17 @@ export const POST = withApiRoute(
         action: 'enroll',
         entityType: 'segment',
         entityId: id,
-        newData: { sequence_id: sequenceId, enrolled: toEnroll.length },
+        newData: { sequence_id: sequenceId, enrolled },
       });
 
       return NextResponse.json({
         ok: true,
         data: {
-          enrolled: toEnroll.length,
+          enrolled,
           skipped_opt_out: skippedOptOut,
+          skipped_not_owned: skippedNotOwned,
           skipped_existing: existingSet.size,
-          total_members: memberIds.length,
+          total_members: totalMembers,
         },
       });
     } catch (err) {

@@ -415,27 +415,40 @@ services:
   #  nested mount — verified: the first attempt at this fix still failed with the
   #  identical error. `!override` (Compose >= 2.24) discards the inherited list
   #  instead of merging it, which is the only way an override can remove a mount.
-  #  Nothing is actually lost: of the four jobs in promtail-config.yml, only
-  #  `nginx-logs` has a writer on this VM.
-  #    * /var/log/app/*.log       — no writer anywhere in the repo. app + worker
-  #                                 log to Docker stdout, not to files. (Phase 7
-  #                                 fixes this properly with docker_sd_configs,
-  #                                 which is what the upstream config assumes.)
-  #    * /var/log/postgresql/*.log — Postgres is UpCloud-managed; there are no
-  #                                 host-side PG log files on this VM.
-  #    * /var/log/redis/*.log      — Redis is a container here; its log is stdout.
-  #  nginx still writes real files into the `nginx-logs` volume (the image's
-  #  access.log/error.log -> /dev/stdout symlinks are shadowed by the volume, so
-  #  nginx appends to plain files), which is exactly what the scrape job reads.
+  #  Nothing is actually lost — but #2602 measured that the reason this block
+  #  used to give was false. It claimed "of the four jobs in
+  #  promtail-config.yml, only `nginx-logs` has a writer on this VM" and that
+  #  nginx appends real files inside the volume. Both wrong:
+  #    * promtail-config.yml had TWO jobs (`docker`, added by #2053, and the
+  #      `postgres-logs` file job #2602 deletes below), and neither is named
+  #      `nginx-logs`. All services — app, worker, nginx, redis — reach Loki
+  #      through container stdout via docker_sd_configs; no job tails a file.
+  #    * the `nginx-logs` volume holds zero log bytes: `ls -la` on its _data
+  #      shows exactly the two symlinks Docker copied out of the image on
+  #      first population (access.log -> /dev/stdout, error.log -> /dev/stderr)
+  #      and nothing else. nginx's log output goes to its container stdout,
+  #      which the `docker` job already reads.
+  #  So the `nginx-logs:/var/log/nginx:ro` mount this override re-declared
+  #  moved nothing — and it was a hazard, not spare weight: inside the promtail
+  #  container /var/log/nginx/access.log resolves through that symlink to
+  #  PROMTAIL'S OWN STDOUT, so any future file-tailing job pointed at that path
+  #  would ingest the shipper's own output in a self-feeding loop. #2602 drops
+  #  the mount (the named volume itself stays declared — nginx still mounts it,
+  #  and `docker compose down -v` semantics are unchanged). The `postgres-logs`
+  #  job is deleted from promtail-config.yml for the same reason: its
+  #  /var/log/postgresql/*.log exists neither in this container nor on this VM
+  #  (the database is UpCloud-managed, off-host), so it was a zero-stream job
+  #  that read as "no Postgres log problems".
   #
-  #  #2053: the base config's `docker` job uses docker_sd_configs and reads
-  #  container stdout via the Docker API, so the socket must be mounted here too.
-  #  `volumes: !override` replaces the base list entirely, so re-declare it.
+  #  What the override must still do: replace the base list (`!override`, per
+  #  above), keep the config-file mount, and re-declare the Docker socket the
+  #  `docker` job's docker_sd_configs reads container stdout through (#2053).
   # ─────────────────────────────────────────────────────────────────────────────
   promtail:
     volumes: !override
       - ./monitoring/promtail/promtail-config.yml:/etc/promtail/promtail-config.yml:ro
-      - nginx-logs:/var/log/nginx:ro
+      # #2602: the inherited `nginx-logs:/var/log/nginx:ro` is dropped too — it
+      # moved zero log bytes and its path resolves to promtail's own stdout.
       - /var/run/docker.sock:/var/run/docker.sock:ro
 
   # ─────────────────────────────────────────────────────────────────────────────

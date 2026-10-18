@@ -22,11 +22,28 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     const now = new Date();
     const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+    // #2756 — this bound is used with `<`, so it has to be the moment last month
+    // ENDS, which is the moment this month starts. Day 0 of the current month is
+    // the last calendar day at 00:00, so the old expression cut the window one
+    // full day short and every record created on the final day of the previous
+    // month vanished from the `lastMonth` counts the usage dashboard trends on.
+    const lastMonthEnd = thisMonthStart;
 
     // Single round-trip aggregate: 17 serial counts used to cost ~17x WAN
     // RTT (~4s against a remote DB) while holding a pinned pool connection.
     // One statement with scalar subselects returns the identical shape.
+    //
+    // #2758 — of the thirteen reads in this statement over a table that HAS a
+    // `deleted_at` column (contacts, deals, tasks, companies), ten filtered it and
+    // these three `lastMonth` ones did not. The trend card divides `lastMonth` into
+    // `thisMonth`, so that omission measured two different populations: a contact
+    // created on Sep 12 and soft-deleted on Oct 3 counted in the baseline and in
+    // nothing else, which made the arrow say "down" about a row the tenant has already
+    // deleted. Every count here is now over live rows. `support_tickets` and
+    // `email_log` carry no such term and keep none: neither table has a `deleted_at`
+    // column (`drizzle/schema/support.ts:95-137`, `drizzle/schema/comm.ts:218`), so
+    // interpolating one there is `undefined`, which drizzle renders as nothing — the
+    // statement would end in `… AND  IS NULL` and Postgres would reject it.
     const aggRes = await db.execute<{
       thisMonthContacts: number; thisMonthDeals: number; thisMonthTasks: number;
       thisMonthTickets: number; thisMonthCompanies: number; thisMonthEmails: number;
@@ -42,9 +59,9 @@ export const GET = withApiRoute(async (request: NextRequest) => {
         (SELECT count(*)::int FROM ${supportTickets} WHERE ${supportTickets.tenantId} = ${ctx.tenantId} AND ${supportTickets.createdAt} >= ${thisMonthStart}) AS "thisMonthTickets",
         (SELECT count(*)::int FROM ${companies} WHERE ${companies.tenantId} = ${ctx.tenantId} AND ${companies.createdAt} >= ${thisMonthStart} AND ${companies.deletedAt} IS NULL) AS "thisMonthCompanies",
         (SELECT count(*)::int FROM ${emailLog} WHERE ${emailLog.tenantId} = ${ctx.tenantId} AND ${emailLog.createdAt} >= ${thisMonthStart}) AS "thisMonthEmails",
-        (SELECT count(*)::int FROM ${contacts} WHERE ${contacts.tenantId} = ${ctx.tenantId} AND ${contacts.createdAt} >= ${lastMonthStart} AND ${contacts.createdAt} < ${lastMonthEnd}) AS "lastMonthContacts",
-        (SELECT count(*)::int FROM ${deals} WHERE ${deals.tenantId} = ${ctx.tenantId} AND ${deals.createdAt} >= ${lastMonthStart} AND ${deals.createdAt} < ${lastMonthEnd}) AS "lastMonthDeals",
-        (SELECT count(*)::int FROM ${tasks} WHERE ${tasks.tenantId} = ${ctx.tenantId} AND ${tasks.createdAt} >= ${lastMonthStart} AND ${tasks.createdAt} < ${lastMonthEnd}) AS "lastMonthTasks",
+        (SELECT count(*)::int FROM ${contacts} WHERE ${contacts.tenantId} = ${ctx.tenantId} AND ${contacts.createdAt} >= ${lastMonthStart} AND ${contacts.createdAt} < ${lastMonthEnd} AND ${contacts.deletedAt} IS NULL) AS "lastMonthContacts",
+        (SELECT count(*)::int FROM ${deals} WHERE ${deals.tenantId} = ${ctx.tenantId} AND ${deals.createdAt} >= ${lastMonthStart} AND ${deals.createdAt} < ${lastMonthEnd} AND ${deals.deletedAt} IS NULL) AS "lastMonthDeals",
+        (SELECT count(*)::int FROM ${tasks} WHERE ${tasks.tenantId} = ${ctx.tenantId} AND ${tasks.createdAt} >= ${lastMonthStart} AND ${tasks.createdAt} < ${lastMonthEnd} AND ${tasks.deletedAt} IS NULL) AS "lastMonthTasks",
         (SELECT count(*)::int FROM ${contacts} WHERE ${contacts.tenantId} = ${ctx.tenantId} AND ${contacts.deletedAt} IS NULL) AS "totalContacts",
         (SELECT count(*)::int FROM ${deals} WHERE ${deals.tenantId} = ${ctx.tenantId} AND ${deals.deletedAt} IS NULL) AS "totalDeals",
         (SELECT count(*)::int FROM ${tasks} WHERE ${tasks.tenantId} = ${ctx.tenantId} AND ${tasks.deletedAt} IS NULL) AS "totalTasks",

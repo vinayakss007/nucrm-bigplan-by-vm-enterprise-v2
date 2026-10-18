@@ -5,7 +5,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
-import { requireAuth, requirePerm } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm, can } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { contacts } from '@/drizzle/schema';
 import { eq, and, sql } from 'drizzle-orm';
@@ -40,6 +40,8 @@ export const POST = withApiRoute(async (request: NextRequest, { params }: { para
     const [contact] = await db
       .select({
         id: contacts.id,
+        assignedTo: contacts.assignedTo,
+        createdBy: contacts.createdBy,
         firstName: contacts.firstName,
         lastName: contacts.lastName,
         email: contacts.email,
@@ -52,6 +54,15 @@ export const POST = withApiRoute(async (request: NextRequest, { params }: { para
       .limit(1);
 
     if (!contact) return NextResponse.json({ error: 'Contact not found' }, { status: 404 });
+
+    // #2698 — enrich writes contacts.metadata, and this route was reachable by
+    // the callers contacts/[id]:195-200 refuses: sales_rep holds contacts.edit
+    // (definitions.ts:133) and not contacts.view_all.
+    if (!can(ctx, 'contacts.view_all')) {
+      if (contact.assignedTo !== ctx.userId && contact.createdBy !== ctx.userId) {
+        return NextResponse.json({ error: 'Contact not found' }, { status: 404 });
+      }
+    }
 
     // Enrich with heuristic data
     const enriched: Record<string, unknown> = {};
@@ -91,7 +102,10 @@ export const POST = withApiRoute(async (request: NextRequest, { params }: { para
     await db
       .update(contacts)
       .set({ metadata: newMeta, updatedAt: new Date() })
-      .where(eq(contacts.id, id));
+      // The pre-read above is what made this tenant-safe; a write whose tenant
+      // scope lives in a different statement than the write is one refactor
+      // away from a cross-tenant mutation (#2698).
+      .where(and(eq(contacts.id, id), eq(contacts.tenantId, ctx.tenantId)));
 
     return NextResponse.json({
       data: { enriched, contact_id: id },

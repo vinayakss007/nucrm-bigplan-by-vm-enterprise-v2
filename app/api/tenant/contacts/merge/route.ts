@@ -11,6 +11,7 @@ import { contacts, deals, activities, leads, tasks, tenants, contactTags, follow
 import { eq, and, sql } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
+import { ownerScope } from '@/lib/api/owner-scope';
 import { cancelOpenEnrollments } from '@/lib/cron/sequence-steps';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
@@ -47,16 +48,22 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     }
 
     // Verify both contacts exist and belong to tenant
+    // #2701 — `contacts.edit` alone is not enough here: this write soft-deletes
+    // one row and re-points another rep's deals, tasks, leads and follow-ups
+    // onto a different one. Merge answers with the same 404 the record path
+    // uses, so a foreign id reads as absent rather than as forbidden.
+    const mergeScope = ownerScope(ctx, 'contacts.view_all', contacts);
+
     const [primary] = await db
       .select({ id: contacts.id, firstName: contacts.firstName, lastName: contacts.lastName, tags: contacts.tags, customFields: contacts.customFields })
       .from(contacts)
-      .where(and(eq(contacts.id, primary_id), eq(contacts.tenantId, ctx.tenantId), sql`${contacts.deletedAt} IS NULL`))
+      .where(and(eq(contacts.id, primary_id), eq(contacts.tenantId, ctx.tenantId), sql`${contacts.deletedAt} IS NULL`, mergeScope))
       .limit(1);
 
     const [duplicate] = await db
       .select({ id: contacts.id, firstName: contacts.firstName, lastName: contacts.lastName, tags: contacts.tags, customFields: contacts.customFields })
       .from(contacts)
-      .where(and(eq(contacts.id, duplicate_id), eq(contacts.tenantId, ctx.tenantId), sql`${contacts.deletedAt} IS NULL`))
+      .where(and(eq(contacts.id, duplicate_id), eq(contacts.tenantId, ctx.tenantId), sql`${contacts.deletedAt} IS NULL`, mergeScope))
       .limit(1);
 
     if (!primary) return NextResponse.json({ error: 'Primary contact not found' }, { status: 404 });
@@ -71,7 +78,10 @@ export const POST = withApiRoute(async (request: NextRequest) => {
 
       await tx.update(contacts)
         .set({ tags: mergedTags })
-        .where(eq(contacts.id, primary_id));
+        // The pre-read is what made these tenant-safe; a write whose tenant
+        // scope lives only in a different statement is one refactor away from a
+        // cross-tenant mutation (#2701, same shape as #2698's enrich).
+        .where(and(eq(contacts.id, primary_id), eq(contacts.tenantId, ctx.tenantId)));
 
       // Reassign contactTags junction rows (INSERT ON CONFLICT for idempotency)
       const dupContactTags = await tx
@@ -100,7 +110,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
 
       await tx.update(contacts)
         .set({ customFields: mergedCF })
-        .where(eq(contacts.id, primary_id));
+        .where(and(eq(contacts.id, primary_id), eq(contacts.tenantId, ctx.tenantId)));
 
       // ── 3. Reassign deals ──
       await tx.update(deals)
@@ -179,7 +189,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
           deletedBy: ctx.userId,
           metadata: sql`jsonb_set(COALESCE(${contacts.metadata}, '{}'), '{merged_into}', ${JSON.stringify(primary_id)}::jsonb)`,
         })
-        .where(eq(contacts.id, duplicate_id));
+        .where(and(eq(contacts.id, duplicate_id), eq(contacts.tenantId, ctx.tenantId)));
 
       // #2392: the duplicate is gone, so its drip has no subject. Every other
       // record of its was reassigned to the primary above; `sequence_enrollments`

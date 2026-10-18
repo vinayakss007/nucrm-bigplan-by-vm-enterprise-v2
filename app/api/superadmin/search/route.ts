@@ -5,6 +5,7 @@
  */
 import { apiError } from '@/lib/api-error';
 import { escapeLike } from '@/lib/api/sanitize-like';
+import { clampInt } from '@/lib/api/query-params';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
@@ -25,7 +26,13 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       return NextResponse.json({ data: [], results: [] });
     }
 
-    const limit = Math.min(Number(searchParams.get('limit') ?? '10'), 25);
+    // #2766 — `Math.min(25, Number('abc'))` is `NaN`, and a `NaN` limit makes drizzle
+    // emit no LIMIT clause at all (`pg-core/dialect.js:286`), so this dropped the cap
+    // on *both* selects in the `Promise.all` below; `?limit=-1` did the same, and
+    // `?limit=` reached `Number('')` = 0, which passes `0 >= 0` and silently returned
+    // an empty search. The sibling `tests/unit/superadmin-search.test.ts:113-132`
+    // already pins the 10 and 25 answers this keeps.
+    const limit = clampInt(searchParams.get('limit'), 10, 1, 25);
     const pattern = `%${escapeLike(q)}%`;
 
     const [tenantResults, userResults] = await Promise.all([

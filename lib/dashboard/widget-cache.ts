@@ -19,9 +19,14 @@ export async function withCache(
   tenantId: string,
   widgetKey: string,
   ttlSeconds: number,
-  fetcher: () => Promise<Response>
+  fetcher: () => Promise<Response>,
+  // #2688 — the entry was keyed by tenant and widget, so whatever the first
+  // caller of a TTL window computed was served to everyone else in that tenant
+  // for up to 300s. Routes whose read is per-caller pass `ownerCacheKey(...)`;
+  // 'tenant' keeps the shared entry for reads that genuinely are tenant-wide.
+  scopeKey = 'tenant'
 ): Promise<Response> {
-  const key = `${tenantId}:${widgetKey}`
+  const key = `${tenantId}:${widgetKey}:${scopeKey}`
   const cached = cache.get(key)
   if (cached && cached.expiresAt > Date.now()) {
     return new Response(JSON.stringify(cached.data), {
@@ -58,7 +63,14 @@ export async function withCache(
 
 export function invalidateWidgetCache(tenantId: string, ...widgetKeys: string[]) {
   const keys = widgetKeys.length ? widgetKeys : Object.keys(WIDGET_REGISTRY)
-  keys.forEach(key => cache.delete(`${tenantId}:${key}`))
+  // A write invalidates every caller's entry for the widget, not just the
+  // writer's: the scope suffix (#2688) means one widget now has N keys, and a
+  // deal reassigned away from me must disappear from my tile as surely as the
+  // manager's whole-tenant tile must.
+  const prefixes = keys.map(key => `${tenantId}:${key}:`)
+  for (const cached of [...cache.keys()]) {
+    if (prefixes.some(prefix => cached.startsWith(prefix))) cache.delete(cached)
+  }
 }
 
 export function getCacheStats() {

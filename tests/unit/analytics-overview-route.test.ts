@@ -7,7 +7,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // the tasks total/completed/open/overdue math, and the 8-bucket weekly fill.
 
 const fakeCtx = { tenantId: 'tenant-123', userId: 'user-1' };
-const mockRequireTenantCtx = vi.fn();
+// #2713: the route authenticates with requireAuth(), not requireTenantCtx() —
+// the latter lives in lib/tenant/context and refuses by throwing a redirect(),
+// which this handler's catch used to report as a 500.
+const mockRequireAuth = vi.fn();
 
 // The route fires six db.select(...) calls inside Promise.all, in this order:
 //   0: deals-by-stage, 1: contacts-by-source, 2: contacts-by-status,
@@ -46,9 +49,10 @@ const mockDb = {
   }),
 };
 
-vi.mock('@/lib/tenant/context', () => ({
-  requireTenantCtx: (...args: unknown[]) => mockRequireTenantCtx(...args),
-}));
+vi.mock('@/lib/auth/middleware', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/auth/middleware')>('@/lib/auth/middleware');
+  return { ...actual, requireAuth: (...args: unknown[]) => mockRequireAuth(...args) };
+});
 vi.mock('@/drizzle/db', () => ({ db: mockDb }));
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/api/with-api-route', () => ({
@@ -93,7 +97,7 @@ describe('GET /api/tenant/analytics/overview aggregate shape (#1544 F4)', () => 
     selectCall = 0;
     selectResults = [];
     whereCalls = [];
-    mockRequireTenantCtx.mockResolvedValue(fakeCtx);
+    mockRequireAuth.mockResolvedValue(fakeCtx);
   });
 
   it('reshapes into compact aggregates and coerces string revenue to a number', async () => {

@@ -23,6 +23,7 @@ import {
 } from '@/lib/field-sales/card-scanner';
 import { logError } from '@/lib/errors-server';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { enforceFieldWrite, enforceFieldRead } from '@/lib/rbac/enforce';
 
 const scanBodySchema = z.object({
   text: z.string().min(1, 'Text is required').max(10000, 'Text too long'),
@@ -96,11 +97,30 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     const payload = toContactPayload(scannedCard, ctx.tenantId, ctx.userId);
     const leadSource = source === 'qr_code' ? 'qr_code_scan' : 'business_card_scan';
 
+    // #2618 — the scan path wrote card data straight into contact columns with
+    // no field_permissions check. Normalize the camel payload to the column
+    // vocabulary, strip restricted keys, and fail closed (403) if a required
+    // column like first_name would vanish mid-insert.
+    const toSnake = (k: string) => k.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase();
+    const toCamel = (k: string) => k.replace(/_([a-z0-9])/g, (_, c: string) => c.toUpperCase());
+    const { body: allowedSnake, stripped } = await enforceFieldWrite(
+      ctx, 'contacts', Object.fromEntries(Object.entries(payload).map(([k, v]) => [toSnake(k), v])),
+    );
+    if (stripped.includes('first_name')) {
+      return NextResponse.json(
+        { error: `field_permissions restricts: ${stripped.join(', ')}` },
+        { status: 403 },
+      );
+    }
+    const gatedPayload = Object.fromEntries(
+      Object.entries(allowedSnake).map(([k, v]) => [toCamel(k), v]),
+    ) as ReturnType<typeof toContactPayload>;
+
     const contact = await db.transaction(async (tx) => {
       const [c] = await tx
         .insert(contacts)
         .values({
-          ...payload,
+          ...gatedPayload,
           leadSource,
           leadStatus: 'new',
           tags: [],
@@ -149,9 +169,12 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       },
     });
 
+    // #2618 — the created row is the full drizzle record (camelCase columns);
+    // project it like every other contact response.
+    const [projectedContact] = await enforceFieldRead(ctx, 'contacts', [contact]);
     return NextResponse.json(
       {
-        contact,
+        contact: projectedContact,
         isDuplicate: false,
         parsed: scannedCard,
       },

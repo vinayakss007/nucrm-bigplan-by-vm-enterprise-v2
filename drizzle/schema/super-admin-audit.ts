@@ -3,7 +3,7 @@
  * Copyright (c) 2026 abetworks.in. All Rights Reserved.
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
-import { pgTable, text, timestamp, index, uuid, jsonb } from 'drizzle-orm/pg-core';
+import { pgTable, text, timestamp, index, uuid } from 'drizzle-orm/pg-core';
 
 export const superAdminAuditLogs = pgTable('super_admin_audit_logs', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -17,9 +17,18 @@ export const superAdminAuditLogs = pgTable('super_admin_audit_logs', {
   tenantName: text('tenant_name'),
   ipAddress: text('ip_address'),
   userAgent: text('user_agent'),
-  oldData: jsonb('old_data'),
-  newData: jsonb('new_data'),
-  metadata: jsonb('metadata'),
+  // #2510, disposition (2) — the database is the truth, not these lines:
+  // 0002_flat_sir_ram.sql:1289-1291 built all three as text, and
+  // 0007_super_admin_audit_logs.sql's jsonb re-declaration is an inert
+  // `CREATE TABLE IF NOT EXISTS` that never executed anywhere (chain build
+  // AND pre-prod measured text). lib/audit/super-admin.ts writes
+  // JSON.stringify and reads `string | null` end to end, and 0057's CHECKs
+  // pattern-match text. Declaring jsonb here only armed `db:sync`
+  // (drizzle-kit push) to re-type a security audit table as a side effect —
+  // the hazard that made #2510 choose text over migrating to jsonb.
+  oldData: text('old_data'),
+  newData: text('new_data'),
+  metadata: text('metadata'),
   previousHash: text('previous_hash'),
   hash: text('hash').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),

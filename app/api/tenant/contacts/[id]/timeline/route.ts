@@ -8,12 +8,38 @@ import { logError } from '@/lib/errors-server';
 import { NextRequest, NextResponse } from 'next/server';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { createNoteSchema } from '@/lib/api/schemas';
-import { requireAuth, can } from '@/lib/auth/middleware';
+import { requireAuth, can, type AuthContext } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { activities, users, contacts } from '@/drizzle/schema';
 import { eq, and, desc, count } from 'drizzle-orm';
 import { parseLimitOffset } from '@/lib/api/query-params';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { ownerScope } from '@/lib/api/owner-scope';
+import { isEntityId } from '@/lib/id';
+
+/**
+ * Can this caller open the contact these entries belong to?
+ *
+ * `contacts/[id]:82-87` answers 404 for a `sales_rep`
+ * (`lib/permissions/definitions.ts:132-137`) reaching a row that is neither
+ * `assigned_to` nor `created_by` them, and the trail of a record is read with
+ * the record's own rule — the same answer `history/[entity]` (#2712) and the
+ * activity feed (#2710) take. It asks no permission: there is no `contacts.view`
+ * in the catalogue (#2597), and `contacts.edit` is not a read right.
+ */
+async function contactVisible(ctx: AuthContext, contactId: string): Promise<boolean> {
+  if (!isEntityId(contactId)) return false;
+  const [hit] = await db
+    .select({ id: contacts.id })
+    .from(contacts)
+    .where(and(
+      eq(contacts.id, contactId),
+      eq(contacts.tenantId, ctx.tenantId),
+      ownerScope(ctx, 'contacts.view_all', contacts),
+    ))
+    .limit(1);
+  return hit !== undefined;
+}
 
 /**
  * GET /api/tenant/contacts/[id]/timeline
@@ -24,11 +50,17 @@ export const GET = withApiRoute(async (request: NextRequest,
   try {
     const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
-    if (!can(ctx, 'contacts.view_all') && !can(ctx, 'contacts.create')) {
-      return NextResponse.json({ error: 'Permission denied' }, { status: 403 });
-    }
 
     const { id } = await params;
+    // The gate this route had was `contacts.view_all || contacts.create`.
+    // `create` is not a read right and says nothing about *this* row, and
+    // `sales_rep` holds it (`definitions.ts:133`), so every rep passed it and
+    // then read by `activities.contact_id = <any uuid>` — including the
+    // colleague `user_email` and `user_avatar` the join below selects.
+    if (!(await contactVisible(ctx, id))) {
+      return NextResponse.json({ error: 'Contact not found' }, { status: 404 });
+    }
+
     const { searchParams } = new URL(request.url);
     const { limit, offset } = parseLimitOffset(searchParams, { defaultLimit: 50, maxLimit: 200 });
     const eventType = searchParams.get('event_type');
@@ -105,12 +137,10 @@ export const POST = withApiRoute(async (request: NextRequest,
       return NextResponse.json({ error: 'event_type is required' }, { status: 400 });
     }
 
-    // Verify contact exists and belongs to tenant
-    const contact = await db.query.contacts.findFirst({
-      where: and(eq(contacts.id, id), eq(contacts.tenantId, ctx.tenantId))
-    });
-
-    if (!contact) {
+    // Verify the caller may open the contact these entries land on. The check
+    // here was existence-and-tenant only, so a rep with `contacts.edit` wrote
+    // onto a colleague's timeline — the same row rule the read above now asks.
+    if (!(await contactVisible(ctx, id))) {
       return NextResponse.json({ error: 'Contact not found' }, { status: 404 });
     }
 

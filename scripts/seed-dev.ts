@@ -5,6 +5,16 @@
  * Populates a local PostgreSQL database with comprehensive test data
  * for development. This script is idempotent and safe to run multiple times.
  *
+ * #2628 — two guarantees make that true on an RLS-migrated database:
+ *   - ONE transaction: cleanup and inserts share a single COMMIT/ROLLBACK,
+ *     so a failure mid-way leaves the previous data intact instead of a
+ *     half-wiped workspace.
+ *   - ONE RLS context: the connection carries app.is_super_admin plus the
+ *     demo tenant/user GUCs, so cleanup DELETEs actually match rows and the
+ *     first INSERT is not rejected with 42501.
+ * Rows whose tables have no DELETE policy (tenants, roles) are upserted
+ * rather than deleted-and-reinserted.
+ *
  * Domain-specific seed logic is extracted into scripts/seed/ modules:
  *   - seed/companies.ts  -- 30 companies across industries
  *   - seed/contacts.ts   -- 55 contacts with varied profiles
@@ -163,6 +173,64 @@ function pastDate(daysAgo: number): Date {
   return d;
 }
 
+// #2628 — hoisted so the seed can write plans BEFORE tenants: tenants.plan_id
+// references plans, and the old end-of-script ordering only worked on a
+// database someone had already seeded.
+const PLAN_ROWS = [
+  {
+    id: 'free',
+    name: 'Free',
+    slug: 'free',
+    description: 'Get started with basic CRM features',
+    priceMonthly: '0',
+    priceYearly: '0',
+    maxUsers: 2,
+    maxContacts: 100,
+    maxDeals: 50,
+    features: ['basic_crm', 'email_log'],
+    sortOrder: 0,
+  },
+  {
+    id: 'starter',
+    name: 'Starter',
+    slug: 'starter',
+    description: 'For growing teams',
+    priceMonthly: '29',
+    priceYearly: '290',
+    maxUsers: 5,
+    maxContacts: 1000,
+    maxDeals: 500,
+    features: ['basic_crm', 'email_log', 'forms', 'automations', 'reports'],
+    sortOrder: 1,
+  },
+  {
+    id: 'professional',
+    name: 'Professional',
+    slug: 'professional',
+    description: 'For scaling businesses',
+    priceMonthly: '79',
+    priceYearly: '790',
+    maxUsers: 25,
+    maxContacts: 10000,
+    maxDeals: 5000,
+    features: ['basic_crm', 'email_log', 'forms', 'automations', 'reports', 'ai_assistant', 'sequences', 'api_access'],
+    sortOrder: 2,
+  },
+  {
+    id: 'enterprise',
+    name: 'Enterprise',
+    slug: 'enterprise',
+    description: 'For large organizations',
+    priceMonthly: '199',
+    priceYearly: '1990',
+    maxUsers: 100,
+    maxContacts: 100000,
+    maxDeals: 50000,
+    features: ['basic_crm', 'email_log', 'forms', 'automations', 'reports', 'ai_assistant', 'sequences', 'api_access', 'sso', 'custom_plugins', 'white_label'],
+    sortOrder: 3,
+  },
+];
+
 
 // ============================================================================
 // MAIN SEED FUNCTION
@@ -180,32 +248,75 @@ async function main() {
     process.exit(1);
   }
 
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-  const db = drizzle(pool, { schema });
+  // #2628 — one pinned connection, one transaction, one RLS context. The pool
+  // version ran with no GUCs at all: cleanup DELETEs matched zero rows, the
+  // first INSERT aborted with 42501, and the deletes that HAD run stayed
+  // committed — the issue's half-wiped workspace. SET LOCAL ties the context
+  // to this transaction, so COMMIT/ROLLBACK ends it.
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 1 });
+  const client = await pool.connect();
+  const db = drizzle(client, { schema });
+  let failed = false;
+  let seededApiKey: string | null = null;
 
   try {
+    await client.query('BEGIN');
+    await client.query(
+      `SELECT set_config('app.is_super_admin', 'true', true),
+              set_config('app.current_tenant', $1, true),
+              set_config('app.current_user', $2, true)`,
+      [IDS.tenant, IDS.users.admin],
+    );
+
+    // ========================================================================
+    // PLANS — first, because tenants.plan_id references them
+    // ========================================================================
+    logSection('Seeding Plans');
+
+    await db.insert(schema.plans).values(PLAN_ROWS).onConflictDoNothing();
+    logDone('plans', PLAN_ROWS.length);
+
     // ========================================================================
     // CLEANUP - Delete existing seed data (idempotent)
     // ========================================================================
     logSection('Cleaning existing seed data');
 
-    // Delete API key usage first (FK to tenants)
-    await db.execute(sql`DELETE FROM api_key_usage WHERE tenant_id = ${IDS.tenant}`);
-    // Children before parents (FK order). Covers every fixed-ID seed table —
-    // previously leads/pipelines/stages/companies/contacts/deals were NOT
-    // cleaned, so a re-run crashed on duplicate PK after users were deleted.
-    await db.delete(schema.deals).where(sql`tenant_id = ${IDS.tenant}`);
-    await db.delete(schema.contacts).where(sql`tenant_id = ${IDS.tenant}`);
-    await db.delete(schema.companies).where(sql`tenant_id = ${IDS.tenant}`);
-    await db.delete(schema.dealStages).where(sql`tenant_id = ${IDS.tenant}`);
-    await db.delete(schema.pipelines).where(sql`tenant_id = ${IDS.tenant}`);
-    await db.delete(schema.leads).where(sql`tenant_id = ${IDS.tenant}`);
-    await db.delete(schema.tenantMembers).where(sql`tenant_id = ${IDS.tenant}`);
-    await db.delete(schema.roles).where(sql`tenant_id = ${IDS.tenant}`);
-    await db.delete(schema.tenants).where(sql`id = ${IDS.tenant}`);
-    await db.delete(schema.users).where(sql`id IN (${sql.join(Object.values(IDS.users).map(v => sql`${v}`), sql`, `)})`);
+    // Children before parents (FK order). Every fixed-ID table the seed writes
+    // has to appear here: anything left over from a previous run either
+    // crashes the next INSERT on a duplicate PK or silently accumulates a
+    // second copy of the same rows (#2628).
+    const CLEANUP_TABLES = [
+      'quote_line_items', 'quotes', 'products',
+      'automation_runs', 'automations',
+      'sequence_steps', 'sequence_enrollments', 'sequences',
+      'webhook_deliveries', 'webhooks',
+      'api_key_usage', 'api_keys',
+      'ticket_replies', 'support_tickets',
+      'plugin_execution_logs', 'custom_plugins',
+      'form_submissions', 'forms',
+      'tenant_modules',
+      'email_log', 'email_templates',
+      'custom_field_defs', 'tax_rates',
+      'tasks', 'notifications', 'audit_logs', 'ai_activity', 'activities',
+      'deals', 'deal_stages', 'pipelines',
+      'contacts', 'companies', 'leads',
+    ];
+    for (const table of CLEANUP_TABLES) {
+      await db.execute(
+        sql`DELETE FROM ${sql.identifier(table)} WHERE tenant_id = ${IDS.tenant}`
+      );
+    }
+    // Rows keyed to the seeded people rather than to the tenant (sessions has
+    // no tenant_id). The users themselves are upserted below, never deleted —
+    // deleting them was the FK blocker that made the old cleanup abort.
+    await db.execute(
+      sql`DELETE FROM sessions WHERE user_id IN (${sql.join(
+        Object.values(IDS.users).map((u) => sql`${u}`),
+        sql`, `
+      )})`
+    );
 
-    log('🧹', 'Cleaned existing seed data');
+    log('🧹', `Cleaned existing seed data (${CLEANUP_TABLES.length} tenant-scoped tables)`);
 
     // ========================================================================
     // USERS
@@ -214,6 +325,9 @@ async function main() {
 
     const passwordHash = await bcrypt.hash('password123', 12);
 
+    // #2628 — upsert, not delete+insert: users are the FK target of api_keys,
+    // sessions, notifications and more, so deleting them was always the step
+    // that blocked the old cleanup.
     await db.insert(schema.users).values([
       {
         id: IDS.users.admin,
@@ -259,7 +373,21 @@ async function main() {
         lastTenantId: IDS.tenant,
         defaultTenantId: IDS.tenant,
       },
-    ]);
+    ]).onConflictDoUpdate({
+      target: schema.users.id,
+      set: {
+        email: sql`excluded.email`,
+        passwordHash: sql`excluded.password_hash`,
+        fullName: sql`excluded.full_name`,
+        timezone: sql`excluded.timezone`,
+        isSuperAdmin: sql`excluded.is_super_admin`,
+        emailVerified: sql`excluded.email_verified`,
+        lastTenantId: sql`excluded.last_tenant_id`,
+        defaultTenantId: sql`excluded.default_tenant_id`,
+        deletedAt: null,
+        updatedAt: new Date(),
+      },
+    });
     logDone('users', 4);
 
     // ========================================================================
@@ -279,12 +407,35 @@ async function main() {
       industry: 'Technology',
       companySize: '11-50',
       country: 'US',
+    // #2628 — tenants has NO DELETE policy, so the old cleanup DELETE could
+    // never remove this row: every re-run died on tenants_pkey regardless of
+    // ordering. Upsert instead.
+    }).onConflictDoUpdate({
+      target: schema.tenants.id,
+      set: {
+        name: sql`excluded.name`,
+        slug: sql`excluded.slug`,
+        status: sql`excluded.status`,
+        planId: sql`excluded.plan_id`,
+        ownerId: sql`excluded.owner_id`,
+        primaryColor: sql`excluded.primary_color`,
+        billingEmail: sql`excluded.billing_email`,
+        industry: sql`excluded.industry`,
+        companySize: sql`excluded.company_size`,
+        country: sql`excluded.country`,
+        deletedAt: null,
+        updatedAt: new Date(),
+      },
     });
     logDone('tenants', 1);
 
     // ========================================================================
     // ROLES
     // ========================================================================
+    // #2629: permissions MUST use the dotted-boolean vocabulary can() reads
+    // (lib/auth/middleware.ts: ctx.permissions['deals.view'] === true, with
+    // 'all' as the wildcard). Coarse strings like { deals: 'full' } were
+    // silently ignored — seeded sales_rep/member roles 403'd on every API.
     logSection('Seeding Roles');
 
     await db.insert(schema.roles).values([
@@ -295,7 +446,7 @@ async function main() {
         slug: 'super_admin',
         description: 'Full system access',
         isSystem: true,
-        permissions: { '*': true },
+        permissions: { 'all': true },
         sortOrder: 0,
       },
       {
@@ -305,7 +456,7 @@ async function main() {
         slug: 'admin',
         description: 'Workspace admin access',
         isSystem: true,
-        permissions: { contacts: 'full', deals: 'full', settings: 'full', users: 'manage', reports: 'full' },
+        permissions: { 'all': true },
         sortOrder: 1,
       },
       {
@@ -315,7 +466,14 @@ async function main() {
         slug: 'sales_rep',
         description: 'Sales team member',
         isSystem: true,
-        permissions: { contacts: 'full', deals: 'full', tasks: 'full', reports: 'read' },
+        permissions: {
+          'contacts.view': true, 'contacts.view_all': true, 'contacts.create': true, 'contacts.edit': true, 'contacts.assign': true,
+          'companies.view': true, 'companies.create': true, 'companies.edit': true,
+          'deals.view': true, 'deals.view_all': true, 'deals.create': true, 'deals.edit': true, 'deals.assign': true, 'deals.export': true, 'deals.import': true,
+          'leads.view': true, 'leads.view_all': true, 'leads.create': true, 'leads.edit': true, 'leads.assign': true,
+          'tasks.view': true, 'tasks.view_all': true, 'tasks.create': true, 'tasks.edit': true, 'tasks.assign': true,
+          'reports.view': true, 'tickets.view': true, 'meetings.view': true, 'meetings.create': true, 'calendar.manage': true,
+        },
         sortOrder: 2,
       },
       {
@@ -325,10 +483,27 @@ async function main() {
         slug: 'member',
         description: 'Basic workspace member',
         isSystem: true,
-        permissions: { contacts: 'read', deals: 'read', tasks: 'own' },
+        permissions: {
+          'contacts.view': true, 'companies.view': true, 'deals.view': true,
+          'leads.view': true, 'tasks.view': true, 'reports.view': true,
+          'tickets.view': true, 'meetings.view': true,
+        },
         sortOrder: 3,
       },
-    ]);
+    // #2628 — roles has no DELETE policy either; upsert on the fixed seed id.
+    ]).onConflictDoUpdate({
+      target: schema.roles.id,
+      set: {
+        name: sql`excluded.name`,
+        slug: sql`excluded.slug`,
+        description: sql`excluded.description`,
+        isSystem: sql`excluded.is_system`,
+        permissions: sql`excluded.permissions`,
+        sortOrder: sql`excluded.sort_order`,
+        deletedAt: null,
+        updatedAt: new Date(),
+      },
+    });
     logDone('roles', 4);
 
     // ========================================================================
@@ -341,7 +516,18 @@ async function main() {
       { tenantId: IDS.tenant, userId: IDS.users.manager, roleId: IDS.roles.admin, roleSlug: 'admin', status: 'active' },
       { tenantId: IDS.tenant, userId: IDS.users.rep1, roleId: IDS.roles.salesRep, roleSlug: 'sales_rep', status: 'active' },
       { tenantId: IDS.tenant, userId: IDS.users.rep2, roleId: IDS.roles.salesRep, roleSlug: 'sales_rep', status: 'active' },
-    ]);
+    // (tenant_id, user_id) is unique, and requireAuth resolves membership
+    // through these rows — a leftover pending row must be re-activated.
+    ]).onConflictDoUpdate({
+      target: [schema.tenantMembers.tenantId, schema.tenantMembers.userId],
+      set: {
+        roleId: sql`excluded.role_id`,
+        roleSlug: sql`excluded.role_slug`,
+        status: sql`excluded.status`,
+        deletedAt: null,
+        updatedAt: new Date(),
+      },
+    });
     logDone('tenant_members', 4);
 
 
@@ -901,19 +1087,27 @@ async function main() {
       prefix: apiKeyPrefix,
       scopes: ['*'],
       isActive: true,
+    // A re-run regenerates the raw key, so the hash/prefix must be refreshed
+    // rather than left on the row from the previous run.
+    }).onConflictDoUpdate({
+      target: schema.apiKeys.id,
+      set: {
+        userId: sql`excluded.user_id`,
+        name: sql`excluded.name`,
+        keyHash: sql`excluded.key_hash`,
+        prefix: sql`excluded.prefix`,
+        scopes: sql`excluded.scopes`,
+        isActive: sql`excluded.is_active`,
+        deletedAt: null,
+        updatedAt: new Date(),
+      },
     });
     logDone('api_keys', 1);
 
-    // Write raw API key to file for test scripts
-    const apiKeyFile = '/tmp/nucrm-test-results/api_key.txt';
-    try {
-      const fs = await import('fs');
-      fs.mkdirSync('/tmp/nucrm-test-results', { recursive: true });
-      fs.writeFileSync(apiKeyFile, apiKeyRaw);
-      log('🔑', `API key written to ${apiKeyFile}`);
-    } catch {
-      log('⚠️', `Could not write API key file — raw key: ${apiKeyRaw}`);
-    }
+    // #2628 — the raw key is only written after COMMIT (see below): a file is
+    // not transactional, and a rolled-back run must not leave a key that the
+    // database never accepted.
+    seededApiKey = apiKeyRaw;
 
     await db.insert(schema.webhooks).values([
       {
@@ -1055,70 +1249,27 @@ async function main() {
     logDone('automation_runs', 6);
 
 
-    // ========================================================================
-    // PLANS
-    // ========================================================================
-    logSection('Seeding Plans');
-
-    await db.insert(schema.plans).values([
-      {
-        id: 'free',
-        name: 'Free',
-        slug: 'free',
-        description: 'Get started with basic CRM features',
-        priceMonthly: '0',
-        priceYearly: '0',
-        maxUsers: 2,
-        maxContacts: 100,
-        maxDeals: 50,
-        features: ['basic_crm', 'email_log'],
-        sortOrder: 0,
-      },
-      {
-        id: 'starter',
-        name: 'Starter',
-        slug: 'starter',
-        description: 'For growing teams',
-        priceMonthly: '29',
-        priceYearly: '290',
-        maxUsers: 5,
-        maxContacts: 1000,
-        maxDeals: 500,
-        features: ['basic_crm', 'email_log', 'forms', 'automations', 'reports'],
-        sortOrder: 1,
-      },
-      {
-        id: 'professional',
-        name: 'Professional',
-        slug: 'professional',
-        description: 'For scaling businesses',
-        priceMonthly: '79',
-        priceYearly: '790',
-        maxUsers: 25,
-        maxContacts: 10000,
-        maxDeals: 5000,
-        features: ['basic_crm', 'email_log', 'forms', 'automations', 'reports', 'ai_assistant', 'sequences', 'api_access'],
-        sortOrder: 2,
-      },
-      {
-        id: 'enterprise',
-        name: 'Enterprise',
-        slug: 'enterprise',
-        description: 'For large organizations',
-        priceMonthly: '199',
-        priceYearly: '1990',
-        maxUsers: 100,
-        maxContacts: 100000,
-        maxDeals: 50000,
-        features: ['basic_crm', 'email_log', 'forms', 'automations', 'reports', 'ai_assistant', 'sequences', 'api_access', 'sso', 'custom_plugins', 'white_label'],
-        sortOrder: 3,
-      },
-    ]).onConflictDoNothing();
-    logDone('plans', 4);
 
     // ========================================================================
     // DONE!
     // ========================================================================
+    // #2628 — COMMIT before the success banner: nothing the script printed
+    // above is durable until here, and a rolled-back run must not claim the
+    // credentials work.
+    await client.query('COMMIT');
+
+    if (seededApiKey) {
+      const apiKeyFile = '/tmp/nucrm-test-results/api_key.txt';
+      try {
+        const fs = await import('fs');
+        fs.mkdirSync('/tmp/nucrm-test-results', { recursive: true });
+        fs.writeFileSync(apiKeyFile, seededApiKey);
+        log('🔑', `API key written to ${apiKeyFile}`);
+      } catch {
+        log('⚠️', `Could not write API key file — raw key: ${seededApiKey}`);
+      }
+    }
+
     console.log('\n\x1b[32m');
     console.log('╔══════════════════════════════════════════════════╗');
     console.log('║          Seed Complete!                         ║');
@@ -1137,11 +1288,19 @@ async function main() {
     console.log('\x1b[0m');
 
   } catch (error) {
-    console.error('\x1b[31m[ERROR] Seed failed:\x1b[0m', error);
-    process.exit(1);
+    failed = true;
+    console.error('\x1b[31m[ERROR] Seed failed — the whole run is rolled back,');
+    console.error('        the database still holds its previous data:\x1b[0m', error);
+    try {
+      await client.query('ROLLBACK');
+    } catch {
+      // The connection is already unusable; pool.end() below closes it.
+    }
   } finally {
+    client.release();
     await pool.end();
   }
+  if (failed) process.exit(1);
 }
 
 main();

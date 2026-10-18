@@ -13,6 +13,8 @@ import type { PgColumn } from 'drizzle-orm/pg-core';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { readJsonBody } from '@/lib/api/validate';
 import { escapeCSV } from '@/lib/export';
+import { notArchived } from '@/lib/api/deals-archive-filter';
+import { ownerScope } from '@/lib/api/owner-scope';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 /**
@@ -76,8 +78,19 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     // row-by-row into the response but reads in one round-trip).
     let query: ExportQuery | null = null;
 
-    const tenantFilter = (table: { tenantId: PgColumn; deletedAt?: PgColumn }) =>
-      and(eq(table.tenantId, ctx.tenantId), table.deletedAt ? isNull(table.deletedAt) : undefined);
+    const tenantFilter = (table: { tenantId: PgColumn; deletedAt?: PgColumn }, scope?: SQL | undefined) =>
+      and(
+        eq(table.tenantId, ctx.tenantId),
+        table.deletedAt ? isNull(table.deletedAt) : undefined,
+        // #2677 — each of these entities' own list route narrows to
+        // `assigned_to = me OR created_by = me` when the role lacks
+        // `<entity>.view_all`; this read the whole tenant for up to 10k rows.
+        // `companies` is deliberately left out: `companies.view_all` is defined
+        // (`lib/permissions/definitions.ts:43`) and enforced nowhere, so scoping
+        // only the export would make it stricter than the list — that gap is
+        // #2597's, not this one.
+        scope,
+      );
 
     // #1048: select an explicit, business-meaningful column set per entity
     // instead of db.select() (which fetches ALL columns — 50+ on wide tables,
@@ -108,7 +121,10 @@ export const POST = withApiRoute(async (request: NextRequest) => {
           isCustomer: contacts.isCustomer,
           createdAt: contacts.createdAt,
           updatedAt: contacts.updatedAt,
-        }).from(contacts).where(tenantFilter(contacts));
+        }).from(contacts).where(tenantFilter(contacts, and(
+          ownerScope(ctx, 'contacts.view_all', contacts),
+          eq(contacts.isArchived, false),
+        )));
         break;
       case 'companies':
         query = db.select({
@@ -141,7 +157,10 @@ export const POST = withApiRoute(async (request: NextRequest) => {
           closeDate: deals.closeDate,
           createdAt: deals.createdAt,
           updatedAt: deals.updatedAt,
-        }).from(deals).where(tenantFilter(deals));
+        }).from(deals).where(tenantFilter(deals, and(
+          ownerScope(ctx, 'deals.view_all', deals),
+          notArchived(),
+        )));
         break;
       case 'leads':
         query = db.select({
@@ -164,7 +183,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
           isConverted: leads.isConverted,
           createdAt: leads.createdAt,
           updatedAt: leads.updatedAt,
-        }).from(leads).where(tenantFilter(leads));
+        }).from(leads).where(tenantFilter(leads, ownerScope(ctx, 'leads.view_all', leads)));
         break;
       case 'tasks':
         query = db.select({
@@ -183,7 +202,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
           leadId: tasks.leadId,
           createdAt: tasks.createdAt,
           updatedAt: tasks.updatedAt,
-        }).from(tasks).where(tenantFilter(tasks));
+        }).from(tasks).where(tenantFilter(tasks, ownerScope(ctx, 'tasks.view_all', tasks)));
         break;
       case 'activities':
         query = db.select({

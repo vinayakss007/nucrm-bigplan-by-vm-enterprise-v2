@@ -72,18 +72,18 @@ The bulk of the tree: frozen snapshots of workstreams that ended, most before th
 
 **Why they are kept rather than deleted.** The register states the rule — a fixed entry stays because
 the evidence is what makes it useful as a learning document, and because the companion lessons doc
-references it — at `docs/infra/PREPROD-ISSUE-REGISTER.md:5108`, re-pinned by **PP-077**. The pointer
-it replaced (`:1598`) had drifted 2,315 lines and was still naming a `**Files:**` entry inside PP-040,
-because `guard:coords` reads the citations the register makes _outward_ and never the ones other
-documents make _into_ it; merging PP-064, then PP-066, PP-067 and PP-068, then **#2511**'s own
-PP-061 bullet, then **#2531**'s PP-069, **#2548**'s PP-071, **#2558**'s PP-072, **#2567**'s PP-073
-and this **#2507**/PP-065, **#2526**/PP-074, **#2534**/PP-070 and this **#2530**/PP-077 bullet, each
-moved the rule again, so the re-pin has now run fourteen times on this tree. **#2581** (**PP-076**)
-and **#2569** (**PP-075**) are open minting the same fourteenth from their own trees, and **#2566**
-re-pins this sentence without minting an entry, so whoever merges last re-measures.
-Same here — these files are cited by PP numbers, ADRs, commit messages and each other.
-`MASTER_PLAN.md` and `ISSUES.md` read like current state and are not; that is a labelling failure,
-and the fix is labelling, not `rm`.
+references it — at `docs/infra/PREPROD-ISSUE-REGISTER.md:5290` (the bullet beginning `- **Fixed issue** → keep the entry (do not delete)` — that text is the anchor if the number has moved again; re-pinned from `:5195` when **#2578**/**PP-077** merged its header bullet, summary row and section above the rule), re-pinned by **PP-076**, after
+**PP-073**, **PP-065**, **PP-074**, **PP-070** and **#2566**'s register-only addendum moved it.
+The pointer it replaced (`:1598`) had drifted 2,315 lines and was still naming a `**Files:**` entry
+inside PP-040, because `guard:coords` reads the citations the register makes _outward_ and never the
+ones other documents make _into_ it; merging PP-064, then PP-066, PP-067 and PP-068, then
+**#2511**'s own PP-061 bullet, then **#2531**'s PP-069, **#2548**'s PP-071, **#2558**'s PP-072,
+**#2567**'s PP-073, **#2507**'s PP-065, **#2526**'s PP-074, **#2534**'s PP-070, **#2566**'s
+addendum and this **#2561**/PP-076 entry each moved the rule again before this line was committed,
+so the re-pin has now run sixteen times on this tree. **#2569** (**PP-075**) and **#2587**
+(**PP-078**) are open with register sections of their own and re-pin this sentence from their own trees, so whoever merges last re-measures. Same here — these files are cited by PP numbers, ADRs, commit messages and each
+other. `MASTER_PLAN.md` and `ISSUES.md` read like current state and are not; that is a labelling
+failure, and the fix is labelling, not `rm`.
 
 **The test for history.** A date in the filename or title means history. A doc describing work that
 has not shipped means history. A doc quoting a count means: re-measure before you repeat it.

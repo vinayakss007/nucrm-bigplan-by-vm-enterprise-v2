@@ -14,6 +14,7 @@ import { deals } from '@/drizzle/schema';
 import { and, eq, desc, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { readJsonBody, validateBody, uuidField } from '@/lib/api/validate';
+import { ownerScope } from '@/lib/api/owner-scope';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { rateLimitRead } from '@/lib/api/read-rate-limit';
 
@@ -78,17 +79,33 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     // #2524 — deal_id arrives from the body, so it is only ever as trusted as
     // the tenant gate below. Both the RPC and the forecast read must be proven
     // in-tenant first: RLS is this repo's backstop, never its primary filter.
+    // #2777 — and proven *owned*. `deals.edit` is the only gate here, and
+    // `sales_rep` holds it with `deals.view_all` false
+    // (`lib/permissions/definitions.ts:135`), so tenant + tombstone alone let a
+    // rep score a colleague's deal and read back its `deal_forecasts` row — the
+    // same row `deals/[id]/forecast/route.ts:31-43` has refused them since #2709.
     const [ownedDeal] = await db
       .select({ id: deals.id })
       .from(deals)
-      .where(and(eq(deals.id, deal_id), eq(deals.tenantId, ctx.tenantId), sql`${deals.deletedAt} IS NULL`))
+      .where(and(
+        eq(deals.id, deal_id),
+        eq(deals.tenantId, ctx.tenantId),
+        sql`${deals.deletedAt} IS NULL`,
+        ownerScope(ctx, 'deals.view_all', deals),
+      ))
       .limit(1);
     if (!ownedDeal) {
       return NextResponse.json({ error: 'Deal not found' }, { status: 404 });
     }
 
     const result = await db.execute(sql`SELECT public.calculate_deal_win_probability(${deal_id}) as probability`);
-    const probability = (result.rows[0] as Record<string, unknown>)?.probability as number || 0;
+    // #2774: node-postgres returns `numeric` as a STRING (no setTypeParser in
+    // this repo), so `as number || 0` was doubly wrong — the body carried
+    // "0.1" while the cast said number, and `|| 0` could never fire because
+    // every non-empty string is truthy. Coerce, then fall back on the number.
+    const raw = (result.rows[0] as Record<string, unknown> | undefined)?.['probability'];
+    const parsed = Number(raw);
+    const probability = Number.isFinite(parsed) ? parsed : 0;
 
     const [forecast] = await db.select()
       .from(dealForecasts)

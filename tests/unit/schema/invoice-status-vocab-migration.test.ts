@@ -80,16 +80,24 @@ describe(`migration ${TAG} (#2258)`, () => {
     expect([...INVOICE_STATUSES].sort()).toEqual(vocabOf(sql).sort());
   });
 
-  it('both invoice status enums reference the shared constant — no inline copy may reappear', () => {
+  it('the invoice status vocabulary is declared once, through the shared constant', () => {
     const monolith = readFileSync(join(ROOT, 'lib/api/schemas.ts'), 'utf8');
     const split = readFileSync(join(ROOT, 'lib/api/schemas/billing.ts'), 'utf8');
     // The invoice status line uses z.enum(INVOICE_STATUSES), not a literal list.
     const invoiceLine = (src: string) =>
       src.split('\n').find((l) => /status: z\.enum\(/.test(l) && /INVOICE_STATUSES/.test(l));
-    expect(invoiceLine(monolith), 'lib/api/schemas.ts must use z.enum(INVOICE_STATUSES)').toBeTruthy();
     expect(invoiceLine(split), 'lib/api/schemas/billing.ts must use z.enum(INVOICE_STATUSES)').toBeTruthy();
+    // #2819 collapsed the duplicate: lib/api/schemas.ts no longer declares invoice
+    // schemas at all, it re-exports billing's. Requiring the re-export keeps the
+    // 90+ routes that import the monolith on this same definition, and forbidding
+    // an invoice line here is what stops #2258's two-vocabularies bug returning.
+    expect(monolith).toMatch(/createInvoiceSchema,\n[\s\S]*?\} from '\.\/schemas\/billing';/);
+    expect(
+      invoiceLine(monolith),
+      'lib/api/schemas.ts must re-export the invoice schemas, not declare its own',
+    ).toBeUndefined();
     // Neither file may keep an inline invoice status enum (the old drift source).
-    const inlineInvoice = /status: z\.enum\(\[.*'partially_paid'.*\]\)/s;
+    const inlineInvoice = /status: z\.enum\(\[[^\]]*'partially_paid'/;
     expect(monolith).not.toMatch(inlineInvoice);
     expect(split).not.toMatch(inlineInvoice);
   });

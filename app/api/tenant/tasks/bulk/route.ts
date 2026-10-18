@@ -22,6 +22,8 @@ import { logError } from '@/lib/errors-server';
 import { readJsonBody } from '@/lib/api/validate';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { ownerScope } from '@/lib/api/owner-scope';
+import { enforceFieldWrite } from '@/lib/rbac/enforce';
 
 const MAX_BULK = 500;
 const PRIORITIES = ['low', 'medium', 'high', 'urgent'];
@@ -44,6 +46,9 @@ export const POST = withApiRoute(async (req: NextRequest) => {
 
     let task_ids: string[] = body.task_ids ?? [];
 
+    // #2674 — into every id set this route writes, ahead of the caller's filters
+    // (`and()` skips the undefined a `view_all` holder gets). See lib/api/owner-scope.ts.
+    const mine = ownerScope(ctx, 'tasks.view_all', tasks);
     if (selectAll) {
       const whereConditions = [
         eq(tasks.tenantId, ctx.tenantId),
@@ -57,7 +62,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
           ilike(tasks.title, `%${escapeLike(filters.q)}%`),
         )!);
       }
-      const matched = await db.select({ id: tasks.id }).from(tasks).where(and(...whereConditions));
+      const matched = await db.select({ id: tasks.id }).from(tasks).where(and(mine, ...whereConditions));
       task_ids = matched.map(r => r.id);
       if (!task_ids.length) return NextResponse.json({ error: 'No tasks match the provided filters' }, { status: 404 });
       if (task_ids.length > MAX_BULK) return NextResponse.json({ error: `Max ${MAX_BULK} tasks per bulk operation (matched ${task_ids.length})` }, { status: 400 });
@@ -76,7 +81,8 @@ export const POST = withApiRoute(async (req: NextRequest) => {
         and(
           inArray(tasks.id, task_ids),
           eq(tasks.tenantId, ctx.tenantId),
-          sql`${tasks.deletedAt} IS NULL`
+          sql`${tasks.deletedAt} IS NULL`,
+          mine
         )
       );
 
@@ -85,6 +91,31 @@ export const POST = withApiRoute(async (req: NextRequest) => {
       return NextResponse.json({ error: 'No valid tasks found' }, { status: 404 });
 
     let affected = 0;
+
+    // #2618 — same doctrine as the deals bulk gate (#2641): each of these
+    // actions writes the column that IS the action, so a field_permissions
+    // restriction on it must reject (403) rather than perform a stripped,
+    // meaningless update.
+    const BULK_WATCHED_FIELDS: Record<string, string[]> = {
+      assign: ['assigned_to'],
+      priority: ['priority'],
+      complete: ['status', 'completed'],
+      reopen: ['status', 'completed'],
+      due: ['due_date'],
+      update_field: ['metadata'],
+    };
+    const watched = BULK_WATCHED_FIELDS[action as string];
+    if (watched) {
+      const { stripped } = await enforceFieldWrite(
+        ctx, 'tasks', Object.fromEntries(watched.map((f) => [f, true])),
+      );
+      if (stripped.length > 0) {
+        return NextResponse.json(
+          { error: `field_permissions restricts: ${stripped.join(', ')}` },
+          { status: 403 },
+        );
+      }
+    }
 
     switch (action) {
       case 'assign': {

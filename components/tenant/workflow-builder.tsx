@@ -36,10 +36,22 @@ import { useUndoRedo } from './use-undo-redo'
  *  `unknown` — read sites narrow before use (replaces the former `any`, #1268). */
 type WorkflowConfig = Record<string, unknown>;
 
-/** A persisted workflow action as returned by the workflows API. */
-interface WorkflowAction {
-  action_type: string;
-  action_config?: WorkflowConfig;
+/** A persisted `workflowActions` row, as `GET /api/tenant/workflows/[id]` hands
+ *  back the `db.query` result untouched (`[id]/route.ts:46`, `:58-64`): drizzle's
+ *  TypeScript names. The snake_case SQL names belong to the request side, which
+ *  is what `POST`/`PATCH` destructure (#2805). */
+interface WorkflowActionRow {
+  actionType: string;
+  config?: WorkflowConfig | null;
+}
+
+/** The `data` of that response: a `workflows` row spread with its two lists. */
+interface WorkflowResponse {
+  name: string;
+  description: string | null;
+  triggerType: string;
+  nodes?: unknown[];
+  actions?: WorkflowActionRow[];
 }
 
 /** Narrow an unknown thrown value to a display message (replaces `catch (e: any)`). */
@@ -60,20 +72,8 @@ interface CustomNodeData extends Record<string, unknown> {
 type CustomNode = Node<CustomNodeData>
 
 // ─── Node Type Definitions ─────────────────────────────────────────────────────
-
-const _NODE_TYPES = {
-  trigger: 'trigger',
-  action_send_email: 'action_send_email',
-  action_create_task: 'action_create_task',
-  action_update_contact: 'action_update_contact',
-  action_add_tag: 'action_add_tag',
-  action_send_notification: 'action_send_notification',
-  action_fire_webhook: 'action_fire_webhook',
-  action_create_deal: 'action_create_deal',
-  action_assign_contact: 'action_assign_contact',
-  condition: 'condition',
-  wait: 'wait',
-}
+// A node's `type` is its palette key; NODE_PALETTE is the only list of them. A
+// parallel const map of the same strings was dead code and is gone (#2805).
 
 const NODE_PALETTE = [
   { type: 'trigger', label: 'Trigger', icon: Zap, color: 'bg-violet-500', textColor: 'text-violet-600', bgColor: 'bg-violet-50 dark:bg-violet-950/30', borderColor: 'border-violet-300 dark:border-violet-700' },
@@ -168,7 +168,7 @@ export default function WorkflowBuilder({ workflowId, onSave }: Props) {
   const [testing, setTesting] = useState(false)
   const [showPalette, setShowPalette] = useState(true)
   const [selectedNode, setSelectedNode] = useState<string | null>(null)
-  const [_nodeConfig, _setNodeConfig] = useState<WorkflowConfig>({})
+  const [_nodeConfig] = useState<WorkflowConfig>({})
   const [loading, setLoading] = useState(!!workflowId)
 
   // Undo/Redo
@@ -234,31 +234,31 @@ export default function WorkflowBuilder({ workflowId, onSave }: Props) {
         const data = await res.json()
         if (!res.ok) throw new Error(data.error)
 
-        const wf = data.data
+        const wf = data.data as WorkflowResponse
         setWorkflowName(wf.name)
         setWorkflowDescription(wf.description || '')
-        setTriggerType(wf.trigger_type)
+        setTriggerType(wf.triggerType)
 
         // Load nodes from JSONB or create from actions
         if (wf.nodes && Array.isArray(wf.nodes) && wf.nodes.length > 0) {
-          setNodes(wf.nodes)
+          setNodes(wf.nodes as CustomNode[])
         } else if (wf.actions && wf.actions.length > 0) {
           // Convert actions to nodes
-          const actionNodes: CustomNode[] = wf.actions.map((action: WorkflowAction, i: number) => ({
+          const actionNodes: CustomNode[] = wf.actions.map((action: WorkflowActionRow, i: number) => ({
             id: `action-${i + 1}`,
             type: 'workflowNode',
             position: { x: 400, y: 200 + i * 180 },
             data: {
-              label: action.action_type.replace('action_', '').replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()),
-              nodeType: `action_${action.action_type}`,
-              config: action.action_config ?? {},
+              label: action.actionType.replace('action_', '').replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()),
+              nodeType: `action_${action.actionType}`,
+              config: action.config ?? {},
             },
           }))
           const triggerNode: CustomNode = {
             id: 'trigger-1',
             type: 'workflowNode',
             position: { x: 400, y: 50 },
-            data: { label: 'Trigger', nodeType: 'trigger', description: TRIGGER_OPTIONS.find(t => t.value === wf.trigger_type)?.label, config: {} },
+            data: { label: 'Trigger', nodeType: 'trigger', description: TRIGGER_OPTIONS.find(t => t.value === wf.triggerType)?.label, config: {} },
           }
           setNodes([triggerNode, ...actionNodes])
 
@@ -276,7 +276,7 @@ export default function WorkflowBuilder({ workflowId, onSave }: Props) {
             id: 'trigger-1',
             type: 'workflowNode',
             position: { x: 400, y: 50 },
-            data: { label: 'Trigger', nodeType: 'trigger', description: TRIGGER_OPTIONS.find(t => t.value === wf.trigger_type)?.label, config: {} },
+            data: { label: 'Trigger', nodeType: 'trigger', description: TRIGGER_OPTIONS.find(t => t.value === wf.triggerType)?.label, config: {} },
           }
           setNodes([triggerNode])
         }

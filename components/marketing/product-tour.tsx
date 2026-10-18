@@ -67,7 +67,7 @@ export function ProductTour({ tabs }: { tabs: TourTab[] }) {
               onClick={() => setActive(i)}
               className={`flex shrink-0 items-center gap-2 rounded-xl border px-3.5 py-2.5 text-[13.5px] font-semibold transition-all duration-300 ${
                 on
-                  ? 'border-sky-400/35 bg-sky-500/15 text-white shadow-[0_8px_30px_-12px_rgba(37,99,235,0.9)]'
+                  ? 'border-sky-400/35 bg-sky-500/15 text-white shadow-[0_8px_30px_-12px_rgba(168,94,60,0.55)]'
                   : 'border-white/[0.08] bg-white/[0.025] text-slate-400 hover:border-white/20 hover:text-slate-200'
               }`}
             >

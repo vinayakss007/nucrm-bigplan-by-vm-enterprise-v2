@@ -5,7 +5,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { logError } from '@/lib/errors-server';
-import { requireTenantCtx } from '@/lib/tenant/context';
+import { requireAuth } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
 import { contacts, deals, tasks, dealStages } from '@/drizzle/schema';
 import { eq, and, sql, count } from 'drizzle-orm';
@@ -25,14 +25,17 @@ import { rateLimitRead } from '@/lib/api/read-rate-limit';
 //     timeseries: { weekly: [{ weekStart, contacts, deals }] } // 8 fixed buckets
 //   }
 
-// #1838: wrapped in withApiRoute so requireTenantCtx()'s setTenantContext() and
+// #1838: wrapped in withApiRoute so requireAuth()'s setTenantContext() and
 // all the aggregate queries below share ONE pinned connection — otherwise RLS
 // sees an empty tenant GUC on these queries and provides no isolation.
 export const GET = withApiRoute(async (request: NextRequest) => {
   try {
     const limited = await rateLimitRead(request, 'analytics');
     if (limited) return limited;
-    const ctx = await requireTenantCtx();
+    // #2713: this used to call requireTenantCtx(), the Server-Component helper
+    // whose refusal is a redirect() THROW. This handler's own catch turned
+    // "not signed in" into a 500. requireAuth answers it with a 401.
+    const ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
 
     // The client previously built 8 weekly buckets as

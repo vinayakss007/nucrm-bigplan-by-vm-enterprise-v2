@@ -86,11 +86,23 @@ export const PATCH = withApiRoute(async (req: NextRequest,
     updates['updatedAt'] = new Date();
 
     const [existing] = await db
-      .select({ updatedAt: productTemplates.updatedAt })
+      .select({ updatedAt: productTemplates.updatedAt, isBuiltin: productTemplates.isBuiltin })
       .from(productTemplates)
       .where(and(eq(productTemplates.id, id), sql`${productTemplates.deletedAt} IS NULL`))
       .limit(1);
     if (!existing) return NextResponse.json({ error: 'Template not found' }, { status: 404 });
+
+    // #2633: builtin rows are the 0128-seeded copies of the shipped templates.
+    // Editing their blueprint would desync them from code and every future
+    // re-seed, so builtins only accept status/description (and icon, cosmetic).
+    if (existing.isBuiltin) {
+      for (const k of Object.keys(updates)) {
+        if (!['status', 'description', 'icon', 'updatedAt'].includes(k)) delete updates[k];
+      }
+      if (Object.keys(updates).length === 1) { // only updatedAt survived
+        return NextResponse.json({ error: 'Built-in templates: only status, description and icon are editable' }, { status: 400 });
+      }
+    }
 
     const expectedUpdatedAt = new Date(v.updated_at ?? existing.updatedAt!);
     const guard = await concurrencyGuardById(db, productTemplates, id, expectedUpdatedAt);

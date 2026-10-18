@@ -364,8 +364,8 @@ export async function withUserContext<T>(
  * redeemed, so every authenticated request answered 401 "Session expired"
  * while signup/login themselves kept returning 2xx. `tenant_members` and
  * `roles` had the same shape via tenant_isolation (they need a tenant the
- * membership read is supposed to discover); 0088 adds self-scoped SELECT
- * policies for them instead of widening the tenant-bound ones.
+ * membership read is supposed to discover); 0127 (#2626) adds self-scoped
+ * SELECT policies for them instead of widening the tenant-bound ones.
  *
  * Read-only by construction: neither GUC grants INSERT/UPDATE/DELETE here.
  */

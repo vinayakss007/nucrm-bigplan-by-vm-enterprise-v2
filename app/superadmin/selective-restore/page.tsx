@@ -460,8 +460,18 @@ export default function SelectiveRestorePage() {
             <Clock className="w-5 h-5" />
             Restore History
           </h3>
+          {/* #2823: a failed read must not claim "no restore operations yet" —
+              that string is a statement about the tenant's data, and this read
+              404s today because the endpoint is #2822. */}
           {restoreLogs.length === 0 ? (
-            <p className="text-gray-500 text-center py-8">No restore operations yet</p>
+            logsQuery.error ? (
+              <div role="alert" className="rounded-lg border border-red-800 bg-red-900/20 p-4 text-sm text-red-300">
+                Failed to load restore history: {logsQuery.error.message}. An empty list would mean no
+                restore has ever run; this message means the request did not succeed.
+              </div>
+            ) : (
+              <p className="text-gray-500 text-center py-8">No restore operations yet</p>
+            )
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full">

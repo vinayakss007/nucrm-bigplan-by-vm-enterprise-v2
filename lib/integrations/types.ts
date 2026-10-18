@@ -12,6 +12,26 @@ export interface ProviderCapability {
   inputFields: FieldDef[];
 }
 
+/**
+ * One input the tenant fills in when configuring a provider.
+ *
+ * `secret` declares that the *value* is a credential (API key, bot token,
+ * password) rather than a setting. It is the only sanctioned answer to "is this
+ * a secret?" on the client: the install form renders `type` from it, and
+ * `SECRET_CONFIG_KEY` in `lib/integrations/config-credentials.ts` decides
+ * whether the stored value comes back out on a read.
+ *
+ * The two must agree. A field marked `secret` that the mask does not strip
+ * leaves the credential readable; a field the mask strips that is not marked
+ * shows the admin a plain text box for something they will never see again.
+ * `tests/unit/integrations-fielddef-secret-2564.test.ts` asserts the equality
+ * over every registered provider, so adding a credential without marking it
+ * fails CI instead of quietly splitting the two rules again (see #2564).
+ *
+ * Do not re-derive it from the key name at a call site. Guessing `key.includes
+ * ('key')` also matched `monkey_mode`-style settings and missed `password`,
+ * which is precisely the drift this field exists to remove.
+ */
 export interface FieldDef {
   key: string;
   label: string;
@@ -19,6 +39,7 @@ export interface FieldDef {
   required?: boolean;
   placeholder?: string;
   options?: { label: string; value: string }[];
+  secret?: boolean;
 }
 
 export interface ProviderDefinition {

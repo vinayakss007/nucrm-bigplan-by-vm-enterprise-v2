@@ -16,6 +16,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
 import { getCronHealth, getStaleJobs } from '@/lib/cron/health';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { clampInt } from '@/lib/api/query-params';
 
 export const GET = withApiRoute(async (request: NextRequest) => {
   const ctx = await requireAuth(request);
@@ -25,7 +26,14 @@ export const GET = withApiRoute(async (request: NextRequest) => {
   }
 
   const maxAgeParam = request.nextUrl.searchParams.get('maxAgeMs');
-  const maxAgeMs = maxAgeParam ? Math.max(Number(maxAgeParam), 60_000) : 900_000;
+  // #2766 — `Math.max(Number('abc'), 60_000)` is `NaN`, and `lib/cron/health.ts:81`
+  // computes `stale = now - record.lastRunAt > maxAgeMs`; every comparison against
+  // `NaN` is false, so a typo in the query string made the endpoint answer
+  // `{"status":"healthy"}` for a fleet whose cron had not run for a week. That is
+  // worse than the 500 the other sites in this sweep cause: it is the monitor turning
+  // itself off and reporting that it is on. The `max` stays open-ended because no
+  // ceiling on how stale a caller may ask about is this route's policy to invent.
+  const maxAgeMs = clampInt(maxAgeParam, 900_000, 60_000, Number.MAX_SAFE_INTEGER);
 
   const jobs = getCronHealth(maxAgeMs);
   const staleJobs = getStaleJobs(maxAgeMs);

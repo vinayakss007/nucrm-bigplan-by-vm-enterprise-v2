@@ -19,6 +19,14 @@
  * be called zero times for lifecycle-dead enrollments, and exactly once for the
  * live control in the same suite. A suite that never sends anything would also
  * be "inert", so the control case is load-bearing.
+ *
+ * #2771 changed how the advance is answered here. `advanceOrCompleteStep` used to
+ * `execute()` a `calculate_sequence_step_date(...)` call — three arguments against
+ * a two-parameter function, so Postgres raised 42883 — and this harness answered
+ * any `execute` positionally, `sequenceSteps.findFirst` was hardcoded to `null`,
+ * and neither could see that. The harness now resolves the next-step lookup from
+ * the seeded steps by the step number the rendered statement actually binds, so a
+ * lookup that stops naming one finds nothing and the enrollment completes.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { NextRequest } from 'next/server';
@@ -36,6 +44,7 @@ const h = vi.hoisted(() => ({
   updates: [] as Array<{ table: unknown; payload: Record<string, unknown>; where: unknown }>,
   inserts: [] as Array<{ table: unknown; payload: unknown }>,
   stepWheres: [] as unknown[],
+  nextStepWheres: [] as unknown[],
   steps: [] as Array<Record<string, unknown>>,
 }));
 
@@ -81,7 +90,19 @@ function txMock() {
           h.stepWheres.push(where);
           return Promise.resolve(h.steps);
         },
-        findFirst: async () => null,
+        // #2771: the next-step lookup resolves from the seeded steps by the number
+        // the statement actually binds. A canned `null` here is what let the old
+        // three-argument `calculate_sequence_step_date` call look harmless.
+        findFirst: ({ where }: { where?: unknown } = {}) => {
+          h.nextStepWheres.push(where);
+          const { sql, params } = render(where);
+          const m = /"sequence_steps"\."step_number" = \$(\d+)/i.exec(sql);
+          if (!m) return Promise.resolve(null);
+          const want = Number(params[Number(m[1]) - 1]);
+          return Promise.resolve(
+            h.steps.find((s) => Number(s.stepNumber) === want && s.isActive !== false && !s.deletedAt) ?? null
+          );
+        },
       },
       sequenceStepLogs: { findMany: async () => [] },
     },
@@ -179,6 +200,7 @@ beforeEach(() => {
   h.updates = [];
   h.inserts = [];
   h.stepWheres = [];
+  h.nextStepWheres = [];
   h.steps = [];
 });
 
@@ -314,8 +336,6 @@ describe('provider rejection reverts the claim instead of recording a send (#242
     [{ id: ENROLLMENT_ROW.contact_id, email: 'x@y.z', do_not_contact: false }],
     [ENROLLMENT_ROW],
   ];
-  const ADVANCE = [{ next_date: new Date(Date.now() + 86400000).toISOString() }];
-
   /** The last write to a table: phase 3 confirm/revert always follows the claim. */
   function lastWriteTo(table: string) {
     const writes = h.updates.filter((u) => u.where !== undefined && sqlOf(u.where).includes(`"${table}"`));
@@ -323,20 +343,27 @@ describe('provider rejection reverts the claim instead of recording a send (#242
   }
 
   it('control — an accepted send is confirmed and the step advances', async () => {
-    h.executeResults = [...UP_TO_CLAIM, ADVANCE];
-    h.steps = [EMAIL_STEP];
+    h.executeResults = [...UP_TO_CLAIM];
+    h.steps = [EMAIL_STEP, { ...EMAIL_STEP, id: 'step-2', stepNumber: 2 }];
     const body = await (await runRoute()).json();
 
     expect(body.processed).toBe(1);
     expect(email.sendEmail).toHaveBeenCalledTimes(1);
     expect(lastWriteTo('sequence_step_logs')!.payload.status).toBe('sent');
     expect(lastWriteTo('sequence_enrollments')!.payload.currentStep).toBe(2);
-    // advanceOrCompleteStep asks the DB for the next date: the 4th statement.
-    expect(h.executes).toHaveLength(4);
+    // #2771: the next date comes from the next step's own row, so the advance costs
+    // no statement at all — the sweep, the contact fetch and the claim re-check are
+    // the only three `execute`s left, and no caller reaches the two-parameter
+    // `calculate_sequence_step_date` that never matched this three-argument call.
+    expect(h.executes).toHaveLength(3);
+    expect(h.nextStepWheres.map((w) => sqlOf(w)).join('\n'))
+      .toMatch(/"sequence_steps"\."step_number"/);
+    expect(h.executes.map((q) => sqlOf(q)).join('\n'))
+      .not.toMatch(/calculate_sequence_step_date/);
   });
 
   it('a {success:false} result reverts the step log to pending with the provider error', async () => {
-    h.executeResults = [...UP_TO_CLAIM]; // no 4th row: the advance must not run
+    h.executeResults = [...UP_TO_CLAIM]; // the revert branch never reaches the advance
     h.steps = [EMAIL_STEP];
     email.sendEmail.mockResolvedValueOnce({ success: false, error: '550 5.1.1 <x@y.z>: Recipient address rejected' });
 
@@ -377,7 +404,7 @@ describe('provider rejection reverts the claim instead of recording a send (#242
   });
 
   it('the provider message id is linked to the tracking row (#2406)', async () => {
-    h.executeResults = [...UP_TO_CLAIM, ADVANCE];
+    h.executeResults = [...UP_TO_CLAIM];
     h.steps = [EMAIL_STEP];
     tracking.createEmailTracking.mockResolvedValueOnce('track-2406');
 
@@ -387,7 +414,7 @@ describe('provider rejection reverts the claim instead of recording a send (#242
   });
 
   it('a failed link does not fail a delivered email (#2406)', async () => {
-    h.executeResults = [...UP_TO_CLAIM, ADVANCE];
+    h.executeResults = [...UP_TO_CLAIM];
     h.steps = [EMAIL_STEP];
     tracking.createEmailTracking.mockResolvedValueOnce('track-2406');
     tracking.recordEmailMessageId.mockRejectedValueOnce(new Error('update failed'));
@@ -399,7 +426,7 @@ describe('provider rejection reverts the claim instead of recording a send (#242
   });
 
   it('nothing is linked when there is no tracking row', async () => {
-    h.executeResults = [...UP_TO_CLAIM, ADVANCE];
+    h.executeResults = [...UP_TO_CLAIM];
     h.steps = [EMAIL_STEP];
     tracking.createEmailTracking.mockResolvedValueOnce(null);
 

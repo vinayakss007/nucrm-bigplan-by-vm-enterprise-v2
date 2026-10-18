@@ -99,7 +99,15 @@ vi.mock('@/drizzle/db', () => {
 const mockExport = vi.hoisted(() => vi.fn());
 const mockAnonymize = vi.hoisted(() => vi.fn());
 const mockSoc2 = vi.hoisted(() => vi.fn());
+// #2611's bulk sweep runs ahead of the read in both routes. This file is about
+// the read-time reaper and the terminal markers; the bulk statement is pinned
+// against a real drizzle in compliance-stale-reap-2530.test.ts.
+const mockBulkReap = vi.hoisted(() => vi.fn(async () => 0));
 
+vi.mock('@/lib/compliance/stale-requests', () => ({
+  reapStaleProcessingRequests: mockBulkReap,
+  STALE_PROCESSING_MS: 15 * 60 * 1000,
+}));
 vi.mock('@/lib/compliance/gdpr', () => ({
   exportTenantData: mockExport,
   anonymizeTenantData: mockAnonymize,

@@ -23,6 +23,15 @@ import { eq, and, sql } from 'drizzle-orm';
 export interface ContactImportOptions {
   skipDuplicates?: boolean;
   updateExisting?: boolean;
+  /**
+   * #2618 — optional per-row write gate (role field_permissions). Called with
+   * the mapped camelCase row after CONTACT_COLUMN_MAP; must return the row
+   * minus any restricted keys. Supplied by the route, which owns AuthContext —
+   * this lib stays ctx-free.
+   */
+  fieldGate?: (
+    mapped: Record<string, unknown>,
+  ) => Promise<{ kept: Record<string, unknown>; dropped: string[] }>;
 }
 
 export interface ContactImportResult {
@@ -176,10 +185,18 @@ export async function processContactImport(
 
     for (const [index, row] of rows.entries()) {
       try {
-        const mapped: Record<string, unknown> = {};
+        const mapped0: Record<string, unknown> = {};
         for (const [key, val] of Object.entries(row)) {
           const dbCol = CONTACT_COLUMN_MAP[key.toLowerCase().trim()];
-          if (dbCol && val) mapped[dbCol] = val;
+          if (dbCol && val) mapped0[dbCol] = val;
+        }
+        let mapped = mapped0;
+        if (options.fieldGate) {
+          const gate = await options.fieldGate(mapped0);
+          mapped = gate.kept;
+          if (gate.dropped.length > 0) {
+            results.errors.push(`Row ${index + 2}: role restrictions dropped ${gate.dropped.join(', ')}`);
+          }
         }
         // CSV cells are strings; mapped values arrive as unknown.
         const s = (v: unknown): string => (typeof v === 'string' ? v : String(v ?? ''));

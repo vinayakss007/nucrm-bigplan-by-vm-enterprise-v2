@@ -18,6 +18,7 @@ import {
   markRequestFailed,
   reapStaleProcessing,
 } from '@/lib/compliance/request-lifecycle';
+import { reapStaleProcessingRequests } from '@/lib/compliance/stale-requests';
 import { readJsonBody } from '@/lib/api/validate';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
@@ -28,6 +29,12 @@ export const GET = withApiRoute(async (req: NextRequest) => {
 
     const moduleGate = await requireModule(ctx.tenantId, 'compliance', ctx.isSuperAdmin);
     if (moduleGate) return moduleGate;
+
+    // #2530: a hard interruption mid-job used to leave the request row stuck
+    // at `processing` — worst for `gdpr_delete`, where the erasure may have
+    // half-run. Surface it as failed before listing, so the audit trail the
+    // admin reads can never claim an erasure is underway when nothing is.
+    await reapStaleProcessingRequests(ctx.tenantId, ['gdpr_export', 'gdpr_delete']);
 
     const requests = await db
       .select()

@@ -131,7 +131,11 @@ describe('the repo agrees with the migration', () => {
     const j = JSON.parse(
       readFileSync(join(ROOT, 'drizzle/migrations/meta/_journal.json'), 'utf8'),
     );
-    const e = j.entries.at(-1);
+    // Look the entry up by tag, not by tail position: `.at(-1)` made this
+    // test expire on the next migration merged (0127/#2626 was the first to
+    // trip it), which is a snapshot, not an invariant.
+    const e = j.entries.find((x: { tag: string }) => x.tag === '0126_segment_members_primary_key');
+    expect(e).toBeDefined();
     expect(e.tag).toBe('0126_segment_members_primary_key');
     expect(e.idx).toBe(126);
     expect(e.breakpoints).toBe(true);

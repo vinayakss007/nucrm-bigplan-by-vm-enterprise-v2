@@ -17,6 +17,7 @@ import { readJsonBody, InvalidJsonBodyError } from '@/lib/api/validate';
 import { logError } from '@/lib/errors-server';
 import { RateLimiter } from '@/lib/rate-limit';
 import { escapeLike } from '@/lib/api/sanitize-like';
+import { clampInt } from '@/lib/api/query-params';
 import { selectLeastPrivilegeRole } from '@/lib/auth/default-role';
 import { db } from '@/drizzle/db';
 import { users, tenantMembers, roles } from '@/drizzle/schema';
@@ -81,8 +82,15 @@ export async function GET(request: NextRequest) {
 
   const url = new URL(request.url);
   const filter = url.searchParams.get('filter') ?? undefined;
-  const startIndex = Math.max(1, parseInt(url.searchParams.get('startIndex') ?? '1', 10));
-  const count = Math.min(100, Math.max(1, parseInt(url.searchParams.get('count') ?? '100', 10)));
+  // #2766 — these two `Math.max(1, parseInt(…))` / `Math.min(100, …)` clamps answer
+  // `NaN` for `?count=abc` and for `?startIndex=` (an empty parameter is `''`, and
+  // `?? '100'` only covers an *absent* one). Drizzle then omits both clauses —
+  // `pg-core/dialect.js:286` drops a `NaN` limit and `offsetSql = offset ? …` drops a
+  // `NaN` offset — so the provisioning API documented at "max 100" returned every
+  // active user of the tenant, and `generateSCIMResponse` echoed `startIndex: NaN`,
+  // which `JSON.stringify` writes as `null`: malformed SCIM, answered 200.
+  const startIndex = clampInt(url.searchParams.get('startIndex'), 1, 1, Number.MAX_SAFE_INTEGER);
+  const count = clampInt(url.searchParams.get('count'), 100, 1, 100);
 
   try {
     // Build query conditions
