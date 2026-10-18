@@ -64,7 +64,12 @@ export const GET = withApiRoute(async (req: NextRequest) => {
 
  
  
-    const filters: SQL[] = [eq(documents.tenantId, ctx.tenantId)];
+    // #2785 — the DELETE in this file tombstones (`deletedAt`), it does not remove, and
+    // every other reader of `documents` filters: `documents/[id]` GET/DELETE (:40, :88)
+    // and `lib/esignature-internal.ts:98`. This list did not, so a deleted document
+    // stayed in the page, stayed in `total` (same array), and 404s when clicked. Both
+    // queries below share this array, so one term covers the page and the count.
+    const filters: SQL[] = [eq(documents.tenantId, ctx.tenantId), isNull(documents.deletedAt)];
 
     if (entityType) filters.push(eq(documents.entityType, entityType));
     if (entityId) filters.push(eq(documents.entityId, entityId));
