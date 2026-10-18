@@ -104,8 +104,17 @@ vi.mock('@/drizzle/db', () => ({
     query: {
       contacts: { findFirst: vi.fn(async () => ({ id: CONTACT })) },
       sequences: { findFirst: vi.fn(async () => ({ id: SEQ })) },
-      sequenceSteps: { findMany: vi.fn(async () => h.steps) },
     },
+    // #2793: the enroll route now asks `firstStepDueAt`, which reads step 1 with
+    // the same `select(...).from(...).where(...).limit(1)` the scheduler uses,
+    // rather than a `findMany` it indexed itself.
+    select: () => ({
+      from: () => ({
+        where: () => ({
+          limit: async () => h.steps.slice(0, 1),
+        }),
+      }),
+    }),
     transaction: vi.fn((fn: (tx: unknown) => Promise<unknown>) => fn(h.tx())),
     update: () => ({ set: () => ({ where: async () => [] }) }),
     insert: () => ({
@@ -258,7 +267,11 @@ describe('the two schedulers agree, so #2771 and #2772 cannot drift apart again'
 describe('one helper, both call sites', () => {
   it('the enroll route delegates the arithmetic instead of re-deriving it', () => {
     const src = readFileSync(ENROLL_ROUTE, 'utf8');
-    expect(src).toContain('stepDelayMs(steps[0] ?? {})');
+    // #2793 moved the whole first-due-date computation into `firstStepDueAt`,
+    // which is where the other five writers get it from too. The guarantee this
+    // test was written for is unchanged: the route sums nothing itself.
+    expect(src).toContain('firstStepDueAt(');
+    expect(src).not.toContain('stepDelayMs(');
     expect(src).not.toMatch(/delayDays\s*\?\?\s*0\s*\)?\s*\*\s*86400000/);
     expect(src).toContain("from '@/lib/cron/sequence-steps'");
   });

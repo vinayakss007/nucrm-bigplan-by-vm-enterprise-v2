@@ -9,10 +9,10 @@ import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { updateContactSchema } from '@/lib/api/schemas';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { db } from '@/drizzle/db';
-import { contacts, sequences, sequenceSteps, sequenceEnrollments } from '@/drizzle/schema';
-import { eq, and, asc, sql, isNull } from 'drizzle-orm';
+import { contacts, sequences, sequenceEnrollments } from '@/drizzle/schema';
+import { eq, and, sql, isNull } from 'drizzle-orm';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
-import { cancelOpenEnrollments, stepDelayMs } from '@/lib/cron/sequence-steps';
+import { cancelOpenEnrollments, firstStepDueAt } from '@/lib/cron/sequence-steps';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 export const POST = withApiRoute(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
@@ -54,18 +54,9 @@ export const POST = withApiRoute(async (req: NextRequest, { params }: { params: 
     });
     if (!seq) return NextResponse.json({ error: 'Sequence not found or inactive' }, { status: 404 });
 
-    // Fetch sequence steps
-    const steps = await db.query.sequenceSteps.findMany({
-        limit: 200,
-      where: and(
-        eq(sequenceSteps.sequenceId, sequence_id),
-        eq(sequenceSteps.isActive, true),
-        isNull(sequenceSteps.deletedAt)
-      ),
-      orderBy: [asc(sequenceSteps.stepNumber)]
-    });
-
-    const nextStepAt = new Date(Date.now() + stepDelayMs(steps[0] ?? {}));
+    // #2793 / #2772: the wait before step 1, from the shared helper the other
+    // five writers use and the cron's own scheduler mirrors.
+    const nextStepAt = await firstStepDueAt(db, ctx.tenantId, sequence_id);
 
     // Upsert enrollment + increment enroll count atomically
     const [enrollment] = await db.transaction(async (tx) => {

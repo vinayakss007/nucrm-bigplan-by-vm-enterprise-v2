@@ -23,6 +23,7 @@ import { convertLeadCore } from '@/lib/leads/convert';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { enforceFieldWrite } from '@/lib/rbac/enforce';
 import { ownerScope } from '@/lib/api/owner-scope';
+import { firstStepDueAt } from '@/lib/cron/sequence-steps';
 
 const MAX_BULK = 500;
 
@@ -389,6 +390,9 @@ export const POST = withApiRoute(async (req: NextRequest) => {
           return NextResponse.json({ error: 'No leads with linked contacts found' }, { status: 400 });
         
         await db.transaction(async (tx) => {
+          // #2793: without a due date the row is `active` but the cron's due sweep
+          // can never select it, so the lead's drip silently never sent.
+          const nextStepAt = await firstStepDueAt(tx, ctx.tenantId, sequenceId);
           const enrollValues = contactIds.map(contactId => ({
             tenantId: ctx.tenantId,
             sequenceId,
@@ -396,6 +400,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
             enrolledBy: ctx.userId,
             status: 'active',
             currentStep: 1,
+            nextStepAt,
           }));
           
           const res = await tx.insert(sequenceEnrollments).values(enrollValues).onConflictDoNothing();

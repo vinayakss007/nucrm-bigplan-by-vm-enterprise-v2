@@ -214,6 +214,47 @@ export function activeStepWhere(tenantId: string, sequenceIds: readonly string[]
 }
 
 /**
+ * When an enrollment created right now is due to fire — the wait its own step 1
+ * asks for (#2793).
+ *
+ * `sequence_enrollments.next_step_at` has no default and no trigger, and the
+ * sweep requires `e.next_step_at <= NOW()`, where `NULL <= NOW()` is NULL. So a
+ * row written without it is `active`, `currentStep: 1` and invisible to the cron
+ * forever: no send, no error, no log line. Five of the six enrollment writers
+ * did exactly that (`app/api/tenant/segments/[id]/enroll`, the contacts and
+ * leads bulk routes, `sequences/[id]` and the automation engine); only
+ * `contacts/[id]/enroll` set the column, and it did the arithmetic inline where
+ * nobody could reuse it.
+ *
+ * One helper, called by every writer, so they cannot disagree about the starting
+ * delay the way they disagree about it today. It mirrors `advanceOrCompleteStep`
+ * exactly — the same `activeStepWhere`, the same `stepDelayMs`, and the step the
+ * sweep will actually look up, which is number 1 because that is the
+ * `currentStep` the writers put on the row.
+ *
+ * A sequence with no runnable step 1 comes back due now rather than NULL: the
+ * sweep then completes the enrollment on the next tick, which is a short and
+ * visible outcome instead of a permanent and silent one.
+ */
+export async function firstStepDueAt(
+  reader: Pick<typeof db, 'select'>,
+  tenantId: string,
+  sequenceId: string,
+): Promise<Date> {
+  const [step] = await reader
+    .select({
+      delayDays: sequenceSteps.delayDays,
+      delayHours: sequenceSteps.delayHours,
+      delayMinutes: sequenceSteps.delayMinutes,
+    })
+    .from(sequenceSteps)
+    .where(and(activeStepWhere(tenantId, [sequenceId]), eq(sequenceSteps.stepNumber, 1)))
+    .limit(1);
+
+  return new Date(Date.now() + stepDelayMs(step ?? {}));
+}
+
+/**
  * Row lock + re-check for the claim transaction (#2392). Must mirror
  * `dueEnrollmentsSql`: the gap between the sweep committing and this tx opening
  * is precisely when a delete/archive/un-enroll lands, and a re-check that only

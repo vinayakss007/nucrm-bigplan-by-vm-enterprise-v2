@@ -21,6 +21,7 @@
 import { logError } from '@/lib/errors-server';
 import { safeFetch } from '@/lib/security/ssrf';
 import { db } from '@/drizzle/db';
+import { firstStepDueAt } from '@/lib/cron/sequence-steps';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import {
   automations,
@@ -270,12 +271,17 @@ async function executeAction(dbOrTx: NodePgDatabase | typeof db, action: Automat
         .limit(1);
       if (alreadyActive) return;
 
+      // #2793: `next_step_at` has no default, and the cron's due sweep needs
+      // `next_step_at <= NOW()` — a NULL never selects, so an automation that
+      // enrolled without it left the contact in a drip that sent nothing, forever.
+      const nextStepAt = await firstStepDueAt(dbOrTx, payload.tenantId, sequenceId);
       await dbOrTx.insert(sequenceEnrollments).values({
         tenantId: payload.tenantId,
         sequenceId,
         contactId,
         status: 'active',
         currentStep: 1,
+        nextStepAt,
         enrolledBy: payload.userId || null,
       });
 
