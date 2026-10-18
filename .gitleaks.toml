@@ -1,5 +1,11 @@
 # Gitleaks false-positive allowlist
 # Test fixtures, docs with example curl commands, and deploy script placeholders.
+#
+# scripts/deploy-vm.sh (#2814) no longer contains a credential, but the path
+# stays listed until the history purge in #2302 part 4: dropping it now would
+# rescan every commit that ever carried the published setup key, which no file
+# edit can turn green again. Remove this entry together with the purge, not
+# before it.
 
 title = "gitleaks config"
 
