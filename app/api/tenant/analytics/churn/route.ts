@@ -132,7 +132,13 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     }
 
     const result = await db.execute(sql`SELECT public.calculate_churn_risk(${contact_id}) as probability`);
-    const probability = (result.rows[0] as Record<string, unknown>)?.probability as number || 0;
+    // #2774: node-postgres returns `numeric` as a STRING (no setTypeParser in
+    // this repo), so `as number || 0` was doubly wrong — the body carried
+    // "0.1" while the cast said number, and `|| 0` could never fire because
+    // every non-empty string is truthy. Coerce, then fall back on the number.
+    const raw = (result.rows[0] as Record<string, unknown> | undefined)?.['probability'];
+    const parsed = Number(raw);
+    const probability = Number.isFinite(parsed) ? parsed : 0;
 
     const [prediction] = await db.select()
       .from(churnPredictions)
