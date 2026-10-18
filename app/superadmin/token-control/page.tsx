@@ -285,8 +285,17 @@ export default function SuperAdminTokenControl() {
               ))}
             </tbody>
           </table>
+          {/* #2823: "No spending data yet" is a claim about the tenants, and this
+              read 404s today because /report/top-spenders has no handler. */}
           {topTenants.length === 0 && (
-            <div className="text-center py-12 text-gray-500">No spending data yet</div>
+            spendersQuery.error ? (
+              <div role="alert" className="m-4 rounded-lg border border-red-800 bg-red-900/20 p-4 text-sm text-red-300">
+                Failed to load top spenders: {spendersQuery.error.message}. An empty list would mean no
+                tenant has spending recorded; this message means the request did not succeed.
+              </div>
+            ) : (
+              <div className="text-center py-12 text-gray-500">No spending data yet</div>
+            )
           )}
         </div>
       )}
