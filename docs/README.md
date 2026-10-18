@@ -43,14 +43,18 @@ preprod database on 2026-10-04. The numbers they carry are reproducible by the c
 "How current is 'current'?" below.
 
 Two files are current by definition, being the implementation rather than a description of it:
-[`.github/workflows/ci.yml`](../.github/workflows/ci.yml) enforces **19** guards by alias —
-`guard:any-suppressions`, `guard:boundaries`, `guard:chain`, `guard:coords`, `guard:counters`, `guard:cron-lock`,
-`guard:csrf`, `guard:csv`, `guard:field-permissions`, `guard:filesize`, `guard:migration-rls`, `guard:panel-errors`,
-`guard:portal-rls-context`, `guard:portal-softdelete`, `guard:public-projection`, `guard:public-ratelimit`,
-`guard:raw-sql`, `guard:rls`, `guard:schemas` — plus **2**
-invoked as direct `node` commands (`scripts/check-audit-baseline.mjs`, `scripts/check-semgrep-baseline.mjs`; measured
-2026-10-10, re-measured by this PR, which added `guard:panel-errors`. The list was 7 when this paragraph was first
-written, and `guard:field-permissions` and `guard:raw-sql` had already joined CI without this sentence following them).
+[`.github/workflows/ci.yml`](../.github/workflows/ci.yml) enforces **20** guards by alias —
+`guard:any-suppressions`, `guard:boundaries`, `guard:catch-empty`, `guard:chain`, `guard:coords`, `guard:counters`,
+`guard:cron-lock`, `guard:csrf`, `guard:csv`, `guard:field-permissions`, `guard:filesize`, `guard:migration-rls`,
+`guard:panel-errors`, `guard:portal-rls-context`, `guard:portal-softdelete`, `guard:public-projection`,
+`guard:public-ratelimit`, `guard:raw-sql`, `guard:rls`, `guard:schemas` — plus **4**
+invoked directly in another job (`scripts/check-audit-baseline.mjs`, `scripts/check-semgrep-baseline.mjs`,
+`scripts/check-fresh-install-sequence.mts`, `scripts/check-env-coverage.mjs`). Aliases, not steps: three steps run
+two guards each, because adding a step shifts every register coordinate below it and the register cites `ci.yml`
+by line number — the line-count-neutral pattern #2655 and #2828 use. Measured 2026-10-18 by the #2829 panel-error
+pass, which added `guard:panel-errors`; the count was 16 when this paragraph was last rewritten, and
+`guard:catch-empty` (#2828), `guard:field-permissions`, `guard:raw-sql` and the env-coverage job had all joined CI
+without this sentence following them.
 [`scripts/migration-chain-baseline.json`](../scripts/migration-chain-baseline.json) holds the five
 baselined chain defects. `npm run db:verify-isolation` is **not** in CI — nothing runs it on a push.
 

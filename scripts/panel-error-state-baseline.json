@@ -6,32 +6,8 @@
     "entry — the guard fails a NEW panel joining the class and prints a hint when a",
     "listed one leaves it, so the list only ever shrinks."
   ],
-  "count": 42,
+  "count": 38,
   "panels": {
-    "app/portal/(protected)/invoices/page.tsx": {
-      "issue": "#2825",
-      "sentences": [
-        "No invoices yet"
-      ]
-    },
-    "app/portal/(protected)/kb/page.tsx": {
-      "issue": "#2825",
-      "sentences": [
-        "No articles found"
-      ]
-    },
-    "app/portal/(protected)/quotes/page.tsx": {
-      "issue": "#2825",
-      "sentences": [
-        "No quotes yet"
-      ]
-    },
-    "app/portal/(protected)/tickets/page.tsx": {
-      "issue": "#2825",
-      "sentences": [
-        "No tickets yet"
-      ]
-    },
     "app/superadmin/adoption/page.tsx": {
       "issue": "#2829",
       "sentences": [

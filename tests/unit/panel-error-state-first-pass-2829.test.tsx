@@ -298,6 +298,10 @@ describe('the false-empty ratchet itself (#2829)', () => {
       count: number; panels: Record<string, { issue: string; sentences: string[] }>;
     };
     expect(doc.count).toBe(Object.keys(doc.panels).length);
+    // #2829 listed 36 outstanding. Five left the class in this pass and #2828's merged
+    // portal fixes took four more out, so the floor is 31 — below it, the sweep stopped
+    // matching rather than the app getting cleaner, which is the failure mode a ratchet
+    // has to be tested against.
     expect(doc.count).toBeGreaterThan(31);
     for (const [file, entry] of Object.entries(doc.panels)) {
       expect(entry.sentences.length, `${file} is allowlisted with no sentence to point at`).toBeGreaterThan(0);

@@ -11,13 +11,15 @@
  * `useApiQuery`/`useQuery`, never binds the failure, and renders a sentence
  * ABOUT THE TENANT'S DATA ("No API keys yet", "Trash is empty") when the array
  * comes back empty — so a 500, an RLS refusal (42501), a dead pool or a missing
- * column all read as "you have none". #2439 → #2823 → #2825 fixed 9 panels and #2829
- * counted 36 more; this sweep finds 47, because the issue's grep missed JSX text on
- * its own line and did not cover `app/portal/**` (#2825's, and its PR is open). The
- * shape was never the hard part — the missing screen was: nothing in CI noticed,
- * because nothing was asserted.
+ * column all read as "you have none". The shape has been fixed one panel at a
+ * time since #2439 (the public routes), #2823 (two super-admin panels) and
+ * #2825/#2828 (the four portal list pages), and #2829 counted 36 still open. This
+ * sweep finds 43 on the tree this lands on — 7 more than the issue's grep, because
+ * that grep needed a delimiter before the copy and so missed JSX text sitting on
+ * its own line. The shape was never the hard part; the missing screen was: nothing
+ * in CI noticed, because nothing was asserted.
  *
- * What makes this an actual failure rather than a cosmetic one: five of the 36
+ * What makes this an actual failure rather than a cosmetic one: five of them
  * answer an operational question, and a masked failure reads as an all-clear —
  * `settings/backup` ("No backups yet") tells an operator the tenant was never
  * backed up, `settings/sessions` ("No sessions found") reports nobody signed in

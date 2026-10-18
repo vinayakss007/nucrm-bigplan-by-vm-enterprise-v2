@@ -141,6 +141,13 @@ Known traps that made earlier runs flaky (all now handled in the script):
   duplicate declarations.
 - **The #2655 rbac enforcement screen** — fails CI if an entity route drops
   `enforceField*`. Keep it; it is the tripwire for the #2618 coverage regression.
+- `scripts/check-panel-error-state.mjs` (`npm run guard:panel-errors`, #2829) — a page
+  may not render "there are none" copy for a read it never checked. Three states are the
+  house convention: rows, then a failure (`components/shared/inline-error-state.tsx`,
+  #2231, with `FAILED_IS_NOT_EMPTY`), then the empty sentence. Outstanding pages are
+  allowlisted in `scripts/panel-error-state-baseline.json` and the list may only shrink.
+  New guards fold into an adjacent step's `run:` line rather than adding a step, because
+  a step changes `ci.yml` line numbers that the issue register cites (#2655 / #2828 pattern).
 
 ## Deploy topology (do not conflate — AGENTS.md)
 
