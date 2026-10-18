@@ -117,9 +117,13 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     // Email is best-effort: the invitation row is already committed, so an
     // SMTP failure must NOT 500 (a retry would rotate the token and invalidate
     // the first emailed link). Report delivery status instead.
+    // #2126: this flag used to be set only by the `catch`, and `sendEmail` does
+    // not throw on a rejected send — it returns `{ success: false }`. So the
+    // commonest failure (no provider configured) answered `email_failed: false`
+    // while nothing left the building. Take the answer from the result.
     let emailFailed = false;
     try {
-      await sendEmail({
+      const sent = await sendEmail({
       to: emailLower,
       subject: `${inviter?.fullName ?? 'Someone'} invited you to join ${tenantRow?.name} on NuCRM`,
       html: `
@@ -146,6 +150,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
         </div>`,
       text: `${inviter?.fullName} invited you to ${tenantRow?.name} on NuCRM. Accept: ${inviteUrl}`,
     });
+      emailFailed = !sent?.success;
     } catch (emailErr) {
       emailFailed = true;
       await logError({ error: emailErr, context: 'invite email delivery' });
