@@ -12,6 +12,7 @@ export default function EmailVerifyBanner({ email }: { email: string; emailVerif
   const [dismissed, setDismissed] = useState(false);
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
+  const [failed, setFailed] = useState(false);
   const [serverVerified, setServerVerified] = useState(false);
 
   const checkVerification = useCallback(async (signal?: AbortSignal) => {
@@ -46,8 +47,21 @@ export default function EmailVerifyBanner({ email }: { email: string; emailVerif
     setSending(true);
     const res = await fetch('/api/auth/resend-verification', { method: 'POST' });
     const data = await res.json();
-    if (res.ok) { setSent(true); toast.success('Verification email sent!'); }
-    else toast.error(data.error || 'Could not send');
+    // #2126: HTTP 200 only says the verification row was written. `email_failed`
+    // says whether a provider accepted the mail, and until now it was never read,
+    // so a rejected send showed "Verification email sent!" forever.
+    if (res.ok && !data.email_failed) {
+      setSent(true);
+      setFailed(false);
+      toast.success('Verification email sent!');
+    } else if (res.ok) {
+      setSent(false);
+      setFailed(true);
+      toast.error('Could not deliver the email — try again or contact support.');
+    } else {
+      setFailed(true);
+      toast.error(data.error || 'Could not send');
+    }
     setSending(false);
   };
 
@@ -68,9 +82,9 @@ export default function EmailVerifyBanner({ email }: { email: string; emailVerif
         </span>
       ) : (
         <button onClick={resend} disabled={sending}
-          className="text-xs font-semibold underline shrink-0 hover:opacity-70 disabled:opacity-50 flex items-center gap-1">
+          className={`text-xs font-semibold underline shrink-0 hover:opacity-70 disabled:opacity-50 flex items-center gap-1 ${failed ? 'text-red-600 dark:text-red-400' : ''}`}>
           {sending && <Loader2 className="w-3 h-3 animate-spin" />}
-          {sending ? 'Sending...' : 'Resend email'}
+          {sending ? 'Sending...' : failed ? 'Not delivered — try again' : 'Resend email'}
         </button>
       )}
       <button onClick={handleDismiss} className="shrink-0 opacity-60 hover:opacity-100">

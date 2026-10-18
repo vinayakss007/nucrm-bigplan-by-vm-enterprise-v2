@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import { PRODUCT_REGISTRY } from '@/lib/products/registry';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 
@@ -50,7 +51,7 @@ export default function ProductsPage() {
   const [form, setForm] = useState({ name: '', description: '', sku: '', base_price: '' });
 
   // #1328: list via TanStack Query (was raw fetch + useEffect).
-  const { data, isLoading: loading } = useApiQuery<ProductsResponse | Product[]>(
+  const { data, isLoading: loading, error: productsError, refetch: refetchProducts } = useApiQuery<ProductsResponse | Product[]>(
     PRODUCTS_QUERY,
     '/api/tenant/products?limit=200',
   );
@@ -159,7 +160,9 @@ export default function ProductsPage() {
       {loading ? (
         <div className="text-center py-12 text-muted-foreground">Loading...</div>
       ) : filtered.length === 0 ? (
-        <div className="text-center py-12 text-muted-foreground">
+        productsError
+          ? <InlineErrorState message={`Failed to load products: ${productsError.message}`} onRetry={refetchProducts} />
+          : <div className="text-center py-12 text-muted-foreground">
           <Package className="w-10 h-10 mx-auto mb-3 text-muted-foreground/30" />
           <p className="text-sm font-medium">
             {search ? 'No products match your search' : 'No products yet. Add your first product!'}

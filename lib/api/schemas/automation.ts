@@ -33,9 +33,12 @@ export const createWorkflowSchema = z.object({
   // No default: the POST route answers 400 when this is missing, and a zod
   // `.default()` silently materialises 'event' before the route ever sees it,
   // so the guard was unreachable and every name-only request created an
-  // event-triggered workflow the caller never asked for. Kept identical to
-  // lib/api/schemas.ts, which app/api/tenant/workflows/route.ts imports.
-  trigger_type: z.enum(['event', 'schedule', 'manual']).optional(),
+  // event-triggered workflow the caller never asked for.
+  // This is chk_workflows_trigger_type's set (0050_data_validation_checks.sql),
+  // which the schema guards rather than defines; #2806. `lib/api/schemas.ts`
+  // re-exports this copy, so there is one declaration to keep in step — and it
+  // is registered in scripts/constraint-vocab.json.
+  trigger_type: z.enum(['manual', 'schedule', 'event', 'webhook']).optional(),
   trigger_config: z.record(z.string(), z.unknown()).optional().default({}),
   nodes: z.array(z.record(z.string(), z.unknown())).optional().default([]),
   edges: z.array(z.record(z.string(), z.unknown())).optional().default([]),
