@@ -5,6 +5,7 @@
  */
 'use client';
 import { useApiQuery } from '@/lib/query/client';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import { Users, Building2, Briefcase, CheckSquare, MessageSquare, Mail, TrendingUp, TrendingDown, Activity } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -44,7 +45,7 @@ const EVENT_ICONS: Record<string, string> = {
 
 export default function UsageDashboardPage() {
   // #1328: TanStack Query replaces fetch + useEffect + useState.
-  const { data: resp, isLoading: loading } = useApiQuery<{ data: UsageData }>(
+  const { data: resp, isLoading: loading, error: usageError, refetch: refetchUsage } = useApiQuery<{ data: UsageData }>(
     ['tenant', 'analytics', 'usage'],
     '/api/tenant/analytics/usage',
   );
@@ -72,6 +73,8 @@ export default function UsageDashboardPage() {
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
           {[...Array(6)].map((_, i) => <div key={i} className="h-28 bg-muted rounded-2xl animate-pulse" />)}
         </div>
+      ) : usageError ? (
+        <InlineErrorState message={`Failed to load your usage: ${usageError.message}`} onRetry={refetchUsage} />
       ) : data ? (
         <>
           {/* Stat cards */}
