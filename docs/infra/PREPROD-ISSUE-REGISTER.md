@@ -24,6 +24,20 @@
 > **#2569**, **#2578** and **#2581** each re-pin the same sentence from their own trees, so whichever docs
 > PR merges last re-derives it. Filed beside the host inventory **#2585**. **PP-075** and **PP-077** sit
 > with the open PRs **#2569** and **#2578**; **PP-076** shipped as **#2581**, so this takes **078** and **079** is free.
+> - **Previous:** 2026-10-12 (UTC) — **PP-077**: **#2530**'s second half. Both compliance routes
+>   wrote a `processing` row, did the work, then wrote a terminal marker, and every death between those
+>   two writes left the row saying `processing` forever — including the marker `UPDATE` itself throwing,
+>   which is the path that mattered, because the marker sat *inside* the work `try` whose `catch` writes
+>   the *other* marker: an Article 17 erasure that ran and whose `completed` write threw was recorded as
+>   `failed`. `lib/compliance/request-lifecycle.ts` now reads a `processing` row older than 15 min as
+>   `failed` + `stale`, best-effort persists that behind a CAS `WHERE … status = 'processing'`, never
+>   mints `completed_at`, and issues both markers outside the work `try` so a marker that throws cannot
+>   change the outcome it records. Deliberately **not** part 1's single transaction (rolling an erasure
+>   back also deletes the row that says it was attempted), **not** a new status (**0050**'s CHECK is a
+>   closed vocabulary), and **not** a cron (**PP-051**, **PP-049**). Filed as **PP-077** (PR **#2578**; **#2569** was the earliest claimant of 075, so this number moves; **#2581** holds 076), on the issue **#2530**, measured
+>   on merge `59725908` (**#2575**) — the tree this branch is rebased onto. This bullet re-pins the `docs/README.md:75` pointer to the keep-the-entry
+>   rule's line on this merged tree (`:5425`); **#2569** (**PP-075**) is the last open PR still
+>   re-pinning it from its own tree, so whichever merges last re-measures.
 > - **Previous:** 2026-10-12 (UTC) — **PP-076**: **#2561**'s "no CSRF check on
 >   `/api/tenant/plugin-engine`" was measured through the one file its evidence list never opened.
 >   `proxy.ts` **is** the root Next.js middleware, and validates the double-submit token for every
@@ -50,8 +64,9 @@
 >   its number and this entry sits between them; **#2587** takes **PP-078**. The pass-through is **#2579** and the
 >   dead-flag decision is **#2580**, both left open on purpose; the retraction of the "no token at all
 >   cross-origin" impact line is posted on **#2561**. This bullet re-pins the `docs/README.md:75`
->   pointer to the keep-the-entry rule's line here (`:5312`, re-measured once **PP-078** merged above it in
->   which moved because this entry added a header bullet, a summary row and a section above it.
+>   pointer to the keep-the-entry rule's line here (`:5425`, re-measured once **PP-078** merged above it in
+>   this tree) — it overtakes **PP-070**'s `:5013`, which moved because this entry added a header bullet, a
+>   summary row and a section above it.
 > - **Previous:** 2026-10-11 (UTC) — **PP-070**: `segment_members` has been keyed by nothing since `0000_init` created it without
 > an `id` at all: `0071` added the column nullable-with-default, `0125` made it NOT NULL and *deliberately stopped short*, and the only
 > index shaped like a key — `idx_segment_members_pk` — is a **non-unique** btree over `(segment_id, entity_id)` (`pg_index.indisunique = f`),
@@ -374,6 +389,7 @@ Severity: **S1** blocks go-live · **S2** broken feature or security weakness ·
 | PP-073 | S3  | Data access / raw SQL | **Six raw-string sinks interpolate a caller-supplied name or a typed-number option and none of them escapes it.** An identifier position can never be a `$n` parameter, so the builders' `` `"${k}"` `` is not escaping: a `lib/db/client.ts` column key of `x" = '1' OR 1=1 --` closes its own quoted identifier and continues the statement; `SET [LOCAL] statement_timeout` has no parameter slot at all. Table names were already allowlisted, every value already binds as `$n`, and `buildInsert`/`buildUpdate`/`countRows` are re-exported at `lib/db/index.ts:17-19` and imported by **nothing** — so this is the pattern, not an active injection | 🔧 FIXED in this PR (**#2528**): `lib/sql-allowlist.ts` gains `BARE_IDENTIFIER` + `validateIdentifier()` (applied to all three builder key lists — `lib/db/client.ts:142`/`:156`/`:158`/`:170` — and to `verifyAuditChainIntegrity`'s operator-supplied `--audit-table` name at `lib/data-integrity.ts:305`, re-pinned from `:285` by **#2566**, *before* the `try` because the `catch` at `:358` (was `:342`) reports the name back) and `MAX_STATEMENT_TIMEOUT_MS` + `validateTimeoutMs()` at `lib/api/with-transaction.ts:86` / `lib/cron/distributed-lock.ts:72` · **14** new tests + **493** existing across the **17** suites that reach these modules, `tsc --noEmit` exit 0 · **all 1,946** explicitly-named columns in `drizzle/schema` satisfy the lowercase-only rule · **not** #683's per-table column allowlist · **#2566 converts what #2567 left** — `withTimeout`'s `SET LOCAL statement_timeout` (clamped *before* `pool.connect()`), both `data-integrity` discovery loops, `exportAsSQL`'s `INSERT INTO "…"`, the `countRows(table, {})` → 42601 empty predicate — deletes `lib/db/identifier.ts` rather than ship a second rule, and adds `guard:raw-sql` (1,498 files re-measured at `59725908`, was 1,499 · 0 unescaped · 15 guarded or marked) + **16** tests |
 | PP-074 | S3  | Email / public edge | **#2526** reported `/api/tenant/email/track` as an unauthenticated pixel/click sink taking `tid`/`cid`/`cpid`/`eid` off the query string. Measured: the path was never in `PUBLIC_PATHS`/`PUBLIC_PREFIXES` (anonymous requests die at the edge with **401**), and both inserts were refused by `0031`'s `tenant_isolation` `WITH CHECK` because the handler sets no tenant context — so it had no working behaviour to forge, and the "public, no auth required" wording lived in two doc comments. What it did do is 302 to any caller-chosen public `?url=` off the CRM's own domain (the #2218 shape), and the two tables it names have had exactly that one writer | 🔧 FIXED in this PR (route + its 12-test #2267 suite deleted; `app/api/tenant/email/analytics/route.ts` docblock corrected to name the token pair; `tests/unit/legacy-email-track-retired-2526.test.ts`, **11** tests, reproduces `isPublic()`'s rules from the arrays in `proxy.ts` and pins that `/api/track/open` + `/api/track/click` read only `?t` and write under `withTenantContext(<row>.tenantId)` · the zero-writer consequence for `email_opens`/`email_clicks` is recorded in the section, not fixed here) |
 | PP-076 | S2  | Auth / CSRF | **#2561** reported `/api/tenant/plugin-engine` POST/PATCH/DELETE as having no CSRF check. Measured, the *coverage* half of that is wrong and the *guard* is the real defect: `proxy.ts:545-561` (re-pinned 2026-10-15: **#2579/#2599/#2603** shifted it) validates the double-submit pair for **every** `/api/` mutation that carries a token and answers the 403 itself, so of **302** non-exempt mutating route files **289** were covered after all — by the proxy, not by the `requireAuth()` backstop the guard cites (`CSRF_ENFORCE_CENTRAL`, set nowhere: **3** repo-wide hits, all code or comments) — while the guard's own header asserted "There is no root Next.js middleware". The hole that is real sits upstream: the `Bearer ak_*` pass-through returns at `proxy.ts:484`, **above** that block, and a junk key then falls through to `requireAuth()`'s cookie path (`lib/auth/middleware.ts:241` → `:262`), producing a cookie-authenticated mutation no CSRF check ever inspected | 🔧 FIXED in this PR (**#2581**): in-handler `requireCsrf()` on all three mutating handlers, exempt only when `ctx.authMethod === 'api_key'` — the credential `requireAuth()` actually verified (`lib/auth/middleware.ts:252`), not `requireCsrf()`'s **client-settable** `x-auth-method` header (`:482`, which nothing in this repo ever sends) · `scripts/check-csrf-coverage.mjs` rewritten to three assertions (the edge call exists, is not behind a `process.env` test, and its exempt lists agree with the literals inside `needsCsrfValidation()` in both directions) plus honest populations (**14** in-handler / **288** proxy-covered / **34** baseline) and **deliberately no ratchet** · `tests/unit/plugin-engine-csrf-2561.test.ts`, **12** tests, **4** red at `79cc642f` against the real `requireCsrf` (only `requireAuth` stubbed, via `importOriginal`) · the pass-through itself is **#2579** and the dead-flag call is **#2580**, both left open on purpose |
+| PP-077 | S2  | Compliance / data integrity | **#2530**'s two compliance routes still had a path that never resolves: `POST` writes a `processing` row, does the work, then writes a terminal marker, and anything dying between those writes — SIGTERM past the drain (**PP-029**), an OOM kill, a redeploy, or the marker `UPDATE` itself throwing — left the row saying `processing` forever. Because the marker sat *inside* the work `try` whose `catch` writes the *other* marker, the failure was not a stuck row but a false record: an Article 17 erasure that ran, and whose `completed` write threw, was logged as `failed`. **2** sites in `app/` mint `processing` and nothing else in the tree writes the table | 🔧 FIXED in this PR (**#2578**): `lib/compliance/request-lifecycle.ts` — `isStaleProcessing` (a `processing` row strictly older than 15 min, sized from **8** parallel SELECTs + **5** sequential UPDATEs at **PP-028**'s ~200 ms/statement) · `reapStaleProcessing` answers it as `failed` + `stale`/`staleReason` and best-effort persists behind a CAS `WHERE id AND tenant_id AND status='processing'` · both markers moved out of the work `try` and return `false` instead of throwing, surfaced as `recordUpdateFailed` · deliberately **not** part 1's transaction (a rollback deletes the evidence that the erasure was attempted), **not** a new status (**0050**'s `chk_compliance_requests_status` is closed), `completed_at` never minted, reap-on-read not cron (**PP-051**/**PP-049**) · `tests/unit/compliance-processing-reaper-2530.test.ts`, **26** tests, **8** of them red with the routes at `11802dcc` · how many rows are stuck today is **not** measured here |
 | PP-078 | S2  | Backup / restore readiness | **The nightly backup has been answering 200 and doing nothing, and what it ever wrote sits inside the database it is supposed to protect.** Measured 2026-10-12 on the host and in the live DB: the retained `nucrm-cron` log (2026-09-15 → 2026-10-12) records `backup-verify` **CRON FAILED on 28 of 28 nights** (every one an `HTTP/1.1 500` from the deployed build, i.e. **#49**'s bug still live) and `auto-backup` **8** failures, `process-sequences` 15, `retry-webhooks` 5, `detect-missed-followups` 4, `task-reminders` 3, `ai-auto-followup` 2, `usage-snapshot` 1, `backup-health` 1 — but `run-cron.sh` is `wget -q -O /dev/null … \|\| echo "[date] CRON FAILED: $JOB" >&2`, so **a 200 that did zero work emits no line at all**, and that is the whole reason the outage was invisible: `tenant_backup_records` has written **0 rows since 2026-10-03T09:26:50Z** (nine nights; only three days ever have rows — 09-25, 10-02, 10-03). The two surfaces disagree exactly as **#79** describes, now quantified: `backup_records` = **4** rows, all `status=failed`, `storage_type=local`, `size_bytes=0`, `storage_path` NULL on all four (the **#50** signature: no `pg_dump` in the image); `tenant_backup_records` = **144** rows, **138** `completed`, all `initiated_auto`, summing **2,150,042 B** of inline `backup_data` (max payload 60,523 B, `sum(data_size)` 1,986,199 B) and it has **no `storage_path`/`storage_type` column at all**, so a nightly backup cannot be pointed off-box even in principle. Payloads are honest where they exist (`rows_actually_stored` == `record_count`, 16–19 rows for a tenant whose live tables hold 1 contact + 1 activity), so the cap **#71** describes is not truncating anything — there is simply almost nothing to back up here, and none of it leaves the machine: `nucrm-minio` holds two buckets (`nucrm-backups`, `nucrm-documents`), created 2026-09-14, **both empty**. `nucrm-app` is image `nucrm-app:preprod`, built **2026-10-03T15:43:25Z** and started 16:03Z — so everything merged after that timestamp (**#49**, **#51**/**#52**, **#139**) is undeployed, and this is **PP-060**'s deploy gap observed on the one surface where it costs data rather than features | 🚨 OPEN · **owner decision**: an off-box destination for either table (and a `storage_path` on the nightly one), plus one *restored* artifact before **#2540** can be called satisfied · the runner's silence is fixable in-repo (`run-cron.sh` should assert the response body, which is also **#77**/PP-049's `ok:true` masking) · no endpoint, credential or bucket key is recorded here — the object-store pair lives in one mode-600 file on the host being decommissioned (**#2585** §2 + addendum) and is an owner custody action, not a repo one |
 
 ## Sentry issues → register entries
@@ -5321,6 +5337,85 @@ no space, no semicolon, no dash, no `-`-comment, and a length under Postgres's o
        statement the sentence describes. They are re-pinned here rather than allowlisted with a
        "TODO: justify" reason, because an unowned allowlist entry is how a wrong pointer stays believed
        for weeks, which is the failure this file's own #2416 correction comment exists to record -->
+
+## PP-077 — 🔧 **#2530**'s second half: both compliance routes could still leave a row saying `processing` **forever** — the POST writes the row, does the work, then writes a terminal marker, and every death between those two writes left the record unresolved. The marker sat *inside* the work `try` whose `catch` writes the *other* marker, so the worst path was not a stuck row but a compliance log that actively **lied**: an Article 17 erasure that ran and whose `completed` UPDATE threw was recorded as `failed` _(S2 · Compliance / data integrity · PR **#2578**)_
+
+- **Found by** finishing part 1 (**#2557**), which folded **#2530**'s three *split write pairs* into
+  transactions and deliberately did **not** wrap this one. This entry records why leaving it was the
+  right call, and what makes the non-atomicity recoverable instead of permanent.
+- **The whole surface is two routes.** `grep -rn "status: 'processing'" app/` → **2** hits,
+  `app/api/tenant/compliance/gdpr/route.ts:112` and `app/api/tenant/compliance/soc2/route.ts:80` (both re-pinned from `:105`/`:74` when **#2611**'s bulk sweep landed above the inserts).
+  `grep -rln complianceRequests app/ lib/ components/ scripts/` → **3** files: those two routes and the
+  new `lib/compliance/request-lifecycle.ts`. Nothing else in the tree can write this table.
+- **What strands a row.** The insert lands (`gdpr/route.ts:109-115`, `soc2/route.ts:77-83`), and then
+  either the process dies — **PP-029**'s drain deadline, an OOM kill, a redeploy — or the work throws and
+  the `failed` write throws as well, or the work *succeeds* and the `completed` write throws. The last two
+  leave a row saying `processing` about work that has already happened.
+- **The inversion is the reason this was S2 and not cosmetic.** Until this PR both markers were issued
+  from inside the `try` their own `catch` serves, so a request whose erasure ran and whose marker UPDATE
+  then threw fell into that `catch` and wrote `failed`. `markRequestCompleted` (`:192`) and
+  `markRequestFailed` (`:226`) are now called *outside* the work `try` and swallow their own failure,
+  returning `false`; the 201 body reports that as `recordUpdateFailed` (`gdpr/route.ts:155`,
+  `soc2/route.ts:118`). The response says what the work did, the record says what the record could take,
+  and the two are never allowed to overwrite each other.
+- **The rule.** `isStaleProcessing` (`:108`) is true for a `processing` row strictly older than
+  `PROCESSING_DEADLINE_MS` (`:66`, 15 minutes). The number is sized from the work, not picked:
+  `exportTenantData` issues **8** parallel `SELECT`s (`lib/compliance/gdpr.ts:66-83`) and
+  `anonymizeTenantData` issues **5** sequential `UPDATE`s (`lib/compliance/gdpr.ts:118`, `:133`, `:147`,
+  `:161`, `:175`), each statement costing **PP-028**'s measured flat ~200 ms — so a whole request is
+  seconds, and only a large tenant on a loaded pool could cross 15 minutes legitimately. A row whose
+  `created_at` cannot be parsed is treated as stale rather than eternal.
+- **Why reap on read instead of in a cron.** The console is the only audience for the word `processing`,
+  so a read is the only moment this status is consumed — and the cron house is measurably the weaker one:
+  **5** cron routes are on no live schedule at all (**PP-051**), and the scheduled ones needed
+  **#2539**/**PP-049** to be taught to report a refused lock rather than answer `ok:true`. A reaper that
+  silently never fires is exactly how a row stays stuck.
+- **Why not one transaction.** Part 1's tool is right for a billing row and wrong here: rolling an
+  erasure back also removes the row that says an erasure was **attempted**. A compliance log has to
+  outlive the operation it describes, so these two writes stay non-atomic and the deadline is what makes
+  that survivable.
+- **Why not a new status.** `chk_compliance_requests_status`
+  (`drizzle/migrations/0050_data_validation_checks.sql:173`) is the only definition of a closed
+  four-value vocabulary — `pending`, `processing`, `completed`, `failed` — anywhere in the chain, so a
+  fifth value is a migration, and no migration is proposed or needed: `reapStaleProcessing` (`:125`)
+  persists `failed` and puts the mechanism in `error_message` (`:73`), leaving `completed_at` NULL.
+  Minting a completion timestamp for a request that never completed would be the more damaging fiction.
+- **Why the write is legal where it runs.** `0031_rls_remaining_tables.sql:28` puts
+  `compliance_requests` in the loop whose generated policy is `CREATE POLICY tenant_isolation …` with no
+  `FOR` clause (`:178-180`) — therefore `FOR ALL`, so a tenant-scoped UPDATE is permitted — and the GUC
+  that policy reads is held for the whole handler by `withApiRoute`'s
+  `runWithTenantCarrier(() => withPinnedConnection(fn))` (`lib/api/with-api-route.ts:199`,
+  `lib/db/tenant-carrier.ts:11`). The reaper's `UPDATE` pins `id` + `tenant_id` + `status = 'processing'`,
+  so it is CAS-guarded against a marker that landed during the read and cannot move another tenant's row
+  even if a future caller handed it one; the two markers pin `id` + `tenant_id` and hold **no** status
+  guard, on purpose — a request that outlived the deadline must still be able to replace the reaper's
+  `failed` with its real result. The tenant half of that filter is the **#2525** convention, not an
+  invention of this PR.
+- **What the console does with a reaped row, with no client change.**
+  `app/tenant/settings/compliance/page.tsx:285` and `:332` render `r.status`, coloured by the two-way test
+  at `:282-283` / `:329-330`, so a reaped row turns yellow→red on its own. `staleReason` is **not**
+  displayed: the row now says *failed* where it should say *failed, and this is why*. That is a UI
+  follow-up, not a correctness gap, and it is left open here.
+- **Measured:** `tests/unit/compliance-processing-reaper-2530.test.ts`, **26** tests. The evidence is the
+  **8 route-level tests that are red with the two routes at `11802dcc`** and green after it (3 of the 4
+  gdpr GET cases, 1 soc2 GET, 3 gdpr POST, 1 soc2 POST); the other 18 exercise the helper directly and
+  pass at either revision, so they are guards on the rule, not proof of the fix. **49** tests green
+  across the three files that own this surface (this one, `write-atomicity-2530.test.ts` 14,
+  `compliance.test.ts` 9), asserting **rendered SQL** and statement identity rather than source text.
+  `npx eslint` exit **0** on all four changed files. `tsc --noEmit` reports **125 errors in 10 files** in
+  this worktree, **none** of them in these four — every one is in `components/**/*data-table*.tsx` from
+  `@tanstack/react-table` **8.21.3** against a `^9.2.6` pin, the symlinked-`node_modules` skew, and CI's
+  `npm ci` does not reproduce it. **Not run:** `postman/full-test-suite.sh`, and no live request.
+- **The honest gap, recorded rather than guessed:** how many rows are *actually* sitting in `processing`
+  on the deployed database is not measurable from this session — it is one `SELECT` behind a live database
+  this session does not probe, on a chain **PP-060** records as still pending. Whoever deploys this can
+  answer it in one query.
+- **Files:** `lib/compliance/request-lifecycle.ts` (new), `app/api/tenant/compliance/gdpr/route.ts`,
+  `app/api/tenant/compliance/soc2/route.ts`, `tests/unit/compliance-processing-reaper-2530.test.ts` (new).
+- **Related:** **#2530** (the report; part 1 landed as **#2557**), **PP-029** (the drain deadline that
+  kills a request mid-flight), **PP-028** (the flat ~200 ms that sizes the deadline), **PP-051** and
+  **PP-049**/**#2539** (why the cron path is the weaker house), **PP-027** (the pinned tenant carrier),
+  **#2525** (id-only writes must pin the tenant too).
 
 ## How to maintain this file
 
