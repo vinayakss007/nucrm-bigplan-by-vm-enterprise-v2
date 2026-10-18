@@ -9,6 +9,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
 import { Key, Plus, Trash2, Copy, CheckCircle } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
+import InlineErrorState, { FAILED_IS_NOT_EMPTY } from '@/components/shared/inline-error-state';
 import { cn, formatDate, formatRelativeTime, apiFetch } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
@@ -39,7 +40,7 @@ export default function APIKeysPage() {
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
 
   // #1328: list via TanStack Query.
-  const { data, isLoading: loading } = useApiQuery<{ data?: ApiKey[] }>(
+  const { data, isLoading: loading, error, refetch } = useApiQuery<{ data?: ApiKey[] }>(
     API_KEYS_QUERY,
     '/api/tenant/api-keys',
   );
@@ -124,7 +125,9 @@ export default function APIKeysPage() {
       <div className="admin-card overflow-hidden">
         {loading ? <p className="text-sm text-muted-foreground p-5">Loading...</p>
         : !keys.length ? (
-          <div className="py-12 text-center"><Key className="w-10 h-10 text-muted-foreground/20 mx-auto mb-3" /><p className="text-sm text-muted-foreground">No API keys yet</p></div>
+          error
+            ? <InlineErrorState className="m-5" message={`Failed to load API keys: ${error.message}`} onRetry={refetch} detail={FAILED_IS_NOT_EMPTY} />
+            : <div className="py-12 text-center"><Key className="w-10 h-10 text-muted-foreground/20 mx-auto mb-3" /><p className="text-sm text-muted-foreground">No API keys yet</p></div>
         ) : (
           <div className="divide-y divide-border">
             {keys.map(k=>(

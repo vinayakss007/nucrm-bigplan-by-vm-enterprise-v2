@@ -10,6 +10,7 @@ import { useApiQuery } from '@/lib/query/client';
 import { Trash2, RotateCcw, AlertTriangle, X, Clock } from 'lucide-react';
 import { cn, formatRelativeTime } from '@/lib/utils';
 import { confirmThen } from '@/components/ui/confirm-dialog';
+import InlineErrorState, { FAILED_IS_NOT_EMPTY } from '@/components/shared/inline-error-state';
 import toast from 'react-hot-toast';
 
 const TYPE_CONFIG: Record<string, { label: string; color: string }> = {
@@ -35,7 +36,7 @@ export default function TrashPage() {
 
   // #1328: trash items via TanStack Query (was raw fetch + useEffect). filter is
   // part of the key so switching tabs refetches and caches per view.
-  const { data, isLoading: loading } = useApiQuery<{ data?: TrashItem[] }>(
+  const { data, isLoading: loading, error, refetch } = useApiQuery<{ data?: TrashItem[] }>(
     ['tenant', 'trash', { filter }],
     '/api/tenant/trash' + (filter !== 'all' ? `?type=${filter}` : ''),
   );
@@ -121,13 +122,15 @@ export default function TrashPage() {
           ))}
         </div>
       ) : !filtered.length ? (
-        <div className="admin-card py-16 text-center">
-          <Trash2 className="w-12 h-12 text-muted-foreground/20 mx-auto mb-4" />
-          <p className="font-semibold">Trash is empty</p>
-          <p className="text-sm text-muted-foreground mt-1">
-            {filter === 'all' ? 'Nothing has been deleted yet' : `No deleted ${filter}s`}
-          </p>
-        </div>
+        error
+          ? <InlineErrorState message={`Failed to load the trash: ${error.message}`} onRetry={refetch} detail={FAILED_IS_NOT_EMPTY} />
+          : <div className="admin-card py-16 text-center">
+              <Trash2 className="w-12 h-12 text-muted-foreground/20 mx-auto mb-4" />
+              <p className="font-semibold">Trash is empty</p>
+              <p className="text-sm text-muted-foreground mt-1">
+                {filter === 'all' ? 'Nothing has been deleted yet' : `No deleted ${filter}s`}
+              </p>
+            </div>
       ) : (
         <div className="admin-card overflow-hidden divide-y divide-border">
           {filtered.map(item => {

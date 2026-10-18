@@ -43,12 +43,14 @@ preprod database on 2026-10-04. The numbers they carry are reproducible by the c
 "How current is 'current'?" below.
 
 Two files are current by definition, being the implementation rather than a description of it:
-[`.github/workflows/ci.yml`](../.github/workflows/ci.yml) enforces **16** guards by alias —
+[`.github/workflows/ci.yml`](../.github/workflows/ci.yml) enforces **19** guards by alias —
 `guard:any-suppressions`, `guard:boundaries`, `guard:chain`, `guard:coords`, `guard:counters`, `guard:cron-lock`,
-`guard:csrf`, `guard:csv`, `guard:filesize`, `guard:migration-rls`, `guard:portal-rls-context`,
-`guard:portal-softdelete`, `guard:public-projection`, `guard:public-ratelimit`, `guard:rls`, `guard:schemas` — plus **2**
+`guard:csrf`, `guard:csv`, `guard:field-permissions`, `guard:filesize`, `guard:migration-rls`, `guard:panel-errors`,
+`guard:portal-rls-context`, `guard:portal-softdelete`, `guard:public-projection`, `guard:public-ratelimit`,
+`guard:raw-sql`, `guard:rls`, `guard:schemas` — plus **2**
 invoked as direct `node` commands (`scripts/check-audit-baseline.mjs`, `scripts/check-semgrep-baseline.mjs`; measured
-2026-10-10, re-measured by this PR, which added `guard:cron-lock`. The list was 7 when this paragraph was first written).
+2026-10-10, re-measured by this PR, which added `guard:panel-errors`. The list was 7 when this paragraph was first
+written, and `guard:field-permissions` and `guard:raw-sql` had already joined CI without this sentence following them).
 [`scripts/migration-chain-baseline.json`](../scripts/migration-chain-baseline.json) holds the five
 baselined chain defects. `npm run db:verify-isolation` is **not** in CI — nothing runs it on a push.
 

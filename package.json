@@ -69,6 +69,7 @@
     "guard:cron-lock": "node scripts/check-cron-lock.mjs",
     "guard:field-permissions": "node scripts/check-field-permission-enforcement.mjs",
     "guard:raw-sql": "node scripts/check-raw-sql-sinks.mjs",
+    "guard:panel-errors": "node scripts/check-panel-error-state.mjs",
     "probe:sql": "npx tsx --import ./scripts/load-env.mjs scripts/probe-sql.mts",
     "probe:rls": "npx tsx --import ./scripts/load-env.mjs scripts/probe-rls.mts",
     "probe:write-contexts": "npx tsx --tsconfig scripts/tsconfig.gate.json --import ./scripts/load-env.mjs scripts/probe-write-contexts.ts",

@@ -13,6 +13,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import InlineErrorState, { FAILED_IS_NOT_EMPTY } from '@/components/shared/inline-error-state';
 import toast from 'react-hot-toast';
 import { backupConfigSchema, validateForm } from '@/lib/validation/forms';
 
@@ -106,7 +107,7 @@ export default function TenantBackupSettingsPage() {
     CONFIG_QUERY,
     '/api/tenant/backup/config',
   );
-  const { data: backupsData, isLoading: loadingBackups } = useApiQuery<{ data?: BackupRecord[]; backups?: BackupRecord[] }>(
+  const { data: backupsData, isLoading: loadingBackups, error: backupsError } = useApiQuery<{ data?: BackupRecord[]; backups?: BackupRecord[] }>(
     BACKUPS_QUERY,
     '/api/tenant/backup',
   );
@@ -505,10 +506,8 @@ export default function TenantBackupSettingsPage() {
         {loadingBackups ? (
           <p className="text-xs text-muted-foreground text-center p-6">Loading...</p>
         ) : !backups.length ? (
-          <div className="text-center py-10">
-            <Database className="w-10 h-10 text-muted-foreground/20 mx-auto mb-3" />
-            <p className="text-muted-foreground text-sm">No backups yet — run your first backup above</p>
-          </div>
+          backupsError ? <InlineErrorState message={`Failed to load the backup history: ${backupsError.message}`} onRetry={reloadBackups} detail={FAILED_IS_NOT_EMPTY} />
+          : <div className="text-center py-10"><Database className="w-10 h-10 text-muted-foreground/20 mx-auto mb-3" /><p className="text-muted-foreground text-sm">No backups yet — run your first backup above</p></div>
         ) : (
           <div className="divide-y divide-border">
             {backups.map(b => {
