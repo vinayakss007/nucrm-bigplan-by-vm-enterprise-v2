@@ -2381,7 +2381,7 @@ connection setup (~400–600 ms) and bounds the 50-statement loop rather than pr
   `:122-127` · a second `setTenantContext` `:161` (0–1, data-dependent) · the Phase-1 `db.transaction`
   `app/api/cron/process-sequences/route.ts:55` = `BEGIN` + the carrier re-apply `drizzle/db.ts:80 (re-pinned 2026-10-15 from `:79`: #2623 reflowed the carrier block)` + the due-enrollments
   `SELECT … FOR UPDATE SKIP LOCKED` (called at `:57`; #2392 moved the SQL itself out of the route into
-  `lib/cron/sequence-steps.ts:145`) + `COMMIT` · `clearTenantContext` in the per-iteration `finally` `:173` →
+  `lib/cron/sequence-steps.ts:171`, re-pinned 2026-10-18 from `:145` — #2796's `stepDelayMs()` block) + `COMMIT` · `clearTenantContext` in the per-iteration `finally` `:173` →
   `rls.ts:107`. Fixed per sweep (5): `BEGIN` + `setSuperAdminContext` (`rls.ts:169`) + the tenants `SELECT`
   (`tenant-scope.ts:81`) + `COMMIT` + the pin's teardown reset (`request-connection.ts:241`). **Count = 7 per tenant**; the 8th
   (the re-set at `:161`) does not fire on this data — and the log discriminates: 8/tenant predicts 85.9 s, i.e. _every_ sweep
@@ -3547,10 +3547,10 @@ database`, and exactly two FAILs:
   `app/api/webhooks/resend/route.ts:261` and `:435` each set `status: 'cancelled'` — both re-pinned on
   2026-10-08 from `:212`/`:368`, which **#2425**'s tenant attribution moved out from under this entry —
   and since **#2392** the
-  shared helper `cancelOpenEnrollments` (`lib/cron/sequence-steps.ts:74`, writing at `:88`, `:340`, `:349` — re-pinned
-  2026-10-09 from lines 64/78/330/339, which **#2473**'s `SequenceStepRow` block pushed down by ten)
+  shared helper `cancelOpenEnrollments` (`lib/cron/sequence-steps.ts:100`, writing at `:114`, `:377`, `:386` — re-pinned
+  2026-10-18 from 74/88/340/349, which #2796's `stepDelayMs()` block pushed down by 26 and by 37; first 2026-10-09 from 64/78/330/339, which **#2473**'s `SequenceStepRow` block moved)
   is the only place that literal is issued: the un-enroll route calls it
-  (`app/api/tenant/contacts/[id]/enroll/route.ts:127`) and no longer contains the value itself. Which is why
+  (`app/api/tenant/contacts/[id]/enroll/route.ts:126`, re-pinned 2026-10-18 from `:127` — #2796 moved the call up one) and no longer contains the value itself. Which is why
   the registry's writer list changed under this entry's feet between `32d252b9` and `38ae90e2` — it tracks
   the literal, not the call graph, so an indirect writer is visible only through the file that holds it.
 - **How old the disagreement is.** The `'cancelled'` write is not recent: `app/api/unsubscribe/route.ts`
@@ -3657,7 +3657,7 @@ CONSTRAINT` + `ADD CONSTRAINT` widenings, so they are not exposed to PP-058's RL
   literal counts + `pg_get_constraintdef`, `drizzle.__drizzle_migrations` row count, `INVOICE_STATUSES`
   (`lib/api/schemas/billing.ts:42-52`), `app/api/tenant/invoices/[id]/route.ts:139,166`,
   `app/api/unsubscribe/route.ts:42-56,121-123`, `app/api/webhooks/resend/route.ts:261,435`,
-  `lib/cron/sequence-steps.ts:74,88,340,349`, `app/api/tenant/contacts/[id]/enroll/route.ts:127`,
+  `lib/cron/sequence-steps.ts:100,114,377,386`, `app/api/tenant/contacts/[id]/enroll/route.ts:126`,
   `lib/api/db-client-error.ts:83,105-111,145`,
   `docker exec nucrm-app printenv DATABASE_URL`, `nucrm-pgbouncer` `[databases]` stanza,
   `git cat-file -e ecbba74e:app/api/unsubscribe/route.ts`, `git log -S` provenance, `package.json` script
