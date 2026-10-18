@@ -21,6 +21,7 @@ import { invalidateWidgetCache } from '@/lib/dashboard/widget-cache';
 import { escapeLike } from '@/lib/api/sanitize-like';
 import { cachedListCount, buildFilterKey } from '@/lib/api/list-count';
 import { invalidateTenantCache } from '@/lib/cache/index';
+import { enforceFieldRead, enforceFieldWrite, attachStrippedFields } from '@/lib/rbac/enforce';
 
  
  
@@ -121,7 +122,8 @@ export const GET = withApiRoute(async (request: NextRequest) => {
 
     // Map camelCase to snake_case for frontend compatibility
     const response = {
-      data: data.map(c => ({
+      // #2597 A2: project the list through the role's read restrictions.
+      data: await enforceFieldRead(ctx, 'contacts', data.map(c => ({
         id: c.id,
         tenant_id: c.tenantId,
         company_id: c.companyId,
@@ -141,7 +143,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
         updated_at: c.updatedAt,
         company_name: c.companyName,
         assigned_name: c.assignedName,
-      })),
+      }))),
       total, offset, limit,
     };
     return NextResponse.json(response);
@@ -164,7 +166,10 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     const deny = requirePerm(ctx, 'contacts.create');
     if (deny) return deny;
 
-    const body = await readJsonBody(request);
+    const rawBody = await readJsonBody(request);
+    // #2597 A2: drop keys the role may not write (STRIP, not 403) before they
+    // reach the column map.
+    const { body, stripped } = await enforceFieldWrite(ctx, 'contacts', rawBody);
     const validated = validateBody(createContactSchema, body);
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;
@@ -286,7 +291,9 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       data: { ...contact },
     }).catch((err) => logError({ error: err, context: 'tenant/contacts POST evaluateAutomations' }));
 
-    return NextResponse.json({ data: { id: contact.id, first_name: contact.firstName, last_name: contact.lastName, email: contact.email, phone: contact.phone, job_title: contact.jobTitle, company_id: contact.companyId, lead_status: contact.leadStatus, lead_source: contact.leadSource, notes: contact.notes, tags: contact.tags, score: contact.score, city: contact.city, country: contact.country, website: contact.website, linkedin_url: contact.linkedinUrl, twitter_url: contact.twitterUrl, custom_fields: contact.customFields, created_at: (contact.createdAt ?? new Date()).toISOString(), updated_at: contact.updatedAt?.toISOString(), tenant_id: contact.tenantId, user_id: contact.createdBy } }, { status: 201 });
+    // #2597 A2: project the created contact through the read restrictions.
+    const [created] = await enforceFieldRead(ctx, 'contacts', [{ id: contact.id, first_name: contact.firstName, last_name: contact.lastName, email: contact.email, phone: contact.phone, job_title: contact.jobTitle, company_id: contact.companyId, lead_status: contact.leadStatus, lead_source: contact.leadSource, notes: contact.notes, tags: contact.tags, score: contact.score, city: contact.city, country: contact.country, website: contact.website, linkedin_url: contact.linkedinUrl, twitter_url: contact.twitterUrl, custom_fields: contact.customFields, created_at: (contact.createdAt ?? new Date()).toISOString(), updated_at: contact.updatedAt?.toISOString(), tenant_id: contact.tenantId, user_id: contact.createdBy }]);
+    return attachStrippedFields(NextResponse.json({ data: created }, { status: 201 }), stripped);
  
  
   } catch (err) {

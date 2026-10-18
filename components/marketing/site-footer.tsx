@@ -23,7 +23,7 @@ export function SiteFooter() {
   const year = new Date().getFullYear();
 
   return (
-    <footer className="relative overflow-hidden border-t border-white/[0.08] bg-[#050d28]">
+    <footer className="relative overflow-hidden border-t border-white/[0.08] bg-[#1a1712]">
       <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-sky-400/60 to-transparent" aria-hidden />
       <div
         className="pointer-events-none absolute -bottom-40 left-1/2 h-80 w-[900px] -translate-x-1/2 rounded-full bg-blue-600/12 blur-[130px]"

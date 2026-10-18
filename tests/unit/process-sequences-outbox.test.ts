@@ -40,14 +40,14 @@ type Scenario = {
   dueRows: unknown[];
   existingLog: unknown | null;
   claimReturning: unknown[];
-  nextDate: string | null;
+  hasNextStep: boolean;
   sendFails: boolean;
 };
 const scenario: Scenario = {
   dueRows: [],
   existingLog: null,
   claimReturning: [],
-  nextDate: null,
+  hasNextStep: false,
   sendFails: false,
 };
 
@@ -162,8 +162,6 @@ function makeTx() {
       const text = sqlText(q);
       if (text.includes('SKIP LOCKED')) return { rows: scenario.dueRows };
       if (text.includes('FROM contacts')) return { rows: [CONTACT_ROW] };
-      if (text.includes('calculate_sequence_step_date'))
-        return { rows: [{ next_date: scenario.nextDate }] };
       if (text.includes('SELECT id, status, current_step'))
         return { rows: [ENROLLMENT_ROW] };
       return { rows: [] };
@@ -178,7 +176,7 @@ function makeTx() {
     query: {
       sequenceSteps: {
         findMany: async () => (scenario.dueRows.length ? [EMAIL_STEP] : []),
-        findFirst: async () => (scenario.nextDate ? { ...EMAIL_STEP, stepNumber: 2, id: 's-2' } : null),
+        findFirst: async () => (scenario.hasNextStep ? { ...EMAIL_STEP, stepNumber: 2, id: 's-2' } : null),
       },
       sequenceStepLogs: {
         findMany: async () => (scenario.existingLog ? [scenario.existingLog] : []),
@@ -215,7 +213,7 @@ describe('cron/process-sequences outbox (#2223)', () => {
     scenario.dueRows = [ENROLLMENT_ROW];
     scenario.existingLog = null;
     scenario.claimReturning = [{ id: 'log-1' }];
-    scenario.nextDate = null; // no further steps → enrollment completes
+    scenario.hasNextStep = false; // no further steps → enrollment completes
     scenario.sendFails = false;
     process.env.CRON_SECRET = 's3cret';
   });

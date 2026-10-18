@@ -13,7 +13,8 @@ import { db } from '@/drizzle/db';
 import { onboardingProgress, pipelines, dealStages, deals } from '@/drizzle/schema';
 import { eq, and, inArray } from 'drizzle-orm';
 import { installTemplateModules } from '@/lib/modules/auto-install';
-import { INDUSTRY_TEMPLATES } from '@/lib/modules/industry-templates';
+import { resolveTemplate } from '@/lib/templates/resolve';
+import { applyTemplate } from '@/lib/templates/apply-template';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { concurrencyGuard } from '@/lib/api/concurrency';
 import { withApiRoute } from '@/lib/api/with-api-route';
@@ -59,7 +60,9 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;
 
-    const template = INDUSTRY_TEMPLATES[v.templateId];
+    // #2633: templates resolve from product_templates (DB), not the old
+    // hardcoded map — superadmin-authored/edited templates work here too.
+    const template = await resolveTemplate(v.templateId);
 
     // Install modules for the tenant based on the selected template.
     // Best-effort per module; report ACTUAL counts (never the template size).
@@ -67,7 +70,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       await installTemplateModules(ctx.tenantId, v.templateId);
 
     // Create the primary pipeline with stages from the template
-    const pipelineStages = template?.pipelines[0]?.stages ?? [
+    const pipelineStages = template?.pipelines?.[0]?.stages ?? [
       'Lead', 'Qualified', 'Proposal', 'Negotiation', 'Won', 'Lost',
     ];
 
@@ -189,6 +192,17 @@ export const POST = withApiRoute(async (request: NextRequest) => {
           }))
         );
       }
+
+      await applyTemplate({
+        tenantId: ctx.tenantId,
+        actorUserId: ctx.userId,
+        blueprint: {
+          custom_fields: template?.custom_fields,
+          pipelines: (template?.pipelines ?? []).slice(1),
+          automations: template?.automations,
+        },
+        tx,
+      });
 
       await tx.insert(onboardingProgress).values({
         tenantId: ctx.tenantId,

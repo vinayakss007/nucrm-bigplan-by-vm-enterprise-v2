@@ -26,6 +26,7 @@ import {
   finalizeStepLog,
   type ClaimOutcome,
   type DueEnrollment,
+  type StepLogOutcome,
 } from '@/lib/cron/sequence-steps';
 
 const SEQUENCE_LOCK_KEY = 'cron:process-sequences';
@@ -235,8 +236,20 @@ export async function POST(req: NextRequest) {
 
             // Non-SMTP step types (task inserts, DNC skips, email steps with
             // no address) run fully inside this tx — no network I/O at all.
-            let success = true;
-            let errorMessage: string | null = null;
+            //
+            // #2795: the outcome is stated per step type instead of defaulting
+            // to success. It used to open `let success = true` and only ever
+            // lower it, so any type this cron does not run — `delay`, or an
+            // `email` step whose contact has no address, both of which fall
+            // through every branch below — inherited the record of a step that
+            // did run, and `finalizeStepLog` wrote `sent` for a nothing. The
+            // CHECK on `sequence_steps.step_type`
+            // (drizzle/migrations/0050_data_validation_checks.sql:121-122) also
+            // allows `whatsapp`, which has no branch either: it now fails
+            // loudly instead of reporting a send.
+            let outcome: StepLogOutcome = 'failed';
+            let errorMessage: string | null =
+              `Sequence step type "${step.stepType}" has no handler in cron/process-sequences`;
 
             if (step.stepType === 'email' && enrollment.contact?.doNotContact) {
               // Contact has doNotContact flag - skip this email step and log it
@@ -254,7 +267,15 @@ export async function POST(req: NextRequest) {
                   eq(sequenceStepLogs.status, 'pending'),
                   eq(sequenceStepLogs.tenantId, tenantId)
                 ));
+              outcome = 'skipped';
+              errorMessage = 'Contact has doNotContact flag set - email step skipped';
               // Do not mark as failed - continue to advance to next step
+            } else if (step.stepType === 'delay') {
+              // A delay step exists only to hold the enrollment, and the wait
+              // was already applied when this step was scheduled. Nothing was
+              // sent, so nothing is recorded as sent (#2795).
+              outcome = 'skipped';
+              errorMessage = 'Delay step — the enrollment waited here; nothing to send';
             } else if (step.stepType === 'task') {
               try {
                 await tx.insert(tasks).values({
@@ -265,14 +286,22 @@ export async function POST(req: NextRequest) {
                   priority: 'medium',
                   completed: false,
                 });
+                outcome = 'sent';
+                errorMessage = null;
 
               } catch (err) {
-                success = false;
+                outcome = 'failed';
                 errorMessage = err instanceof Error ? err.message : String(err);
               }
+            } else if (step.stepType === 'email') {
+              // Past the `shouldSendEmail` gate above, an email step reaching
+              // here means the contact has no address on file: nothing left to
+              // dispatch, so it is a skip, not a send (#2795).
+              outcome = 'skipped';
+              errorMessage = 'Contact has no email address - email step skipped';
             }
 
-            const didProcess = await finalizeStepLog(tx, tenantId, enrollment, step, success, errorMessage);
+            const didProcess = await finalizeStepLog(tx, tenantId, enrollment, step, outcome, errorMessage);
             return { kind: didProcess ? 'processed' : 'noop' };
           });
 

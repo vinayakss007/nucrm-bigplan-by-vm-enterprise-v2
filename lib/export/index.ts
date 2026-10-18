@@ -4,13 +4,14 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 import { db } from '@/drizzle/db';
-import { contacts, companies, deals, tasks } from '@/drizzle/schema';
-import { eq, and, isNull, ilike, or, sql } from 'drizzle-orm';
+import { contacts, companies, deals, tasks, leads } from '@/drizzle/schema';
+import { eq, and, isNull, ilike, or, sql, type SQL } from 'drizzle-orm';
 import { addJob } from '@/lib/queue';
 import { escapeLike } from '@/lib/api/sanitize-like';
+import { notArchived } from '@/lib/api/deals-archive-filter';
 import { csvEscapeValue } from '@/lib/csv';
 
-export type ExportEntityType = 'contacts' | 'deals' | 'tasks' | 'companies';
+export type ExportEntityType = 'contacts' | 'deals' | 'tasks' | 'companies' | 'leads';
 
 export interface ExportOptions {
   tenantId: string;
@@ -20,6 +21,23 @@ export interface ExportOptions {
  
   filters?: Record<string, string | undefined>;
   callbackUrl?: string;
+  /**
+   * #2677 — the row narrowing the caller's own list route applies, passed in by
+   * the route that holds an `AuthContext` (`ownerScope(ctx, 'contacts.view_all',
+   * contacts)`). This module has no context of its own and the async export job
+   * in `worker.ts` has none to pass, so it stays optional and `and()` skips the
+   * undefined: a cron running as a tenant-wide role keeps reading the tenant,
+   * while a `sales_rep` pressing Export stops reading rows the UI refuses to
+   * show them.
+   */
+  scope?: SQL | undefined;
+  /**
+   * #2618 — optional row projection (role field_permissions). Applied after
+   * the row-cap check and before headers are derived, so a restricted column
+   * disappears from the CSV entirely. Async export jobs (worker.ts) have no
+   * AuthContext and stay unprojected.
+   */
+  project?: (data: Record<string, unknown>[]) => Promise<Record<string, unknown>[]>;
 }
 
 // Maximum contacts per import to prevent system overload
@@ -82,7 +100,7 @@ export function escapeIlikeWildcards(input: string): string {
  * Generates CSV string for a given entity type and tenant
  */
 export async function generateExportData(opts: Omit<ExportOptions, 'callbackUrl'>): Promise<string> {
-  const { tenantId, entityType, filters = {} } = opts;
+  const { tenantId, entityType, filters = {}, scope } = opts;
   
  
  
@@ -113,12 +131,17 @@ export async function generateExportData(opts: Omit<ExportOptions, 'callbackUrl'
       .leftJoin(companies, eq(companies.id, contacts.companyId))
       .where(and(
         eq(contacts.tenantId, tenantId),
+        // #2677 — the contacts list hides archived rows (`contacts/route.ts:54`),
+        // the bulk routes hide them (`contacts/bulk/route.ts`), and this query
+        // did not, so the CSV carried rows the screen never showed.
+        eq(contacts.isArchived, false),
         isNull(contacts.deletedAt),
         q ? or(
           ilike(contacts.firstName, `%${escapeLike(q)}%`),
           ilike(contacts.lastName, `%${escapeLike(q)}%`),
           ilike(contacts.email, `%${escapeLike(q)}%`)
-        ) : undefined
+        ) : undefined,
+        scope
       ))
       // #H2: fetch at most MAX_EXPORT_ROWS + 1 so we can detect (and reject)
       // an over-limit export without loading the whole table into memory.
@@ -141,7 +164,11 @@ export async function generateExportData(opts: Omit<ExportOptions, 'callbackUrl'
       .leftJoin(companies, eq(companies.id, deals.companyId))
       .where(and(
         eq(deals.tenantId, tenantId),
-        isNull(deals.deletedAt)
+        isNull(deals.deletedAt),
+        // #2677 — `deals/route.ts:53` hides archived deals by default through
+        // `archiveFilter`; this branch read them all.
+        notArchived(),
+        scope
       ))
       .limit(MAX_EXPORT_ROWS + 1);
       break;
@@ -160,7 +187,8 @@ export async function generateExportData(opts: Omit<ExportOptions, 'callbackUrl'
       .leftJoin(contacts, eq(contacts.id, tasks.contactId))
       .where(and(
         eq(tasks.tenantId, tenantId),
-        isNull(tasks.deletedAt)
+        isNull(tasks.deletedAt),
+        scope
       ))
       .limit(MAX_EXPORT_ROWS + 1);
       break;
@@ -180,11 +208,55 @@ export async function generateExportData(opts: Omit<ExportOptions, 'callbackUrl'
       .from(companies)
       .where(and(
         eq(companies.tenantId, tenantId),
-        isNull(companies.deletedAt)
+        isNull(companies.deletedAt),
+        scope
       ))
       .limit(MAX_EXPORT_ROWS + 1);
       break;
       
+    case 'leads': {
+      const q = filters['q'];
+      const leadStatus = filters['lead_status'];
+      // #2678 — the columns `app/api/tenant/leads/route.ts:139-165` selects for
+      // the list, and the same `q`/`lead_status` predicates it builds at `:93-95`
+      // and `:119-128`, so the download matches the rows on screen.
+      data = await db.select({
+        first_name: leads.firstName,
+        last_name: leads.lastName,
+        full_name: leads.fullName,
+        email: leads.email,
+        phone: leads.phone,
+        title: leads.title,
+        company_name: leads.companyName,
+        lead_status: leads.leadStatus,
+        lead_source: leads.source,
+        score: leads.score,
+        value: leads.value,
+        lifecycle_stage: leads.lifecycleStage,
+        authority_level: leads.authorityLevel,
+        city: leads.city,
+        country: leads.country,
+        tags: sql<string>`array_to_string(${leads.tags}, ';')`,
+        created_date: sql<string>`(${leads.createdAt})::date`
+      })
+      .from(leads)
+      .where(and(
+        eq(leads.tenantId, tenantId),
+        isNull(leads.deletedAt),
+        leadStatus ? eq(leads.leadStatus, leadStatus) : undefined,
+        q ? or(
+          ilike(leads.firstName, `%${escapeLike(q)}%`),
+          ilike(leads.lastName, `%${escapeLike(q)}%`),
+          ilike(leads.email, `%${escapeLike(q)}%`),
+          ilike(leads.phone, `%${escapeLike(q)}%`),
+          ilike(leads.companyName, `%${escapeLike(q)}%`)
+        ) : undefined,
+        scope
+      ))
+      .limit(MAX_EXPORT_ROWS + 1);
+      break;
+    }
+
     default:
       throw new Error(`Unsupported export entity type: ${entityType}`);
   }
@@ -200,10 +272,17 @@ export async function generateExportData(opts: Omit<ExportOptions, 'callbackUrl'
     if (entityType === 'deals') return 'title,amount,stage_id,contact_name,company_name,close_date,created_at';
     if (entityType === 'tasks') return 'title,description,due_date,priority,status,related_contact,created_at';
     if (entityType === 'companies') return 'name,domain,industry,company_size,annual_revenue,city,country,website,created_at';
+    if (entityType === 'leads') return 'first_name,last_name,full_name,email,phone,title,company_name,lead_status,lead_source,score,value,lifecycle_stage,authority_level,city,country,tags,created_date';
     return '';
   }
-  
-  const headers = Object.keys(data[0] ?? {});
+
+  if (opts.project) data = await opts.project(data);
+  if (data.length === 0) return '';
+  // Intersect, not data[0]: projection can remove keys, and every row loses
+  // the same fields, but a first-row-only header list would emit undefined
+  // cells if projections ever diverge per row.
+  let headers = Object.keys(data[0] ?? {});
+  for (const row of data) headers = headers.filter((h) => h in row);
   const rows = data.map(row => headers.map(h => row[h] === null ? '' : escapeCSV(row[h])).join(','));
   
   return [headers.join(','), ...rows].join('\n');

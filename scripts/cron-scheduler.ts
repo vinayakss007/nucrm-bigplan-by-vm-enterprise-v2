@@ -74,9 +74,9 @@ async function runJob(job: CronJob): Promise<void> {
       const text = await res.text().catch(() => '');
       console.error(`[cron] ✗ ${job.name} — HTTP ${res.status}: ${text.slice(0, 200)}`);
     }
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (err: any) {
-    console.error(`[cron] ✗ ${job.name} — ${err.message}`);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[cron] ✗ ${job.name} — ${msg}`);
   }
   job.lastRun = Date.now();
 }

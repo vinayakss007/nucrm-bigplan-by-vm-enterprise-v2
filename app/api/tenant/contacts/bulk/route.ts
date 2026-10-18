@@ -16,15 +16,17 @@ import { NextRequest, NextResponse } from 'next/server';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { bulkUpdateSchema } from '@/lib/api/schemas';
 import { requireAuth, requirePerm, type AuthContext } from '@/lib/auth/middleware';
+import { ownerScope } from '@/lib/api/owner-scope';
 import { db } from '@/drizzle/db';
 import { contacts, tenantMembers, sequences, sequenceEnrollments, segments, segmentMembers, companies, tenants } from '@/drizzle/schema';
-import { eq, and, sql, inArray, isNull, or, ilike } from 'drizzle-orm';
+import { eq, and, sql, inArray, isNull, or, ilike, type SQL } from 'drizzle-orm';
 import { logAudit } from '@/lib/audit';
 import { logError } from '@/lib/errors-server';
 import { invalidateWidgetCache } from '@/lib/dashboard/widget-cache';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
-import { cancelOpenEnrollments } from '@/lib/cron/sequence-steps';
+import { cancelOpenEnrollments, firstStepDueAt } from '@/lib/cron/sequence-steps';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { enforceFieldWrite } from '@/lib/rbac/enforce';
 
 const MAX_BULK = 500;
 
@@ -47,13 +49,25 @@ export const POST = withApiRoute(async (req: NextRequest) => {
     // In selectAll mode, resolve IDs from filters; otherwise require explicit IDs
     let contact_ids: string[] = rawBody.contact_ids ?? [];
 
+    // #2673 — this route had no `view_all` reference at all: both of its id sets
+    // were scoped by tenant, archive flag and tombstone only, while
+    // `contacts/[id]` answers 404 to a caller who lacks `contacts.view_all` unless
+    // the contact is theirs (`:82-87` GET, `:195-200` PATCH, `:304-311` DELETE) and
+    // the list narrows with `canViewAll` (`contacts/route.ts:28-30`). So "select all
+    // matching" enumerated the whole workspace and an explicit `contact_ids` list was
+    // accepted as-is. See lib/api/owner-scope.ts for the shared predicate.
+    const ownedScope = ownerScope(ctx, 'contacts.view_all', contacts);
+
     if (selectAll) {
       // Build filter conditions from the same logic as the contacts list endpoint
-      const whereConditions = [
+      const whereConditions: SQL[] = [
         eq(contacts.tenantId, ctx.tenantId),
         eq(contacts.isArchived, false),
         isNull(contacts.deletedAt),
       ];
+      // Before the caller's filters: `company_id`/`lead_status`/`assigned_to` may
+      // narrow this further, and naming another owner cannot widen it back.
+      if (ownedScope) whereConditions.push(ownedScope);
 
       if (filters?.lead_status) {
         whereConditions.push(eq(contacts.leadStatus, filters.lead_status));
@@ -105,7 +119,10 @@ export const POST = withApiRoute(async (req: NextRequest) => {
         and(
           inArray(contacts.id, contact_ids),
           eq(contacts.tenantId, ctx.tenantId),
-          sql`${contacts.deletedAt} IS NULL`
+          sql`${contacts.deletedAt} IS NULL`,
+          // Both id sets must narrow, or `selectAll` plus a foreign id walks
+          // through whichever one is unguarded.
+          ownedScope
         )
       );
     
@@ -117,6 +134,27 @@ export const POST = withApiRoute(async (req: NextRequest) => {
     let affected = 0;
     // Optional extra fields merged into the response (e.g. compliance skip counts).
     let extraResult: Record<string, unknown> = {};
+
+    // #2618 — same doctrine as the deals bulk gate (#2641): assign/status
+    // write contact columns straight from payload keys; stripping the action's
+    // only value would leave the action meaningless, so reject (403) when
+    // field_permissions restricts the field.
+    const BULK_WATCHED_FIELDS: Record<string, string[]> = {
+      assign: ['assigned_to'],
+      status: ['lead_status'],
+    };
+    const watched = BULK_WATCHED_FIELDS[action as string];
+    if (watched) {
+      const { stripped } = await enforceFieldWrite(
+        ctx, 'contacts', Object.fromEntries(watched.map((f) => [f, true])),
+      );
+      if (stripped.length > 0) {
+        return NextResponse.json(
+          { error: `field_permissions restricts: ${stripped.join(', ')}` },
+          { status: 403 },
+        );
+      }
+    }
 
     switch (action) {
       case 'tag': {
@@ -379,6 +417,9 @@ export const POST = withApiRoute(async (req: NextRequest) => {
         }
 
         await db.transaction(async (tx) => {
+          // #2793: a row written without `next_step_at` is `active` but can never
+          // be picked up by the cron's due sweep, so the drip silently never sent.
+          const nextStepAt = await firstStepDueAt(tx, ctx.tenantId, sequenceId);
           const enrollValues = eligibleIds.map(contactId => ({
             tenantId: ctx.tenantId,
             sequenceId,
@@ -386,6 +427,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
             enrolledBy: ctx.userId,
             status: 'active',
             currentStep: 1,
+            nextStepAt,
           }));
           
           const res = await tx.insert(sequenceEnrollments).values(enrollValues).onConflictDoNothing();

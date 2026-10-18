@@ -8,6 +8,9 @@ import { apiError } from '@/lib/api-error';
 import { logError } from '@/lib/errors-server';
 import { requireAuth, requirePerm } from '@/lib/auth/middleware';
 import { generateExportData, ExportLimitError } from '@/lib/export';
+import { contacts } from '@/drizzle/schema';
+import { ownerScope } from '@/lib/api/owner-scope';
+import { enforceFieldRead } from '@/lib/rbac/enforce';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
 export const GET = withApiRoute(async (request: NextRequest) => {
@@ -24,7 +27,16 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       tenantId: ctx.tenantId,
       userId: ctx.userId,
       entityType: 'contacts',
-      filters: { q }
+      filters: { q },
+      // #2677 — the list and the single-record handlers both refuse a caller
+      // without `contacts.view_all` unless the contact is theirs
+      // (`contacts/route.ts:58-60`, `contacts/[id]/route.ts:83,196,305`); this
+      // read the whole tenant, so Export handed a restricted role up to
+      // MAX_EXPORT_ROWS rows the UI would not show them.
+      scope: ownerScope(ctx, 'contacts.view_all', contacts),
+      // #2618 — the CSV used to bypass field_permissions entirely (the deals
+      // export was fixed the same way in #2614): drop restricted columns.
+      project: (data) => enforceFieldRead(ctx, 'contacts', data),
     });
 
     return new NextResponse(csv, {

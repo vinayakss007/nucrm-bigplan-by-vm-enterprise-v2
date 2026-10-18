@@ -9,6 +9,8 @@ import { db } from '@/drizzle/db';
 import { deals, dealStages, pipelines } from '@/drizzle/schema';
 import { eq, and, isNull, gte, sql } from 'drizzle-orm';
 import { withCache } from '@/lib/dashboard/widget-cache';
+import { ownerScope, ownerCacheKey } from '@/lib/api/owner-scope';
+import { notArchived } from '@/lib/api/deals-archive-filter';
 import { logError, tenantMeta } from '@/lib/errors-server';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
@@ -18,6 +20,10 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     ctx = await requireAuth(request);
     if (ctx instanceof NextResponse) return ctx;
     const tid = ctx.tenantId;
+
+    // `ctx` is a `let`, so the narrowing the guard above establishes does not
+    // survive into the withCache closure (#2688).
+    const auth = ctx;
 
     return withCache(tid, 'stats-revenue', 300, async () => {
       const [wonStage] = await db
@@ -37,6 +43,13 @@ export const GET = withApiRoute(async (request: NextRequest) => {
           .where(and(
             eq(deals.tenantId, tid),
             isNull(deals.deletedAt),
+            // #2695 — the tile totalled the workspace for a rep whose pipeline
+            // tile beside it (`widgets/stats/pipeline/route.ts:49`) shows only
+            // their own, and it counted archived deals, which #2684 hid from
+            // every other deals read. `and()` skips the `undefined` a
+            // `deals.view_all` holder gets, so their SQL is unchanged.
+            notArchived(),
+            ownerScope(auth, 'deals.view_all', deals),
             eq(deals.stageId, wonStage.id),
             gte(deals.createdAt, sql`date_trunc('month', now())`),
           ));
@@ -44,7 +57,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       }
 
       return NextResponse.json({ data: { wonThisMonth } });
-    });
+    }, ownerCacheKey(auth, 'deals.view_all'));
   } catch (err) {
     void logError({ error: err, context: 'GET /api/tenant/dashboard/widgets/stats/revenue', ...tenantMeta(ctx) });
     return NextResponse.json({ error: 'Widget failed' }, { status: 500 });

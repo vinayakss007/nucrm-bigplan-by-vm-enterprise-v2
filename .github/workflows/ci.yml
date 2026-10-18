@@ -81,8 +81,10 @@ jobs:
         run: npm run guard:portal-rls-context
       - name: Register coordinate guard (#2416)
         run: npm run guard:coords
-      - name: Cron lock refusal + schedule guard (#2539)
-        run: npm run guard:cron-lock
+      - name: Cron lock + field-permission wiring guards (#2539, #2597)
+        run: npm run guard:cron-lock && npm run guard:field-permissions
+      - name: Raw-SQL identifier + statement_timeout guard (#2528)
+        run: npm run guard:raw-sql
 
   test-unit:
     name: Unit Tests
@@ -405,3 +407,32 @@ jobs:
             -c 'CREATE DATABASE nucrm_chain'
           npm run db:bootstrap -- --yes
           npm run db:drift-check
+
+  # #2596 — every process.env name the app reads must be in `.env.example`, or
+  # carry a written reason in `scripts/env-coverage-allowlist.json`. The failure
+  # this removes is silent: a deployment that never sets a variable takes its
+  # default path and nothing anywhere says the knob exists. `METRICS_SECRET`
+  # (#2221) and `BACKUP_ENCRYPTION_KEY` are the shape of it — features that
+  # degrade to "off" with a 200 and a log line.
+  #
+  # Appended as a NEW JOB at the end of the file rather than as steps inside an
+  # existing one, because the register cites coordinates in this file
+  # (`ci.yml:63`, `:86-87`, `:92-105`, `:126`, `:135-185`, `:171`, `:221`,
+  # `:401`) and anything inserted below the last `run:` of the last job would
+  # move every line after it. Nothing above the end of the file has shifted on
+  # this branch, which is what `npm run guard:coords` checks.
+  #
+  # No `npm ci`: scripts/check-env-coverage.mjs imports node built-ins only, so
+  # the screen costs seconds rather than a dependency install.
+  env-coverage:
+    name: Env coverage (#2596)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+
+      - name: Every environment variable is documented or allowlisted
+        run: node scripts/check-env-coverage.mjs

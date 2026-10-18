@@ -39,14 +39,15 @@ vi.mock('drizzle-orm', () => ({
   desc: vi.fn(() => true),
 }));
 
-vi.mock('@/lib/modules/industry-templates', () => ({
-  INDUSTRY_TEMPLATES: {
-    saas: {
-      defaultDashboardLayout: [
-        { widget: 'stats-revenue', position: 0, size: '1x1' },
-      ],
-    },
-  },
+// #2633: industry layouts resolve from product_templates via lib/templates/resolve
+vi.mock('@/lib/templates/resolve', () => ({
+  resolveTemplate: vi.fn(async (id: string) => (id === 'saas' ? {
+    id: 'tpl-saas', slug: 'saas', name: 'SaaS', description: null, icon: null,
+    modules: [], custom_fields: [], pipelines: [], automations: [], isBuiltin: true,
+    defaultDashboardLayout: [
+      { widget: 'stats-revenue', position: 0, size: '1x1' },
+    ],
+  } : null)),
 }));
 
 describe('per-role dashboard defaults', () => {

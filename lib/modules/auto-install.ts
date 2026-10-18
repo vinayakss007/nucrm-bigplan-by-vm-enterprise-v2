@@ -20,7 +20,7 @@ import { modules, tenantModules } from '@/drizzle/schema/modules';
 
 type DbTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 import { BUILTIN_MODULES } from '@/lib/modules/registry';
-import { INDUSTRY_TEMPLATES } from '@/lib/modules/industry-templates';
+import { resolveTemplate } from '@/lib/templates/resolve';
 import { logger } from '@/lib/logger';
 
 /**
@@ -91,13 +91,15 @@ export function getDefaultModulesForPlan(planId: string): string[] {
 /**
  * Get the combined module list for a plan + optional industry template.
  * Template modules are merged with plan modules (union, no duplicates).
+ * #2633: template modules come from product_templates (DB), so superadmin
+ * edits to a template's module set actually take effect.
  */
-export function getModulesForPlanAndTemplate(planId: string, templateId?: string): string[] {
+export async function getModulesForPlanAndTemplate(planId: string, templateId?: string): Promise<string[]> {
   const planModules = getDefaultModulesForPlan(planId);
 
   if (!templateId) return planModules;
 
-  const template = INDUSTRY_TEMPLATES[templateId];
+  const template = await resolveTemplate(templateId).catch(() => null);
   if (!template) return planModules;
 
   // Merge plan modules with template modules (deduplicated)
@@ -109,8 +111,8 @@ export function getModulesForPlanAndTemplate(planId: string, templateId?: string
  * Get the module IDs for a specific industry template.
  * Returns only modules that exist in BUILTIN_MODULES.
  */
-export function getTemplateModules(templateId: string): string[] {
-  const template = INDUSTRY_TEMPLATES[templateId];
+export async function getTemplateModules(templateId: string): Promise<string[]> {
+  const template = await resolveTemplate(templateId).catch(() => null);
   if (!template) return [];
 
   const validModuleIds = new Set(BUILTIN_MODULES.map(m => m.id));
@@ -126,7 +128,7 @@ export async function installTemplateModules(
   tenantId: string,
   templateId: string
 ): Promise<{ installed: number; failed: string[] }> {
-  const moduleIds = getTemplateModules(templateId);
+  const moduleIds = await getTemplateModules(templateId);
 
   if (moduleIds.length === 0) return { installed: 0, failed: [] };
 
@@ -189,7 +191,7 @@ export async function installDefaultModules(
   // running it on `db` installed nothing while the catch below logged the
   // failure as non-fatal.
   const client = tx ?? db;
-  const moduleIds = getModulesForPlanAndTemplate(planId, industryTemplate);
+  const moduleIds = await getModulesForPlanAndTemplate(planId, industryTemplate);
 
   if (moduleIds.length === 0) return;
 

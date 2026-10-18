@@ -15,6 +15,7 @@ import { apiError } from '@/lib/api-error';
 import { logError } from '@/lib/errors-server';
 import { logAudit } from '@/lib/audit';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { enforceFieldWrite } from '@/lib/rbac/enforce';
 
 function parseCSV(text: string): Record<string, string>[] {
   const lines = text.split(/\r?\n/).filter(l => l.trim());
@@ -241,10 +242,25 @@ export const POST = withApiRoute(async (request: NextRequest) => {
 
       for (const [index, row] of rows.entries()) {
         try {
-          const mapped: Record<string, string | undefined> = {};
+          const mappedRaw: Record<string, string | undefined> = {};
           for (const [key, val] of Object.entries(row)) {
             const dbCol = COLUMN_MAP[key.toLowerCase().trim()];
-            if (dbCol && val) mapped[dbCol] = val;
+            if (dbCol && val) mappedRaw[dbCol] = val;
+          }
+          // #2615 — COLUMN_MAP folds five CSV spellings (amount / value /
+          // deal_amount / deal_value / revenue) into `amount`, and stage /
+          // deal_stage / stage_name into `stage`, so without this projection a
+          // role with `amount` or `stage_id` hidden via field_permissions
+          // could bulk-create deals carrying those values. Stripped keys are
+          // dropped before the insertBuffer push, so downstream defaults take
+          // over (amount → '0', assignedTo → ctx.userId, stage → first).
+          const { body: mappedBody, stripped } = await enforceFieldWrite(ctx, 'deals', mappedRaw);
+          if (stripped.length > 0) {
+            results.errors.push(`Row ${index + 2}: role restrictions dropped ${stripped.join(', ')}`);
+          }
+          const mapped: Record<string, string | undefined> = {};
+          for (const [k, v] of Object.entries(mappedBody)) {
+            if (typeof v === 'string' || v === undefined) mapped[k] = v;
           }
 
           if (!mapped.title) {

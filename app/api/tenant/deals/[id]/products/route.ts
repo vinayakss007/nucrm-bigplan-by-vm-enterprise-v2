@@ -5,7 +5,8 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { apiError } from '@/lib/api-error';
-import { requireAuth } from '@/lib/auth/middleware';
+import { requireAuth, requirePerm, type AuthContext } from '@/lib/auth/middleware';
+import { ownerScope } from '@/lib/api/owner-scope';
 import { sumLineItems } from '@/lib/money';
 import { db } from '@/drizzle/db';
 import { deals, dealProducts } from '@/drizzle/schema';
@@ -25,11 +26,23 @@ const createDealProductSchema = z.object({
 
 const updateDealProductSchema = createDealProductSchema.partial();
 
-async function assertDeal(tenantId: string, dealId: string) {
+/**
+ * The parent check `deals/[id]` applies to every verb, in one place. The owner
+ * narrowing is what the old `assertDeal(tenantId, dealId)` left out: a row read on
+ * `id + tenant_id + deleted_at` resolves for a `sales_rep` whose `deals.view_all` is
+ * false (`lib/permissions/definitions.ts:135`), which is exactly the caller
+ * `deals/[id]/route.ts:67-72` answers 404 (#2709).
+ */
+async function assertDeal(ctx: AuthContext, dealId: string) {
   const [deal] = await db
     .select({ id: deals.id })
     .from(deals)
-    .where(and(eq(deals.id, dealId), eq(deals.tenantId, tenantId), sql`${deals.deletedAt} IS NULL`))
+    .where(and(
+      eq(deals.id, dealId),
+      eq(deals.tenantId, ctx.tenantId),
+      sql`${deals.deletedAt} IS NULL`,
+      ownerScope(ctx, 'deals.view_all', deals),
+    ))
     .limit(1);
   return deal;
 }
@@ -39,9 +52,11 @@ export const GET = withApiRoute(async (req: NextRequest, { params }: { params: P
   try {
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
+    const deny = requirePerm(ctx, 'deals.view');
+    if (deny) return deny;
     const dealId = (await params).id;
 
-    if (!(await assertDeal(ctx.tenantId, dealId))) {
+    if (!(await assertDeal(ctx, dealId))) {
       return NextResponse.json({ error: 'Deal not found' }, { status: 404 });
     }
 
@@ -69,9 +84,11 @@ export const POST = withApiRoute(async (req: NextRequest, { params }: { params: 
 
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
+    const deny = requirePerm(ctx, 'deals.edit');
+    if (deny) return deny;
     const dealId = (await params).id;
 
-    if (!(await assertDeal(ctx.tenantId, dealId))) {
+    if (!(await assertDeal(ctx, dealId))) {
       return NextResponse.json({ error: 'Deal not found' }, { status: 404 });
     }
 
@@ -101,7 +118,15 @@ export const PATCH = withApiRoute(async (req: NextRequest, { params }: { params:
 
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
+    const deny = requirePerm(ctx, 'deals.edit');
+    if (deny) return deny;
     const dealId = (await params).id;
+
+    // Without this the write was keyed on a deal id the caller chose, and nothing
+    // asked whether that deal exists, is theirs, or is soft-deleted (#2709).
+    if (!(await assertDeal(ctx, dealId))) {
+      return NextResponse.json({ error: 'Deal not found' }, { status: 404 });
+    }
 
     const body = await readJsonBody(req);
     const itemId = body?.item_id;
@@ -144,7 +169,13 @@ export const DELETE = withApiRoute(async (req: NextRequest, { params }: { params
 
     const ctx = await requireAuth(req);
     if (ctx instanceof NextResponse) return ctx;
+    const deny = requirePerm(ctx, 'deals.edit');
+    if (deny) return deny;
     const dealId = (await params).id;
+
+    if (!(await assertDeal(ctx, dealId))) {
+      return NextResponse.json({ error: 'Deal not found' }, { status: 404 });
+    }
 
     const itemId = new URL(req.url).searchParams.get('item_id');
     if (!itemId) return NextResponse.json({ error: 'item_id query parameter is required' }, { status: 400 });

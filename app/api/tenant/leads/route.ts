@@ -22,6 +22,7 @@ import { logError } from '@/lib/errors-server';
 import { createNotification } from '@/lib/notifications';
 import { escapeLike } from '@/lib/api/sanitize-like';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { enforceFieldRead, enforceFieldWrite, attachStrippedFields } from '@/lib/rbac/enforce';
 
 // Whitelist for sort columns to prevent SQL injection
 
@@ -171,7 +172,8 @@ export const GET = withApiRoute(async (request: NextRequest) => {
     .offset(offset);
 
     // Map camelCase to snake_case for frontend compatibility
-    const data = rawData.map(lead => ({
+    // #2597 A2: project the list through the role's read restrictions.
+    const data = await enforceFieldRead(ctx, 'leads', rawData.map(lead => ({
       id: lead.id,
       first_name: lead.firstName,
       last_name: lead.lastName,
@@ -197,7 +199,7 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       assigned_name: lead.assignedName,
       assigned_avatar: lead.assignedAvatar,
       company_display_name: lead.companyDisplayName,
-    }));
+    })));
 
     return NextResponse.json({
       data,
@@ -229,13 +231,18 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     const overLimit = await checkLimit(ctx, 'leads');
     if (overLimit) return overLimit;
 
-    const body = await readJsonBody(request);
+    const rawBody = await readJsonBody(request);
+    // #2597 A2: drop keys the role may not write (STRIP, not 403) before the column map.
+    const { body, stripped } = await enforceFieldWrite(ctx, 'leads', rawBody);
     const validated = validateBody(createLeadSchema, body);
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;
 
     if (v.email) {
-      const [existing] = await db.select()
+      // #2618: the 409 used to embed the whole duplicate row (`duplicate:
+      // existing` via select()), bypassing read restrictions. Clients only
+      // consume is_duplicate/duplicate_id, so project to the id alone.
+      const [existing] = await db.select({ id: leads.id })
         .from(leads)
         .where(and(
           eq(leads.tenantId, ctx.tenantId),
@@ -246,7 +253,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
 
       if (existing) {
         return NextResponse.json(
-          { error: 'A lead with this email already exists', is_duplicate: true, duplicate_id: existing.id, duplicate: existing },
+          { error: 'A lead with this email already exists', is_duplicate: true, duplicate_id: existing.id },
           { status: 409 }
         );
       }
@@ -419,7 +426,9 @@ export const POST = withApiRoute(async (request: NextRequest) => {
 
     fireWebhooks(ctx.tenantId, 'lead.created', { id: newLead.id, email: v.email }).catch((err) => logError({ error: err, context: 'tenant/leads fireWebhooks lead.created' }));
 
-    return NextResponse.json({ data: newLead }, { status: 201 });
+    // #2597 A2: project the created lead through the read restrictions.
+    const [created] = newLead ? await enforceFieldRead(ctx, 'leads', [newLead]) : [newLead];
+    return attachStrippedFields(NextResponse.json({ data: created }, { status: 201 }), stripped);
  
  
   } catch (error) {

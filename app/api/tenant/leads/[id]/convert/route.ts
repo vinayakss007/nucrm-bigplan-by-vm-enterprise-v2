@@ -17,7 +17,10 @@ import { validateBody, readJsonBody } from '@/lib/api/validate';
 import { convertLeadSchema } from '@/lib/api/schemas';
 import { requireAuth, can } from '@/lib/auth/middleware';
 import { convertLeadCore } from '@/lib/leads/convert';
+import { ownerScope } from '@/lib/api/owner-scope';
+import { leads } from '@/drizzle/schema';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { enforceFieldWrite, attachStrippedFields } from '@/lib/rbac/enforce';
 
 export const POST = withApiRoute(async (request: NextRequest, 
   { params }: { params: Promise<{ id: string }> | { id: string } }) => {
@@ -36,16 +39,35 @@ export const POST = withApiRoute(async (request: NextRequest,
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;
 
+    // #2618 — convert optionally writes deals.amount / deals.stage_id /
+    // assigned_to straight from body keys. Unlike the assign routes the
+    // conversion itself stays meaningful without them, so STRIP the
+    // restricted keys (core defaults then take over) instead of 403.
+    const dealGate = await enforceFieldWrite(ctx, 'deals', {
+      ...(v.deal_value !== undefined ? { amount: v.deal_value } : {}),
+      ...(v.deal_stage !== undefined ? { stage_id: v.deal_stage } : {}),
+    });
+    const assignGate = v.assigned_to !== undefined
+      ? await enforceFieldWrite(ctx, 'leads', { assigned_to: v.assigned_to })
+      : { stripped: [] as string[] };
+    const gateStripped = [...dealGate.stripped, ...assignGate.stripped];
+
     const result = await convertLeadCore({
       tenantId: ctx.tenantId,
       actorId: ctx.userId,
       leadId: id,
       createDeal: v.create_deal,
       dealTitle: v.deal_title ?? undefined,
-      dealValue: v.deal_value,
-      dealStage: v.deal_stage ?? undefined,
+      dealValue: dealGate.stripped.includes('amount') ? undefined : v.deal_value,
+      dealStage: dealGate.stripped.includes('stage_id') ? undefined : (v.deal_stage ?? undefined),
       pipelineId: v.pipeline_id ?? undefined,
-      assignedTo: v.assigned_to ?? undefined,
+      assignedTo: assignGate.stripped.includes('assigned_to') ? undefined : (v.assigned_to ?? undefined),
+      // #2696 — the route never looked at the lead; convertLeadCore did, on
+      // tenant + tombstone alone. Converting a foreign lead created a contact
+      // and a deal owned by the attacker and re-pointed the existing contact's
+      // `assigned_to`, so the scope belongs on the core's lookup, where a lead
+      // the caller may not touch reads as absent (404 below).
+      leadScope: ownerScope(ctx, 'leads.view_all', leads),
     });
 
     if (!result.ok) {
@@ -58,13 +80,14 @@ export const POST = withApiRoute(async (request: NextRequest,
       }, { status: 409 });
     }
 
-    return NextResponse.json({
+    // #2620 signal: the caller learns which keys the gate dropped.
+    return attachStrippedFields(NextResponse.json({
       ok: true,
       contact_id: result.contactId,
       deal_id: result.dealId,
       is_new_contact: result.isNewContact,
       message: result.isNewContact ? 'Lead converted to new contact.' : 'Lead merged into existing contact.',
-    }, { status: 201 });
+    }, { status: 201 }), gateStripped);
 
   
   

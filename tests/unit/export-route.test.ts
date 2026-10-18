@@ -19,15 +19,22 @@ describe('POST /api/tenant/export route - F6 ergonomics & streaming', () => {
       rateLimitMutating: vi.fn().mockResolvedValue(null),
     }));
 
-    vi.doMock('@/lib/auth/middleware', () => ({
-      requireAuth: vi.fn().mockResolvedValue({
-        tenantId: 'test-tenant',
-        userId: 'test-user',
-        isAdmin: true,
-        isSuperAdmin: false,
-      }),
-      requirePerm: vi.fn().mockReturnValue(null),
-    }));
+    vi.doMock('@/lib/auth/middleware', async () => {
+      const actual = await vi.importActual<typeof import('@/lib/auth/middleware')>('@/lib/auth/middleware');
+      return {
+        // #2677 — the route now reads `can()` (through `ownerScope`) to decide
+        // whether the export is owner-narrowed, so only `requireAuth`/
+        // `requirePerm` are faked here and the permission rule stays real.
+        ...actual,
+        requireAuth: vi.fn().mockResolvedValue({
+          tenantId: 'test-tenant',
+          userId: 'test-user',
+          isAdmin: true,
+          isSuperAdmin: false,
+        }),
+        requirePerm: vi.fn().mockReturnValue(null),
+      };
+    });
 
     vi.doMock('@/lib/api/validate', () => ({
       readJsonBody: vi.fn().mockResolvedValue({ entity: 'contacts', format: 'csv' }),

@@ -1,12 +1,7 @@
 {
-  "drizzle/db.ts": 3,
   "drizzle/schema/utils.ts": 5,
   "lib/api/validate.ts": 1,
-  "scripts/add-indexes.ts": 1,
-  "scripts/cron-scheduler.ts": 1,
-  "scripts/generate-migration.ts": 1,
-  "scripts/quality-report.ts": 1,
-  "scripts/stress-test.ts": 3,
+  "scripts/stress-test.ts": 2,
   "tests/helpers/auth-mock.ts": 1,
   "tests/helpers/db-mock.ts": 3,
   "tests/helpers/razorpay-mock.ts": 3,
@@ -14,8 +9,5 @@
   "tests/helpers.ts": 5,
   "tests/setup.ts": 1,
   "types/dashboard.ts": 1,
-  "sentry-pii-scrub.ts": 2,
-  "sentry.client.config.ts": 1,
-  "sentry.server.config.ts": 1,
-  "worker.ts": 8
+  "sentry-pii-scrub.ts": 1
 }

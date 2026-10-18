@@ -239,7 +239,7 @@ export default function LeadsClient({
     if (activeStatus !== 'all') q.set('lead_status', activeStatus);
     if (search) q.set('q', search);
     try {
-      const res = await fetch('/api/tenant/contacts/export?' + q);
+      const res = await fetch('/api/tenant/leads/export?' + q);
       if (!res.ok) throw new Error();
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);

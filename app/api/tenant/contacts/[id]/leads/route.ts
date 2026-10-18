@@ -22,6 +22,8 @@ import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 import { apiError } from '@/lib/api-error';
 import { logError } from '@/lib/errors-server';
 import { withApiRoute } from '@/lib/api/with-api-route';
+import { ownerScope } from '@/lib/api/owner-scope';
+import { enforceFieldRead } from '@/lib/rbac/enforce';
 
  
  
@@ -65,6 +67,13 @@ export const GET = withApiRoute(async (request: NextRequest, { params }: { param
         eq(leads.tenantId, ctx.tenantId),
         eq(leads.contactId, id),
         isNull(leads.deletedAt),
+        // #2696 — the Leads tab on the contact detail page is the surface a rep
+        // uses most, and it projected budget, value, score, needDescription and
+        // the assignee's name for every lead of any contact in the workspace,
+        // which is also where #2692's bulk id set became readable. The offer
+        // totals below aggregate over these ids only, so narrowing here
+        // narrows them too.
+        ownerScope(ctx, 'leads.view_all', leads)
       ))
       .orderBy(desc(leads.createdAt));
 
@@ -134,7 +143,10 @@ export const GET = withApiRoute(async (request: NextRequest, { params }: { param
       };
     });
 
-    return NextResponse.json({ data });
+    // #2618 — these lead rows bypass the leads list projection; run them
+    // through the role's read restrictions too.
+    const projected = await enforceFieldRead(ctx, 'leads', data);
+    return NextResponse.json({ data: projected });
  
  
   } catch (error) {

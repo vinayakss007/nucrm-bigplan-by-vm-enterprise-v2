@@ -21,17 +21,20 @@
 import { logError } from '@/lib/errors-server';
 import { safeFetch } from '@/lib/security/ssrf';
 import { db } from '@/drizzle/db';
+import { firstStepDueAt } from '@/lib/cron/sequence-steps';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
-import { 
-  automations, 
-  automationRuns, 
-  contacts, 
-  deals, 
-  tasks, 
-  callLogs, 
-  integrations 
+import {
+  automations,
+  automationRuns,
+  contacts,
+  deals,
+  tasks,
+  callLogs,
+  integrations,
+  sequences,
+  sequenceEnrollments
 } from '@/drizzle/schema';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, and, sql, isNull } from 'drizzle-orm';
 import { sendEmail } from '@/lib/email/service';
 import { escapeHtml } from '@/lib/email/escape-html';
 import { createNotification } from '@/lib/notifications';
@@ -229,20 +232,67 @@ async function executeAction(dbOrTx: NodePgDatabase | typeof db, action: Automat
       const sequenceId = config.sequence_id;
       if (!contactId || !sequenceId) return;
 
-      try {
-        await dbOrTx.execute(sql`
-          SELECT public.enroll_contact_in_sequence(
-            ${payload.tenantId}::uuid, 
-            ${sequenceId}::uuid, 
-            ${contactId}::uuid, 
-            ${payload.userId || null}::uuid
-          )
-        `);
- 
- 
-      } catch (err) {
-        captureError(err, 'automation:sequence-enrollment');
-      }
+      // #2739: this used to run `SELECT public.enroll_contact_in_sequence(…)` with
+      // four uuid arguments, and the function is defined with two
+      // (`drizzle/migrations/0032_missing_db_functions.sql:50-59`). Postgres resolves
+      // by name AND argument list, so every firing raised "function does not exist",
+      // the `catch` below turned it into a `captureError`, and the run was still
+      // recorded `success` — an "enroll in sequence" automation has never enrolled
+      // anybody. The row is written here instead, the way #2737 wrote it for the HTTP
+      // route, and a genuine failure now aborts the transaction so
+      // `evaluateAutomations` logs the run as failed rather than passing it off as
+      // done.
+      //
+      // Two reads, for two different reasons: the enrollment pre-read is the cheap early-out that
+      // skips a contact already in the drip (the partial unique index from #2740 is what makes a
+      // racing pair safe, below); and the contact is re-read at write time because a
+      // `do_not_contact` / `unsubscribed` flag or a tombstone set between the trigger and this
+      // action must stop the mail (#1120).
+      const [contact] = await dbOrTx.select({
+        id: contacts.id,
+        deletedAt: contacts.deletedAt,
+        doNotContact: contacts.doNotContact,
+        unsubscribed: contacts.unsubscribed,
+      })
+        .from(contacts)
+        .where(and(eq(contacts.id, contactId), eq(contacts.tenantId, payload.tenantId)))
+        .limit(1);
+      if (!contact || contact.deletedAt || contact.doNotContact || contact.unsubscribed) return;
+
+      const [alreadyActive] = await dbOrTx.select({ id: sequenceEnrollments.id })
+        .from(sequenceEnrollments)
+        .where(and(
+          eq(sequenceEnrollments.tenantId, payload.tenantId),
+          eq(sequenceEnrollments.sequenceId, sequenceId),
+          eq(sequenceEnrollments.contactId, contactId),
+          eq(sequenceEnrollments.status, 'active'),
+          isNull(sequenceEnrollments.deletedAt)
+        ))
+        .limit(1);
+      if (alreadyActive) return;
+
+      // #2793: `next_step_at` has no default, and the cron's due sweep needs
+      // `next_step_at <= NOW()` — a NULL never selects, so an automation that
+      // enrolled without it left the contact in a drip that sent nothing, forever.
+      const nextStepAt = await firstStepDueAt(dbOrTx, payload.tenantId, sequenceId);
+      // #2740: the read above cannot be the only guard — two triggers firing on the same contact
+      // both pass it, and migration 0130's partial unique index then rejects the second insert.
+      // Skipped (not failed) is the right outcome: the contact is already in the drip, so the
+      // enroll counter must not move for a row that was never written.
+      const enrolled = await dbOrTx.insert(sequenceEnrollments).values({
+        tenantId: payload.tenantId,
+        sequenceId,
+        contactId,
+        status: 'active',
+        currentStep: 1,
+        nextStepAt,
+        enrolledBy: payload.userId || null,
+      }).onConflictDoNothing().returning({ id: sequenceEnrollments.id });
+      if (enrolled.length === 0) return;
+
+      await dbOrTx.update(sequences)
+        .set({ enrollCount: sql`COALESCE(${sequences.enrollCount}, 0) + 1` })
+        .where(eq(sequences.id, sequenceId));
       break;
     }
 

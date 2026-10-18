@@ -12,11 +12,60 @@ import { confirmThen } from '@/components/ui/confirm-dialog';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
-const STEP_ACTIONS = ['send_email','send_whatsapp','send_sms','create_task','send_notification','wait'];
-const STEP_LABELS: Record<string,string> = {
-  send_email:'Send Email', send_whatsapp:'Send WhatsApp', send_sms:'Send SMS',
-  create_task:'Create Task', send_notification:'Send Notification', wait:'Wait',
+// #2794: these are the wire values `createSequenceSchema` accepts, not vocabulary
+// the cron does not implement. The list used to be `send_email` / `send_whatsapp` /
+// `send_sms` / `create_task` / `send_notification` / `wait` — none of which is a
+// legal `type`, so every submit was a 400 — while
+// `chk_sequence_steps_step_type` (`drizzle/migrations/0050_data_validation_checks.sql:121`)
+// admits exactly `email|delay|task|whatsapp` and `process-sequences/route.ts:241-274`
+// implements `email` and `task` only. `whatsapp` is left out because a step that is
+// logged as `sent` and sends nothing is the bug #2795 files.
+const STEP_ACTIONS = ['email', 'task', 'delay'] as const;
+type StepAction = (typeof STEP_ACTIONS)[number];
+const STEP_LABELS: Record<StepAction, string> = {
+  email: 'Send Email', task: 'Create Task', delay: 'Wait',
 };
+
+/** The step as the page holds it: day-granular wait, because that is the input. */
+interface PageStep {
+  delay_days: number;
+  action_type: StepAction;
+  content: string;
+  subject: string;
+  body: string;
+}
+
+/** The step as `createSequenceSchema` reads it. */
+interface WireStep {
+  type: StepAction;
+  delay_minutes: number;
+  subject?: string;
+  body?: string;
+}
+
+/**
+ * Convert at the boundary. The schema's only delay field is `delay_minutes`
+ * (`lib/api/schemas/automation.ts:53`) and Zod strips anything else, so a
+ * `delay_days` sent alongside is silently dropped and the route stores
+ * `delayDays: 0` (`app/api/tenant/sequences/route.ts:107-109`).
+ *
+ * A task's title travels in `subject`, because that is the column the processor
+ * reads for it (`app/api/cron/process-sequences/route.ts:261` — `title: step.subject
+ * || 'Follow up'`).
+ */
+function toWireStep(step: PageStep): WireStep {
+  const wire: WireStep = {
+    type: step.action_type,
+    delay_minutes: step.delay_days * 24 * 60,
+  };
+  if (step.action_type === 'email') {
+    if (step.subject) wire.subject = step.subject;
+    if (step.body) wire.body = step.body;
+  } else if (step.action_type === 'task' && step.content) {
+    wire.subject = step.content;
+  }
+  return wire;
+}
 
 interface Sequence {
   id: string;
@@ -36,10 +85,10 @@ export default function SequencesPage() {
   const [form, setForm] = useState({
     name:'', description:'',
     steps:[
-      { delay_days:0, action_type:'send_email', content:'', subject:'', body:'' },
-      { delay_days:3, action_type:'send_notification', content:'Follow up task', subject:'', body:'' },
-      { delay_days:7, action_type:'send_email', content:'', subject:'', body:'' },
-    ],
+      { delay_days:0, action_type:'email', content:'', subject:'', body:'' },
+      { delay_days:3, action_type:'task', content:'Follow up task', subject:'', body:'' },
+      { delay_days:7, action_type:'email', content:'', subject:'', body:'' },
+    ] as PageStep[],
   });
 
   // #1328: list via TanStack Query (was raw fetch + useEffect).
@@ -53,7 +102,7 @@ export default function SequencesPage() {
     mutationFn: async () => {
       const res = await fetch('/api/tenant/sequences', {
         method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify(form),
+        body: JSON.stringify({ ...form, steps: form.steps.map(toWireStep) }),
       });
       const d = await res.json();
       if (!res.ok) throw new Error(d.error ?? 'Failed');
@@ -88,7 +137,7 @@ export default function SequencesPage() {
     });
   };
 
-  const addStep = () => setForm(f => ({...f, steps:[...f.steps, { delay_days:f.steps.length*3, action_type:'send_email', content:'', subject:'', body:'' }]}));
+  const addStep = () => setForm(f => ({...f, steps:[...f.steps, { delay_days:f.steps.length*3, action_type:'email' as StepAction, content:'', subject:'', body:'' }]}));
   const removeStep = (i: number) => setForm(f => ({...f, steps:f.steps.filter((_,idx) => idx !== i)}));
   const updateStep = (i: number, field: string, val: string|number) =>
     setForm(f => ({...f, steps: f.steps.map((s,idx) => idx === i ? {...s, [field]:val} : s)}));
@@ -146,19 +195,19 @@ export default function SequencesPage() {
                       </div>
                       <div>
                         <label className="block text-[10px] font-medium text-muted-foreground mb-1">Action</label>
-                        <select value={step.action_type} onChange={e => updateStep(i, 'action_type', e.target.value)} className={inp}>
+                        <select value={step.action_type} onChange={e => updateStep(i, 'action_type', e.target.value as StepAction)} className={inp}>
                           {STEP_ACTIONS.map(a => <option key={a} value={a}>{STEP_LABELS[a]}</option>)}
                         </select>
                       </div>
                       <div>
                         <label className="block text-[10px] font-medium text-muted-foreground mb-1">
-                          {step.action_type === 'send_email' ? 'Email Subject' : step.action_type === 'wait' ? '—' : 'Content'}
+                          {step.action_type === 'email' ? 'Email Subject' : step.action_type === 'delay' ? '—' : 'Task Title'}
                         </label>
-                        <input value={step.action_type === 'send_email' ? step.subject : step.content}
-                          onChange={e => updateStep(i, step.action_type === 'send_email' ? 'subject' : 'content', e.target.value)}
-                          className={inp} placeholder={step.action_type === 'wait' ? 'No content needed' : step.action_type === 'send_email' ? 'Subject line...' : 'Message...'}
-                          disabled={step.action_type === 'wait'} />
-                        {step.action_type === 'send_email' && (
+                        <input value={step.action_type === 'email' ? step.subject : step.content}
+                          onChange={e => updateStep(i, step.action_type === 'email' ? 'subject' : 'content', e.target.value)}
+                          className={inp} placeholder={step.action_type === 'delay' ? 'No content needed' : step.action_type === 'email' ? 'Subject line...' : 'What the assignee has to do...'}
+                          disabled={step.action_type === 'delay'} />
+                        {step.action_type === 'email' && (
                           <input value={step.body || ''}
                             onChange={e => updateStep(i, 'body', e.target.value)}
                             className={inp + ' mt-1'} placeholder="Email body..." />

@@ -13,7 +13,7 @@ export const mailgunProvider: ProviderDefinition = {
   icon: 'Mail',
   docsUrl: 'https://documentation.mailgun.com/api_reference.html',
   configFields: [
-    { key: 'api_key', label: 'API Key', type: 'string', required: true, placeholder: 'key-xxxxx' },
+    { key: 'api_key', label: 'API Key', type: 'string', required: true, placeholder: 'key-xxxxx', secret: true },
     { key: 'domain', label: 'Domain', type: 'string', required: true, placeholder: 'mg.yourdomain.com' },
     { key: 'from_email', label: 'From Email', type: 'string', required: true },
     { key: 'from_name', label: 'From Name', type: 'string', placeholder: 'NuCRM' },

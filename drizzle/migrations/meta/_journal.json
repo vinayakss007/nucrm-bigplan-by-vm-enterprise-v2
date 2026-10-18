@@ -890,6 +890,34 @@
       "when": 1788782400042,
       "tag": "0126_segment_members_primary_key",
       "breakpoints": true
+    },
+    {
+      "version": "7",
+      "idx": 127,
+      "when": 1792078588167,
+      "tag": "0127_membership_self_scoped_select",
+      "breakpoints": true
+    },
+    {
+      "version": "7",
+      "idx": 128,
+      "when": 1792078945976,
+      "tag": "0128_seed_builtin_product_templates",
+      "breakpoints": true
+    },
+    {
+      "version": "7",
+      "idx": 129,
+      "when": 1792078945977,
+      "tag": "0129_automations_dedupe_unique",
+      "breakpoints": true
+    },
+    {
+      "version": "7",
+      "idx": 130,
+      "when": 1792301971513,
+      "tag": "0130_sequence_enrollments_active_unique",
+      "breakpoints": true
     }
   ]
 }

@@ -19,6 +19,7 @@ import { logAudit } from '@/lib/audit';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { logError } from '@/lib/errors-server';
+import { isEntityId } from '@/lib/id';
 import { evaluateSegment, isSegmentEntityType, SegmentFilterError } from '@/lib/segments/evaluate';
 
 async function loadSegment(id: string, tenantId: string) {
@@ -37,6 +38,8 @@ export const GET = withApiRoute(
       const ctx = await requireAuth(req);
       if (ctx instanceof NextResponse) return ctx;
       const { id } = await params;
+      // #2781 — the handler's own catch would turn this segment's uuid cast into a 500.
+      if (!isEntityId(id)) return NextResponse.json({ error: 'Segment not found' }, { status: 404 });
 
       const seg = await loadSegment(id, ctx.tenantId);
       if (!seg) return NextResponse.json({ error: 'Segment not found' }, { status: 404 });
@@ -70,6 +73,8 @@ export const POST = withApiRoute(
       const ctx = await requireAuth(req);
       if (ctx instanceof NextResponse) return ctx;
       const { id } = await params;
+      // #2781 — the handler's own catch would turn this segment's uuid cast into a 500.
+      if (!isEntityId(id)) return NextResponse.json({ error: 'Segment not found' }, { status: 404 });
 
       const seg = await loadSegment(id, ctx.tenantId);
       if (!seg) return NextResponse.json({ error: 'Segment not found' }, { status: 404 });

@@ -14,6 +14,12 @@ vi.mock('@/lib/auth/middleware', () => ({
   // Default: permission granted (returns null). Individual tests override to
   // assert the #1126 permission gate on PUT/DELETE.
   requirePerm: vi.fn(() => null),
+  // The route asks `can(ctx, '<entity>.view_all')` before it narrows the row
+  // sets (#2704). This file is about response shape, pagination and the sort
+  // allowlist, so its fixture caller holds every view_all and the SQL it asserts
+  // stays the un-narrowed one; the owner rule itself is covered in
+  // data-explorer-owner-scope-2704.test.ts.
+  can: () => true,
 }));
 
 vi.mock('@/drizzle/db', () => ({

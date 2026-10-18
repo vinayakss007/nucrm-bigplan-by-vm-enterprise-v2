@@ -40,7 +40,7 @@ interface Task {
   due_date: string | null
   completed: boolean
   completed_at: string | null
-  contact_name: string | null
+  first_name: string | null; last_name: string | null
   deal_title: string | null
   assignee_name: string | null
   created_at: string
@@ -226,10 +226,10 @@ export default function TasksDataTable({ initialTasks, contacts, deals, teamMemb
       },
     },
     {
-      accessorKey: 'contact_name',
+      id: 'related_to',
       header: 'Related To',
       cell: ({ row }) => {
-        const contact = row.original.contact_name
+        const contact = [row.original.first_name, row.original.last_name].filter(Boolean).join(' ') || null
         const deal = row.original.deal_title
         return (
           <div className="text-sm text-muted-foreground">

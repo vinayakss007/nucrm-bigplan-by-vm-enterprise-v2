@@ -9,7 +9,7 @@ import { verifySecret } from '@/lib/crypto';
 import { refuseIfCronLockHeld } from '@/lib/cron/cron-lock';
 import { db } from '@/drizzle/db';
 import { backupRecords, backupAlerts } from '@/drizzle/schema';
-import { eq, desc } from 'drizzle-orm';
+import { and, desc, eq, inArray } from 'drizzle-orm';
 import { withSecurityContext } from '@/lib/db/rls';
 import { logError } from '@/lib/errors-server';
 import { Pool } from 'pg';
@@ -105,6 +105,14 @@ async function fetchFromS3(storagePath: string, destDir: string): Promise<string
 }
 
 /**
+ * The alert types this job owns (#2600). `no_backup` is deliberately NOT in the
+ * list: `app/api/cron/backup/route.ts` writes-then-resolves that one, and closing
+ * it from here would mean a passing *verification* silently overstates that a
+ * *dump* happened.
+ */
+const VERIFY_ALERT_TYPES = ['no_backup_to_verify', 'verify_failed', 'verify_error'] as const;
+
+/**
  * Record why verification did not pass, in a place an operator can actually look.
  *
  * Both writes need the super-admin GUC: backup_alerts and backup_records each have a
@@ -114,14 +122,52 @@ async function fetchFromS3(storagePath: string, destDir: string): Promise<string
  * The old code wrapped that insert in `.catch(() => {})`, so every nightly
  * failure vanished: run-cron.sh discards the response body, so nothing was left behind
  * anywhere.
+ *
+ * #2600 also makes the write idempotent. The same nightly condition (no completed
+ * backup) used to add a fresh unresolved row every 04:00: 13 `no_backup_to_verify`
+ * rows for 13 nights of one cause, which reads as 13 incidents to whoever finally
+ * looks. One open row per alert type is the durable signal; `resolveVerifyAlerts`
+ * is what lets the next one be written. `cron/backup-health` guards its own inserts
+ * the same way. The duplicate check itself reads on the bare handle, which is safe
+ * here: `backup_alerts_read_all` gives SELECT to every role (qual `true`), so the
+ * guard sees the open rows another job wrote.
  */
 async function recordFailure(alertType: string, message: string): Promise<void> {
   try {
-    await withSecurityContext((tx) => tx.insert(backupAlerts).values({ alertType, message }));
+    const open = await db.query.backupAlerts.findFirst({
+      columns: { id: true },
+      where: and(eq(backupAlerts.alertType, alertType), eq(backupAlerts.resolved, false)),
+    });
+    if (!open) {
+      await withSecurityContext((tx) => tx.insert(backupAlerts).values({ alertType, message }));
+    }
   } catch (err) {
     void logError({ error: err, context: 'cron/backup-verify alert insert', level: 'warning', metadata: { alertType } });
   }
   void logError({ error: new Error(message), context: 'cron/backup-verify', level: 'warning', metadata: { alertType } });
+}
+
+/**
+ * A verification that passed is the proof the alert condition is over, so this job
+ * closes the alerts it owns. Before #2600 the only `resolved = true` write in the
+ * repo was in `cron/backup`, which has no line in `deploy/cron/crontab` and filters
+ * on `alert_type = 'no_backup'` — so verify-family rows were unresolvable by
+ * construction, and stayed open even after a restore proved the backup good.
+ */
+async function resolveVerifyAlerts(): Promise<void> {
+  try {
+    await withSecurityContext((tx) => tx
+      .update(backupAlerts)
+      .set({ resolved: true, resolvedAt: new Date(), updatedAt: new Date() })
+      .where(and(
+        eq(backupAlerts.resolved, false),
+        inArray(backupAlerts.alertType, [...VERIFY_ALERT_TYPES]),
+      )));
+  } catch (err) {
+    // Closing the alert trail is bookkeeping; it must not turn a passing
+    // verification into a 500 the scheduler reports as a failure.
+    void logError({ error: err, context: 'cron/backup-verify alert resolve', level: 'warning' });
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -327,26 +373,40 @@ export async function POST(request: NextRequest) {
       .where(eq(backupRecords.id, backup.id)));
 
     if (!verifiedOk) {
-      await withSecurityContext((tx) => tx.insert(backupAlerts).values({
-        alertType: 'verify_failed',
-        message: failures.join(' | '),
-      }));
+      // Through recordFailure rather than a bare insert, so a verification that
+      // fails every night for a month stays one open incident, not thirty (#2600).
+      await recordFailure('verify_failed', failures.join(' | '));
       await alertSuperAdmin(
         'CRITICAL: Backup verification FAILED',
         `Backup ${backup.id} (${backup.backupType}, ${backup.completedAt?.toISOString()}) failed verification:\n\n` +
         failures.map((f) => `  - ${f}`).join('\n') +
         '\n\nAn unrestorable backup is not a backup. Investigate immediately.'
       ).catch(() => { /* best-effort */ });
+    } else {
+      // A passing restore is the evidence that closes the alert trail.
+      await resolveVerifyAlerts();
     }
 
-    return NextResponse.json({
-      ok: verifiedOk,
-      backup_id: backup.id,
-      backup_type: backup.backupType,
-      completed_at: backup.completedAt,
-      checksum_match: !backup.checksum || backup.checksum.toLowerCase() === actual.toLowerCase(),
-      ...(failures.length > 0 ? { failures } : {}),
-    });
+    // A failed verification answers 5xx, in the same shape as the
+    // `no_backup_to_verify` branch above (#2600). Until now a corrupt or
+    // unrestorable artefact — the worst result this job can produce — returned
+    // HTTP 200 with `ok: false` in the body, and both schedulers read status
+    // only: `deploy/cron/run-cron.sh` prints CRON FAILED on a non-2xx, and
+    // `scripts/cron-scheduler.ts` logs `res.ok`. So a nightly restore failure was
+    // greener than a nightly "there is nothing to restore". `ok:false` in a 200
+    // is the exact mask #2539 removed from the lock refusals.
+    return NextResponse.json(
+      {
+        ok: verifiedOk,
+        ...(verifiedOk ? {} : { cause: 'verify_failed' }),
+        backup_id: backup.id,
+        backup_type: backup.backupType,
+        completed_at: backup.completedAt,
+        checksum_match: !backup.checksum || backup.checksum.toLowerCase() === actual.toLowerCase(),
+        ...(failures.length > 0 ? { failures } : {}),
+      },
+      verifiedOk ? undefined : { status: 500 },
+    );
   } catch (err) {
     if (failures.length > 0) {
       // We have specific diagnostics — return them even on a throw.

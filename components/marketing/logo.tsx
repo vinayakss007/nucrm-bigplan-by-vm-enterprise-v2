@@ -7,7 +7,7 @@ import Link from 'next/link';
 
 /**
  * The NuCRM mark: a rounded gradient tile carrying a geometric "N" with the
- * brand's violet accent dot. Drawn inline so it stays crisp at any size and
+ * brand's copper accent dot. Drawn inline so it stays crisp at any size and
  * needs no asset request.
  */
 export function LogoMark({ size = 34, className = '' }: { size?: number; className?: string }) {
@@ -18,8 +18,8 @@ export function LogoMark({ size = 34, className = '' }: { size?: number; classNa
         width: size,
         height: size,
         borderRadius: size * 0.3,
-        background: 'linear-gradient(148deg, #38bdf8 0%, #3b82f6 55%, #2563eb 100%)',
-        boxShadow: '0 6px 20px -6px rgba(37,99,235,0.85), inset 0 1px 0 rgba(255,255,255,0.35)',
+        background: 'linear-gradient(148deg, #e2b16e 0%, #cf8152 55%, #a85e3c 100%)',
+        boxShadow: '0 6px 20px -6px rgba(168,94,60,0.5), inset 0 1px 0 rgba(255,255,255,0.35)',
       }}
     >
       <svg viewBox="0 0 32 32" width={size} height={size} aria-hidden>
@@ -31,7 +31,7 @@ export function LogoMark({ size = 34, className = '' }: { size?: number; classNa
           strokeLinecap="round"
           strokeLinejoin="round"
         />
-        <circle cx="22.2" cy="22" r="2.1" fill="#67e8f9" />
+        <circle cx="22.2" cy="22" r="2.1" fill="#fff0d6" />
       </svg>
     </span>
   );

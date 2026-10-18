@@ -68,8 +68,7 @@ if (SENTRY_DSN) {
     beforeSend(event) {
       return scrubPii(event);
     },
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    beforeSendTransaction(event: any) {
+    beforeSendTransaction(event: Parameters<NonNullable<Sentry.NodeOptions['beforeSendTransaction']>>[0]) {
       if (event.transaction === '/api/health') return null;
       return event;
     },

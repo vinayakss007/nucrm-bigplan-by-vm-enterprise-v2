@@ -45,6 +45,32 @@ export type SequenceStepRow = Pick<
 type DbTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 /**
+ * How long a step asks to be waited on, in ms — every delay column it carries.
+ *
+ * `sequence_steps` has three (`drizzle/schema/marketing.ts:41-43`) and the two
+ * step-writing routes fill them differently: `POST /api/tenant/sequences`
+ * (`app/api/tenant/sequences/route.ts:107-109`) flattens the caller's
+ * `delay_minutes` into the hours/minutes pair and pins `delayDays: 0`, while the
+ * update route (`PATCH /api/tenant/sequences/[id]`,
+ * `app/api/tenant/sequences/[id]/route.ts:154-156`) writes all three. So a reader
+ * that sums a subset is correct for one writer and silently wrong for the other —
+ * which is exactly #2772: the enroll route read only `delay_days`, so the first
+ * step of every POST-created sequence was due at `now` and the cron dispatched it
+ * on the next tick, whatever delay was asked for.
+ *
+ * Both schedulers call this so they cannot drift again.
+ */
+export function stepDelayMs(step: {
+  delayDays?: number | null;
+  delayHours?: number | null;
+  delayMinutes?: number | null;
+}): number {
+  return (step.delayDays ?? 0) * 86_400_000
+    + (step.delayHours ?? 0) * 3_600_000
+    + (step.delayMinutes ?? 0) * 60_000;
+}
+
+/**
  * Cancel every open enrollment matching `filter` and drop the step logs still
  * waiting on them (#2392).
  *
@@ -188,6 +214,47 @@ export function activeStepWhere(tenantId: string, sequenceIds: readonly string[]
 }
 
 /**
+ * When an enrollment created right now is due to fire — the wait its own step 1
+ * asks for (#2793).
+ *
+ * `sequence_enrollments.next_step_at` has no default and no trigger, and the
+ * sweep requires `e.next_step_at <= NOW()`, where `NULL <= NOW()` is NULL. So a
+ * row written without it is `active`, `currentStep: 1` and invisible to the cron
+ * forever: no send, no error, no log line. Five of the six enrollment writers
+ * did exactly that (`app/api/tenant/segments/[id]/enroll`, the contacts and
+ * leads bulk routes, `sequences/[id]` and the automation engine); only
+ * `contacts/[id]/enroll` set the column, and it did the arithmetic inline where
+ * nobody could reuse it.
+ *
+ * One helper, called by every writer, so they cannot disagree about the starting
+ * delay the way they disagree about it today. It mirrors `advanceOrCompleteStep`
+ * exactly — the same `activeStepWhere`, the same `stepDelayMs`, and the step the
+ * sweep will actually look up, which is number 1 because that is the
+ * `currentStep` the writers put on the row.
+ *
+ * A sequence with no runnable step 1 comes back due now rather than NULL: the
+ * sweep then completes the enrollment on the next tick, which is a short and
+ * visible outcome instead of a permanent and silent one.
+ */
+export async function firstStepDueAt(
+  reader: Pick<typeof db, 'select'>,
+  tenantId: string,
+  sequenceId: string,
+): Promise<Date> {
+  const [step] = await reader
+    .select({
+      delayDays: sequenceSteps.delayDays,
+      delayHours: sequenceSteps.delayHours,
+      delayMinutes: sequenceSteps.delayMinutes,
+    })
+    .from(sequenceSteps)
+    .where(and(activeStepWhere(tenantId, [sequenceId]), eq(sequenceSteps.stepNumber, 1)))
+    .limit(1);
+
+  return new Date(Date.now() + stepDelayMs(step ?? {}));
+}
+
+/**
  * Row lock + re-check for the claim transaction (#2392). Must mirror
  * `dueEnrollmentsSql`: the gap between the sweep committing and this tx opening
  * is precisely when a delete/archive/un-enroll lands, and a re-check that only
@@ -238,14 +305,34 @@ export function buildSequenceEmailPayload(enrollment: DueEnrollment, step: Seque
  */
 export async function advanceOrCompleteStep(tx: DbTransaction, tenantId: string, enrollment: DueEnrollment): Promise<void> {
   const nextStepNumber = enrollment.currentStep + 1;
-  const nextStepResult = await tx.execute(sql`
-    SELECT public.calculate_sequence_step_date(now(), ${enrollment.sequenceId}::uuid, ${nextStepNumber}) as next_date
-  `);
 
-  const nextStepDate = nextStepResult.rows[0]?.['next_date'] as string | undefined;
+  // #2771 — `SELECT public.calculate_sequence_step_date(now(), …, …)` could not ever have worked,
+  // twice over. It binds three arguments to a function declared with two
+  // (drizzle/migrations/0032_missing_db_functions.sql:32), and Postgres resolves by signature, so the
+  // statement raises before its body runs — measured on a throwaway PG16 cluster with `0032:32-38`
+  // applied: `function public.calculate_sequence_step_date(timestamp with time zone, uuid, integer)
+  // does not exist`. And at its own arity the body is `RETURN NOW() + interval '1 day'` (`0032:37`):
+  // it ignores both parameters and can never return NULL, while the branch below keys on exactly that
+  // absence to decide a sequence has run out of steps. So the schedule was a flat day, whatever the
+  // step's own `delay_days` / `delay_hours` / `delay_minutes` (drizzle/schema/marketing.ts:41-43) say —
+  // and `app/api/tenant/sequences/route.ts:107-109` writes the caller's `delay_minutes` into the
+  // hours/minutes pair and leaves `delay_days` at 0.
+  //
+  // The row this function needs is the same row the cron already looks up to decide what to do at all:
+  // `app/api/cron/process-sequences/route.ts:141` resolves the current step from a map built with
+  // `activeStepWhere`, and treats "not in the map" as completion (`route.ts:143-153`). Reading the next
+  // step here with that same predicate makes the absence meaningful instead of a `NULL` no function can
+  // produce — and it subsumes the second lookup this function used to do for the log row's `step_id`.
+  const nextStep = await tx.query.sequenceSteps.findFirst({
+    columns: { id: true, delayDays: true, delayHours: true, delayMinutes: true },
+    where: and(
+      activeStepWhere(tenantId, [enrollment.sequenceId]),
+      eq(sequenceSteps.stepNumber, nextStepNumber)
+    )
+  });
 
-  if (!nextStepDate) {
-    // No more steps, mark as completed
+  if (!nextStep) {
+    // No more active steps, mark as completed
     await tx.update(sequenceEnrollments)
       .set({
         status: 'completed',
@@ -253,52 +340,52 @@ export async function advanceOrCompleteStep(tx: DbTransaction, tenantId: string,
         updatedAt: new Date()
       })
       .where(and(eq(sequenceEnrollments.id, enrollment.id), eq(sequenceEnrollments.tenantId, tenantId)));
-  } else {
-    // Schedule next step
-    await tx.update(sequenceEnrollments)
-      .set({
-        currentStep: nextStepNumber,
-        nextStepAt: new Date(nextStepDate),
-        updatedAt: new Date()
-      })
-      .where(and(eq(sequenceEnrollments.id, enrollment.id), eq(sequenceEnrollments.tenantId, tenantId)));
-
-    // Fetch next step ID to create log
-    const nextStep = await tx.query.sequenceSteps.findFirst({
-      where: and(
-        eq(sequenceSteps.tenantId, tenantId),
-        eq(sequenceSteps.sequenceId, enrollment.sequenceId),
-        eq(sequenceSteps.stepNumber, nextStepNumber)
-      )
-    });
-
-    if (nextStep) {
-      await tx.insert(sequenceStepLogs).values({
-        enrollmentId: enrollment.id,
-        stepId: nextStep.id,
-        tenantId: enrollment.tenantId,
-        status: 'pending',
-        scheduledAt: new Date(nextStepDate),
-      });
-    }
+    return;
   }
+
+  const nextStepAt = new Date(Date.now() + stepDelayMs(nextStep));
+
+  await tx.update(sequenceEnrollments)
+    .set({
+      currentStep: nextStepNumber,
+      nextStepAt,
+      updatedAt: new Date()
+    })
+    .where(and(eq(sequenceEnrollments.id, enrollment.id), eq(sequenceEnrollments.tenantId, tenantId)));
+
+  await tx.insert(sequenceStepLogs).values({
+    enrollmentId: enrollment.id,
+    stepId: nextStep.id,
+    tenantId: enrollment.tenantId,
+    status: 'pending',
+    scheduledAt: nextStepAt,
+  });
 }
 
 /**
- * Mark the step log sent/failed and advance (or reschedule) the enrollment,
- * all inside `tx`. Returns true when the enrollment was advanced.
+ * The status `finalizeStepLog` writes for a step the cron has just finished
+ * handling. `sent` only for a step that actually did something deliverable
+ * (#2795): `skipped` covers the types that wait or that the contact cannot
+ * receive, and `failed` the ones that errored or have no handler at all.
+ */
+export type StepLogOutcome = 'sent' | 'skipped' | 'failed';
+
+/**
+ * Mark the step log with the outcome the caller stated and advance (or
+ * reschedule) the enrollment, all inside `tx`. Returns true when the enrollment
+ * was advanced.
  */
 export async function finalizeStepLog(
   tx: DbTransaction,
   tenantId: string,
   enrollment: DueEnrollment,
   step: SequenceStepRow,
-  success: boolean,
+  outcome: StepLogOutcome,
   errorMessage: string | null,
 ): Promise<boolean> {
   await tx.update(sequenceStepLogs)
     .set({
-      status: success ? 'sent' : 'failed',
+      status: outcome,
       executedAt: new Date(),
       errorMessage: errorMessage,
       updatedAt: new Date()
@@ -310,7 +397,7 @@ export async function finalizeStepLog(
       eq(sequenceStepLogs.tenantId, tenantId)
     ));
 
-  if (!success) {
+  if (outcome === 'failed') {
     // If step failed, reschedule it for 1 hour later
     await tx.update(sequenceEnrollments)
       .set({

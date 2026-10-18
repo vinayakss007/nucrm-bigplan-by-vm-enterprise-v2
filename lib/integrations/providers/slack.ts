@@ -13,7 +13,7 @@ export const slackProvider: ProviderDefinition = {
   icon: 'MessageSquare',
   docsUrl: 'https://api.slack.com/methods',
   configFields: [
-    { key: 'bot_token', label: 'Bot Token', type: 'string', required: true, placeholder: 'xoxb-...' },
+    { key: 'bot_token', label: 'Bot Token', type: 'string', required: true, placeholder: 'xoxb-...', secret: true },
     { key: 'default_channel', label: 'Default Channel', type: 'string', placeholder: '#general' },
   ],
   capabilities: [

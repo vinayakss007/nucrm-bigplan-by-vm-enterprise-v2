@@ -8,35 +8,29 @@
  *  2. globals.css applies element-level heading sizes and `font-weight: 500` to
  *     p/span/div/li. Class selectors below win on specificity.
  *
- * Colours are hard-coded dark on purpose: the marketing site is a fixed
- * composition and must not shift when a visitor's app theme is light.
+ * The shared marketing shell defaults to a fixed dark composition; the
+ * homepage opts into its own light palette through route-scoped styles below.
  */
 
 .mk-root {
-  /* Vivid blue + pearl-white theme. The canvas is a deep ocean-blue rather
-     than near-black, and every accent that used to be violet now runs on a
-     blue → sky → cyan ramp so the site reads bright and colourful instead of
-     the old "AI purple". Pearl-white highlights are layered on top via the
-     aurora and text gradients. */
-  --mk-bg: #071033;
-  --mk-bg-soft: #0b1a4a;
-  --mk-line: rgba(255, 255, 255, 0.1);
-  --mk-line-strong: rgba(255, 255, 255, 0.18);
-  --mk-panel: rgba(255, 255, 255, 0.04);
-  --mk-panel-hi: rgba(255, 255, 255, 0.08);
-  --mk-text: #ffffff;
-  --mk-muted: #b9c6e6;
-  --mk-dim: #8394c0;
-  /* Accent ramp — kept under the same variable names so existing references
-     don't break, but every value is now a vivid blue instead of violet. */
-  --mk-violet: #3b82f6;
-  --mk-indigo: #2563eb;
-  --mk-cyan: #22d3ee;
-  --mk-sky: #38bdf8;
-  --mk-pearl: #eaf2ff;
+  /* Warm graphite canvas with restrained copper and parchment accents. */
+  --mk-bg: #171511;
+  --mk-bg-soft: #211e18;
+  --mk-line: rgba(243, 230, 208, 0.11);
+  --mk-line-strong: rgba(243, 230, 208, 0.2);
+  --mk-panel: rgba(246, 235, 215, 0.045);
+  --mk-panel-hi: rgba(246, 235, 215, 0.085);
+  --mk-text: #f7f1e7;
+  --mk-muted: #c9bfae;
+  --mk-dim: #9a9081;
+  --mk-violet: #cf8152;
+  --mk-indigo: #b96942;
+  --mk-cyan: #e4b66f;
+  --mk-sky: #e3a765;
+  --mk-pearl: #fff5e4;
 
   color-scheme: dark;
-  background: var(--mk-bg);
+  background: radial-gradient(ellipse at 50% -18%, #2b241a 0%, var(--mk-bg) 48rem);
   color: var(--mk-text);
   -webkit-font-smoothing: antialiased;
 
@@ -123,7 +117,7 @@
 }
 .mk-root strong {
   font-weight: 650;
-  color: #e8ecf5;
+  color: #f0e7d8;
 }
 
 /* The header is fixed and 64px tall, so anything an anchor jumps to has to
@@ -155,7 +149,7 @@
    at 0.72 alpha with no blur the hero headline read straight through an open
    navigation menu. */
 .mk-glass {
-  background: rgba(9, 20, 55, 0.94);
+  background: rgba(25, 22, 17, 0.94);
   border: 1px solid var(--mk-line);
   /* The 0.95 alpha does the readability work (see comment above); the blur is
      pure decoration. This surface is the full-width fixed header, so the blur
@@ -175,7 +169,7 @@
   inset: 0;
   border-radius: inherit;
   padding: 1px;
-  background: linear-gradient(160deg, rgba(59, 130, 246, 0.6), rgba(234, 242, 255, 0.06) 35%, transparent 70%);
+  background: linear-gradient(160deg, rgba(212, 139, 83, 0.56), rgba(255, 245, 228, 0.08) 35%, transparent 70%);
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
@@ -186,14 +180,14 @@
 /* ── Text effects ───────────────────────────────────────────────────── */
 
 .mk-grad {
-  background: linear-gradient(103deg, #ffffff 0%, #dbeafe 30%, #60a5fa 60%, #67e8f9 100%);
+  background: linear-gradient(103deg, #fff7e9 0%, #f3d9b2 43%, #d58c58 78%, #e3b469 100%);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
 }
-/* Kept the .mk-grad-violet name for compatibility; the ramp is now blue. */
+/* Kept the legacy class name so existing page components remain compatible. */
 .mk-grad-violet {
-  background: linear-gradient(100deg, #60a5fa, #3b82f6 50%, #22d3ee);
+  background: linear-gradient(100deg, #e9b976, #cf8152 52%, #e8aa70);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -202,12 +196,12 @@
 /* ── Backdrops ──────────────────────────────────────────────────────── */
 
 .mk-grid-bg {
-  background-image: linear-gradient(rgba(125, 211, 252, 0.07) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(125, 211, 252, 0.07) 1px, transparent 1px);
+  background-image: linear-gradient(rgba(229, 187, 126, 0.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(229, 187, 126, 0.055) 1px, transparent 1px);
   background-size: 56px 56px;
 }
 .mk-dot-bg {
-  background-image: radial-gradient(rgba(125, 211, 252, 0.18) 1px, transparent 1px);
+  background-image: radial-gradient(rgba(229, 187, 126, 0.2) 1px, transparent 1px);
   background-size: 22px 22px;
 }
 .mk-fade-y {
@@ -356,15 +350,15 @@
 }
 .mk-btn-primary {
   color: #ffffff;
-  background: linear-gradient(135deg, #2563eb, #38bdf8);
-  box-shadow: 0 10px 30px -10px rgba(37, 99, 235, 0.9), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  background: linear-gradient(135deg, #b96942, #df9c5d);
+  box-shadow: 0 10px 30px -10px rgba(176, 96, 54, 0.58), inset 0 1px 0 rgba(255, 255, 255, 0.3);
 }
 .mk-btn-primary:hover {
   transform: translateY(-2px);
-  box-shadow: 0 16px 40px -12px rgba(37, 99, 235, 1), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  box-shadow: 0 16px 40px -12px rgba(176, 96, 54, 0.72), inset 0 1px 0 rgba(255, 255, 255, 0.35);
 }
 .mk-btn-ghost {
-  color: #e6e9f2;
+  color: #f0e7d8;
   background: rgba(255, 255, 255, 0.045);
   border: 1px solid var(--mk-line-strong);
 }
@@ -392,12 +386,12 @@
   background: rgba(255, 255, 255, 0.04);
   font-size: 12px;
   font-weight: 600;
-  color: #cbd3e1;
+  color: #d8cdbb;
 }
 
 /* Underline that grows in on hover, used for inline text links. */
 .mk-link {
-  color: #7dd3fc;
+  color: #e0a467;
   font-weight: 600;
   position: relative;
 }
@@ -508,7 +502,7 @@
   position: absolute;
   inset: -1px;
   border-radius: inherit;
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.45), rgba(34, 211, 238, 0.35));
+  background: linear-gradient(135deg, rgba(207, 129, 82, 0.42), rgba(228, 182, 111, 0.3));
   opacity: 0;
   filter: blur(12px);
   transition: opacity 0.4s ease;
@@ -553,7 +547,7 @@
   width: 600px;
   height: 600px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(56, 189, 248, 0.16) 0%, transparent 70%);
+  background: radial-gradient(circle, rgba(222, 157, 92, 0.17) 0%, transparent 70%);
   pointer-events: none;
   transform: translate(-50%, -50%);
   opacity: 0;
@@ -614,39 +608,110 @@
   z-index: 1;
   /* Opaque, not a translucent wash. The header sticks while rows scroll beneath
      it, so any transparency lets row text read straight through the labels. */
-  background: #0d1636;
+  background: #211e18;
   box-shadow: inset 0 -1px 0 var(--mk-line);
 }
 /* Needs to outrank `.mk-table .mk-col-own` on the header cell, so the violet
    tint layers over the opaque base instead of replacing it. */
 .mk-table thead th.mk-col-own {
-  background: linear-gradient(180deg, rgba(37, 99, 235, 0.26), rgba(37, 99, 235, 0.14)), #0d1636;
-  color: #eaf2ff;
+  background: linear-gradient(180deg, rgba(201, 125, 75, 0.2), rgba(201, 125, 75, 0.1)), #211e18;
+  color: #f7ead8;
 }
 .mk-table tbody tr:hover td {
   background: rgba(255, 255, 255, 0.022);
 }
 .mk-table .mk-col-own {
-  background: linear-gradient(180deg, rgba(37, 99, 235, 0.13), rgba(37, 99, 235, 0.05));
-  border-left: 1px solid rgba(59, 130, 246, 0.26);
-  border-right: 1px solid rgba(59, 130, 246, 0.26);
-  color: #eaf2ff;
+  background: linear-gradient(180deg, rgba(201, 125, 75, 0.13), rgba(201, 125, 75, 0.05));
+  border-left: 1px solid rgba(201, 125, 75, 0.26);
+  border-right: 1px solid rgba(201, 125, 75, 0.26);
+  color: #f7ead8;
 }
 
-
+/* Warm the Tailwind accents used by the shared marketing components. This
+   keeps the navigation, cards and feature mockups in the same visual family. */
+.mk-root [class*='text-sky-'],
+.mk-root [class*='text-blue-'],
+.mk-root [class*='text-cyan-'],
+.mk-root [class*='text-indigo-'],
+.mk-root [class*='text-violet-'] {
+  color: #e0a467 !important;
+}
+.mk-root [class*='bg-sky-'],
+.mk-root [class*='bg-blue-'],
+.mk-root [class*='bg-cyan-'],
+.mk-root [class*='bg-indigo-'],
+.mk-root [class*='bg-violet-'] {
+  background-color: rgb(193 117 69 / 0.13) !important;
+}
+.mk-root [class*='border-sky-'],
+.mk-root [class*='border-blue-'],
+.mk-root [class*='border-cyan-'],
+.mk-root [class*='border-indigo-'],
+.mk-root [class*='border-violet-'] {
+  border-color: rgb(212 145 92 / 0.3) !important;
+}
+.mk-root [class*='ring-sky-'],
+.mk-root [class*='ring-blue-'],
+.mk-root [class*='ring-cyan-'],
+.mk-root [class*='ring-indigo-'],
+.mk-root [class*='ring-violet-'] {
+  --tw-ring-color: rgb(212 145 92 / 0.32) !important;
+}
+.mk-root [class*='from-blue-'],
+.mk-root [class*='from-sky-'],
+.mk-root [class*='from-cyan-'],
+.mk-root [class*='from-indigo-'],
+.mk-root [class*='from-violet-'] {
+  --tw-gradient-from: #b96942 var(--tw-gradient-from-position) !important;
+  --tw-gradient-to: rgb(185 105 66 / 0) var(--tw-gradient-to-position) !important;
+}
+.mk-root [class*='via-blue-'],
+.mk-root [class*='via-sky-'],
+.mk-root [class*='via-cyan-'],
+.mk-root [class*='via-indigo-'],
+.mk-root [class*='via-violet-'] {
+  /* Tailwind 3 writes the via color directly into --tw-gradient-stops. */
+  --tw-gradient-stops: var(--tw-gradient-from), rgb(207 129 82 / var(--mk-gradient-mid-opacity, 0.14)) var(--tw-gradient-via-position), var(--tw-gradient-to) !important;
+}
+.mk-root [class*='via-sky-400/60'] {
+  --mk-gradient-mid-opacity: 0.6;
+}
+.mk-root [class*='via-sky-600/10'] {
+  --mk-gradient-mid-opacity: 0.1;
+}
+.mk-root [class*='via-sky-500/12'] {
+  --mk-gradient-mid-opacity: 0.12;
+}
+.mk-root [class*='to-blue-'],
+.mk-root [class*='to-sky-'],
+.mk-root [class*='to-cyan-'],
+.mk-root [class*='to-indigo-'],
+.mk-root [class*='to-violet-'] {
+  --tw-gradient-to: #e2b16e var(--tw-gradient-to-position) !important;
+}
+.mk-root [class*='shadow-blue-'],
+.mk-root [class*='shadow-sky-'] {
+  --tw-shadow-color: rgb(142 83 48 / 0.35) !important;
+}
+.mk-root [class*='bg-[#0a1330]'] {
+  background-color: #201d18 !important;
+}
+.mk-root .mk-spotlight::after {
+  background: radial-gradient(circle, rgba(222, 157, 92, 0.14) 0%, transparent 70%);
+}
 /* ── Long-form prose (legal pages) ──────────────────────────────────── */
 
 .mk-prose {
   font-size: 15px;
   line-height: 1.75;
-  color: #9aa4b8;
+  color: #c9bfae;
 }
 .mk-prose h2 {
   font-size: 21px;
   line-height: 1.25;
   letter-spacing: -0.02em;
   font-weight: 700;
-  color: #ffffff;
+  color: #f7f1e7;
   margin-top: 2.5em;
   margin-bottom: 0.6em;
   scroll-margin-top: 90px;
@@ -658,7 +723,7 @@
   font-size: 16px;
   line-height: 1.35;
   font-weight: 700;
-  color: #e2e8f2;
+  color: #eee4d3;
   margin-top: 1.8em;
   margin-bottom: 0.4em;
 }
@@ -685,14 +750,14 @@
   width: 5px;
   height: 5px;
   border-radius: 999px;
-  background: rgba(56, 189, 248, 0.8);
+  background: rgba(224, 164, 103, 0.85);
 }
 .mk-prose strong {
-  color: #e8ecf5;
+  color: #f0e7d8;
   font-weight: 650;
 }
 .mk-prose a {
-  color: #7dd3fc;
+  color: #e0a467;
   text-decoration: underline;
   text-underline-offset: 2px;
 }
@@ -711,7 +776,195 @@
 }
 .mk-prose th {
   background: rgba(255, 255, 255, 0.03);
-  color: #e2e8f2;
+  color: #eee4d3;
   font-weight: 650;
   font-size: 12.5px;
+}
+
+/* ── Homepage: warm editorial direction ──────────────────────────────── */
+.mk-home {
+  --mk-bg: #f2eee5;
+  --mk-bg-soft: #e8e1d4;
+  --mk-line: rgba(44, 39, 30, 0.12);
+  --mk-line-strong: rgba(44, 39, 30, 0.22);
+  --mk-panel: rgba(255, 253, 247, 0.75);
+  --mk-panel-hi: #fffdf7;
+  --mk-text: #24231e;
+  --mk-muted: #5d5a50;
+  --mk-dim: #777266;
+  --mk-violet: #b85837;
+  --mk-indigo: #a94d31;
+  --mk-cyan: #d4a85f;
+  --mk-sky: #bd633d;
+  --mk-pearl: #fff8eb;
+  position: relative;
+  background: #f2eee5;
+  color: #24231e;
+  isolation: isolate;
+}
+.mk-home-hero {
+  min-height: 720px;
+  padding: 150px 0 74px;
+  background:
+    radial-gradient(ellipse at 80% 12%, rgba(202, 156, 91, 0.2), transparent 34%),
+    linear-gradient(180deg, #f8f4eb 0%, #f2eee5 100%);
+}
+.mk-home-hero::before {
+  content: 'NUCRM / CUSTOMER OPERATIONS';
+  position: absolute;
+  top: 112px;
+  right: max(32px, calc((100vw - 1200px) / 2));
+  color: rgba(53, 49, 41, 0.32);
+  font: 600 9px/1 var(--font-jetbrains-mono), monospace;
+  letter-spacing: .12em;
+}
+.mk-home-orbit {
+  position: absolute;
+  width: 560px;
+  height: 560px;
+  left: 47%;
+  top: 100px;
+  border: 1px solid rgba(175, 112, 67, .13);
+  border-radius: 50%;
+  pointer-events: none;
+}
+.mk-home-orbit::before,
+.mk-home-orbit::after {
+  content: '';
+  position: absolute;
+  inset: 42px;
+  border: 1px solid rgba(175, 112, 67, .1);
+  border-radius: 50%;
+}
+.mk-home-orbit::after { inset: 88px; }
+.mk-home-hero-grid {
+  display: grid;
+  grid-template-columns: minmax(340px, .83fr) minmax(0, 1.17fr);
+  align-items: center;
+  gap: clamp(42px, 6vw, 84px);
+}
+.mk-home-copy { position: relative; z-index: 2; padding: 10px 0 28px; }
+.mk-home-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: #725842;
+  font: 600 11px/1.2 var(--font-jetbrains-mono), monospace;
+  letter-spacing: .045em;
+  text-transform: uppercase;
+}
+.mk-home-kicker-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #b85b37;
+  box-shadow: 0 0 0 4px rgba(184, 91, 55, .12);
+}
+.mk-home-title {
+  max-width: 620px;
+  margin-top: 27px;
+  color: #26251f;
+  font: 500 clamp(54px, 6.2vw, 88px)/.99 Georgia, 'Times New Roman', serif;
+  letter-spacing: -.065em;
+}
+.mk-home-title em { color: #a84d31; font-weight: 500; }
+.mk-home-lead {
+  max-width: 480px;
+  margin-top: 25px;
+  color: #646055;
+  font-size: clamp(16px, 1.35vw, 18px);
+  line-height: 1.7;
+}
+.mk-home-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 30px; }
+.mk-home-actions .mk-btn-primary { background: #a94f32; box-shadow: 0 8px 22px rgba(132, 63, 40, .18); }
+.mk-home-actions .mk-btn-ghost { color: #3c392f; background: transparent; border-color: rgba(53, 49, 41, .2); }
+.mk-home-actions .mk-btn-ghost:hover { background: rgba(255, 255, 255, .55); border-color: rgba(53, 49, 41, .36); }
+.mk-home-proof { display: flex; flex-wrap: wrap; gap: 10px 18px; margin-top: 21px; color: #746f63; font-size: 11px; }
+.mk-home-proof span { display: inline-flex; align-items: center; gap: 6px; }
+.mk-home-proof svg { width: 13px; height: 13px; color: #8b795d; stroke-width: 2.5; }
+.mk-home-note { display: flex; align-items: center; gap: 11px; margin-top: 42px; color: #777164; font-size: 12px; }
+.mk-home-note strong { color: #353229; }
+.mk-home-note-mark { display: grid; width: 30px; height: 30px; place-items: center; border: 1px solid rgba(169, 79, 50, .26); border-radius: 50%; color: #a94f32; font: 600 13px Georgia, serif; }
+.mk-home-product-wrap { position: relative; min-width: 0; padding: 15px 0 45px; }
+.mk-home-product-label,.mk-home-product-caption { display: flex; justify-content: space-between; gap: 15px; color: #80796b; font: 500 9px/1.4 var(--font-jetbrains-mono), monospace; letter-spacing: .08em; }
+.mk-home-product-label { padding: 0 8px 11px; }
+.mk-home-product { position: relative; z-index: 1; transform: rotate(1.1deg); border: 1px solid rgba(61, 50, 36, .17); border-radius: 18px; background: #1c1a17; box-shadow: 0 32px 70px -32px rgba(62, 45, 26, .55), 0 4px 14px rgba(58, 44, 29, .13); }
+.mk-home-product::before { content: ''; position: absolute; inset: 12px -12px -12px 12px; z-index: -1; border: 1px solid rgba(168, 95, 55, .25); border-radius: 18px; }
+.mk-home-product .mk-edge::before { display: none; }
+.mk-home-product .mk-edge { border: 0; box-shadow: none; }
+.mk-home-float-card { position: absolute; z-index: 3; right: -20px; bottom: 79px; display: flex; align-items: center; gap: 10px; padding: 12px 15px 12px 12px; border: 1px solid rgba(47, 42, 33, .12); border-radius: 12px; background: #fffdf7; box-shadow: 0 14px 36px rgba(52, 43, 30, .14); color: #37342c; }
+.mk-home-float-icon { display: grid; width: 30px; height: 30px; place-items: center; border-radius: 9px; background: #f3e7d6; color: #a94f32; }
+.mk-home-float-icon svg { width: 15px; height: 15px; }
+.mk-home-float-card strong,.mk-home-float-card small { display: block; }
+.mk-home-float-card strong { font-size: 11px; }
+.mk-home-float-card small { margin-top: 3px; color: #837d71; font-size: 9px; }
+.mk-home-float-arrow { width: 14px; height: 14px; margin-left: 8px; color: #a94f32; }
+.mk-home-product-caption { position: relative; z-index: 2; margin-top: 25px; padding: 0 6px; color: #797467; font-family: inherit; font-size: 11px; letter-spacing: 0; }
+
+/* Light surfaces and readable ink, scoped to this route only. */
+.mk-home .mk-card { border-color: rgba(49, 45, 37, .12); background: rgba(255, 253, 247, .68); box-shadow: 0 10px 30px rgba(53, 46, 35, .035); backdrop-filter: none; }
+.mk-home .mk-card-hover:hover { border-color: rgba(160, 91, 54, .34); background: #fffdf7; box-shadow: 0 18px 36px rgba(53, 46, 35, .08); }
+.mk-home .mk-chip { border-color: rgba(56, 49, 39, .14); background: rgba(255,255,255,.46); color: #655e51; }
+.mk-home .text-white { color: #2d2a23 !important; }
+.mk-home [class*='text-slate-100'], .mk-home [class*='text-slate-200'], .mk-home [class*='text-slate-300'] { color: #454137 !important; }
+.mk-home [class*='text-slate-400'] { color: #625d52 !important; }
+.mk-home [class*='text-slate-500'] { color: #777164 !important; }
+.mk-home [class*='text-slate-600'] { color: #8e8779 !important; }
+.mk-home [class*='text-sky-'], .mk-home [class*='text-blue-'], .mk-home [class*='text-cyan-'] { color: #a94f32 !important; }
+/* #2601 — .mk-home-product is a deliberately dark (#1c1a17) workspace mock,
+   but the ink remap above is a descendant selector, so it recoloured the
+   mock's own light text to near-black ink (measured 1.65:1 on the hero).
+   Restore the pre-remap Tailwind values inside the mock; the higher
+   specificity (two classes + attribute) beats the remap rules. */
+.mk-home .mk-home-product .text-white { color: #ffffff !important; }
+.mk-home .mk-home-product [class*='text-slate-100'] { color: #f1f5f9 !important; }
+.mk-home .mk-home-product [class*='text-slate-200'] { color: #e2e8f0 !important; }
+.mk-home .mk-home-product [class*='text-slate-300'] { color: #cbd5e1 !important; }
+.mk-home .mk-home-product [class*='text-slate-400'] { color: #94a3b8 !important; }
+.mk-home .mk-home-product [class*='text-slate-500'] { color: #64748b !important; }
+.mk-home .mk-home-product [class*='text-slate-600'] { color: #475569 !important; }
+.mk-home [class*='border-white/'] { border-color: rgba(49, 45, 37, .13) !important; }
+.mk-home [class*='bg-white/[0.0'], .mk-home [class*='bg-black/'] { background-color: rgba(86, 71, 50, .045) !important; }
+.mk-home [class*='from-blue-'], .mk-home [class*='from-sky-'], .mk-home [class*='from-cyan-'], .mk-home [class*='from-indigo-'], .mk-home [class*='from-violet-'] { --tw-gradient-from: #a94f32 var(--tw-gradient-from-position) !important; --tw-gradient-to: rgb(169 79 50 / 0) var(--tw-gradient-to-position) !important; }
+.mk-home [class*='to-blue-'], .mk-home [class*='to-sky-'], .mk-home [class*='to-cyan-'], .mk-home [class*='to-indigo-'], .mk-home [class*='to-violet-'] { --tw-gradient-to: #d0a261 var(--tw-gradient-to-position) !important; }
+.mk-home section[id] { scroll-margin-top: 88px; }
+.mk-home section[id] .mk-h2, .mk-home section[id] .mk-h3, .mk-home section[id] .mk-h4 { color: #2d2a23; }
+.mk-home section:nth-of-type(even) { background-color: rgba(221, 212, 196, .25); }
+.mk-home .mk-grad, .mk-home .mk-grad-violet { background-image: linear-gradient(100deg, #403b31, #a94f32 72%, #bd8850); }
+.mk-home .mk-link { color: #a94f32; }
+.mk-home .mk-table thead th { background: #e9e2d6; color: #5f594d; }
+.mk-home .mk-table thead th.mk-col-own { background: #efe1d2; color: #743e2b; }
+.mk-home .mk-table .mk-col-own { background: rgba(184, 91, 55, .07); border-color: rgba(184, 91, 55, .2); color: #743e2b; }
+.mk-home .mk-table td { border-color: rgba(49, 45, 37, .1); }
+.mk-home > :last-child { color: inherit; }
+.mk-root:has(.mk-home) > header.mk-glass { background: rgba(248, 244, 235, .94); border-color: rgba(49,45,37,.1); box-shadow: 0 4px 18px rgba(52,43,30,.04); }
+.mk-root:has(.mk-home) > header .text-slate-400,.mk-root:has(.mk-home) > header .text-slate-300 { color: #625d52; }
+.mk-root:has(.mk-home) > header .text-white { color: #26251f; }
+.mk-root:has(.mk-home) > header .border-white\/\[0\.1\] { border-color: rgba(49,45,37,.16); }
+.mk-root:has(.mk-home) > footer { border-color: rgba(49,45,37,.14); background: #e9e2d6; color: #514c41; }
+.mk-root:has(.mk-home) > footer [class*='text-slate-'] { color: #625d52 !important; }
+.mk-root:has(.mk-home) > footer [class*='border-white/'] { border-color: rgba(49,45,37,.12) !important; }
+
+@media (max-width: 900px) {
+  .mk-home-hero { padding: 130px 0 58px; }
+  .mk-home-hero-grid { grid-template-columns: minmax(0, 1fr); gap: 34px; }
+  .mk-home-copy { max-width: 700px; padding-bottom: 0; }
+  .mk-home-title { max-width: 700px; }
+  .mk-home-product-wrap { width: min(100%, 760px); justify-self: center; }
+  .mk-home-orbit { left: 35%; top: 360px; }
+}
+@media (max-width: 600px) {
+  .mk-home-hero { padding-top: 112px; }
+  .mk-home-hero::before { display: none; }
+  .mk-home-title { font-size: clamp(49px, 13vw, 70px); }
+  .mk-home-actions { align-items: stretch; flex-direction: column; }
+  .mk-home-actions > div, .mk-home-actions .mk-btn { width: 100%; }
+  .mk-home-actions .mk-btn { justify-content: center; }
+  .mk-home-proof { gap: 9px 14px; }
+  .mk-home-note { margin-top: 28px; }
+  .mk-home-product-wrap { padding-bottom: 56px; }
+  .mk-home-product { transform: none; }
+  .mk-home-product::before { inset: 8px -6px -8px 6px; }
+  .mk-home-float-card { right: -3px; bottom: 31px; padding: 9px 11px; }
+  .mk-home-product-caption span:last-child { display: none; }
 }
