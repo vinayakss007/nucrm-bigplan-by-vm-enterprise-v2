@@ -11,6 +11,7 @@ import { Key, Plus, Trash2, Copy, CheckCircle } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import { cn, formatDate, formatRelativeTime, apiFetch } from '@/lib/utils';
 import toast from 'react-hot-toast';
+import InlineErrorState from '@/components/shared/inline-error-state';
 
 // #2215: v1 data routes now enforce these scopes, so leads:* had to become
 // grantable — a key without leads:read/write is denied /api/v1/leads* now.
@@ -39,7 +40,7 @@ export default function APIKeysPage() {
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
 
   // #1328: list via TanStack Query.
-  const { data, isLoading: loading } = useApiQuery<{ data?: ApiKey[] }>(
+  const { data, isLoading: loading, error: keysError, refetch } = useApiQuery<{ data?: ApiKey[] }>(
     API_KEYS_QUERY,
     '/api/tenant/api-keys',
   );
@@ -124,7 +125,13 @@ export default function APIKeysPage() {
       <div className="admin-card overflow-hidden">
         {loading ? <p className="text-sm text-muted-foreground p-5">Loading...</p>
         : !keys.length ? (
-          <div className="py-12 text-center"><Key className="w-10 h-10 text-muted-foreground/20 mx-auto mb-3" /><p className="text-sm text-muted-foreground">No API keys yet</p></div>
+          keysError ? (
+            // #2829: a failed read hid live credentials behind "No API keys yet",
+            // next to a create button that invites a duplicate.
+            <div className="p-5"><InlineErrorState message="Could not load this workspace's API keys — this is a failed request, not an empty list." onRetry={() => void refetch()} /></div>
+          ) : (
+            <div className="py-12 text-center"><Key className="w-10 h-10 text-muted-foreground/20 mx-auto mb-3" /><p className="text-sm text-muted-foreground">No API keys yet</p></div>
+          )
         ) : (
           <div className="divide-y divide-border">
             {keys.map(k=>(

@@ -11,6 +11,7 @@ import { Megaphone, Plus, Trash2, Eye, EyeOff } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import toast from 'react-hot-toast';
+import InlineErrorState from '@/components/shared/inline-error-state';
 
 // Keys are the values chk_announcements_type accepts; anything else 500s on
 // INSERT, so the select below offers exactly these four.
@@ -48,7 +49,7 @@ export default function AnnouncementsPage() {
 
   // #1328: TanStack Query replaces fetch + useEffect + useState.
   const queryKey = ['superadmin', 'announcements'] as const;
-  const { data, isLoading } = useApiQuery<{ data?: Announcement[] }>(queryKey, '/api/superadmin/announcements');
+  const { data, isLoading, error: listError, refetch } = useApiQuery<{ data?: Announcement[] }>(queryKey, '/api/superadmin/announcements');
   const items: Announcement[] = data?.data ?? [];
   const loading = isLoading;
 
@@ -150,10 +151,16 @@ export default function AnnouncementsPage() {
       {/* Announcements list */}
       {loading ? <p className="text-white/30 text-sm">Loading...</p>
       : !items.length ? (
+        listError ? (
+          // #2829: the announcement list is the record of what was already sent
+          // out; "No announcements yet" over a failed read invites a duplicate.
+          <InlineErrorState message="Could not load the announcements — this is a failed request, not an empty list." onRetry={() => void refetch()} />
+        ) : (
         <div className="text-center py-12">
           <Megaphone className="w-10 h-10 text-white/10 mx-auto mb-3"/>
           <p className="text-white/30 text-sm">No announcements yet</p>
         </div>
+        )
       ) : (
         <div className="space-y-3">
           {items.map(a => {

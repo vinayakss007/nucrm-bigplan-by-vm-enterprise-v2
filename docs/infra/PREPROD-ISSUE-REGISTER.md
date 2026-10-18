@@ -3593,12 +3593,25 @@ database`, and exactly two FAILs:
   the repo in that condition. Two of the five guards added since this entry was written — `coords` and
   `register-drift` — are the ones that read _this file_, which is why the re-count is in the entry rather than
   in a follow-up. (The fifth, **#2566**'s `guard:raw-sql`, reads the source tree rather than this file, and its
-  own coordinates are `ci.yml:86-87`.) (A sixth, **#2825**'s `guard:catch-empty` on 2026-10-18, also reads the source
-  tree rather than this file, and it is wired line-count-neutrally so that this paragraph's coordinates did not move:
-  it shares the portal-RLS-context step's `run:` line at `ci.yml:81` — the pattern **#2655** used at `:85` — and its
-  alias is appended at `package.json:156`, outside the `:47-69` block, next to **#2596**'s `guard:env-coverage`, which
-  `ci.yml` likewise calls as a bare `node` command at `:438`. The counts above predate it: one more `guard:*` script
-  exists, and one more is invoked.)
+  own coordinates are `ci.yml:86-87`.) (A sixth — **#2825**'s `guard:catch-empty`, on 2026-10-18 — and a seventh,
+  **#2829**'s `guard:panel-error-state` the next day, both read the source tree rather than this file, and both are
+  wired line-count-neutrally so that no coordinate in this paragraph moved. The shape, for whoever folds in the next:
+  the invocation joins the portal-RLS-context step's `run:` line — the pattern **#2655** used at `:85`, and since the
+  seventh arrived `ci.yml:81` runs three guards rather than one — and the alias goes at the very end of the `scripts`
+  block, outside the `:47-69` region, so the sixth reads `package.json:156` and the seventh `package.json:157`, next to
+  **#2596**'s `guard:env-coverage`, which `ci.yml` likewise calls as a bare `node` command at `:438`.
+  Line-count-neutral wiring keeps those _numbers_ true and cannot keep their _content_. Appending to a shared `run:`
+  line rewrites that line; appending to a JSON object leaves the alias before it intact but for the comma the new key
+  requires. So both coordinates read as drift to `check-register-drift`, which compares a cited line with what it held
+  in the revision that wrote the sentence, while `guard:coords`, which only asks whether the line is live, passes both.
+  That screen runs on main, nightly, and never in PR CI, because its answer is branch-dependent. Both are re-pinned
+  here, inside the sentences that name them, because an entry in `scripts/register-drift-allowlist.json` is for drift
+  that waits on another PR and this PR is the one that finished the move. The trap is permanent by construction:
+  whoever appends the next alias re-pins `package.json:157`, whoever joins that step re-pins `ci.yml:81`, and each
+  writes the correction into the sentence rather than minting a fresh pointer. The seventh also carries a ratcheting
+  allowlist of its own, `scripts/panel-error-state-baseline.json` — data rather than a coordinate, so it is named
+  without a line number. The counts above predate the sixth and the seventh: two more `guard:*` scripts exist, and two
+  more are invoked.)
   (The 20/2/1 split is itself worth recording. A wiring audit that greps for `npm run guard:` reports
   **20 of 23** and mis-files `audit` and `semgrep` as unrun, because those two are called as direct `node`
   invocations rather than through their aliases. This entry said exactly that until its own PR's CI run
