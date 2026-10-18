@@ -4,9 +4,11 @@
  * read failed.
  *
  * #2439 (routes), #2823 (two super-admin panels), #2825 (the customer portal)
- * and #2829 (the rest of the app) are the same accident: a page destructures
- * `{ data, isLoading }` from `useApiQuery`, never binds `error`, and renders a
- * sentence about the tenant's data whenever the array comes back empty. An RLS
+ * and #2829 (the rest of the app) are the same accident: a page reads its rows
+ * from `useApiQuery` and renders a sentence about the tenant's data whenever the
+ * array comes back empty, whatever else happened. Either the hook's `error` is
+ * never bound at all, or it is bound and routed to a `useEffect` toast that
+ * speaks for four seconds and leaves the sentence behind it on screen. An RLS
  * refusal, a dead pool or a 500 is then reported as "No backups yet", "No
  * sessions found", "Trash is empty" — a false all-clear on the panels whose job
  * is to answer those questions.
@@ -96,9 +98,14 @@ export function rendersFalseEmpty(lines) {
 }
 
 /**
+ * Two shapes reach the same sentence, and the message names whichever it found:
+ * a page whose hook never binds `error`, and a page that binds it and routes it
+ * to a `useEffect` toast — which says the read failed for four seconds and then
+ * leaves the false sentence on screen permanently.
+ *
  * @param {string} rel path relative to ROOT
  * @param {string} src file contents
- * @returns {{offends: boolean, why?: string}}
+ * @returns {{offends: boolean, why?: string, bindsError?: boolean}}
  */
 export function inspect(rel, src) {
   const lines = src.split('\n');
@@ -119,7 +126,11 @@ export function inspect(rel, src) {
 
   return {
     offends: true,
-    why: `${rel}:${empty.line} says "${empty.text}" with no failure branch (${queries} query hook${queries > 1 ? 's' : ''}, error never bound)`,
+    bindsError,
+    why:
+      `${rel}:${empty.line} says "${empty.text}" with no failure branch ` +
+      `(${queries} query hook${queries > 1 ? 's' : ''}, ` +
+      `${bindsError ? '`error` bound but never rendered' : '`error` never bound'})`,
   };
 }
 

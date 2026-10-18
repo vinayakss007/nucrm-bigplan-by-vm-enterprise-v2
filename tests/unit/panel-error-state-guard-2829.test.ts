@@ -64,14 +64,29 @@ describe('panel-error-state guard (#2829) — offenders', () => {
   });
 
   it('catches a page that binds error but never renders anything for it', () => {
-    // The half the proxy cannot close by binding alone: the failure is destructured
-    // and dropped on the floor.
+    // The half a `useEffect` toast does not close: it speaks for four seconds and
+    // the false sentence stays on screen afterwards.
     const src = `function P() {
   const { data, isLoading, error } = useApiQuery({ queryKey: ['x'], queryFn: fetchX });
   const rows = data?.data ?? [];
+  useEffect(() => { if (error) toast.error('Failed to load sessions'); }, [error]);
   return <div>{!rows.length ? <p>No sessions found</p> : <Table rows={rows} />}</div>;
 }`;
-    expect(inspect('app/tenant/y/page.tsx', src).offends).toBe(true);
+    const res = inspect('app/tenant/y/page.tsx', src);
+    expect(res.offends).toBe(true);
+    expect(res.bindsError).toBe(true);
+    expect(res.why).toContain('`error` bound but never rendered');
+  });
+
+  it('names the two shapes apart, because the baseline records which one each page is', () => {
+    const neverBound = inspect('app/tenant/y/page.tsx', `function P() {
+  const { data } = useApiQuery({ queryKey: ['x'], queryFn: fetchX });
+  const rows = data?.data ?? [];
+  return <div>{!rows.length ? <p>No sessions found</p> : <Table rows={rows} />}</div>;
+}`);
+    expect(neverBound.offends).toBe(true);
+    expect(neverBound.bindsError).toBe(false);
+    expect(neverBound.why).toContain('`error` never bound');
   });
 
   it('catches the hand-written queryFn form too', () => {
@@ -182,7 +197,13 @@ describe('the guard against the real tree (#2829)', () => {
     for (const [rel, reason] of baseline) {
       expect(existsSync(`${process.cwd()}/${rel}`), `${rel} is gone — drop the entry`).toBe(true);
       expect(reason, `${rel} needs the issue that carries it`).toMatch(/^#\d{4}:/);
-      expect(offending.get(rel), `${rel} is allowlisted but no longer prints an empty sentence over a failed read`).toBeTruthy();
+      const found = offending.get(rel);
+      expect(found, `${rel} is allowlisted but no longer prints an empty sentence over a failed read`).toBeTruthy();
+      // The reason is documentation, so it has to say which shape the page has:
+      // #2829's own sweep said "never binds error" about 54 pages and 29 of them
+      // do bind it — they toast it and leave the sentence up.
+      const claimsBound = /binds `error`/.test(reason);
+      expect(claimsBound, `${rel}'s reason names the wrong shape`).toBe(/`error` bound but never rendered/.test(found!));
     }
   });
 
