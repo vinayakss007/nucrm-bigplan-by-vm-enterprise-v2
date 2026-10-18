@@ -3598,12 +3598,19 @@ database`, and exactly two FAILs:
   it shares the portal-RLS-context step's `run:` line at `ci.yml:81` — the pattern **#2655** used at `:85` — and its
   alias is appended at `package.json:156`, outside the `:47-69` block, next to **#2596**'s `guard:env-coverage`, which
   `ci.yml` likewise calls as a bare `node` command at `:438`. The counts above predate it: one more `guard:*` script
-  exists, and one more is invoked.)
-  (A seventh, **#2829**'s `guard:panel-error-state` on 2026-10-18, reads the source tree the same way and is wired the
-  same way — its `npm run` joins that same step's `run:` line at `ci.yml:81`, which is why the step now names three
-  guards instead of two, and its alias is appended below the sixth at `package.json:157`. It carries a ratcheting
-  allowlist of its own, `scripts/panel-error-state-baseline.json`, which is data rather than a coordinate and so is
-  not cited here. The counts above predate it too: one more `guard:*` script exists, and one more is invoked.)
+  exists, and one more is invoked. A seventh, **#2829**'s `guard:panel-error-state`, joined that same `run:` line the
+  next day — the step names three guards now, which is why this sentence re-pins `ci.yml:81` rather than letting the
+  nightly drift screen call the move — and its alias sits below the sixth at `package.json:157`, which is why the
+  sentence above re-pins `:156` too: line-count-neutral wiring keeps the _numbers_ true and cannot keep the _content_,
+  because appending to a shared `run:` line rewrites it and appending to a JSON object puts nothing but a comma on the
+  line before. `guard:coords` sees both as live and passes; `check-register-drift` compares a cited line to what it
+  held in the revision that wrote the sentence, and so flags both — on main, nightly, never in PR CI, because its
+  answer is branch-dependent. `scripts/register-drift-allowlist.json` is not the place for these two: an entry there is
+  for drift that waits on another PR, and this drift was finished by this one. The trap is permanent by construction,
+  so the next alias appended to `package.json` re-pins `:157` the same way and the next guard folded into that step
+  re-pins `ci.yml:81` — both sentences should gain the correction, not a new number. The seventh carries a ratcheting
+  allowlist of its own, `scripts/panel-error-state-baseline.json`, which is data rather than a coordinate and so is not
+  cited here. The counts above predate it too: one more `guard:*` script exists, and one more is invoked.)
   (The 20/2/1 split is itself worth recording. A wiring audit that greps for `npm run guard:` reports
   **20 of 23** and mis-files `audit` and `semgrep` as unrun, because those two are called as direct `node`
   invocations rather than through their aliases. This entry said exactly that until its own PR's CI run
