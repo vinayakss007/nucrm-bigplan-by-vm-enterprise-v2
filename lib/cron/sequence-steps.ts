@@ -322,20 +322,29 @@ export async function advanceOrCompleteStep(tx: DbTransaction, tenantId: string,
 }
 
 /**
- * Mark the step log sent/failed and advance (or reschedule) the enrollment,
- * all inside `tx`. Returns true when the enrollment was advanced.
+ * The status `finalizeStepLog` writes for a step the cron has just finished
+ * handling. `sent` only for a step that actually did something deliverable
+ * (#2795): `skipped` covers the types that wait or that the contact cannot
+ * receive, and `failed` the ones that errored or have no handler at all.
+ */
+export type StepLogOutcome = 'sent' | 'skipped' | 'failed';
+
+/**
+ * Mark the step log with the outcome the caller stated and advance (or
+ * reschedule) the enrollment, all inside `tx`. Returns true when the enrollment
+ * was advanced.
  */
 export async function finalizeStepLog(
   tx: DbTransaction,
   tenantId: string,
   enrollment: DueEnrollment,
   step: SequenceStepRow,
-  success: boolean,
+  outcome: StepLogOutcome,
   errorMessage: string | null,
 ): Promise<boolean> {
   await tx.update(sequenceStepLogs)
     .set({
-      status: success ? 'sent' : 'failed',
+      status: outcome,
       executedAt: new Date(),
       errorMessage: errorMessage,
       updatedAt: new Date()
@@ -347,7 +356,7 @@ export async function finalizeStepLog(
       eq(sequenceStepLogs.tenantId, tenantId)
     ));
 
-  if (!success) {
+  if (outcome === 'failed') {
     // If step failed, reschedule it for 1 hour later
     await tx.update(sequenceEnrollments)
       .set({
