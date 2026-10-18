@@ -24,7 +24,7 @@ import { logAudit } from '@/lib/audit';
 import { logError } from '@/lib/errors-server';
 import { invalidateWidgetCache } from '@/lib/dashboard/widget-cache';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
-import { cancelOpenEnrollments } from '@/lib/cron/sequence-steps';
+import { cancelOpenEnrollments, firstStepDueAt } from '@/lib/cron/sequence-steps';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { enforceFieldWrite } from '@/lib/rbac/enforce';
 
@@ -417,6 +417,9 @@ export const POST = withApiRoute(async (req: NextRequest) => {
         }
 
         await db.transaction(async (tx) => {
+          // #2793: a row written without `next_step_at` is `active` but can never
+          // be picked up by the cron's due sweep, so the drip silently never sent.
+          const nextStepAt = await firstStepDueAt(tx, ctx.tenantId, sequenceId);
           const enrollValues = eligibleIds.map(contactId => ({
             tenantId: ctx.tenantId,
             sequenceId,
@@ -424,6 +427,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
             enrolledBy: ctx.userId,
             status: 'active',
             currentStep: 1,
+            nextStepAt,
           }));
           
           const res = await tx.insert(sequenceEnrollments).values(enrollValues).onConflictDoNothing();

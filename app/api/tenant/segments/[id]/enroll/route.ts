@@ -28,6 +28,7 @@ import { readJsonBody } from '@/lib/api/validate';
 import { withApiRoute } from '@/lib/api/with-api-route';
 import { logError } from '@/lib/errors-server';
 import { ownerScope } from '@/lib/api/owner-scope';
+import { firstStepDueAt } from '@/lib/cron/sequence-steps';
 import { isEntityId } from '@/lib/id';
 
 export const POST = withApiRoute(
@@ -164,6 +165,9 @@ export const POST = withApiRoute(
       const toEnroll = contactableIds.filter((cid) => !existingSet.has(cid));
 
       if (toEnroll.length) {
+        // #2793: without a due date the sweep can never select the row, so the
+        // enrollment is active and silent forever.
+        const nextStepAt = await firstStepDueAt(db, ctx.tenantId, sequenceId);
         await db.insert(sequenceEnrollments).values(
           toEnroll.map((contactId) => ({
             tenantId: ctx.tenantId,
@@ -171,6 +175,7 @@ export const POST = withApiRoute(
             contactId,
             status: 'active' as const,
             currentStep: 1,
+            nextStepAt,
             enrolledBy: ctx.userId,
             metadata: { source: 'segment', segment_id: id },
           })),

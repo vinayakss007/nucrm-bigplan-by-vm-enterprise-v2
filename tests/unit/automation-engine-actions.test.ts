@@ -43,14 +43,23 @@ vi.mock('@/drizzle/schema', () => ({
   integrations: { tenantId: 'i.tenantId', type: 'i.type', isActive: 'i.isActive' },
   sequences: { id: 's.id', tenantId: 's.tenantId', enrollCount: 's.enrollCount' },
   sequenceEnrollments: { id: 'se.id', tenantId: 'se.tenantId', sequenceId: 'se.sequenceId', contactId: 'se.contactId', status: 'se.status', deletedAt: 'se.deletedAt' },
+  sequenceSteps: { tenantId: 'ss.tenantId', sequenceId: 'ss.sequenceId', stepNumber: 'ss.stepNumber', isActive: 'ss.isActive', deletedAt: 'ss.deletedAt', delayDays: 'ss.delayDays', delayHours: 'ss.delayHours', delayMinutes: 'ss.delayMinutes' },
 }));
 vi.mock('@/drizzle/relations', () => ({}));
-vi.mock('drizzle-orm', () => ({
-  eq: (a: unknown, b: unknown) => ({ __eq: [a, b] }),
-  and: (...c: unknown[]) => ({ __and: c }),
-  isNull: (a: unknown) => ({ __isNull: a }),
-  sql: (strings: TemplateStringsArray, ...v: unknown[]) => ({ __sql: strings.join('?'), values: v }),
-}));
+vi.mock('drizzle-orm', () => {
+  const sqlFn = (strings: TemplateStringsArray, ...v: unknown[]) => ({ __sql: strings.join('?'), values: v });
+  // `activeStepWhere` in lib/cron/sequence-steps.ts composes its id list with
+  // `sql.join`, which the enroll_sequence action now reaches through
+  // `firstStepDueAt` (#2793) to read step 1's delay.
+  Object.assign(sqlFn, { join: (parts: unknown[], sep: unknown) => ({ __join: parts, __sep: sep }) });
+  return {
+    eq: (a: unknown, b: unknown) => ({ __eq: [a, b] }),
+    and: (...c: unknown[]) => ({ __and: c }),
+    isNull: (a: unknown) => ({ __isNull: a }),
+    inArray: (a: unknown, b: unknown) => ({ __in: [a, b] }),
+    sql: sqlFn,
+  };
+});
 
 // ── DB mock harness (records tx-level side effects) ──────────────────────────
 interface Harness {
@@ -231,6 +240,8 @@ describe('enroll_sequence (#2739)', () => {
     expect(row!.values).toMatchObject({
       tenantId: 't-1', contactId: 'c-1', status: 'active', currentStep: 1, enrolledBy: 'u-1',
     });
+    // #2793 — the row the cron's due sweep can actually select.
+    expect(row!.values['nextStepAt']).toBeInstanceOf(Date);
     expect(h.executes).toHaveLength(0);
   });
 

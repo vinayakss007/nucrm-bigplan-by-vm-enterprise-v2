@@ -15,7 +15,7 @@ import { z } from 'zod';
 import { uuidIdSchema } from '@/lib/validation/uuid';
 import { ownerScope } from '@/lib/api/owner-scope';
 import { rateLimitMutating } from '@/lib/api/mutating-rate-limit';
-import { cancelOpenEnrollments } from '@/lib/cron/sequence-steps';
+import { cancelOpenEnrollments, firstStepDueAt } from '@/lib/cron/sequence-steps';
 import { concurrencyGuard } from '@/lib/api/concurrency';
 import { logError } from '@/lib/errors-server';
 import { withApiRoute } from '@/lib/api/with-api-route';
@@ -339,6 +339,10 @@ export const POST = withApiRoute(async (request: NextRequest,
     }
 
     const inserted = await db.transaction(async (tx) => {
+      // #2793: `next_step_at` has no default and the sweep requires
+      // `next_step_at <= NOW()`, so a row written without it is active and never
+      // sends. Computed once for the batch, from this sequence's own step 1.
+      const nextStepAt = await firstStepDueAt(tx, ctx.tenantId, sequenceId);
       const rows = await tx.insert(sequenceEnrollments).values(
         toEnroll.map((contactId) => ({
           tenantId: ctx.tenantId,
@@ -346,6 +350,7 @@ export const POST = withApiRoute(async (request: NextRequest,
           contactId,
           status: 'active' as const,
           currentStep: 1,
+          nextStepAt,
           enrolledBy: ctx.userId,
         }))
       ).returning({ id: sequenceEnrollments.id, contactId: sequenceEnrollments.contactId });
