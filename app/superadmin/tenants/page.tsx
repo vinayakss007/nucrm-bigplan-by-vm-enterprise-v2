@@ -513,7 +513,7 @@ export default function SuperAdminTenantsPage() {
           </tr></thead>
           <tbody>
             {loading&&<tr><td colSpan={6} className="text-center py-8 text-muted-foreground text-sm">Loading...</td></tr>}
-            {!loading&&!tenants.length&&<tr><td colSpan={6} className="text-center py-12 text-muted-foreground text-sm">No organizations found</td></tr>}
+            {!loading&&!tenants.length&&(tenantsQuery.error?<tr><td colSpan={6}><div role="alert" className="px-4 py-12 text-center text-sm text-red-400">Failed to load organizations: {tenantsQuery.error.message}. An empty table would mean no organization exists; this message means the request did not succeed. <button onClick={() => void tenantsQuery.refetch()} className="underline">Try again</button></div></td></tr>:<tr><td colSpan={6} className="text-center py-12 text-muted-foreground text-sm">No organizations found</td></tr>)}
             {tenants.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE).map(t=>{
               const trialLeft = t.trial_ends_at ? Math.max(0,Math.ceil((new Date(t.trial_ends_at).getTime()-Date.now())/86400000)) : null;
               const isOwnOrg = t.id === meInfo?.ownTenantId;

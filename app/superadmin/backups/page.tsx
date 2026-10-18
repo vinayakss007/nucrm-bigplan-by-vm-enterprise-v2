@@ -8,6 +8,7 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import { clientLogError } from '@/lib/client-logger';
 import {
   Clock,
@@ -275,11 +276,17 @@ export default function SuperAdminBackups() {
           </div>
 
           {schedules.length === 0 ? (
+            schedulesQuery.error ? (
+              // #2829: this is the panel that answers "are we backing anything
+              // up?". A refused read may not answer it with an empty schedule.
+              <InlineErrorState message="Could not load the backup schedules — an empty list here is a failed request, not an unconfigured backup." onRetry={() => void schedulesQuery.refetch()} />
+            ) : (
             <div className="text-center py-12 bg-gray-900 rounded-xl border border-gray-800">
               <Calendar className="w-12 h-12 text-gray-600 mx-auto mb-3" />
               <p className="text-gray-400">No backup schedules configured</p>
               <p className="text-gray-500 text-sm mt-1">Default monthly backup will run automatically</p>
             </div>
+            )
           ) : (
             <div className="space-y-3">
               {schedules.map(schedule => (
@@ -355,11 +362,15 @@ export default function SuperAdminBackups() {
           </div>
 
           {backups.length === 0 ? (
+            backupsQuery.error ? (
+              <InlineErrorState message="Could not list the recent backups — the runs below are not absent, the request failed." onRetry={() => void backupsQuery.refetch()} />
+            ) : (
             <div className="text-center py-12 bg-gray-900 rounded-xl border border-gray-800">
               <Clock className="w-12 h-12 text-gray-600 mx-auto mb-3" />
               <p className="text-gray-400">No backups yet</p>
               <p className="text-gray-500 text-sm mt-1">Run a manual backup or wait for the scheduled run</p>
             </div>
+            )
           ) : (
             <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
               <table className="w-full">
@@ -456,11 +467,15 @@ export default function SuperAdminBackups() {
 
           {/* Deleted Records List */}
           {deletedData.length === 0 ? (
+            criticalQuery.error ? (
+              <InlineErrorState message="Could not read the deleted-data report — nothing here is evidence that critical data is intact." onRetry={() => void criticalQuery.refetch()} />
+            ) : (
             <div className="text-center py-12 bg-gray-900 rounded-xl border border-gray-800">
               <CheckCircle className="w-12 h-12 text-green-600 mx-auto mb-3" />
               <p className="text-gray-400">No deleted data in backup</p>
               <p className="text-gray-500 text-sm mt-1">All critical data is intact</p>
             </div>
+            )
           ) : (
             <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
               <table className="w-full">
