@@ -6,7 +6,7 @@
     "entry — the guard fails a NEW panel joining the class and prints a hint when a",
     "listed one leaves it, so the list only ever shrinks."
   ],
-  "count": 38,
+  "count": 32,
   "panels": {
     "app/superadmin/adoption/page.tsx": {
       "issue": "#2829",
@@ -92,13 +92,6 @@
         "No sequences yet"
       ]
     },
-    "app/tenant/calls/page.tsx": {
-      "issue": "#2829",
-      "sentences": [
-        "No calls logged yet",
-        "No calls match your search"
-      ]
-    },
     "app/tenant/chat/page.tsx": {
       "issue": "#2829",
       "sentences": [
@@ -106,35 +99,10 @@
         "No messages yet"
       ]
     },
-    "app/tenant/documents/page.tsx": {
-      "issue": "#2829",
-      "sentences": [
-        "No documents yet"
-      ]
-    },
     "app/tenant/emails/page.tsx": {
       "issue": "#2829",
       "sentences": [
         "No emails sent yet"
-      ]
-    },
-    "app/tenant/modules/page.tsx": {
-      "issue": "#2829",
-      "sentences": [
-        "No modules in this category"
-      ]
-    },
-    "app/tenant/plugins/page.tsx": {
-      "issue": "#2829",
-      "sentences": [
-        "No plugins yet"
-      ]
-    },
-    "app/tenant/products/page.tsx": {
-      "issue": "#2829",
-      "sentences": [
-        "No products match your search",
-        "No products yet"
       ]
     },
     "app/tenant/reports/custom/page.tsx": {
@@ -150,13 +118,6 @@
       "issue": "#2829",
       "sentences": [
         "No deals for this period yet"
-      ]
-    },
-    "app/tenant/services/page.tsx": {
-      "issue": "#2829",
-      "sentences": [
-        "No services found",
-        "No contacts linked to services yet"
       ]
     },
     "app/tenant/settings/admin/page.tsx": {

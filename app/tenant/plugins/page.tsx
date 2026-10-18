@@ -10,6 +10,7 @@ import { useApiQuery } from '@/lib/query/client';
 import { Puzzle, Plus, Trash2, X, Loader2, ToggleLeft, ToggleRight, Zap, TestTube, Copy, ChevronDown, ChevronUp, Clock, Activity } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { confirmThen } from '@/components/ui/confirm-dialog';
+import InlineErrorState, { FAILED_IS_NOT_EMPTY } from '@/components/shared/inline-error-state';
 import toast from 'react-hot-toast';
 
 type Tab = 'my_plugins' | 'create' | 'templates';
@@ -68,7 +69,7 @@ export default function PluginsPage() {
   const [selectedTemplate, setSelectedTemplate] = useState<(typeof TEMPLATES)[number] | null>(null);
 
   // #1328: list via TanStack Query (was raw fetch + useEffect).
-  const { data, isLoading: loading } = useApiQuery<{ data?: Plugin[] }>(
+  const { data, isLoading: loading, error: pluginsError, refetch: refetchPlugins } = useApiQuery<{ data?: Plugin[] }>(
     PLUGINS_QUERY,
     '/api/tenant/plugins',
   );
@@ -173,7 +174,9 @@ export default function PluginsPage() {
         loading ? (
           <div className="space-y-3">{[...Array(3)].map((_, i) => <div key={i} className="h-20 bg-muted rounded-xl animate-pulse" />)}</div>
         ) : plugins.length === 0 ? (
-          <div className="text-center py-12 border border-dashed border-border rounded-2xl">
+          pluginsError
+            ? <InlineErrorState message={`Failed to load your plugins: ${pluginsError.message}`} onRetry={refetchPlugins} detail={FAILED_IS_NOT_EMPTY} />
+            : <div className="text-center py-12 border border-dashed border-border rounded-2xl">
             <Puzzle className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
             <p className="font-medium">No plugins yet</p>
             <p className="text-sm text-muted-foreground mt-1">Create your first plugin or start from a template</p>
