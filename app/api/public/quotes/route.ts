@@ -9,6 +9,7 @@ import { eq, and, desc, isNull } from 'drizzle-orm';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { resolvePortalIdentity, resolvePortalContact } from '@/lib/portal-auth';
 import { withTenantContext, NO_USER_SENTINEL } from '@/lib/db/rls';
+import { logError } from '@/lib/errors-server';
 
 export async function GET(request: NextRequest) {
   try {
@@ -63,7 +64,18 @@ export async function GET(request: NextRequest) {
     });
 
     return NextResponse.json({ data });
-  } catch {
-    return NextResponse.json({ data: [] });
+  } catch (err) {
+    // #2825: this used to answer `200 { data: [] }` for ANY throw, so an RLS
+    // refusal, a dead pool or a missing column was rendered to the customer as
+    // "you have no quotes". Only the `!contact` exit above is a real empty list.
+    // Shape copied from the #2439 fix on public/invoices.
+    void logError({
+      error: err,
+      context: 'public/quotes',
+      level: 'warning',
+      requestUrl: request.url,
+      requestMethod: 'GET',
+    });
+    return NextResponse.json({ error: 'Failed to load quotes' }, { status: 500 });
   }
 }

@@ -14,6 +14,7 @@ import { checkRateLimit } from '@/lib/rate-limit';
 import { resolvePortalIdentity, resolvePortalContact } from '@/lib/portal-auth';
 import { withTenantContext, NO_USER_SENTINEL } from '@/lib/db/rls';
 import { PUBLIC_TICKET_COLUMNS } from '@/lib/public-ticket-projection';
+import { logError } from '@/lib/errors-server';
 
 const publicTicketSchema = z.object({
   email: z.string().email('Valid email is required'),
@@ -80,7 +81,19 @@ export async function GET(request: NextRequest) {
     });
 
     return NextResponse.json({ data });
-  } catch { return NextResponse.json({ data: [] }); }
+  } catch (err) {
+    // #2825: `200 { data: [] }` for ANY throw made a failed read indistinguishable
+    // from a customer with no tickets — the #2439 fix on public/invoices, missed
+    // here. The `!contact` exit above is the only honest empty list.
+    void logError({
+      error: err,
+      context: 'public/tickets',
+      level: 'warning',
+      requestUrl: request.url,
+      requestMethod: 'GET',
+    });
+    return NextResponse.json({ error: 'Failed to load tickets' }, { status: 500 });
+  }
 }
 
 /**

@@ -43,7 +43,7 @@ export default function PortalInvoicesPage() {
     } catch { router.replace('/portal/login'); }
   }, [router]);
 
-  const { data, isLoading } = useApiQuery<{ data: PortalInvoice[] }>(
+  const { data, isLoading, error } = useApiQuery<{ data: PortalInvoice[] }>(
     ['portal-invoices', session?.email],
     // #2439: no identity in the URL. The httpOnly portal session cookie is the
     // credential (same-origin fetch sends it automatically), exactly as the
@@ -73,10 +73,19 @@ export default function PortalInvoicesPage() {
           {[1, 2, 3].map(i => <div key={i} className="h-20 bg-card border border-border rounded-xl animate-pulse" />)}
         </div>
       ) : invoices.length === 0 ? (
-        <div className="text-center py-12">
-          <FileText className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
-          <p className="text-sm text-muted-foreground">No invoices yet</p>
-        </div>
+        error ? (
+          // #2825: #2439 made the route answer 500, but this page read only
+          // {data, isLoading}, so the 500 still landed on "No invoices yet".
+          <div role="alert" className="p-4 rounded-xl bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 text-sm">
+            We could not load your invoices. That is a failed request, not an empty
+            list — reload the page to try again.
+          </div>
+        ) : (
+          <div className="text-center py-12">
+            <FileText className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
+            <p className="text-sm text-muted-foreground">No invoices yet</p>
+          </div>
+        )
       ) : (
         <div className="bg-card border border-border rounded-2xl overflow-hidden">
           <div className="overflow-x-auto">

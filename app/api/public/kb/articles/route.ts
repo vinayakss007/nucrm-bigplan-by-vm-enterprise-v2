@@ -9,6 +9,7 @@ import { eq, and, desc, isNull } from 'drizzle-orm';
 import { resolvePortalIdentity } from '@/lib/portal-auth';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { withTenantContext, NO_USER_SENTINEL } from '@/lib/db/rls';
+import { logError } from '@/lib/errors-server';
 
 /**
  * Public KB list — DECISION (#2221): this is NOT a global help center.
@@ -52,5 +53,17 @@ export async function GET(request: NextRequest) {
         .limit(50));
 
     return NextResponse.json({ data });
-  } catch { return NextResponse.json({ data: [] }); }
+  } catch (err) {
+    // #2825: one of the three `catch → 200 {data:[]}` reads that #2439 fixed on
+    // public/invoices and missed here. On this route there is not even a
+    // `!contact` exit that could make an empty list honest.
+    void logError({
+      error: err,
+      context: 'public/kb/articles',
+      level: 'warning',
+      requestUrl: request.url,
+      requestMethod: 'GET',
+    });
+    return NextResponse.json({ error: 'Failed to load articles' }, { status: 500 });
+  }
 }
