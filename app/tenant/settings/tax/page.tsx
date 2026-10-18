@@ -10,6 +10,7 @@ import { useApiQuery } from '@/lib/query/client';
 import { Plus, Receipt, X, Loader2, Trash2, Pencil, Star } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import { cn } from '@/lib/utils';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import toast from 'react-hot-toast';
 
 interface TaxRate {
@@ -42,7 +43,7 @@ export default function TaxSettingsPage() {
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
 
   // #1328: list via TanStack Query (was raw fetch + useEffect).
-  const { data, isLoading: loading, error } = useApiQuery<{ data?: TaxRate[] }>(
+  const { data, isLoading: loading, error, refetch } = useApiQuery<{ data?: TaxRate[] }>(
     TAX_QUERY,
     '/api/tenant/tax',
   );
@@ -145,23 +146,30 @@ export default function TaxSettingsPage() {
       </div>
 
       {/* Stats */}
+      {/* Every number below is counted off `rates`, so a refused read would report this
+          tenant's tax setup as empty rather than unread (#2829). */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="admin-card p-4">
           <p className="text-xs text-muted-foreground font-medium">Total Rates</p>
-          <p className="text-2xl font-bold mt-1">{rates.length}</p>
+          <p className="text-2xl font-bold mt-1">{error ? '—' : rates.length}</p>
         </div>
         <div className="admin-card p-4">
           <p className="text-xs text-muted-foreground font-medium">Active Rates</p>
-          <p className="text-2xl font-bold mt-1">{activeRates.length}</p>
+          <p className="text-2xl font-bold mt-1">{error ? '—' : activeRates.length}</p>
         </div>
         <div className="admin-card p-4">
           <p className="text-xs text-muted-foreground font-medium">Default Rate</p>
-          <p className="text-2xl font-bold mt-1">{rates.find(r => r.isDefault)?.name || 'None'}</p>
+          <p className="text-2xl font-bold mt-1">{error ? '—' : (rates.find(r => r.isDefault)?.name || 'None')}</p>
         </div>
       </div>
 
       {loading ? (
         [...Array(3)].map((_, i) => <div key={i} className="h-16 bg-muted rounded-2xl animate-pulse" />)
+      ) : error ? (
+        <InlineErrorState
+          message={`Failed to load tax rates: ${error.message || 'no response from the server'}`}
+          onRetry={refetch}
+        />
       ) : rates.length === 0 ? (
         <div className="text-center py-12 border border-dashed border-border rounded-2xl">
           <Receipt className="w-8 h-8 text-muted-foreground mx-auto mb-3" />

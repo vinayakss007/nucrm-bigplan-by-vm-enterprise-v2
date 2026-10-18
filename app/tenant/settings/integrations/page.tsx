@@ -10,6 +10,7 @@ import { useApiQuery } from '@/lib/query/client';
 import { Plug, Trash2, CheckCircle, XCircle, Globe, Mail, Zap, Send, Loader2 } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import { cn, formatDate } from '@/lib/utils';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import toast from 'react-hot-toast';
 
 const INTEGRATION_TYPES = [
@@ -165,7 +166,7 @@ export default function IntegrationsPage() {
   const [addType, setAddType] = useState<IntegrationType | null>(null);
 
   // #1328: load connected integrations via TanStack Query (was raw fetch + useEffect).
-  const { data, isLoading: loading } = useApiQuery<{ data?: ConnectedIntegration[] }>(
+  const { data, isLoading: loading, error, refetch } = useApiQuery<{ data?: ConnectedIntegration[] }>(
     ['tenant', 'integrations'],
     '/api/tenant/integrations',
   );
@@ -215,6 +216,7 @@ export default function IntegrationsPage() {
 
       {/* Connected integrations */}
       {loading ? <div className="admin-card p-5 animate-pulse h-20"/>
+      : error ? <InlineErrorState message={`Failed to load integrations: ${error.message || 'no response from the server'}`} onRetry={refetch} />
       : integrations.length > 0 && (
         <div className="admin-card overflow-hidden">
           <div className="px-5 py-3.5 border-b border-border"><p className="text-sm font-semibold">Connected ({integrations.length})</p></div>
@@ -244,7 +246,7 @@ export default function IntegrationsPage() {
           </div>
         </div>
       )}
-      {!loading && !integrations.length && (
+      {!loading && !error && !integrations.length && (
         <div className="text-center py-10"><Plug className="w-10 h-10 text-muted-foreground/20 mx-auto mb-3"/><p className="font-semibold text-sm mb-1">No integrations yet</p><p className="text-sm text-muted-foreground">Connect a tool above to get started</p></div>
       )}
 

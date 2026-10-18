@@ -8,6 +8,7 @@ import { useState } from 'react';
 import { useApiQuery } from '@/lib/query/client';
 import { BarChart3, Star, TrendingUp, MessageSquare } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import InlineErrorState from '@/components/shared/inline-error-state';
 
 interface CSATStats {
   overall: {
@@ -33,7 +34,7 @@ export default function CSATDashboardPage() {
 
   // #1328: stats via TanStack Query (was raw fetch + useEffect). days is part of
   // the key so switching the range refetches and caches per window.
-  const { data, isLoading: loading } = useApiQuery<{ data?: CSATStats }>(
+  const { data, isLoading: loading, error, refetch } = useApiQuery<{ data?: CSATStats }>(
     ['tenant', 'csat', 'stats', { days }],
     `/api/tenant/csat/stats?days=${days}`,
   );
@@ -64,6 +65,11 @@ export default function CSATDashboardPage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {[...Array(3)].map((_, i) => <div key={i} className="h-32 bg-muted rounded-2xl animate-pulse" />)}
         </div>
+      ) : error ? (
+        <InlineErrorState
+          message={`Failed to load CSAT stats: ${error.message || 'no response from the server'}`}
+          onRetry={refetch}
+        />
       ) : stats ? (
         <>
           {/* Summary cards */}
