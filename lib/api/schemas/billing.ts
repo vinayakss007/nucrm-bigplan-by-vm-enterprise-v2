@@ -96,6 +96,10 @@ export const createQuoteSchema = z.object({
   notes: z.string().trim().max(2000).nullable().optional(),
   terms: z.string().trim().max(2000).nullable().optional(),
   discount: z.coerce.number().min(0).optional().default(0),
+  // #2876 — the Create Quote modal has a Tax input (page.tsx:340) that the route threw
+  // away with `const tax = 0`. It is an AMOUNT, not a rate: documentTotal() is
+  // subtotal − discount + tax (lib/money.ts:57-59), matching the `tax` column.
+  tax: z.coerce.number().min(0).optional().default(0),
 });
 
 export const updateQuoteSchema = createQuoteSchema.partial();
@@ -110,10 +114,19 @@ export const quoteQuerySchema = z.object({
 });
 
 // ── Order schemas ──
+/**
+ * #2876 — `title`, `order_date` and `expected_delivery_date` are declared here
+ * because the Create Order modal collects all three (`app/tenant/orders/page.tsx:314-325`)
+ * and the route was hard-coding `Order ${orderNumber}` / today / null. Absent keys keep
+ * that behaviour, so an API client posting the old shape is unaffected.
+ */
 export const createOrderSchema = z.object({
   contact_id: uuid,
   company_id: uuid,
+  title: z.string().trim().max(200).optional(),
   status: z.enum(['pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled', 'refunded']).optional().default('pending'),
+  order_date: z.string().date().optional().nullable(),
+  expected_delivery_date: z.string().date().optional().nullable(),
   line_items: z.array(z.object({
     description: z.string().max(500),
     quantity: z.coerce.number().min(0),
@@ -136,11 +149,33 @@ export const orderQuerySchema = z.object({
 });
 
 // ── Subscription schemas ──
+/**
+ * #2876 — the Create Subscription modal collects a name, a plan name and an amount
+ * (`app/tenant/subscriptions/page.tsx:166-190`) and none of the three was in this
+ * schema, so the route's insert kept them hard-coded
+ * (`name: 'Subscription'`, `planName: null`, `amount: '0'`). The amount is what the
+ * panel's MRR/ARR header sums (`page.tsx:84-85`), so a subscription created through
+ * the UI would have counted as $0 even once the field names lined up.
+ *
+ * `payment_method` / `last4` are deliberately NOT added: they sit in the page's form
+ * state but no input renders them, so they are always empty. A field nobody collects
+ * is a field nobody should declare.
+ */
 export const createSubscriptionSchema = z.object({
   contact_id: uuid,
   company_id: uuid,
   service_id: uuid,
-  status: z.enum(['trial', 'active', 'paused', 'cancelled', 'expired', 'past_due', 'incomplete']).optional().default('trial'),
+  name: z.string().trim().max(200).optional(),
+  plan_name: z.string().trim().max(200).nullable().optional(),
+  amount: z.coerce.number().min(0).optional().default(0),
+  // No `.default('trial')` here (#2876): the modal never asks for a status, so a default
+  // was the only thing this field could take — and it contradicted both the column
+  // (`serviceSubscriptions.status` defaults to 'active', drizzle/schema/billing.ts:485)
+  // and the panel, whose MRR/ARR sums only count rows with `status === 'active'`
+  // (page.tsx:84-85). Every subscription created through the UI was filed as a trial and
+  // silently left the revenue arithmetic. Omitted now, so the route's own
+  // `status ?? 'active'` decides; a client that means a trial still says so.
+  status: z.enum(['trial', 'active', 'paused', 'cancelled', 'expired', 'past_due', 'incomplete']).optional(),
   start_date: z.string().date().optional().nullable(),
   end_date: z.string().date().optional().nullable(),
   trial_end_date: z.string().date().optional().nullable(),
