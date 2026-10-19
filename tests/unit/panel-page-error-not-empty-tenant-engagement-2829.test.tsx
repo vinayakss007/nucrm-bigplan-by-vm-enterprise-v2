@@ -6,40 +6,47 @@
  */
 
 /**
- * #2829, engagement-log slice — `activities`, `meetings`, `sms`, `visitors`.
+ * #2829, engagement-log slice — `meetings`, `visitors`.
  *
  * Measured on `8beeec0c` with the repo's own screen (`inspect()` from
- * `scripts/check-panel-error-state.mjs`), before any of this was written:
+ * `scripts/check-panel-error-state.mjs`), before any of this was written. The slice
+ * started as four panels, `activities`, `meetings`, `sms` and `visitors`; #2862 landed
+ * the first and the third while this was in review, so those two pages are its
+ * implementation now and their cases went with them. What is left is the pair nobody
+ * else touched:
  *
- *   - `activities:77`      — `No activity yet`, `error` bound and spent on
- *     `useEffect(() => { if (error) toast.error('Failed to load activities') }, [error])`.
- *   - `meetings:139`       — `No meetings yet. Create your first meeting above.`, with
+ *   - `meetings:139`  — `No meetings yet. Create your first meeting above.`, with
  *     `if (error) toast.error(...)` in the **render body**, so it re-fired every render.
- *   - `sms:186`            — `No messages found` plus a Compose CTA, same render-body toast.
- *   - `visitors:137`       — `No visitors found`, same render-body toast.
+ *   - `visitors:137`  — `No visitors found`, same render-body toast.
  *
- * Two things the screen cannot see, and both are pinned here.
+ * Two things the screen cannot see, both pinned here.
  *
- * First, each refusal also produced **numbers**. `sms` counts Total / Sent / Delivered /
- * Failed messages off the read, `visitors` counts Total / Identified / Anonymous / Avg
- * Score — all four of each were reading `0` off `?? []`, and `avgScore` special-cased
- * empty to `0` so it looked like a measured average of zero rather than no measurement.
- * `activities` produced a different derived claim: `Next` was disabled by
- * `activities.length < limit`, so an unread feed asserted "this is the last page".
+ * First, a refusal produces **numbers** as well as a sentence. `visitors` counts Total /
+ * Identified / Anonymous / Avg Score off the read, all four of them reading `0` out of
+ * `?? []`, and `avgScore` special-cased the empty list to `0` — so an unread panel did
+ * not merely look thin, it asserted a measured average of zero. `meetings` has no stats
+ * row, so the falsifiable claim there is the instruction under the empty state.
  *
- * Second, `sms` has a **read nobody can see fail**: the compose dialog's picker calls
- * `/api/tenant/sms/templates` with `const { data: templatesData } = useApiQuery(...)` —
- * no `error`, no `refetch`. A refused template list left a dropdown whose only entry was
+ * Second, `sms` — which is where that lesson came from, and it is worth keeping on the
+ * record because the page is now somebody else's. Its compose dialog's picker calls
+ * `/api/tenant/sms/templates` as `const { data: templatesData } = useApiQuery(...)`: no
+ * `error`, no `refetch`. A refused template list leaves a dropdown whose only entry is
  * "Select a template…", which is the option-list shape where "none" and "unread" are
- * indistinguishable from the operator's side of the screen.
+ * indistinguishable from the operator's side of the screen. `guard:panel-error-state`
+ * cannot see it: the screen asks whether the FILE renders an error state, and `sms`
+ * renders one for its message read. Measured on `cdd2f715`, after #2862 landed it:
+ * `app/tenant/sms/page.tsx:74` is still that destructure, and no test in this repo
+ * covers it. Filed as **#2868** rather than fixed here — that page is #2862's, and
+ * re-cutting it mid-review is the duplicate work this issue keeps having to apologise
+ * for.
  *
  * The honest arms stay honest, which is the part a blanket `error ?` gate gets wrong.
- * `sms`'s status tabs and `visitors`' type/score controls are **server-side**, so a
- * successful read that returns nothing under `failed` or `identified` is a real answer
- * about that view — those now say so instead of claiming the whole inbox/site is empty.
- * And because every one of these queries is invalidated by its own mutations, a failed
- * *refresh* has to keep the rows: that is a second state, tested separately, not the
- * outage banner replacing data the operator is looking at.
+ * `visitors`' type and score controls are **server-side**, so a read that answers with
+ * nothing under `identified` is a real answer about that view — that now says so instead
+ * of claiming the whole site is empty. And because every one of these queries is
+ * invalidated by its own mutations, a failed *refresh* has to keep the rows: that is a
+ * second state, tested separately, not the outage banner replacing data the operator is
+ * looking at.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
@@ -75,20 +82,14 @@ vi.mock('next/link', () => ({
   default: ({ href, children }: { href: string; children: ReactNode }) => <a href={href}>{children}</a>,
 }));
 
-import ActivitiesPage from '@/app/tenant/activities/page';
 import MeetingsPage from '@/app/tenant/meetings/page';
-import SmsPage from '@/app/tenant/sms/page';
 import VisitorsPage from '@/app/tenant/visitors/page';
 
 const NOW = '2026-10-01T00:00:00Z';
-// Both list pages build their query string with URLSearchParams and no default params,
-// so the URL they ask for really does end in `?`.
+// `visitors` builds its query string with URLSearchParams and no default params, so the
+// URL it asks for really does end in `?`.
 const URLS = {
-  activities: '/api/tenant/activities?limit=50&offset=0',
   meetings: '/api/tenant/meetings',
-  sms: '/api/tenant/sms?',
-  smsFailed: '/api/tenant/sms?status=failed',
-  templates: '/api/tenant/sms/templates',
   visitors: '/api/tenant/visitors?',
   visitorsIdentified: '/api/tenant/visitors?filter=identified',
 };
@@ -103,34 +104,12 @@ const staleRead = (data: unknown, message = 'Request failed (504)'): QueryResult
 });
 
 // ── fixtures: the shape each endpoint actually returns ─────────────────────────
-const activityRows = {
-  data: [{
-    id: 'act1', action: 'deal.update', entity_type: 'deal',
-    description: 'Moved Northwind to Won', user_id: 'u1', user_name: 'Priya Kulkarni',
-    created_at: NOW,
-  }],
-};
 const meetingRows = {
   data: [{
     id: 'mt1', title: 'Quarterly review', description: 'Q3 account readout',
     start_time: NOW, end_time: NOW, location: 'War Room',
     meeting_url: 'https://meet.example.invalid/qr', status: 'scheduled', created_at: NOW,
   }],
-};
-const smsRows = {
-  data: [
-    {
-      id: 'sm1', to: '+15550001111', from: '+15550009999', body: 'Renewal is due Friday',
-      direction: 'outbound', status: 'sent', templateId: null, createdAt: NOW,
-    },
-    {
-      id: 'sm2', to: '+15550009999', from: '+15550001111', body: 'Thanks, sending now',
-      direction: 'inbound', status: 'delivered', templateId: null, createdAt: NOW,
-    },
-  ],
-};
-const templateRows = {
-  data: [{ id: 'stm1', name: 'Renewal reminder', body: 'Your renewal is due on the 1st.', variables: ['date'] }],
 };
 const visitorRows = {
   data: [
@@ -151,13 +130,12 @@ function alerts(): string {
 }
 
 /**
- * A stat card's whole text, found by walking up from its caption to the card. The
- * caption is a `p` on both pages here; the value is a sibling two levels up on
- * `visitors` (its caption sits inside the icon row) and one level up on `sms`, so the
- * walk starts from the caption and climbs to the nearest `.admin-card`, which is the
- * same card for both shapes. Asserting through the card rather than a global
- * `getByText('0')` keeps these honest: the number is only wrong because of WHICH read
- * it is derived from.
+ * A stat card's whole text, found by walking up from its caption to the card. On
+ * `visitors` the caption is a `p` sitting inside the icon row and the value is its
+ * sibling two levels up, so the walk starts from the caption and climbs to the nearest
+ * `.admin-card`, which is the same card whatever the shape. Asserting through the card
+ * rather than a global `getByText('0')` keeps this honest: the number is only wrong
+ * because of WHICH read it is derived from.
  */
 function card(label: string): string {
   const el = screen.getByText(label, { selector: 'p' });
@@ -194,19 +172,6 @@ type Panel = {
 
 const PANELS: Panel[] = [
   {
-    key: 'activities',
-    Page: ActivitiesPage,
-    failUrl: URLS.activities,
-    withFailure: { [URLS.activities]: failed('Request failed (503)') },
-    sentence: /No activity yet/,
-    phrase: /activity feed/i,
-    empty: { [URLS.activities]: ok({ data: [] }) },
-    rows: { [URLS.activities]: ok(activityRows) },
-    rowText: 'Moved Northwind to Won',
-    numbers: [],
-    stale: { [URLS.activities]: staleRead(activityRows) },
-  },
-  {
     key: 'meetings',
     Page: MeetingsPage,
     failUrl: URLS.meetings,
@@ -218,24 +183,6 @@ const PANELS: Panel[] = [
     rowText: 'Quarterly review',
     numbers: [],
     stale: { [URLS.meetings]: staleRead(meetingRows) },
-  },
-  {
-    key: 'sms',
-    Page: SmsPage,
-    failUrl: URLS.sms,
-    withFailure: { [URLS.sms]: failed(), [URLS.templates]: ok(templateRows) },
-    sentence: /No messages found/,
-    phrase: /SMS messages/i,
-    empty: { [URLS.sms]: ok({ data: [] }), [URLS.templates]: ok(templateRows) },
-    rows: { [URLS.sms]: ok(smsRows), [URLS.templates]: ok(templateRows) },
-    rowText: 'Renewal is due Friday',
-    numbers: [
-      { label: 'Total Messages', onRows: '2' },
-      { label: 'Sent', onRows: '1' },
-      { label: 'Delivered', onRows: '1' },
-      { label: 'Failed', onRows: '0' },
-    ],
-    stale: { [URLS.sms]: staleRead(smsRows), [URLS.templates]: ok(templateRows) },
   },
   {
     key: 'visitors',
@@ -341,109 +288,6 @@ describe('a refused engagement-log read is not reported as "there are none" (#28
   }
 });
 
-describe('activities: the pager stops asserting a page count it never read (#2829)', () => {
-  beforeEach(() => {
-    registry.byUrl = {};
-    vi.clearAllMocks();
-  });
-
-  const next = () => screen.getByRole('button', { name: /next/i });
-
-  it('does not disable "Next" as if it had proved this is the last page', () => {
-    // `activities.length < limit` read the empty fallback and concluded "one page,
-    // that is all there is" from a request that never answered.
-    registry.byUrl = { [URLS.activities]: failed() };
-    wrapped(<ActivitiesPage />);
-    expect(next().hasAttribute('disabled'), 'the failure disabled a navigation control').toBe(false);
-  });
-
-  it('still disables "Next" for a short page it genuinely read', () => {
-    registry.byUrl = { [URLS.activities]: ok(activityRows) };
-    wrapped(<ActivitiesPage />);
-    expect(next().hasAttribute('disabled'), 'a 1-row page under the 50 limit is the last page').toBe(true);
-    expect(alerts()).toBe('');
-  });
-
-  it('keeps "Prev" and the page label usable while the failure is on screen', () => {
-    registry.byUrl = { [URLS.activities]: failed() };
-    wrapped(<ActivitiesPage />);
-    expect(screen.getByText('Page 1')).toBeTruthy();
-    expect(screen.getByRole('button', { name: /prev/i }).hasAttribute('disabled')).toBe(true);
-  });
-});
-
-describe('sms: the compose dialog\'s template picker (#2829)', () => {
-  beforeEach(() => {
-    registry.byUrl = {};
-    vi.clearAllMocks();
-  });
-
-  const openTemplatePicker = () => {
-    wrapped(<SmsPage />);
-    fireEvent.click(screen.getByRole('button', { name: /compose sms/i }));
-    fireEvent.click(screen.getByRole('button', { name: /use template/i }));
-  };
-
-  it('says the templates failed instead of showing an empty dropdown', () => {
-    registry.byUrl = { [URLS.sms]: ok(smsRows), [URLS.templates]: failed('Request failed (500)') };
-    openTemplatePicker();
-    expect(alerts()).toMatch(/templates/i);
-    // The picker is the page's only select, and it is gone: no dropdown whose sole
-    // entry is "Select a template…".
-    expect(screen.queryByRole('combobox')).toBeNull();
-    expect(screen.getByRole('button', { name: /try again/i })).toBeTruthy();
-  });
-
-  it('names the template read that failed, not the inbox it did read', () => {
-    // The two reads are independent: an unread template list must not be reported as
-    // an unread inbox, and the messages below the modal keep their real counts.
-    registry.byUrl = { [URLS.sms]: ok(smsRows), [URLS.templates]: failed() };
-    openTemplatePicker();
-    expect(alerts()).toMatch(/templates/i);
-    expect(alerts()).not.toMatch(/inbox|SMS messages/i);
-    expect(card('Total Messages')).toContain('2');
-  });
-
-  it('keeps the picker usable and states a genuine "no templates" without an alert', () => {
-    registry.byUrl = { [URLS.sms]: ok(smsRows), [URLS.templates]: ok({ data: [] }) };
-    openTemplatePicker();
-    expect(alerts()).toBe('');
-    expect(screen.getByText(/No SMS templates saved yet/)).toBeTruthy();
-    expect(screen.getByRole('combobox')).toBeTruthy();
-  });
-
-  it('lists the templates for a read that answered', () => {
-    registry.byUrl = { [URLS.sms]: ok(smsRows), [URLS.templates]: ok(templateRows) };
-    openTemplatePicker();
-    expect(screen.getByRole('combobox')).toBeTruthy();
-    expect(screen.getByText('Renewal reminder')).toBeTruthy();
-    expect(screen.queryByText(/No SMS templates saved yet/)).toBeNull();
-    expect(alerts()).toBe('');
-  });
-
-  it('keeps Compose reachable while the message read is failed', () => {
-    registry.byUrl = { [URLS.sms]: failed(), [URLS.templates]: ok(templateRows) };
-    wrapped(<SmsPage />);
-    expect(screen.queryByText(/No messages found/)).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: /compose sms/i }));
-    expect(screen.getByRole('heading', { name: 'Compose SMS' })).toBeTruthy();
-  });
-
-  it('keeps the status tabs as filters, not as a fake outage', () => {
-    // Server-side filter: a read that answered with nothing under `failed` is an
-    // answer about that status.
-    registry.byUrl = {
-      [URLS.sms]: ok(smsRows),
-      [URLS.smsFailed]: ok({ data: [] }),
-      [URLS.templates]: ok(templateRows),
-    };
-    wrapped(<SmsPage />);
-    fireEvent.click(screen.getByRole('button', { name: 'Failed' }));
-    expect(screen.getByText('No failed messages')).toBeTruthy();
-    expect(alerts()).toBe('');
-  });
-});
-
 describe('visitors: a filtered miss stays a filtered miss (#2829)', () => {
   beforeEach(() => {
     registry.byUrl = {};
@@ -511,12 +355,10 @@ describe('meetings: the failure does not delete the form (#2829)', () => {
   });
 });
 
-describe('the ratchet decayed by exactly these four (#2829)', () => {
+describe('the ratchet decayed by exactly these two (#2829)', () => {
   const ROOT = process.cwd();
   const FILES = [
-    'app/tenant/activities/page.tsx',
     'app/tenant/meetings/page.tsx',
-    'app/tenant/sms/page.tsx',
     'app/tenant/visitors/page.tsx',
   ];
   const doc = () => JSON.parse(readFileSync(join(ROOT, 'scripts/panel-error-state-baseline.json'), 'utf8')) as {
@@ -532,9 +374,9 @@ describe('the ratchet decayed by exactly these four (#2829)', () => {
     expect(res.stdout, 'a fixed page must be deleted from the file, not left stale').not.toContain('no longer offends');
   });
 
-  it('no longer carries any of the four', () => {
+  it('no longer carries any of the two', () => {
     const files = doc().files;
-    // A ceiling, never an equality: #2851 and #2857 each delete entries of their own.
+    // A ceiling, never an equality: #2851 and #2864 each delete entries of their own.
     expect(Object.keys(files).length).toBeLessThanOrEqual(16);
     for (const f of FILES) {
       expect(files, `${f} stayed on the list after being fixed`).not.toHaveProperty(f);
@@ -549,34 +391,37 @@ describe('the ratchet decayed by exactly these four (#2829)', () => {
       expect(src, `${f} does not bind error`).toMatch(/\berror\b/);
       expect(src, `${f} binds error and never renders it`).toMatch(/InlineErrorState/);
     }
-    // The second read, the one the screen cannot count at all: `sms` binds its
-    // template failure too, and renders for it inside the compose dialog.
-    const sms = readFileSync(join(ROOT, 'app/tenant/sms/page.tsx'), 'utf8');
-    expect(sms).toMatch(/templatesError/);
-    expect(sms).toMatch(/Failed to load the SMS templates/);
   });
 
-  it('leaves no load-failure toast behind on these four pages', () => {
+  it('leaves no load-failure toast behind on these two pages', () => {
     for (const f of FILES) {
       const src = readFileSync(join(ROOT, f), 'utf8');
       expect(src, `${f} still toasts a read failure`).not.toMatch(/if \((?:error|\w*[Ee]rror)\)\s*toast\.error/);
     }
   });
 
-  it('points the sibling suites\' owed-names at pages this slice did not touch', () => {
-    // Two decay assertions carried my page names until now. Moved rather than deleted:
-    // an empty sweep must not read as success, so the pin has to land on a real entry.
-    const money = readFileSync(join(ROOT, 'tests/unit/panel-page-error-not-empty-money-path-2829.test.tsx'), 'utf8');
-    const lists = readFileSync(join(ROOT, 'tests/unit/panel-page-error-not-empty-tenant-lists-2829.test.tsx'), 'utf8');
-    expect(money).toContain("'app/tenant/kb/page.tsx'");
-    // The pointer moved rather than the old name being left as a live assertion — a
-    // comment mentioning a fixed page is fine, `expect(f['…'])` on it is not.
-    expect(money, 'the visitors pointer is still an assertion').not.toMatch(/expect\(f\['app\/tenant\/visitors\/page\.tsx'\]/);
-    expect(lists).toContain("'app/tenant/pipelines/page.tsx'");
-    expect(lists, 'the meetings pointer is still an assertion').not.toMatch(/expect\(files\['app\/tenant\/meetings\/page\.tsx'\]/);
-    // And both new names are entries that still offend, so the pin proves something.
-    expect(doc().files['app/tenant/kb/page.tsx']).toBeTruthy();
-    expect(doc().files['app/tenant/pipelines/page.tsx']).toBeTruthy();
+  it('leaves no owed-name pointing at a page this slice fixed', () => {
+    // Two decay assertions carried my page names until now. A NAME is a bet against the
+    // rest of #2829: money-path's has been re-cut four times because a different slice
+    // fixed the page it named — superadmin/modules → visitors → kb → pipelines, every
+    // one of them fixed on purpose. That is the same defect #2858 and #2865 filed for
+    // memorised counts, wearing a page's name instead of a number. So the siblings check
+    // the shape of the sweep rather than a name, and what remains here is the half that
+    // cannot rot: a live assertion must not point at a page that is already honest.
+    const siblings = [
+      ['money-path', readFileSync(join(ROOT, 'tests/unit/panel-page-error-not-empty-money-path-2829.test.tsx'), 'utf8')],
+      ['tenant-lists', readFileSync(join(ROOT, 'tests/unit/panel-page-error-not-empty-tenant-lists-2829.test.tsx'), 'utf8')],
+    ] as const;
+    for (const [label, src] of siblings) {
+      for (const f of FILES) {
+        const dead = new RegExp(`expect\\((?:f|files)\\['${f.replace(/[/.]/g, '\\$&')}'\\]`);
+        expect(src, `${label} still asserts the fixed ${f}`).not.toMatch(dead);
+      }
+      // And the reason a name was never load-bearing: the guard runs in both files, and
+      // a page deleted from the baseline while it still prints an empty sentence over a
+      // failed read is a NOVEL offender, which is what fails the guard.
+      expect(src, `${label} stopped running the guard`).toMatch(/check-panel-error-state\.mjs/);
+    }
   });
 
   it('keeps every file it touched inside the size ceiling', () => {
