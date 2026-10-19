@@ -5,10 +5,10 @@
  */
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useApiQuery } from '@/lib/query/client';
 import { Button } from '@/components/ui/button';
-import toast from 'react-hot-toast';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { EmptyState } from '@/components/shared/empty-state';
 
@@ -32,7 +32,13 @@ export default function ActivitiesPage() {
 
   // #1328: TanStack Query — offset is part of the queryKey, so paging back and
   // forth is instant from cache and keepPreviousData avoids a loading flash.
-  const { data, isLoading, error } = useApiQuery<ActivitiesResponse | ActivityItem[]>(
+  //
+  // #2829: `error` was bound and spent entirely on a `useEffect` toast, while the
+  // page answered the refusal with "No activity yet" and a description promising
+  // that created deals, updated contacts and sent emails will appear here as the
+  // team works. The activity log is the record of what the workspace has already
+  // done, so the false "none" reads as "nothing has happened".
+  const { data, isLoading, error, refetch } = useApiQuery<ActivitiesResponse | ActivityItem[]>(
     ['tenant', 'activities', offset, limit],
     `/api/tenant/activities?limit=${limit}&offset=${offset}`,
     { placeholderData: (prev) => prev },
@@ -40,10 +46,6 @@ export default function ActivitiesPage() {
   const activities: ActivityItem[] = Array.isArray(data)
     ? data
     : data?.data ?? data?.activities ?? [];
-
-  useEffect(() => {
-    if (error) toast.error('Failed to load activities');
-  }, [error]);
 
   const loading = isLoading;
 
@@ -71,7 +73,12 @@ export default function ActivitiesPage() {
         </div>
       </div>
 
-      {activities.length === 0 ? (
+      {error ? (
+        <InlineErrorState
+          message={`Failed to load the activity log: ${error.message || 'no response from the server'}`}
+          onRetry={refetch}
+        />
+      ) : activities.length === 0 ? (
         <EmptyState
           type="generic"
           title="No activity yet"
