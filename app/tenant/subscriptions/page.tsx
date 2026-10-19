@@ -4,7 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
 import InlineErrorState from '@/components/shared/inline-error-state';
@@ -50,7 +50,18 @@ export default function SubscriptionsPage() {
     '/api/tenant/subscriptions',
   );
   const subscriptions: Subscription[] = data?.data ?? [];
-  if (error) toast.error('Failed to load subscriptions');
+  // #2872: this toast fired from the render body, so a read that fails once kept announcing
+  // itself on every keystroke. The stale state this slice introduces is sustained, not a flash
+  // — it needs an effect, the way the sibling pages already do it.
+  useEffect(() => { if (error) toast.error('Failed to load subscriptions'); }, [error]);
+
+  // #2872: this page invalidates SUBSCRIPTIONS_QUERY after every create, so the error that
+  // arrives here is usually a failed *refresh* of a list that is still on screen. `error`
+  // alone cannot tell the two apart, and treating a refresh failure like an outage deletes
+  // the rows — which is how an operator concludes their subscription vanished.
+  const failed = Boolean(error) && !data;
+  const stale = Boolean(error) && Boolean(data);
+  const reason = error?.message || 'no response from the server';
 
   const createSubscription = useMutation({
     mutationFn: async () => {
@@ -98,13 +109,15 @@ export default function SubscriptionsPage() {
       </div>
 
       {/* Stats — every number here is computed from the list, so a failed read would report
-          this tenant's MRR and ARR as zero (#2829). Unread renders unavailable, not 0. */}
+          this tenant's MRR and ARR as zero (#2829). Unread renders unavailable, not 0.
+          #2872: the dash is for an unread list only — a failed refresh still has the rows,
+          and printing — above rows we are also counting contradicts the page itself. */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { label: 'Total', value: error ? '—' : subscriptions.length, color: '' },
-          { label: 'Active', value: error ? '—' : subscriptions.filter(s => s.status === 'active').length, color: 'text-green-600' },
-          { label: 'MRR', value: error ? '—' : `$${mrr.toFixed(2)}`, color: 'text-violet-600' },
-          { label: 'ARR', value: error ? '—' : `$${arr.toFixed(2)}`, color: 'text-indigo-600' },
+          { label: 'Total', value: failed ? '—' : subscriptions.length, color: '' },
+          { label: 'Active', value: failed ? '—' : subscriptions.filter(s => s.status === 'active').length, color: 'text-green-600' },
+          { label: 'MRR', value: failed ? '—' : `$${mrr.toFixed(2)}`, color: 'text-violet-600' },
+          { label: 'ARR', value: failed ? '—' : `$${arr.toFixed(2)}`, color: 'text-indigo-600' },
         ].map(s => (
           <div key={s.label} className="admin-card p-3">
             <p className="text-xs text-muted-foreground">{s.label}</p>
@@ -121,14 +134,27 @@ export default function SubscriptionsPage() {
       </div>
 
       {/* Cards Grid */}
+      {stale && (
+        <InlineErrorState
+          className="mb-1.5"
+          message={`Could not refresh the subscriptions, so the cards below are the last read: ${reason}`}
+          onRetry={refetchSubscriptions}
+        />
+      )}
       {loading ? (
         <div className="flex items-center justify-center py-12 text-muted-foreground"><Loader2 className="w-5 h-5 animate-spin mr-2" />Loading subscriptions...</div>
-      ) : error ? (
-        <InlineErrorState message={`Failed to load subscriptions: ${error.message}`} onRetry={refetchSubscriptions} />
+      ) : failed ? (
+        <InlineErrorState message={`Failed to load subscriptions: ${reason}`} onRetry={refetchSubscriptions} />
       ) : filtered.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground">
           <RefreshCw className="w-10 h-10 mx-auto mb-3 text-muted-foreground/30" />
-          <p className="text-sm font-medium">No subscriptions found</p>
+          {subscriptions.length > 0 ? (
+            // #2872: the read returned rows and the search dropped them; "No subscriptions
+            // found" over a live list describes a tenant that does not exist.
+            <p className="text-sm font-medium">No subscription matches “{search}” — the read returned {subscriptions.length}</p>
+          ) : (
+            <p className="text-sm font-medium">No subscriptions found</p>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">

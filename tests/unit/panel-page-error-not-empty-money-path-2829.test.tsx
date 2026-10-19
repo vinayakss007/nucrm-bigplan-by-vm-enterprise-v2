@@ -133,6 +133,9 @@ const CASES: {
   page: () => ReactNode;
   /** what the page says when a successful read returned nothing */
   emptyCopy: RegExp;
+  /** #2872: what it says when the read returned rows and the search dropped them. Pages that
+   *  separate the two carry this; the rest still answer a miss with `emptyCopy`. */
+  missCopy?: RegExp;
   /** the envelope key the page reads its list out of */
   key: 'data' | 'quotes' | 'orders' | 'contracts' | 'offers';
   /** does the page filter client-side, so a search miss has to stay the honest sentence? */
@@ -155,6 +158,7 @@ const CASES: {
     url: 'quotes',
     page: () => <QuotesPage />,
     emptyCopy: /No quotes found/,
+    missCopy: /No quote matches this search/,
     key: 'quotes',
     searchable: true,
     row: { id: 'q1', quoteNumber: 'QT-1187', title: 'Warehouse rollout', status: 'sent', subtotal: '8000.00', totalAmount: '8000.00', contactId: 'ct1', expiresAt: null, createdAt: NOW },
@@ -165,6 +169,7 @@ const CASES: {
     url: 'orders',
     page: () => <OrdersPage />,
     emptyCopy: /No orders found/,
+    missCopy: /No order matches this search/,
     key: 'orders',
     searchable: true,
     row: { id: 'o1', orderNumber: 'SO-3312', title: 'Forklift fleet', status: 'confirmed', orderDate: NOW, expectedDeliveryDate: null, totalAmount: '12500.00', contactId: 'ct1' },
@@ -185,6 +190,7 @@ const CASES: {
     url: 'subscriptions',
     page: () => <SubscriptionsPage />,
     emptyCopy: /No subscriptions found/,
+    missCopy: /No subscription matches/,
     key: 'data',
     searchable: true,
     row: { id: 's1', name: 'Fleet telemetry', planName: 'Pro', status: 'active', startDate: NOW, currentPeriodEnd: null, amount: '129.00', billingFrequency: 'monthly', autoRenew: true },
@@ -233,7 +239,7 @@ function payload(key: typeof CASES[number]['key'], rows: unknown[] | null) {
   return { [key]: list };
 }
 
-describe.each(CASES)('$name panel renders the failure instead of the absence (#2829)', ({ url, page, emptyCopy, row, rowCopy, key, searchable }) => {
+describe.each(CASES)('$name panel renders the failure instead of the absence (#2829)', ({ url, page, emptyCopy, missCopy, row, rowCopy, key, searchable }) => {
   it('says the read failed, with the reason, when the fetch errors', () => {
     registry.byUrl[URLS[url]] = failed('Request failed (500)');
     mount(page());
@@ -273,7 +279,14 @@ describe.each(CASES)('$name panel renders the failure instead of the absence (#2
       const box = screen.getByPlaceholderText(/search/i) as HTMLInputElement;
       fireEvent.change(box, { target: { value: 'zzz-no-such-row' } });
       expect(screen.queryByRole('alert')).toBeNull();
-      expect(screen.getByText(emptyCopy)).toBeTruthy();
+      if (missCopy) {
+        // #2872: the read answered with rows, so "there are none" is a invented tenant. The
+        // miss gets its own sentence and the count the read established.
+        expect(screen.getByText(missCopy)).toBeTruthy();
+        expect(screen.queryByText(emptyCopy)).toBeNull();
+      } else {
+        expect(screen.getByText(emptyCopy)).toBeTruthy();
+      }
     });
   }
 });

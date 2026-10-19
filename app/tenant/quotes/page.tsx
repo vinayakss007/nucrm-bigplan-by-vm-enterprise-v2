@@ -74,12 +74,25 @@ function QuotesPageInner() {
   const quotes: Quote[] = useMemo(() => quotesData?.quotes ?? [], [quotesData]);
   useEffect(() => { if (quotesError) toast.error('Failed to load quotes'); }, [quotesError]);
 
-  const { data: contactsData, error: contactsError } = useApiQuery<{ contacts?: Contact[] }>(
+  // #2872: create invalidates QUOTES_QUERY, so the error that reaches this page is usually a
+  // failed *refresh* of rows that are still on screen. `quotesError` alone cannot tell the two
+  // apart, and the list branch treated both as an outage.
+  const failed = Boolean(quotesError) && !quotesData;
+  const stale = Boolean(quotesError) && Boolean(quotesData);
+  const reason = quotesError?.message || 'no response from the server';
+
+  const { data: contactsData, error: contactsError, refetch: refetchContacts } = useApiQuery<{ contacts?: Contact[] }>(
     QUOTE_CONTACTS_QUERY,
     '/api/tenant/contacts',
   );
   const contacts: Contact[] = useMemo(() => contactsData?.contacts ?? [], [contactsData]);
   useEffect(() => { if (contactsError) toast.error('Failed to load contacts'); }, [contactsError]);
+
+  // The secondary read guard:panel-error-state cannot see. It feeds getContactName (every row's
+  // Contact column falls back to '-') and the Contact filter (which then offers nobody).
+  const contactsFailed = Boolean(contactsError) && !contactsData;
+  const contactsStale = Boolean(contactsError) && Boolean(contactsData);
+  const contactsReason = contactsError?.message || 'no response from the server';
 
   const createQuote = useMutation({
     mutationFn: async () => {
@@ -161,13 +174,17 @@ function QuotesPageInner() {
         </button>
       </div>
 
-      {/* Stats */}
+      {/* Stats (#2829, #2872) — these four numbers are computed from the list, and until now
+          they carried no guard at all: under a failed read `quotes` is `[]`, so the page
+          reported a firm 0 total for a tenant whose quotes it had not read. Unread renders
+          unavailable, not 0 — but a failed *refresh* still has the rows, so it keeps counting
+          them instead of printing — above a table it is also displaying. */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { label: 'Total', value: quotes.length, color: '' },
-          { label: 'Accepted', value: quotes.filter(q => q.status === 'accepted').length, color: 'text-green-600' },
-          { label: 'Pending', value: quotes.filter(q => ['draft','sent','viewed'].includes(q.status)).length, color: 'text-blue-600' },
-          { label: 'Lost', value: quotes.filter(q => ['expired','declined'].includes(q.status)).length, color: 'text-red-600' },
+          { label: 'Total', value: failed ? '—' : quotes.length, color: '' },
+          { label: 'Accepted', value: failed ? '—' : quotes.filter(q => q.status === 'accepted').length, color: 'text-green-600' },
+          { label: 'Pending', value: failed ? '—' : quotes.filter(q => ['draft','sent','viewed'].includes(q.status)).length, color: 'text-blue-600' },
+          { label: 'Lost', value: failed ? '—' : quotes.filter(q => ['expired','declined'].includes(q.status)).length, color: 'text-red-600' },
         ].map(s => (
           <div key={s.label} className="admin-card p-3">
             <p className="text-xs text-muted-foreground">{s.label}</p>
@@ -205,15 +222,42 @@ function QuotesPageInner() {
         </div>
       </div>
 
+      {contactsFailed ? (
+        // #2872: a secondary read the guard cannot see — an unread contacts list makes every
+        // row's Contact column read '-' and leaves the Contact filter with nobody to offer.
+        <InlineErrorState
+          message={`Failed to load contacts: ${contactsReason} — the Contact column reads “-” and the Contact filter has nobody to offer, which is not the same as these quotes having no contact.`}
+          onRetry={refetchContacts}
+        />
+      ) : contactsStale ? (
+        <InlineErrorState
+          message={`Could not refresh the contacts, so the Contact column and filter are working from the last read: ${contactsReason}`}
+          onRetry={refetchContacts}
+        />
+      ) : null}
+
       {/* Table */}
+      {stale && (
+        <InlineErrorState
+          className="mb-1.5"
+          message={`Could not refresh the quotes, so the rows below are the last read: ${reason}`}
+          onRetry={refetchQuotes}
+        />
+      )}
       {loading ? (
         <div className="flex items-center justify-center py-12 text-muted-foreground"><Loader2 className="w-5 h-5 animate-spin mr-2" />Loading quotes...</div>
-      ) : quotesError ? (
-        <InlineErrorState message={`Failed to load quotes: ${quotesError.message}`} onRetry={refetchQuotes} />
+      ) : failed ? (
+        <InlineErrorState message={`Failed to load quotes: ${reason}`} onRetry={refetchQuotes} />
       ) : filtered.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground">
           <FileText className="w-10 h-10 mx-auto mb-3 text-muted-foreground/30" />
-          <p className="text-sm font-medium">No quotes found</p>
+          {quotes.length > 0 ? (
+            // #2872: the read returned rows and the search or filters dropped them. "No quotes
+            // found" describes a tenant with no quotes, which the read just disproved.
+            <p className="text-sm font-medium">No quote matches this search — the read returned {quotes.length}</p>
+          ) : (
+            <p className="text-sm font-medium">No quotes found</p>
+          )}
         </div>
       ) : (
         <div className="admin-card overflow-hidden">
@@ -290,13 +334,25 @@ function QuotesPageInner() {
             <form onSubmit={handleSubmit} className="p-4 space-y-4">
               <div>
                 <label className="block text-sm font-medium mb-1">Contact</label>
-                <select value={form.contactId} onChange={(e) => setForm({ ...form, contactId: e.target.value })}
-                  className="w-full px-3 py-2 border border-border rounded-lg bg-card text-sm">
-                  <option value="">Select contact...</option>
-                  {contacts.map(c => (
-                    <option key={c.id} value={c.id}>{c.firstName} {c.lastName} {c.email ? `(${c.email})` : ''}</option>
-                  ))}
-                </select>
+                {contactsFailed ? (
+                  <InlineErrorState message={`Failed to load contacts, so there is nobody to pick from: ${contactsReason}. That is not the same as the tenant having no contacts saved.`} onRetry={refetchContacts} />
+                ) : (
+                  <>
+                    {contactsStale && (
+                      <InlineErrorState className="mb-1.5" message={`Could not refresh the contacts, so the names below are the last read: ${contactsReason}`} onRetry={refetchContacts} />
+                    )}
+                    <select value={form.contactId} onChange={(e) => setForm({ ...form, contactId: e.target.value })}
+                      className="w-full px-3 py-2 border border-border rounded-lg bg-card text-sm">
+                      <option value="">Select contact...</option>
+                      {contacts.map(c => (
+                        <option key={c.id} value={c.id}>{c.firstName} {c.lastName} {c.email ? `(${c.email})` : ''}</option>
+                      ))}
+                    </select>
+                    {contacts.length === 0 && (
+                      <p className="text-xs text-muted-foreground mt-1">No contacts saved yet — the list read back empty.</p>
+                    )}
+                  </>
+                )}
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
