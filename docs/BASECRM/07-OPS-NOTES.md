@@ -141,6 +141,43 @@ Known traps that made earlier runs flaky (all now handled in the script):
   duplicate declarations.
 - **The #2655 rbac enforcement screen** — fails CI if an entity route drops
   `enforceField*`. Keep it; it is the tripwire for the #2618 coverage regression.
+- `scripts/check-catch-empty.mjs` (`npm run guard:catch-empty`, `4dbeeaea`) — an API
+  route must not `catch` and return an empty payload as if it were a result; an
+  unread collection and an empty one are different answers.
+- `scripts/check-panel-error-state.mjs` (`npm run guard:panel-error-state`, `7893b2b0`)
+  — a panel that prints a "there are none" sentence must bind the read's `error` and
+  render `InlineErrorState` / `ErrorFallback` / `role="alert"`. Known-good offenders
+  are grandfathered in `scripts/panel-error-state-baseline.json`, which is
+  **shrink-only**: fix the page, delete its entry.
+
+### What `guard:panel-error-state` cannot see (learn this before rebuilding the panels)
+
+The guard judges a **file**, and it stops at the first bound read that reaches the
+screen. Three shapes therefore pass it while the page still lies (#2868 / #2869 /
+#2872 all found by hand, not by the sweep):
+
+1. **Secondary reads.** A page that binds `error` for its list and destructures only
+   `data` for an option list — `kb`'s categories (#2869), `sms`'s template picker
+   (#2868), `settings/assignment-rules/page.tsx:64`'s team list,
+   `settings/bulk-transfer/page.tsx:50-51`'s identity and team reads — is clean.
+   The picker then offers one placeholder option under a failed read, which is the
+   identical screen a tenant with nothing saved gets, and no retry on the page can
+   re-run it. A page is only as honest as its **worse** read.
+2. **Failed vs stale.** Branching on `Boolean(error)` treats "never answered" and
+   "answered, then the refresh failed" as one state. TanStack keeps `data` on a
+   failed refetch, so every mutation that invalidates the key — and each of these
+   pages invalidates its own — replaces the rows on screen with an outage banner.
+   Spell the two states apart:
+   `failed = Boolean(err) && !data`, `stale = Boolean(err) && Boolean(data)`; keep
+   the rows under `stale` and say they are the last read. With
+   `refetchOnWindowFocus: false` and `retry: 2` (`lib/query/client.tsx:51-52`) that
+   state only arrives after two retries, i.e. right after the operator acted.
+3. **A sentence inside a modal.** The guard's "false empty" scan looks at page-level
+   copy; a dialog's single-option `<select>` or its silent `Uncategorized` fallback
+   is invisible to it.
+
+Derived counters have their own version of (2): `error ? '—' : n` must become
+`failed ? '—' : n`, or the page prints `—` above rows it is also counting.
 
 ## Deploy topology (do not conflate — AGENTS.md)
 
