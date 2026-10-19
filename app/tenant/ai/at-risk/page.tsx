@@ -11,6 +11,7 @@ import {
   MessageSquare, Zap, Target, ExternalLink, RefreshCcw
 } from 'lucide-react';
 import { cn, formatCurrency } from '@/lib/utils';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import Link from 'next/link';
 
 type AtRiskDeal = {
@@ -33,7 +34,7 @@ export default function AIAtRiskPage() {
   const [q, setQ] = useState('');
 
   // #1328: at-risk deals via TanStack Query (was raw fetch + useEffect).
-  const { data, isLoading: loading, isFetching, refetch } = useApiQuery<{ data?: AtRiskDeal[] }>(
+  const { data, isLoading: loading, isFetching, error, refetch } = useApiQuery<{ data?: AtRiskDeal[] }>(
     ['tenant', 'ai', 'at-risk'],
     '/api/tenant/ai/at-risk',
   );
@@ -83,7 +84,7 @@ export default function AIAtRiskPage() {
             </div>
             <div className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Total At-Risk</div>
           </div>
-          <div className="text-3xl font-bold">{loading ? '...' : deals.length}</div>
+          <div className="text-3xl font-bold">{loading ? '...' : error ? '—' : deals.length}</div>
           <div className="text-xs text-muted-foreground mt-2">
             Deals matching your detection rules
           </div>
@@ -97,7 +98,7 @@ export default function AIAtRiskPage() {
             <div className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">High Severity</div>
           </div>
           <div className="text-3xl font-bold text-destructive">
-            {loading ? '...' : deals.filter(d => d.atRisk.severity === 'high').length}
+            {loading ? '...' : error ? '—' : deals.filter(d => d.atRisk.severity === 'high').length}
           </div>
           <div className="text-xs text-muted-foreground mt-2">
             Multiple risk factors detected
@@ -112,7 +113,7 @@ export default function AIAtRiskPage() {
             <div className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Risk Value</div>
           </div>
           <div className="text-3xl font-bold">
-            {loading ? '...' : formatCurrency(deals.reduce((sum, d) => sum + parseFloat(d.amount || '0'), 0))}
+            {loading ? '...' : error ? '—' : formatCurrency(deals.reduce((sum, d) => sum + parseFloat(d.amount || '0'), 0))}
           </div>
           <div className="text-xs text-muted-foreground mt-2">
             Total amount in stalled deals
@@ -137,15 +138,40 @@ export default function AIAtRiskPage() {
           <Loader2 className="w-8 h-8 animate-spin mb-4" />
           <p>Analyzing pipeline...</p>
         </div>
+      ) : error ? (
+        // "Pipeline healthy" is the claim this page exists to make, so it is the one a
+        // refused read may not borrow: the risk scan did not run, which is not the same
+        // as the scan finding nothing at all (#2829).
+        <InlineErrorState
+          message={`Failed to check your pipeline for at-risk deals: ${error.message || 'no response from the server'}`}
+          onRetry={refetch}
+        />
       ) : filtered.length === 0 ? (
         <div className="p-20 text-center bg-card border border-dashed rounded-3xl">
           <div className="w-16 h-16 rounded-full bg-emerald-500/10 flex items-center justify-center mx-auto mb-4">
             <Zap className="w-8 h-8 text-emerald-500" />
           </div>
-          <h2 className="text-xl font-bold">Pipeline Healthy</h2>
-          <p className="text-muted-foreground mt-2 max-w-sm mx-auto">
-            No deals currently match your at-risk criteria. Great job keeping the momentum!
-          </p>
+          {q ? (
+            <>
+              <h2 className="text-xl font-bold">No deals match “{q}”</h2>
+              <p className="text-muted-foreground mt-2 max-w-sm mx-auto">
+                That is the filter, not the pipeline — clear it to see every deal your rules flagged.
+              </p>
+              <button
+                onClick={() => setQ('')}
+                className="mt-4 px-3 py-1.5 rounded-lg border border-border text-sm font-medium hover:bg-muted transition-colors"
+              >
+                Clear filter
+              </button>
+            </>
+          ) : (
+            <>
+              <h2 className="text-xl font-bold">Pipeline Healthy</h2>
+              <p className="text-muted-foreground mt-2 max-w-sm mx-auto">
+                No deals currently match your at-risk criteria. Great job keeping the momentum!
+              </p>
+            </>
+          )}
         </div>
       ) : (
         <div className="bg-card border rounded-2xl overflow-hidden shadow-sm">

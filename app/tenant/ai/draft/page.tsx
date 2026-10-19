@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import { logError } from '@/lib/errors-client';
 
 type Template = {
@@ -71,7 +72,7 @@ export default function AIDraftPage() {
 
   // #1328: templates via TanStack Query (was raw fetch + useEffect). The API
   // merges db rows + seeds; for non-admins it 404s, so we fall back to [].
-  const { data: templatesData, isLoading: templatesLoading, isError: templatesError } =
+  const { data: templatesData, isLoading: templatesLoading, error: templatesError, refetch: refetchTemplates } =
     useApiQuery<{ templates?: Template[]; seeds?: Template[] }>(
       ['tenant', 'admin', 'ai-templates'],
       '/api/tenant/admin/ai-templates',
@@ -209,9 +210,18 @@ export default function AIDraftPage() {
         <div className="space-y-3">
           <Card title="1. Template">
             {templates === null && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />}
-            {templates !== null && templates.length === 0 && (
+            {templatesError && templatesError.status !== 404 ? (
+              // #1328 documented this endpoint as admin-only, so a 404 really does mean "you
+              // have no templates to pick". Anything else — a 500, a dead pool, an RLS refusal
+              // — was being turned into [] and then into "No templates configured. Add one.",
+              // which sends the tenant off to re-create a template they already have (#2829).
+              <InlineErrorState
+                message={`Failed to load your AI templates: ${templatesError.message || 'no response from the server'}`}
+                onRetry={refetchTemplates}
+              />
+            ) : templates !== null && templates.length === 0 ? (
               <p className="text-sm text-muted-foreground">No templates configured. <Link href="/tenant/settings/ai-templates" className="text-violet-600 hover:underline">Add one</Link>.</p>
-            )}
+            ) : null}
             <div className="space-y-1.5">
               {templates?.map(t => {
                 const active = selectedTemplate
