@@ -38,6 +38,13 @@ export default function KBCategoriesPage() {
     '/api/tenant/kb/categories',
   );
   const categories: KBCategory[] = data?.data ?? [];
+  // #2869: `reload()` runs after every create, update and delete on this screen, so the
+  // read that fails is usually the REFRESH of a list that already answered. Branching on
+  // `error` alone hides those categories — including the ones the operator is about to
+  // delete — behind a banner that says nothing about them.
+  const failed = Boolean(error) && !data;
+  const stale = Boolean(error) && Boolean(data);
+  const reason = error?.message || 'no response from the server';
   const reload = () => queryClient.invalidateQueries({ queryKey: KB_CATEGORIES_QUERY });
 
   const deleteCategory = async (id: string) => {
@@ -61,13 +68,19 @@ export default function KBCategoriesPage() {
         </button>
       </div>
 
+      {stale && (
+        <InlineErrorState
+          message={`Could not refresh the categories, so the list below is the last read: ${reason}`}
+          onRetry={refetch}
+        />
+      )}
       {loading ? (
         <div className="space-y-2">
           {[1, 2, 3].map(i => <div key={i} className="h-14 bg-card border border-border rounded-xl animate-pulse" />)}
         </div>
-      ) : error ? (
+      ) : failed ? (
         <InlineErrorState
-          message={`Failed to load the categories: ${error.message || 'no response from the server'}`}
+          message={`Failed to load the categories: ${reason}`}
           onRetry={refetch}
         />
       ) : categories.length === 0 ? (
