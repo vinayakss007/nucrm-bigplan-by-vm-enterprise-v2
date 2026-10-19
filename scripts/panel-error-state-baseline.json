@@ -19,10 +19,6 @@
     "app/tenant/kb/page.tsx": "#2829: prints 'No articles found' for a failed read — binds `error` and toasts it, then prints the sentence anyway",
     "app/tenant/meetings/page.tsx": "#2829: prints 'No meetings yet' for a failed read — binds `error` and toasts it, then prints the sentence anyway",
     "app/tenant/pipelines/page.tsx": "#2829: prints 'No pipelines yet' for a failed read — binds `error` and toasts it, then prints the sentence anyway",
-    "app/tenant/reports/custom/page.tsx": "#2829: prints 'No saved reports yet' for a failed read — destructures no `error` at all",
-    "app/tenant/reports/funnel/page.tsx": "#2829: prints 'No deals for this period yet' for a failed read — destructures no `error` at all",
-    "app/tenant/reports/saved/page.tsx": "#2829: prints 'No reports match' for a failed read — binds `error` and toasts it, then prints the sentence anyway",
-    "app/tenant/reports/team-performance/page.tsx": "#2829: prints 'No leads yet' for a failed read — binds `error` and toasts it, then prints the sentence anyway",
     "app/tenant/sms/page.tsx": "#2829: prints 'No messages found' for a failed read — binds `error` and toasts it, then prints the sentence anyway",
     "app/tenant/visitors/page.tsx": "#2829: prints 'No visitors found' for a failed read — binds `error` and toasts it, then prints the sentence anyway"
   }
