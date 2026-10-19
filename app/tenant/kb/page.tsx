@@ -11,6 +11,7 @@ import Link from 'next/link';
 import { Book, Search, Plus, Clock, Eye, ThumbsUp, ChevronRight, FolderPlus } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
 import toast from 'react-hot-toast';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import { ListSkeleton } from '@/components/shared/page-skeleton';
 
 interface KBArticle {
@@ -39,18 +40,26 @@ export default function KBPage() {
   const [showCreate, setShowCreate] = useState(false);
 
   // #1328: reads via TanStack Query (were parallel raw fetch + useEffect).
-  const { data: articlesData, isLoading: articlesLoading, error: articlesError } = useApiQuery<{ data?: KBArticle[] }>(
+  const { data: articlesData, isLoading: articlesLoading, error: articlesError, refetch: refetchArticles } = useApiQuery<{ data?: KBArticle[] }>(
     KB_ARTICLES_QUERY,
     '/api/tenant/kb/articles?status=published',
   );
-  const { data: categoriesData, isLoading: categoriesLoading } = useApiQuery<{ data?: KBCategory[] }>(
+  const { data: categoriesData, isLoading: categoriesLoading, error: categoriesError, refetch: refetchCategories } = useApiQuery<{ data?: KBCategory[] }>(
     KB_CATEGORIES_QUERY,
     '/api/tenant/kb/categories',
   );
   const articles: KBArticle[] = articlesData?.data ?? [];
   const categories: KBCategory[] = categoriesData?.data ?? [];
   const loading = articlesLoading || categoriesLoading;
-  if (articlesError) toast.error('Failed to load knowledge base');
+
+  // #2829: a published-article read that never answered is not evidence that
+  // the knowledge base is empty. `failed` is that outage; `stale` is a refresh
+  // that failed over rows already on screen, which stay usable.
+  const failed = Boolean(articlesError) && !articlesData;
+  const stale = Boolean(articlesError) && Boolean(articlesData);
+  const reason = articlesError?.message || 'no response from the server';
+  const categoriesFailed = Boolean(categoriesError) && !categoriesData;
+  const categoriesReason = categoriesError?.message || 'no response from the server';
 
   const load = () => {
     queryClient.invalidateQueries({ queryKey: KB_ARTICLES_QUERY });
@@ -106,16 +115,31 @@ export default function KBPage() {
             {c.name}
           </button>
         ))}
+        {categoriesFailed && (
+          <InlineErrorState className="basis-full"
+            message={`Failed to load the categories, so this filter offers only All: ${categoriesReason}`}
+            onRetry={refetchCategories} />
+        )}
       </div>
 
       {/* Article list */}
       <div className="grid gap-3">
+        {stale && <InlineErrorState message={`Could not refresh the knowledge base, so the articles below are the last read: ${reason}`} onRetry={refetchArticles} />}
         {loading ? (
           <ListSkeleton rows={5} />
+        ) : failed ? (
+          <InlineErrorState message={`Failed to load the knowledge base: ${reason}`} onRetry={refetchArticles} />
         ) : filtered.length === 0 ? (
           <div className="text-center py-12">
             <Book className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
-            <p className="text-sm text-muted-foreground">No articles found</p>
+            {search || activeCategory !== 'all' ? (
+              <>
+                <p className="text-sm text-muted-foreground">No published articles match this search or category</p>
+                <p className="text-xs text-muted-foreground/70 mt-1">Clear the search box, or choose All in the category chips above.</p>
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground">No published articles yet</p>
+            )}
           </div>
         ) : filtered.map(a => (
           <Link key={a.id} href={`/tenant/kb/${a.id}`}
@@ -140,12 +164,17 @@ export default function KBPage() {
       </div>
 
       {/* Create article modal */}
-      {showCreate && <CreateArticleModal categories={categories} onClose={() => setShowCreate(false)} onCreated={() => { setShowCreate(false); load(); }} />}
+      {showCreate && <CreateArticleModal categories={categories} categoriesFailed={categoriesFailed}
+        categoriesReason={categoriesReason} onRetryCategories={refetchCategories}
+        onClose={() => setShowCreate(false)} onCreated={() => { setShowCreate(false); load(); }} />}
     </div>
   );
 }
 
-function CreateArticleModal({ categories, onClose, onCreated }: { categories: KBCategory[]; onClose: () => void; onCreated: () => void }) {
+function CreateArticleModal({ categories, categoriesFailed, categoriesReason, onRetryCategories, onClose, onCreated }: {
+  categories: KBCategory[]; categoriesFailed: boolean; categoriesReason: string; onRetryCategories: () => void;
+  onClose: () => void; onCreated: () => void;
+}) {
   const [form, setForm] = useState({ title: '', content: '', excerpt: '', category_id: '', status: 'draft' });
   const [saving, setSaving] = useState(false);
 
@@ -186,6 +215,14 @@ function CreateArticleModal({ categories, onClose, onCreated }: { categories: KB
                 <option value="">Uncategorized</option>
                 {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
+              {/* An unread category list is not an empty one: the dropdown would
+                  quietly offer only Uncategorized and the article would be filed
+                  wrong without anyone saying so. */}
+              {categoriesFailed && (
+                <InlineErrorState className="mt-1.5"
+                  message={`Failed to load the categories, so this dropdown offers only Uncategorized: ${categoriesReason}`}
+                  onRetry={onRetryCategories} />
+              )}
             </div>
             <div>
               <label className="block text-xs font-medium text-muted-foreground mb-1">Status</label>

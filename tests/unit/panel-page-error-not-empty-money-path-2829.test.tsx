@@ -381,7 +381,11 @@ describe('the ratchet decays by exactly the pages this slice fixed (#2829)', () 
     expect(f['app/tenant/chat/page.tsx']).toBeTruthy();
     // Not `app/superadmin/modules`, the name this file carried until now: the
     // super-admin slice of #2829 fixed it, which is the outcome being asked for.
-    expect(f['app/tenant/visitors/page.tsx']).toBeTruthy();
+    // And now not `app/tenant/visitors`: the engagement-log slice fixed it, and the
+    // knowledge slice fixes the name that took its place. `pipelines` is the page
+    // nobody can sweep up in passing — it sits on the 500-line grandfather exactly,
+    // so a fix there needs a component split first.
+    expect(f['app/tenant/pipelines/page.tsx']).toBeTruthy();
     expect(f['app/tenant/emails/page.tsx'], 'the documented #1328 tradeoff stays allowlisted').toBeTruthy();
     for (const [file, note] of Object.entries(f)) {
       expect(note, `${file} is allowlisted with no reason attached`).toContain('#2829');
