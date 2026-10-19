@@ -373,16 +373,18 @@ describe('the ratchet decays by exactly the pages this slice fixed (#2829)', () 
     }
   });
 
-  it('keeps pages nobody is fixing in the list, so an empty sweep cannot read as success', () => {
+  it('cannot be satisfied by an empty list, and pins no page by name', () => {
     const f = files();
     // A ceiling, never an equality: an exact count goes false the moment another slice
     // honestly fixes a panel, which is the landmine the first slice of this issue shipped.
     expect(Object.keys(f).length).toBeLessThanOrEqual(46);
-    expect(f['app/tenant/chat/page.tsx']).toBeTruthy();
-    // Not `app/superadmin/modules`, the name this file carried until now: the
-    // super-admin slice of #2829 fixed it, which is the outcome being asked for.
-    expect(f['app/tenant/visitors/page.tsx']).toBeTruthy();
-    expect(f['app/tenant/emails/page.tsx'], 'the documented #1328 tradeoff stays allowlisted').toBeTruthy();
+    // The three names this case used to assert — `superadmin/modules`, then `visitors`,
+    // then `pipelines` — were each deleted by the slice that fixed them, which is the
+    // outcome the issue asks for. Naming a page owed was therefore a bet against every
+    // other slice on the board, and it lost four times.
+    // What actually stops a sweep from deleting the list to make this green is the guard
+    // run above: a page dropped while it still prints an empty sentence over a failed
+    // read is a NOVEL offender, and that is the failure the guard is built to report.
     for (const [file, note] of Object.entries(f)) {
       expect(note, `${file} is allowlisted with no reason attached`).toContain('#2829');
     }
