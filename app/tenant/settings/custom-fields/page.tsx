@@ -24,6 +24,7 @@ import {
   Code,
 } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import toast from 'react-hot-toast';
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -83,7 +84,7 @@ export default function TenantCustomFields() {
   // #1328: load fields (per entityType) + features via TanStack Query
   // (was raw fetch + useEffect). The list URL depends on the active tab, so
   // entityType is part of the query key.
-  const { data: fieldsData, isLoading: loading } = useApiQuery<{ fields?: CustomField[] }>(
+  const { data: fieldsData, isLoading: loading, error: fieldsError, refetch } = useApiQuery<{ fields?: CustomField[] }>(
     ['tenant', 'custom-fields', entityType],
     `/api/tenant/custom-fields?entityType=${entityType}`,
   );
@@ -217,7 +218,7 @@ export default function TenantCustomFields() {
       {/* Fields List */}
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-white">
-          {ENTITY_TYPES.find(e => e.value === entityType)?.icon} {ENTITY_TYPES.find(e => e.value === entityType)?.label} — Custom Fields ({fields.length})
+          {ENTITY_TYPES.find(e => e.value === entityType)?.icon} {ENTITY_TYPES.find(e => e.value === entityType)?.label} — Custom Fields ({fieldsError ? '—' : fields.length})
         </h2>
         <div className="flex items-center gap-2">
           <button
@@ -240,6 +241,13 @@ export default function TenantCustomFields() {
       {loading ? (
         <div className="flex items-center justify-center py-12">
           <Loader2 className="w-6 h-6 animate-spin text-cyan-500" />
+        </div>
+      ) : fieldsError ? (
+        <div className="py-6">
+          <InlineErrorState
+            message={`Failed to load custom fields: ${fieldsError.message || 'no response from the server'}`}
+            onRetry={refetch}
+          />
         </div>
       ) : fields.length === 0 ? (
         <div className="text-center py-16 bg-gray-900 rounded-xl border border-gray-800">

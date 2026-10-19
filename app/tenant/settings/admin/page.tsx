@@ -10,6 +10,7 @@ import { Building2, Users, CreditCard, TrendingUp, AlertCircle, Clock, Crown, Se
 import { cn, formatDate, formatCurrency } from '@/lib/utils';
 import Link from 'next/link';
 import SettingsEmptyState from '@/components/shared/settings-empty-state';
+import InlineErrorState from '@/components/shared/inline-error-state';
 
 interface OrgTenant {
   name?: string;
@@ -50,11 +51,11 @@ interface Usage {
 export default function OrganizationAdminPage() {
   // #1328: load org overview + members via TanStack Query (was raw fetch +
   // useEffect + manual client cache + interval refetch).
-  const { data: orgData, isLoading: orgLoading } = useApiQuery<Org & { plan?: Plan; usage?: Usage }>(
+  const { data: orgData, isLoading: orgLoading, error: orgError, refetch: refetchOrg } = useApiQuery<Org & { plan?: Plan; usage?: Usage }>(
     ['tenant', 'workspace'],
     '/api/tenant/workspace',
   );
-  const { data: membersData, isLoading: membersLoading } = useApiQuery<{ data?: Member[] }>(
+  const { data: membersData, isLoading: membersLoading, error: membersError, refetch: refetchMembers } = useApiQuery<{ data?: Member[] }>(
     ['tenant', 'members'],
     '/api/tenant/members',
   );
@@ -69,6 +70,20 @@ export default function OrganizationAdminPage() {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="w-6 h-6 border-2 border-violet-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  // Nothing below survives an unread read: the organization card renders blank, the plan as
+  // "Free"/"active", the seats as 0/1 and the team as having no members (#2829). Say the read
+  // failed instead of describing the tenant's workspace from what is left in scope.
+  if (orgError || membersError) {
+    return (
+      <div className="flex items-center justify-center h-64 px-4">
+        <InlineErrorState
+          message={`Failed to load your organization: ${(orgError ?? membersError)?.message || 'no response from the server'}`}
+          onRetry={() => { refetchOrg(); refetchMembers(); }}
+        />
       </div>
     );
   }

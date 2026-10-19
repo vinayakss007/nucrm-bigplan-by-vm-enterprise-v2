@@ -9,6 +9,7 @@ import { useMutation } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
 import { Globe, Clock, DollarSign, Calendar, Briefcase, Plus, X, Save, Loader2, ShieldX, type LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import toast from 'react-hot-toast';
 
 type Holiday = { date: string; name: string };
@@ -54,7 +55,7 @@ export default function LocalizationPage() {
 
   // #1328: reads via TanStack Query (were parallel raw fetch + useEffect). The
   // editable copy is seeded once so the dirty-tracking + discard flow persists.
-  const { data: locData, isLoading: locLoading } = useApiQuery<{ localization?: Partial<Loc> }>(
+  const { data: locData, isLoading: locLoading, error: locError, refetch: refetchLoc } = useApiQuery<{ localization?: Partial<Loc> }>(
     ['tenant', 'admin', 'localization'],
     '/api/tenant/admin/localization',
   );
@@ -122,6 +123,18 @@ export default function LocalizationPage() {
   const save = () => saveMutation.mutate();
 
   if (loading) return <div className="flex items-center justify-center h-48 text-muted-foreground"><Loader2 className="w-5 h-5 animate-spin" /></div>;
+
+  // The editable copy below is seeded from DEFAULTS until the read lands, so a refused read
+  // renders "UTC, USD, weekend Sat-Sun, no holidays" as if that were the tenant's answer —
+  // and the first edit arms Save to write it back (#2829). Read it or don't show it.
+  if (locError) return (
+    <div className="flex items-center justify-center h-48 px-4">
+      <InlineErrorState
+        message={`Failed to load your localization settings: ${locError.message || 'no response from the server'}`}
+        onRetry={refetchLoc}
+      />
+    </div>
+  );
 
   if (!isAdmin) return (
     <div className="rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-950/20 p-5 flex items-start gap-3">

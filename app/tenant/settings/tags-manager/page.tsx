@@ -9,6 +9,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
 import { Tag, Search, Pencil, GitMerge, Trash2, RefreshCw, Loader2, ShieldX, X, AlertCircle, Check, type LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import toast from 'react-hot-toast';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 
@@ -30,7 +31,7 @@ export default function TagsManagerPage() {
   const { data: meData } = useApiQuery<{ is_admin?: boolean }>(['tenant', 'me'], '/api/tenant/me');
   const isAdmin = meData?.is_admin ?? true;
 
-  const { data: tagsData, isLoading: loading, isFetching, refetch } = useApiQuery<{ tags?: TagRow[] }>(
+  const { data: tagsData, isLoading: loading, isFetching, error, refetch } = useApiQuery<{ tags?: TagRow[] }>(
     TAGS_QUERY,
     '/api/tenant/admin/tags',
   );
@@ -190,12 +191,18 @@ export default function TagsManagerPage() {
       )}
 
       {/* Table */}
+      {error && (
+        <InlineErrorState
+          message={`Failed to load tags: ${error.message || 'no response from the server'}`}
+          onRetry={refetch}
+        />
+      )}
       <div className="rounded-xl border border-border overflow-hidden bg-card">
         {/* Mobile view: card list */}
         <div className="sm:hidden divide-y divide-border">
           {loading ? (
             <div className="px-4 py-10 text-center text-muted-foreground"><Loader2 className="w-5 h-5 animate-spin mx-auto" /></div>
-          ) : filtered.length === 0 ? (
+          ) : !error && filtered.length === 0 ? (
             <div className="px-4 py-10 text-center text-sm text-muted-foreground">{q ? `No tags match "${query}"` : 'No tags yet'}</div>
           ) : (
             <>
@@ -247,7 +254,7 @@ export default function TagsManagerPage() {
             {loading && (
               <tr><td colSpan={7} className="py-10 text-center text-muted-foreground"><Loader2 className="w-5 h-5 animate-spin mx-auto" /></td></tr>
             )}
-            {!loading && filtered.length === 0 && (
+            {!loading && !error && filtered.length === 0 && (
               <tr><td colSpan={7} className="py-10 text-center text-sm text-muted-foreground">{q ? `No tags match "${query}"` : 'No tags yet'}</td></tr>
             )}
             {filtered.map(row => (

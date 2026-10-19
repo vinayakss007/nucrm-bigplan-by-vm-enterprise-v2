@@ -1,70 +1,74 @@
 import { describe, it, expect } from 'vitest';
-import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
+import { collect, isLintedSource } from '../../scripts/check-any-suppressions.mjs';
 
 /*!
  * #1341 / #1268 / #1269 — the `any` gate.
  *
  * The three issues counted 156, 271 and 1686+ suppressions. Measured across
- * everything eslint actually lints, the tree now holds 52 across 21 files —
- * all grandfathered into `scripts/any-suppression-baseline.json` — and the
- * checks below are what keep them from coming back. Two things have to stay
- * true:
+ * everything eslint actually lints, the tree holds 464 across 134 files — all
+ * grandfathered into `scripts/any-suppression-baseline.json` — and the checks
+ * below are what keep them from coming back. Three things have to stay true:
  *
  * 1. `@typescript-eslint/no-explicit-any` is `error`. At `warn` the rule was
  *    decorative: `npm run lint` is plain `eslint .`, with no `--max-warnings`,
  *    so a new `any` written *without* a disable comment — which is how people
- *    avoid the ratchet — passed CI silently. Five such sites existed the moment
- *    this was measured, and they are exactly the ones the suppression count
- *    never saw.
+ *    avoid the ratchet — passed CI silently.
  * 2. The ratchet looks at the whole linted tree. Its root list used to be
- *    `app, lib, components, hooks, workers` — `workers` does not exist, and the
- *    suppressions in `drizzle/`, `types/`, `tests/`, `scripts/` and the
- *    root-level sources were invisible to it, so those files could grow while
- *    the guard reported "1 suppression".
+ *    `app, lib, components, hooks, workers` — `workers` does not exist — and
+ *    even after #1341 widened it, `walk()` skipped every `*.test.ts(x)`, which
+ *    is how #1268 stayed open: 438 of the 464 suppressions were outside the
+ *    count the guard printed.
+ * 3. The baseline matches the tree — nothing unrecorded, nothing stale.
  *
- * A source scan because neither property is observable at runtime, and both are
- * one careless config edit away from being undone.
+ * Scope here is derived from `eslint.config.mjs` itself, not copied from the
+ * guard: the bug this file used to share with the guard was that both agreed
+ * with each other and neither agreed with eslint.
  */
 
 const SUPPRESSION = /eslint-disable(?:-next-line|-line)?[^\n]*no-explicit-any/g;
 
-/** Top-level directories eslint ignores outright (eslint.config.mjs `ignores`). */
-const LINT_IGNORED = new Set([
-  'node_modules', '.next', '.next-build', 'out', 'coverage', 'storybook-static',
-  'playwright-report', 'test-results', 'public', 'archive', 'logs',
-]);
+/** The `ignores` array of the flat config, read from the file that declares it. */
+const configIgnores = (): string[] => {
+  const config = readFileSync('eslint.config.mjs', 'utf8');
+  const block = /ignores:\s*\[([\s\S]*?)\]/.exec(config);
+  expect(block, 'eslint.config.mjs must declare a global ignores array').not.toBeNull();
+  return [...(block![1] as string).matchAll(/"([^"]+)"/g)].map((m) => m[1] as string);
+};
 
-const isSource = (name: string): boolean =>
-  /\.(ts|tsx)$/.test(name) &&
-  !/\.(test|spec)\.(ts|tsx)$/.test(name) &&
-  !/\.stories\.tsx$/.test(name) &&
-  name !== 'next-env.d.ts';
+const isIgnored = (path: string, ignores: string[]): boolean => {
+  const name = path.slice(path.lastIndexOf('/') + 1);
+  return ignores.some((g) => {
+    // Flat-config ignores are root-relative: `node_modules/` and `tests/load/`
+    // prune a whole tree, `**/*.stories.tsx` matches by filename.
+    if (g.endsWith('/')) return path.startsWith(g);
+    if (g.startsWith('**/')) return name.endsWith(g.slice(3));
+    return path === g;
+  });
+};
 
-const walk = (dir: string, out: string[] = []): string[] => {
+/** Every `.ts`/`.tsx` the linter reads, walked independently of the guard. */
+const lintedSources = (dir = '.', ignores = configIgnores(), out: string[] = []): string[] => {
   for (const name of readdirSync(dir)) {
-    if (name.startsWith('.') || LINT_IGNORED.has(name)) continue;
-    const p = join(dir, name);
-    if (statSync(p).isDirectory()) walk(p, out);
-    else if (isSource(name)) out.push(p);
+    if (name.startsWith('.')) continue;
+    const p = dir === '.' ? name : join(dir, name);
+    if (isIgnored(p + '/x', ignores)) continue;
+    if (statSync(p).isDirectory()) lintedSources(p, ignores, out);
+    else if (/\.(ts|tsx)$/.test(name) && !isIgnored(p, ignores)) out.push(p);
   }
   return out;
 };
 
-/** The eslint rule's configured severity, read from the flat config. */
+const countOf = (file: string): number =>
+  (readFileSync(file, 'utf8').match(SUPPRESSION) || []).length;
+
+/** The rule's configured severity, and the per-directory relaxations, from config. */
 const ruleSeverity = (): string => {
   const config = readFileSync('eslint.config.mjs', 'utf8');
   const m = /"@typescript-eslint\/no-explicit-any"\s*:\s*"([a-z]+)"/.exec(config);
   expect(m, 'no-explicit-any must be configured in eslint.config.mjs').not.toBeNull();
   return m![1] as string;
-};
-
-/** The directories the suppression ratchet scans, read from its source. */
-const ratchetRoots = (): string[] => {
-  const script = readFileSync('scripts/check-any-suppressions.mjs', 'utf8');
-  const m = /const ROOTS = \[([^\]]*)\]/.exec(script);
-  expect(m, 'check-any-suppressions.mjs must declare ROOTS').not.toBeNull();
-  return [...(m![1] as string).matchAll(/'([^']+)'/g)].map((x) => x[1] as string);
 };
 
 describe('#1341 the no-explicit-any rule is enforced, not suggested', () => {
@@ -75,8 +79,8 @@ describe('#1341 the no-explicit-any rule is enforced, not suggested', () => {
 
   it('is not relaxed again for tests or scripts', () => {
     // The ratchet counts those directories now, so a per-file rule override
-    // there would turn the gate off exactly where 51 of the 52 current
-    // suppressions — and every future one — live.
+    // there would turn the gate off exactly where 464 of the 464 current
+    // suppressions — 438 in test files — and every future one live.
     const config = readFileSync('eslint.config.mjs', 'utf8');
     const relaxations = [...config.matchAll(/files:\s*\[[^\]]*\][^}]*\}/gs)]
       .map((m) => m[0])
@@ -86,19 +90,31 @@ describe('#1341 the no-explicit-any rule is enforced, not suggested', () => {
 });
 
 describe('#1268 the suppression ratchet sees the whole linted tree', () => {
+  it('reaches the test files the linter reaches', () => {
+    // The specific hole: `walk()` once dropped every `*.test.ts(x)` while ROOTS
+    // claimed `tests`, so a test file could add suppressions freely.
+    const testSources = lintedSources().filter((f) => /\.test\.(ts|tsx)$/.test(f));
+    expect(testSources.length, 'no test file reached the ratchet').toBeGreaterThan(0);
+    for (const f of testSources) {
+      expect(isLintedSource(f), `${f} is linted but not governed`).toBe(true);
+    }
+  });
+
+  it('governs exactly the files eslint lints, no more and no fewer', () => {
+    const scoped = new Set(Object.keys(collect()));
+    const missed = lintedSources().filter((f) => countOf(f) > 0 && !scoped.has(f));
+    expect(missed, 'suppressions eslint fails on, invisible to the ratchet').toEqual([]);
+  });
+
   it('grandfatheres every suppression that actually exists', () => {
     const baseline = JSON.parse(readFileSync('scripts/any-suppression-baseline.json', 'utf8')) as Record<string, number>;
     const unrecorded = [];
     const underRecorded = [];
-    for (const file of walk('.')) {
-      const n = (readFileSync(file, 'utf8').match(SUPPRESSION) || []).length;
-      if (n === 0) continue;
+    for (const [file, n] of Object.entries(collect())) {
       if (baseline[file] === undefined) unrecorded.push(`${file} (${n})`);
       else if (baseline[file] < n) underRecorded.push(`${file} (${n} > baseline ${baseline[file]})`);
     }
-    // A file the guard does not read is a file whose count can grow silently —
-    // the hole that hid 14 of the 52 current entries in drizzle/, types/,
-    // tests/, scripts/ and the root-level worker/Sentry sources.
+    // A file the guard does not read is a file whose count can grow silently.
     expect(unrecorded).toEqual([]);
     expect(underRecorded).toEqual([]);
   });
@@ -107,14 +123,17 @@ describe('#1268 the suppression ratchet sees the whole linted tree', () => {
     // Stale baseline entries make the ceiling higher than reality, so a file
     // can regain a suppression it was supposed to have shed.
     const baseline = JSON.parse(readFileSync('scripts/any-suppression-baseline.json', 'utf8')) as Record<string, number>;
-    const counts = new Map(walk('.').map((f) => [f, (readFileSync(f, 'utf8').match(SUPPRESSION) || []).length]));
+    const counts = new Map(lintedSources().map((f) => [f, countOf(f)]));
     const stale = Object.keys(baseline).filter((f) => (counts.get(f) ?? 0) === 0);
     expect(stale).toEqual([]);
   });
 
-  it('scans directories that still exist', () => {
-    // A stale root is a root that quietly stops covering anything.
-    const missing = ratchetRoots().filter((dir) => !existsSync(dir));
-    expect(missing).toEqual([]);
+  it('does not govern a file the linter never reads', () => {
+    // `tests/load/` and `drizzle/migrations/` are ignored outright; a
+    // suppression there is inert text, and counting it would ask a reviewer to
+    // justify a comment no tool ever applies.
+    for (const file of Object.keys(collect())) {
+      expect(isIgnored(file, configIgnores()), `${file} is eslint-ignored yet governed`).toBe(false);
+    }
   });
 });

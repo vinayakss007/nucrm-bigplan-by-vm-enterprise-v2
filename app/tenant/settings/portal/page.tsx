@@ -12,6 +12,7 @@ import { confirmThen } from '@/components/ui/confirm-dialog';
 import toast from 'react-hot-toast';
 import { cn } from '@/lib/utils';
 import SettingsEmptyState from '@/components/shared/settings-empty-state';
+import InlineErrorState from '@/components/shared/inline-error-state';
 
 interface PortalConfig {
   enabled: boolean;
@@ -48,11 +49,11 @@ export default function PortalSettingsPage() {
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
 
   // #1328: load config + clients via TanStack Query (was raw fetch + useEffect).
-  const { data: configData, isLoading: configLoading } = useApiQuery<{ data?: PortalConfig }>(
+  const { data: configData, isLoading: configLoading, error: configError, refetch: refetchConfig } = useApiQuery<{ data?: PortalConfig }>(
     ['tenant', 'portal', 'config'],
     '/api/tenant/portal/config',
   );
-  const { data: clientsData, isLoading: clientsLoading } = useApiQuery<{ data?: PortalClient[] }>(
+  const { data: clientsData, isLoading: clientsLoading, error: clientsError, refetch: refetchClients } = useApiQuery<{ data?: PortalClient[] }>(
     ['tenant', 'portal', 'clients'],
     '/api/tenant/portal/clients',
   );
@@ -143,6 +144,20 @@ export default function PortalSettingsPage() {
     return <div className="flex items-center justify-center p-8"><Loader2 className="w-6 h-6 animate-spin" /></div>;
   }
 
+  // `config` starts at DEFAULT_CONFIG (enabled: false) and is only overwritten once the read
+  // lands, so a refused read renders the portal as switched off, hides the permissions and
+  // client roster, and lets the first toggle save defaults over the real settings (#2829).
+  if (configError) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <InlineErrorState
+          message={`Failed to load your portal settings: ${configError.message || 'no response from the server'}`}
+          onRetry={refetchConfig}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6 animate-fade-in">
       <div>
@@ -217,7 +232,7 @@ export default function PortalSettingsPage() {
         <div className="admin-card p-5 space-y-4">
           <div className="flex items-center justify-between">
             <p className="text-sm font-semibold flex items-center gap-2">
-              <Users className="w-4 h-4" />Client Access ({clients.length})
+              <Users className="w-4 h-4" />Client Access ({clientsError ? '—' : clients.length})
             </p>
             <button
               onClick={() => setShowCreate(true)}
@@ -227,7 +242,12 @@ export default function PortalSettingsPage() {
             </button>
           </div>
 
-          {clients.length === 0 ? (
+          {clientsError ? (
+            <InlineErrorState
+              message={`Failed to load portal clients: ${clientsError.message || 'no response from the server'}`}
+              onRetry={refetchClients}
+            />
+          ) : clients.length === 0 ? (
             <SettingsEmptyState icon={Users} title="No clients yet" description="Add your first client to the portal" />
           ) : (
             <div className="space-y-2">

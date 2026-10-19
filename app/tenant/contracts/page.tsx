@@ -7,6 +7,7 @@
 import { useState, useMemo, Suspense } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import { useSearchParams } from 'next/navigation';
 import { Plus, Search, FileText, X, Calendar, DollarSign, User, Loader2, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -56,7 +57,7 @@ function ContractsPageInner() {
   const [form, setForm] = useState({ contactId: initialContactId, title: '', contractType: 'service', startDate: '', endDate: '', totalValue: '', terms: '', notes: '' });
 
   // #1328: reads via TanStack Query (were raw fetch + useEffect).
-  const { data: contractsData, isLoading: loading, error: contractsError } = useApiQuery<{ contracts?: Contract[] }>(
+  const { data: contractsData, isLoading: loading, error: contractsError, refetch: refetchContracts } = useApiQuery<{ contracts?: Contract[] }>(
     CONTRACTS_QUERY,
     '/api/tenant/contracts',
   );
@@ -139,12 +140,13 @@ function ContractsPageInner() {
         </button>
       </div>
 
-      {/* Stats */}
+      {/* Stats — every number here is computed from the list, so a failed read would report
+          this tenant's live contract value as zero (#2829). Unread renders unavailable, not 0. */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         {[
-          { label: 'Total', value: contracts.length, color: '' },
-          { label: 'Active', value: contracts.filter(c => c.status === 'active').length, color: 'text-green-600' },
-          { label: 'Total Value', value: `$${activeValue.toFixed(2)}`, color: 'text-violet-600' },
+          { label: 'Total', value: contractsError ? '—' : contracts.length, color: '' },
+          { label: 'Active', value: contractsError ? '—' : contracts.filter(c => c.status === 'active').length, color: 'text-green-600' },
+          { label: 'Total Value', value: contractsError ? '—' : `$${activeValue.toFixed(2)}`, color: 'text-violet-600' },
         ].map(s => (
           <div key={s.label} className="admin-card p-3">
             <p className="text-xs text-muted-foreground">{s.label}</p>
@@ -201,6 +203,8 @@ function ContractsPageInner() {
       {/* Cards Grid */}
       {loading ? (
         <div className="flex items-center justify-center py-12 text-muted-foreground"><Loader2 className="w-5 h-5 animate-spin mr-2" />Loading contracts...</div>
+      ) : contractsError ? (
+        <InlineErrorState message={`Failed to load contracts: ${contractsError.message}`} onRetry={refetchContracts} />
       ) : filtered.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground">
           <FileText className="w-10 h-10 mx-auto mb-3 text-muted-foreground/30" />

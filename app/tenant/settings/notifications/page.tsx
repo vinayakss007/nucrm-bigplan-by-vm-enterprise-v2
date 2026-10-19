@@ -13,6 +13,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import toast from 'react-hot-toast';
 
 type Channel = 'in_app' | 'email' | 'telegram';
@@ -101,7 +102,7 @@ export default function NotificationsPage() {
   // #1328: matrix via TanStack Query (was raw fetch + useEffect). The editable
   // copy is seeded once from the query so the dirty-tracking + discard flow is
   // preserved.
-  const { data, isLoading: loading } = useApiQuery<{ matrix?: Matrix }>(
+  const { data, isLoading: loading, error, refetch } = useApiQuery<{ matrix?: Matrix }>(
     ['tenant', 'notifications', 'matrix'],
     '/api/tenant/notifications/matrix',
   );
@@ -170,6 +171,21 @@ export default function NotificationsPage() {
 
   if (loading) {
     return <div className="flex items-center justify-center h-48 text-muted-foreground"><Loader2 className="w-5 h-5 animate-spin" /></div>;
+  }
+
+  // Every switch below defaults to OFF when `matrix` is empty, so a refused read renders a
+  // wall of choices the tenant never made (#2829). Nothing here is editable until the read
+  // succeeds — `dirty` already refuses to arm Save without `original`, and this keeps the
+  // page from claiming the current setup is all-off in the first place.
+  if (error) {
+    return (
+      <div className="flex items-center justify-center h-48 px-4">
+        <InlineErrorState
+          message={`Failed to load your notification settings: ${error.message || 'no response from the server'}`}
+          onRetry={refetch}
+        />
+      </div>
+    );
   }
 
   return (
