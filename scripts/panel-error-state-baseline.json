@@ -8,8 +8,6 @@
     "app/tenant/ai/lead-warming/page.tsx": "#2829: prints 'No campaigns yet' for a failed read — destructures no `error` at all",
     "app/tenant/chat/page.tsx": "#2829: prints 'No sessions found' for a failed read — destructures no `error` at all",
     "app/tenant/emails/page.tsx": "#2829: prints 'No emails sent' for a failed read — destructures no `error` at all",
-    "app/tenant/meetings/page.tsx": "#2829: prints 'No meetings yet' for a failed read — binds `error` and toasts it, then prints the sentence anyway",
-    "app/tenant/pipelines/page.tsx": "#2829: prints 'No pipelines yet' for a failed read — binds `error` and toasts it, then prints the sentence anyway",
-    "app/tenant/visitors/page.tsx": "#2829: prints 'No visitors found' for a failed read — binds `error` and toasts it, then prints the sentence anyway"
+    "app/tenant/pipelines/page.tsx": "#2829: prints 'No pipelines yet' for a failed read — binds `error` and toasts it, then prints the sentence anyway"
   }
 }

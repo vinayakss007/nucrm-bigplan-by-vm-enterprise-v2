@@ -71,11 +71,21 @@ export default function SmsPage() {
   );
   const messages: SmsMessage[] = messagesData?.data ?? [];
 
-  const { data: templatesData } = useApiQuery<{ data?: SmsTemplate[] }>(
+  // #2868: this read destructured only `data`. The page is not judged on its
+  // message read — the compose dialog's "Use Template" picker is a second,
+  // separate read, and when it refused its only entry was the placeholder,
+  // which is the identical thing a tenant with no templates saved sees, with
+  // no retry anywhere. An operator who had templates could not tell whether
+  // they had lost them, and the one action the dialog was in was blocked
+  // (`!form.templateId`) on a request that never answered.
+  const { data: templatesData, error: templatesError, refetch: refetchTemplates } = useApiQuery<{ data?: SmsTemplate[] }>(
     ['tenant', 'sms', 'templates'],
     '/api/tenant/sms/templates',
   );
   const templates: SmsTemplate[] = templatesData?.data ?? [];
+  const templatesFailed = Boolean(templatesError) && !templatesData;
+  const templatesStale = Boolean(templatesError) && Boolean(templatesData);
+  const templatesReason = templatesError?.message || 'no response from the server';
 
   const openCompose = () => {
     setForm({ to: '', body: '', templateId: '' });
@@ -276,16 +286,37 @@ export default function SmsPage() {
               {useTemplate ? (
                 <div>
                   <label className="block text-xs font-medium text-muted-foreground mb-1">Template *</label>
-                  <select value={form.templateId} onChange={e => setForm(f => ({ ...f, templateId: e.target.value }))} required className={inp}>
-                    <option value="">Select a template...</option>
-                    {templates.map(t => (
-                      <option key={t.id} value={t.id}>{t.name}</option>
-                    ))}
-                  </select>
-                  {form.templateId && (
-                    <p className="mt-2 text-xs text-muted-foreground p-2 bg-muted rounded-lg">
-                      {templates.find(t => t.id === form.templateId)?.body}
-                    </p>
+                  {templatesFailed ? (
+                    <InlineErrorState
+                      message={`Failed to load the templates, so there is nothing to pick from — which is not the same as having none saved: ${templatesReason}. Switch to Direct Message to send free text, or try again.`}
+                      onRetry={refetchTemplates}
+                    />
+                  ) : (
+                    <>
+                      {templatesStale && (
+                        <InlineErrorState
+                          className="mb-1.5"
+                          message={`Could not refresh the templates, so the options below are the last read: ${templatesReason}`}
+                          onRetry={refetchTemplates}
+                        />
+                      )}
+                      <select value={form.templateId} onChange={e => setForm(f => ({ ...f, templateId: e.target.value }))} required className={inp}>
+                        <option value="">Select a template...</option>
+                        {templates.map(t => (
+                          <option key={t.id} value={t.id}>{t.name}</option>
+                        ))}
+                      </select>
+                      {templates.length === 0 && (
+                        <p className="mt-1.5 text-xs text-muted-foreground">
+                          No SMS templates saved yet — use Direct Message to write one instead.
+                        </p>
+                      )}
+                      {form.templateId && (
+                        <p className="mt-2 text-xs text-muted-foreground p-2 bg-muted rounded-lg">
+                          {templates.find(t => t.id === form.templateId)?.body}
+                        </p>
+                      )}
+                    </>
                   )}
                 </div>
               ) : (
