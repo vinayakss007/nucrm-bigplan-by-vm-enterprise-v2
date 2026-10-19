@@ -441,22 +441,46 @@ describe('the ratchet decayed by exactly these four (#2829)', () => {
     'app/superadmin/templates/page.tsx',
     'app/superadmin/tickets/page.tsx',
   ];
+  const baseline = () =>
+    JSON.parse(readFileSync(join(ROOT, 'scripts/panel-error-state-baseline.json'), 'utf8')) as {
+      files: Record<string, string>;
+    };
 
-  it('is still green, and now counts 20 panels instead of 24', () => {
+  it('is still green, and still counts what the baseline actually holds', () => {
+    // #2858: this used to compare the guard's message and the baseline's length
+    // against the exact number read off the file the day the slice was written. The
+    // ratchet is a shrink-only queue, so every later slice that honestly fixes a
+    // panel deletes an entry and turns *this* suite red on that slice's PR, with
+    // nothing wrong. Measure the file instead; the ceiling is what carries the
+    // promise (the same shape #2852's suite uses).
+    const keys = Object.keys(baseline().files);
     const res = spawnSync('node', ['scripts/check-panel-error-state.mjs'], { cwd: ROOT, encoding: 'utf8' });
     expect(res.status, res.stdout + res.stderr).toBe(0);
-    expect(res.stdout).toMatch(/OK — 20 panel\(s\)/);
+    expect(res.stdout).toContain(`OK — ${keys.length} panel(s)`);
     expect(res.stdout, 'a fixed page must be deleted from the file, not left stale').not.toContain('no longer offends');
   });
 
   it('no longer carries any of the four', () => {
-    const doc = JSON.parse(readFileSync(join(ROOT, 'scripts/panel-error-state-baseline.json'), 'utf8')) as {
-      files: Record<string, string>;
-    };
-    expect(Object.keys(doc.files)).toHaveLength(20);
+    const files = baseline().files;
+    expect(
+      Object.keys(files).length,
+      '#2829 stood at 24 when this slice was cut; it may only go down from there',
+    ).toBeLessThanOrEqual(24);
     for (const f of FILES) {
-      expect(doc.files, `${f} stayed on the list after being fixed`).not.toHaveProperty(f);
+      expect(files, `${f} stayed on the list after being fixed`).not.toHaveProperty(f);
     }
+  });
+
+  it('memorises no panel count anywhere in this file (#2858)', () => {
+    // The two red-on-a-sibling-slice assertions above are gone, and nothing may
+    // quietly re-plant one: the suite runs on a page's PR, not on the day it was
+    // written, so a literal here is a landmine for whoever fixes the next panel.
+    const src = readFileSync(
+      join(ROOT, 'tests/unit/panel-page-error-not-empty-superadmin-2829.test.tsx'),
+      'utf8',
+    );
+    expect(src).not.toMatch(/OK — \d+ panel/);
+    expect(src).not.toMatch(/toHaveLength\(2\d\)/);
   });
 
   it('and the screen now sees what it saw before: each page reads its failure and shows it', async () => {
