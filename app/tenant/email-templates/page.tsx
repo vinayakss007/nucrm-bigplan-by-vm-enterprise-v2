@@ -7,6 +7,7 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import { Mail, Plus, Pencil, Trash2, Eye, Copy, Save, X, Variable, Blocks } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import toast from 'react-hot-toast';
@@ -209,12 +210,17 @@ export default function EmailTemplatesPage() {
   const [filter, setFilter] = useState('all');
 
   // #1328: list via TanStack Query (was raw fetch + useEffect).
-  const { data, isLoading: loading, error } = useApiQuery<{ data?: Template[] }>(
+  //
+  // #2829: `error` was bound and spent on a toast fired from the render body, so
+  // it re-fired on every render while the page kept printing
+  // "No templates yet / Create your first template" and a header that counted the
+  // read that never arrived: "0 templates". These templates are what sequences and
+  // automations send, so the false "none" invites a duplicate of a live one.
+  const { data, isLoading: loading, error, refetch } = useApiQuery<{ data?: Template[] }>(
     TEMPLATES_QUERY,
     '/api/tenant/email-templates',
   );
   const templates: Template[] = data?.data ?? [];
-  if (error) toast.error('Failed to load templates');
 
   const reload = () => queryClient.invalidateQueries({ queryKey: TEMPLATES_QUERY });
 
@@ -282,7 +288,11 @@ export default function EmailTemplatesPage() {
           <h1 className="text-lg font-bold flex items-center gap-2">
             <Mail className="w-5 h-5" />Email Templates
           </h1>
-          <p className="text-sm text-muted-foreground">{templates.length} template{templates.length !== 1 ? 's' : ''}</p>
+          {/* The count is derived from the list, so an unread one renders unavailable
+              rather than "0 templates" (#2829). */}
+          <p className="text-sm text-muted-foreground">
+            {error ? '—' : `${templates.length} template${templates.length !== 1 ? 's' : ''}`}
+          </p>
         </div>
         <button
           onClick={() => setCreating(true)}
@@ -314,6 +324,11 @@ export default function EmailTemplatesPage() {
             </div>
           ))}
         </div>
+      ) : error ? (
+        <InlineErrorState
+          message={`Failed to load your email templates: ${error.message || 'no response from the server'}`}
+          onRetry={refetch}
+        />
       ) : !visible.length ? (
         <div className="admin-card py-20 text-center">
           <Mail className="w-12 h-12 text-muted-foreground/20 mx-auto mb-4" />
