@@ -4,7 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
 import { 
@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import { cn } from '@/lib/utils';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import toast from 'react-hot-toast';
 
 interface DunningAttempt {
@@ -40,10 +41,11 @@ export default function DunningDashboard() {
   const { data, isLoading, error, refetch } = useApiQuery<{ data?: DunningAttempt[] }>(queryKey, '/api/superadmin/billing/dunning');
   const attempts: DunningAttempt[] = data?.data ?? [];
   const loading = isLoading;
-
-  useEffect(() => {
-    if (error) toast.error('Failed to load dunning data');
-  }, [error]);
+  // A failed first read has nothing on screen to describe; a failed *refresh* still shows the
+  // last read, and hiding that queue would be its own wrong answer.
+  const failed = Boolean(error) && !data;
+  const stale = Boolean(error) && Boolean(data);
+  const reason = error?.message || 'no response from the server';
 
   const retryMutation = useMutation({
     mutationFn: async (subscriptionId: string) => {
@@ -99,6 +101,13 @@ export default function DunningDashboard() {
         </button>
       </div>
 
+      {stale && (
+        <InlineErrorState
+          message={`Could not refresh the dunning queue, so what is below is the last read: ${reason}`}
+          onRetry={refetch}
+        />
+      )}
+
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="admin-card p-4">
@@ -107,7 +116,7 @@ export default function DunningDashboard() {
             <span className="text-xs font-medium text-muted-foreground">Pending Retries</span>
           </div>
           <p className="text-2xl font-bold">
-            {attempts.filter(a => a.status === 'pending').length}
+            {data ? attempts.filter(a => a.status === 'pending').length : '—'}
           </p>
         </div>
         <div className="admin-card p-4">
@@ -116,7 +125,7 @@ export default function DunningDashboard() {
             <span className="text-xs font-medium text-muted-foreground">Completed</span>
           </div>
           <p className="text-2xl font-bold">
-            {attempts.filter(a => a.status === 'completed').length}
+            {data ? attempts.filter(a => a.status === 'completed').length : '—'}
           </p>
         </div>
         <div className="admin-card p-4">
@@ -125,7 +134,7 @@ export default function DunningDashboard() {
             <span className="text-xs font-medium text-muted-foreground">Failed</span>
           </div>
           <p className="text-2xl font-bold">
-            {attempts.filter(a => a.status === 'failed').length}
+            {data ? attempts.filter(a => a.status === 'failed').length : '—'}
           </p>
         </div>
         <div className="admin-card p-4">
@@ -134,7 +143,7 @@ export default function DunningDashboard() {
             <span className="text-xs font-medium text-muted-foreground">Total Amount</span>
           </div>
           <p className="text-2xl font-bold">
-            {formatCurrency(attempts.reduce((sum, a) => sum + (a.paymentAmount || 0), 0))}
+            {data ? formatCurrency(attempts.reduce((sum, a) => sum + (a.paymentAmount || 0), 0)) : '—'}
           </p>
         </div>
       </div>
@@ -174,10 +183,21 @@ export default function DunningDashboard() {
               </tr>
             </thead>
             <tbody>
-              {filteredAttempts.length === 0 ? (
+              {failed ? (
+                <tr>
+                  <td colSpan={8} className="p-8">
+                    <InlineErrorState
+                      message={`Failed to load the failed-payment retries: ${reason}`}
+                      onRetry={refetch}
+                    />
+                  </td>
+                </tr>
+              ) : filteredAttempts.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="p-8 text-center text-muted-foreground">
-                    No dunning attempts found
+                    {attempts.length === 0
+                      ? 'No dunning attempts yet'
+                      : `No ${filter} dunning attempts — ${attempts.length} attempt${attempts.length === 1 ? '' : 's'} in other statuses`}
                   </td>
                 </tr>
               ) : (

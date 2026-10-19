@@ -8,6 +8,7 @@ import { useState, useEffect } from 'react';
 import { useApiQuery } from '@/lib/query/client';
 import { Package, Users, ToggleRight, ToggleLeft, Save, DollarSign } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import toast from 'react-hot-toast';
 
 const PLANS = ['free', 'starter', 'pro', 'enterprise'] as const;
@@ -56,8 +57,14 @@ export default function SuperAdminModulesPage() {
   const [search, setSearch] = useState('');
 
   // #1328: TanStack Query replaces fetch + useEffect + useState.
-  const { data, isLoading } = useApiQuery<{ data?: Record<string, unknown>[] }>(['superadmin', 'modules'], '/api/superadmin/modules');
+  // #2829: the read's failure must not be reported as "No modules configured".
+  const { data, isLoading, error, refetch } = useApiQuery<{ data?: Record<string, unknown>[] }>(['superadmin', 'modules'], '/api/superadmin/modules');
   const loading = isLoading;
+  // The matrix below is an editable form: on a failed *refresh* the rows and any unsaved edits
+  // have to stay on screen, so the banner says the read is stale instead of replacing the form.
+  const failed = Boolean(error) && !data;
+  const stale = Boolean(error) && Boolean(data);
+  const reason = error?.message || 'no response from the server';
 
   // Seed the editable module list (with pricing→planAccess mapping) once loaded.
   useEffect(() => {
@@ -155,12 +162,18 @@ export default function SuperAdminModulesPage() {
       </div>
 
       {/* Stats row */}
+      {stale && (
+        <InlineErrorState
+          message={`Could not refresh the modules, so the pricing below is the last read: ${reason}`}
+          onRetry={refetch}
+        />
+      )}
       <div className="grid grid-cols-4 gap-4">
         {[
-          { label: 'Total Modules', value: modules.length, color: 'text-white' },
-          { label: 'Free', value: modules.filter(m => m.planAccess?.free?.enabled).length, color: 'text-slate-400' },
-          { label: 'Starter', value: modules.filter(m => m.planAccess?.starter?.enabled).length, color: 'text-blue-400' },
-          { label: 'Pro', value: modules.filter(m => m.planAccess?.pro?.enabled).length, color: 'text-violet-400' },
+          { label: 'Total Modules', value: data ? modules.length : '—', color: 'text-white' },
+          { label: 'Free', value: data ? modules.filter(m => m.planAccess?.free?.enabled).length : '—', color: 'text-slate-400' },
+          { label: 'Starter', value: data ? modules.filter(m => m.planAccess?.starter?.enabled).length : '—', color: 'text-blue-400' },
+          { label: 'Pro', value: data ? modules.filter(m => m.planAccess?.pro?.enabled).length : '—', color: 'text-violet-400' },
         ].map(s => (
           <div key={s.label} className="rounded-xl border border-white/10 bg-white/5 p-4">
             <p className="text-xs text-white/40">{s.label}</p>
@@ -182,6 +195,11 @@ export default function SuperAdminModulesPage() {
         <div className="space-y-2">
           {[...Array(10)].map((_, i) => <div key={i} className="h-14 rounded-xl animate-pulse bg-white/5" />)}
         </div>
+      ) : failed ? (
+        <InlineErrorState
+          message={`Failed to load the modules and their plan pricing: ${reason}`}
+          onRetry={refetch}
+        />
       ) : (
         /* Matrix table */
         <div className="rounded-xl border border-white/10 overflow-hidden">

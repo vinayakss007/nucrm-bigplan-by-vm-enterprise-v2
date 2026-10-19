@@ -4,11 +4,12 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
 import { MessageSquare, CheckCircle, ChevronDown, Search } from 'lucide-react';
 import { cn, formatRelativeTime } from '@/lib/utils';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import toast from 'react-hot-toast';
 
 const PRI_CFG: Record<string,string> = { critical:'text-red-400 bg-red-500/15', high:'text-amber-400 bg-amber-500/15', normal:'text-blue-400 bg-blue-500/15', low:'text-white/40 bg-white/5' };
@@ -27,16 +28,18 @@ export default function TicketsPage() {
   // #1328: TanStack Query replaces fetch + useEffect + useState.
   // #1089: surface load errors instead of silently swallowing them.
   const queryKey = ['superadmin', 'tickets', status] as const;
-  const { data, isLoading, error } = useApiQuery<TicketData>(
+  const { data, isLoading, error, refetch } = useApiQuery<TicketData>(
     queryKey,
     '/api/superadmin/tickets' + (status ? `?status=${status}` : ''),
     { retry: false },
   );
   const loading = isLoading;
-
-  useEffect(() => {
-    if (error) toast.error('Failed to load tickets');
-  }, [error]);
+  // Failed first read → the queue is unknown and uncounted. Failed *refresh* (every status
+  // change and reply invalidates this query) → the tickets on screen are real, and hiding them
+  // behind a banner would be a second wrong answer.
+  const failed = Boolean(error) && !data;
+  const stale = Boolean(error) && Boolean(data);
+  const reason = error?.message || 'no response from the server';
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, updates }: { id: string; updates: Record<string, unknown> }) => {
@@ -74,8 +77,14 @@ export default function TicketsPage() {
       </div>
 
       {/* Counts */}
+      {stale && (
+        <InlineErrorState
+          message={`Could not refresh the queue, so the tickets below are the last read: ${reason}`}
+          onRetry={refetch}
+        />
+      )}
       <div className="grid grid-cols-4 gap-3">
-        {[{label:'Open',v:c.open??0,color:'text-amber-400'},{label:'In Progress',v:c.in_progress??0,color:'text-blue-400'},{label:'Resolved',v:c.resolved??0,color:'text-emerald-400'},{label:'Critical',v:c.critical??0,color:'text-red-400'}].map(m=>(
+        {[{label:'Open',v:data ? (c.open ?? 0) : '—',color:'text-amber-400'},{label:'In Progress',v:data ? (c.in_progress ?? 0) : '—',color:'text-blue-400'},{label:'Resolved',v:data ? (c.resolved ?? 0) : '—',color:'text-emerald-400'},{label:'Critical',v:data ? (c.critical ?? 0) : '—',color:'text-red-400'}].map(m=>(
           <div key={m.label} className="rounded-xl border border-white/10 bg-white/5 p-3">
             <p className="text-xs text-white/40">{m.label}</p>
             <p className={cn('text-xl font-bold mt-0.5',m.color)}>{m.v}</p>
@@ -103,12 +112,25 @@ export default function TicketsPage() {
       {/* Tickets */}
       <div className="space-y-3">
         {loading ? <p className="text-white/30 text-sm">Loading...</p>
-        : !tickets.length ? (
+        : failed ? (
+          <InlineErrorState
+            message={`Failed to load the support tickets: ${reason}`}
+            onRetry={refetch}
+          />
+        ) : !tickets.length ? (
           <div className="text-center py-12 rounded-xl border border-white/10 bg-white/[0.02]">
-            <CheckCircle className="w-10 h-10 text-emerald-500/30 mx-auto mb-3"/>
-            <p className="text-white/30 text-sm">No tickets found</p>
+            {!search && <CheckCircle className="w-10 h-10 text-emerald-500/30 mx-auto mb-3"/>}
+            <p className="text-white/30 text-sm">
+              {search
+                ? `No tickets match “${search}”`
+                : `No ${status ? status.replace('_', ' ') : ''} tickets — the queue is clear`}
+            </p>
+            {search && (
+              <button onClick={()=>setSearch('')}
+                className="mt-2 text-xs text-violet-400 hover:text-violet-300 font-semibold">Clear search</button>
+            )}
           </div>
-        )         : tickets.map((t) => {
+        ) : tickets.map((t) => {
           const isOpen = expanded===t.id;
           return (
             <div key={t.id} className="rounded-xl border border-white/10 bg-white/[0.02] overflow-hidden">

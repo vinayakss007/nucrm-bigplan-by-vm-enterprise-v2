@@ -379,7 +379,7 @@ describe('the ratchet decays by exactly the pages this slice fixed (#2829)', () 
     // honestly fixes a panel, which is the landmine the first slice of this issue shipped.
     expect(Object.keys(f).length).toBeLessThanOrEqual(46);
     expect(f['app/tenant/chat/page.tsx']).toBeTruthy();
-    expect(f['app/superadmin/modules/page.tsx']).toBeTruthy();
+    expect(f['app/tenant/forms/page.tsx'], 'the super-admin panels are fixed now, so the proof moves to the tenant lists').toBeTruthy();
     expect(f['app/tenant/emails/page.tsx'], 'the documented #1328 tradeoff stays allowlisted').toBeTruthy();
     for (const [file, note] of Object.entries(f)) {
       expect(note, `${file} is allowlisted with no reason attached`).toContain('#2829');

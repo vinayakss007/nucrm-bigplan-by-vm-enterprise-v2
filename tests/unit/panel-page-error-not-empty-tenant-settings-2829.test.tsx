@@ -597,7 +597,7 @@ describe('the guard still ratchets, and this slice decays honestly', () => {
     expect(Object.keys(files).length).toBeLessThanOrEqual(32);
     expect(files['app/tenant/chat/page.tsx']).toBeTruthy();
     expect(files['app/tenant/emails/page.tsx'], 'the documented #1328 tradeoff stays allowlisted').toBeTruthy();
-    expect(files['app/superadmin/modules/page.tsx']).toBeTruthy();
+    expect(files['app/tenant/email-templates/page.tsx'], 'the super-admin panels are fixed now, so the proof moves to the tenant lists').toBeTruthy();
     for (const [file, note] of Object.entries(files)) {
       expect(note, `${file} is allowlisted with no reason attached`).toContain('#2829');
     }
