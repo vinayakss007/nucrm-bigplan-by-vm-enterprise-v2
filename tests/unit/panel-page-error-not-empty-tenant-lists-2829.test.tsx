@@ -455,9 +455,9 @@ describe('the ratchet decays by exactly the pages this slice fixed (#2829)', () 
     // exactly that landmine. The named pages below are what prove the sweep still runs.
     const files = doc().files;
     expect(Object.keys(files).length).toBeLessThanOrEqual(44);
-    // Both super-admin names this line carried are fixed now (#2829's super-admin
-    // slice), so the pin moves to a page no in-flight slice has touched.
-    expect(files['app/tenant/meetings/page.tsx']).toBeTruthy();
+    // `app/tenant/meetings/page.tsx` is fixed now (#2829's engagement-log slice), so the
+    // pin moves to a page no in-flight slice has touched.
+    expect(files['app/tenant/pipelines/page.tsx']).toBeTruthy();
     expect(files['app/tenant/chat/page.tsx']).toBeTruthy();
     expect(files['app/tenant/emails/page.tsx'], 'the documented #1328 tradeoff stays allowlisted').toBeTruthy();
     for (const [file, note] of Object.entries(files)) {

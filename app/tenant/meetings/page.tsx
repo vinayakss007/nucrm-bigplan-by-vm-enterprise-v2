@@ -9,6 +9,7 @@ import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
 import { Button } from '@/components/ui/button';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import toast from 'react-hot-toast';
 import { Plus, Video, MapPin, Link as LinkIcon } from 'lucide-react';
 import { ListSkeleton } from '@/components/shared/page-skeleton';
@@ -42,14 +43,19 @@ export default function MeetingsPage() {
 
   // #1328: TanStack Query replaces the raw fetch + useEffect + useState trio —
   // cache, background refetch and dedup come for free.
-  const { data, isLoading, error } = useApiQuery<MeetingsResponse | Meeting[]>(
+  const { data, isLoading, error, refetch } = useApiQuery<MeetingsResponse | Meeting[]>(
     MEETINGS_KEY,
     '/api/tenant/meetings',
   );
   const meetings: Meeting[] = Array.isArray(data)
     ? data
     : data?.data ?? data?.meetings ?? [];
-  if (error) toast.error('Failed to load meetings');
+  // #2829: the load-failure toast sat in the render body, so it re-fired on every render
+  // while the page printed "No meetings yet. Create your first meeting above." —
+  // telling someone to build the meeting their refused read may already have stored.
+  const failed = Boolean(error) && !data;
+  const stale = Boolean(error) && Boolean(data);
+  const reason = error?.message || 'no response from the server';
 
   const createMeeting = useMutation({
     mutationFn: async () => {
@@ -133,7 +139,16 @@ export default function MeetingsPage() {
         </div>
       )}
 
-      {meetings.length === 0 ? (
+      {stale && (
+        <InlineErrorState
+          message={`Could not refresh the meetings, so the list below is the last read: ${reason}`}
+          onRetry={refetch}
+        />
+      )}
+
+      {failed ? (
+        <InlineErrorState message={`Failed to load the meetings: ${reason}`} onRetry={refetch} />
+      ) : meetings.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground">
           <Video className="w-12 h-12 mx-auto mb-4 opacity-50" />
           <p>No meetings yet. Create your first meeting above.</p>

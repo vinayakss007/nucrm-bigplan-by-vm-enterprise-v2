@@ -5,10 +5,10 @@
  */
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useApiQuery } from '@/lib/query/client';
 import { Button } from '@/components/ui/button';
-import toast from 'react-hot-toast';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { EmptyState } from '@/components/shared/empty-state';
 
@@ -32,7 +32,7 @@ export default function ActivitiesPage() {
 
   // #1328: TanStack Query — offset is part of the queryKey, so paging back and
   // forth is instant from cache and keepPreviousData avoids a loading flash.
-  const { data, isLoading, error } = useApiQuery<ActivitiesResponse | ActivityItem[]>(
+  const { data, isLoading, error, refetch } = useApiQuery<ActivitiesResponse | ActivityItem[]>(
     ['tenant', 'activities', offset, limit],
     `/api/tenant/activities?limit=${limit}&offset=${offset}`,
     { placeholderData: (prev) => prev },
@@ -40,10 +40,13 @@ export default function ActivitiesPage() {
   const activities: ActivityItem[] = Array.isArray(data)
     ? data
     : data?.data ?? data?.activities ?? [];
-
-  useEffect(() => {
-    if (error) toast.error('Failed to load activities');
-  }, [error]);
+  // #2829: this used to spend the failure on a four-second toast and print "No activity
+  // yet" anyway — a verdict about the team's work that the server never gave. The
+  // placeholder above keeps the previous page in `data` when a *refresh* fails, so the
+  // two states are different: nothing-read shows a banner, failed-refresh keeps the rows.
+  const failed = Boolean(error) && !data;
+  const stale = Boolean(error) && Boolean(data);
+  const reason = error?.message || 'no response from the server';
 
   const loading = isLoading;
 
@@ -65,13 +68,24 @@ export default function ActivitiesPage() {
             <ChevronLeft className="w-4 h-4" />Prev
           </Button>
           <span className="text-sm text-muted-foreground">Page {Math.floor(offset / limit) + 1}</span>
-          <Button variant="outline" size="sm" disabled={activities.length < limit} onClick={() => setOffset(offset + limit)}>
+          {/* A read that never answered cannot prove this is the last page, so the
+              button stays live rather than going disabled on an empty fallback. */}
+          <Button variant="outline" size="sm" disabled={Boolean(data) && activities.length < limit} onClick={() => setOffset(offset + limit)}>
             Next<ChevronRight className="w-4 h-4" />
           </Button>
         </div>
       </div>
 
-      {activities.length === 0 ? (
+      {stale && (
+        <InlineErrorState
+          message={`Could not refresh the activity feed, so the entries below are the last read: ${reason}`}
+          onRetry={refetch}
+        />
+      )}
+
+      {failed ? (
+        <InlineErrorState message={`Failed to load the activity feed: ${reason}`} onRetry={refetch} />
+      ) : activities.length === 0 ? (
         <EmptyState
           type="generic"
           title="No activity yet"

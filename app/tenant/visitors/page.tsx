@@ -8,7 +8,7 @@ import { useState } from 'react';
 import { useApiQuery } from '@/lib/query/client';
 import { Users, Eye, UserCheck, UserX, BarChart3, ArrowUpDown } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
-import toast from 'react-hot-toast';
+import InlineErrorState from '@/components/shared/inline-error-state';
 
 interface Visitor {
   id: string;
@@ -36,12 +36,17 @@ export default function VisitorsPage() {
   if (filter !== 'all') params.set('filter', filter);
   if (minScore) params.set('min_score', minScore);
   if (maxScore) params.set('max_score', maxScore);
-  const { data, isLoading: loading, error } = useApiQuery<{ data?: Visitor[] }>(
+  const { data, isLoading: loading, error, refetch } = useApiQuery<{ data?: Visitor[] }>(
     ['tenant', 'visitors', { filter, minScore, maxScore }],
     `/api/tenant/visitors?${params}`,
   );
   const visitors: Visitor[] = data?.data ?? [];
-  if (error) toast.error('Failed to load visitors');
+  // #2829: the load-failure toast sat in the render body — it re-fired on every
+  // render, and the page went on printing "No visitors found" below four stat cards that
+  // were all counting the empty fallback of a read that never answered.
+  const failed = Boolean(error) && !data;
+  const stale = Boolean(error) && Boolean(data);
+  const reason = error?.message || 'no response from the server';
 
   const sorted = [...visitors].sort((a, b) => {
     if (sortBy === 'score') return sortDesc ? b.score - a.score : a.score - b.score;
@@ -71,35 +76,36 @@ export default function VisitorsPage() {
         <p className="text-sm text-muted-foreground">Monitor website visitors, engagement scores, and conversion opportunities</p>
       </div>
 
-      {/* Stats Cards */}
+      {/* Stats Cards — all four are derived from the visitors read, so an unread view
+          shows them as unavailable instead of reporting a traffic-less site. */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="admin-card p-4">
           <div className="flex items-center gap-2 text-muted-foreground mb-1">
             <Users className="w-4 h-4" />
             <p className="text-xs font-medium">Total Visitors</p>
           </div>
-          <p className="text-2xl font-bold">{stats.total}</p>
+          <p className="text-2xl font-bold">{data ? stats.total : '—'}</p>
         </div>
         <div className="admin-card p-4">
           <div className="flex items-center gap-2 text-muted-foreground mb-1">
             <UserCheck className="w-4 h-4" />
             <p className="text-xs font-medium">Identified</p>
           </div>
-          <p className="text-2xl font-bold text-emerald-600">{stats.identified}</p>
+          <p className="text-2xl font-bold text-emerald-600">{data ? stats.identified : '—'}</p>
         </div>
         <div className="admin-card p-4">
           <div className="flex items-center gap-2 text-muted-foreground mb-1">
             <UserX className="w-4 h-4" />
             <p className="text-xs font-medium">Anonymous</p>
           </div>
-          <p className="text-2xl font-bold text-orange-600">{stats.anonymous}</p>
+          <p className="text-2xl font-bold text-orange-600">{data ? stats.anonymous : '—'}</p>
         </div>
         <div className="admin-card p-4">
           <div className="flex items-center gap-2 text-muted-foreground mb-1">
             <BarChart3 className="w-4 h-4" />
             <p className="text-xs font-medium">Avg Score</p>
           </div>
-          <p className="text-2xl font-bold text-violet-600">{stats.avgScore}</p>
+          <p className="text-2xl font-bold text-violet-600">{data ? stats.avgScore : '—'}</p>
         </div>
       </div>
 
@@ -128,14 +134,34 @@ export default function VisitorsPage() {
         </div>
       </div>
 
+      {stale && (
+        <InlineErrorState
+          message={`Could not refresh the visitor list, so the table and the counts above are the last read: ${reason}`}
+          onRetry={refetch}
+        />
+      )}
+
       {/* Table */}
       {loading ? (
         [...Array(5)].map((_, i) => <div key={i} className="h-14 bg-muted rounded-2xl animate-pulse" />)
+      ) : failed ? (
+        <InlineErrorState message={`Failed to load the visitors: ${reason}`} onRetry={refetch} />
       ) : sorted.length === 0 ? (
         <div className="text-center py-12 border border-dashed border-border rounded-2xl" role="status">
           <Eye className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
-          <p className="font-medium">No visitors found</p>
-          <p className="text-sm text-muted-foreground mt-1">Visitors will appear once tracking is active</p>
+          {/* The type/score controls are server-side, so a miss under one of them is an
+              answer about that view rather than about the site's traffic. */}
+          {filter === 'all' && !minScore && !maxScore ? (
+            <>
+              <p className="font-medium">No visitors found</p>
+              <p className="text-sm text-muted-foreground mt-1">Visitors will appear once tracking is active</p>
+            </>
+          ) : (
+            <>
+              <p className="font-medium">No visitors match this view</p>
+              <p className="text-sm text-muted-foreground mt-1">Widen the filter or the score range.</p>
+            </>
+          )}
         </div>
       ) : (
         <div className="admin-card overflow-hidden">
