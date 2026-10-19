@@ -279,7 +279,13 @@ export default function EmailTemplatesPage() {
   const duplicate = (t: Template) => duplicateTemplate.mutate(t);
 
   const categories = ['all', ...Array.from(new Set(templates.map(t => t.category).filter(Boolean)))];
-  const visible = filter === 'all' ? templates : templates.filter(t => t.category === filter);
+  // #2861: the chips are derived from the list, so the category being viewed can
+  // disappear underneath the filter — delete the last template of a category and
+  // `filter` still names it. Fall back to showing everything rather than letting
+  // an empty selection read as "No templates yet" under a header that still
+  // counts live templates.
+  const activeFilter = categories.includes(filter) ? filter : 'all';
+  const visible = activeFilter === 'all' ? templates : templates.filter(t => t.category === activeFilter);
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -308,7 +314,7 @@ export default function EmailTemplatesPage() {
           {categories.map(c => (
             <button key={c} onClick={() => setFilter(c)}
               className={cn('px-3 py-1.5 rounded-lg text-xs font-medium transition-colors capitalize',
-                filter === c ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground')}>
+              activeFilter === c ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground')}>
               {c}
             </button>
           ))}
