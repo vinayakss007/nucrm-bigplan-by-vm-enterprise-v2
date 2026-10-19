@@ -284,7 +284,17 @@ describe('the guard against the real tree (#2829)', () => {
 
   it('the baseline is a real list: every entry exists, names an issue, and still offends', () => {
     const baseline = loadBaseline(process.cwd());
-    expect(baseline.size, 'an empty baseline means this test proves nothing').toBeGreaterThan(10);
+    // A CEILING, never a floor. The file is documented shrink-only, so a floor goes
+    // false at the exact moment #2829 succeeds: this line used to read
+    // `toBeGreaterThan(10)`, and the knowledge-base slice landed the list under it.
+    // What the test is actually for — "an empty baseline means this proves nothing"
+    // — is a claim about the sweep, so it is asserted as one, on a planted page the
+    // screen has never seen (#2865).
+    expect(baseline.size, 'the list may only shrink from the 46 it started at').toBeLessThanOrEqual(46);
+    expect(
+      inspect('app/tenant/planted/page.tsx', page('<p>No pipelines yet</p>')).offends,
+      'the screen went blind: every entry check below this one is vacuous',
+    ).toBe(true);
     const offending = new Map(scan(process.cwd()).offenders.map((o) => [o.why.split(':')[0], o.why]));
     for (const [rel, reason] of baseline) {
       expect(existsSync(`${process.cwd()}/${rel}`), `${rel} is gone — drop the entry`).toBe(true);

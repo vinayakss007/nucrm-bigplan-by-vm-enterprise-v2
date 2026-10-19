@@ -9,6 +9,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
 import { FolderPlus, Settings, X, GripVertical, Trash2, Plus } from 'lucide-react';
 import toast from 'react-hot-toast';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 
 interface KBCategory {
@@ -25,12 +26,18 @@ export default function KBCategoriesPage() {
   const [_editing, setEditing] = useState<string | null>(null);
 
   // #1328: list via TanStack Query (types the categories, removes an `any`).
-  const { data, isLoading: loading, error } = useApiQuery<{ data?: KBCategory[] }>(
+  //
+  // #2829: `error` was bound and spent on a toast fired from the render body, so
+  // it re-fired on every render while the page printed "No categories yet" — the
+  // sentence for a knowledge base that has never had one. Deleting a category is
+  // the only destructive action on this screen, so a false "none" here is also a
+  // tenant concluding that the list is already empty and rebuilding duplicates of
+  // categories that articles still point at.
+  const { data, isLoading: loading, error, refetch } = useApiQuery<{ data?: KBCategory[] }>(
     KB_CATEGORIES_QUERY,
     '/api/tenant/kb/categories',
   );
   const categories: KBCategory[] = data?.data ?? [];
-  if (error) toast.error('Failed to load categories');
   const reload = () => queryClient.invalidateQueries({ queryKey: KB_CATEGORIES_QUERY });
 
   const deleteCategory = async (id: string) => {
@@ -58,6 +65,11 @@ export default function KBCategoriesPage() {
         <div className="space-y-2">
           {[1, 2, 3].map(i => <div key={i} className="h-14 bg-card border border-border rounded-xl animate-pulse" />)}
         </div>
+      ) : error ? (
+        <InlineErrorState
+          message={`Failed to load the categories: ${error.message || 'no response from the server'}`}
+          onRetry={refetch}
+        />
       ) : categories.length === 0 ? (
         <div className="text-center py-12">
           <FolderPlus className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
