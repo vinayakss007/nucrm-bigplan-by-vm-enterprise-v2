@@ -6,9 +6,10 @@
 'use client';
 import { useState, useMemo } from 'react';
 import { useApiQuery } from '@/lib/query/client';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import Link from 'next/link';
 import {
-  FileText, Send, Eye, CheckCircle2, XCircle, Clock, AlertCircle, Search,
+  FileText, Send, Eye, CheckCircle2, XCircle, Clock, Search,
   ChevronLeft, ChevronRight, RefreshCw, Plus,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -83,7 +84,7 @@ export default function OffersListPage() {
     ['tenant', 'offers', qs],
     `/api/tenant/offers?${qs}`,
   );
-  const error = queryError ? (queryError.message || 'Failed to load') : null;
+  const error = queryError ? `Failed to load offers: ${queryError.message || 'no response from the server'}` : null;
   const load = () => refetch();
 
   const filteredOffers = useMemo(() => {
@@ -174,10 +175,7 @@ export default function OffersListPage() {
       </div>
 
       {error && (
-        <div className="rounded-xl border border-red-300 bg-red-50 dark:border-red-800/50 dark:bg-red-950/20 px-4 py-3 text-sm text-red-700 dark:text-red-300 flex items-start gap-2">
-          <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-          <span className="flex-1">{error}</span>
-        </div>
+        <InlineErrorState message={error} onRetry={load} />
       )}
 
       {/* Table */}
@@ -202,7 +200,7 @@ export default function OffersListPage() {
                   <FileText className="w-5 h-5 mx-auto mb-2 animate-pulse" />Loading…
                 </td></tr>
               )}
-              {!loading && filteredOffers.length === 0 && (
+              {!loading && !error && filteredOffers.length === 0 && (
                 <tr><td colSpan={8} className="px-3 py-12 text-center text-muted-foreground">
                   No offers yet. Create a quote and send it to a buyer.
                 </td></tr>

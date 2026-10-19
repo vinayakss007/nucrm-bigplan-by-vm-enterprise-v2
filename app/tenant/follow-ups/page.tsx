@@ -7,6 +7,7 @@
 import { useState, useEffect } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import Link from 'next/link';
 import { ListChecks, Calendar, AlertCircle, Plus, CheckCircle, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -47,13 +48,13 @@ export default function FollowUpsPage() {
   // The query key includes the filter/offset so changing either refetches and
   // caches per-view automatically.
   const FOLLOWUPS_QUERY = ['tenant', 'follow-ups', { statusFilter, offset }] as const;
-  const { data: json, isLoading: loading, error: queryError } = useApiQuery<FollowUpsResponse>(
+  const { data: json, isLoading: loading, error: queryError, refetch: refetchFollowUps } = useApiQuery<FollowUpsResponse>(
     FOLLOWUPS_QUERY,
     `/api/tenant/follow-ups?${params}`,
   );
   const data: FollowUp[] = json?.data ?? [];
   const total = json?.total ?? 0;
-  const error = queryError ? 'Failed to load follow-ups' : null;
+  const error = queryError ? `Failed to load follow-ups: ${queryError.message}` : null;
   useEffect(() => { if (queryError) toast.error('Failed to load follow-ups'); }, [queryError]);
 
   useEffect(() => { setOffset(0); }, [statusFilter]);
@@ -183,9 +184,7 @@ export default function FollowUpsPage() {
       )}
 
       {error && (
-        <div className="p-4 rounded-xl border border-red-300 bg-red-50 dark:bg-red-950/20 text-sm text-red-700 dark:text-red-300">
-          {error}
-        </div>
+        <InlineErrorState message={error} onRetry={refetchFollowUps} />
       )}
 
       {!loading && !error && data.length === 0 && (

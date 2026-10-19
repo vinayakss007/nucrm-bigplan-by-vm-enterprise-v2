@@ -7,6 +7,7 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import { Plus, Search, RefreshCw, X, Calendar, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
@@ -44,7 +45,7 @@ export default function SubscriptionsPage() {
   });
 
   // #1328: list via TanStack Query (was raw fetch + useEffect).
-  const { data, isLoading: loading, error } = useApiQuery<{ data?: Subscription[] }>(
+  const { data, isLoading: loading, error, refetch: refetchSubscriptions } = useApiQuery<{ data?: Subscription[] }>(
     SUBSCRIPTIONS_QUERY,
     '/api/tenant/subscriptions',
   );
@@ -96,13 +97,14 @@ export default function SubscriptionsPage() {
         </button>
       </div>
 
-      {/* Stats */}
+      {/* Stats — every number here is computed from the list, so a failed read would report
+          this tenant's MRR and ARR as zero (#2829). Unread renders unavailable, not 0. */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { label: 'Total', value: subscriptions.length, color: '' },
-          { label: 'Active', value: subscriptions.filter(s => s.status === 'active').length, color: 'text-green-600' },
-          { label: 'MRR', value: `$${mrr.toFixed(2)}`, color: 'text-violet-600' },
-          { label: 'ARR', value: `$${arr.toFixed(2)}`, color: 'text-indigo-600' },
+          { label: 'Total', value: error ? '—' : subscriptions.length, color: '' },
+          { label: 'Active', value: error ? '—' : subscriptions.filter(s => s.status === 'active').length, color: 'text-green-600' },
+          { label: 'MRR', value: error ? '—' : `$${mrr.toFixed(2)}`, color: 'text-violet-600' },
+          { label: 'ARR', value: error ? '—' : `$${arr.toFixed(2)}`, color: 'text-indigo-600' },
         ].map(s => (
           <div key={s.label} className="admin-card p-3">
             <p className="text-xs text-muted-foreground">{s.label}</p>
@@ -121,6 +123,8 @@ export default function SubscriptionsPage() {
       {/* Cards Grid */}
       {loading ? (
         <div className="flex items-center justify-center py-12 text-muted-foreground"><Loader2 className="w-5 h-5 animate-spin mr-2" />Loading subscriptions...</div>
+      ) : error ? (
+        <InlineErrorState message={`Failed to load subscriptions: ${error.message}`} onRetry={refetchSubscriptions} />
       ) : filtered.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground">
           <RefreshCw className="w-10 h-10 mx-auto mb-3 text-muted-foreground/30" />
