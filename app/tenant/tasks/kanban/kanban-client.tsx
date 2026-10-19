@@ -16,6 +16,7 @@ import {
   GripVertical, ArrowLeft, CheckSquare, User, Calendar, LinkIcon
 } from 'lucide-react';
 import { cn, formatRelativeTime } from '@/lib/utils';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import toast from 'react-hot-toast';
 import Link from 'next/link';
 
@@ -144,9 +145,14 @@ const TaskColumn = memo(function TaskColumn({ column, tasks }: { column: Column;
 
 export default function TasksKanbanPage() {
   const [activeId, setActiveId] = useState<string | null>(null);
-  const { data: res, isLoading, mutate } = useSWR('/api/tenant/tasks');
+  const { data: res, isLoading, mutate, error: tasksErr } = useSWR('/api/tenant/tasks');
   const [tasks, setTasks] = useState<Task[]>([]);
   const loading = isLoading && tasks.length === 0;
+  // #2849: this read answered nothing, which is not the same as the workspace
+  // having no tasks. SWR's error is an Error OBJECT — inlining it as a React
+  // child is the crash `leaderboards-client.tsx:53-55` records, so derive a
+  // string here and hand the board a failure state instead of empty columns.
+  const tasksUnread = tasksErr ? (tasksErr instanceof Error ? tasksErr.message : String(tasksErr)) : null;
 
   useEffect(() => {
     if (res?.data) {
@@ -258,13 +264,18 @@ export default function TasksKanbanPage() {
               <div className={cn('w-3 h-3 rounded-full', col.color)} />
               <p className="text-xs text-muted-foreground">{col.name}</p>
             </div>
-            <p className="text-lg font-bold mt-1">{tasksByStatus[col.id]?.length || 0}</p>
+            <p className="text-lg font-bold mt-1">{tasksUnread ? '—' : tasksByStatus[col.id]?.length || 0}</p>
           </div>
         ))}
       </div>
 
       {/* Kanban Board */}
-      {loading ? (
+      {tasksUnread ? (
+        <InlineErrorState
+          message={`The task list did not load (${tasksUnread}). "No tasks" would mean this workspace has none — this means the request never answered.`}
+          onRetry={() => void mutate()}
+        />
+      ) : loading ? (
         <div className="flex items-center justify-center h-48">
           <div className="animate-spin w-6 h-6 border-2 border-violet-600 border-t-transparent rounded-full" />
         </div>
