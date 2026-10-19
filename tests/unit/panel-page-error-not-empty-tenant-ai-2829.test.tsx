@@ -485,17 +485,19 @@ describe('the baseline decays, and the guards still pass', () => {
       expect(files[`app/tenant/ai/${p}/page.tsx`]).toBeUndefined();
     }
     expect(Object.keys(files).filter(k => k.startsWith('app/tenant/ai/'))).toEqual([]);
-    // still owed, and still listed. #2839 (the money path), #2837 (thirteen tenant lists)
-    // and #2844 (the twelve settings pages) have all landed, so their paths are gone from
-    // this file too — what is left is the rest of the class.
+    // The anti-vacuity screen that actually holds is the guard case above — exit 0 *and* no
+    // "no longer offends" notes, which a sweep that silently found nothing cannot do: its whole
+    // allowlist would be reported as stale. The names below are belt-and-braces, so they are
+    // only ever paths no slice in flight is removing: `superadmin/modules` is claimed by #2856
+    // and `reports/custom` by the reports slice, and a path that gets fixed before this merges
+    // would fail a test about the AI panels for no reason.
     for (const stillOwed of [
-      'app/tenant/chat/page.tsx', 'app/tenant/emails/page.tsx', 'app/tenant/kb/page.tsx',
-      'app/tenant/sms/page.tsx', 'app/tenant/visitors/page.tsx',
-      'app/tenant/reports/custom/page.tsx', 'app/superadmin/modules/page.tsx',
+      'app/tenant/chat/page.tsx', 'app/tenant/emails/page.tsx',
     ]) {
       expect(Object.keys(files)).toContain(stillOwed);
     }
     // 44 on `e89f86e8`, 24 on the main this slice merges into, 19 with these five gone.
+    // A ceiling, never an equality: #2856 and the reports slice each drop the number further.
     expect(Object.keys(files).length).toBeLessThanOrEqual(19);
   });
 
