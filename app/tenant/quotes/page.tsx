@@ -11,6 +11,7 @@ import InlineErrorState from '@/components/shared/inline-error-state';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Plus, Search, FileText, X, Send, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { quotePayload } from '@/lib/billing/create-payloads';
 import toast from 'react-hot-toast';
 
 interface Contact { id: string; firstName: string; lastName: string; email: string | null; }
@@ -85,7 +86,7 @@ function QuotesPageInner() {
     mutationFn: async () => {
       const res = await fetch('/api/tenant/quotes', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
+        body: JSON.stringify(quotePayload(form)),
       });
       if (!res.ok) throw new Error('Failed');
     },
