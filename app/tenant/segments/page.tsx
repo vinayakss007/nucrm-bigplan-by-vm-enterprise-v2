@@ -8,6 +8,7 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import { Button } from '@/components/ui/button';
 import toast from 'react-hot-toast';
 import { confirmThen } from '@/components/ui/confirm-dialog';
@@ -33,14 +34,20 @@ export default function SegmentsPage() {
   const [form, setForm] = useState({ name: '', entity_type: 'contacts', filters: '' });
 
   // #1328: list via TanStack Query.
-  const { data, isLoading: loading, error } = useApiQuery<SegmentsResponse | Segment[]>(
+  //
+  // #2852: the failure used to be announced by `if (error) toast.error(...)` sitting
+  // in the RENDER BODY, which re-fires on every re-render — every keystroke in the
+  // create form re-announced it — and left "No segments defined. Create your first
+  // audience segment above." underneath, an instruction to add audiences the tenant
+  // may already have. The screen that ratchets this class cannot see a bare
+  // "No segments" either (EMPTY_SENTENCE wants a trailing qualifier).
+  const { data, isLoading: loading, error, refetch } = useApiQuery<SegmentsResponse | Segment[]>(
     SEGMENTS_QUERY,
     '/api/tenant/segments',
   );
   const segments: Segment[] = Array.isArray(data)
     ? data
     : data?.data ?? data?.segments ?? [];
-  if (error) toast.error('Failed to load segments');
 
   const reload = () => queryClient.invalidateQueries({ queryKey: SEGMENTS_QUERY });
 
@@ -114,7 +121,12 @@ export default function SegmentsPage() {
         </div>
       )}
 
-      {segments.length === 0 ? (
+      {error ? (
+        <InlineErrorState
+          message={`Failed to load segments: ${error.message || 'no response from the server'}`}
+          onRetry={refetch}
+        />
+      ) : segments.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground">
           <PieChart className="w-12 h-12 mx-auto mb-4 opacity-50" />
           <p>No segments defined. Create your first audience segment above.</p>

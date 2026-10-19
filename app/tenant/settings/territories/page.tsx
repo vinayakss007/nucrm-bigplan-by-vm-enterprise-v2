@@ -7,6 +7,7 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import { Plus, Map, X, Loader2, Trash2 } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import { cn } from '@/lib/utils';
@@ -57,12 +58,18 @@ export default function TerritoriesPage() {
   };
 
   // #1328: list via TanStack Query (was raw fetch + useEffect).
-  const { data, isLoading: loading, error } = useApiQuery<{ data?: Territory[] }>(
+  //
+  // #2852: `if (error) toast.error(...)` sat in the render body, so the failure was
+  // re-announced on every re-render, and the page still answered the refusal with
+  // "No territories" + an "Add Territory" button — a tenant with a territory tree is
+  // invited to rebuild it. `data?.data ?? []` → `flattenTree` → length 0 is the same
+  // answer for "none" and for "never read", and the #2829 screen cannot see a bare
+  // "No territories" to begin with.
+  const { data, isLoading: loading, error, refetch } = useApiQuery<{ data?: Territory[] }>(
     TERRITORIES_QUERY,
     '/api/tenant/territories',
   );
   const territories: Territory[] = data?.data ?? [];
-  if (error) toast.error('Failed to load territories');
 
   const reload = () => queryClient.invalidateQueries({ queryKey: TERRITORIES_QUERY });
 
@@ -160,6 +167,11 @@ export default function TerritoriesPage() {
 
       {loading ? (
         [...Array(3)].map((_, i) => <div key={i} className="h-16 bg-muted rounded-2xl animate-pulse" />)
+      ) : error ? (
+        <InlineErrorState
+          message={`Failed to load territories: ${error.message || 'no response from the server'}`}
+          onRetry={refetch}
+        />
       ) : allTerritories.length === 0 ? (
         <div className="text-center py-12 border border-dashed border-border rounded-2xl">
           <Map className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
