@@ -10,10 +10,11 @@
  * numeric-vs-payload split, control-char handling, structure round-tripping and
  * the guard script that stops a seventh hand-rolled exporter appearing.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterAll } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { readFileSync, writeFileSync, mkdirSync, unlinkSync, rmdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, rmSync, mkdtempSync } from 'node:fs';
 import { join, dirname } from 'node:path';
+import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 import { csvEscapeValue, csvRow, FORMULA_PREFIXES } from '@/lib/csv';
@@ -133,12 +134,20 @@ describe('client export pages use the shared escaper (#2340)', () => {
 
 describe('check-csv-blob guard (#2340)', () => {
   const GUARD = join(REPO, 'scripts', 'check-csv-blob.mjs');
-  const FIXTURE_DIR = join(REPO, 'app', '__csv_guard_probe__');
+  // Same reason as the counter probe: the guard scans `process.cwd()`, and a file
+  // planted in this working tree is read mid-deletion by the other source scanners
+  // that run in parallel with this one (#2875).
+  const SCRATCH = mkdtempSync(join(tmpdir(), 'csv-guard-'));
+  const FIXTURE_DIR = join(SCRATCH, 'app', '__csv_guard_probe__');
   const FIXTURE = join(FIXTURE_DIR, 'page.tsx');
 
   function runGuard(cwd = REPO): string {
     return execFileSync('node', [GUARD], { cwd, encoding: 'utf8' });
   }
+
+  afterAll(() => {
+    rmSync(SCRATCH, { recursive: true, force: true });
+  });
 
   it('the committed tree is clean', () => {
     expect(runGuard()).toContain('0 unescaped text/csv Blob builders');
@@ -151,12 +160,7 @@ describe('check-csv-blob guard (#2340)', () => {
       "'use client';\nexport default function P() {\n" +
         "  const blob = new Blob(['a'], { type: 'text/csv;charset=utf-8;' });\n  return blob.size;\n}\n",
     );
-    try {
-      expect(() => runGuard()).toThrowError(/__csv_guard_probe__/);
-    } finally {
-      unlinkSync(FIXTURE);
-      rmdirSync(FIXTURE_DIR);
-    }
+    expect(() => runGuard(SCRATCH)).toThrowError(/__csv_guard_probe__/);
   });
 
   it('is wired into package.json and CI', () => {
