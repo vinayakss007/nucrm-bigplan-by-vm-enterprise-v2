@@ -18,6 +18,7 @@ import {
   User, Clock, TrendingUp
 } from 'lucide-react';
 import { cn, formatCurrency, formatRelativeTime } from '@/lib/utils';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import toast from 'react-hot-toast';
 
 interface Deal {
@@ -157,10 +158,19 @@ const StageColumn = memo(function StageColumn({ stage, deals, _onDealMove }: { s
 export default function DealsKanbanPage() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'kanban' | 'list'>('kanban');
-  const { data: res, isLoading, mutate } = useSWR('/api/tenant/deals');
-  const { data: stagesRes } = useSWR('/api/tenant/pipelines');
+  const { data: res, isLoading, mutate, error: dealsErr } = useSWR('/api/tenant/deals');
+  const { data: stagesRes, mutate: mutateStages, error: stagesErr } = useSWR('/api/tenant/pipelines');
   const [deals, setDeals] = useState<Deal[]>([]);
   const loading = isLoading && deals.length === 0;
+  // #2849: two reads, neither with a failure branch. A refused `/deals` made
+  // every stage column answer "No deals" and the four summary cards answer 0 /
+  // ₹0; a refused `/pipelines` made the board draw DEFAULT_STAGES (:49-52) as if
+  // they were this workspace's pipeline, which is indistinguishable on screen
+  // from a read that really returned those six. SWR's error is an Error OBJECT —
+  // inlining it is the crash `leaderboards-client.tsx:53-55` records, so derive
+  // strings and hand each read its own failure state and its own retry.
+  const dealsUnread = dealsErr ? (dealsErr instanceof Error ? dealsErr.message : String(dealsErr)) : null;
+  const stagesUnread = stagesErr ? (stagesErr instanceof Error ? stagesErr.message : String(stagesErr)) : null;
 
   const stages: Stage[] = useMemo(() => {
     // API returns { data: Pipeline[] } where each pipeline has a stages array
@@ -306,10 +316,10 @@ export default function DealsKanbanPage() {
       {/* Summary Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { label: 'Total Deals', value: deals.length, color: '' },
-          { label: 'Pipeline Value', value: formatCurrency(totalValue), color: 'text-violet-600' },
-          { label: 'Won Deals', value: wonDeals.length, color: 'text-emerald-600' },
-          { label: 'Won Value', value: formatCurrency(wonValue), color: 'text-emerald-600' },
+          { label: 'Total Deals', value: dealsUnread ? '—' : deals.length, color: '' },
+          { label: 'Pipeline Value', value: dealsUnread ? '—' : formatCurrency(totalValue), color: 'text-violet-600' },
+          { label: 'Won Deals', value: dealsUnread ? '—' : wonDeals.length, color: 'text-emerald-600' },
+          { label: 'Won Value', value: dealsUnread ? '—' : formatCurrency(wonValue), color: 'text-emerald-600' },
         ].map(s => (
           <div key={s.label} className="admin-card p-3">
             <p className="text-xs text-muted-foreground">{s.label}</p>
@@ -319,7 +329,17 @@ export default function DealsKanbanPage() {
       </div>
 
       {/* Kanban Board */}
-      {loading ? (
+      {dealsUnread ? (
+        <InlineErrorState
+          message={`The deal list did not load (${dealsUnread}). "No deals" and the summary above would be answers about this pipeline — this means the request never answered.`}
+          onRetry={() => void mutate()}
+        />
+      ) : stagesUnread ? (
+        <InlineErrorState
+          message={`The pipeline stages did not load (${stagesUnread}), so this board has no stages to draw. The six it would otherwise show are the component's built-in defaults, not this workspace's pipeline.`}
+          onRetry={() => void mutateStages()}
+        />
+      ) : loading ? (
         <div className="flex items-center justify-center h-48">
           <div className="animate-spin w-6 h-6 border-2 border-violet-600 border-t-transparent rounded-full" />
         </div>

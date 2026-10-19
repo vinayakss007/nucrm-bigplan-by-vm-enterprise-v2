@@ -11,6 +11,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend,
 } from 'recharts';
 import { formatCurrency } from '@/lib/utils';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import { cn } from '@/lib/utils';
 
 const STAGE_COLORS: Record<string,string> = {
@@ -26,11 +27,16 @@ const TIP_STYLE   = { background:'hsl(var(--card))', border:'1px solid hsl(var(-
 export default function TenantAnalyticsPage() {
   const [range, setRange] = useState(30);
 
-  const { data: overviewRes, error: overviewErr } = useSWR('/api/tenant/analytics/overview');
+  const { data: overviewRes, error: overviewErr, mutate } = useSWR('/api/tenant/analytics/overview');
 
   // F4 (#1544): the endpoint now returns compact server-side aggregates over
   // the FULL tenant dataset instead of raw rows. Derive every KPI/chart/label
   // from those aggregates so nothing here relies on raw rows anymore.
+  //
+  // #2849: which is why a FAILED read is worse than it looks here. `|| {}` makes
+  // every aggregate below answer zero, so the page does not claim "there are
+  // none" — it claims Win Rate 0% and an ₹0 pipeline, which reads as a
+  // measurement. `overviewErr` was bound and used only to end the spinner.
   const overview = (overviewRes?.data || {}) as {
     deals?: { byStage?: { stageId: string; stageName: string; count: number; revenue: number }[] };
     contacts?: { bySource?: { source: string | null; count: number }[]; byStatus?: { status: string | null; count: number }[] };
@@ -118,6 +124,21 @@ export default function TenantAnalyticsPage() {
       deals: Number(w.deals || 0),
     })),
     [weekly],
+  );
+
+  // SWR's error is an Error OBJECT; rendering it directly is the crash
+  // `leaderboards-client.tsx:53-55` records, so derive a string.
+  const overviewUnread = overviewErr
+    ? (overviewErr instanceof Error ? overviewErr.message : String(overviewErr))
+    : null;
+
+  if (overviewUnread) return (
+    <div className="space-y-5 max-w-[1600px] mx-auto">
+      <InlineErrorState
+        message={`The analytics overview did not load (${overviewUnread}). Every figure on this page — pipeline, won revenue, win rate, task completion — is computed from that one read, so none of them is known.`}
+        onRetry={() => void mutate()}
+      />
+    </div>
   );
 
   if (loading) return (
