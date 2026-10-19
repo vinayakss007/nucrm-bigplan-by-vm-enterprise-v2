@@ -103,7 +103,7 @@ export default function TenantBackupSettingsPage() {
   const [bkType, setBkType] = useState<'full' | 'schema'>('full');
 
   // #1328: load config + history via TanStack Query (was raw fetch + useEffect).
-  const { data: configData, isLoading: configLoading } = useApiQuery<{ data?: Partial<BackupConfig> }>(
+  const { data: configData, isLoading: configLoading, error: configError, refetch: refetchConfig } = useApiQuery<{ data?: Partial<BackupConfig> }>(
     CONFIG_QUERY,
     '/api/tenant/backup/config',
   );
@@ -234,6 +234,7 @@ export default function TenantBackupSettingsPage() {
 
       {/* Object Storage Configuration */}
       <form onSubmit={saveConfig} className="space-y-5">
+        {configError && <InlineErrorState message={`The saved backup configuration could not be read (${configError.message}), so the values below are this form's defaults — not what is configured for your workspace. Saving would replace it.`} onRetry={() => void refetchConfig()} />}
         <div className="admin-card p-5 space-y-4">
           <div className="flex items-center gap-2 text-sm font-semibold">
             <Settings className="w-4 h-4 text-muted-foreground" />
@@ -446,11 +447,11 @@ export default function TenantBackupSettingsPage() {
 
         <button
           type="submit"
-          disabled={saving}
+          disabled={saving || Boolean(configError)}
           className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold disabled:opacity-50 transition-colors"
         >
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-          {saving ? 'Saving...' : 'Save Configuration'}
+          {saving ? 'Saving...' : configError ? 'Configuration not read — cannot save' : 'Save Configuration'}
         </button>
       </form>
 

@@ -741,7 +741,7 @@ function ModulesModal({ tenant, onClose, _onSaved }: ModulesModalProps) {
         <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 sticky top-0 z-10" style={{ background: 'hsl(222,28%,9%)' }}>
           <div>
             <p className="text-sm font-bold text-white">{tenant.name} — Modules</p>
-            <p className="text-xs text-white/40">Plan: <span className="capitalize font-semibold">{plan}</span></p>
+            <p className="text-xs text-white/40">Plan: <span className="capitalize font-semibold">{modulesQuery.error ? 'unknown — read failed' : plan}</span></p>
           </div>
           <button onClick={onClose} className="text-white/30 hover:text-white"><X className="w-4 h-4" /></button>
         </div>
@@ -751,7 +751,7 @@ function ModulesModal({ tenant, onClose, _onSaved }: ModulesModalProps) {
               <div key={i} className="h-16 rounded-xl animate-pulse bg-white/5" />
             ))
           ) : modules.length === 0 ? (
-            <p className="text-center text-white/30 py-8 text-sm">No modules available</p>
+            modulesQuery.error ? <p role="alert" className="text-center text-red-400 py-8 text-sm">Failed to read {tenant.name}'s modules: {modulesQuery.error.message}. "No modules available" would mean this tenant has none; this message means the request did not succeed. <button onClick={() => void modulesQuery.refetch()} className="underline">Try again</button></p> : <p className="text-center text-white/30 py-8 text-sm">No modules available</p>
           ) : (
             modules.map(mod => {
               const isActive = mod.status === 'active';

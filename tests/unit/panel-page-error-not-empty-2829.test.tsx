@@ -240,8 +240,11 @@ describe('a failed panel read is reported as a failure (#2829)', () => {
     it(`${s.name}: the alert replaces the empty sentence when the read fails`, () => {
       fill(s, 'failed');
       mount(s.Page);
-      const alert = screen.getByRole('alert');
-      expect(alert.textContent).toContain(s.alertCopy);
+      // #2841 gave the backup page's *other* read its own failure branch, so one
+      // page can now raise two alerts. The assertion is that one of them names
+      // this read, not that it is the only failure on screen.
+      const alertTexts = screen.getAllByRole('alert').map((el) => el.textContent ?? '').join(' | ');
+      expect(alertTexts).toContain(s.alertCopy);
       if (s.emptyCopy) {
         expect(screen.queryByText(s.emptyCopy), `${s.name}: still claims the tenant has nothing`).toBeNull();
       }

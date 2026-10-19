@@ -50,7 +50,7 @@ export default function CallsPage() {
   );
   const calls: CallLog[] = useMemo(() => callsData?.data ?? [], [callsData]);
 
-  const { data: contactsData } = useApiQuery<{ data?: CallContact[] }>(
+  const { data: contactsData, error: contactsError, refetch: refetchContacts } = useApiQuery<{ data?: CallContact[] }>(
     CALL_CONTACTS_QUERY,
     '/api/tenant/contacts?limit=200',
   );
@@ -222,7 +222,7 @@ export default function CallsPage() {
         </table>
       </div>
 
-      {showForm && <LogCallModal contacts={contacts} onSaved={onCallLogged} onClose={() => setShowForm(false)} />}
+      {showForm && <LogCallModal contacts={contacts} contactsError={contactsError} onRetryContacts={() => void refetchContacts()} onSaved={onCallLogged} onClose={() => setShowForm(false)} />}
       {editingCall && <EditCallModal call={editingCall} onSaved={onCallUpdated} onClose={() => setEditingCall(null)} />}
     </div>
   );
@@ -312,7 +312,7 @@ function EditCallModal({ call, onSaved, onClose }: { call: CallLog; onSaved: (c:
   );
 }
 
-function LogCallModal({ contacts, onSaved, onClose }: { contacts: { id: string; firstName?: string; first_name?: string; lastName?: string; last_name?: string }[]; onSaved: (c: CallLog) => void; onClose: () => void }) {
+function LogCallModal({ contacts, contactsError, onRetryContacts, onSaved, onClose }: { contacts: { id: string; firstName?: string; first_name?: string; lastName?: string; last_name?: string }[]; contactsError?: Error | null; onRetryContacts?: () => void; onSaved: (c: CallLog) => void; onClose: () => void }) {
   const [form, setForm] = useState({
     contact_id: '',
     direction: 'outbound',
@@ -360,6 +360,7 @@ function LogCallModal({ contacts, onSaved, onClose }: { contacts: { id: string; 
               <option value="">Select contact</option>
               {contacts.map(c => <option key={c.id} value={c.id}>{c.firstName || c.first_name} {c.lastName || c.last_name}</option>)}
             </select>
+            {contactsError && <InlineErrorState className="mt-2" message={`The contact list did not load (${contactsError.message}), so there is no contact to log this call against.`} onRetry={onRetryContacts} />}
           </div>
           <div>
             <label className="block text-xs font-medium text-muted-foreground mb-1">Direction</label>
