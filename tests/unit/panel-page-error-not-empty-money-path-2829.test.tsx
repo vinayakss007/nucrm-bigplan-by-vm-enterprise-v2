@@ -373,20 +373,19 @@ describe('the ratchet decays by exactly the pages this slice fixed (#2829)', () 
     }
   });
 
-  it('keeps pages nobody is fixing in the list, so an empty sweep cannot read as success', () => {
+  it('cannot be satisfied by an empty list, and pins no page by name', () => {
     const f = files();
     // A ceiling, never an equality: an exact count goes false the moment another slice
     // honestly fixes a panel, which is the landmine the first slice of this issue shipped.
     expect(Object.keys(f).length).toBeLessThanOrEqual(46);
-    expect(f['app/tenant/chat/page.tsx']).toBeTruthy();
-    // Not `app/superadmin/modules`, the name this file carried until now: the
-    // super-admin slice of #2829 fixed it, which is the outcome being asked for.
-    // And now not `app/tenant/visitors`: the engagement-log slice fixed it, and the
-    // knowledge slice fixes the name that took its place. `pipelines` is the page
-    // nobody can sweep up in passing — it sits on the 500-line grandfather exactly,
-    // so a fix there needs a component split first.
-    expect(f['app/tenant/pipelines/page.tsx']).toBeTruthy();
-    expect(f['app/tenant/emails/page.tsx'], 'the documented #1328 tradeoff stays allowlisted').toBeTruthy();
+    // The names this case asserted have been re-cut four times — `superadmin/modules`,
+    // then `visitors`, then `kb`, then `pipelines` — and every one of them went because a
+    // different slice FIXED the page it named, which is the outcome #2829 is asking for.
+    // A name is a bet against every other slice on the board; #2865 and #2866 file the
+    // same defect as a memorised count, and #2860's commit is what removes it here.
+    // What proves the sweep still runs is the guard run above, not a pin: a page deleted
+    // from the baseline while it still prints an empty sentence over a failed read is a
+    // NOVEL offender, and that is exactly what fails the guard.
     for (const [file, note] of Object.entries(f)) {
       expect(note, `${file} is allowlisted with no reason attached`).toContain('#2829');
     }

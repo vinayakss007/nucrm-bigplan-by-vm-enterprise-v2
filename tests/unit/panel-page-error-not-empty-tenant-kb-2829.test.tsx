@@ -389,23 +389,21 @@ describe('the ratchet decayed by exactly these two (#2829)', () => {
     }
   });
 
-  it('points the sibling suites\' owed-names at pages this slice did not touch', () => {
-    // `money-path` pins a page from another group to prove an empty sweep is not
-    // success. That page is being fixed, so the pin moves rather than disappears —
-    // and it lands on `pipelines`, the entry nobody can sweep up in passing: it sits
-    // on the 500-line grandfather exactly, so fixing it needs a component split first.
+  it('leaves no owed-name pointing at a page this slice fixed', () => {
+    // `money-path` used to pin a page from another group to prove an empty sweep is not
+    // success, and the pin had to be re-cut every time that group was fixed:
+    // `superadmin/modules` → `visitors` → `kb` → `pipelines`, each one moved because a
+    // slice did its job. #2860 removes the pins; this is the half that cannot rot, and it
+    // is what the fix in #2865 for the same class of memorised count looks like from here.
     const money = readFileSync(join(ROOT, 'tests/unit/panel-page-error-not-empty-money-path-2829.test.tsx'), 'utf8');
-    expect(money).toContain("'app/tenant/pipelines/page.tsx'");
-    expect(money, 'the visitors pointer is still an assertion')
-      .not.toMatch(/expect\(f\['app\/tenant\/visitors\/page\.tsx'\]/);
-    expect(money, 'the kb pointer is still an assertion')
-      .not.toMatch(/expect\(f\['app\/tenant\/kb\/page\.tsx'\]/);
-    expect(doc().files['app/tenant/pipelines/page.tsx'], 'the pin points at a live entry').toBeTruthy();
     for (const f of FILES) {
       expect(money, `money-path still asserts the fixed ${f}`).not.toMatch(
         new RegExp(`expect\\(f\\['${f.replace(/[/.]/g, (c) => `\\${c}`)}'\\]`),
       );
     }
+    // The guard run is what the pins were pretending to prove, and it is in that file:
+    // a page dropped from the baseline while it still offends is a NOVEL offender.
+    expect(money, 'money-path stopped running the guard').toMatch(/check-panel-error-state\.mjs/);
   });
 
   it('keeps every file it touched inside the size ceiling', () => {
