@@ -7,6 +7,7 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import { FilePlus, Play, Save, Trash2, Download, Plus, X, Filter, Columns } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
 import { csvRow } from '@/lib/csv';
@@ -80,7 +81,12 @@ export default function CustomReportBuilder() {
   const currentType = REPORT_TYPES.find(r => r.id === reportType)!;
 
   // #1328: saved reports via TanStack Query (was raw fetch + useEffect).
-  const { data: savedData } = useApiQuery<{ data?: SavedReport[] }>(
+  //
+  // #2829: this read destructured `data` and nothing else — no `error`, no
+  // `isLoading`. A refusal therefore had no channel at all, and it showed up twice:
+  // the header button counting "Saved Reports (0)", and inside the panel "No saved
+  // reports yet". Both are claims about configurations the page never saw.
+  const { data: savedData, error: savedError, refetch: refetchSaved } = useApiQuery<{ data?: SavedReport[] }>(
     CUSTOM_REPORTS_QUERY,
     '/api/tenant/reports/custom',
   );
@@ -219,14 +225,19 @@ export default function CustomReportBuilder() {
         <button onClick={() => setShowSaved(!showSaved)}
           aria-expanded={showSaved}
           className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-border hover:bg-accent text-xs font-medium transition-colors">
-          <Save className="w-3.5 h-3.5" />Saved Reports ({savedReports.length})
+          <Save className="w-3.5 h-3.5" />Saved Reports ({savedError ? '—' : savedReports.length})
         </button>
       </div>
 
       {showSaved && (
         <div className="admin-card p-4 space-y-2">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Saved Reports</p>
-          {savedReports.length === 0 ? (
+          {savedError ? (
+            <InlineErrorState
+              message={`Failed to load your saved reports: ${savedError.message || 'no response from the server'}`}
+              onRetry={refetchSaved}
+            />
+          ) : savedReports.length === 0 ? (
             <p className="text-sm text-muted-foreground">No saved reports yet</p>
           ) : savedReports.map(r => (
             <div key={r.id} className="flex items-center justify-between py-2 border-t border-border">

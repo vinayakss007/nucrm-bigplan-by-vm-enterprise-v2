@@ -7,6 +7,7 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import Link from 'next/link';
 import { FileText, Play, Trash2, Clock, BarChart3, Eye } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
@@ -44,12 +45,18 @@ export default function SavedReportsPage() {
   const [typeFilter, setTypeFilter] = useState('');
 
   // #1328: list via TanStack Query (was raw fetch + useEffect).
-  const { data, isLoading: loading, error } = useApiQuery<{ data?: SavedReport[] }>(
+  //
+  // #2829: the failure had exactly one channel, and it was `if (error)
+  // toast.error(...)` sitting in the RENDER BODY — a four-second toast that
+  // re-fired on every render, while the page itself kept answering the refusal
+  // with "No saved reports / Run a report and save it to see it here" and a link
+  // away. The filters hide when the list is empty, so the panel never even gave
+  // the operator a way to see what the read had refused.
+  const { data, isLoading: loading, error, refetch } = useApiQuery<{ data?: SavedReport[] }>(
     SAVED_REPORTS_QUERY,
     '/api/tenant/reports/saved',
   );
   const reports: SavedReport[] = data?.data ?? [];
-  if (error) toast.error('Failed to load reports');
 
   const reload = () => queryClient.invalidateQueries({ queryKey: SAVED_REPORTS_QUERY });
 
@@ -145,7 +152,12 @@ export default function SavedReportsPage() {
         </div>
       )}
 
-      {reports.length === 0 ? (
+      {error ? (
+        <InlineErrorState
+          message={`Failed to load saved reports: ${error.message || 'no response from the server'}`}
+          onRetry={refetch}
+        />
+      ) : reports.length === 0 ? (
         <div className="text-center py-16 border rounded-lg bg-card">
           <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
           <h3 className="text-lg font-semibold mb-2">No saved reports</h3>
