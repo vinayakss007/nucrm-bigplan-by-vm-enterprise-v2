@@ -8,11 +8,12 @@ import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
 import {
-  Target, Plus, Save, X, AlertCircle, Loader2, Trash2, Edit2, RefreshCw, Play,
+  Target, Plus, Save, X, Loader2, Trash2, Edit2, RefreshCw, Play,
   CheckCircle2, HelpCircle, Sparkles
 } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import { cn } from '@/lib/utils';
+import InlineErrorState from '@/components/shared/inline-error-state';
 
 type Rule = {
   id: string;
@@ -162,10 +163,12 @@ export default function LeadScoringRulesPage() {
       )}
 
       {(error || queryErrorMsg) && (
-        <div className="rounded-xl border border-red-300 bg-red-50 dark:border-red-800/50 dark:bg-red-950/20 px-4 py-3 text-sm text-red-700 dark:text-red-300 flex items-start gap-2">
-          <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-          <span className="flex-1">{error || queryErrorMsg}</span>
-        </div>
+        <InlineErrorState
+          message={queryErrorMsg
+            ? `Failed to load lead scoring rules: ${queryErrorMsg}`
+            : (error ?? 'Failed to save the rule')}
+          onRetry={queryErrorMsg ? refetch : undefined}
+        />
       )}
 
       <div className="bg-card border border-border rounded-xl overflow-hidden">
@@ -189,7 +192,7 @@ export default function LeadScoringRulesPage() {
                   </td>
                 </tr>
               )}
-              {!loading && rules.length === 0 && (
+              {!loading && !queryError && rules.length === 0 && (
                 <tr>
                   <td colSpan={5} className="px-4 py-12 text-center text-muted-foreground">
                     No scoring rules defined yet.

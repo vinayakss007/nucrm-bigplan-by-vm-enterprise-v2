@@ -12,6 +12,7 @@ import { useRouter } from 'next/navigation';
 import { Shield, Lock, Key, Download, RefreshCw, Trash2, Eye, EyeOff, Loader2, CheckCircle, AlertTriangle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { cn } from '@/lib/utils';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import { sanitizeHTML } from '@/lib/sanitize';
 
 interface PendingDeletion { contacts?: number; companies?: number; deals?: number; tasks?: number; leads?: number; total?: number }
@@ -71,17 +72,17 @@ export default function SecuritySettingsPage() {
     ME_QUERY,
     '/api/tenant/me',
   );
-  const { data: trashSettingsData } = useApiQuery<TrashSettingsResponse>(
+  const { data: trashSettingsData, error: trashError, refetch: refetchTrash } = useApiQuery<TrashSettingsResponse>(
     TRASH_SETTINGS_QUERY,
     '/api/tenant/trash/settings',
     { retry: false },
   );
-  const { data: cleanupData } = useApiQuery<AutoCleanupResponse>(
+  const { data: cleanupData, error: cleanupError, refetch: refetchCleanup } = useApiQuery<AutoCleanupResponse>(
     TRASH_CLEANUP_QUERY,
     '/api/tenant/trash/auto-cleanup',
     { retry: false },
   );
-  const { data: ipData } = useApiQuery<IpWhitelistResponse>(
+  const { data: ipData, error: ipError, refetch: refetchIp } = useApiQuery<IpWhitelistResponse>(
     IP_WHITELIST_QUERY,
     '/api/tenant/security/ip-whitelist',
     { retry: false },
@@ -559,6 +560,14 @@ export default function SecuritySettingsPage() {
         </div>
 
         <div className="space-y-4">
+          {/* Unread, this section would show 30 days and no pending deletions — a retention
+              policy the tenant never set (#2829). */}
+          {(trashError || cleanupError) && (
+            <InlineErrorState
+              message={`Failed to load your trash settings: ${(trashError ?? cleanupError)?.message || 'no response from the server'}`}
+              onRetry={() => { refetchTrash(); refetchCleanup(); }}
+            />
+          )}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-lg bg-muted/50">
             <div>
               <p className="text-sm font-medium">Retention Period</p>
@@ -615,6 +624,12 @@ export default function SecuritySettingsPage() {
         </div>
 
         <div className="space-y-4">
+          {ipError && (
+            <InlineErrorState
+              message={`Failed to load your IP whitelist: ${ipError.message || 'no response from the server'}`}
+              onRetry={refetchIp}
+            />
+          )}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-lg bg-muted/50">
             <div>
               <p className="text-sm font-medium">IP Restriction</p>
@@ -681,7 +696,7 @@ export default function SecuritySettingsPage() {
             </div>
           )}
 
-          {ipWhitelist.length === 0 && (
+          {!ipError && ipWhitelist.length === 0 && (
             <p className="text-sm text-muted-foreground">No IPs added yet. Add at least one IP to enable restriction.</p>
           )}
         </div>

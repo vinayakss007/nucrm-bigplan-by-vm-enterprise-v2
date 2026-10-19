@@ -7,8 +7,9 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import {
-  FileEdit, Plus, Save, X, Sparkles, AlertCircle, Loader2, Trash2, Eye, RefreshCw,
+  FileEdit, Plus, Save, X, Sparkles, Loader2, Trash2, Eye, RefreshCw,
 } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import { cn } from '@/lib/utils';
@@ -183,21 +184,23 @@ export default function AITemplatesPage() {
       </div>
 
       {error && (
-        <div className="rounded-xl border border-red-300 bg-red-50 dark:border-red-800/50 dark:bg-red-950/20 px-4 py-3 text-sm text-red-700 dark:text-red-300 flex items-start gap-2">
-          <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-          <span className="flex-1">{error}</span>
-        </div>
+        <InlineErrorState
+          message={queryError
+            ? `Failed to load AI templates: ${queryError.message}`
+            : `Failed to update templates: ${error}`}
+          onRetry={queryError ? refetch : undefined}
+        />
       )}
 
       {/* Installed */}
       <div>
-        <h2 className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-2">Your templates ({installed.length})</h2>
+        <h2 className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-2">Your templates ({queryError ? '—' : installed.length})</h2>
         {loading && !data && (
           <div className="rounded-xl border border-border bg-card p-8 text-center text-muted-foreground">
             <Loader2 className="w-5 h-5 animate-spin mx-auto" />
           </div>
         )}
-        {!loading && installed.length === 0 && (
+        {!loading && !queryError && installed.length === 0 && (
           <div className="rounded-xl border border-dashed border-border bg-card p-6 text-center text-sm text-muted-foreground">
             No saved templates yet. Install one of the starters below or click <strong>New template</strong>.
           </div>
