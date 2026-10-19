@@ -5,13 +5,12 @@
  */
 'use client';
 
-import { useEffect } from 'react';
 import Link from 'next/link';
 import { useApiQuery } from '@/lib/query/client';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import { ArrowLeft, RefreshCw, Users, User, Loader2, Download } from 'lucide-react';
 import { formatCurrency, cn } from '@/lib/utils';
 import { csvRow } from '@/lib/csv';
-import toast from 'react-hot-toast';
 
 interface Row {
   userId?: string | null;
@@ -100,6 +99,12 @@ interface TeamPerformanceResponse { data?: { byRep?: Row[]; byTeam?: Row[] } }
 
 export default function TeamPerformancePage() {
   // #1328: TanStack Query — the Refresh button just calls refetch().
+  //
+  // #2829: one read feeds both tables, so a refusal printed "No leads yet." twice —
+  // two independent-looking claims about a report that was never read, each with
+  // its own disabled CSV button beside it. The `useEffect` toast was the only
+  // mention of the failure, and it spoke for four seconds. One banner replaces
+  // both, because one read is what failed.
   const { data, isLoading: loading, error, refetch } = useApiQuery<TeamPerformanceResponse>(
     ['tenant', 'reports', 'team-performance'],
     '/api/tenant/reports/team-performance',
@@ -107,10 +112,6 @@ export default function TeamPerformancePage() {
   const byRep: Row[] = data?.data?.byRep ?? [];
   const byTeam: Row[] = data?.data?.byTeam ?? [];
   const load = () => refetch();
-
-  useEffect(() => {
-    if (error) toast.error(error.message || 'Failed to load report');
-  }, [error]);
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
@@ -131,6 +132,11 @@ export default function TeamPerformancePage() {
         <div className="flex items-center gap-2 text-sm text-muted-foreground py-8 justify-center">
           <Loader2 className="w-5 h-5 animate-spin" /> Loading report…
         </div>
+      ) : error ? (
+        <InlineErrorState
+          message={`Failed to load team performance: ${error.message || 'no response from the server'}`}
+          onRetry={refetch}
+        />
       ) : (
         <div className="space-y-6">
           <Table rows={byRep} label="Rep" icon={<User className="w-4 h-4" />} />
