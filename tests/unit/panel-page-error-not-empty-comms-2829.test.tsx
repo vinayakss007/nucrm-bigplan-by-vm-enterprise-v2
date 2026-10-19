@@ -45,7 +45,7 @@
  * failure, and `forms`' two independent reads — a failed submissions read must banner
  * inside the drawer while the list beside it stays on screen.
  */
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { readFileSync } from 'node:fs';
