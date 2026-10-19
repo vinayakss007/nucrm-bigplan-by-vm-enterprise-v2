@@ -11,8 +11,6 @@
     "app/tenant/email-templates/page.tsx": "#2829: prints 'No templates yet' for a failed read — binds `error` and toasts it, then prints the sentence anyway",
     "app/tenant/emails/page.tsx": "#2829: prints 'No emails sent' for a failed read — destructures no `error` at all",
     "app/tenant/forms/page.tsx": "#2829: prints 'No forms yet' for a failed read — binds `error` and toasts it, then prints the sentence anyway",
-    "app/tenant/kb/categories/page.tsx": "#2829: prints 'No categories yet' for a failed read — binds `error` and toasts it, then prints the sentence anyway",
-    "app/tenant/kb/page.tsx": "#2829: prints 'No articles found' for a failed read — binds `error` and toasts it, then prints the sentence anyway",
     "app/tenant/meetings/page.tsx": "#2829: prints 'No meetings yet' for a failed read — binds `error` and toasts it, then prints the sentence anyway",
     "app/tenant/pipelines/page.tsx": "#2829: prints 'No pipelines yet' for a failed read — binds `error` and toasts it, then prints the sentence anyway",
     "app/tenant/sms/page.tsx": "#2829: prints 'No messages found' for a failed read — binds `error` and toasts it, then prints the sentence anyway",
