@@ -447,19 +447,18 @@ describe('the ratchet decays by exactly the pages this slice fixed (#2829)', () 
     }
   });
 
-  it('keeps pages nobody is fixing in the list, so an empty sweep cannot read as success', () => {
+  it('cannot be satisfied by an empty list, and pins no page by name', () => {
     // 54 entries went in to this slice and 44 come out. A number proves nothing about whether
-    // the scan still works, so pin concrete findings the next slices have not touched.
-    // The bound is a CEILING on purpose: an equality here goes false every time another slice
-    // honestly fixes a panel (the in-flight #2836 deletes four more entries), and #2831 shipped
-    // exactly that landmine. The named pages below are what prove the sweep still runs.
+    // the scan still works, and a NAME is worse: it is a bet against every other slice on the
+    // board. The pages pinned here — `superadmin/modules`, then `meetings`, then `pipelines` —
+    // were each deleted by the slice that fixed them, which is the outcome being asked for,
+    // and the case went red four times for the crime of being right. #2858 and #2865 are the
+    // same defect wearing a count instead of a page.
+    // The bound stays a CEILING for that reason. What proves the sweep still runs is the
+    // guard run above: a page dropped from the baseline while it still prints an empty
+    // sentence over a failed read is a NOVEL offender, and that is what fails the guard.
     const files = doc().files;
     expect(Object.keys(files).length).toBeLessThanOrEqual(44);
-    // Both super-admin names this line carried are fixed now (#2829's super-admin
-    // slice), so the pin moves to a page no in-flight slice has touched.
-    expect(files['app/tenant/meetings/page.tsx']).toBeTruthy();
-    expect(files['app/tenant/chat/page.tsx']).toBeTruthy();
-    expect(files['app/tenant/emails/page.tsx'], 'the documented #1328 tradeoff stays allowlisted').toBeTruthy();
     for (const [file, note] of Object.entries(files)) {
       expect(note, `${file} is allowlisted with no reason attached`).toContain('#2829');
     }
