@@ -10,6 +10,7 @@ import { useApiQuery } from '@/lib/query/client';
 import InlineErrorState from '@/components/shared/inline-error-state';
 import { Plus, Search, RefreshCw, X, Calendar, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { subscriptionPayload } from '@/lib/billing/create-payloads';
 import toast from 'react-hot-toast';
 
 interface Subscription {
@@ -67,7 +68,7 @@ export default function SubscriptionsPage() {
     mutationFn: async () => {
       const res = await fetch('/api/tenant/subscriptions', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
+        body: JSON.stringify(subscriptionPayload(form)),
       });
       if (!res.ok) throw new Error('Failed');
     },

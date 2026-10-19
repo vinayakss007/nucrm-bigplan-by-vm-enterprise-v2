@@ -55,7 +55,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     const validated = validateBody(createSubscriptionSchema, rawBody);
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;
-    const { contact_id: contactId, company_id: companyId, status, start_date: startDate, end_date: endDate, trial_end_date: trialEndDate, billing_frequency: billingFrequency, auto_renew: autoRenew, quantity: _quantity } = v;
+    const { contact_id: contactId, company_id: companyId, status, start_date: startDate, end_date: endDate, trial_end_date: trialEndDate, billing_frequency: billingFrequency, auto_renew: autoRenew, name, plan_name: planName, amount, quantity: _quantity } = v;
 
     if (!startDate || !billingFrequency) {
       return NextResponse.json({ error: 'Start date and billing frequency are required' }, { status: 400 });
@@ -68,13 +68,17 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       tenantId,
       contactId: contactId || null,
       companyId: companyId || null,
-      name: 'Subscription',
-      planName: null,
+      // #2876: the modal asks for a Name, a Plan Name and an Amount and all three were
+      // dropped here — the page posted camelCase, this schema declared none of them, so
+      // the insert kept its hard-coded 'Subscription' / null / '0'. The amount is what
+      // the panel's MRR/ARR header sums, so a $0 mis-stores the tenant's revenue.
+      name: name || 'Subscription',
+      planName: planName || null,
       status: status ?? 'active',
       startDate,
       currentPeriodStart: startDate,
       currentPeriodEnd: endDate ?? null,
-      amount: '0',
+      amount: String(amount ?? 0),
       currency: 'USD',
       billingFrequency,
       autoRenew: autoRenew ?? true,

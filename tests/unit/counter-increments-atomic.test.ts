@@ -15,10 +15,11 @@
  * in SQL — plus tests for the ratchet guard that keeps the pattern from
  * regressing.
  */
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, afterAll } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { writeFileSync, unlinkSync, readFileSync, mkdirSync, rmdirSync } from 'node:fs';
+import { writeFileSync, rmSync, readFileSync, mkdirSync, mkdtempSync } from 'node:fs';
 import { join, dirname } from 'node:path';
+import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { PgDialect } from 'drizzle-orm/pg-core';
 import type { SQLWrapper } from 'drizzle-orm';
@@ -507,24 +508,23 @@ describe('lib/offers incrementOfferViewedCount — rendered SQL (#2344)', () => 
 
 describe('counter ratchet guard (scripts/check-counter-increments.mjs) (#2344)', () => {
   const GUARD = join(REPO, 'scripts', 'check-counter-increments.mjs');
-  const PROBE_DIR = join(REPO, 'app', 'api', '__counter-ratchet-probe__');
+  // The guard scans the tree it is run from (`ROOT = process.cwd()`), so the probe
+  // goes in a scratch tree: 29 other test files walk this one, and a fixture that
+  // disappears between their directory listing and their read crashes them (#2875).
+  const SCRATCH = mkdtempSync(join(tmpdir(), 'counter-ratchet-'));
+  const PROBE_DIR = join(SCRATCH, 'app', 'api', '__counter-ratchet-probe__');
   const PROBE = join(PROBE_DIR, 'route.ts');
 
-  function runGuard(): string {
-    return execFileSync('node', [GUARD], { cwd: REPO, encoding: 'utf8' });
+  function runGuard(root = REPO): string {
+    return execFileSync('node', [GUARD], { cwd: root, encoding: 'utf8' });
   }
 
   afterEach(() => {
-    try {
-      unlinkSync(PROBE);
-    } catch {
-      /* probe not present */
-    }
-    try {
-      rmdirSync(PROBE_DIR);
-    } catch {
-      /* dir already gone */
-    }
+    rmSync(PROBE_DIR, { recursive: true, force: true });
+  });
+
+  afterAll(() => {
+    rmSync(SCRATCH, { recursive: true, force: true });
   });
 
   it('the committed tree is clean (baseline is empty by design)', () => {
@@ -539,7 +539,7 @@ describe('counter ratchet guard (scripts/check-counter-increments.mjs) (#2344)',
         "  const set = { viewCount: (row?.views ?? 0) + 1 };\n" +
         '  return Response.json(set);\n}\n',
     );
-    expect(runGuard).toThrowError(/viewCount/);
+    expect(() => runGuard(SCRATCH)).toThrowError(/viewCount/);
   });
 
   it('honours the documented opt-out comment', () => {
@@ -550,7 +550,7 @@ describe('counter ratchet guard (scripts/check-counter-increments.mjs) (#2344)',
         "  const set = { viewCount: (row?.views ?? 0) + 1 }; // counter-ratchet: allow — deliberate non-atomic demo\n" +
         '  return Response.json(set);\n}\n',
     );
-    expect(runGuard()).toContain('0 read-modify-write counter updates');
+    expect(runGuard(SCRATCH)).toContain('0 read-modify-write counter updates');
   });
 
   it('is wired into package.json and CI', () => {

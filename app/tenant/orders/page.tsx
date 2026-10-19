@@ -11,6 +11,7 @@ import InlineErrorState from '@/components/shared/inline-error-state';
 import { useSearchParams } from 'next/navigation';
 import { Plus, Search, Package, X, FileText, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { orderPayload } from '@/lib/billing/create-payloads';
 import toast from 'react-hot-toast';
 
 interface Contact { id: string; firstName: string; lastName: string; email: string | null; }
@@ -99,12 +100,10 @@ function OrdersPageInner() {
 
   const createOrder = useMutation({
     mutationFn: async () => {
-      const items = form.items.filter(i => i.description);
-      const subtotal = items.reduce((sum, i) => sum + (parseFloat(i.quantity) || 1) * (parseFloat(i.unitPrice) || 0), 0);
       const res = await fetch('/api/tenant/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, subtotal: subtotal.toFixed(2), items }),
+        body: JSON.stringify(orderPayload(form)),
       });
       if (!res.ok) throw new Error('Failed to create order');
     },
