@@ -32,6 +32,12 @@ export default function ActivitiesPage() {
 
   // #1328: TanStack Query — offset is part of the queryKey, so paging back and
   // forth is instant from cache and keepPreviousData avoids a loading flash.
+  //
+  // #2829: `error` was bound and spent entirely on a `useEffect` toast, while the
+  // page answered the refusal with "No activity yet" and a description promising
+  // that created deals, updated contacts and sent emails will appear here as the
+  // team works. The activity log is the record of what the workspace has already
+  // done, so the false "none" reads as "nothing has happened".
   const { data, isLoading, error, refetch } = useApiQuery<ActivitiesResponse | ActivityItem[]>(
     ['tenant', 'activities', offset, limit],
     `/api/tenant/activities?limit=${limit}&offset=${offset}`,
@@ -40,13 +46,6 @@ export default function ActivitiesPage() {
   const activities: ActivityItem[] = Array.isArray(data)
     ? data
     : data?.data ?? data?.activities ?? [];
-  // #2829: this used to spend the failure on a four-second toast and print "No activity
-  // yet" anyway — a verdict about the team's work that the server never gave. The
-  // placeholder above keeps the previous page in `data` when a *refresh* fails, so the
-  // two states are different: nothing-read shows a banner, failed-refresh keeps the rows.
-  const failed = Boolean(error) && !data;
-  const stale = Boolean(error) && Boolean(data);
-  const reason = error?.message || 'no response from the server';
 
   const loading = isLoading;
 
@@ -68,23 +67,17 @@ export default function ActivitiesPage() {
             <ChevronLeft className="w-4 h-4" />Prev
           </Button>
           <span className="text-sm text-muted-foreground">Page {Math.floor(offset / limit) + 1}</span>
-          {/* A read that never answered cannot prove this is the last page, so the
-              button stays live rather than going disabled on an empty fallback. */}
-          <Button variant="outline" size="sm" disabled={Boolean(data) && activities.length < limit} onClick={() => setOffset(offset + limit)}>
+          <Button variant="outline" size="sm" disabled={activities.length < limit} onClick={() => setOffset(offset + limit)}>
             Next<ChevronRight className="w-4 h-4" />
           </Button>
         </div>
       </div>
 
-      {stale && (
+      {error ? (
         <InlineErrorState
-          message={`Could not refresh the activity feed, so the entries below are the last read: ${reason}`}
+          message={`Failed to load the activity log: ${error.message || 'no response from the server'}`}
           onRetry={refetch}
         />
-      )}
-
-      {failed ? (
-        <InlineErrorState message={`Failed to load the activity feed: ${reason}`} onRetry={refetch} />
       ) : activities.length === 0 ? (
         <EmptyState
           type="generic"
