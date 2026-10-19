@@ -4,9 +4,10 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import { MessageSquare, CheckCircle, ChevronDown, Search } from 'lucide-react';
 import { cn, formatRelativeTime } from '@/lib/utils';
 import toast from 'react-hot-toast';
@@ -26,17 +27,20 @@ export default function TicketsPage() {
 
   // #1328: TanStack Query replaces fetch + useEffect + useState.
   // #1089: surface load errors instead of silently swallowing them.
+  //
+  // #2829: "surface" had stopped at a toast. The list branch below answers an
+  // unread request with a green tick and "No tickets found" — an all-clear that
+  // no tenant is waiting on support — and the counts row reads Open 0 /
+  // In Progress 0 / Resolved 0 / Critical 0 off `data?.counts ?? {}`, which is
+  // the same claim in four places. The banner replaces the tick; the counts
+  // refuse to render a number the read never gave.
   const queryKey = ['superadmin', 'tickets', status] as const;
-  const { data, isLoading, error } = useApiQuery<TicketData>(
+  const { data, isLoading, error, refetch } = useApiQuery<TicketData>(
     queryKey,
     '/api/superadmin/tickets' + (status ? `?status=${status}` : ''),
     { retry: false },
   );
   const loading = isLoading;
-
-  useEffect(() => {
-    if (error) toast.error('Failed to load tickets');
-  }, [error]);
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, updates }: { id: string; updates: Record<string, unknown> }) => {
@@ -75,7 +79,7 @@ export default function TicketsPage() {
 
       {/* Counts */}
       <div className="grid grid-cols-4 gap-3">
-        {[{label:'Open',v:c.open??0,color:'text-amber-400'},{label:'In Progress',v:c.in_progress??0,color:'text-blue-400'},{label:'Resolved',v:c.resolved??0,color:'text-emerald-400'},{label:'Critical',v:c.critical??0,color:'text-red-400'}].map(m=>(
+        {[{label:'Open',v:error?'—':c.open??0,color:'text-amber-400'},{label:'In Progress',v:error?'—':c.in_progress??0,color:'text-blue-400'},{label:'Resolved',v:error?'—':c.resolved??0,color:'text-emerald-400'},{label:'Critical',v:error?'—':c.critical??0,color:'text-red-400'}].map(m=>(
           <div key={m.label} className="rounded-xl border border-white/10 bg-white/5 p-3">
             <p className="text-xs text-white/40">{m.label}</p>
             <p className={cn('text-xl font-bold mt-0.5',m.color)}>{m.v}</p>
@@ -103,6 +107,12 @@ export default function TicketsPage() {
       {/* Tickets */}
       <div className="space-y-3">
         {loading ? <p className="text-white/30 text-sm">Loading...</p>
+        : error ? (
+          <InlineErrorState
+            message={`Failed to load tickets: ${error.message || 'no response from the server'}`}
+            onRetry={refetch}
+          />
+        )
         : !tickets.length ? (
           <div className="text-center py-12 rounded-xl border border-white/10 bg-white/[0.02]">
             <CheckCircle className="w-10 h-10 text-emerald-500/30 mx-auto mb-3"/>

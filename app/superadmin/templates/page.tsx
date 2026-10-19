@@ -4,9 +4,9 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useEffect } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import { Package, Plus, Users, FileText, Edit, Copy, UserPlus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
@@ -29,13 +29,14 @@ export default function SuperAdminTemplatesPage() {
 
   // #1328: TanStack Query replaces fetch + useEffect + useState.
   const queryKey = ['superadmin', 'templates'] as const;
-  const { data, isLoading, error } = useApiQuery<{ data?: Template[] }>(queryKey, '/api/superadmin/templates');
+  // #2829: a template is a thing that gets *assigned to tenants*, so a refusal
+  // here was doubly wrong: the stats row read Total Templates 0 / Active 0 /
+  // Draft 0 / Total Assignments 0, and the page then said "No templates yet.
+  // Create your first one." next to a Create New button. The `useEffect` toast
+  // was the only mention of the failure, and it spoke for four seconds.
+  const { data, isLoading, error, refetch } = useApiQuery<{ data?: Template[] }>(queryKey, '/api/superadmin/templates');
   const templates: Template[] = data?.data ?? [];
   const loading = isLoading;
-
-  useEffect(() => {
-    if (error) toast.error('Failed to load templates');
-  }, [error]);
 
   const createMutation = useMutation({
     mutationFn: async () => {
@@ -85,13 +86,15 @@ export default function SuperAdminTemplatesPage() {
         </button>
       </div>
 
-      {/* Stats row */}
+      {/* Stats — every number here is computed from the list, so a failed read
+          reported the platform's whole template catalogue as zero (#2829).
+          Unread renders unavailable, not 0. */}
       <div className="grid grid-cols-4 gap-4">
         {[
-          { label: 'Total Templates', value: templates.length, color: 'text-white' },
-          { label: 'Active', value: activeCount, color: 'text-emerald-400' },
-          { label: 'Draft', value: draftCount, color: 'text-amber-400' },
-          { label: 'Total Assignments', value: totalAssignments, color: 'text-violet-400' },
+          { label: 'Total Templates', value: error ? '—' : templates.length, color: 'text-white' },
+          { label: 'Active', value: error ? '—' : activeCount, color: 'text-emerald-400' },
+          { label: 'Draft', value: error ? '—' : draftCount, color: 'text-amber-400' },
+          { label: 'Total Assignments', value: error ? '—' : totalAssignments, color: 'text-violet-400' },
         ].map(s => (
           <div key={s.label} className="rounded-xl border border-white/10 bg-white/5 p-4">
             <p className="text-xs text-white/40">{s.label}</p>
@@ -105,6 +108,11 @@ export default function SuperAdminTemplatesPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {[...Array(4)].map((_, i) => <div key={i} className="h-48 rounded-xl animate-pulse bg-white/5" />)}
         </div>
+      ) : error ? (
+        <InlineErrorState
+          message={`Failed to load templates: ${error.message || 'no response from the server'}`}
+          onRetry={refetch}
+        />
       ) : templates.length === 0 ? (
         <div className="text-center py-16">
           <Package className="w-12 h-12 text-white/20 mx-auto mb-3" />
