@@ -485,12 +485,18 @@ describe('the baseline decays, and the guards still pass', () => {
       expect(files[`app/tenant/ai/${p}/page.tsx`]).toBeUndefined();
     }
     expect(Object.keys(files).filter(k => k.startsWith('app/tenant/ai/'))).toEqual([]);
-    // still owed, and still listed: #2839's money path (on main), the settings pages #2844
-    // takes, and the rest of the class.
-    for (const stillOwed of ['app/tenant/invoices/page.tsx', 'app/tenant/settings/tax/page.tsx', 'app/tenant/chat/page.tsx', 'app/tenant/emails/page.tsx', 'app/superadmin/modules/page.tsx']) {
+    // still owed, and still listed. #2839 (the money path), #2837 (thirteen tenant lists)
+    // and #2844 (the twelve settings pages) have all landed, so their paths are gone from
+    // this file too — what is left is the rest of the class.
+    for (const stillOwed of [
+      'app/tenant/chat/page.tsx', 'app/tenant/emails/page.tsx', 'app/tenant/kb/page.tsx',
+      'app/tenant/sms/page.tsx', 'app/tenant/visitors/page.tsx',
+      'app/tenant/reports/custom/page.tsx', 'app/superadmin/modules/page.tsx',
+    ]) {
       expect(Object.keys(files)).toContain(stillOwed);
     }
-    expect(Object.keys(files).length).toBeLessThanOrEqual(39);
+    // 44 on `e89f86e8`, 24 on the main this slice merges into, 19 with these five gone.
+    expect(Object.keys(files).length).toBeLessThanOrEqual(19);
   });
 
   it('every page in this slice renders a role="alert" the guard can see', () => {
