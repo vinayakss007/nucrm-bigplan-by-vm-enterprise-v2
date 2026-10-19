@@ -7,6 +7,7 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import { MessageSquare, Plus, X, Loader2, Send, ArrowUpRight, ArrowDownLeft, FileText } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
 import toast from 'react-hot-toast';
@@ -54,14 +55,21 @@ export default function SmsPage() {
 
   // #1328: reads via TanStack Query (were raw fetch + useEffect). status filter
   // is part of the messages key so each view refetches and caches.
+  //
+  // #2829: `messagesError` was bound and spent on `if (messagesError)
+  // toast.error(...)` in the render body, so it re-fired on every render — and
+  // because the four stat cards are all derived from `messages`, a refusal made
+  // the inbox report Total 0 / Sent 0 / Delivered 0 / **Failed 0** above "No
+  // messages found / Send your first SMS to get started". An outbound message
+  // log that says nothing was sent, and nothing failed, is the worst kind of
+  // all-clear: the operator concludes the campaign never went out.
   const params = new URLSearchParams();
   if (filter !== 'all') params.set('status', filter);
-  const { data: messagesData, isLoading: loading, error: messagesError } = useApiQuery<{ data?: SmsMessage[] }>(
+  const { data: messagesData, isLoading: loading, error: messagesError, refetch: refetchMessages } = useApiQuery<{ data?: SmsMessage[] }>(
     ['tenant', 'sms', { filter }],
     `/api/tenant/sms?${params}`,
   );
   const messages: SmsMessage[] = messagesData?.data ?? [];
-  if (messagesError) toast.error('Failed to load messages');
 
   const { data: templatesData } = useApiQuery<{ data?: SmsTemplate[] }>(
     ['tenant', 'sms', 'templates'],
@@ -146,23 +154,24 @@ export default function SmsPage() {
         </button>
       </div>
 
-      {/* Stats Cards */}
+      {/* Stats Cards — every number here is counted off `messages`, so an unread
+          list renders unavailable rather than 0 (#2829). */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="admin-card p-4">
           <p className="text-xs font-medium text-muted-foreground">Total Messages</p>
-          <p className="text-2xl font-bold mt-1">{stats.total}</p>
+          <p className="text-2xl font-bold mt-1">{messagesError ? '—' : stats.total}</p>
         </div>
         <div className="admin-card p-4">
           <p className="text-xs font-medium text-muted-foreground">Sent</p>
-          <p className="text-2xl font-bold mt-1 text-blue-600">{stats.sent}</p>
+          <p className="text-2xl font-bold mt-1 text-blue-600">{messagesError ? '—' : stats.sent}</p>
         </div>
         <div className="admin-card p-4">
           <p className="text-xs font-medium text-muted-foreground">Delivered</p>
-          <p className="text-2xl font-bold mt-1 text-emerald-600">{stats.delivered}</p>
+          <p className="text-2xl font-bold mt-1 text-emerald-600">{messagesError ? '—' : stats.delivered}</p>
         </div>
         <div className="admin-card p-4">
           <p className="text-xs font-medium text-muted-foreground">Failed</p>
-          <p className="text-2xl font-bold mt-1 text-red-600">{stats.failed}</p>
+          <p className="text-2xl font-bold mt-1 text-red-600">{messagesError ? '—' : stats.failed}</p>
         </div>
       </div>
 
@@ -180,6 +189,11 @@ export default function SmsPage() {
       {/* Messages Table */}
       {loading ? (
         [...Array(4)].map((_, i) => <div key={i} className="h-14 bg-muted rounded-2xl animate-pulse" />)
+      ) : messagesError ? (
+        <InlineErrorState
+          message={`Failed to load the message log: ${messagesError.message || 'no response from the server'}`}
+          onRetry={refetchMessages}
+        />
       ) : messages.length === 0 ? (
         <div className="text-center py-12 border border-dashed border-border rounded-2xl">
           <MessageSquare className="w-8 h-8 text-muted-foreground mx-auto mb-3" />

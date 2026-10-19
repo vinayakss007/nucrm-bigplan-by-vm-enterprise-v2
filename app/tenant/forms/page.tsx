@@ -4,9 +4,10 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Plus, FileText, ExternalLink, Copy, Check, ToggleLeft, ToggleRight,
@@ -74,8 +75,14 @@ export default function FormsPage() {
 
   // #1328: list via TanStack Query (was raw fetch + useEffect). offset is part
   // of the key so paging refetches and caches per page.
+  //
+  // #2829: this read bound neither `error` nor `refetch`, so a refusal had no
+  // channel at all and the page answered it with "No forms yet / Build a lead
+  // capture form and embed it on any website in seconds" plus a button that
+  // starts a duplicate of a form that exists. Forms have public embed URLs, so
+  // rebuilding one silently puts a second live collector on the same site.
   const FORMS_QUERY = ['tenant', 'forms', { offset }] as const;
-  const { data, isLoading: loading } = useApiQuery<{ data?: FormItem[]; total?: number }>(
+  const { data, isLoading: loading, error: formsError, refetch: refetchForms } = useApiQuery<{ data?: FormItem[]; total?: number }>(
     FORMS_QUERY,
     `/api/tenant/forms?limit=${limit}&offset=${offset}`,
   );
@@ -134,13 +141,17 @@ export default function FormsPage() {
   const [viewingSubmissions, setViewingSubmissions] = useState<FormItem | null>(null);
 
   // #1328: submissions loaded on-demand via a query keyed by the viewed form.
-  const { data: submissionsData, isLoading: loadingSubmissions, error: submissionsError } = useApiQuery<{ data?: { submissions?: FormSubmissionRecord[] } }>(
+  //
+  // #2829: this one bound `error` and spent it on a `useEffect` toast, then drew
+  // "No submissions yet / Share your form link or embed it on your site to start
+  // collecting leads." — the drawer telling whoever is chasing a lead that the
+  // form has collected nothing, when the request never got through.
+  const { data: submissionsData, isLoading: loadingSubmissions, error: submissionsError, refetch: refetchSubmissions } = useApiQuery<{ data?: { submissions?: FormSubmissionRecord[] } }>(
     ['tenant', 'forms', 'submissions', viewingSubmissions?.id ?? 'none'],
     `/api/tenant/forms/${viewingSubmissions?.id}`,
     { enabled: !!viewingSubmissions },
   );
   const submissions: FormSubmissionRecord[] = submissionsData?.data?.submissions ?? [];
-  useEffect(() => { if (submissionsError) toast.error('Failed to load submissions'); }, [submissionsError]);
 
   const viewSubmissions = (form: { id: string }) => {
     setViewingSubmissions(form as FormItem);
@@ -245,7 +256,12 @@ export default function FormsPage() {
         )}
       {/* Forms list */}
       {loading ? <ListSkeleton /> :
-      forms.length === 0 ? (
+      formsError ? (
+        <InlineErrorState
+          message={`Failed to load your forms: ${formsError.message || 'no response from the server'}`}
+          onRetry={refetchForms}
+        />
+      ) : forms.length === 0 ? (
         <div className="text-center py-16 border border-dashed border-border rounded-2xl">
           <FileText className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
           <p className="font-medium">No forms yet</p>
@@ -334,6 +350,13 @@ export default function FormsPage() {
                     <div className="flex flex-col items-center justify-center py-20 gap-3">
                       <Loader2 className="w-8 h-8 animate-spin text-violet-600" />
                       <p className="text-sm text-muted-foreground font-medium">Loading submissions...</p>
+                    </div>
+                  ) : submissionsError ? (
+                    <div className="p-5">
+                      <InlineErrorState
+                        message={`Failed to load this form's submissions: ${submissionsError.message || 'no response from the server'}`}
+                        onRetry={refetchSubmissions}
+                      />
                     </div>
                   ) : submissions.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-20 text-center px-10">
