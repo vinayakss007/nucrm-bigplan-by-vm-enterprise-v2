@@ -426,9 +426,11 @@ describe('the guard still ratchets, and this slice decays honestly', () => {
     // exact count goes false the moment another slice honestly fixes a panel.
     const files = doc().files;
     expect(Object.keys(files).length).toBeLessThanOrEqual(20);
+    // Tenant lists, deliberately: every path named here is one the reports slice in flight is
+    // not removing, so a fixed sibling cannot fail this file for the wrong reason.
     expect(files['app/tenant/kb/categories/page.tsx']).toBeTruthy();
     expect(files['app/tenant/forms/page.tsx']).toBeTruthy();
-    expect(files['app/tenant/reports/custom/page.tsx']).toBeTruthy();
+    expect(files['app/tenant/email-templates/page.tsx']).toBeTruthy();
     for (const [file, note] of Object.entries(files)) {
       expect(note, `${file} is allowlisted with no reason attached`).toContain('#2829');
     }
