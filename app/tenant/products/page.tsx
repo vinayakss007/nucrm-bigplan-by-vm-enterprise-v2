@@ -57,6 +57,19 @@ export default function ProductsPage() {
   );
   const products: Product[] = Array.isArray(data) ? data : data?.data ?? [];
 
+  // #2872: both writes end in `reload()`, which invalidates `['tenant','products']` — the exact
+  // key this read lives under — so the ordinary state right after creating, editing or deleting a
+  // product is "kept rows + error flag set". TanStack Query hands the page back the `data` it
+  // already had when that refresh is refused, and the branch below asked only whether
+  // `productsError` was set. Two lies follow: a catalog the last read said was empty, or a search
+  // term that excluded every kept row, printed "Failed to load products" — an outage over a read
+  // that answered, replacing the honest sentence and the kept rows' footer tally with it — while a
+  // search that still matched showed the table with no hint that the save or delete just attempted
+  // had not been re-read. The search box filters client-side, so no term is part of the key: a
+  // kept read is a kept read for every term, and only a read that never answered is an outage.
+  const productsFailed = Boolean(productsError) && !data;
+  const productsStale = Boolean(productsError) && Boolean(data);
+  const productsReason = productsError?.message || 'no response from the server';
   const reload = () => queryClient.invalidateQueries({ queryKey: PRODUCTS_QUERY });
 
   const resetForm = () => {
@@ -157,11 +170,19 @@ export default function ProductsPage() {
         />
       </div>
 
+      {/* Kept rows, refused refresh: the catalog stays, and says what it may not show. */}
+      {productsStale && (
+        <InlineErrorState
+          message={`Could not refresh, so the catalog below is the last read: ${productsReason}. A product you just created, edited or deleted is still listed the way it was.`}
+          onRetry={refetchProducts}
+        />
+      )}
+
       {loading ? (
         <div className="text-center py-12 text-muted-foreground">Loading...</div>
       ) : filtered.length === 0 ? (
-        productsError
-          ? <InlineErrorState message={`Failed to load products: ${productsError.message}`} onRetry={refetchProducts} />
+        productsFailed
+          ? <InlineErrorState message={`Failed to load products: ${productsReason}`} onRetry={refetchProducts} />
           : <div className="text-center py-12 text-muted-foreground">
           <Package className="w-10 h-10 mx-auto mb-3 text-muted-foreground/30" />
           <p className="text-sm font-medium">
