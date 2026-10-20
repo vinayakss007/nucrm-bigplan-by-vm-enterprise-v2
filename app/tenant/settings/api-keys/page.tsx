@@ -47,6 +47,14 @@ export default function APIKeysPage() {
   const keys: ApiKey[] = data?.data ?? [];
   const reload = () => queryClient.invalidateQueries({ queryKey: API_KEYS_QUERY });
 
+  // #2872: create (:58) and revoke (:64) invalidate this key, so a *refused
+  // refresh* leaves TanStack holding the last good rows in `data`. That is a
+  // different fact from a read that never answered — and this page used to
+  // collapse both into the bare `keysError` flag.
+  const failed = Boolean(keysError) && !data;   // a read that never answered
+  const stale  = Boolean(keysError) && Boolean(data); // a refused refresh, rows kept
+  const reason = keysError?.message || 'no response from the server';
+
   const create = async (e: React.FormEvent) => {
     e.preventDefault(); setCreating(true);
     const res = await apiFetch('/api/tenant/api-keys',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(form)});
@@ -122,10 +130,21 @@ export default function APIKeysPage() {
       )}
 
       {/* Keys list */}
+      {/* #2872: a refused refresh keeps the rows, so name THIS page's loss above
+          them rather than a generic "may be out of date". GET selects named
+          columns (route.ts:31-42) and never returns the secret, so the one-time
+          newKey reveal is left alone; Revoke stays live because the [id] route
+          re-reads the row (:34) and 404s when it is gone (:48). */}
+      {stale && (
+        <InlineErrorState
+          message={`Could not refresh, so the keys below are the last read: ${reason}. One may already be revoked or expired elsewhere yet still show Revoke — that button stays live because the route re-reads the row and 404s if it is gone — and its "Last used" is the older value, so a key that looks idle may be handling live traffic right now.`}
+          onRetry={() => void refetch()}
+        />
+      )}
       <div className="admin-card overflow-hidden">
         {loading ? <p className="text-sm text-muted-foreground p-5">Loading...</p>
         : !keys.length ? (
-          keysError ? (
+          failed ? (
             // #2829: a failed read hid live credentials behind "No API keys yet",
             // next to a create button that invites a duplicate.
             <div className="p-5"><InlineErrorState message="Could not load this workspace's API keys — this is a failed request, not an empty list." onRetry={() => void refetch()} /></div>
