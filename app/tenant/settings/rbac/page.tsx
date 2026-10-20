@@ -7,6 +7,7 @@
 
 import { useState } from 'react';
 import { useApiQuery } from '@/lib/query/client';
+import InlineErrorState from '@/components/shared/inline-error-state';
 
 type Tab = 'field-permissions' | 'record-permissions' | 'approval-rules';
 
@@ -41,17 +42,26 @@ export default function RBACSettingsPage() {
   const [message] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // #1328: reads via TanStack Query (were parallel raw fetch + useEffect).
-  const { data: fpData, isLoading: fpLoading, error: fpError } = useApiQuery<{ data?: FieldPermission[] }>(
+  // #2872: each read now also hands back its own `refetch`, because the retry a
+  // refused refresh needs has to re-run the read that was refused and not one of
+  // the other two.
+  const {
+    data: fpData, isLoading: fpLoading, error: fpError, refetch: refetchFp,
+  } = useApiQuery<{ data?: FieldPermission[] }>(
     ['tenant', 'rbac', 'field-permissions'],
     '/api/tenant/rbac/field-permissions',
     { retry: false },
   );
-  const { data: rpData, isLoading: rpLoading, error: rpError } = useApiQuery<{ data?: RecordPermission[] }>(
+  const {
+    data: rpData, isLoading: rpLoading, error: rpError, refetch: refetchRp,
+  } = useApiQuery<{ data?: RecordPermission[] }>(
     ['tenant', 'rbac', 'record-permissions'],
     '/api/tenant/rbac/record-permissions',
     { retry: false },
   );
-  const { data: arData, isLoading: arLoading, error: arError } = useApiQuery<{ data?: ApprovalRule[] }>(
+  const {
+    data: arData, isLoading: arLoading, error: arError, refetch: refetchAr,
+  } = useApiQuery<{ data?: ApprovalRule[] }>(
     ['tenant', 'rbac', 'approval-rules'],
     '/api/tenant/rbac/approval-rules',
     { retry: false },
@@ -59,12 +69,30 @@ export default function RBACSettingsPage() {
   const fieldPermissions: FieldPermission[] = fpData?.data ?? [];
   const recordPermissions: RecordPermission[] = rpData?.data ?? [];
   const approvalRules: ApprovalRule[] = arData?.data ?? [];
-  const loading = fpLoading || rpLoading || arLoading;
 
-  if (loading) {
-    return <div className="p-6">Loading RBAC settings...</div>;
-  }
+  // #2872: three reads, and each tab judged its own by one error flag. TanStack Query
+  // keeps `data` when a revalidation of a read that already succeeded fails, so
+  // `error ?` alone made "answered, then refused" look exactly like "never answered" —
+  // and the other way round too: with rows in hand the refusal went unmentioned, while
+  // a last read that legitimately held nothing got the outage card. `failed` is the
+  // outage #2597 pinned; `stale` keeps the list and says it is the last read.
+  // The status code and the words "endpoint"/"route" belong in `…Reason` (server
+  // internals from `ApiQueryError.message`), never in the operator's banner copy below.
+  const fpFailed = Boolean(fpError) && !fpData;
+  const fpStale = Boolean(fpError) && Boolean(fpData);
+  const fpReason = fpError?.message || 'no response from the server';
+  const rpFailed = Boolean(rpError) && !rpData;
+  const rpStale = Boolean(rpError) && Boolean(rpData);
+  const rpReason = rpError?.message || 'no response from the server';
+  const arFailed = Boolean(arError) && !arData;
+  const arStale = Boolean(arError) && Boolean(arData);
+  const arReason = arError?.message || 'no response from the server';
 
+  // #2872: this was `fpLoading || rpLoading || arLoading` gating a whole-page
+  // `Loading RBAC settings…` return, so two reads that had answered were replaced by a
+  // spinner because the third had not — the tab navigation gone with them, and a read
+  // that hangs is indistinguishable from a page that failed. Each tab now waits on its
+  // own read only.
   const tabs: { id: Tab; label: string }[] = [
     { id: 'field-permissions', label: 'Field Permissions' },
     { id: 'record-permissions', label: 'Record Permissions' },
@@ -111,7 +139,23 @@ export default function RBACSettingsPage() {
           <p className="text-sm text-gray-600 dark:text-gray-400">
             Control which roles can read or write specific fields on each entity type.
           </p>
-          {fieldPermissions.length > 0 ? (
+          {/* The refused refresh sits ABOVE the rows it did not replace (#2872). */}
+          {fpStale && (
+            <InlineErrorState
+              message={`Could not refresh, so the field-level grants below are the last read: ${fpReason}. A field a role was just given or denied is not reflected here.`}
+              onRetry={() => void refetchFp()}
+            />
+          )}
+          {fpLoading ? (
+            <p className="text-sm text-gray-500 dark:text-gray-400">Loading field permissions…</p>
+          ) : fpFailed ? (
+            // #2597: a read that never answered is not an empty matrix. This sentence
+            // is pinned by tests/unit/rbac-tab-error-state-2597.test.tsx.
+            <InlineErrorState
+              message={`Failed to load field permissions: ${fpReason}`}
+              onRetry={() => void refetchFp()}
+            />
+          ) : fieldPermissions.length > 0 ? (
             <div className="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
               <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                 <thead className="bg-gray-50 dark:bg-gray-800">
@@ -141,10 +185,6 @@ export default function RBACSettingsPage() {
                 </tbody>
               </table>
             </div>
-          ) : fpError ? (
-            <div role="alert" className="rounded-lg border border-red-300 bg-red-50 p-4 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300">
-              Failed to load field permissions: {fpError.message}
-            </div>
           ) : (
             <div className="rounded-lg border border-dashed border-gray-300 p-8 text-center dark:border-gray-600">
               <p className="text-sm text-gray-500 dark:text-gray-400">
@@ -162,7 +202,21 @@ export default function RBACSettingsPage() {
           <p className="text-sm text-gray-600 dark:text-gray-400">
             Define which records each role can access based on ownership or team assignment.
           </p>
-          {recordPermissions.length > 0 ? (
+          {rpStale && (
+            <InlineErrorState
+              message={`Could not refresh, so the record access rules below are the last read: ${rpReason}. A rule you just added or removed is not reflected here.`}
+              onRetry={() => void refetchRp()}
+            />
+          )}
+          {rpLoading ? (
+            <p className="text-sm text-gray-500 dark:text-gray-400">Loading record permissions…</p>
+          ) : rpFailed ? (
+            // #2597: pinned by tests/unit/rbac-tab-error-state-2597.test.tsx.
+            <InlineErrorState
+              message={`Failed to load record permissions: ${rpReason}`}
+              onRetry={() => void refetchRp()}
+            />
+          ) : recordPermissions.length > 0 ? (
             <div className="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
               <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                 <thead className="bg-gray-50 dark:bg-gray-800">
@@ -183,10 +237,6 @@ export default function RBACSettingsPage() {
                 </tbody>
               </table>
             </div>
-          ) : rpError ? (
-            <div role="alert" className="rounded-lg border border-red-300 bg-red-50 p-4 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300">
-              Failed to load record permissions: {rpError.message}
-            </div>
           ) : (
             <div className="rounded-lg border border-dashed border-gray-300 p-8 text-center dark:border-gray-600">
               <p className="text-sm text-gray-500 dark:text-gray-400">
@@ -204,7 +254,27 @@ export default function RBACSettingsPage() {
           <p className="text-sm text-gray-600 dark:text-gray-400">
             Configure approval workflows that require manager sign-off before changes take effect.
           </p>
-          {approvalRules.length > 0 ? (
+          {arStale && (
+            <InlineErrorState
+              message={`Could not refresh, so the approval rules below are the last read: ${arReason}. A rule just created, edited or switched off is not reflected here.`}
+              onRetry={() => void refetchAr()}
+            />
+          )}
+          {arLoading ? (
+            <p className="text-sm text-gray-500 dark:text-gray-400">Loading approval rules…</p>
+          ) : arFailed ? (
+            // #2597: this route is allowlisted as missing in
+            // tests/unit/api-url-has-handler-2822.test.ts, so this arm is the tab's
+            // everyday answer. #2597's sentence is pinned by
+            // tests/unit/rbac-tab-error-state-2597.test.tsx, which asserts the reason
+            // (and its status code) reaches the operator — so only the tail, which said
+            // "endpoint responded successfully", was moved to #2872 rule #3's operator
+            // wording. It still keeps "none" and "unreadable" apart.
+            <InlineErrorState
+              message={`Failed to load approval rules: ${arReason}. An empty list would say none are configured; this says the read never came back.`}
+              onRetry={() => void refetchAr()}
+            />
+          ) : approvalRules.length > 0 ? (
             <div className="space-y-3">
               {approvalRules.map(rule => (
                 <div key={rule.id} className="rounded-lg border border-gray-200 p-4 dark:border-gray-700">
@@ -221,11 +291,6 @@ export default function RBACSettingsPage() {
                   </p>
                 </div>
               ))}
-            </div>
-          ) : arError ? (
-            <div role="alert" className="rounded-lg border border-red-300 bg-red-50 p-4 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300">
-              Failed to load approval rules: {arError.message}. An empty list here means the
-              endpoint responded successfully with no rules; this message means it did not.
             </div>
           ) : (
             <div className="rounded-lg border border-dashed border-gray-300 p-8 text-center dark:border-gray-600">

@@ -20,9 +20,10 @@
  * to let two outcomes share one status; here the two outcomes shared one string.
  *
  * The fix is not new design — `app/tenant/settings/rbac/page.tsx` already
- * distinguishes the three states, with the sentence "An empty list here means the
- * endpoint responded successfully with no rules; this message means it did
- * not." These two panels now do the same.
+ * distinguishes the three states, with the sentence "An empty list would say none
+ * are configured; this says the read never came back." These two panels now do the
+ * same. (#2872 reworded that sentence's tail out of server vocabulary; the
+ * distinction it pins is unchanged.)
  *
  * Each case drives the panel through `@/lib/query/client`'s `useApiQuery` — the
  * seam the page actually has — and asserts the *distinction*, not the wording:
