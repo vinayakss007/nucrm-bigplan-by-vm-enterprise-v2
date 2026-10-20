@@ -49,6 +49,15 @@ export default function SegmentsPage() {
     ? data
     : data?.data ?? data?.segments ?? [];
 
+  // #2872: TanStack Query keeps `data` when a revalidation of a read that already
+  // succeeded fails, and the list below branched on the bare `error`. Creating or
+  // deleting a segment invalidates this key through `reload()`, so a refused reload
+  // after a save replaced the roster the page was still holding with the outage
+  // card — and told the operator the segment they just made had not appeared.
+  const failed = Boolean(error) && !data;
+  const stale = Boolean(error) && Boolean(data);
+  const reason = error?.message || 'no response from the server';
+
   const reload = () => queryClient.invalidateQueries({ queryKey: SEGMENTS_QUERY });
 
   const createSegment = useMutation({
@@ -121,9 +130,15 @@ export default function SegmentsPage() {
         </div>
       )}
 
-      {error ? (
+      {stale && (
         <InlineErrorState
-          message={`Failed to load segments: ${error.message || 'no response from the server'}`}
+          message={`Could not refresh, so the segments below are the last read: ${reason}. A segment created or deleted since this was fetched is not reflected here.`}
+          onRetry={refetch}
+        />
+      )}
+      {failed ? (
+        <InlineErrorState
+          message={`Failed to load segments: ${reason}`}
           onRetry={refetch}
         />
       ) : segments.length === 0 ? (
