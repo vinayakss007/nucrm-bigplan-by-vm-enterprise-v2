@@ -66,6 +66,15 @@ export default function SuperAdminModulesPage() {
   // with. Both halves now refuse to answer for a read that never happened.
   const { data, isLoading, error, refetch } = useApiQuery<{ data?: Record<string, unknown>[] }>(['superadmin', 'modules'], '/api/superadmin/modules');
   const loading = isLoading;
+  // #2872: `error` drove both the four cards and the table's failure arm, and because the rows come
+  // from a `useState` mirror of the read rather than off `data` directly, a *refused refresh* landed
+  // in a third shape: the matrix stayed on screen while a banner above it announced that loading the
+  // plan offerings had failed, and the four counts dashed anyway. Splitting the flag is what makes
+  // that state say the truth — the matrix is the last read, not an outage and not a catalogue that
+  // stopped existing.
+  const failed = Boolean(error) && !data;
+  const stale = Boolean(error) && Boolean(data);
+  const reason = error?.message || 'no response from the server';
 
   // Seed the editable module list (with pricing→planAccess mapping) once loaded.
   useEffect(() => {
@@ -165,10 +174,10 @@ export default function SuperAdminModulesPage() {
       {/* Stats row */}
       <div className="grid grid-cols-4 gap-4">
         {[
-          { label: 'Total Modules', value: error ? '—' : modules.length, color: 'text-white' },
-          { label: 'Free', value: error ? '—' : modules.filter(m => m.planAccess?.free?.enabled).length, color: 'text-slate-400' },
-          { label: 'Starter', value: error ? '—' : modules.filter(m => m.planAccess?.starter?.enabled).length, color: 'text-blue-400' },
-          { label: 'Pro', value: error ? '—' : modules.filter(m => m.planAccess?.pro?.enabled).length, color: 'text-violet-400' },
+          { label: 'Total Modules', value: failed ? '—' : modules.length, color: 'text-white' },
+          { label: 'Free', value: failed ? '—' : modules.filter(m => m.planAccess?.free?.enabled).length, color: 'text-slate-400' },
+          { label: 'Starter', value: failed ? '—' : modules.filter(m => m.planAccess?.starter?.enabled).length, color: 'text-blue-400' },
+          { label: 'Pro', value: failed ? '—' : modules.filter(m => m.planAccess?.pro?.enabled).length, color: 'text-violet-400' },
         ].map(s => (
           <div key={s.label} className="rounded-xl border border-white/10 bg-white/5 p-4">
             <p className="text-xs text-white/40">{s.label}</p>
@@ -208,14 +217,24 @@ export default function SuperAdminModulesPage() {
                 </tr>
               </thead>
               <tbody>
-                {error ? (
+                {stale && (
+                  <tr>
+                    <td colSpan={PLANS.length + 3} className="p-4">
+                      <InlineErrorState
+                        message={`Could not refresh the plan offerings, so the matrix below is the last read: ${reason}. A module that was registered or repriced since then is not reflected here.`}
+                        onRetry={refetch}
+                      />
+                    </td>
+                  </tr>
+                )}
+                {failed ? (
                   <tr>
                     <td colSpan={PLANS.length + 3} className="p-4">
                       {/* #2829: the read failed, so nothing below it is known — the
                           two arms of the empty state both state a fact about what
                           each plan offers. */}
                       <InlineErrorState
-                        message={`Failed to load the plan offerings: ${error.message || 'no response from the server'}`}
+                        message={`Failed to load the plan offerings: ${reason}`}
                         onRetry={refetch}
                       />
                     </td>

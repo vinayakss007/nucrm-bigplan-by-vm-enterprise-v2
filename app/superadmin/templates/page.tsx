@@ -37,6 +37,13 @@ export default function SuperAdminTemplatesPage() {
   const { data, isLoading, error, refetch } = useApiQuery<{ data?: Template[] }>(queryKey, '/api/superadmin/templates');
   const templates: Template[] = data?.data ?? [];
   const loading = isLoading;
+  // #2872: #2829's fix branched on the bare `error` flag, so it could not tell an outage from a
+  // refused refresh — and `create` invalidates this key, which is when an operator is looking for
+  // the template they just made. TanStack keeps `data` in that state; the page threw the catalogue
+  // away to print a banner about nothing and dashed four counts it had just read.
+  const failed = Boolean(error) && !data;
+  const stale = Boolean(error) && Boolean(data);
+  const reason = error?.message || 'no response from the server';
 
   const createMutation = useMutation({
     mutationFn: async () => {
@@ -91,10 +98,10 @@ export default function SuperAdminTemplatesPage() {
           Unread renders unavailable, not 0. */}
       <div className="grid grid-cols-4 gap-4">
         {[
-          { label: 'Total Templates', value: error ? '—' : templates.length, color: 'text-white' },
-          { label: 'Active', value: error ? '—' : activeCount, color: 'text-emerald-400' },
-          { label: 'Draft', value: error ? '—' : draftCount, color: 'text-amber-400' },
-          { label: 'Total Assignments', value: error ? '—' : totalAssignments, color: 'text-violet-400' },
+          { label: 'Total Templates', value: failed ? '—' : templates.length, color: 'text-white' },
+          { label: 'Active', value: failed ? '—' : activeCount, color: 'text-emerald-400' },
+          { label: 'Draft', value: failed ? '—' : draftCount, color: 'text-amber-400' },
+          { label: 'Total Assignments', value: failed ? '—' : totalAssignments, color: 'text-violet-400' },
         ].map(s => (
           <div key={s.label} className="rounded-xl border border-white/10 bg-white/5 p-4">
             <p className="text-xs text-white/40">{s.label}</p>
@@ -104,13 +111,19 @@ export default function SuperAdminTemplatesPage() {
       </div>
 
       {/* Template cards */}
+      {stale && (
+        <InlineErrorState
+          message={`Could not refresh the templates, so what is below is the last read: ${reason}. A template you just created is not in this list yet, and the counts above do not include it.`}
+          onRetry={refetch}
+        />
+      )}
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {[...Array(4)].map((_, i) => <div key={i} className="h-48 rounded-xl animate-pulse bg-white/5" />)}
         </div>
-      ) : error ? (
+      ) : failed ? (
         <InlineErrorState
-          message={`Failed to load templates: ${error.message || 'no response from the server'}`}
+          message={`Failed to load templates: ${reason}`}
           onRetry={refetch}
         />
       ) : templates.length === 0 ? (
