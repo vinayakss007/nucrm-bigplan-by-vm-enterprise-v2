@@ -13,6 +13,7 @@ import { cn, formatRelativeTime, toSnakeCase } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import Pagination from '@/components/tenant/pagination';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import toast from 'react-hot-toast';
 
 interface NotificationItem {
@@ -52,8 +53,21 @@ export default function NotificationsPage() {
 
   // #1328: list via TanStack Query (was raw fetch + useEffect). offset is part
   // of the key; the API rows are normalized to snake_case for the UI.
+  //
+  // #2872: this page's only failure channel was `if (error) toast.error(...)` written in
+  // the RENDER BODY below — a four-second toast that re-fired on every render, while the
+  // panel itself kept answering the refusal with "0 total · 0 unread" and "All caught
+  // up!". What made that the wrong shape twice over is that all four of the page's own
+  // writes — opening a row and `markRead`, `markAllRead`, `del` and `clearAll` — call
+  // `reload()`, which invalidates the `['tenant','notifications']` PREFIX, i.e. every
+  // offset's view of this same list read. So the ordinary state immediately after marking
+  // something read is: the rows are still in `data`, the refresh came back refused. Judging
+  // that by `error` alone was never going to be honest either way — the toast faded and the
+  // header reported an empty inbox over the notifications the operator was reading.
+  // `offset` is part of the key, so a page that has never answered is a failure, not a
+  // stale read: `failed` shows the outage, `stale` keeps the list and caveats it.
   const NOTIFICATIONS_KEY = ['tenant', 'notifications', { offset }] as const;
-  const { data, isLoading: loading, error } = useApiQuery<NotificationsResponse>(
+  const { data, isLoading: loading, error, refetch } = useApiQuery<NotificationsResponse>(
     NOTIFICATIONS_KEY,
     `/api/tenant/notifications?limit=${limit}&offset=${offset}`,
   );
@@ -62,8 +76,9 @@ export default function NotificationsPage() {
     [data],
   );
   const total = data?.total ?? 0;
-  if (error) toast.error('Failed to load notifications');
-
+  const failed = Boolean(error) && !data;
+  const stale = Boolean(error) && Boolean(data);
+  const reason = error?.message || 'no response from the server';
   // Invalidate every notifications view (any offset) after a mutation.
   const reload = () => queryClient.invalidateQueries({ queryKey: ['tenant', 'notifications'] });
 
@@ -133,7 +148,11 @@ export default function NotificationsPage() {
               <span className="text-xs bg-violet-600 text-white px-2 py-0.5 rounded-full font-bold">{unreadCount}</span>
             )}
           </h1>
-          <p className="text-sm text-muted-foreground">{notifications.length} total · {unreadCount} unread</p>
+          <p className="text-sm text-muted-foreground">
+            {/* Both figures count the rows below, so an unread list reports unavailable
+                rather than "0 total · 0 unread" (#2829's rule, as on the SMS stats). */}
+            {failed ? '—' : notifications.length} total · {failed ? '—' : unreadCount} unread
+          </p>
         </div>
         <div className="flex gap-2">
           {unreadCount > 0 && (
@@ -155,10 +174,18 @@ export default function NotificationsPage() {
           <button key={v} onClick={() => setFilter(v as 'all' | 'unread')}
             className={cn('px-3 py-1.5 rounded-lg text-xs font-medium transition-colors',
               filter===v ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground')}>
-            {l} {v==='unread' && unreadCount > 0 && `(${unreadCount})`}
+            {l} {v==='unread' && (failed ? '(—)' : unreadCount > 0 && `(${unreadCount})`)}
           </button>
         ))}
       </div>
+
+      {/* Answered before, refused now: the list stays and says what it may not show. */}
+      {stale && (
+        <InlineErrorState
+          message={`Could not refresh, so the notifications below are the last read: ${reason}. One you just opened, marked read or deleted is still shown the way it was.`}
+          onRetry={refetch}
+        />
+      )}
 
       {loading ? (
         <div className="space-y-2">
@@ -169,6 +196,11 @@ export default function NotificationsPage() {
             </div>
           ))}
         </div>
+      ) : failed ? (
+        <InlineErrorState
+          message={`Failed to load your notifications: ${reason}`}
+          onRetry={refetch}
+        />
       ) : !visible.length ? (
         <div className="admin-card py-16 text-center">
           <BellOff className="w-12 h-12 text-muted-foreground/20 mx-auto mb-4" />

@@ -41,6 +41,19 @@ export default function TrashPage() {
     '/api/tenant/trash' + (filter !== 'all' ? `?type=${filter}` : ''),
   );
   const items: TrashItem[] = data?.data ?? [];
+  // #2872: restore and permanent delete both call `load()`, which invalidates the
+  // `['tenant','trash']` prefix — the very view the operator is looking at, plus every
+  // other type tab. TanStack Query hands the page back the `data` it already had when
+  // that refresh is refused, and the branch below keyed off `trashError && !items.length`:
+  // a bin the last read said was empty got the outage card ("this is a failed request,
+  // not an empty one") when it was in fact an answered bin whose *refresh* failed, and a
+  // bin that still had rows on screen got no mention that the restore just now clicked
+  // might not be reflected. The tabs count `items` too, so a read that never answered
+  // printed `All (0)` and four per-type zeros above nothing — the same false all-clear
+  // #2829 removed from the sentence, left standing in the tallies.
+  const failed = Boolean(trashError) && !data;
+  const stale = Boolean(trashError) && Boolean(data);
+  const reason = trashError?.message || 'no response from the server';
   const load = () => queryClient.invalidateQueries({ queryKey: ['tenant', 'trash'] });
 
   const restoreMutation = useMutation({
@@ -100,13 +113,23 @@ export default function TrashPage() {
         </div>
       </div>
 
+      {/* Kept rows, refused refresh: the list stays and says what it may not show. */}
+      {stale && (
+        <InlineErrorState
+          message={`Could not refresh, so the trash below is the last read: ${reason}. Something you just restored or deleted forever is still listed the way it was.`}
+          onRetry={() => void refetch()}
+        />
+      )}
+
       {/* Type filter tabs */}
       <div className="flex rounded-xl border border-border bg-muted/20 p-1 w-fit gap-0.5">
         {['all', 'contact', 'deal', 'task', 'company'].map(t => (
           <button key={t} onClick={() => setFilter(t)}
             className={cn('px-3 py-1.5 rounded-lg text-xs font-medium capitalize transition-colors',
               filter === t ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground')}>
-            {t === 'all' ? `All (${items.length})` : `${t}s (${items.filter(i => i.resource_type === t).length})`}
+            {t === 'all'
+              ? `All (${failed ? '—' : items.length})`
+              : `${t}s (${failed ? '—' : items.filter(i => i.resource_type === t).length})`}
           </button>
         ))}
       </div>
@@ -122,11 +145,11 @@ export default function TrashPage() {
           ))}
         </div>
       ) : !filtered.length ? (
-        trashError && !items.length ? (
+        failed ? (
           // #2829: "Trash is empty" reads as "the retention sweep had nothing to
           // purge". A failed read never looked at the tombstones. The filter tabs
           // keep their own sentence — a miss there is honest, as on the KB page.
-          <div className="admin-card p-5"><InlineErrorState message="Could not load the trash — this is a failed request, not an empty one." onRetry={() => void refetch()} /></div>
+          <div className="admin-card p-5"><InlineErrorState message={`Could not load the trash — this is a failed request, not an empty one. ${reason}`} onRetry={() => void refetch()} /></div>
         ) : (
         <div className="admin-card py-16 text-center">
           <Trash2 className="w-12 h-12 text-muted-foreground/20 mx-auto mb-4" />
