@@ -9,6 +9,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
 import { Plus, Zap, X, Loader2, Trash2 } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
@@ -52,20 +53,40 @@ export default function AssignmentRulesPage() {
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
 
   // #1328: reads via TanStack Query (were raw fetch + useEffect).
-  const { data: rulesData, isLoading: loading, error } = useApiQuery<{ data?: AssignmentRule[] }>(
+  //
+  // #2872: this read's only channel was `if (error) toast.error(...)` in the render body,
+  // which faded in four seconds and re-fired on every render while "No assignment rules /
+  // Create rules to automatically assign records to team members" stayed on screen. That
+  // single flag also could not tell an unread list from a kept one: `reload()` invalidates
+  // RULES_QUERY from both saveRule.onSuccess and deleteRule.onSuccess, and TanStack Query
+  // keeps `rulesData` when that revalidation is refused — so the ordinary state right after
+  // creating, editing or deleting a rule was kept rows whose only trace was a toast.
+  const { data: rulesData, isLoading: loading, error: rulesError, refetch: refetchRules } = useApiQuery<{ data?: AssignmentRule[] }>(
     RULES_QUERY,
     '/api/tenant/assignment-rules',
   );
   const rules: AssignmentRule[] = rulesData?.data ?? [];
-  if (error) toast.error('Failed to load assignment rules');
+  const rulesFailed = Boolean(rulesError) && !rulesData;
+  const rulesStale = Boolean(rulesError) && Boolean(rulesData);
+  const rulesReason = rulesError?.message || 'no response from the server';
 
   // Teams the rule can route to (config.teamId) — the member pool is then
   // loaded live from the team at assignment time.
-  const { data: teamsData } = useApiQuery<{ data?: { id: string; name: string; memberCount?: number }[] }>(
+  //
+  // #2872: this read destructured neither `error` nor `refetch`, so it had no channel at all.
+  // Nothing in the app invalidates TEAMS_QUERY — `reload()` only touches RULES_QUERY — so this
+  // read is re-run when the operator comes back to Settings → Assignment Rules after the
+  // 30-second `staleTime` and, unlike the rules list, a refusal there was invisible: the builder
+  // showed a picker with nothing but "— Choose a team —", which is exactly what a tenant with no
+  // teams at all sees.
+  const { data: teamsData, error: teamsError, refetch: refetchTeams } = useApiQuery<{ data?: { id: string; name: string; memberCount?: number }[] }>(
     TEAMS_QUERY,
     '/api/tenant/teams',
   );
   const teams = teamsData?.data ?? [];
+  const teamsFailed = Boolean(teamsError) && !teamsData;
+  const teamsStale = Boolean(teamsError) && Boolean(teamsData);
+  const teamsReason = teamsError?.message || 'no response from the server';
 
   const reload = () => queryClient.invalidateQueries({ queryKey: RULES_QUERY });
 
@@ -164,8 +185,19 @@ export default function AssignmentRulesPage() {
         </button>
       </div>
 
+      {rulesStale && (
+        <InlineErrorState
+          message={`Could not refresh, so the rules below are the last read: ${rulesReason}. One you just created, edited or deleted is still shown the way it was.`}
+          onRetry={refetchRules}
+        />
+      )}
       {loading ? (
         [...Array(3)].map((_, i) => <div key={i} className="h-16 bg-muted rounded-2xl animate-pulse" />)
+      ) : rulesFailed ? (
+        <InlineErrorState
+          message={`Failed to load assignment rules: ${rulesReason}`}
+          onRetry={refetchRules}
+        />
       ) : rules.length === 0 ? (
         <div className="text-center py-12 border border-dashed border-border rounded-2xl">
           <Zap className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
@@ -242,12 +274,26 @@ export default function AssignmentRulesPage() {
               </div>
               <div>
                 <label className="block text-xs font-medium text-muted-foreground mb-1">Assign to team</label>
-                <select value={form.teamId} onChange={e => setForm(f => ({ ...f, teamId: e.target.value }))} className={inp}>
-                  <option value="">— Choose a team —</option>
-                  {teams.map(t => (
-                    <option key={t.id} value={t.id}>{t.name}{typeof t.memberCount === 'number' ? ` (${t.memberCount})` : ''}</option>
-                  ))}
-                </select>
+                {teamsStale && (
+                  <InlineErrorState
+                    className="mb-1.5"
+                    message={`Could not refresh the team list, so the options below are the last read: ${teamsReason}. A team created since this was fetched is missing, and the member counts beside them are old.`}
+                    onRetry={refetchTeams}
+                  />
+                )}
+                {teamsFailed ? (
+                  <InlineErrorState
+                    message={`Failed to load your teams, so there is nothing to pick from — which is not the same as having none: ${teamsReason}. Leave the team unset and list members in the advanced box below, or try again.`}
+                    onRetry={refetchTeams}
+                  />
+                ) : (
+                  <select value={form.teamId} onChange={e => setForm(f => ({ ...f, teamId: e.target.value }))} className={inp}>
+                    <option value="">— Choose a team —</option>
+                    {teams.map(t => (
+                      <option key={t.id} value={t.id}>{t.name}{typeof t.memberCount === 'number' ? ` (${t.memberCount})` : ''}</option>
+                    ))}
+                  </select>
+                )}
                 <p className="text-[11px] text-muted-foreground mt-1">
                   Routes {form.entityType}s to this team&apos;s members using the {form.type.replace('_', ' ')} strategy. Manage teams in Settings → Teams. Leave blank to define members manually in the advanced config below.
                 </p>

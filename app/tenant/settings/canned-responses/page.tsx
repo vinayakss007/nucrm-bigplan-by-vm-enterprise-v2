@@ -9,6 +9,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
 import { Plus, Edit2, Trash2, X, Loader2, MessageSquare, Search } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import toast from 'react-hot-toast';
 
 interface CannedResponse {
@@ -33,15 +34,29 @@ export default function CannedResponsesPage() {
 
   // #1328: list via TanStack Query (was raw fetch + useEffect). category/search
   // are part of the key so each view refetches and caches independently.
+  //
+  // #2872: the failure had one channel, `if (error) toast.error(...)` in the render body —
+  // a four-second toast, re-fired on every render, while "No canned responses / Create
+  // templates to speed up ticket replies" stayed underneath it answering for the refusal.
+  // These are the templates an agent inserts into a ticket answer (the `{{…}}` interpolation
+  // in app/api/tenant/tickets/[id]/replies is written for them), so an unread tenant was
+  // reported as one with nothing saved. And `reload()` invalidates the `['tenant',
+  // 'canned-responses']` prefix from create, edit and delete alike, so the ordinary state right
+  // after using the form is a kept `data` beside a refused revalidation — which one flag could
+  // only ever report as the list being gone.
   const params = new URLSearchParams();
   if (categoryFilter) params.set('category', categoryFilter);
   if (search) params.set('search', search);
-  const { data, isLoading: loading, error } = useApiQuery<{ data?: CannedResponse[] }>(
+  const { data, isLoading: loading, error, refetch } = useApiQuery<{ data?: CannedResponse[] }>(
     ['tenant', 'canned-responses', { categoryFilter, search }],
     `/api/tenant/canned-responses?${params}`,
   );
   const responses: CannedResponse[] = data?.data ?? [];
-  if (error) toast.error('Failed to load canned responses');
+  // `categoryFilter`/`search` are in the key, so a filtered view that has never answered has
+  // no `data` of its own and is `failed`, not somebody else's last read.
+  const failed = Boolean(error) && !data;
+  const stale = Boolean(error) && Boolean(data);
+  const reason = error?.message || 'no response from the server';
 
   const reload = () => queryClient.invalidateQueries({ queryKey: ['tenant', 'canned-responses'] });
 
@@ -168,10 +183,21 @@ export default function CannedResponsesPage() {
       </div>
 
       {/* List */}
+      {stale && (
+        <InlineErrorState
+          message={`Could not refresh, so the responses below are the last read: ${reason}. One you just created, edited or deleted is still shown the way it was.`}
+          onRetry={refetch}
+        />
+      )}
       {loading ? (
         <div className="space-y-3">
           {[...Array(3)].map((_, i) => <div key={i} className="h-24 bg-muted rounded-2xl animate-pulse" />)}
         </div>
+      ) : failed ? (
+        <InlineErrorState
+          message={`Failed to load canned responses: ${reason}`}
+          onRetry={refetch}
+        />
       ) : responses.length === 0 ? (
         <div className="text-center py-12 border border-dashed border-border rounded-2xl">
           <MessageSquare className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
