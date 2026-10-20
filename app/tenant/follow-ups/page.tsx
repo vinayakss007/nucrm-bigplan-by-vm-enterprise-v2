@@ -54,7 +54,17 @@ export default function FollowUpsPage() {
   );
   const data: FollowUp[] = json?.data ?? [];
   const total = json?.total ?? 0;
-  const error = queryError ? `Failed to load follow-ups: ${queryError.message}` : null;
+  // #2872: this one flag was doing two jobs. TanStack Query keeps `json` when a
+  // revalidation of a view that already answered fails, and `reload()` after Mark
+  // complete / Delete invalidates every follow-ups view — so a refused refresh took
+  // the rows, the `Showing … of N` line and the pager off the screen and reported
+  // that nothing had loaded. The key carries {statusFilter, offset}, so a filter the
+  // operator has never opened is a read that never answered while the view they came
+  // from still holds its rows — the two arms are reachable from the same page.
+  const failed = Boolean(queryError) && !json;
+  const stale = Boolean(queryError) && Boolean(json);
+  const reason = queryError?.message || 'no response from the server';
+  const error = failed ? `Failed to load follow-ups: ${reason}` : null;
   useEffect(() => { if (queryError) toast.error('Failed to load follow-ups'); }, [queryError]);
 
   useEffect(() => { setOffset(0); }, [statusFilter]);
@@ -185,6 +195,17 @@ export default function FollowUpsPage() {
 
       {error && (
         <InlineErrorState message={error} onRetry={refetchFollowUps} />
+      )}
+
+      {stale && (
+        // Refused refresh, not a missing read: the rows below are the answer this
+        // view already gave. The count and the page arithmetic come off the same
+        // unread read, and PATCH/DELETE re-read the row server-side by id + tenant
+        // and 404 on the way, so the row buttons stay attached to rows on screen.
+        <InlineErrorState
+          message={`Could not refresh, so the follow-ups below are the last read: ${reason}. One completed or deleted elsewhere since this was fetched is still listed here with its Mark complete and Delete buttons, and "of ${total}" is the count from before — page on and you can land past the real end.`}
+          onRetry={refetchFollowUps}
+        />
       )}
 
       {!loading && !error && data.length === 0 && (
