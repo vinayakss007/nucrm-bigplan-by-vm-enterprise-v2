@@ -60,6 +60,14 @@ export default function WarmupDashboardPage() {
   );
   const config: WarmupConfig | null = data?.config ?? null;
   const pool: PoolParticipant[] = data?.pool ?? [];
+  // #2872: this dashboard's whole job is to say whether warmup is running right now. Pause/Resume
+  // invalidates WARMUP_QUERY, so a refused refresh is the ordinary state after the operator clicks —
+  // and TanStack keeps `data`, which sends the chain below down the `config ?` branch: the status
+  // banner keeps asserting the state the server just refused to confirm, silently. `failed` is the
+  // read that never answered; `stale` is the one that answered and then could not refresh.
+  const failed = Boolean(warmupError) && !data;
+  const stale = Boolean(warmupError) && Boolean(data);
+  const reason = warmupError?.message || 'no response from the server';
 
   const toggleMutation = useMutation({
     mutationFn: async (nextActive: boolean) => {
@@ -127,7 +135,10 @@ export default function WarmupDashboardPage() {
           <h1 className="text-xl font-bold">Email Warmup</h1>
           <p className="text-sm text-muted-foreground">Build sender reputation by gradually ramping up email volume</p>
         </div>
-        {!config && (
+        {/* During an outage the body says the setup could not be read; a header offering to configure
+            warmup from scratch contradicts it, and invites the operator to rebuild a setup that may be
+            sitting there running. (#2872, the same trap #2852 found on territories.) */}
+        {!config && !failed && (
           <button onClick={() => setShowSetup(true)}
             className="flex items-center gap-2 px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold">
             <Mail className="w-4 h-4" />Setup Warmup
@@ -135,6 +146,13 @@ export default function WarmupDashboardPage() {
         )}
       </div>
 
+      {stale && (
+        <InlineErrorState
+          className="mb-1.5"
+          message={`Could not refresh your warmup setup, so the status below is the last read: ${reason}`}
+          onRetry={refetchWarmup}
+        />
+      )}
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           {[...Array(4)].map((_, i) => <div key={i} className="h-32 bg-muted rounded-2xl animate-pulse" />)}
@@ -289,8 +307,8 @@ export default function WarmupDashboardPage() {
             )}
           </div>
         </>
-      ) : warmupError ? (
-        <InlineErrorState message={`Failed to load your warmup pool: ${warmupError.message}`} onRetry={refetchWarmup} />
+      ) : failed ? (
+        <InlineErrorState message={`Failed to load your warmup setup: ${reason}`} onRetry={refetchWarmup} />
       ) : (
         /* No config - empty state */
         <div className="text-center py-12 border border-dashed border-border rounded-2xl">

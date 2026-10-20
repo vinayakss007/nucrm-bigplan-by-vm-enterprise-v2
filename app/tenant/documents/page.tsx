@@ -51,6 +51,14 @@ export default function DocumentsPage() {
   );
   const documents: DocumentFile[] = envelope?.data?.documents ?? [];
   const folders: Folder[] = envelope?.data?.folders ?? [];
+  // #2872: this page decides its file list by length before it decides it by error — `documents.length
+  // > 0` comes first, so the ordinary state here (upload, create-folder and delete all invalidate this
+  // query) renders the last read and says nothing about the refresh that refused it. For delete that is
+  // worse than a missing banner: the file the operator just removed is still listed, the green "Document
+  // deleted" strip is on screen agreeing with it, and there is no reason on the page to doubt either.
+  const failed = Boolean(envelopeError) && !envelope;
+  const stale = Boolean(envelopeError) && Boolean(envelope);
+  const reason = envelopeError?.message || 'no response from the server';
 
   const loadDocuments = () =>
     queryClient.invalidateQueries({ queryKey: ['tenant', 'documents'] });
@@ -246,6 +254,12 @@ export default function DocumentsPage() {
         </p>
       </div>
 
+      {stale && (
+        <InlineErrorState
+          message={`Could not refresh this folder, so what is listed below is the last read: ${reason}. A file you just deleted may still appear here.`}
+          onRetry={refetchDocuments}
+        />
+      )}
       {/* Folders */}
       {folders.length > 0 && (
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
@@ -285,8 +299,8 @@ export default function DocumentsPage() {
             ))}
           </div>
         </div>
-      ) : envelopeError ? (
-        <InlineErrorState message={`Failed to load this folder: ${envelopeError.message}`} onRetry={refetchDocuments} />
+      ) : failed ? (
+        <InlineErrorState message={`Failed to load this folder: ${reason}`} onRetry={refetchDocuments} />
       ) : (
         folders.length === 0 && (
           <div className="text-center py-12 text-muted-foreground">
