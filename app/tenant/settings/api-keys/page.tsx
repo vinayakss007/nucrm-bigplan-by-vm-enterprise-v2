@@ -47,7 +47,7 @@ export default function APIKeysPage() {
   const keys: ApiKey[] = data?.data ?? [];
   const reload = () => queryClient.invalidateQueries({ queryKey: API_KEYS_QUERY });
 
-  // #2872: create (:58) and revoke (:64) invalidate this key, so a *refused
+  // #2872: create (:66) and revoke (:72) invalidate this key, so a *refused
   // refresh* leaves TanStack holding the last good rows in `data`. That is a
   // different fact from a read that never answered — and this page used to
   // collapse both into the bare `keysError` flag.
@@ -137,7 +137,7 @@ export default function APIKeysPage() {
           re-reads the row (:34) and 404s when it is gone (:48). */}
       {stale && (
         <InlineErrorState
-          message={`Could not refresh, so the keys below are the last read: ${reason}. One may already be revoked or expired elsewhere yet still show Revoke — that button stays live because the route re-reads the row and 404s if it is gone — and its "Last used" is the older value, so a key that looks idle may be handling live traffic right now.`}
+          message={`Could not refresh, so the keys below are the last read: ${reason}. One that was revoked or let expire since this was fetched is still listed here with its Revoke button, and its "Last used" is the older value — a key that looks idle may be handling live traffic right now. Revoking a key that is no longer there signs nothing new out, and a key created since this read is missing from this list entirely: its secret is shown once and never again, so nothing here can recover it.`}
           onRetry={() => void refetch()}
         />
       )}

@@ -185,8 +185,11 @@ describe('api keys: a refused refresh keeps the rows AND says what it cost (#287
     expect(alerts()).toMatch(/Request failed \(504\)/);
     // The specific loss: revoked-elsewhere + still-offered Revoke, and a stale "Last used".
     expect(alerts()).toMatch(/Revoke/i);
-    expect(alerts()).toMatch(/404/);
+    expect(alerts()).toMatch(/signs nothing new out/i);
     expect(alerts()).toMatch(/live traffic right now/i);
+    // Operator-facing: the route facts above are what makes that true, but the banner
+    // is not where a status code belongs.
+    expect(alerts()).not.toMatch(/\b404\b|route|endpoint/i);
   });
 
   it('leaves the Revoke button clickable over a stale row — the route 404s on a gone key', () => {
