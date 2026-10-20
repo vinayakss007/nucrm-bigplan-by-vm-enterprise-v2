@@ -39,6 +39,15 @@ export default function CSATDashboardPage() {
     `/api/tenant/csat/stats?days=${days}`,
   );
   const stats: CSATStats | null = data?.data ?? null;
+  // #2872: TanStack Query keeps `data` when a revalidation of a read that already
+  // succeeded fails, and the chain below branched on `error` alone — so a refused
+  // reload of a window that had already answered replaced the whole dashboard (its
+  // three cards, the score distribution, the feedback list) with an outage card.
+  // Switching `days` is the other story: the window is part of the key, so a range
+  // that has never answered is `failed`, not `stale`, and keeps #2829's banner.
+  const failed = Boolean(error) && !data;
+  const stale = Boolean(error) && Boolean(data);
+  const reason = error?.message || 'no response from the server';
 
   const emojis = ['😞', '😕', '😐', '😊', '😄'];
 
@@ -61,13 +70,20 @@ export default function CSATDashboardPage() {
         </select>
       </div>
 
+      {stale && (
+        <InlineErrorState
+          message={`Could not refresh, so the scores below are the last read: ${reason}. A survey answered since this was fetched is not counted here.`}
+          onRetry={refetch}
+        />
+      )}
+
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {[...Array(3)].map((_, i) => <div key={i} className="h-32 bg-muted rounded-2xl animate-pulse" />)}
         </div>
-      ) : error ? (
+      ) : failed ? (
         <InlineErrorState
-          message={`Failed to load CSAT stats: ${error.message || 'no response from the server'}`}
+          message={`Failed to load CSAT stats: ${reason}`}
           onRetry={refetch}
         />
       ) : stats ? (
