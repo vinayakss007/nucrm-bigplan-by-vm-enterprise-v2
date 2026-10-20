@@ -10,6 +10,7 @@ import { useApiQuery } from '@/lib/query/client';
 import { Plus, Trash2, X, Loader2, ChevronDown, ChevronRight, GitBranch, Layers } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import toast from 'react-hot-toast';
 
 interface Stage {
@@ -60,7 +61,13 @@ export default function PipelinesPage() {
     '/api/tenant/pipelines',
   );
   const pipelines: Pipeline[] = useMemo(() => data?.data ?? [], [data]);
-  const error = queryError ? 'Failed to load pipelines' : null;
+  // #2829/#2872: the page used to answer any error by replacing itself with a "Failed to load
+  // pipelines" card — but create, add-stage and delete all invalidate PIPELINES_QUERY, so that card
+  // also swallowed the list an operator had just changed. An outage and a refused refresh are
+  // different states, and neither one is a reason to hide data the page still holds.
+  const failed = Boolean(queryError) && !data;
+  const stale = Boolean(queryError) && Boolean(data);
+  const reason = queryError?.message || 'no response from the server';
 
   const loadPipelines = () => queryClient.invalidateQueries({ queryKey: PIPELINES_QUERY });
 
@@ -176,22 +183,6 @@ export default function PipelinesPage() {
     );
   }
 
-  if (error) {
-    return (
-      <div className="max-w-[1600px] mx-auto">
-        <div className="text-center py-16 border border-dashed border-border rounded-2xl">
-          <p className="text-red-500 font-medium">{error}</p>
-          <button
-            onClick={() => refetch()}
-            className="mt-4 px-4 py-2 rounded-xl bg-violet-600 text-white text-sm font-semibold hover:bg-violet-700"
-          >
-            Retry
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="max-w-[1600px] mx-auto space-y-6 animate-fade-in">
       {/* Header */}
@@ -201,10 +192,12 @@ export default function PipelinesPage() {
             <GitBranch className="w-5 h-5 text-violet-500" />
             Pipelines
           </h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            <span className="text-violet-600 font-semibold">{pipelines.length}</span>{' '}
-            pipeline{pipelines.length !== 1 ? 's' : ''} configured
-          </p>
+          {!failed && (
+            <p className="text-sm text-muted-foreground mt-0.5">
+              <span className="text-violet-600 font-semibold">{pipelines.length}</span>{' '}
+              pipeline{pipelines.length !== 1 ? 's' : ''} configured
+            </p>
+          )}
         </div>
         <button
           onClick={() => setShowCreate(true)}
@@ -298,22 +291,22 @@ export default function PipelinesPage() {
         </div>
       )}
 
+      {stale && <InlineErrorState message={`Could not refresh, so the list below is the last read: ${reason}. A pipeline you just changed may be out of date.`} onRetry={refetch} />}
       {/* Pipelines list */}
       {pipelines.length === 0 ? (
-        <div className="text-center py-16 border border-dashed border-border rounded-2xl">
-          <GitBranch className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
-          <p className="font-medium">No pipelines yet</p>
-          <p className="text-sm text-muted-foreground mt-1">
-            Create a pipeline to organize your deals into stages
-          </p>
-          <button
-            onClick={() => setShowCreate(true)}
-            className="mt-4 flex items-center gap-2 px-4 py-2 rounded-xl bg-violet-600 text-white text-sm font-semibold mx-auto hover:bg-violet-700"
-          >
-            <Plus className="w-4 h-4" />
-            Create First Pipeline
-          </button>
-        </div>
+        failed ? (
+          <InlineErrorState message={`Failed to load pipelines: ${reason}`} onRetry={refetch} />
+        ) : (
+          <div className="text-center py-16 border border-dashed border-border rounded-2xl">
+            <GitBranch className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
+            <p className="font-medium">No pipelines yet</p>
+            <p className="text-sm text-muted-foreground mt-1">Create a pipeline to organize your deals into stages</p>
+            <button onClick={() => setShowCreate(true)} className="mt-4 flex items-center gap-2 px-4 py-2 rounded-xl bg-violet-600 text-white text-sm font-semibold mx-auto hover:bg-violet-700">
+              <Plus className="w-4 h-4" />
+              Create First Pipeline
+            </button>
+          </div>
+        )
       ) : (
         <div className="space-y-3">
           {pipelines.map(pipeline => {

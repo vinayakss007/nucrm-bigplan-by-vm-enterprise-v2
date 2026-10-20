@@ -9,6 +9,7 @@ import { useMutation } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
 import { MessageCircle, Loader2, User, Bot, Clock, CheckCircle2, XCircle } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import toast from 'react-hot-toast';
 import { ErrorBoundary } from '@/components/ui/error-boundary';
 
@@ -59,6 +60,7 @@ export default function ChatPage() {
 function ChatInner() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
+  const [messagesError, setMessagesError] = useState<string | null>(null);
   const [selectedSession, setSelectedSession] = useState<ChatSession | null>(null);
   const [filter, setFilter] = useState<string>('active');
   const [replyText, setReplyText] = useState('');
@@ -66,23 +68,39 @@ function ChatInner() {
   // #1328: session list via TanStack Query, re-keyed on the status filter
   // (was raw fetch + useEffect + useCallback).
   const sessionsUrl = filter === 'all' ? '/api/tenant/chat' : `/api/tenant/chat?status=${encodeURIComponent(filter)}`;
-  const { data: sessionsData, isLoading: loading } = useApiQuery<{ data?: ChatSession[] }>(
+  const { data: sessionsData, isLoading: loading, error: sessionsError, refetch: refetchSessions } = useApiQuery<{ data?: ChatSession[] }>(
     ['tenant', 'chat', 'sessions', filter],
     sessionsUrl,
   );
   const sessions: ChatSession[] = useMemo(() => sessionsData?.data ?? [], [sessionsData]);
+  // #2829: this is the panel an agent watches for work, so "No sessions found" is the most
+  // consequential sentence on the page — said during an outage it means a visitor waiting for
+  // help is counted as nobody waiting. #2872's other half matters here too: react-query
+  // keeps `data` while a refetch fails, and the operator has no way to tell the stale list
+  // from the current one.
+  const failed = Boolean(sessionsError) && !sessionsData;
+  const stale = Boolean(sessionsError) && Boolean(sessionsData);
+  const reason = sessionsError?.message || 'no response from the server';
 
   // On-demand fetch (only runs when a session is selected) — left as plain fetch.
   const loadMessages = async (session: ChatSession) => {
     setSelectedSession(session);
     setLoadingMessages(true);
     setMessages([]);
+    setMessagesError(null);
     try {
       const res = await fetch(`/api/tenant/chat/${session.id}/messages`);
-      if (res.ok) {
-        const d = await res.json();
-        setMessages(d.data ?? []);
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        setMessagesError(d.error || `Request failed (${res.status})`);
+        return;
       }
+      const d = await res.json();
+      setMessages(d.data ?? []);
+    } catch (err: unknown) {
+      // A rejection that is not an Error used to leave `messages` at [], and the thread pane
+      // reported an unread conversation as one the visitor never wrote in.
+      setMessagesError(err instanceof Error ? err.message : 'no response from the server');
     } finally {
       setLoadingMessages(false);
     }
@@ -136,13 +154,23 @@ function ChatInner() {
       <div className="flex gap-4 h-[calc(100vh-14rem)]">
         {/* Sessions Sidebar */}
         <div className="w-80 shrink-0 overflow-y-auto space-y-2">
+          {stale && (
+            <InlineErrorState
+              message={`The ${filter} list below is the last read: ${reason}`}
+              onRetry={refetchSessions}
+            />
+          )}
           {loading ? (
             [...Array(4)].map((_, i) => <div key={i} className="h-20 bg-muted rounded-xl animate-pulse" />)
           ) : sessions.length === 0 ? (
-            <div className="text-center py-8 border border-dashed border-border rounded-2xl">
-              <MessageCircle className="w-6 h-6 text-muted-foreground mx-auto mb-2" />
-              <p className="text-sm text-muted-foreground">No sessions found</p>
-            </div>
+            failed ? (
+              <InlineErrorState message={`Failed to load ${filter} sessions: ${reason}`} onRetry={refetchSessions} />
+            ) : (
+              <div className="text-center py-8 border border-dashed border-border rounded-2xl">
+                <MessageCircle className="w-6 h-6 text-muted-foreground mx-auto mb-2" />
+                <p className="text-sm text-muted-foreground">No sessions found</p>
+              </div>
+            )
           ) : (
             sessions.map(s => {
               const cfg = getStatusConfig(s.status);
@@ -206,7 +234,11 @@ function ChatInner() {
                     <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
                   </div>
                 ) : messages.length === 0 ? (
-                  <p className="text-center text-sm text-muted-foreground py-8">No messages yet</p>
+                  messagesError ? (
+                    <InlineErrorState message={`Failed to load this conversation: ${messagesError}`} />
+                  ) : (
+                    <p className="text-center text-sm text-muted-foreground py-8">No messages yet</p>
+                  )
                 ) : (
                   messages.map(msg => {
                     const isVisitor = msg.senderType === 'visitor';

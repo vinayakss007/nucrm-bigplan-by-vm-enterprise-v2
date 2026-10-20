@@ -478,7 +478,7 @@ describe('the baseline decays, and the guards still pass', () => {
     expect(r.stdout + r.stderr).not.toContain('no longer offends');
   });
 
-  it('drops exactly the five AI panels and leaves the ones still outstanding', () => {
+  it('drops exactly the five AI panels, which is all this slice had on the list', () => {
     const doc = JSON.parse(readFileSync(`${root}/scripts/panel-error-state-baseline.json`, 'utf8'));
     const files = doc.files ?? doc;
     for (const p of ['activity', 'at-risk', 'draft', 'lead-scoring', 'lead-warming']) {
@@ -491,11 +491,10 @@ describe('the baseline decays, and the guards still pass', () => {
     // only ever paths no slice in flight is removing: `superadmin/modules` is claimed by #2856
     // and `reports/custom` by the reports slice, and a path that gets fixed before this merges
     // would fail a test about the AI panels for no reason.
-    for (const stillOwed of [
-      'app/tenant/chat/page.tsx', 'app/tenant/emails/page.tsx',
-    ]) {
-      expect(Object.keys(files)).toContain(stillOwed);
-    }
+    //
+    // There are none left to name. #2829's last slice fixed the final three — `chat`, `emails`
+    // and `pipelines` — so the belt-and-braces list is empty and the two lines above are the only
+    // anti-vacuity proof the baseline can give. A page that joins the class is a NOVEL offender.
     // 44 on `e89f86e8`, 24 on the main this slice merges into, 19 with these five gone.
     // A ceiling, never an equality: #2856 and the reports slice each drop the number further.
     expect(Object.keys(files).length).toBeLessThanOrEqual(19);
