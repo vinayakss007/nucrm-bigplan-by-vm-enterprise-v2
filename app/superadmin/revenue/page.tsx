@@ -71,7 +71,7 @@ export default function RevenuePage() {
   //   stale  = an earlier read answered and the *revalidation* was refused
   //            (Boolean(error) && Boolean(data)): the rows are on screen, so the
   //            page must keep them and add a caveat, never an outage sentence.
-  // `revErr`/`tenErr` are referenced ONLY in these four lines; every render arm keys
+  // `revErr`/`tenErr` are referenced ONLY in these six lines; every render arm keys
   // off the derived flag, never off the bare error object.
   const revErr = revenueQuery.error;
   const tenErr = tenantsQuery.error;
@@ -79,6 +79,10 @@ export default function RevenuePage() {
   const revenueStale  = Boolean(revErr) && Boolean(revData);
   const tenantsFailed = Boolean(tenErr) && !tenData;
   const tenantsStale  = Boolean(tenErr) && Boolean(tenData);
+  // What the refusal itself said, interpolated into the banner the way the other
+  // #2872 panels do. A refusal that carried no message still reads as a sentence.
+  const revReason = revErr?.message || 'no response from the server';
+  const tenReason = tenErr?.message || 'no response from the server';
 
   // #2872 — the other half of the collapse: the old `loading = a.isLoading || b.isLoading`
   // union (main page.tsx:49) skeletonized an already-answered read whenever the other
@@ -124,18 +128,18 @@ export default function RevenuePage() {
 
       {/* Revenue read — banner ABOVE every kept revenue figure (metrics + events).
           The outage sentence can only be reached when `!revData`, i.e. when the read
-          never answered; a refused refresh (revenueStale) can NEVER print it. The raw
-          ApiQueryError message ("Request failed (NNN)") is deliberately withheld — it
-          is a status code and belongs in the code below, not in operator copy (#2872 r3). */}
+          never answered; a refused refresh (revenueStale) can NEVER print it. The
+          reason is the dynamic `${revReason}` the other #2872 panels show — the
+          sentence names its own read, so the two channels stay distinguishable. */}
       {revenueFailed && (
         <InlineErrorState
-          message="Revenue didn't come back, so the totals and billing events below aren't known yet — this is a failed read, not zero revenue."
+          message={`Failed to load revenue: ${revReason}. The four totals and the billing events below are unanswered — not zero revenue, and not an empty event list.`}
           onRetry={() => void revenueQuery.refetch()}
         />
       )}
       {revenueStale && (
         <InlineErrorState
-          message="Revenue couldn't be refreshed, so the totals and billing events below are from the last successful read — a plan change, a new paying tenant, or a charge that arrived since then is not counted here."
+          message={`Could not refresh revenue, so the totals and billing events below are the last read: ${revReason}. A plan change, a new paying tenant, or a charge that arrived since this was fetched is missing here, while every total below still counts the old ones.`}
           onRetry={() => void revenueQuery.refetch()}
         />
       )}
@@ -170,13 +174,13 @@ export default function RevenuePage() {
           refused refresh keeps the rows and only adds the caveat. */}
       {tenantsFailed && (
         <InlineErrorState
-          message="The organization list didn't come back, so the plan breakdown and monthly chart below aren't known yet — this is a failed read, not an empty plan mix."
+          message={`Failed to load the organization list: ${tenReason}. The plan breakdown and the monthly chart below are unanswered — not an empty plan mix.`}
           onRetry={() => void tenantsQuery.refetch()}
         />
       )}
       {tenantsStale && (
         <InlineErrorState
-          message="The organization list couldn't be refreshed, so the plan breakdown and monthly chart below are from the last successful read — a tenant that upgraded, downgraded, or signed up since then is not reflected here."
+          message={`Could not refresh the organization list, so the plan breakdown and monthly chart below are the last read: ${tenReason}. A tenant that upgraded, downgraded, or signed up since this was fetched is counted the old way, is missing from its plan row, or is absent from the chart's month.`}
           onRetry={() => void tenantsQuery.refetch()}
         />
       )}

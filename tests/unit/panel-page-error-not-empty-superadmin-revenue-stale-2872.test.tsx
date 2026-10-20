@@ -108,10 +108,18 @@ const staleRead = (data: unknown, message = 'Request failed (504)'): QueryResult
   data, error: new Error(message), isLoading: false, refetch: vi.fn(),
 });
 
-const REV_OUTAGE = "Revenue didn't come back, so the totals and billing events below aren't known yet — this is a failed read, not zero revenue.";
-const REV_STALE = "Revenue couldn't be refreshed, so the totals and billing events below are from the last successful read — a plan change, a new paying tenant, or a charge that arrived since then is not counted here.";
-const TEN_OUTAGE = "The organization list didn't come back, so the plan breakdown and monthly chart below aren't known yet — this is a failed read, not an empty plan mix.";
-const TEN_STALE = "The organization list couldn't be refreshed, so the plan breakdown and monthly chart below are from the last successful read — a tenant that upgraded, downgraded, or signed up since then is not reflected here.";
+// Each banner names its read, then the reason that read was refused, then the
+// specific loss. The middle is dynamic (`${revReason}` / `${tenReason}`) exactly as
+// in the merged #2872 panels, so the two halves are pinned here and the reason is
+// pinned by the `names the refusal` cases.
+const REV_OUTAGE_HEAD = 'Failed to load revenue:';
+const REV_STALE_HEAD = 'Could not refresh revenue, so the totals and billing events below are the last read:';
+const TEN_OUTAGE_HEAD = 'Failed to load the organization list:';
+const TEN_STALE_HEAD = 'Could not refresh the organization list, so the plan breakdown and monthly chart below are the last read:';
+const REV_OUTAGE = 'The four totals and the billing events below are unanswered — not zero revenue, and not an empty event list.';
+const REV_STALE = 'A plan change, a new paying tenant, or a charge that arrived since this was fetched is missing here, while every total below still counts the old ones.';
+const TEN_OUTAGE = 'The plan breakdown and the monthly chart below are unanswered — not an empty plan mix.';
+const TEN_STALE = 'A tenant that upgraded, downgraded, or signed up since this was fetched is counted the old way, is missing from its plan row, or is absent from the chart\'s month.';
 
 const alerts = () =>
   screen.queryAllByRole('alert').map((el) => el.textContent ?? '').join(' | ');
@@ -158,7 +166,7 @@ describe('a refused revenue refresh keeps the numbers and says what it is missin
   it('the stale caveat names the specific loss, not a vague warning', () => {
     registry.byUrl = { [REVENUE]: staleRead(REV_ROWS), [TENANTS]: ok(TEN_ROWS) };
     mount();
-    expect(alerts()).toMatch(/plan change, a new paying tenant, or a charge that arrived since then is not counted here/i);
+    expect(alerts()).toMatch(/plan change, a new paying tenant, or a charge that arrived since this was fetched is missing here/i);
     expect(alerts()).not.toMatch(/may be out of date|out of date|some data/i);
   });
 
@@ -172,12 +180,21 @@ describe('a refused revenue refresh keeps the numbers and says what it is missin
     expect(alerts()).not.toContain(REV_OUTAGE);
   });
 
+  it('names the reason the refresh was refused, in the middle of the sentence', () => {
+    registry.byUrl = { [REVENUE]: staleRead(REV_ROWS), [TENANTS]: ok(TEN_ROWS) };
+    mount();
+    expect(alerts()).toContain(`${REV_STALE_HEAD} Request failed (504).`);
+    expect(alerts()).toContain(REV_STALE);
+  });
+
   it('states a complete sentence whether or not the refusal carried a message', () => {
     registry.byUrl = { [REVENUE]: staleRead(REV_ROWS, ''), [TENANTS]: ok(TEN_ROWS) };
     mount();
-    // The status code never leaks into operator copy, with or without a message.
+    // A refusal that said nothing still reads as a sentence, never `undefined` and
+    // never an empty clause where the reason belongs.
+    expect(alerts()).toContain(`${REV_STALE_HEAD} no response from the server.`);
+    expect(alerts()).not.toMatch(/undefined|null/);
     expect(alerts()).toContain(REV_STALE);
-    expect(alerts()).not.toMatch(/Request failed|\(50|\d{3}/);
   });
 });
 
@@ -186,6 +203,7 @@ describe('a revenue read that never answered gets an outage and dashes every der
     const rev = failedRead();
     registry.byUrl = { [REVENUE]: rev, [TENANTS]: ok(TEN_ROWS) };
     mount();
+    expect(alerts()).toContain(`${REV_OUTAGE_HEAD} Request failed (500).`);
     expect(alerts()).toContain(REV_OUTAGE);
     expect(alerts()).not.toContain(REV_STALE);
     // MRR / Paying / Free Tier / ARPU are all withheld, not reported as 0.
@@ -199,6 +217,7 @@ describe('a revenue read that never answered gets an outage and dashes every der
   it('withholds the events rather than claiming "no billing events yet"', () => {
     registry.byUrl = { [REVENUE]: failedRead('kaboom'), [TENANTS]: ok(TEN_ROWS) };
     mount();
+    expect(alerts()).toContain('Failed to load revenue: kaboom.');
     expect(screen.queryByText('No billing events yet')).toBeNull();
     expect(screen.queryByText('Setup Stripe webhook')).toBeNull();
     expect(bodyText()).toMatch(/Billing events .*known/i);
@@ -252,6 +271,8 @@ describe('a tenants read that never answered is judged on its own', () => {
     expect(screen.queryByText('No revenue data yet')).toBeNull();
     expect(bodyText()).toMatch(/Monthly MRR .*known/i);
     expect(screen.queryByText('$158')).toBeNull(); // tenants-derived, so withheld
+    expect(alerts()).toContain(`${TEN_OUTAGE_HEAD} no response from the server.`);
+    expect(alerts()).not.toMatch(/undefined/);
     expect(alerts()).toContain(TEN_OUTAGE);
   });
 });
@@ -261,9 +282,10 @@ describe('a refused tenants refresh keeps the plan rows and adds a caveat', () =
     const ten = staleRead(TEN_ROWS);
     registry.byUrl = { [REVENUE]: ok(REV_ROWS), [TENANTS]: ten };
     mount();
+    expect(alerts()).toContain(`${TEN_STALE_HEAD} Request failed (504).`);
     expect(alerts()).toContain(TEN_STALE);
     expect(alerts()).not.toContain(TEN_OUTAGE);
-    expect(alerts()).toMatch(/upgraded, downgraded, or signed up since then is not reflected here/i);
+    expect(alerts()).toMatch(/upgraded, downgraded, or signed up since this was fetched is counted the old way/i);
     expect(screen.getByText('$158')).toBeTruthy();
     expect(fireEvent.click(screen.getByRole('button', { name: /try again/i }))).toBe(true);
     expect(ten.refetch).toHaveBeenCalledTimes(1);
@@ -377,16 +399,23 @@ describe('the source ratchet this slice closes (#2872)', () => {
 
   it('keeps server internals out of the operator-visible copy', () => {
     const s = src();
-    const msgs = [...s.matchAll(/message="([^"]*)"/g)].map((m) => m[1]);
-    expect(msgs.length).toBe(4); // the four banners and nothing else
-    for (const msg of msgs) {
-      expect(msg, msg).not.toMatch(/\bendpoint\b|\broute\b|\bstatus\b|\b\d{3}\b/i);
-      expect(msg, msg).not.toMatch(/out of date|may be|some data/i); // rule 2
+    // Rule #3 bans what the page PRINTS ITSELF — a source path, a status code typed
+    // into the copy, server vocabulary. The refusal's own message arrives as a
+    // dynamic `${revReason}`/`${tenReason}`, which is what every merged #2872 panel
+    // shows, so it is not a literal here and the ban does not reach it.
+    const copy = s.split('\n').filter((line) => /message=\{?[`"]/.test(line)).join('\n');
+    expect([...copy.matchAll(/message=/g)]).toHaveLength(4); // the four banners, nothing else
+    for (const frag of [REV_OUTAGE_HEAD, REV_OUTAGE, REV_STALE_HEAD, REV_STALE,
+                        TEN_OUTAGE_HEAD, TEN_OUTAGE, TEN_STALE_HEAD, TEN_STALE]) {
+      expect(copy, frag).toContain(frag);
     }
-    expect(s).toContain(REV_OUTAGE);
-    expect(s).toContain(REV_STALE);
-    expect(s).toContain(TEN_OUTAGE);
-    expect(s).toContain(TEN_STALE);
+    expect(copy).toContain('{revReason}');
+    expect(copy).toContain('{tenReason}');
+    expect(s).toMatch(/const revReason = revErr\?\.message \|\| 'no response from the server';/);
+    expect(s).toMatch(/const tenReason = tenErr\?\.message \|\| 'no response from the server';/);
+    expect(copy, 'a source path reached the operator').not.toMatch(/app\/api|\.tsx?:\d|route\.ts|schema\//);
+    expect(copy, 'server vocabulary reached the operator').not.toMatch(/\bendpoint\b|\broute\b|\bstatus code\b|\b404\b|\b500\b|\b504\b/);
+    expect(copy, 'a hedged caveat').not.toMatch(/out of date|may be|some data/i); // rule 2
   });
 
   it('has no write control to gate on `failed` (and asserts the page does not add one)', () => {
