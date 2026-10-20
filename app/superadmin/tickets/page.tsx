@@ -34,6 +34,13 @@ export default function TicketsPage() {
   // In Progress 0 / Resolved 0 / Critical 0 off `data?.counts ?? {}`, which is
   // the same claim in four places. The banner replaces the tick; the counts
   // refuse to render a number the read never gave.
+  //
+  // #2872: that fix branched on the bare `error` flag, so it cannot tell an outage from a refused
+  // refresh. Both mutations below invalidate this query — the moment an agent is checking whether
+  // their reply landed — and TanStack hands the failed refetch back *with* `data`. In that state
+  // the page threw the queue away to print a banner about nothing, and dashed four counts it had
+  // just read. So the flag is split: the outage keeps the banner and the dashes, the stale read
+  // keeps the rows, keeps the numbers, and says which half is missing.
   const queryKey = ['superadmin', 'tickets', status] as const;
   const { data, isLoading, error, refetch } = useApiQuery<TicketData>(
     queryKey,
@@ -41,6 +48,11 @@ export default function TicketsPage() {
     { retry: false },
   );
   const loading = isLoading;
+  const failed = Boolean(error) && !data;
+  const stale = Boolean(error) && Boolean(data);
+  const reason = error?.message || 'no response from the server';
+  // The list is filtered by status server-side, so the scope names the status that was asked for.
+  const scope = status ? `${status.replace('_', ' ')} tickets` : 'support tickets';
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, updates }: { id: string; updates: Record<string, unknown> }) => {
@@ -79,7 +91,7 @@ export default function TicketsPage() {
 
       {/* Counts */}
       <div className="grid grid-cols-4 gap-3">
-        {[{label:'Open',v:error?'—':c.open??0,color:'text-amber-400'},{label:'In Progress',v:error?'—':c.in_progress??0,color:'text-blue-400'},{label:'Resolved',v:error?'—':c.resolved??0,color:'text-emerald-400'},{label:'Critical',v:error?'—':c.critical??0,color:'text-red-400'}].map(m=>(
+        {[{label:'Open',v:failed?'—':c.open??0,color:'text-amber-400'},{label:'In Progress',v:failed?'—':c.in_progress??0,color:'text-blue-400'},{label:'Resolved',v:failed?'—':c.resolved??0,color:'text-emerald-400'},{label:'Critical',v:failed?'—':c.critical??0,color:'text-red-400'}].map(m=>(
           <div key={m.label} className="rounded-xl border border-white/10 bg-white/5 p-3">
             <p className="text-xs text-white/40">{m.label}</p>
             <p className={cn('text-xl font-bold mt-0.5',m.color)}>{m.v}</p>
@@ -106,19 +118,14 @@ export default function TicketsPage() {
 
       {/* Tickets */}
       <div className="space-y-3">
-        {loading ? <p className="text-white/30 text-sm">Loading...</p>
-        : error ? (
+        {stale && (
           <InlineErrorState
-            message={`Failed to load tickets: ${error.message || 'no response from the server'}`}
+            message={`Could not refresh the ${scope}, so the list below is the last read: ${reason}. A ticket you just replied to or moved will not have changed here.`}
             onRetry={refetch}
           />
-        )
-        : !tickets.length ? (
-          <div className="text-center py-12 rounded-xl border border-white/10 bg-white/[0.02]">
-            <CheckCircle className="w-10 h-10 text-emerald-500/30 mx-auto mb-3"/>
-            <p className="text-white/30 text-sm">No tickets found</p>
-          </div>
-        )         : tickets.map((t) => {
+        )}
+        {loading ? <p className="text-white/30 text-sm">Loading...</p>
+        : tickets.length > 0 ? tickets.map((t) => {
           const isOpen = expanded===t.id;
           return (
             <div key={t.id} className="rounded-xl border border-white/10 bg-white/[0.02] overflow-hidden">
@@ -168,7 +175,18 @@ export default function TicketsPage() {
               )}
             </div>
           );
-        })}
+        })
+        : failed ? (
+          <InlineErrorState
+            message={`Failed to load the ${scope}: ${reason}`}
+            onRetry={refetch}
+          />
+        ) : (
+          <div className="text-center py-12 rounded-xl border border-white/10 bg-white/[0.02]">
+            <CheckCircle className="w-10 h-10 text-emerald-500/30 mx-auto mb-3"/>
+            <p className="text-white/30 text-sm">No tickets found</p>
+          </div>
+        )}
       </div>
     </div>
   );
