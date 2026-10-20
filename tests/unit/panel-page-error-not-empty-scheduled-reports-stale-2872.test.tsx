@@ -39,7 +39,7 @@
  * revalidation both at runtime and in source, and the three that prove the #2829 guard could never
  * have seen this page — including the case that keeps this fix off the baseline.
  */
-import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, within, fireEvent, cleanup, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { readFileSync } from 'node:fs';
@@ -249,12 +249,7 @@ describe('the ratchet this slice is measured by (#2872)', () => {
   const ROOT = process.cwd();
   const src = () => readFileSync(join(ROOT, PAGE), 'utf8');
   // #2829's screen, loaded the way `vitest.config.ts` needs under jsdom: an absolute file:// URL.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let guard: any;
-
-  beforeAll(async () => {
-    guard = await import(`file://${join(ROOT, 'scripts/check-panel-error-state.mjs')}`);
-  });
+  const loadGuard = () => import(`file://${join(ROOT, 'scripts/check-panel-error-state.mjs')}`);
 
   beforeEach(() => { registry.byUrl = {}; vi.clearAllMocks(); });
   afterEach(cleanup);
@@ -281,9 +276,10 @@ describe('the ratchet this slice is measured by (#2872)', () => {
     expect(s.match(/\bload\(\);/g)).toHaveLength(3);
   });
 
-  it('is not something the #2829 guard could have caught at all', () => {
+  it('is not something the #2829 guard could have caught at all', async () => {
     // "No scheduled reports" is outside the guard's empty-sentence vocabulary, so it scored this
     // page clean before the fix and scores it clean after — the screen here is this file.
+    const guard = await loadGuard();
     expect(guard.EMPTY_SENTENCE.test('No scheduled reports')).toBe(false);
     expect(guard.EMPTY_SENTENCE.test('No scheduled reports yet')).toBe(true);
     const base = 'const { data, error } = useApiQuery(k, url);\n'
@@ -293,7 +289,8 @@ describe('the ratchet this slice is measured by (#2872)', () => {
     expect(guard.inspect(PAGE, src()).offends).toBe(false);
   });
 
-  it('rewinding the split keeps the guard green, which is the point of #2872', () => {
+  it('rewinding the split keeps the guard green, which is the point of #2872', async () => {
+    const guard = await loadGuard();
     const bare = src()
       .replace(/\n\s*\{\s*stale && \([\s\S]*?\)\s*\}\s*\n/g, '\n')
       .replace(/const stale = [^\n]*\n/g, '')
