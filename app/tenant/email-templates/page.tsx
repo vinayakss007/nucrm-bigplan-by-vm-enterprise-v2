@@ -221,6 +221,15 @@ export default function EmailTemplatesPage() {
     '/api/tenant/email-templates',
   );
   const templates: Template[] = data?.data ?? [];
+  // #2872: TanStack Query keeps `data` when a revalidation of a read that already
+  // succeeded fails, and both the header count and the card grid branched on `error`
+  // alone. Save, delete and duplicate all call `reload()` on success, so the ordinary
+  // path — create a template, the reload is refused — read "—" above the very cards the
+  // page was still listing, with "Failed to load your email templates" over them, and
+  // the outage card hid the grid whose category chips are derived from that same array.
+  const failed = Boolean(error) && !data;
+  const stale = Boolean(error) && Boolean(data);
+  const reason = error?.message || 'no response from the server';
 
   const reload = () => queryClient.invalidateQueries({ queryKey: TEMPLATES_QUERY });
 
@@ -297,7 +306,7 @@ export default function EmailTemplatesPage() {
           {/* The count is derived from the list, so an unread one renders unavailable
               rather than "0 templates" (#2829). */}
           <p className="text-sm text-muted-foreground">
-            {error ? '—' : `${templates.length} template${templates.length !== 1 ? 's' : ''}`}
+            {failed ? '—' : `${templates.length} template${templates.length !== 1 ? 's' : ''}`}
           </p>
         </div>
         <button
@@ -307,6 +316,13 @@ export default function EmailTemplatesPage() {
           <Plus className="w-4 h-4" />New Template
         </button>
       </div>
+
+      {stale && (
+        <InlineErrorState
+          message={`Could not refresh, so the count above and the templates below are the last read: ${reason}. A template you just saved may not be one of them.`}
+          onRetry={refetch}
+        />
+      )}
 
       {/* Category filter */}
       {categories.length > 1 && (
@@ -330,9 +346,9 @@ export default function EmailTemplatesPage() {
             </div>
           ))}
         </div>
-      ) : error ? (
+      ) : failed ? (
         <InlineErrorState
-          message={`Failed to load your email templates: ${error.message || 'no response from the server'}`}
+          message={`Failed to load your email templates: ${reason}`}
           onRetry={refetch}
         />
       ) : !visible.length ? (

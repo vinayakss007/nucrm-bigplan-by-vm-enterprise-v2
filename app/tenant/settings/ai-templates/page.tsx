@@ -131,14 +131,24 @@ export default function AITemplatesPage() {
     onSuccess: invalidate,
   });
 
-  // Surface whichever error is active (query load or a failed mutation), keeping
-  // the existing single error banner.
-  const error =
-    (queryError as Error | null)?.message ??
+  // Surface whichever failure is active, keeping the existing single error banner.
+  // #2872 split the read out of that chain: its message used to be reported through
+  // the same `error` the mutations feed, so a refused revalidation of a list the page
+  // was still showing announced "Failed to update templates" — and, because the old
+  // `(queryError as Error | null)?.message ?? …` kept an empty string, a messageless
+  // failure silenced the banner entirely. TanStack Query keeps `data` when a
+  // revalidation of a read that already succeeded fails, and all three mutations
+  // invalidate on success, so that state is the ordinary outcome of installing,
+  // saving or deleting a template whose reload was refused: the header read "Your
+  // templates (—)" above the cards on screen.
+  const mutationError =
     installMutation.error?.message ??
     saveMutation.error?.message ??
     deleteMutation.error?.message ??
     null;
+  const failed = Boolean(queryError) && !data;
+  const stale = Boolean(queryError) && Boolean(data);
+  const reason = queryError?.message || 'no response from the server';
 
   // Preserve the old `busy` string contract the Card/SeedCard/Editor props expect.
   const busy =
@@ -183,24 +193,31 @@ export default function AITemplatesPage() {
         </button>
       </div>
 
-      {error && (
+      {(mutationError || failed) && (
         <InlineErrorState
-          message={queryError
-            ? `Failed to load AI templates: ${queryError.message}`
-            : `Failed to update templates: ${error}`}
-          onRetry={queryError ? refetch : undefined}
+          message={
+            failed
+              ? `Failed to load AI templates: ${reason}`
+              : `Failed to update templates: ${mutationError}`}
+          onRetry={failed ? refetch : undefined}
+        />
+      )}
+      {stale && (
+        <InlineErrorState
+          message={`Could not refresh, so the templates below are the last read: ${reason}. A template you just installed or saved may not be one of them.`}
+          onRetry={refetch}
         />
       )}
 
       {/* Installed */}
       <div>
-        <h2 className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-2">Your templates ({queryError ? '—' : installed.length})</h2>
+        <h2 className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-2">Your templates ({failed ? '—' : installed.length})</h2>
         {loading && !data && (
           <div className="rounded-xl border border-border bg-card p-8 text-center text-muted-foreground">
             <Loader2 className="w-5 h-5 animate-spin mx-auto" />
           </div>
         )}
-        {!loading && !queryError && installed.length === 0 && (
+        {!loading && !failed && installed.length === 0 && (
           <div className="rounded-xl border border-dashed border-border bg-card p-6 text-center text-sm text-muted-foreground">
             No saved templates yet. Install one of the starters below or click <strong>New template</strong>.
           </div>
