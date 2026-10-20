@@ -8,6 +8,7 @@ import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
 import { clientLogError } from '@/lib/client-logger';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import { AlertTriangle, CheckCheck, RefreshCw, X, ChevronDown, ChevronRight, Search, Book, Copy, Check } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import { cn, formatRelativeTime } from '@/lib/utils';
@@ -77,6 +78,17 @@ export default function ErrorsPage() {
   const fetchError = error
     ? ((error.info as { error?: string } | undefined)?.error || error.message || 'Failed to load errors')
     : null;
+  // #2872: this page had the failure branch (a `fetchError ?` block below) and no third state, and
+  // its five summary cards read `s.fatal_unresolved ?? 0` with **no guard at all** — so a queue the
+  // server refused was reported as five firm zeros, the opposite lie to the one #2829 removed. The
+  // cards are keyed to the outage now, and a refused *refresh* keeps the rows, keeps the counts, and
+  // says which is behind. Resolve All follows #2872's first rule: a read that failed must not drive
+  // the one control that mass-marks resolved errors the page cannot currently see.
+  const failed = Boolean(fetchError) && !data;
+  const stale = Boolean(fetchError) && Boolean(data);
+  const reason = fetchError || 'no response from the server';
+  // Which queue was asked for, so a failure names the queue it could not read.
+  const scope = resolved === 'false' ? 'unresolved errors' : resolved === 'true' ? 'resolved errors' : 'errors';
 
   const resolveMutation = useMutation({
     mutationFn: async ({ id, resolveAll, lvl }: { id?: string; resolveAll?: boolean; lvl?: string }) => {
@@ -110,7 +122,7 @@ export default function ErrorsPage() {
         </div>
         <div className="flex items-center gap-2">
           <button onClick={() => refetch()} className="p-2 rounded-lg border border-border text-muted-foreground hover:text-foreground transition-colors"><RefreshCw className="w-3.5 h-3.5"/></button>
-          {resolved==='false' && (
+          {resolved==='false' && !failed && (
             <button onClick={() => confirmThen('Mark all unresolved errors as resolved?', () => resolve(undefined, true))}
               className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-600/20 border border-emerald-500/30 text-emerald-400 text-xs font-medium hover:bg-emerald-600/30 transition-colors">
               <CheckCheck className="w-3.5 h-3.5"/>Resolve All
@@ -122,11 +134,11 @@ export default function ErrorsPage() {
       {/* Summary */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         {[
-          { label:'Fatal', desc:LEVEL_CFG['fatal']?.desc ?? '', value:s.fatal_unresolved??0, color:'text-red-400', bg:'bg-red-500/10', filter:'fatal' },
-          { label:'Error', desc:LEVEL_CFG['error']?.desc ?? '', value:s.error_unresolved??0, color:'text-orange-400', bg:'bg-orange-500/10', filter:'error' },
-          { label:'Warn', desc:LEVEL_CFG['warning']?.desc ?? '', value:s.warn_unresolved??0, color:'text-amber-400', bg:'bg-amber-500/10', filter:'warning' },
-          { label:'Last hour', desc:'Errors in the last 60 minutes', value:s.last_hour??0, color:'text-muted-foreground', bg:'bg-muted/30', filter:'' },
-          { label:'Last 24h', desc:'Errors in the last 24 hours', value:s.last_day??0, color:'text-muted-foreground', bg:'bg-muted/30', filter:'' },
+          { label:'Fatal', desc:LEVEL_CFG['fatal']?.desc ?? '', value:failed?'—':s.fatal_unresolved??0, color:'text-red-400', bg:'bg-red-500/10', filter:'fatal' },
+          { label:'Error', desc:LEVEL_CFG['error']?.desc ?? '', value:failed?'—':s.error_unresolved??0, color:'text-orange-400', bg:'bg-orange-500/10', filter:'error' },
+          { label:'Warn', desc:LEVEL_CFG['warning']?.desc ?? '', value:failed?'—':s.warn_unresolved??0, color:'text-amber-400', bg:'bg-amber-500/10', filter:'warning' },
+          { label:'Last hour', desc:'Errors in the last 60 minutes', value:failed?'—':s.last_hour??0, color:'text-muted-foreground', bg:'bg-muted/30', filter:'' },
+          { label:'Last 24h', desc:'Errors in the last 24 hours', value:failed?'—':s.last_day??0, color:'text-muted-foreground', bg:'bg-muted/30', filter:'' },
         ].map(m => (
           <button key={m.label} onClick={()=>m.filter&&setLevel(level===m.filter?'':m.filter)}
             className={cn('rounded-xl border border-border p-3 text-left transition-all',m.bg,level===m.filter&&'border-primary/30')}
@@ -158,17 +170,16 @@ export default function ErrorsPage() {
 
       {/* Errors list */}
       <div className="rounded-xl border border-border bg-card overflow-hidden">
+        {stale && (
+          <InlineErrorState
+            message={`Could not refresh the ${scope}, so the list below is the last read: ${reason}. New errors logged since then are not on screen, and the counts above are from that same read.`}
+            onRetry={refetch}
+          />
+        )}
         {loading ? <p className="text-muted-foreground text-sm p-6 text-center">Loading...</p>
-        : fetchError ? (
-          <div className="text-center py-12">
-            <AlertTriangle className="w-10 h-10 text-red-500/60 mx-auto mb-3"/>
-            <p className="text-red-400/80 text-sm font-medium mb-1">Failed to load errors</p>
-            <p className="text-muted-foreground text-xs mb-4">{fetchError}</p>
-            <button onClick={() => refetch()} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-violet-600/20 border border-violet-500/30 text-violet-400 text-xs font-medium hover:bg-violet-600/30 transition-colors mx-auto">
-              <RefreshCw className="w-3 h-3"/>Retry
-            </button>
-          </div>
-        ) : !errors.length ? (
+        : failed ? (
+          <InlineErrorState message={`Failed to load the ${scope}: ${reason}`} onRetry={refetch} />
+        ) : errors.length === 0 ? (
           <div className="text-center py-12">
             <CheckCheck className="w-10 h-10 text-emerald-500/40 mx-auto mb-3"/>
             <p className="text-muted-foreground text-sm">{resolved==='true'?'No resolved errors':'No unresolved errors — system is clean ✓'}</p>

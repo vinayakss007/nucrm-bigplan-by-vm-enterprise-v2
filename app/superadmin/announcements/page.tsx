@@ -52,6 +52,14 @@ export default function AnnouncementsPage() {
   const { data, isLoading, error: listError, refetch } = useApiQuery<{ data?: Announcement[] }>(queryKey, '/api/superadmin/announcements');
   const items: Announcement[] = data?.data ?? [];
   const loading = isLoading;
+  // #2872: #2829 gave the empty arm an outage branch, and this page invalidates its own key after
+  // publish, toggle and delete — the exact moment an operator checks whether the banner went out.
+  // TanStack keeps `data` when that refresh fails, so the page showed the banners and said nothing:
+  // an announcement that the failed read could not confirm is indistinguishable from one that did
+  // not save, and the duplicate this page already warns about is the one a silent failure invites.
+  const failed = Boolean(listError) && !data;
+  const stale = Boolean(listError) && Boolean(data);
+  const reason = listError?.message || 'no response from the server';
 
   const saveMutation = useMutation({
     mutationFn: async () => {
@@ -149,9 +157,15 @@ export default function AnnouncementsPage() {
       )}
 
       {/* Announcements list */}
+      {stale && (
+        <InlineErrorState
+          message={`Could not refresh the announcements, so what is below is the last read: ${reason}. A banner you just published, deactivated or deleted is not reflected here — check before sending a duplicate.`}
+          onRetry={() => void refetch()}
+        />
+      )}
       {loading ? <p className="text-white/30 text-sm">Loading...</p>
       : !items.length ? (
-        listError ? (
+        failed ? (
           // #2829: the announcement list is the record of what was already sent
           // out; "No announcements yet" over a failed read invites a duplicate.
           <InlineErrorState message="Could not load the announcements — this is a failed request, not an empty list." onRetry={() => void refetch()} />
