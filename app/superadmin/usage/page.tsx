@@ -114,10 +114,17 @@ export default function UsagePage() {
       {/* #2829's alert channel used to mean "no fleet was read at all", and the one
           thing it never said was what the operator was looking at when a refresh was
           refused. Same channel now, same shape as the other #2872 panels: the rows
-          stay, and the refusal is named. */}
+          stay, and the refusal is named.
+
+          The scope the banner describes in operator words lives here, not in the copy
+          (#2872 rule #3 — no source paths or status codes on screen):
+          app/api/superadmin/usage/route.ts:42 — WHERE status IN (active, trialing);
+          :44 — ORDER BY contact count DESC, LIMIT 100. So a tenant that left those
+          statuses, or that ranks below the newest 100 by contacts, is absent from this
+          read rather than cleared by it. */}
       {stale && (
         <InlineErrorState
-          message={`Could not refresh, so the organizations, their usage figures and the growth series below are the last read: ${reason}. A tenant that crossed 80% of its contact or user limit since this was fetched is missing from the warning below, a plan whose max moved is still measured against the old one, and every count on the rows is from before the refresh failed. The read only covers active and trialing tenants, capped at 100 ordered by contact count (app/api/superadmin/usage/route.ts:42-44), so a tenant that left those statuses since is absent from this list rather than cleared by it.`}
+          message={`Could not refresh, so the organizations, their usage figures and the growth series below are the last read: ${reason}. A tenant that crossed 80% of its contact or user limit since this was fetched is missing from the warning below, a plan whose max moved is still measured against the old one, and every count on the rows is from before the refresh failed. This list only covers active and trialing organizations, and only the hundred with the most contacts, so a tenant that left those statuses since is absent here rather than cleared by it.`}
           onRetry={() => void refetch()}
         />
       )}

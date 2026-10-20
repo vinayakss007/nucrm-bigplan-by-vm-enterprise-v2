@@ -317,6 +317,21 @@ describe('the ratchet this slice closes (#2872)', () => {
     expect(s).toMatch(/onRetry=\{\(\) => void refetch\(\)\}/);
   });
 
+  it('keeps the scope fact, and keeps it out of server vocabulary (#2872 rule #3)', () => {
+    const s = src();
+    // The cap and the status filter are facts the operator needs to read the banner
+    // correctly, so they stay — as "only the hundred with the most contacts", not as
+    // a file:line or a status code. This is the assertion that was missing when this
+    // slice first shipped: the banner carried `app/api/superadmin/usage/route.ts:42-44`
+    // on screen, and nothing failed for it.
+    const operatorCopy = s.split('\n').filter((line) => /message=\{?[`"]/.test(line)).join('\n');
+    expect(operatorCopy).toMatch(/only the hundred with the most contacts/);
+    expect(operatorCopy).toMatch(/active and trialing/);
+    expect(operatorCopy, 'a source path reached the operator').not.toMatch(/app\/api|\.tsx?:\d|route\.ts/);
+    expect(operatorCopy, 'server vocabulary reached the operator').not.toMatch(/\bendpoint\b|\bstatus code\b|\b404\b|\b500\b|\b504\b/);
+    expect(operatorCopy).not.toMatch(/out of date/i);
+  });
+
   it('is invisible to the sweep, before and after the split is taken back out', async () => {
     const { inspect } = await import(`file://${join(ROOT, 'scripts/check-panel-error-state.mjs')}`);
     const s = src();
