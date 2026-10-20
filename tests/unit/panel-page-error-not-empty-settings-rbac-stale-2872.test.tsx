@@ -367,9 +367,11 @@ describe('the guard cannot see this class, so these assertions do (#2872)', () =
     const s = src();
     const banners = s.split('\n').filter((line) => /Could not refresh/.test(line));
     expect(banners, 'no last-read banner in the source').toHaveLength(3);
-    for (const line of banners) {
+    const outage = s.split('\n').filter((line) => /Failed to load (field permissions|record permissions|approval rules)/.test(line));
+    expect(outage, 'one of #2597\'s three outage sentences left the source').toHaveLength(3);
+    for (const line of [...banners, ...outage]) {
       expect(line, 'the banner said "out of date"').not.toMatch(/out of date/i);
-      expect(line).not.toMatch(/\bendpoint\b|\broute\b|\b500\b|\bstatus\b/i);
+      expect(line, 'server vocabulary reached the operator').not.toMatch(/\bendpoint\b|\broute\b|\b500\b|\b404\b|\bstatus\b/i);
     }
     expect(s, 'this page started writing the matrix from a read it may not have').not.toMatch(/\bapiFetch\b|method:\s*['"](?:POST|PUT|PATCH|DELETE)|useMutation/);
   });
