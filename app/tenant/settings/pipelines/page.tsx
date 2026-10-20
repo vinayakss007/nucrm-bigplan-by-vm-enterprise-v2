@@ -10,6 +10,7 @@ import { useApiQuery } from '@/lib/query/client';
 import { Plus, Trash2, GripVertical, Save, Loader2, X, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { confirmThen } from '@/components/ui/confirm-dialog';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import toast from 'react-hot-toast';
 
 const _DEFAULT_STAGES = [
@@ -46,12 +47,22 @@ export default function PipelinesSettingsPage() {
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
 
   // #1328: list via TanStack Query (was raw fetch + useEffect).
-  const { data, isLoading: loading, error } = useApiQuery<{ data?: Pipeline[] }>(
+  //
+  // #2872: `if (error) toast.error(...)` in the render body was the whole failure channel — one
+  // four-second toast, re-fired on every re-render, over a left column that simply stopped listing
+  // pipelines. `load()` invalidates PIPELINES_QUERY from all three write handlers (create, save,
+  // delete), so a refused revalidation is this page's ordinary state immediately after the
+  // operator pressed the button, and TanStack keeps `data` through it: kept rows plus an error
+  // flag. That pair is a "last read", not an outage — and the stage editor is seeded from the same
+  // kept rows, so a pipeline that was just deleted off the server can still be open on the right.
+  const { data, isLoading: loading, error, refetch } = useApiQuery<{ data?: Pipeline[] }>(
     PIPELINES_QUERY,
     '/api/tenant/pipelines',
   );
   const pipelines: Pipeline[] = useMemo(() => data?.data ?? [], [data]);
-  if (error) toast.error('Failed to load pipelines');
+  const failed = Boolean(error) && !data;
+  const stale = Boolean(error) && Boolean(data);
+  const reason = error?.message || 'no response from the server';
 
   // Auto-select the first pipeline once loaded (preserves original behavior).
   useEffect(() => {
@@ -157,10 +168,25 @@ export default function PipelinesSettingsPage() {
         </div>
       )}
 
+      {stale && (
+        <InlineErrorState
+          message={`Could not refresh, so the pipelines below are the last read: ${reason}. One you just created, saved or deleted may be listed out of date — and so may the stages open on the right.`}
+          onRetry={refetch}
+        />
+      )}
+
+      {failed ? (
+        <InlineErrorState message={`Failed to load pipelines: ${reason}`} onRetry={refetch} />
+      ) : (
       <div className="grid grid-cols-[200px_1fr] gap-5">
         {/* Pipeline list */}
         <div className="space-y-2">
-          {pipelines.map(p => (
+          {!pipelines.length ? (
+            <div className="py-8 text-center border border-dashed border-border rounded-xl">
+              <p className="text-sm font-medium">No pipelines yet</p>
+              <p className="text-xs text-muted-foreground mt-1">Add one to define the stages deals move through</p>
+            </div>
+          ) : pipelines.map(p => (
             <button key={p.id} onClick={()=>setSelected(p)}
               className={cn('w-full text-left px-3 py-2.5 rounded-xl text-sm font-medium transition-colors',
                 selected?.id===p.id ? 'bg-violet-100 dark:bg-violet-950/40 text-violet-700 dark:text-violet-400' : 'hover:bg-accent text-muted-foreground')}>
@@ -219,6 +245,7 @@ export default function PipelinesSettingsPage() {
           </div>
         )}
       </div>
+      )}
     </div>
   );
 }

@@ -10,6 +10,7 @@ import { useApiQuery } from '@/lib/query/client';
 import { Shield, Plus, Edit, Trash2, Save, Lock, ChevronDown, Check, Crown } from 'lucide-react';
 import { PERMISSIONS, PERMISSION_CATEGORIES } from '@/lib/permissions/definitions';
 import { confirmThen } from '@/components/ui/confirm-dialog';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
@@ -112,12 +113,21 @@ export default function RolesPermissionsPage() {
   const [showEditor, setShowEditor] = useState(false);
 
   // #1328: list via TanStack Query (was raw fetch + useEffect).
-  const { data, isLoading: loading, error } = useApiQuery<{ data?: Role[] }>(
+  //
+  // #2872: `if (error) toast.error(...)` in the render body was the whole failure channel — four
+  // seconds, re-fired on every re-render, over a list that said nothing. `load()` invalidates
+  // ROLES_QUERY from `deleteRole`'s onSuccess and from the editor's onSave, so the ordinary state
+  // after deleting or saving a role is TanStack keeping `data` through the refused revalidation:
+  // real rows plus an error flag. The banner is the durable channel, and it has to tell those two
+  // states apart — only a read that never answered may hide the rows or say "No roles yet".
+  const { data, isLoading: loading, error, refetch } = useApiQuery<{ data?: Role[] }>(
     ROLES_QUERY,
     '/api/tenant/roles',
   );
   const roles: Role[] = data?.data ?? [];
-  if (error) toast.error('Failed to load roles');
+  const failed = Boolean(error) && !data;
+  const stale = Boolean(error) && Boolean(data);
+  const reason = error?.message || 'no response from the server';
 
   const load = () => queryClient.invalidateQueries({ queryKey: ROLES_QUERY });
 
@@ -142,7 +152,21 @@ export default function RolesPermissionsPage() {
         <div><h1 className="text-lg font-bold">Roles & Permissions</h1><p className="text-sm text-muted-foreground">Control what each role can do</p></div>
         <button onClick={() => { setEditRole(null); setShowEditor(true); }} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium transition-colors"><Plus className="w-4 h-4" />New Role</button>
       </div>
-      {loading ? <div className="text-center py-8 text-sm text-muted-foreground">Loading...</div> : (
+      {stale && (
+        <InlineErrorState
+          message={`Could not refresh, so the roles below are the last read: ${reason}. A role you just created, saved or deleted may not be reflected here.`}
+          onRetry={refetch}
+        />
+      )}
+      {loading ? <div className="text-center py-8 text-sm text-muted-foreground">Loading...</div> : failed ? (
+        <InlineErrorState message={`Failed to load roles: ${reason}`} onRetry={refetch} />
+      ) : !roles.length ? (
+        <div className="text-center py-12 border border-dashed border-border rounded-2xl">
+          <Shield className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
+          <p className="font-medium">No roles yet</p>
+          <p className="text-sm text-muted-foreground mt-1">Create a role to control what each team member can do</p>
+        </div>
+      ) : (
         <div className="space-y-3">
           {roles.map(role => {
             const g = role.permissions?.all ? PERMISSIONS.length : Object.values(role.permissions||{}).filter(Boolean).length;
