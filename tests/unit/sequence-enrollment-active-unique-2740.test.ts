@@ -64,11 +64,19 @@ const upSql = statementsOf(up).join('\n');
 const statements = statementsOf(up);
 
 describe('#2740 migration 0130 is journaled and replayable', () => {
-  it('is the last journal entry and has both files on disk', () => {
+  it('is journaled once, at its own idx, with both files on disk', () => {
     const entry = journal.entries.find((e) => e.tag === TAG);
     expect(entry, `${TAG} is not in meta/_journal.json, so no deploy would ever run it`).toBeDefined();
     expect(entry!.idx, 'journal idx must match the file prefix').toBe(130);
-    expect(journal.entries[journal.entries.length - 1]!.tag).toBe(TAG);
+    // This line used to read `journal.entries.at(-1).tag === TAG`, which pins the head
+    // of the journal — a property of the branch it was written on, not of 0130. The
+    // next migration merged after it fails it, and #2880's 0131 did exactly that. What
+    // this file can keep forever is that the tag is journaled once: a tag appearing
+    // twice is applied once by `scripts/migrate.ts` and counted twice by every reader.
+    expect(
+      journal.entries.filter((e) => e.tag === TAG),
+      `${TAG} is journaled more than once`,
+    ).toHaveLength(1);
     expect(existsSync(join(MIGRATIONS, `${TAG}.sql`))).toBe(true);
     expect(existsSync(join(MIGRATIONS, `${TAG}.down.sql`))).toBe(true);
   });
