@@ -62,7 +62,17 @@ export default function TicketsPage() {
   );
   const tickets: Ticket[] = useMemo(() => ticketsResp?.data ?? [], [ticketsResp]);
   const total = ticketsResp?.total ?? 0;
-  useEffect(() => { if (ticketsError) toast.error('Failed to load tickets'); }, [ticketsError]);
+
+  // #2872: bulk status/priority/delete and the create modal each end in
+  // invalidateQueries(['tenant','tickets']), a prefix that matches this view's key
+  // {filter, search, offset} — so the flag is normally set over the rows still on
+  // screen, and the list branch answered that with an outage and no rows at all. The
+  // filter, search and offset are in the key and in the URL (the server narrows them,
+  // not the page), so a tab nobody has opened is a read that never answered, while the
+  // view the operator came from still holds its rows.
+  const failed = Boolean(ticketsError) && !ticketsResp;
+  const stale = Boolean(ticketsError) && Boolean(ticketsResp);
+  const reason = ticketsError?.message || 'no response from the server';
 
   // Invalidate every tickets view (any filter/search/offset) after a mutation.
   const loadTickets = useCallback(
@@ -162,13 +172,14 @@ export default function TicketsPage() {
         </div>
       </div>
 
-      {/* Stats summary */}
+      {/* Stats summary — all four reduce the page's rows, so an unread list dashes them
+          rather than reporting the tenant as having no open or no urgent tickets. */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: 'Open', value: tickets.filter(t => t.status === 'open').length, icon: Inbox, color: 'text-blue-600' },
-          { label: 'In Progress', value: tickets.filter(t => t.status === 'in_progress').length, icon: Clock, color: 'text-amber-600' },
-          { label: 'Resolved', value: tickets.filter(t => t.status === 'resolved').length, icon: CheckCircle2, color: 'text-emerald-600' },
-          { label: 'Urgent', value: tickets.filter(t => t.priority === 'urgent').length, icon: AlertCircle, color: 'text-red-600' },
+          { label: 'Open', value: failed ? '—' : tickets.filter(t => t.status === 'open').length, icon: Inbox, color: 'text-blue-600' },
+          { label: 'In Progress', value: failed ? '—' : tickets.filter(t => t.status === 'in_progress').length, icon: Clock, color: 'text-amber-600' },
+          { label: 'Resolved', value: failed ? '—' : tickets.filter(t => t.status === 'resolved').length, icon: CheckCircle2, color: 'text-emerald-600' },
+          { label: 'Urgent', value: failed ? '—' : tickets.filter(t => t.priority === 'urgent').length, icon: AlertCircle, color: 'text-red-600' },
         ].map(s => (
           <div key={s.label} className="bg-card border border-border p-4 rounded-2xl shadow-sm">
             <div className="flex items-center gap-3">
@@ -214,15 +225,22 @@ export default function TicketsPage() {
         </div>
       </div>
 
+      {stale && (
+        <InlineErrorState
+          message={`Could not refresh, so the tickets below are the last read: ${reason}. A ticket you just created, or a bulk status, priority or delete you just applied, may not be reflected here — the four counts above are the ones this kept page yields.`}
+          onRetry={refetchTickets}
+        />
+      )}
+
       {/* Tickets List */}
       <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm">
         {loading ? (
           <div className="p-4">
             <ListSkeleton />
           </div>
-        ) : ticketsError ? (
+        ) : failed ? (
           <div className="p-4">
-            <InlineErrorState message={`Failed to load tickets: ${ticketsError.message}`} onRetry={refetchTickets} />
+            <InlineErrorState message={`Failed to load tickets: ${reason}`} onRetry={refetchTickets} />
           </div>
         ) : filtered.length === 0 ? (
           <div className="p-16 text-center">
@@ -321,7 +339,8 @@ export default function TicketsPage() {
         )}
       </div>
 
-      {/* Module Upsell (if applicable) */}
+      {/* Module Upsell — gated on the bare flag, not only `failed`: a page whose refresh
+          was just refused gets no marketing claim on top of its own caveat. */}
       {!loading && !ticketsError && tickets.length === 0 && filter === 'all' && !search && (
         <div className="bg-violet-50 dark:bg-violet-950/20 border border-violet-100 dark:border-violet-900/50 p-6 rounded-2xl flex flex-col items-center text-center">
           <div className="w-12 h-12 bg-white dark:bg-violet-900 rounded-xl shadow-sm flex items-center justify-center mb-4">
