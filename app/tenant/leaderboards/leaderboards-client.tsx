@@ -9,6 +9,7 @@ import { useState } from 'react';
 import useSWR from 'swr';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import type { FetchError } from '@/lib/swr-config';
+import InlineErrorState from '@/components/shared/inline-error-state';
 
 type Metric = 'deals_won' | 'revenue' | 'activities' | 'conversion';
 type Period = 'week' | 'month' | 'quarter' | 'custom';
@@ -45,7 +46,7 @@ export default function LeaderboardsPage() {
   if (period === 'custom' && customEnd) params.set('end', customEnd);
   const queryString = params.toString();
 
-  const { data: res, error, isLoading } = useSWR<{ data?: LeaderboardEntry[] }, FetchError>(
+  const { data: res, error, isLoading, mutate } = useSWR<{ data?: LeaderboardEntry[] }, FetchError>(
     `/api/tenant/leaderboards?${queryString}`,
   );
   const data = (res?.data || []) as LeaderboardEntry[];
@@ -58,6 +59,14 @@ export default function LeaderboardsPage() {
       ? 'Leaderboards require the Analytics Pro module for this workspace.'
       : 'Failed to load leaderboard data. Please try again.'
     : null;
+  // #2872: SWR keeps `data` when a revalidation of a read that already succeeded fails, and the
+  // chart and the ranked list below both gate on `!errorText` — so a focus revalidation that 500s
+  // hid a leaderboard the operator was looking at and left only "Failed to load leaderboard data"
+  // over a cache that still had every row. The 403 case is unaffected: a module gate has never
+  // returned rows for this key, so it is `failed`, not `stale`.
+  const failed = Boolean(error) && !res;
+  const stale = Boolean(error) && Boolean(res);
+  const reason = error?.message || 'no response from the server';
 
   return (
     <div className="space-y-6">
@@ -121,10 +130,17 @@ export default function LeaderboardsPage() {
       </div>
 
       {/* Error State */}
-      {errorText && (
+      {failed && (
         <div className="rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-900/20">
           <p className="text-sm text-red-600 dark:text-red-300">{errorText}</p>
         </div>
+      )}
+
+      {stale && (
+        <InlineErrorState
+          message={`Could not refresh, so the ranking below is the last read (${reason}).`}
+          onRetry={() => void mutate()}
+        />
       )}
 
       {/* Loading State */}
@@ -137,7 +153,7 @@ export default function LeaderboardsPage() {
       )}
 
       {/* Chart */}
-      {!loading && !errorText && data.length > 0 && (
+      {!loading && !failed && data.length > 0 && (
         <div className="rounded-lg border p-4">
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={data.slice(0, 10)} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
@@ -152,7 +168,7 @@ export default function LeaderboardsPage() {
       )}
 
       {/* Ranked List */}
-      {!loading && !errorText && (
+      {!loading && !failed && (
         <div className="space-y-2">
           {data.length === 0 && (
             <p className="text-center text-muted-foreground py-8">No data for the selected period</p>
