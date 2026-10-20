@@ -46,6 +46,14 @@ export default function DunningDashboard() {
   const { data, isLoading, error, refetch } = useApiQuery<{ data?: DunningAttempt[] }>(queryKey, '/api/superadmin/billing/dunning');
   const attempts: DunningAttempt[] = data?.data ?? [];
   const loading = isLoading;
+  // #2872: the four cards and the table body keyed off `error` alone, and TanStack
+  // Query keeps `data` when a revalidation of a read that already succeeded fails —
+  // which `retryMutation`'s `invalidateQueries` fires after every retry. A retried
+  // payment whose reload was refused therefore emptied a money panel that still had
+  // every attempt in the cache and read "— / — / — / —" over it.
+  const failed = Boolean(error) && !data;
+  const stale = Boolean(error) && Boolean(data);
+  const reason = error?.message || 'no response from the server';
 
   const retryMutation = useMutation({
     mutationFn: async (subscriptionId: string) => {
@@ -102,6 +110,12 @@ export default function DunningDashboard() {
       </div>
 
       {/* Summary Cards */}
+      {stale && (
+        <InlineErrorState
+          message={`Could not refresh, so the attempts below are the last read: ${reason}. A retry the server has since finished may still be shown as pending.`}
+          onRetry={refetch}
+        />
+      )}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="admin-card p-4">
           <div className="flex items-center gap-2 mb-2">
@@ -109,7 +123,7 @@ export default function DunningDashboard() {
             <span className="text-xs font-medium text-muted-foreground">Pending Retries</span>
           </div>
           <p className="text-2xl font-bold">
-            {error ? '—' : attempts.filter(a => a.status === 'pending').length}
+            {failed ? '—' : attempts.filter(a => a.status === 'pending').length}
           </p>
         </div>
         <div className="admin-card p-4">
@@ -118,7 +132,7 @@ export default function DunningDashboard() {
             <span className="text-xs font-medium text-muted-foreground">Completed</span>
           </div>
           <p className="text-2xl font-bold">
-            {error ? '—' : attempts.filter(a => a.status === 'completed').length}
+            {failed ? '—' : attempts.filter(a => a.status === 'completed').length}
           </p>
         </div>
         <div className="admin-card p-4">
@@ -127,7 +141,7 @@ export default function DunningDashboard() {
             <span className="text-xs font-medium text-muted-foreground">Failed</span>
           </div>
           <p className="text-2xl font-bold">
-            {error ? '—' : attempts.filter(a => a.status === 'failed').length}
+            {failed ? '—' : attempts.filter(a => a.status === 'failed').length}
           </p>
         </div>
         <div className="admin-card p-4">
@@ -136,7 +150,7 @@ export default function DunningDashboard() {
             <span className="text-xs font-medium text-muted-foreground">Total Amount</span>
           </div>
           <p className="text-2xl font-bold">
-            {error ? '—' : formatCurrency(attempts.reduce((sum, a) => sum + (a.paymentAmount || 0), 0))}
+            {failed ? '—' : formatCurrency(attempts.reduce((sum, a) => sum + (a.paymentAmount || 0), 0))}
           </p>
         </div>
       </div>
@@ -176,11 +190,11 @@ export default function DunningDashboard() {
               </tr>
             </thead>
             <tbody>
-              {error ? (
+              {failed ? (
                 <tr>
                   <td colSpan={8} className="p-4">
                     <InlineErrorState
-                      message={`Failed to load dunning attempts: ${error.message || 'no response from the server'}`}
+                      message={`Failed to load dunning attempts: ${reason}`}
                       onRetry={refetch}
                     />
                   </td>

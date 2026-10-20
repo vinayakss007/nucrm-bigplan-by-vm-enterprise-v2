@@ -37,6 +37,16 @@ export default function SuperAdminTemplatesPage() {
   const { data, isLoading, error, refetch } = useApiQuery<{ data?: Template[] }>(queryKey, '/api/superadmin/templates');
   const templates: Template[] = data?.data ?? [];
   const loading = isLoading;
+  // #2872: TanStack Query keeps `data` when a revalidation of a read that already
+  // succeeded fails, and every branch below keyed off `error` alone. The reload that
+  // gets refused is the one `createMutation`'s `invalidateQueries` fires after a new
+  // template, or the remount refetch once `staleTime` (30s) has passed — and either
+  // way the page answered by replacing a catalogue that was still in the cache with
+  // "Failed to load templates" and dashing its four counts. `failed` is a catalogue
+  // that never answered; `stale` is the last read, and stays visible with that said.
+  const failed = Boolean(error) && !data;
+  const stale = Boolean(error) && Boolean(data);
+  const reason = error?.message || 'no response from the server';
 
   const createMutation = useMutation({
     mutationFn: async () => {
@@ -91,10 +101,10 @@ export default function SuperAdminTemplatesPage() {
           Unread renders unavailable, not 0. */}
       <div className="grid grid-cols-4 gap-4">
         {[
-          { label: 'Total Templates', value: error ? '—' : templates.length, color: 'text-white' },
-          { label: 'Active', value: error ? '—' : activeCount, color: 'text-emerald-400' },
-          { label: 'Draft', value: error ? '—' : draftCount, color: 'text-amber-400' },
-          { label: 'Total Assignments', value: error ? '—' : totalAssignments, color: 'text-violet-400' },
+          { label: 'Total Templates', value: failed ? '—' : templates.length, color: 'text-white' },
+          { label: 'Active', value: failed ? '—' : activeCount, color: 'text-emerald-400' },
+          { label: 'Draft', value: failed ? '—' : draftCount, color: 'text-amber-400' },
+          { label: 'Total Assignments', value: failed ? '—' : totalAssignments, color: 'text-violet-400' },
         ].map(s => (
           <div key={s.label} className="rounded-xl border border-white/10 bg-white/5 p-4">
             <p className="text-xs text-white/40">{s.label}</p>
@@ -104,13 +114,19 @@ export default function SuperAdminTemplatesPage() {
       </div>
 
       {/* Template cards */}
+      {stale && (
+        <InlineErrorState
+          message={`Could not refresh, so the templates below are the last read: ${reason}. A template you just created may not be one of them.`}
+          onRetry={refetch}
+        />
+      )}
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {[...Array(4)].map((_, i) => <div key={i} className="h-48 rounded-xl animate-pulse bg-white/5" />)}
         </div>
-      ) : error ? (
+      ) : failed ? (
         <InlineErrorState
-          message={`Failed to load templates: ${error.message || 'no response from the server'}`}
+          message={`Failed to load templates: ${reason}`}
           onRetry={refetch}
         />
       ) : templates.length === 0 ? (
