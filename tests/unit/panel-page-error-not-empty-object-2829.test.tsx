@@ -254,6 +254,9 @@ describe('tenant reports panel (#2829, toasted failure and a permanent sentence)
     };
     run();
     expect(screen.getByText(/Ada Operator/)).toBeTruthy();
-    expect(screen.queryByRole('alert')).toBeNull();
+    // #2872 pinned this as "no alert at all", which was the other half of the bug: the
+    // rows staying is only honest if the page also says they are the last read. The
+    // caveat itself belongs to panel-page-error-not-empty-forms-reports-stale-2872.
+    expect(screen.queryByText('This report did not run')).toBeNull();
   });
 });
