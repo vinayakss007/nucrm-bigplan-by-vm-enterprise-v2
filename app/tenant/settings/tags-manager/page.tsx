@@ -37,6 +37,14 @@ export default function TagsManagerPage() {
   );
   const tags: TagRow[] = useMemo(() => tagsData?.tags ?? [], [tagsData]);
 
+  // #2872: rename / merge / delete each call reload() on this exact key and the Refresh button
+  // re-fetches it, so kept rows + refused revalidation is the ordinary state right after the
+  // operator acts. TanStack keeps tagsData then, so branching on `error` alone showed an outage
+  // above the tags still on screen. The filter is client-side, so a filtered miss is never unread.
+  const failed = Boolean(error) && !tagsData;   // never answered → outage
+  const stale = Boolean(error) && Boolean(tagsData); // background-refusal → last-read caveat
+  const reason = error?.message || 'no response from the server';
+
   const reload = () => queryClient.invalidateQueries({ queryKey: TAGS_QUERY });
 
   const q = query.trim().toLowerCase();
@@ -191,9 +199,15 @@ export default function TagsManagerPage() {
       )}
 
       {/* Table */}
-      {error && (
+      {failed && (
         <InlineErrorState
-          message={`Failed to load tags: ${error.message || 'no response from the server'}`}
+          message={`Failed to load tags: ${reason}`}
+          onRetry={refetch}
+        />
+      )}
+      {stale && (
+        <InlineErrorState
+          message={`Could not refresh, so the tags below are the last read: ${reason}. A tag you just renamed, merged or deleted is not reflected here yet.`}
           onRetry={refetch}
         />
       )}
@@ -202,7 +216,7 @@ export default function TagsManagerPage() {
         <div className="sm:hidden divide-y divide-border">
           {loading ? (
             <div className="px-4 py-10 text-center text-muted-foreground"><Loader2 className="w-5 h-5 animate-spin mx-auto" /></div>
-          ) : !error && filtered.length === 0 ? (
+          ) : !failed && filtered.length === 0 ? (
             <div className="px-4 py-10 text-center text-sm text-muted-foreground">{q ? `No tags match "${query}"` : 'No tags yet'}</div>
           ) : (
             <>
@@ -254,7 +268,7 @@ export default function TagsManagerPage() {
             {loading && (
               <tr><td colSpan={7} className="py-10 text-center text-muted-foreground"><Loader2 className="w-5 h-5 animate-spin mx-auto" /></td></tr>
             )}
-            {!loading && !error && filtered.length === 0 && (
+            {!loading && !failed && filtered.length === 0 && (
               <tr><td colSpan={7} className="py-10 text-center text-sm text-muted-foreground">{q ? `No tags match "${query}"` : 'No tags yet'}</td></tr>
             )}
             {filtered.map(row => (
