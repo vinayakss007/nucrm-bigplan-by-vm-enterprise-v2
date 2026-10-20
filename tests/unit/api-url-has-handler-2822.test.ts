@@ -30,9 +30,6 @@ import { join } from 'node:path';
 
 /** URL → the issue carrying the missing handler. May only SHRINK, entry by entry. */
 const ALLOWLIST: Record<string, string> = {
-  '/api/dev/errors': '#2881: written as GET_ERRORS, a name Next never routes',
-  '/api/dev/logs': '#2881: the page fetches it, the file only documents it',
-  '/api/dev/queries': '#2881: written as GET_QUERIES, a name Next never routes',
   '/api/superadmin/token-control/report/top-spenders':
     '#2880: the spenders table has been GETting a handler that was never written, same shape as #2822',
   '/api/tenant/rbac/approval-rules':

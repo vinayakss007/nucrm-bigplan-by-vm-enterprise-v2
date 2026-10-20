@@ -4,14 +4,19 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 /**
- * POST /api/v1/auth/login - User login
- * POST /api/v1/auth/logout - User logout  
- * POST /api/v1/auth/signup - User signup
- * GET /api/v1/auth/me - Get current user
+ * This module routes two URLs:
+ *   POST /api/v1/auth/login - User login
+ *   GET  /api/v1/auth/me    - Get current user
  *
  * ⚠️ DEPRECATED: Use /api/auth/* endpoints instead
  * These v1 auth handlers are kept for backward compatibility only
  * and will be removed in a future version.
+ *
+ * #2884: the header used to promise `POST /api/v1/auth/logout` and
+ * `POST /api/v1/auth/signup` as well. They were exported as `POST_LOGOUT` and
+ * `POST_SIGNUP`, which Next.js never dispatches, so those two paths have been 404s
+ * for their whole history — the removals took nothing away that was reachable.
+ * `/api/auth/logout` and `/api/auth/signup` are the live ones.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -19,16 +24,14 @@ import { readJsonBody } from '@/lib/api/validate';
 import { db } from '@/drizzle/db';
 import { users, sessions } from '@/drizzle/schema';
 import { eq, and, sql } from 'drizzle-orm';
-import { hashPassword, verifyPassword, createToken, hashToken, setSessionCookie, clearSessionCookie, validatePassword, getCurrentUser } from '@/lib/auth/session';
+import { verifyPassword, createToken, hashToken, setSessionCookie, getCurrentUser } from '@/lib/auth/session';
 import { verifyTOTP } from '@/lib/auth/totp';
 import { limiters } from '@/lib/rate-limit';
-import { handleError, ValidationError, AuthError, ConflictError, ErrorCode } from '@/lib/errors';
+import { handleError, ValidationError, AuthError, ErrorCode } from '@/lib/errors';
 import { devLogger } from '@/lib/dev-logger';
 import { getClientIp } from '@/lib/client-ip';
 import { createHash } from 'crypto';
-// Deprecated v1 signup inserts into the platform-wide `users` table with no
-// authenticated context; without the security context it 500s on RLS.
-import { withSecurityContext, withUserContext } from '@/lib/db/rls';
+import { withUserContext } from '@/lib/db/rls';
 
 // Mirrors the private SESSION_EXPIRES_DAYS in lib/auth/session.ts (the default
 // createToken() lifetime); the sessions row must expire with the JWT it hashes
@@ -164,100 +167,6 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     devLogger.error(error as Error, 'POST /api/v1/auth/login');
-    return handleError(error);
-  }
-}
-
-/**
- * POST /api/v1/auth/logout
- * ⚠️ DEPRECATED: Use /api/auth/logout instead
- */
-export async function POST_LOGOUT(_request: NextRequest) {
-  console.warn('DEPRECATED: /api/v1/auth/logout called - use /api/auth/logout instead');
-  try {
-    await clearSessionCookie();
-    
-    return NextResponse.json({ success: true });
-  } catch (error) {
-    return handleError(error);
-  }
-}
-
-/**
- * POST /api/v1/auth/signup
- * ⚠️ DEPRECATED: Use /api/auth/signup instead - this v1 version does NOT create tenant/workspace
- */
-export async function POST_SIGNUP(request: NextRequest) {
-  console.warn('DEPRECATED: /api/v1/auth/signup called - use /api/auth/signup instead');
-  try {
-    const body = await readJsonBody(request);
-
-    // Validate
-    if (!body.email || !body.password) {
-      throw new ValidationError('email and password are required');
-    }
-
-    const passwordError = validatePassword(body.password);
-    if (passwordError) {
-      throw new ValidationError(passwordError);
-    }
-
-    // Check if user exists + create run under the security context below
-    // (bare connections cannot satisfy the fail-closed `users` policies).
-
-    // Hash password
-    const password_hash = await hashPassword(body.password);
-
-    // Pre-auth provisioning: the existence check + insert run under the
-    // security context (same as /api/auth/signup) — a bare connection
-    // cannot satisfy the fail-closed `users` policies.
-    const [user] = await withSecurityContext(async (tx) => {
-      const [already] = await tx.select({ id: users.id })
-        .from(users)
-        .where(eq(sql`lower(${users.email})`, body.email.toLowerCase()))
-        .limit(1);
-
-      if (already) {
-        throw new ConflictError('User with this email already exists');
-      }
-
-      // Create user
-      const [created] = await tx.insert(users)
-        .values({
-          email: body.email.toLowerCase(),
-          passwordHash: password_hash,
-          emailVerified: true,
-        })
-        .returning({
-          id: users.id,
-          email: users.email,
-          isSuperAdmin: users.isSuperAdmin,
-        });
-
-      return [created];
-    });
-
-    if (!user) {
-      throw new Error('Failed to create user');
-    }
-
-    // Create token and set cookie
-    const token = await createToken(user.id);
-    await setSessionCookie(token);
-
-    devLogger.auth('Signup', true, body.email, user.id);
-
-    return NextResponse.json({
-      data: {
-        user: {
-          id: user.id,
-          email: user.email,
-          is_super_admin: user.isSuperAdmin,
-        }
-      }
-    }, { status: 201 });
-  } catch (error) {
-    devLogger.error(error as Error, 'POST /api/v1/auth/signup');
     return handleError(error);
   }
 }
