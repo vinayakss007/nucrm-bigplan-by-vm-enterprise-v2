@@ -1,24 +1,8 @@
 {
   "_comment": "Panels that still print a 'there are none' sentence when the read failed (#2829). Each entry names the issue carrying it and which of the two shapes the page has: one that destructures no `error`, or one that binds it and routes it to a toast that fades while the sentence stays. The binding spelling does not matter: a page that keeps the whole result object (`const q = useApiQuery(...)`) is judged on whether it reads `q.error`, which is how four super-admin panels that the first pass counted as clean were found. The list may only SHRINK: fix the page, delete its entry, and guard:panel-error-state turns the next one red.",
   "files": {
-    "app/superadmin/billing/dunning/page.tsx": "#2829: prints 'No dunning attempts found' for a failed read — binds `error` and toasts it, then prints the sentence anyway",
-    "app/superadmin/modules/page.tsx": "#2829: prints 'No modules match' for a failed read — destructures no `error` at all",
-    "app/superadmin/templates/page.tsx": "#2829: prints 'No templates yet' for a failed read — binds `error` and toasts it, then prints the sentence anyway",
-    "app/superadmin/tickets/page.tsx": "#2829: prints 'No tickets found' for a failed read — binds `error` and toasts it, then prints the sentence anyway",
-    "app/tenant/activities/page.tsx": "#2829: prints 'No activity yet' for a failed read — binds `error` and toasts it, then prints the sentence anyway",
     "app/tenant/chat/page.tsx": "#2829: prints 'No sessions found' for a failed read — destructures no `error` at all",
-    "app/tenant/email-templates/page.tsx": "#2829: prints 'No templates yet' for a failed read — binds `error` and toasts it, then prints the sentence anyway",
     "app/tenant/emails/page.tsx": "#2829: prints 'No emails sent' for a failed read — destructures no `error` at all",
-    "app/tenant/forms/page.tsx": "#2829: prints 'No forms yet' for a failed read — binds `error` and toasts it, then prints the sentence anyway",
-    "app/tenant/kb/categories/page.tsx": "#2829: prints 'No categories yet' for a failed read — binds `error` and toasts it, then prints the sentence anyway",
-    "app/tenant/kb/page.tsx": "#2829: prints 'No articles found' for a failed read — binds `error` and toasts it, then prints the sentence anyway",
-    "app/tenant/meetings/page.tsx": "#2829: prints 'No meetings yet' for a failed read — binds `error` and toasts it, then prints the sentence anyway",
-    "app/tenant/pipelines/page.tsx": "#2829: prints 'No pipelines yet' for a failed read — binds `error` and toasts it, then prints the sentence anyway",
-    "app/tenant/reports/custom/page.tsx": "#2829: prints 'No saved reports yet' for a failed read — destructures no `error` at all",
-    "app/tenant/reports/funnel/page.tsx": "#2829: prints 'No deals for this period yet' for a failed read — destructures no `error` at all",
-    "app/tenant/reports/saved/page.tsx": "#2829: prints 'No reports match' for a failed read — binds `error` and toasts it, then prints the sentence anyway",
-    "app/tenant/reports/team-performance/page.tsx": "#2829: prints 'No leads yet' for a failed read — binds `error` and toasts it, then prints the sentence anyway",
-    "app/tenant/sms/page.tsx": "#2829: prints 'No messages found' for a failed read — binds `error` and toasts it, then prints the sentence anyway",
-    "app/tenant/visitors/page.tsx": "#2829: prints 'No visitors found' for a failed read — binds `error` and toasts it, then prints the sentence anyway"
+    "app/tenant/pipelines/page.tsx": "#2829: prints 'No pipelines yet' for a failed read — binds `error` and toasts it, then prints the sentence anyway"
   }
 }

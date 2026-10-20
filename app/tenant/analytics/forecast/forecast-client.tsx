@@ -8,6 +8,7 @@ import { useMemo, type ComponentProps } from 'react';
 import useSWR from 'swr';
 import { TrendingUp, DollarSign, BarChart3, Target } from 'lucide-react';
 import { cn, formatCurrency } from '@/lib/utils';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 // Derive the Tooltip `formatter` type from the installed recharts Tooltip so it
 // matches the resolved version (recharts' type aliases aren't reliably exported
@@ -34,9 +35,17 @@ interface MonthlyForecast {
 }
 
 export default function ForecastPage() {
-  const { data: dealsRes, error: dealsErr } = useSWR('/api/tenant/deals?limit=500');
+  const { data: dealsRes, error: dealsErr, mutate } = useSWR('/api/tenant/deals?limit=500');
   const deals = useMemo(() => (dealsRes?.data ?? []) as Deal[], [dealsRes?.data]);
   const loading = !dealsRes && !dealsErr;
+  // #2849: `?? []` makes a refused read indistinguishable from a workspace with
+  // no open deals, and this page's four cards are computed from it — an unread
+  // forecast printed ₹0 / 0 / "No deals found". `dealsErr` was bound and used
+  // only to end the spinner. SWR's error is an Error OBJECT, so derive a string
+  // (the crash `leaderboards-client.tsx:53-55` records).
+  const dealsUnread = dealsErr
+    ? (dealsErr instanceof Error ? dealsErr.message : String(dealsErr))
+    : null;
 
   const next6Months = useMemo(() => {
     const now = new Date();
@@ -97,6 +106,17 @@ export default function ForecastPage() {
     })),
     [monthlyData],
   );
+
+  if (dealsUnread) {
+    return (
+      <div className="space-y-5">
+        <InlineErrorState
+          message={`The deal list behind this forecast did not load (${dealsUnread}). Total pipeline, weighted forecast, deal count and average size all come from that read, so none of them is known.`}
+          onRetry={() => void mutate()}
+        />
+      </div>
+    );
+  }
 
   if (loading) {
     return (

@@ -11,6 +11,7 @@ import Link from 'next/link';
 import { Book, Search, Plus, Clock, Eye, ThumbsUp, ChevronRight, FolderPlus } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
 import toast from 'react-hot-toast';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import { ListSkeleton } from '@/components/shared/page-skeleton';
 
 interface KBArticle {
@@ -39,18 +40,24 @@ export default function KBPage() {
   const [showCreate, setShowCreate] = useState(false);
 
   // #1328: reads via TanStack Query (were parallel raw fetch + useEffect).
-  const { data: articlesData, isLoading: articlesLoading, error: articlesError } = useApiQuery<{ data?: KBArticle[] }>(
+  //
+  // #2829: the articles read bound `error` and spent it on a toast fired from the
+  // render body, then answered the refusal with "No articles found" — the same
+  // sentence a search with no matches deserves. The categories read below bound no
+  // `error` at all, so a refused one just made the category chips vanish, one of
+  // the two ways in, and left the create-article modal offering "Uncategorized"
+  // as the only choice.
+  const { data: articlesData, isLoading: articlesLoading, error: articlesError, refetch: refetchArticles } = useApiQuery<{ data?: KBArticle[] }>(
     KB_ARTICLES_QUERY,
     '/api/tenant/kb/articles?status=published',
   );
-  const { data: categoriesData, isLoading: categoriesLoading } = useApiQuery<{ data?: KBCategory[] }>(
+  const { data: categoriesData, isLoading: categoriesLoading, error: categoriesError, refetch: refetchCategories } = useApiQuery<{ data?: KBCategory[] }>(
     KB_CATEGORIES_QUERY,
     '/api/tenant/kb/categories',
   );
   const articles: KBArticle[] = articlesData?.data ?? [];
   const categories: KBCategory[] = categoriesData?.data ?? [];
   const loading = articlesLoading || categoriesLoading;
-  if (articlesError) toast.error('Failed to load knowledge base');
 
   const load = () => {
     queryClient.invalidateQueries({ queryKey: KB_ARTICLES_QUERY });
@@ -93,25 +100,37 @@ export default function KBPage() {
       </div>
 
       {/* Categories */}
-      <div className="flex flex-wrap gap-2">
-        <button onClick={() => setActiveCategory('all')}
-          className={cn('px-3 py-1.5 rounded-lg text-xs font-medium transition-colors',
-            activeCategory === 'all' ? 'bg-violet-600 text-white' : 'bg-card border border-border text-muted-foreground hover:bg-accent')}>
-          All
-        </button>
-        {categories.map(c => (
-          <button key={c.id} onClick={() => setActiveCategory(c.id)}
+      {categoriesError ? (
+        <InlineErrorState
+          message={`Failed to load the categories: ${categoriesError.message || 'no response from the server'} — the articles below are shown unfiltered`}
+          onRetry={refetchCategories}
+        />
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          <button onClick={() => setActiveCategory('all')}
             className={cn('px-3 py-1.5 rounded-lg text-xs font-medium transition-colors',
-              activeCategory === c.id ? 'bg-violet-600 text-white' : 'bg-card border border-border text-muted-foreground hover:bg-accent')}>
-            {c.name}
+              activeCategory === 'all' ? 'bg-violet-600 text-white' : 'bg-card border border-border text-muted-foreground hover:bg-accent')}>
+            All
           </button>
-        ))}
-      </div>
+          {categories.map(c => (
+            <button key={c.id} onClick={() => setActiveCategory(c.id)}
+              className={cn('px-3 py-1.5 rounded-lg text-xs font-medium transition-colors',
+                activeCategory === c.id ? 'bg-violet-600 text-white' : 'bg-card border border-border text-muted-foreground hover:bg-accent')}>
+              {c.name}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Article list */}
       <div className="grid gap-3">
         {loading ? (
           <ListSkeleton rows={5} />
+        ) : articlesError ? (
+          <InlineErrorState
+            message={`Failed to load the knowledge base: ${articlesError.message || 'no response from the server'}`}
+            onRetry={refetchArticles}
+          />
         ) : filtered.length === 0 ? (
           <div className="text-center py-12">
             <Book className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />

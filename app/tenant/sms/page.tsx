@@ -7,6 +7,7 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import { MessageSquare, Plus, X, Loader2, Send, ArrowUpRight, ArrowDownLeft, FileText } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
 import toast from 'react-hot-toast';
@@ -54,20 +55,37 @@ export default function SmsPage() {
 
   // #1328: reads via TanStack Query (were raw fetch + useEffect). status filter
   // is part of the messages key so each view refetches and caches.
+  //
+  // #2829: `messagesError` was bound and spent on `if (messagesError)
+  // toast.error(...)` in the render body, so it re-fired on every render — and
+  // because the four stat cards are all derived from `messages`, a refusal made
+  // the inbox report Total 0 / Sent 0 / Delivered 0 / **Failed 0** above "No
+  // messages found / Send your first SMS to get started". An outbound message
+  // log that says nothing was sent, and nothing failed, is the worst kind of
+  // all-clear: the operator concludes the campaign never went out.
   const params = new URLSearchParams();
   if (filter !== 'all') params.set('status', filter);
-  const { data: messagesData, isLoading: loading, error: messagesError } = useApiQuery<{ data?: SmsMessage[] }>(
+  const { data: messagesData, isLoading: loading, error: messagesError, refetch: refetchMessages } = useApiQuery<{ data?: SmsMessage[] }>(
     ['tenant', 'sms', { filter }],
     `/api/tenant/sms?${params}`,
   );
   const messages: SmsMessage[] = messagesData?.data ?? [];
-  if (messagesError) toast.error('Failed to load messages');
 
-  const { data: templatesData } = useApiQuery<{ data?: SmsTemplate[] }>(
+  // #2868: this read destructured only `data`. The page is not judged on its
+  // message read — the compose dialog's "Use Template" picker is a second,
+  // separate read, and when it refused its only entry was the placeholder,
+  // which is the identical thing a tenant with no templates saved sees, with
+  // no retry anywhere. An operator who had templates could not tell whether
+  // they had lost them, and the one action the dialog was in was blocked
+  // (`!form.templateId`) on a request that never answered.
+  const { data: templatesData, error: templatesError, refetch: refetchTemplates } = useApiQuery<{ data?: SmsTemplate[] }>(
     ['tenant', 'sms', 'templates'],
     '/api/tenant/sms/templates',
   );
   const templates: SmsTemplate[] = templatesData?.data ?? [];
+  const templatesFailed = Boolean(templatesError) && !templatesData;
+  const templatesStale = Boolean(templatesError) && Boolean(templatesData);
+  const templatesReason = templatesError?.message || 'no response from the server';
 
   const openCompose = () => {
     setForm({ to: '', body: '', templateId: '' });
@@ -146,23 +164,24 @@ export default function SmsPage() {
         </button>
       </div>
 
-      {/* Stats Cards */}
+      {/* Stats Cards — every number here is counted off `messages`, so an unread
+          list renders unavailable rather than 0 (#2829). */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="admin-card p-4">
           <p className="text-xs font-medium text-muted-foreground">Total Messages</p>
-          <p className="text-2xl font-bold mt-1">{stats.total}</p>
+          <p className="text-2xl font-bold mt-1">{messagesError ? '—' : stats.total}</p>
         </div>
         <div className="admin-card p-4">
           <p className="text-xs font-medium text-muted-foreground">Sent</p>
-          <p className="text-2xl font-bold mt-1 text-blue-600">{stats.sent}</p>
+          <p className="text-2xl font-bold mt-1 text-blue-600">{messagesError ? '—' : stats.sent}</p>
         </div>
         <div className="admin-card p-4">
           <p className="text-xs font-medium text-muted-foreground">Delivered</p>
-          <p className="text-2xl font-bold mt-1 text-emerald-600">{stats.delivered}</p>
+          <p className="text-2xl font-bold mt-1 text-emerald-600">{messagesError ? '—' : stats.delivered}</p>
         </div>
         <div className="admin-card p-4">
           <p className="text-xs font-medium text-muted-foreground">Failed</p>
-          <p className="text-2xl font-bold mt-1 text-red-600">{stats.failed}</p>
+          <p className="text-2xl font-bold mt-1 text-red-600">{messagesError ? '—' : stats.failed}</p>
         </div>
       </div>
 
@@ -180,6 +199,11 @@ export default function SmsPage() {
       {/* Messages Table */}
       {loading ? (
         [...Array(4)].map((_, i) => <div key={i} className="h-14 bg-muted rounded-2xl animate-pulse" />)
+      ) : messagesError ? (
+        <InlineErrorState
+          message={`Failed to load the message log: ${messagesError.message || 'no response from the server'}`}
+          onRetry={refetchMessages}
+        />
       ) : messages.length === 0 ? (
         <div className="text-center py-12 border border-dashed border-border rounded-2xl">
           <MessageSquare className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
@@ -262,16 +286,37 @@ export default function SmsPage() {
               {useTemplate ? (
                 <div>
                   <label className="block text-xs font-medium text-muted-foreground mb-1">Template *</label>
-                  <select value={form.templateId} onChange={e => setForm(f => ({ ...f, templateId: e.target.value }))} required className={inp}>
-                    <option value="">Select a template...</option>
-                    {templates.map(t => (
-                      <option key={t.id} value={t.id}>{t.name}</option>
-                    ))}
-                  </select>
-                  {form.templateId && (
-                    <p className="mt-2 text-xs text-muted-foreground p-2 bg-muted rounded-lg">
-                      {templates.find(t => t.id === form.templateId)?.body}
-                    </p>
+                  {templatesFailed ? (
+                    <InlineErrorState
+                      message={`Failed to load the templates, so there is nothing to pick from — which is not the same as having none saved: ${templatesReason}. Switch to Direct Message to send free text, or try again.`}
+                      onRetry={refetchTemplates}
+                    />
+                  ) : (
+                    <>
+                      {templatesStale && (
+                        <InlineErrorState
+                          className="mb-1.5"
+                          message={`Could not refresh the templates, so the options below are the last read: ${templatesReason}`}
+                          onRetry={refetchTemplates}
+                        />
+                      )}
+                      <select value={form.templateId} onChange={e => setForm(f => ({ ...f, templateId: e.target.value }))} required className={inp}>
+                        <option value="">Select a template...</option>
+                        {templates.map(t => (
+                          <option key={t.id} value={t.id}>{t.name}</option>
+                        ))}
+                      </select>
+                      {templates.length === 0 && (
+                        <p className="mt-1.5 text-xs text-muted-foreground">
+                          No SMS templates saved yet — use Direct Message to write one instead.
+                        </p>
+                      )}
+                      {form.templateId && (
+                        <p className="mt-2 text-xs text-muted-foreground p-2 bg-muted rounded-lg">
+                          {templates.find(t => t.id === form.templateId)?.body}
+                        </p>
+                      )}
+                    </>
                   )}
                 </div>
               ) : (

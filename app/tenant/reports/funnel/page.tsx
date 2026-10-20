@@ -11,6 +11,7 @@ import { ArrowLeft, RefreshCw, Loader2, Download, Filter } from 'lucide-react';
 import { formatCurrency, cn } from '@/lib/utils';
 import { csvRow } from '@/lib/csv';
 import { useApiQuery } from '@/lib/query/client';
+import InlineErrorState from '@/components/shared/inline-error-state';
 
 interface FunnelStage {
   stageId: string;
@@ -60,6 +61,11 @@ export default function ConversionFunnelPage() {
 
   // #1328: TanStack Query. rangeDays is part of the query key, so changing the
   // range refetches automatically; the refresh button calls refetch().
+  //
+  // #2829: `error` was never bound, so a refused funnel read had no channel at all
+  // and the page answered it with "No deals for this period yet." — a statement
+  // about the tenant's pipeline, on the page whose whole job is measuring it. The
+  // range selector, the Refresh button and the CSV button all stayed live under it.
   const funnelUrl = (() => {
     const params = new URLSearchParams();
     if (rangeDays > 0) params.set('from', new Date(Date.now() - rangeDays * 86400000).toISOString());
@@ -67,7 +73,7 @@ export default function ConversionFunnelPage() {
     return `/api/tenant/reports/conversion-funnel${qs ? `?${qs}` : ''}`;
   })();
 
-  const { data: json, isLoading: loading, refetch } = useApiQuery<FunnelResponse>(
+  const { data: json, isLoading: loading, error, refetch } = useApiQuery<FunnelResponse>(
     ['tenant', 'reports', 'conversion-funnel', rangeDays],
     funnelUrl,
   );
@@ -120,6 +126,11 @@ export default function ConversionFunnelPage() {
         <div className="flex items-center gap-2 text-sm text-muted-foreground py-8 justify-center">
           <Loader2 className="w-5 h-5 animate-spin" /> Loading report…
         </div>
+      ) : error ? (
+        <InlineErrorState
+          message={`Failed to load the conversion funnel: ${error.message || 'no response from the server'}`}
+          onRetry={refetch}
+        />
       ) : stages.length === 0 ? (
         <div className="admin-card p-8 text-center text-sm text-muted-foreground">
           No deals for this period yet.

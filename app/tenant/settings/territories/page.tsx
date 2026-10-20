@@ -7,6 +7,7 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import { Plus, Map, X, Loader2, Trash2 } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import { cn } from '@/lib/utils';
@@ -57,12 +58,26 @@ export default function TerritoriesPage() {
   };
 
   // #1328: list via TanStack Query (was raw fetch + useEffect).
-  const { data, isLoading: loading, error } = useApiQuery<{ data?: Territory[] }>(
+  //
+  // #2852: `if (error) toast.error(...)` sat in the render body, so the failure was
+  // re-announced on every re-render, and the page still answered the refusal with
+  // "No territories" + an "Add Territory" button — a tenant with a territory tree is
+  // invited to rebuild it. `data?.data ?? []` → `flattenTree` → length 0 is the same
+  // answer for "none" and for "never read", and the #2829 screen cannot see a bare
+  // "No territories" to begin with.
+  const { data, isLoading: loading, error, refetch } = useApiQuery<{ data?: Territory[] }>(
     TERRITORIES_QUERY,
     '/api/tenant/territories',
   );
   const territories: Territory[] = data?.data ?? [];
-  if (error) toast.error('Failed to load territories');
+  // #2872: #2852 gave this page an outage branch, and that branch is now the thing that misbehaves.
+  // `reload()` invalidates TERRITORIES_QUERY after save and after delete, so the error that arrives is
+  // usually a refused *refresh* of a tree that is still on screen — and branching on the bare flag
+  // spent that moment replacing the tree with "Failed to load territories". Never-read and refused-
+  // refresh are two different answers, and only the first one is allowed to hide the rows.
+  const failed = Boolean(error) && !data;
+  const stale = Boolean(error) && Boolean(data);
+  const reason = error?.message || 'no response from the server';
 
   const reload = () => queryClient.invalidateQueries({ queryKey: TERRITORIES_QUERY });
 
@@ -158,8 +173,20 @@ export default function TerritoriesPage() {
         </button>
       </div>
 
+      {stale && (
+        <InlineErrorState
+          className="mb-1.5"
+          message={`Could not refresh the territories, so the tree below is the last read: ${reason}`}
+          onRetry={refetch}
+        />
+      )}
       {loading ? (
         [...Array(3)].map((_, i) => <div key={i} className="h-16 bg-muted rounded-2xl animate-pulse" />)
+      ) : failed ? (
+        <InlineErrorState
+          message={`Failed to load territories: ${reason}`}
+          onRetry={refetch}
+        />
       ) : allTerritories.length === 0 ? (
         <div className="text-center py-12 border border-dashed border-border rounded-2xl">
           <Map className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
@@ -224,12 +251,32 @@ export default function TerritoriesPage() {
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-muted-foreground mb-1">Parent</label>
-                  <select value={form.parentId} onChange={e => setForm(f => ({ ...f, parentId: e.target.value }))} className={inp}>
-                    <option value="">None (root)</option>
-                    {allTerritories
-                      .filter(t => t.id !== editing?.id)
-                      .map(t => <option key={t.id} value={t.id}>{'  '.repeat(t.depth)}{t.name}</option>)}
-                  </select>
+                  {/* The tree this picker reads is the same read the page just failed. Offered empty, it
+                      silently files every new territory as a root — "no parent" and "never read" look
+                      identical to whoever is typing the name. (#2872) */}
+                  {failed ? (
+                    <InlineErrorState
+                      message={`The territory tree could not be read (${reason}), so there is no parent to pick from.`}
+                      onRetry={refetch}
+                    />
+                  ) : (
+                    <>
+                      {stale && (
+                        <p className="text-xs text-amber-700 dark:text-amber-400 mb-1">
+                          The refresh failed, so these options are the last read: {reason}
+                        </p>
+                      )}
+                      <select value={form.parentId} onChange={e => setForm(f => ({ ...f, parentId: e.target.value }))} className={inp}>
+                        <option value="">None (root)</option>
+                        {allTerritories
+                          .filter(t => t.id !== editing?.id)
+                          .map(t => <option key={t.id} value={t.id}>{'  '.repeat(t.depth)}{t.name}</option>)}
+                      </select>
+                      {allTerritories.length === 0 && (
+                        <p className="text-xs text-muted-foreground mt-1">No territories saved yet — the list read back empty.</p>
+                      )}
+                    </>
+                  )}
                 </div>
               </div>
               <div>

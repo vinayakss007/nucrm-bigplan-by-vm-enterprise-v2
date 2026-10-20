@@ -7,6 +7,7 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import {
   Plug, Plus, Trash2, CheckCircle, XCircle, ExternalLink,
   Mail, MessageSquare, Brain, Database, Cloud, Power,
@@ -28,18 +29,37 @@ export default function IntegrationsPage() {
   const [showAdd, setShowAdd] = useState<string | null>(null);
 
   // #1328: reads via TanStack Query (were parallel raw fetch + useEffect).
-  const { data: instancesData, isLoading: instancesLoading, error: instancesError } = useApiQuery<{ data?: IntegrationInstance[] }>(
+  //
+  // #2852: two reads, and the failure handling was worse than the sentence it left
+  // behind. `if (instancesError) toast.error(...)` sat in the RENDER BODY, so the
+  // refusal re-announced itself on every re-render (every keystroke in an install
+  // form) and "No integrations installed. Browse the available ones." stayed — with
+  // the second read pointing the tenant at that tab. `providersError` was not bound
+  // at all, so a refused `?type=providers` emptied the "Available" grid and left the
+  // hand-rolled Custom API card as the whole list. Both reads now answer for
+  // themselves, and the tab counts stop quoting a read that never answered.
+  const { data: instancesData, isLoading: instancesLoading, error: instancesError, refetch } = useApiQuery<{ data?: IntegrationInstance[] }>(
     ['tenant', 'integrations', 'instances'],
     '/api/tenant/plugin-engine',
   );
-  const { data: providersData, isLoading: providersLoading } = useApiQuery<{ data?: ProviderDefinition[] }>(
+  const { data: providersData, isLoading: providersLoading, error: providersError, refetch: refetchProviders } = useApiQuery<{ data?: ProviderDefinition[] }>(
     ['tenant', 'integrations', 'providers'],
     '/api/tenant/plugin-engine?type=providers',
   );
   const instances: IntegrationInstance[] = instancesData?.data ?? [];
   const providers: ProviderDefinition[] = providersData?.data ?? [];
   const loading = instancesLoading || providersLoading;
-  if (instancesError) toast.error('Failed to load integrations');
+  // #2872: #2852 gave both reads an outage branch, which was the right answer to a read that never
+  // happened. Removing, toggling and installing all call `load()` below, so the error that arrives here
+  // is usually a refused *refresh* of a list that is still on screen — and the bare flag routed that
+  // moment to the same banner, deleting the rows and leaving the tenant to re-discover which
+  // integrations they had. Two reads, so two pairs of flags: the tabs answer for themselves.
+  const instancesFailed = Boolean(instancesError) && !instancesData;
+  const instancesStale = Boolean(instancesError) && Boolean(instancesData);
+  const instancesReason = instancesError?.message || 'no response from the server';
+  const providersFailed = Boolean(providersError) && !providersData;
+  const providersStale = Boolean(providersError) && Boolean(providersData);
+  const providersReason = providersError?.message || 'no response from the server';
 
   const load = () => queryClient.invalidateQueries({ queryKey: ['tenant', 'integrations'] });
 
@@ -85,12 +105,12 @@ export default function IntegrationsPage() {
         <button onClick={() => setActiveTab('installed')}
           className={cn('px-4 py-1.5 text-xs font-medium rounded-md transition-colors',
             activeTab === 'installed' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground')}>
-          Installed ({instances.length})
+          Installed ({instancesFailed ? '—' : instances.length})
         </button>
         <button onClick={() => setActiveTab('available')}
           className={cn('px-4 py-1.5 text-xs font-medium rounded-md transition-colors',
             activeTab === 'available' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground')}>
-          Available ({providers.length})
+          Available ({providersFailed ? '—' : providers.length})
         </button>
       </div>
 
@@ -106,7 +126,20 @@ export default function IntegrationsPage() {
           ))}
         </div>
       ) : activeTab === 'installed' ? (
-        instances.length === 0 ? (
+        <>
+          {instancesStale && (
+            <InlineErrorState
+              className="mb-1.5"
+              message={`Could not refresh your installed integrations, so the list below is the last read: ${instancesReason}`}
+              onRetry={refetch}
+            />
+          )}
+          {instancesFailed ? (
+          <InlineErrorState
+            message={`Failed to load your installed integrations: ${instancesReason}`}
+            onRetry={refetch}
+          />
+        ) : instances.length === 0 ? (
           <div className="text-center py-12">
             <Plug className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
             <p className="text-sm text-muted-foreground">No integrations installed. Browse the available ones.</p>
@@ -149,7 +182,28 @@ export default function IntegrationsPage() {
               );
             })}
           </div>
-        )
+        )}
+        </>
+      ) : (
+        <>
+          {providersStale && (
+            <InlineErrorState
+              className="mb-1.5"
+              message={`Could not refresh the providers available to install, so this grid is the last read: ${providersReason}`}
+              onRetry={refetchProviders}
+            />
+          )}
+          {instancesFailed && (
+            <p className="text-xs text-muted-foreground">
+              Which integrations are already installed is unread right now ({instancesReason}), so a
+              provider listed below may be one you have already connected.
+            </p>
+          )}
+          {providersFailed ? (
+        <InlineErrorState
+          message={`Failed to load the providers available to install: ${providersReason}`}
+          onRetry={refetchProviders}
+        />
       ) : (
         <div className="grid gap-3">
           {providers.filter(p => !installedIds.has(p.id)).map(provider => {
@@ -204,6 +258,8 @@ export default function IntegrationsPage() {
             </div>
           </div>
         </div>
+          )}
+        </>
       )}
 
       {/* Add integration modal */}

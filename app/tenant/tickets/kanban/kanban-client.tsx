@@ -16,6 +16,7 @@ import {
   GripVertical, ArrowLeft, LifeBuoy, User, Clock, AlertCircle
 } from 'lucide-react';
 import { cn, formatRelativeTime } from '@/lib/utils';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import toast from 'react-hot-toast';
 import Link from 'next/link';
 
@@ -132,9 +133,13 @@ const TicketColumn = memo(function TicketColumn({ column, tickets }: { column: C
 
 export default function TicketsKanbanPage() {
   const [activeId, setActiveId] = useState<string | null>(null);
-  const { data: res, isLoading, mutate } = useSWR('/api/tenant/tickets');
+  const { data: res, isLoading, mutate, error: ticketsErr } = useSWR('/api/tenant/tickets');
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const loading = isLoading && tickets.length === 0;
+  // #2849: a refused read is not a workspace with no tickets. SWR's error is an
+  // Error OBJECT — inlining it as a React child is the crash
+  // `leaderboards-client.tsx:53-55` records, so derive a string here.
+  const ticketsUnread = ticketsErr ? (ticketsErr instanceof Error ? ticketsErr.message : String(ticketsErr)) : null;
 
   useEffect(() => {
     const fetched = res?.data as Ticket[] | undefined;
@@ -241,13 +246,18 @@ export default function TicketsKanbanPage() {
               <div className={cn('w-3 h-3 rounded-full', col.color)} />
               <p className="text-xs text-muted-foreground">{col.name}</p>
             </div>
-            <p className="text-lg font-bold mt-1">{ticketsByStatus[col.id]?.length || 0}</p>
+            <p className="text-lg font-bold mt-1">{ticketsUnread ? '—' : ticketsByStatus[col.id]?.length || 0}</p>
           </div>
         ))}
       </div>
 
       {/* Kanban Board */}
-      {loading ? (
+      {ticketsUnread ? (
+        <InlineErrorState
+          message={`The ticket list did not load (${ticketsUnread}). "No tickets" would mean this workspace has none — this means the request never answered.`}
+          onRetry={() => void mutate()}
+        />
+      ) : loading ? (
         <div className="flex items-center justify-center h-48">
           <div className="animate-spin w-6 h-6 border-2 border-violet-600 border-t-transparent rounded-full" />
         </div>

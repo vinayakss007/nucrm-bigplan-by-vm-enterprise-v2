@@ -133,6 +133,9 @@ const CASES: {
   page: () => ReactNode;
   /** what the page says when a successful read returned nothing */
   emptyCopy: RegExp;
+  /** #2872: what it says when the read returned rows and the search dropped them. Pages that
+   *  separate the two carry this; the rest still answer a miss with `emptyCopy`. */
+  missCopy?: RegExp;
   /** the envelope key the page reads its list out of */
   key: 'data' | 'quotes' | 'orders' | 'contracts' | 'offers';
   /** does the page filter client-side, so a search miss has to stay the honest sentence? */
@@ -145,6 +148,7 @@ const CASES: {
     url: 'invoices',
     page: () => <InvoicesPage />,
     emptyCopy: /No invoices found/,
+    missCopy: /No invoice matches this search/,
     key: 'data',
     searchable: true,
     row: { id: 'inv1', invoiceNumber: 'INV-2041', title: 'Northwind retainer', status: 'sent', issueDate: NOW, dueDate: NOW, totalAmount: '4200.00', balanceDue: '4200.00', contactId: 'ct1' },
@@ -175,6 +179,7 @@ const CASES: {
     url: 'contracts',
     page: () => <ContractsPage />,
     emptyCopy: /No contracts found/,
+    missCopy: /No contract matches this search/,
     key: 'contracts',
     searchable: true,
     row: { id: 'c1', title: 'Master services agreement', contractNumber: 'MSA-12', contractType: 'msa', status: 'active', startDate: NOW, endDate: null, totalValue: '60000.00', contactId: 'ct1' },
@@ -233,7 +238,7 @@ function payload(key: typeof CASES[number]['key'], rows: unknown[] | null) {
   return { [key]: list };
 }
 
-describe.each(CASES)('$name panel renders the failure instead of the absence (#2829)', ({ url, page, emptyCopy, row, rowCopy, key, searchable }) => {
+describe.each(CASES)('$name panel renders the failure instead of the absence (#2829)', ({ url, page, emptyCopy, missCopy, row, rowCopy, key, searchable }) => {
   it('says the read failed, with the reason, when the fetch errors', () => {
     registry.byUrl[URLS[url]] = failed('Request failed (500)');
     mount(page());
@@ -273,7 +278,14 @@ describe.each(CASES)('$name panel renders the failure instead of the absence (#2
       const box = screen.getByPlaceholderText(/search/i) as HTMLInputElement;
       fireEvent.change(box, { target: { value: 'zzz-no-such-row' } });
       expect(screen.queryByRole('alert')).toBeNull();
-      expect(screen.getByText(emptyCopy)).toBeTruthy();
+      if (missCopy) {
+        // #2872: the read answered with rows, so "there are none" invents a tenant. The miss
+        // gets its own sentence and keeps the count the read established.
+        expect(screen.getByText(missCopy)).toBeTruthy();
+        expect(screen.queryByText(emptyCopy)).toBeNull();
+      } else {
+        expect(screen.getByText(emptyCopy)).toBeTruthy();
+      }
     });
   }
 });
@@ -373,14 +385,18 @@ describe('the ratchet decays by exactly the pages this slice fixed (#2829)', () 
     }
   });
 
-  it('keeps pages nobody is fixing in the list, so an empty sweep cannot read as success', () => {
+  it('cannot be satisfied by an empty list, and pins no page by name', () => {
     const f = files();
     // A ceiling, never an equality: an exact count goes false the moment another slice
     // honestly fixes a panel, which is the landmine the first slice of this issue shipped.
     expect(Object.keys(f).length).toBeLessThanOrEqual(46);
-    expect(f['app/tenant/chat/page.tsx']).toBeTruthy();
-    expect(f['app/superadmin/modules/page.tsx']).toBeTruthy();
-    expect(f['app/tenant/emails/page.tsx'], 'the documented #1328 tradeoff stays allowlisted').toBeTruthy();
+    // The three names this case used to assert — `superadmin/modules`, then `visitors`,
+    // then `pipelines` — were each deleted by the slice that fixed them, which is the
+    // outcome the issue asks for. Naming a page owed was therefore a bet against every
+    // other slice on the board, and it lost four times.
+    // What actually stops a sweep from deleting the list to make this green is the guard
+    // run above: a page dropped while it still prints an empty sentence over a failed
+    // read is a NOVEL offender, and that is the failure the guard is built to report.
     for (const [file, note] of Object.entries(f)) {
       expect(note, `${file} is allowlisted with no reason attached`).toContain('#2829');
     }

@@ -5,80 +5,39 @@
  */
 /**
  * Development Dashboard API
- * 
+ *
  * Provides real-time metrics and logs for development monitoring
- * 
+ *
  * ⚠️ SUPER ADMIN ONLY - Local dev tools disabled in production
  * ✅ External monitoring (Sentry, Grafana) works in production
- * 
- * Endpoints:
- * GET /api/dev/dashboard - Get dashboard data
- * GET /api/dev/logs - Get recent logs
- * GET /api/dev/stats - Get statistics
- * GET /api/dev/queries - Get database queries
- * GET /api/dev/errors - Get error logs
- * POST /api/dev/clear - Clear all logs
+ *
+ * This module answers two URLs, and no others:
+ *   GET  /api/dev/dashboard  — stats, the log export, DB counters, environment
+ *   POST /api/dev/dashboard  — clear the development log buffers
+ *
+ * The per-panel reads the page polls are siblings, not exports of this file:
+ *   GET /api/dev/logs    → app/api/dev/logs/route.ts
+ *   GET /api/dev/queries → app/api/dev/queries/route.ts
+ *   GET /api/dev/errors  → app/api/dev/errors/route.ts
+ *
+ * #2881: this header used to advertise three more GET endpoints and a log-clearing
+ * POST as if they lived here, and a panel was written against the list. A route
+ * module only routes its HTTP-method exports, so the `GET_QUERIES` / `GET_ERRORS`
+ * functions that matched two of those names were never reachable — see the route
+ * files that replaced them.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { logError } from '@/lib/errors-server';
 import { devLogger } from '@/lib/dev-logger';
+import { requireDevAccess, requireSuperAdmin } from '@/lib/dev-access';
 import { db } from '@/drizzle/db';
 import { sql } from 'drizzle-orm';
-import { users } from '@/drizzle/schema';
-import { eq, and } from 'drizzle-orm';
-
-/**
- * Check if user is super admin
- * ⚠️ Local dev dashboard is ONLY for super admins
- * ✅ External monitoring (Sentry, Grafana) works in production
- */
-async function requireSuperAdmin(req: NextRequest): Promise<{ userId: string; isSuperAdmin: boolean } | null> {
-  // Dev dashboard available in all environments — secured by super admin auth below
-
-  // In development, verify super admin authentication
-  try {
-    const { getCurrentUserForToken } = await import('@/lib/auth/session');
-
-    // Get token from cookie in the request
-    const tokenCookie = req.cookies.get('nucrm_session')?.value;
-    if (!tokenCookie) {
-      return null;
-    }
-
-    // #2216: verifyToken alone keeps accepting revoked/logged-out JWTs until
-    // they expire; getCurrentUserForToken also requires a live sessions row.
-    const tokenUser = await getCurrentUserForToken(tokenCookie);
-    if (!tokenUser) {
-      return null;
-    }
-
-    // Check if user is super admin using Drizzle
-    const [user] = await db.select({
-      id: users.id,
-      isSuperAdmin: users.isSuperAdmin
-    })
-    .from(users)
-    .where(and(
-      eq(users.id, tokenUser.id),
-      sql`deleted_at IS NULL`
-    ))
-    .limit(1);
-
-    if (!user || !user.isSuperAdmin) {
-      return null;
-    }
-
-    return { userId: tokenUser.id, isSuperAdmin: true };
-  } catch {
-    return null;
-  }
-}
 
 /**
  * GET /api/dev/dashboard
  * Get comprehensive dashboard data
- * 
+ *
  * ⚠️ SUPER ADMIN ONLY - Local dev tool
  * ✅ External monitoring flows to Sentry/Grafana in production
  */
@@ -111,8 +70,24 @@ export async function GET(request: NextRequest) {
     void logError({ error, context: 'dev/dashboard db-stats', level: 'warning' });
   }
 
+  // #2881: the page's `DashboardData` has always read `uptime`, `nodeVersion` and
+  // `memory.{rss,heapUsed,heapTotal,external}`, and this response never carried them.
+  // `data.memory.rss` is not an optional field to the renderer — it is read straight
+  // off the object, so the Overview tab threw and the dashboard never drew at all.
+  // They are cheap to answer honestly, so they are answered, not removed from the type.
+  const memory = process.memoryUsage();
+  const toMb = (bytes: number) => Math.round((bytes / 1024 / 1024) * 10) / 10;
+
   return NextResponse.json({
     timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    nodeVersion: process.version,
+    memory: {
+      rss: toMb(memory.rss),
+      heapUsed: toMb(memory.heapUsed),
+      heapTotal: toMb(memory.heapTotal),
+      external: toMb(memory.external),
+    },
     stats,
     logs,
     dbStats,
@@ -122,8 +97,9 @@ export async function GET(request: NextRequest) {
       // DATABASE_SSL, DATABASE_POOL_SIZE, RESEND_API_KEY) are only exposed in
       // development. In production this dashboard should not report the
       // deployment's configuration surface — that belongs in Sentry/Grafana,
-      // not an API response (even a super-admin one). Matches the dev-only
-      // gating already used for GET_QUERIES/GET_LOGS below.
+      // not an API response (even a super-admin one). The dev-only data reads
+      // (/api/dev/logs, /queries, /errors) gate on this the same way, and
+      // additionally on the caller being a super admin.
       ...(process.env.NODE_ENV === 'development'
         ? {
             databaseUrl: (process.env as Record<string, string | undefined>).DATABASE_URL ? 'configured' : 'not configured',
@@ -148,71 +124,14 @@ export async function GET(request: NextRequest) {
 }
 
 /**
- * GET /api/dev/queries
- * Get database query logs
- */
-export async function GET_QUERIES(request: NextRequest) {
-  if (process.env.NODE_ENV !== 'development') {
-    return NextResponse.json({ error: 'Development only' }, { status: 403 });
-  }
-
-  const url = new URL(request.url);
-  const limit = parseInt(url.searchParams.get('limit') || '100');
-  const slowOnly = url.searchParams.get('slow') === 'true';
-  const threshold = parseInt(url.searchParams.get('threshold') || '100');
-
-  const logs = devLogger.exportLogs();
-  let queries = logs.queries;
-
-  if (slowOnly) {
-    queries = queries.filter(q => q.duration > threshold);
-  }
-
-  return NextResponse.json({
-    queries: queries.slice(-limit),
-    total: queries.length,
-    slow: queries.filter(q => q.duration > threshold).length,
-  });
-}
-
-/**
- * GET /api/dev/errors
- * Get error logs
- */
-export async function GET_ERRORS(request: NextRequest) {
-  if (process.env.NODE_ENV !== 'development') {
-    return NextResponse.json({ error: 'Development only' }, { status: 403 });
-  }
-
-  const url = new URL(request.url);
-  const limit = parseInt(url.searchParams.get('limit') || '50');
-
-  const logs = devLogger.exportLogs();
-
-  return NextResponse.json({
-    errors: logs.errors.slice(-limit).map(e => ({
-      message: e.message,
-      context: e.context,
-      timestamp: new Date(e.timestamp).toISOString(),
-    })),
-    total: logs.errors.length,
-  });
-}
-
-/**
- * POST /api/dev/clear
- * Clear all logs
+ * POST /api/dev/dashboard
+ * Clear the development log buffers
  */
 export async function POST(request: NextRequest) {
-  if (process.env.NODE_ENV !== 'development') {
-    return NextResponse.json({ error: 'Development only' }, { status: 403 });
-  }
-
-  // Same super-admin gate as GET above — clearing logs is privileged too.
-  const admin = await requireSuperAdmin(request);
-  if (!admin) {
-    return NextResponse.json({ error: 'Super admin access required' }, { status: 403 });
-  }
+  // Clearing is privileged too, and it is a dev-only affordance: same gate as the
+  // three read endpoints that feed the panels these buffers back into.
+  const access = await requireDevAccess(request);
+  if (access instanceof NextResponse) return access;
 
   devLogger.clear();
 

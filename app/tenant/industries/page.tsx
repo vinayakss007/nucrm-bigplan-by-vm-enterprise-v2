@@ -5,9 +5,9 @@
  */
 'use client';
 
-import { useEffect } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import { Loader2, Sparkles, Zap } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -26,15 +26,18 @@ export default function IndustriesPage() {
   const queryClient = useQueryClient();
 
   // #1328: list via TanStack Query.
-  const { data, isLoading: loading, error } = useApiQuery<{ data?: IndustryTemplate[] }>(
+  //
+  // #2852: `data?.data ?? []` made a refused read indistinguishable from a tenant
+  // with no templates to apply, and the `useEffect` toast that used to own this
+  // failure spoke for four seconds and left "No templates available." on screen.
+  // `check-panel-error-state.mjs` cannot see that sentence at all — its
+  // EMPTY_SENTENCE only recognises "No … yet|found|here|configured|…" — so nothing
+  // in CI ever pointed here. The banner is the permanent answer now.
+  const { data, isLoading: loading, error, refetch } = useApiQuery<{ data?: IndustryTemplate[] }>(
     ['tenant', 'industry-templates'],
     '/api/tenant/industry-templates',
   );
   const templates: IndustryTemplate[] = data?.data ?? [];
-
-  useEffect(() => {
-    if (error) toast.error('Could not load industry templates');
-  }, [error]);
 
   // Apply via useMutation; `variables` is the templateId so the button can show
   // a per-row spinner without extra state.
@@ -81,7 +84,12 @@ export default function IndustriesPage() {
       </div>
 
       {/* Templates List */}
-      {templates.length === 0 ? (
+      {error ? (
+        <InlineErrorState
+          message={`Failed to load industry templates: ${error.message || 'no response from the server'}`}
+          onRetry={refetch}
+        />
+      ) : templates.length === 0 ? (
         <p className="text-muted-foreground text-center py-12">No templates available.</p>
       ) : (
         <div className="grid gap-4">

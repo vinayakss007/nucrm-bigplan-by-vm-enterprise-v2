@@ -6,6 +6,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useApiQuery } from '@/lib/query/client';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import { Package, Users, ToggleRight, ToggleLeft, Save, DollarSign } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
@@ -56,7 +57,14 @@ export default function SuperAdminModulesPage() {
   const [search, setSearch] = useState('');
 
   // #1328: TanStack Query replaces fetch + useEffect + useState.
-  const { data, isLoading } = useApiQuery<{ data?: Record<string, unknown>[] }>(['superadmin', 'modules'], '/api/superadmin/modules');
+  //
+  // #2829: this is the plan-offerings matrix, and `error` was not even bound. A
+  // refused read left "No modules configured" — "Modules will appear here once
+  // they are registered" — over a stats row reading Total Modules 0, Free 0,
+  // Starter 0, Pro 0. That is not an empty state, it is a claim that nothing is
+  // offered on any plan, on the page whose toggles decide what each plan ships
+  // with. Both halves now refuse to answer for a read that never happened.
+  const { data, isLoading, error, refetch } = useApiQuery<{ data?: Record<string, unknown>[] }>(['superadmin', 'modules'], '/api/superadmin/modules');
   const loading = isLoading;
 
   // Seed the editable module list (with pricing→planAccess mapping) once loaded.
@@ -157,10 +165,10 @@ export default function SuperAdminModulesPage() {
       {/* Stats row */}
       <div className="grid grid-cols-4 gap-4">
         {[
-          { label: 'Total Modules', value: modules.length, color: 'text-white' },
-          { label: 'Free', value: modules.filter(m => m.planAccess?.free?.enabled).length, color: 'text-slate-400' },
-          { label: 'Starter', value: modules.filter(m => m.planAccess?.starter?.enabled).length, color: 'text-blue-400' },
-          { label: 'Pro', value: modules.filter(m => m.planAccess?.pro?.enabled).length, color: 'text-violet-400' },
+          { label: 'Total Modules', value: error ? '—' : modules.length, color: 'text-white' },
+          { label: 'Free', value: error ? '—' : modules.filter(m => m.planAccess?.free?.enabled).length, color: 'text-slate-400' },
+          { label: 'Starter', value: error ? '—' : modules.filter(m => m.planAccess?.starter?.enabled).length, color: 'text-blue-400' },
+          { label: 'Pro', value: error ? '—' : modules.filter(m => m.planAccess?.pro?.enabled).length, color: 'text-violet-400' },
         ].map(s => (
           <div key={s.label} className="rounded-xl border border-white/10 bg-white/5 p-4">
             <p className="text-xs text-white/40">{s.label}</p>
@@ -200,7 +208,19 @@ export default function SuperAdminModulesPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.length === 0 && (
+                {error ? (
+                  <tr>
+                    <td colSpan={PLANS.length + 3} className="p-4">
+                      {/* #2829: the read failed, so nothing below it is known — the
+                          two arms of the empty state both state a fact about what
+                          each plan offers. */}
+                      <InlineErrorState
+                        message={`Failed to load the plan offerings: ${error.message || 'no response from the server'}`}
+                        onRetry={refetch}
+                      />
+                    </td>
+                  </tr>
+                ) : filtered.length === 0 && (
                   /* #1071: empty state so the matrix never renders a blank table */
                   <tr>
                     <td colSpan={PLANS.length + 3} className="text-center py-16">

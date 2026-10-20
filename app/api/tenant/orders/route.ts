@@ -76,7 +76,7 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     const validated = validateBody(createOrderSchema, rawBody);
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;
-    const { contact_id: contactId, company_id: companyId, line_items: items, shipping_address: shippingAddress, tracking_number: _trackingNumber, notes, status } = v;
+    const { contact_id: contactId, company_id: companyId, title, line_items: items, shipping_address: shippingAddress, tracking_number: _trackingNumber, notes, status, order_date: orderDate, expected_delivery_date: expectedDeliveryDate } = v;
 
     if (!items?.length) {
       return NextResponse.json({ error: 'At least one line item is required' }, { status: 400 });
@@ -113,10 +113,13 @@ export const POST = withApiRoute(async (request: NextRequest) => {
             contactId: contactId ?? null,
             companyId: companyId ?? null,
             orderNumber,
-            title: `Order ${orderNumber}`,
+            // #2876: the modal's Title / Order Date / Expected Delivery inputs used to be
+            // dropped on the floor here — the page posted `title`/`orderDate` while the
+            // schema wanted `line_items`/`contact_id`, so nothing reached this insert.
+            title: title || `Order ${orderNumber}`,
             status: status ?? 'pending',
-            orderDate: new Date().toISOString().split('T')[0],
-            expectedDeliveryDate: null,
+            orderDate: orderDate ?? new Date().toISOString().split('T')[0],
+            expectedDeliveryDate: expectedDeliveryDate ?? null,
             subtotal: String(subtotal.toFixed(2)),
             discountAmount: '0',
             taxAmount: '0',

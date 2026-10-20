@@ -39,6 +39,14 @@ export default function WebhookDLQPage() {
   );
   const entries: DLQEntry[] = data?.data ?? [];
   const total = data?.total ?? 0;
+  // #2872: the list survived a failed refresh by accident — the banner only ever
+  // rendered inside `entries.length === 0` — so the rows stayed up with nothing on
+  // screen saying they had stopped updating. Retry an entry, the refetch behind
+  // `reload()` fails, and the row sits there looking untouched: the operator cannot
+  // tell a refused refresh from a retry that did nothing, so they press it again.
+  const failed = Boolean(dlqError) && !data;
+  const stale = Boolean(dlqError) && Boolean(data);
+  const reason = dlqError?.message || 'no response from the server';
 
   const reload = () => queryClient.invalidateQueries({ queryKey: ['tenant', 'webhooks', 'dlq'] });
 
@@ -116,25 +124,29 @@ export default function WebhookDLQPage() {
         )}
       </div>
 
+      {stale && (
+        <InlineErrorState
+          message={`Could not refresh the dead letter queue, so the entries below are the last read — a retry you just ran may already have taken: ${reason}`}
+          onRetry={() => void refetch()}
+        />
+      )}
       {loading ? (
         <div className="space-y-3">
           {[...Array(5)].map((_, i) => <div key={i} className="h-20 bg-muted rounded-2xl animate-pulse" />)}
         </div>
+      ) : failed ? (
+        // #2829: "No dead letter entries" is the all-clear the DLQ exists to
+        // withhold — a failed read prints it over a real backlog.
+        <InlineErrorState
+          message={`Could not load the dead letter queue — this is a failed request, not an empty queue. (${reason})`}
+          onRetry={() => void refetch()}
+        />
       ) : entries.length === 0 ? (
-        dlqError ? (
-          // #2829: "No dead letter entries" is the all-clear the DLQ exists to
-          // withhold — a failed read prints it over a real backlog.
-          <InlineErrorState
-            message="Could not load the dead letter queue — this is a failed request, not an empty queue."
-            onRetry={() => void refetch()}
-          />
-        ) : (
-          <div className="text-center py-12 border border-dashed border-border rounded-2xl">
-            <AlertTriangle className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
-            <p className="font-medium">No dead letter entries</p>
-            <p className="text-sm text-muted-foreground mt-1">Failed webhooks that exceed retry limits will appear here</p>
-          </div>
-        )
+        <div className="text-center py-12 border border-dashed border-border rounded-2xl">
+          <AlertTriangle className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
+          <p className="font-medium">No dead letter entries</p>
+          <p className="text-sm text-muted-foreground mt-1">Failed webhooks that exceed retry limits will appear here</p>
+        </div>
       ) : (
         <div className="space-y-3">
           {entries.map(entry => (
