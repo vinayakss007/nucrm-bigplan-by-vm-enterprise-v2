@@ -12,6 +12,7 @@ import {
   ThumbsUp, Clock, CheckCircle2, Plus, Pause, Play, Archive, Trash2, FileText,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import { Button } from '@/components/ui/button';
 import { CampaignBuilder } from '@/components/lead-warming/campaign-builder';
 
@@ -82,15 +83,15 @@ export default function LeadWarmingPage() {
   const [showBuilder, setShowBuilder] = useState(false);
 
   // #1328: reads via TanStack Query (were parallel raw fetch + useEffect).
-  const { data: statsData, isLoading: statsLoading } = useApiQuery<WarmingStats>(
+  const { data: statsData, isLoading: statsLoading, error: statsError, refetch: refetchStats } = useApiQuery<WarmingStats>(
     ['tenant', 'lead-warming', 'stats'],
     '/api/tenant/lead-warming/stats',
   );
-  const { data: repliesData, isLoading: repliesLoading } = useApiQuery<{ data?: Reply[] }>(
+  const { data: repliesData, isLoading: repliesLoading, error: repliesError, refetch: refetchReplies } = useApiQuery<{ data?: Reply[] }>(
     ['tenant', 'lead-warming', 'replies'],
     '/api/tenant/lead-warming/replies?limit=50',
   );
-  const { data: campaignsData, isLoading: campaignsLoading } = useApiQuery<{ data?: Campaign[] }>(
+  const { data: campaignsData, isLoading: campaignsLoading, error: campaignsError, refetch: refetchCampaigns } = useApiQuery<{ data?: Campaign[] }>(
     ['tenant', 'lead-warming', 'campaigns'],
     '/api/tenant/lead-warming/campaigns',
   );
@@ -148,7 +149,14 @@ export default function LeadWarmingPage() {
       </div>
 
       {/* Stats grid */}
-      {stats && (
+      {statsError ? (
+        // Hiding the grid would be the polite version of the same lie: six numbers about
+        // how the warmings are going, none of them measured (#2829).
+        <InlineErrorState
+          message={`Failed to load your warming stats: ${statsError.message || 'no response from the server'}`}
+          onRetry={refetchStats}
+        />
+      ) : stats && (
         <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-2">
           <StatCard icon={Mail} label="Messages (30d)" value={stats.messages.sent} />
           <StatCard icon={MessageSquare} label="Replies" value={stats.replies.total} />
@@ -168,7 +176,7 @@ export default function LeadWarmingPage() {
             tab === 'campaigns' ? 'border-violet-500 text-violet-700' : 'border-transparent text-muted-foreground hover:text-foreground',
           )}
         >
-          Campaigns ({campaigns.length})
+          Campaigns ({campaignsError ? '—' : campaigns.length})
         </button>
         <button
           onClick={() => setTab('replies')}
@@ -177,14 +185,19 @@ export default function LeadWarmingPage() {
             tab === 'replies' ? 'border-violet-500 text-violet-700' : 'border-transparent text-muted-foreground hover:text-foreground',
           )}
         >
-          Replies ({replies.length})
+          Replies ({repliesError ? '—' : replies.length})
         </button>
       </div>
 
       {/* Campaigns tab */}
       {tab === 'campaigns' && (
         <div className="space-y-2">
-          {campaigns.length === 0 ? (
+          {campaignsError ? (
+            <InlineErrorState
+              message={`Failed to load your warming campaigns: ${campaignsError.message || 'no response from the server'}`}
+              onRetry={refetchCampaigns}
+            />
+          ) : campaigns.length === 0 ? (
             <div className="rounded-xl border border-border bg-card p-8 text-center text-muted-foreground text-sm">
               No campaigns yet. Create your first warming campaign to start sending personalized messages.
             </div>
@@ -246,6 +259,9 @@ export default function LeadWarmingPage() {
       {tab === 'replies' && (
         <>
           {/* Intent filter pills */}
+          {/* The pills are counts of the replies array, so an unread inbox would otherwise
+              offer a set of filters whose every choice answers "none" (#2829). */}
+          {!repliesError && (
           <div className="flex flex-wrap gap-1.5">
             <FilterPill label="All" count={replies.length} active={filter === 'all'} onClick={() => setFilter('all')} />
             {Object.entries(intentCounts).sort((a, b) => b[1] - a[1]).map(([intent, count]) => {
@@ -261,12 +277,20 @@ export default function LeadWarmingPage() {
               );
             })}
           </div>
+          )}
 
           {/* Replies list */}
           <div className="space-y-2">
-            {filtered.length === 0 ? (
+            {repliesError ? (
+              <InlineErrorState
+                message={`Failed to load warming replies: ${repliesError.message || 'no response from the server'}`}
+                onRetry={refetchReplies}
+              />
+            ) : filtered.length === 0 ? (
               <div className="rounded-xl border border-border bg-card p-8 text-center text-muted-foreground text-sm">
-                No replies found. Lead warming replies will appear here once campaigns start receiving responses.
+                {filter === 'all'
+                  ? 'No replies found. Lead warming replies will appear here once campaigns start receiving responses.'
+                  : `No replies classified as “${(INTENT_CONFIG[filter] ?? INTENT_CONFIG.unknown!).label}”. That is the filter, not the inbox — every reply this month is under All.`}
               </div>
             ) : (
               filtered.map(reply => {

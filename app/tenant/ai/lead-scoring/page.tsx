@@ -8,13 +8,14 @@ import { useState, useMemo } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
 import {
-  Target, RefreshCw, Sparkles, AlertCircle, Loader2, TrendingUp,
+  Target, RefreshCw, Sparkles, Loader2, TrendingUp,
   History, Play, TrendingDown, Minus,
   Building2, Mail, ExternalLink, Wand2,
   type LucideIcon,
 } from 'lucide-react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
+import InlineErrorState from '@/components/shared/inline-error-state';
 
 type Lead = {
   id: string;
@@ -41,7 +42,7 @@ export default function AILeadScoringPage() {
   const [error, setError] = useState<string | null>(null);
 
   // #1328: scored leads via TanStack Query (was raw fetch + useEffect).
-  const { data, isLoading: loading, error: queryError } = useApiQuery<{ data?: Lead[]; leads?: Lead[] }>(
+  const { data, isLoading: loading, error: queryError, refetch } = useApiQuery<{ data?: Lead[]; leads?: Lead[] }>(
     LEADS_QUERY,
     '/api/tenant/leads?sort_by=score&sort_order=DESC&limit=100',
   );
@@ -121,18 +122,24 @@ export default function AILeadScoringPage() {
         </div>
       </div>
 
-      {(error || queryErrorMsg) && (
-        <div className="rounded-xl border border-red-300 bg-red-50 dark:border-red-800/50 dark:bg-red-950/20 px-4 py-3 text-sm text-red-700 dark:text-red-300 flex items-start gap-2">
-          <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-          <span className="flex-1">{error || queryErrorMsg}</span>
-        </div>
+      {(error || queryError) && (
+        <InlineErrorState
+          message={
+            queryError
+              ? `Failed to load your scored leads: ${queryErrorMsg}`
+              : `Could not update the scores: ${error}`
+          }
+          onRetry={queryError ? refetch : undefined}
+        />
       )}
 
       {/* Quick Stats */}
+      {/* Every one of these is a reduction over the array the list below renders, so a refused
+          read ranked the queue at zero rather than not at all (#2829). */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <StatCard icon={TrendingUp} label="Avg. Score" value={stats.avg} sub="Leads scored" />
-        <StatCard icon={Sparkles} label="High Intent" value={stats.high} sub="Score 80+" />
-        <StatCard icon={History} label="Scored Leads" value={stats.total} sub="Total ranked" />
+        <StatCard icon={TrendingUp} label="Avg. Score" value={queryError ? '—' : stats.avg} sub="Leads scored" />
+        <StatCard icon={Sparkles} label="High Intent" value={queryError ? '—' : stats.high} sub="Score 80+" />
+        <StatCard icon={History} label="Scored Leads" value={queryError ? '—' : stats.total} sub="Total ranked" />
       </div>
 
       <div className="grid grid-cols-1 gap-4">
@@ -143,7 +150,7 @@ export default function AILeadScoringPage() {
           </div>
         )}
 
-        {!loading && leads.length === 0 && (
+        {!loading && !queryError && leads.length === 0 && (
           <div className="py-20 text-center border border-dashed border-border rounded-2xl bg-muted/20">
             <Target className="w-10 h-10 mx-auto text-muted-foreground/30 mb-3" />
             <p className="text-muted-foreground">No leads found to score.</p>
