@@ -4,7 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
 import { Plus, Receipt, X, Loader2, Trash2, Pencil, Star } from 'lucide-react';
@@ -48,7 +48,16 @@ export default function TaxSettingsPage() {
     '/api/tenant/tax',
   );
   const rates: TaxRate[] = data?.data ?? [];
-  if (error) toast.error('Failed to load tax rates');
+  // #2872: the toast fired from the render body, so a refused read re-announced itself on every
+  // re-render. The stale state this page is now branching on is sustained, not a flash — it needs an
+  // effect, the way #2852 already moved territories and integrations.
+  useEffect(() => { if (error) toast.error('Failed to load tax rates'); }, [error]);
+  // `reload()` invalidates TAX_QUERY after both save and delete, so the error that reaches this page
+  // is usually a refused *refresh* of rates that are still on screen. The bare flag cannot tell the
+  // two apart, and branching on it spent that moment deleting the table.
+  const failed = Boolean(error) && !data;
+  const stale = Boolean(error) && Boolean(data);
+  const reason = error?.message || 'no response from the server';
 
   const reload = () => queryClient.invalidateQueries({ queryKey: TAX_QUERY });
 
@@ -147,27 +156,36 @@ export default function TaxSettingsPage() {
 
       {/* Stats */}
       {/* Every number below is counted off `rates`, so a refused read would report this
-          tenant's tax setup as empty rather than unread (#2829). */}
+          tenant's tax setup as empty rather than unread (#2829). #2872: the dash belongs on
+          `failed` only — a refused refresh leaves the table underneath still counting, and a
+          `—` sitting above rows it is totalling is a second lie. */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="admin-card p-4">
           <p className="text-xs text-muted-foreground font-medium">Total Rates</p>
-          <p className="text-2xl font-bold mt-1">{error ? '—' : rates.length}</p>
+          <p className="text-2xl font-bold mt-1">{failed ? '—' : rates.length}</p>
         </div>
         <div className="admin-card p-4">
           <p className="text-xs text-muted-foreground font-medium">Active Rates</p>
-          <p className="text-2xl font-bold mt-1">{error ? '—' : activeRates.length}</p>
+          <p className="text-2xl font-bold mt-1">{failed ? '—' : activeRates.length}</p>
         </div>
         <div className="admin-card p-4">
           <p className="text-xs text-muted-foreground font-medium">Default Rate</p>
-          <p className="text-2xl font-bold mt-1">{error ? '—' : (rates.find(r => r.isDefault)?.name || 'None')}</p>
+          <p className="text-2xl font-bold mt-1">{failed ? '—' : (rates.find(r => r.isDefault)?.name || 'None')}</p>
         </div>
       </div>
 
+      {stale && (
+        <InlineErrorState
+          className="mb-1.5"
+          message={`Could not refresh the tax rates, so the table below is the last read: ${reason}`}
+          onRetry={refetch}
+        />
+      )}
       {loading ? (
         [...Array(3)].map((_, i) => <div key={i} className="h-16 bg-muted rounded-2xl animate-pulse" />)
-      ) : error ? (
+      ) : failed ? (
         <InlineErrorState
-          message={`Failed to load tax rates: ${error.message || 'no response from the server'}`}
+          message={`Failed to load tax rates: ${reason}`}
           onRetry={refetch}
         />
       ) : rates.length === 0 ? (

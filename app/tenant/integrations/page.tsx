@@ -49,6 +49,17 @@ export default function IntegrationsPage() {
   const instances: IntegrationInstance[] = instancesData?.data ?? [];
   const providers: ProviderDefinition[] = providersData?.data ?? [];
   const loading = instancesLoading || providersLoading;
+  // #2872: #2852 gave both reads an outage branch, which was the right answer to a read that never
+  // happened. Removing, toggling and installing all call `load()` below, so the error that arrives here
+  // is usually a refused *refresh* of a list that is still on screen — and the bare flag routed that
+  // moment to the same banner, deleting the rows and leaving the tenant to re-discover which
+  // integrations they had. Two reads, so two pairs of flags: the tabs answer for themselves.
+  const instancesFailed = Boolean(instancesError) && !instancesData;
+  const instancesStale = Boolean(instancesError) && Boolean(instancesData);
+  const instancesReason = instancesError?.message || 'no response from the server';
+  const providersFailed = Boolean(providersError) && !providersData;
+  const providersStale = Boolean(providersError) && Boolean(providersData);
+  const providersReason = providersError?.message || 'no response from the server';
 
   const load = () => queryClient.invalidateQueries({ queryKey: ['tenant', 'integrations'] });
 
@@ -94,12 +105,12 @@ export default function IntegrationsPage() {
         <button onClick={() => setActiveTab('installed')}
           className={cn('px-4 py-1.5 text-xs font-medium rounded-md transition-colors',
             activeTab === 'installed' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground')}>
-          Installed ({instancesError ? '—' : instances.length})
+          Installed ({instancesFailed ? '—' : instances.length})
         </button>
         <button onClick={() => setActiveTab('available')}
           className={cn('px-4 py-1.5 text-xs font-medium rounded-md transition-colors',
             activeTab === 'available' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground')}>
-          Available ({providersError ? '—' : providers.length})
+          Available ({providersFailed ? '—' : providers.length})
         </button>
       </div>
 
@@ -115,9 +126,17 @@ export default function IntegrationsPage() {
           ))}
         </div>
       ) : activeTab === 'installed' ? (
-        instancesError ? (
+        <>
+          {instancesStale && (
+            <InlineErrorState
+              className="mb-1.5"
+              message={`Could not refresh your installed integrations, so the list below is the last read: ${instancesReason}`}
+              onRetry={refetch}
+            />
+          )}
+          {instancesFailed ? (
           <InlineErrorState
-            message={`Failed to load your installed integrations: ${instancesError.message || 'no response from the server'}`}
+            message={`Failed to load your installed integrations: ${instancesReason}`}
             onRetry={refetch}
           />
         ) : instances.length === 0 ? (
@@ -163,10 +182,26 @@ export default function IntegrationsPage() {
               );
             })}
           </div>
-        )
-      ) : providersError ? (
+        )}
+        </>
+      ) : (
+        <>
+          {providersStale && (
+            <InlineErrorState
+              className="mb-1.5"
+              message={`Could not refresh the providers available to install, so this grid is the last read: ${providersReason}`}
+              onRetry={refetchProviders}
+            />
+          )}
+          {instancesFailed && (
+            <p className="text-xs text-muted-foreground">
+              Which integrations are already installed is unread right now ({instancesReason}), so a
+              provider listed below may be one you have already connected.
+            </p>
+          )}
+          {providersFailed ? (
         <InlineErrorState
-          message={`Failed to load the providers available to install: ${providersError.message || 'no response from the server'}`}
+          message={`Failed to load the providers available to install: ${providersReason}`}
           onRetry={refetchProviders}
         />
       ) : (
@@ -223,6 +258,8 @@ export default function IntegrationsPage() {
             </div>
           </div>
         </div>
+          )}
+        </>
       )}
 
       {/* Add integration modal */}
