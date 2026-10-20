@@ -9,6 +9,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
 import { Plus, Shield, X, Loader2, Trash2, ToggleLeft, ToggleRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import toast from 'react-hot-toast';
 
 const PRIORITIES = ['critical', 'high', 'medium', 'low'] as const;
@@ -49,12 +50,21 @@ export default function SlaPage() {
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
 
   // #1328: list via TanStack Query (was raw fetch + useEffect).
-  const { data, isLoading: loading, error } = useApiQuery<{ data?: SlaPolicy[] }>(
+  const { data, isLoading: loading, error, refetch } = useApiQuery<{ data?: SlaPolicy[] }>(
     SLA_QUERY,
     '/api/tenant/sla',
   );
   const policies: SlaPolicy[] = data?.data ?? [];
-  if (error) toast.error('Failed to load SLA policies');
+  // #2872: one read, judged by one error flag. Saving, toggling and removing a policy all
+  // end in reload(), which invalidates SLA_QUERY — the exact key of this view — so "the
+  // write worked, the refresh was refused" is the ordinary state right after any action
+  // here. TanStack Query keeps `data` when a refetch of a read that already succeeded
+  // fails, and the only channel was a toast in the render body: once it faded, the page
+  // answered the refused refresh with "No SLA policies" over the policies still in hand,
+  // including the one just toggled off or removed.
+  const failed = Boolean(error) && !data;
+  const stale = Boolean(error) && Boolean(data);
+  const reason = error?.message || 'no response from the server';
 
   const reload = () => queryClient.invalidateQueries({ queryKey: SLA_QUERY });
 
@@ -173,8 +183,20 @@ export default function SlaPage() {
         </button>
       </div>
 
+      {/* Create/Edit-driven refresh caveat, then the list itself */}
+      {stale && (
+        <InlineErrorState
+          message={`Could not refresh, so the policies below are the last read: ${reason}. A policy you just created, edited, toggled or removed is not reflected here, and the breach counts are the ones this read returned.`}
+          onRetry={() => void refetch()}
+        />
+      )}
       {loading ? (
         [...Array(3)].map((_, i) => <div key={i} className="h-16 bg-muted rounded-2xl animate-pulse" />)
+      ) : failed ? (
+        <InlineErrorState
+          message={`Failed to load SLA policies: ${reason}`}
+          onRetry={() => void refetch()}
+        />
       ) : policies.length === 0 ? (
         <div className="text-center py-12 border border-dashed border-border rounded-2xl">
           <Shield className="w-8 h-8 text-muted-foreground mx-auto mb-3" />

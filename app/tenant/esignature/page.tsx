@@ -9,6 +9,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
 import { FileSignature, Plus, X, Loader2, Trash2, UserPlus } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import toast from 'react-hot-toast';
 
 interface SigningRequest {
@@ -60,12 +61,21 @@ export default function EsignaturePage() {
   // part of the key so each view refetches and caches independently.
   const params = new URLSearchParams();
   if (filter !== 'all') params.set('status', filter);
-  const { data, isLoading: loading, error } = useApiQuery<{ data?: SigningRequest[] }>(
+  const { data, isLoading: loading, error, refetch } = useApiQuery<{ data?: SigningRequest[] }>(
     ['tenant', 'esignature', { filter }],
     `/api/tenant/esignature?${params}`,
   );
   const requests: SigningRequest[] = data?.data ?? [];
-  if (error) toast.error('Failed to load signing requests');
+  // #2872: creating a signing request invalidates the ['tenant', 'esignature'] prefix,
+  // which matches this view's filter-carrying key — so the ordinary state right after
+  // the write is kept rows plus a refused revalidation, and the only channel for it was
+  // a render-body toast that faded while "No signing requests" answered for the refusal.
+  // The status column is the damage: envelopes the other side has since signed, viewed
+  // or declined kept showing their old status. The filter lives in the query key, so a
+  // view that never answered is `failed`, never a "last read" of some other tab.
+  const failed = Boolean(error) && !data;
+  const stale = Boolean(error) && Boolean(data);
+  const reason = error?.message || 'no response from the server';
 
   const createRequest = useMutation({
     mutationFn: async () => {
@@ -144,8 +154,19 @@ export default function EsignaturePage() {
       </div>
 
       {/* Requests Table */}
+      {stale && (
+        <InlineErrorState
+          message={`Could not refresh, so the requests below are the last read: ${reason}. One you just created may not be listed yet, and a document the signer has since viewed, signed or declined still shows its old status.`}
+          onRetry={() => void refetch()}
+        />
+      )}
       {loading ? (
         [...Array(4)].map((_, i) => <div key={i} className="h-16 bg-muted rounded-2xl animate-pulse" />)
+      ) : failed ? (
+        <InlineErrorState
+          message={`Failed to load signing requests: ${reason}`}
+          onRetry={() => void refetch()}
+        />
       ) : requests.length === 0 ? (
         <div className="text-center py-12 border border-dashed border-border rounded-2xl">
           <FileSignature className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
