@@ -34,7 +34,7 @@
  * Fixtures are documentation-only (TEST-NET addresses, synthetic key prefixes).
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, cleanup } from '@testing-library/react';
+import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
@@ -99,11 +99,17 @@ const tree = (node: ReactNode) => (
     {node}
   </QueryClientProvider>
 );
+/** Every fetch the page makes, so a case can assert what a write actually sent. */
+const sent: { url: string; method: string; body: string }[] = [];
 const mount = (node: ReactNode) => {
   cleanup();
+  sent.length = 0;
   // The writes reach the network through fetch/apiFetch; nothing here clicks one, but a
   // jsdom "fetch is not implemented" throw would be a lie about the page.
-  vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({}) })));
+  vi.stubGlobal('fetch', vi.fn(async (url: string, init?: { method?: string; body?: string }) => {
+    sent.push({ url, method: init?.method ?? 'GET', body: init?.body ?? '' });
+    return { ok: true, json: async () => ({}) };
+  }));
   return render(tree(node));
 };
 
@@ -196,6 +202,47 @@ describe('sessions: a refused refresh after a sign-out keeps the roster (#2872)'
     mount(<SessionsPage />);
     expect(screen.getByRole('button', { name: /sign out all others/i })).toBeTruthy();
     expect(screen.getByRole('button', { name: /try again/i })).toBeTruthy();
+  });
+
+  // What a last read can and cannot be used for. #2872 does not only change what the page
+  // says: it decides whether these two buttons are still safe to offer over kept rows.
+  it('offers Revoke only on the device the kept read says is not this one', () => {
+    mount(<SessionsPage />);
+    const revoke = screen.getAllByRole('button', { name: /^revoke$/i });
+    expect(revoke).toHaveLength(1);
+    expect(revoke[0].disabled).toBe(false);
+  });
+
+  it('a kept row\'s Revoke sends that one visible id and nothing else', async () => {
+    mount(<SessionsPage />);
+    fireEvent.click(screen.getAllByRole('button', { name: /^revoke$/i })[0]);
+    await waitFor(() => expect(sent).toHaveLength(1));
+    expect(sent[0].url).toBe(SESSIONS);
+    expect(sent[0].method).toBe('DELETE');
+    // s1 is the current device and renders no button at all, so the only id a row can name is
+    // s2 — the staleness costs accuracy about a device the operator is looking at, not a sweep.
+    expect(JSON.parse(sent[0].body)).toEqual({ sessionId: 's2' });
+    expect(sent[0].body).not.toMatch(/revokeAll/);
+  });
+
+  it('Sign out all others sends {revokeAll:true} with no id from the kept list', async () => {
+    mount(<SessionsPage />);
+    fireEvent.click(screen.getByRole('button', { name: /sign out all others/i }));
+    await waitFor(() => expect(sent).toHaveLength(1));
+    expect(sent[0].url).toBe(SESSIONS);
+    expect(sent[0].method).toBe('DELETE');
+    // The whole queue is decided server-side (`eq(userId)`, `ne(currentTokenHash)`), so a list
+    // that is a last read is not an input to this action and the button stays honest.
+    expect(JSON.parse(sent[0].body)).toEqual({ revokeAll: true });
+    expect(sent[0].body).not.toContain('s1');
+    expect(sent[0].body).not.toContain('s2');
+  });
+
+  it('withholds both actions from a read that never answered', () => {
+    registry.byUrl = { [SESSIONS]: failed('Request failed (503)') };
+    mount(<SessionsPage />);
+    expect(screen.queryAllByRole('button', { name: /^revoke$/i })).toHaveLength(0);
+    expect(screen.queryByRole('button', { name: /sign out all others/i })).toBeNull();
   });
 
   it('does not call the kept sessions a failed load, nor an empty list', () => {
