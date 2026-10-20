@@ -150,9 +150,16 @@ export default function TasksKanbanPage() {
   const loading = isLoading && tasks.length === 0;
   // #2849: this read answered nothing, which is not the same as the workspace
   // having no tasks. SWR's error is an Error OBJECT — inlining it as a React
-  // child is the crash `leaderboards-client.tsx:53-55` records, so derive a
+  // child is the crash `leaderboards-client.tsx:54-56` records, so derive a
   // string here and hand the board a failure state instead of empty columns.
   const tasksUnread = tasksErr ? (tasksErr instanceof Error ? tasksErr.message : String(tasksErr)) : null;
+  // #2872: SWR keeps `data` when a revalidation of a read that already succeeded fails, and both
+  // the stat row and the board below keyed off the flag alone. handleDragEnd PATCHes, then calls
+  // `mutate()` on success — so a refused revalidation replaced a board the operator had just moved
+  // a card on with an outage card, and dashed four counts it could still make. A list that never
+  // answered is `failed`; a list that answered and then refused is `stale`, and stays on screen.
+  const failed = Boolean(tasksErr) && !res;
+  const stale = Boolean(tasksErr) && Boolean(res);
 
   useEffect(() => {
     if (res?.data) {
@@ -264,13 +271,20 @@ export default function TasksKanbanPage() {
               <div className={cn('w-3 h-3 rounded-full', col.color)} />
               <p className="text-xs text-muted-foreground">{col.name}</p>
             </div>
-            <p className="text-lg font-bold mt-1">{tasksUnread ? '—' : tasksByStatus[col.id]?.length || 0}</p>
+            <p className="text-lg font-bold mt-1">{failed ? '—' : tasksByStatus[col.id]?.length || 0}</p>
           </div>
         ))}
       </div>
 
+      {stale && (
+        <InlineErrorState
+          message={`Could not refresh, so the columns below are the last read (${tasksUnread}). A card you just moved may not be where the server has it.`}
+          onRetry={() => void mutate()}
+        />
+      )}
+
       {/* Kanban Board */}
-      {tasksUnread ? (
+      {failed ? (
         <InlineErrorState
           message={`The task list did not load (${tasksUnread}). "No tasks" would mean this workspace has none — this means the request never answered.`}
           onRetry={() => void mutate()}

@@ -28,7 +28,7 @@
  *
  * The `not.toThrow()` assertions are not decoration: SWR's `error` is an Error
  * OBJECT, and rendering it as a React child is the crash that
- * `leaderboards-client.tsx:53-55` records. A fix that inlines `{error}` would
+ * `leaderboards-client.tsx:54-56` records. A fix that inlines `{error}` would
  * satisfy the copy assertions and take the page to the error boundary.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
