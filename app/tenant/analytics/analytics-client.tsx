@@ -127,12 +127,19 @@ export default function TenantAnalyticsPage() {
   );
 
   // SWR's error is an Error OBJECT; rendering it directly is the crash
-  // `leaderboards-client.tsx:53-55` records, so derive a string.
+  // `leaderboards-client.tsx:54-56` records, so derive a string.
   const overviewUnread = overviewErr
     ? (overviewErr instanceof Error ? overviewErr.message : String(overviewErr))
     : null;
+  // #2872: SWR keeps `data` when a revalidation of a read that already succeeded fails, and the
+  // early return below keyed off the flag alone. This board revalidates on focus and on reconnect,
+  // so alt-tabbing away and back through a hiccup replaced an analytics page the operator was
+  // reading with an outage page — and every chart it had was still in the cache. `failed` is the
+  // overview that never answered; `stale` is the last read, and stays on screen.
+  const failed = Boolean(overviewErr) && !overviewRes;
+  const stale = Boolean(overviewErr) && Boolean(overviewRes);
 
-  if (overviewUnread) return (
+  if (failed) return (
     <div className="space-y-5 max-w-[1600px] mx-auto">
       <InlineErrorState
         message={`The analytics overview did not load (${overviewUnread}). Every figure on this page — pipeline, won revenue, win rate, task completion — is computed from that one read, so none of them is known.`}
@@ -164,6 +171,12 @@ export default function TenantAnalyticsPage() {
       </div>
 
       {/* KPI row */}
+      {stale && (
+        <InlineErrorState
+          message={`Could not refresh, so every figure below is the last read (${overviewUnread}). These are the numbers this page had before the refresh failed, not what the server says now.`}
+          onRetry={() => void mutate()}
+        />
+      )}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
           { label:'Open Pipeline',    value:formatCurrency(pipeline),      sub:`${openCount} deals`,    icon:TrendingUp,  color:'text-amber-600', bg:'bg-amber-50 dark:bg-amber-950/20' },

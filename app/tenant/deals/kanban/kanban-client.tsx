@@ -167,10 +167,20 @@ export default function DealsKanbanPage() {
   // ₹0; a refused `/pipelines` made the board draw DEFAULT_STAGES (:49-52) as if
   // they were this workspace's pipeline, which is indistinguishable on screen
   // from a read that really returned those six. SWR's error is an Error OBJECT —
-  // inlining it is the crash `leaderboards-client.tsx:53-55` records, so derive
+  // inlining it is the crash `leaderboards-client.tsx:54-56` records, so derive
   // strings and hand each read its own failure state and its own retry.
   const dealsUnread = dealsErr ? (dealsErr instanceof Error ? dealsErr.message : String(dealsErr)) : null;
   const stagesUnread = stagesErr ? (stagesErr instanceof Error ? stagesErr.message : String(stagesErr)) : null;
+  // #2872: two reads, and #2849 gave each of them a flag — but a flag alone cannot tell "never
+  // answered" from "answered, then refused", and SWR keeps `data` through the second one.
+  // handleDragEnd calls `mutate()` after a successful PATCH (:270), so the ordinary state after
+  // moving a deal was the board replaced by "The deal list did not load" and four summary cards
+  // dashed over numbers the page was still holding. The secondary read has the same split: a
+  // refused `/pipelines` after a stage edit used to hide a board whose stages were still cached.
+  const dealsFailed = Boolean(dealsErr) && !res;
+  const dealsStale = Boolean(dealsErr) && Boolean(res);
+  const stagesFailed = Boolean(stagesErr) && !stagesRes;
+  const stagesStale = Boolean(stagesErr) && Boolean(stagesRes);
 
   const stages: Stage[] = useMemo(() => {
     // API returns { data: Pipeline[] } where each pipeline has a stages array
@@ -316,10 +326,10 @@ export default function DealsKanbanPage() {
       {/* Summary Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { label: 'Total Deals', value: dealsUnread ? '—' : deals.length, color: '' },
-          { label: 'Pipeline Value', value: dealsUnread ? '—' : formatCurrency(totalValue), color: 'text-violet-600' },
-          { label: 'Won Deals', value: dealsUnread ? '—' : wonDeals.length, color: 'text-emerald-600' },
-          { label: 'Won Value', value: dealsUnread ? '—' : formatCurrency(wonValue), color: 'text-emerald-600' },
+          { label: 'Total Deals', value: dealsFailed ? '—' : deals.length, color: '' },
+          { label: 'Pipeline Value', value: dealsFailed ? '—' : formatCurrency(totalValue), color: 'text-violet-600' },
+          { label: 'Won Deals', value: dealsFailed ? '—' : wonDeals.length, color: 'text-emerald-600' },
+          { label: 'Won Value', value: dealsFailed ? '—' : formatCurrency(wonValue), color: 'text-emerald-600' },
         ].map(s => (
           <div key={s.label} className="admin-card p-3">
             <p className="text-xs text-muted-foreground">{s.label}</p>
@@ -328,13 +338,26 @@ export default function DealsKanbanPage() {
         ))}
       </div>
 
+      {dealsStale && (
+        <InlineErrorState
+          message={`Could not refresh, so the board below is the last read (${dealsUnread}). A deal you just moved may not be where the server has it.`}
+          onRetry={() => void mutate()}
+        />
+      )}
+      {stagesStale && (
+        <InlineErrorState
+          message={`Could not refresh the pipeline stages, so the columns below are the last read (${stagesUnread}). A stage you just added or renamed may not be reflected.`}
+          onRetry={() => void mutateStages()}
+        />
+      )}
+
       {/* Kanban Board */}
-      {dealsUnread ? (
+      {dealsFailed ? (
         <InlineErrorState
           message={`The deal list did not load (${dealsUnread}). "No deals" and the summary above would be answers about this pipeline — this means the request never answered.`}
           onRetry={() => void mutate()}
         />
-      ) : stagesUnread ? (
+      ) : stagesFailed ? (
         <InlineErrorState
           message={`The pipeline stages did not load (${stagesUnread}), so this board has no stages to draw. The six it would otherwise show are the component's built-in defaults, not this workspace's pipeline.`}
           onRetry={() => void mutateStages()}

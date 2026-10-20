@@ -138,8 +138,15 @@ export default function TicketsKanbanPage() {
   const loading = isLoading && tickets.length === 0;
   // #2849: a refused read is not a workspace with no tickets. SWR's error is an
   // Error OBJECT — inlining it as a React child is the crash
-  // `leaderboards-client.tsx:53-55` records, so derive a string here.
+  // `leaderboards-client.tsx:54-56` records, so derive a string here.
   const ticketsUnread = ticketsErr ? (ticketsErr instanceof Error ? ticketsErr.message : String(ticketsErr)) : null;
+  // #2872: the flag alone cannot tell "never read" from "read, then refused", and SWR keeps `data`
+  // through the second one. handleDragEnd calls `mutate()` after a successful PATCH (:205), so a
+  // refused revalidation replaced the board the operator had just moved a ticket on with an outage
+  // card and dashed the four column counts — the same accident #2849 fixed for the read that never
+  // answered, now from the other side.
+  const failed = Boolean(ticketsErr) && !res;
+  const stale = Boolean(ticketsErr) && Boolean(res);
 
   useEffect(() => {
     const fetched = res?.data as Ticket[] | undefined;
@@ -246,13 +253,20 @@ export default function TicketsKanbanPage() {
               <div className={cn('w-3 h-3 rounded-full', col.color)} />
               <p className="text-xs text-muted-foreground">{col.name}</p>
             </div>
-            <p className="text-lg font-bold mt-1">{ticketsUnread ? '—' : ticketsByStatus[col.id]?.length || 0}</p>
+            <p className="text-lg font-bold mt-1">{failed ? '—' : ticketsByStatus[col.id]?.length || 0}</p>
           </div>
         ))}
       </div>
 
+      {stale && (
+        <InlineErrorState
+          message={`Could not refresh, so the columns below are the last read (${ticketsUnread}). A ticket you just moved may not be where the server has it.`}
+          onRetry={() => void mutate()}
+        />
+      )}
+
       {/* Kanban Board */}
-      {ticketsUnread ? (
+      {failed ? (
         <InlineErrorState
           message={`The ticket list did not load (${ticketsUnread}). "No tickets" would mean this workspace has none — this means the request never answered.`}
           onRetry={() => void mutate()}

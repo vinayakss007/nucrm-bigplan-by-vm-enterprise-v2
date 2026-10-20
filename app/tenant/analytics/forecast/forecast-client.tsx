@@ -42,7 +42,7 @@ export default function ForecastPage() {
   // no open deals, and this page's four cards are computed from it — an unread
   // forecast printed ₹0 / 0 / "No deals found". `dealsErr` was bound and used
   // only to end the spinner. SWR's error is an Error OBJECT, so derive a string
-  // (the crash `leaderboards-client.tsx:53-55` records).
+  // (the crash `leaderboards-client.tsx:54-56` records).
   const dealsUnread = dealsErr
     ? (dealsErr instanceof Error ? dealsErr.message : String(dealsErr))
     : null;
@@ -107,7 +107,15 @@ export default function ForecastPage() {
     [monthlyData],
   );
 
-  if (dealsUnread) {
+  // #2872: the early return below keyed off the flag alone, but SWR keeps `data` when a
+  // revalidation of a read that already succeeded fails — and this is a page operators sit on, so
+  // the focus revalidation fires constantly. A hiccup while tabbing back replaced a forecast that
+  // was on screen, with its four cards and two charts, with an outage page. `failed` is the deal
+  // list that never answered; `stale` is the last read, and stays.
+  const failed = Boolean(dealsErr) && !dealsRes;
+  const stale = Boolean(dealsErr) && Boolean(dealsRes);
+
+  if (failed) {
     return (
       <div className="space-y-5">
         <InlineErrorState
@@ -137,6 +145,13 @@ export default function ForecastPage() {
         <h1 className="text-lg font-bold flex items-center gap-2"><TrendingUp className="w-5 h-5" />Revenue Forecast</h1>
         <p className="text-sm text-muted-foreground">Weighted pipeline projections based on deal stages</p>
       </div>
+
+      {stale && (
+        <InlineErrorState
+          message={`Could not refresh, so the projection below is the last read (${dealsUnread}). Total pipeline, weighted forecast, deal count and average size are what this page had before the refresh failed.`}
+          onRetry={() => void mutate()}
+        />
+      )}
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
