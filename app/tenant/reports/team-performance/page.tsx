@@ -112,6 +112,12 @@ export default function TeamPerformancePage() {
   const byRep: Row[] = data?.data?.byRep ?? [];
   const byTeam: Row[] = data?.data?.byTeam ?? [];
   const load = () => refetch();
+  // #2872: one read feeds both tables, and the branch below keyed off `error` alone — so the
+  // Refresh button, pressed while the last numbers were still on screen, swapped both tables for
+  // an outage banner. Two different states: never read, or read and then refused.
+  const failed = Boolean(error) && !data;
+  const stale = Boolean(error) && Boolean(data);
+  const reason = error?.message || 'no response from the server';
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
@@ -128,13 +134,19 @@ export default function TeamPerformancePage() {
         </button>
       </div>
 
+      {stale && (
+        <InlineErrorState
+          message={`Could not refresh this report, so the tables below are the last read: ${reason}`}
+          onRetry={refetch}
+        />
+      )}
       {loading ? (
         <div className="flex items-center gap-2 text-sm text-muted-foreground py-8 justify-center">
           <Loader2 className="w-5 h-5 animate-spin" /> Loading report…
         </div>
-      ) : error ? (
+      ) : failed ? (
         <InlineErrorState
-          message={`Failed to load team performance: ${error.message || 'no response from the server'}`}
+          message={`Failed to load team performance: ${reason}`}
           onRetry={refetch}
         />
       ) : (
