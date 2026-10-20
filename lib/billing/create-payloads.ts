@@ -22,6 +22,10 @@
  * call them, `tests/unit/create-form-body-2876.test.ts` posts their output through the
  * real routes with the real schemas, and a screen in that file fails if a page goes
  * back to stringifying its form directly.
+ *
+ * `invoicePayload` (#2888) is the fourth form in the same family. #2876 named four
+ * pages and #2883 fixed three; the invoice modal kept posting its camelCase state and
+ * kept 400ing on `line_items`, with no test in that screen to notice.
  */
 
 /** What the Create Order / Quote / Subscription modals keep in `useState`. */
@@ -63,6 +67,20 @@ interface SubscriptionDraft {
   autoRenew: boolean;
   paymentMethod: string;
   last4: string;
+}
+
+interface InvoiceDraft {
+  title: string;
+  contactId: string;
+  /** `new Date().toISOString().split('T')[0]` — the modal's default, so possibly undefined. */
+  issueDate?: string;
+  dueDate: string;
+  notes: string;
+  items: LineItemDraft[];
+  /** `'percentage' | 'fixed'`, from the modal's own select. */
+  discountType: string;
+  discountValue: string;
+  taxRate: string;
 }
 
 /**
@@ -133,4 +151,34 @@ export function subscriptionPayload(form: SubscriptionDraft) {
   };
 }
 
-export type { OrderDraft, QuoteDraft, SubscriptionDraft, LineItemDraft };
+/**
+ * #2888 — the fourth form in this family, and the one #2883 did not reach.
+ *
+ * `discount_type` is not in `createInvoiceSchema`, and cannot be: the route reads it off the
+ * *raw* body (`app/api/tenant/invoices/route.ts:91`), because Zod strips any key the schema does
+ * not declare and `discount` alone cannot tell a percentage from a fixed amount. So it belongs
+ * here even though nothing validates it — dropping it would silently turn "10% off" into
+ * "10 off the subtotal".
+ */
+export function invoicePayload(form: InvoiceDraft) {
+  return {
+    // `title` is outside `createInvoiceSchema` — the route reads it off the raw body
+    // (`app/api/tenant/invoices/route.ts:90`) and falls back to `Invoice ${invoiceNumber}`. An
+    // empty string is not nullish, so sending one would store a nameless invoice; omitting it lets
+    // that fallback run, the same way the order and quote modals get their generated titles.
+    title: form.title.trim() || undefined,
+    contact_id: blankToNull(form.contactId),
+    // A cleared date input is `''`, which `z.string().date()` rejects; omitting it lets the
+    // schema's own default (today) apply, which is what the modal's default already says.
+    issue_date: form.issueDate?.trim() || undefined,
+    due_date: blankToNull(form.dueDate),
+    notes: blankToNull(form.notes),
+    line_items: lineItems(form.items),
+    discount: num(form.discountValue, 0),
+    discount_type: form.discountType,
+    tax_rate: num(form.taxRate, 0),
+    // `terms` has no input on this modal, unlike the quote's.
+  };
+}
+
+export type { OrderDraft, QuoteDraft, SubscriptionDraft, InvoiceDraft, LineItemDraft };
