@@ -4,10 +4,11 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import { ArrowLeft, User, Clock, MessageSquare, Trash2, Send,
   Building2, Briefcase, Receipt, Mail, ExternalLink
 } from 'lucide-react';
@@ -70,18 +71,25 @@ export default function TicketDetailPage() {
   const ticketId = params['id'] as string;
   const TICKET_QUERY = ['tenant', 'tickets', ticketId] as const;
 
-  // #1328: detail read via TanStack Query.
-  const { data, isLoading: loading, error } = useApiQuery<TicketResponse>(
+  // #1328: detail read via TanStack Query. Replies and the Customer History aside ride on
+  // this one response, so one refused refresh is stale for the whole page — there is no
+  // second read to retry by accident.
+  const { data, isLoading: loading, error, refetch } = useApiQuery<TicketResponse>(
     TICKET_QUERY,
     `/api/tenant/tickets/${ticketId}`,
     { enabled: !!ticketId },
   );
   const ticket = data?.data;
 
-  // Preserve prior behavior: on load failure, toast + redirect to list.
-  useEffect(() => {
-    if (error) { toast.error('Failed to load ticket'); router.push('/tenant/tickets'); }
-  }, [error, router]);
+  // #2872: sending a reply and changing the status both end in
+  // invalidateQueries(TICKET_QUERY) — this exact key — so the flag is usually set over
+  // the ticket still on screen. It used to toast and then `router.push('/tenant/tickets')`,
+  // which threw the record the operator was working on away and landed them on a list whose
+  // own read may also have been refused. `failed` is the never-answered outage; `stale`
+  // keeps the ticket, its replies and the customer aside and says they are the last read.
+  const failed = Boolean(error) && !data;
+  const stale = Boolean(error) && Boolean(data);
+  const reason = error?.message || 'no response from the server';
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: TICKET_QUERY });
 
@@ -144,7 +152,37 @@ export default function TicketDetailPage() {
     </div>
   );
 
-  if (!ticket) return null;
+  // The read never answered. Nothing here may act as though a ticket were on screen: no
+  // reply box, no status buttons, no delete — each of them writes against an id this
+  // session has only failed to read.
+  if (failed) return (
+    <div className="space-y-4 animate-fade-in">
+      <button onClick={() => router.push('/tenant/tickets')}
+        className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
+        <ArrowLeft className="w-4 h-4" /> Back to tickets
+      </button>
+      <InlineErrorState message={`Failed to load ticket: ${reason}`} onRetry={refetch} />
+    </div>
+  );
+
+  // The read answered and there is no ticket in it. Reachable only through a 2xx with an
+  // empty body, so it says so plainly — and a refused refresh on top of it still carries
+  // the caveat rather than silently claiming the ticket is gone.
+  if (!ticket) return (
+    <div className="space-y-4 animate-fade-in">
+      {stale && (
+        <InlineErrorState
+          message={`Could not refresh, so this page is the last read: ${reason}. The ticket may have been deleted since it last answered — that is not the same as never loading.`}
+          onRetry={refetch}
+        />
+      )}
+      <div className="text-center py-12">
+        <p className="text-lg font-semibold">Ticket not found</p>
+        <button onClick={() => router.push('/tenant/tickets')}
+          className="text-sm text-violet-600 hover:underline mt-2 inline-block">Back to tickets</button>
+      </div>
+    </div>
+  );
 
   const statusColor: Record<string, string> = {
     open: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
@@ -176,6 +214,12 @@ export default function TicketDetailPage() {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fade-in items-start">
       <div className="lg:col-span-2 space-y-6">
+      {stale && (
+        <InlineErrorState
+          message={`Could not refresh, so the ticket below is the last read: ${reason}. A reply you just sent or a status you just changed may not be reflected here; the replies and the customer panel came back with this same response.`}
+          onRetry={refetch}
+        />
+      )}
       {/* Back button + actions */}
       <div className="flex items-center justify-between">
         <button onClick={() => router.push('/tenant/tickets')}
