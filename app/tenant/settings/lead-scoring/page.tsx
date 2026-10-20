@@ -47,7 +47,13 @@ export default function LeadScoringRulesPage() {
     '/api/tenant/admin/lead-scoring',
   );
   const rules: Rule[] = data?.rules ?? [];
-  const queryErrorMsg = queryError ? (queryError.message || 'Failed to load rules') : null;
+  // #2872: save / delete / install-starters each call load(), which invalidates this exact key,
+  // and the Refresh button re-fetches it, so "kept rules + error flag" is the ordinary state right
+  // after the operator acts. TanStack keeps `data` when that revalidation is refused, so branching
+  // on queryError alone dashed the rows still on screen; the outage and the last read are different.
+  const queryFailed = Boolean(queryError) && !data;
+  const queryStale = Boolean(queryError) && Boolean(data);
+  const queryReason = queryError?.message || 'no response from the server';
   const load = () => queryClient.invalidateQueries({ queryKey: LEAD_SCORING_QUERY });
 
   const saveMutation = useMutation({
@@ -162,13 +168,20 @@ export default function LeadScoringRulesPage() {
         </div>
       )}
 
-      {(error || queryErrorMsg) && (
+      {queryFailed && (
         <InlineErrorState
-          message={queryErrorMsg
-            ? `Failed to load lead scoring rules: ${queryErrorMsg}`
-            : (error ?? 'Failed to save the rule')}
-          onRetry={queryErrorMsg ? refetch : undefined}
+          message={`Failed to load lead scoring rules: ${queryReason}`}
+          onRetry={refetch}
         />
+      )}
+      {queryStale && (
+        <InlineErrorState
+          message={`Could not refresh, so the rules below are the last read: ${queryReason}. A rule you just saved, reordered or deleted is not reflected here yet.`}
+          onRetry={refetch}
+        />
+      )}
+      {error && !queryError && (
+        <InlineErrorState message={error ?? 'Failed to save the rule'} />
       )}
 
       <div className="bg-card border border-border rounded-xl overflow-hidden">
@@ -192,7 +205,7 @@ export default function LeadScoringRulesPage() {
                   </td>
                 </tr>
               )}
-              {!loading && !queryError && rules.length === 0 && (
+              {!loading && !queryFailed && rules.length === 0 && (
                 <tr>
                   <td colSpan={5} className="px-4 py-12 text-center text-muted-foreground">
                     No scoring rules defined yet.
