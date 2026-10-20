@@ -80,6 +80,15 @@ export default function ReportsPage() {
   const loading = reportQuery.isFetching;
   const ran = !!ranWith;
 
+  // #2872: re-clicking Run with the same params refetches in place, so a refused
+  // refetch leaves `error` set beside the rows TanStack kept. The toast below speaks
+  // once and fades in four seconds; the panel is what stays, and `!results.length &&
+  // isError` only reached it for a report that had never returned rows. A report whose
+  // rows were kept got no channel at all — "43 records" over last month's numbers.
+  const reportFailed = Boolean(reportQuery.error) && !reportQuery.data;
+  const reportStale = Boolean(reportQuery.error) && Boolean(reportQuery.data);
+  const reportReason = reportQuery.error?.message || 'no response from the server';
+
   // useQuery has no onError callback (TanStack v5) — toast each distinct
   // failure once; the results panel already renders the empty-data state.
   const lastToastedError = useRef<unknown>(null);
@@ -200,7 +209,7 @@ export default function ReportsPage() {
                     <p className="text-sm font-semibold">{meta.label}</p>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    {results.length} records · {dateRange > 0 ? `Last ${dateRange} days` : 'All time'}
+                    {reportFailed ? '—' : results.length} records · {dateRange > 0 ? `Last ${dateRange} days` : 'All time'}
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -213,15 +222,23 @@ export default function ReportsPage() {
 
               {loading ? (
                 <div className="p-8 text-center text-sm text-muted-foreground">Generating report...</div>
-              ) : !results.length && reportQuery.isError ? (
+              ) : reportFailed ? (
                 // #2829: the toast above speaks for four seconds and this panel
                 // stays on screen. "No data found for this period" is then the
                 // permanent answer about a report that never ran.
                 <InlineErrorState
-                  message="This report did not run — the rows below are not missing, the query failed."
+                  message={`This report did not run — the rows below are not missing, the query failed: ${reportReason}.`}
                   onRetry={() => void reportQuery.refetch()}
                 />
-              ) : !results.length ? (
+              ) : (
+                <>
+                {reportStale && (
+                  <InlineErrorState
+                    message={`Could not refresh, so what is shown below is the last read: ${reportReason}. Anything that changed since then is not in it.`}
+                    onRetry={() => void reportQuery.refetch()}
+                  />
+                )}
+                {!results.length ? (
                 <div className="p-8 text-center">
                   <FileText className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
                   <p className="text-sm text-muted-foreground">No data found for this period</p>
@@ -254,6 +271,8 @@ export default function ReportsPage() {
                     </tbody>
                   </table>
                 </div>
+              )}
+                </>
               )}
             </div>
           )}

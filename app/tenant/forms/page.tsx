@@ -90,6 +90,17 @@ export default function FormsPage() {
   const total = data?.total ?? 0;
   const reload = () => queryClient.invalidateQueries({ queryKey: ['tenant', 'forms'] });
 
+  // #2872: `reload()` is what every mutation here calls on success, and the prefix
+  // matches both reads — the paged list and the open drawer. So the action that
+  // changes the data is the action that revalidates it, and a refused revalidation
+  // left `error` set beside the rows TanStack had kept, which the bare `error ?` branch
+  // read exactly like a read that never answered. `failed` is the outage; `stale` keeps
+  // what is on screen and says so. Paging is the exception: `offset` is in the key, so a
+  // page that has never answered is `failed`, not a last read of the page before it.
+  const formsFailed = Boolean(formsError) && !data;
+  const formsStale = Boolean(formsError) && Boolean(data);
+  const formsReason = formsError?.message || 'no response from the server';
+
   const createMutation = useMutation({
     mutationFn: async () => {
       const res = await fetch('/api/tenant/forms', {
@@ -152,6 +163,9 @@ export default function FormsPage() {
     { enabled: !!viewingSubmissions },
   );
   const submissions: FormSubmissionRecord[] = submissionsData?.data?.submissions ?? [];
+  const submissionsFailed = Boolean(submissionsError) && !submissionsData;
+  const submissionsStale = Boolean(submissionsError) && Boolean(submissionsData);
+  const submissionsReason = submissionsError?.message || 'no response from the server';
 
   const viewSubmissions = (form: { id: string }) => {
     setViewingSubmissions(form as FormItem);
@@ -256,12 +270,20 @@ export default function FormsPage() {
         )}
       {/* Forms list */}
       {loading ? <ListSkeleton /> :
-      formsError ? (
+      formsFailed ? (
         <InlineErrorState
-          message={`Failed to load your forms: ${formsError.message || 'no response from the server'}`}
+          message={`Failed to load your forms: ${formsReason}`}
           onRetry={refetchForms}
         />
-      ) : forms.length === 0 ? (
+      ) : (
+        <>
+        {formsStale && (
+          <InlineErrorState
+            message={`Could not refresh, so the forms below are the last read: ${formsReason}. One you just created, published or deleted is not reflected here.`}
+            onRetry={refetchForms}
+          />
+        )}
+      {forms.length === 0 ? (
         <div className="text-center py-16 border border-dashed border-border rounded-2xl">
           <FileText className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
           <p className="font-medium">No forms yet</p>
@@ -351,14 +373,24 @@ export default function FormsPage() {
                       <Loader2 className="w-8 h-8 animate-spin text-violet-600" />
                       <p className="text-sm text-muted-foreground font-medium">Loading submissions...</p>
                     </div>
-                  ) : submissionsError ? (
+                  ) : submissionsFailed ? (
                     <div className="p-5">
                       <InlineErrorState
-                        message={`Failed to load this form's submissions: ${submissionsError.message || 'no response from the server'}`}
+                        message={`Failed to load this form's submissions: ${submissionsReason}`}
                         onRetry={refetchSubmissions}
                       />
                     </div>
-                  ) : submissions.length === 0 ? (
+                  ) : (
+                    <>
+                    {submissionsStale && (
+                      <div className="p-5">
+                        <InlineErrorState
+                          message={`Could not refresh, so the submissions below are the last read: ${submissionsReason}. One that arrived since this was fetched is not in here.`}
+                          onRetry={refetchSubmissions}
+                        />
+                      </div>
+                    )}
+                    {submissions.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-20 text-center px-10">
                       <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
                         <FileText className="w-8 h-8 text-muted-foreground/40" />
@@ -413,6 +445,8 @@ export default function FormsPage() {
                       ))}
                     </div>
                   )}
+                    </>
+                  )}
                 </div>
                 
                 <div className="p-5 border-t border-border bg-muted/20">
@@ -445,6 +479,8 @@ export default function FormsPage() {
             </div>
           </div>
         </div>
+      )}
+        </>
       )}
     </div>
   );
