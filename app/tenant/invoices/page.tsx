@@ -13,6 +13,7 @@ import { Plus, Search, Eye, Download, FileText, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import { ListSkeleton } from '@/components/shared/page-skeleton';
+import { invoicePayload } from '@/lib/billing/create-payloads';
 
 interface Contact { id: string; firstName: string; lastName: string; email: string | null; }
 interface Invoice {
@@ -99,7 +100,11 @@ function InvoicesPageInner() {
       const res = await fetch('/api/tenant/invoices', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
+        // #2888: the modal keeps camelCase and `createInvoiceSchema` reads snake_case, so
+        // stringifying `form` sent a body whose only surviving key was `title` — the one the route
+        // reads off `rawBody`. Zod strips the rest rather than rejecting it, and `line_items` then
+        // failed its `min(1)`, so this create has 400'd on every install.
+        body: JSON.stringify(invoicePayload(form)),
       });
       const data = await res.json().catch(() => ({}) as { error?: string });
       if (!res.ok) throw new Error(data.error || 'Failed to create invoice');
