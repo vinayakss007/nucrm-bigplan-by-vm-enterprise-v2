@@ -39,36 +39,20 @@ export default function SuperAdminAnalyticsPage() {
   const tenants: TenantRow[] = tenantsQuery.data?.data ?? [];
   const monitoring: MonitoringData | null = monitoringQuery.data ?? null;
 
-  /**
-   * #2872 — two reads, so two verdicts. The page used to collapse the two failures into ONE
-   * message (a nullish coalesce across the two reads' error messages) and then hand that single
-   * string the whole dashboard, so an error screen replaced it. That lost twice. First, whichever
-   * read refused second was reported in the other one's words, because the coalesce always takes
-   * the left message when both are set. Second, and worse: `useApiQuery` keeps `data` when a
-   * revalidation of an already-answered query fails, so the ordinary state "the dashboard is on
-   * screen and one refresh was refused" blanked everything the operator was reading — the growth
-   * curve, the plan mix, the status distribution, every total — behind that error screen.
-   *
-   * So the takeover is now gated on BOTH reads having never answered; short of that there is
-   * something to keep, and the failure is shown in the space that read feeds, not over it.
-   *
-   * The route facts behind each read (server internals stay in this comment):
-   *  - `/api/superadmin/tenants` answers `{ data }` (app/api/superadmin/tenants/route.ts:95) from
-   *    a live join over tenants/plans/users/tenantMembers, ordered newest-first and capped at 100
-   *    rows (route.ts:92-93) — no pagination, so this page's totals describe at most the newest
-   *    100 organizations. Every figure below is computed from it, including plan mix and the
-   *    status distribution; a tenant created, upgraded or suspended between two reads moves them.
-   *  - `/api/superadmin/monitoring` answers `{ data, ...payload }` (app/api/superadmin/
-   *    monitoring/route.ts:203); this page reads only `tenantGrowth`, a rolling
-   *    `now() - interval '30 days'` group-by-day over tenants.createdAt (route.ts:34-43) — so the
-   *    curve genuinely differs between two refreshes, which is why a kept-but-refused read has to
-   *    be labelled.
-   *
-   *  Epic rule #1, the controls: the only action on this page is the retry each banner carries, so
-   *  a refused refresh costs the operator nothing — the rows are read-only aggregates and no
-   *  control here is irreversible or fleet-wide. A reload of the whole document is gone: on a
-   *  stale read it threw away the payload the banner was promising to re-check.
-   */
+  // #2872 — two reads, so two verdicts. Main coalesced the two error messages into one string and
+  // handed that string the whole page, so a refused refresh (which keeps `data`) blanked the
+  // dashboard behind an error screen, and whichever read refused second was reported in the other's
+  // words. The takeover now requires both reads to have never answered; otherwise the failure is
+  // shown in the space that read feeds. Route facts behind that split:
+  //  - /api/superadmin/tenants answers { data } (app/api/superadmin/tenants/route.ts:95) from a live
+  //    join, newest-first and capped at 100 rows with no pagination (:92-93) — every figure below,
+  //    plan mix and status distribution included, is computed from at most the newest 100 orgs.
+  //  - /api/superadmin/monitoring answers { data, ...payload } (…/monitoring/route.ts:203) and this
+  //    page takes only tenantGrowth, a rolling 30-day group-by-day (:34-43) — so the curve really
+  //    does differ between refreshes, which is why a kept one has to be labelled.
+  // Controls: the only action here is each banner's retry, so a refused refresh costs nothing; the
+  // document reload is gone because on a stale read it threw away what the banner promised to
+  // re-check.
   const tenantsFailed = Boolean(tenantsQuery.error) && !tenantsQuery.data;
   const tenantsStale = Boolean(tenantsQuery.error) && Boolean(tenantsQuery.data);
   const tenantsReason = tenantsQuery.error?.message || 'no response from the server';
