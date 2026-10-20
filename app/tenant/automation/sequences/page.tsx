@@ -99,6 +99,14 @@ export default function SequencesPage() {
   );
   const sequences: Sequence[] = useMemo(() => data?.data ?? [], [data]);
 
+  // #2872: one read, judged by one error flag. Creating or deleting a sequence
+  // invalidates SEQUENCES_QUERY, so the ordinary path — the write worked, its reload was
+  // refused — replaced the list with "Failed to load your sequences" over the sequences
+  // still in hand, and the only way back to them was to create another one blind.
+  const failed = Boolean(sequencesError) && !data;
+  const stale = Boolean(sequencesError) && Boolean(data);
+  const reason = sequencesError?.message || 'no response from the server';
+
   const createMutation = useMutation({
     mutationFn: async () => {
       const res = await fetch('/api/tenant/sequences', {
@@ -236,9 +244,12 @@ export default function SequencesPage() {
       )}
 
       {/* Sequences list */}
+      {stale && (
+        <InlineErrorState message={`Could not refresh, so the sequences below are the last read: ${reason}. One you just created or deleted is not reflected here.`} onRetry={refetchSequences} />
+      )}
       {loading ? [...Array(3)].map((_,i) => <div key={i} className="h-24 bg-muted rounded-2xl animate-pulse" />) :
-      sequencesError ? (
-        <InlineErrorState message={`Failed to load your sequences: ${sequencesError.message}`} onRetry={refetchSequences} />
+      failed ? (
+        <InlineErrorState message={`Failed to load your sequences: ${reason}`} onRetry={refetchSequences} />
       ) : sequences.length === 0 ? (
         <div className="text-center py-16 border border-dashed border-border rounded-2xl">
           <Clock className="w-8 h-8 text-muted-foreground mx-auto mb-3" />

@@ -191,6 +191,25 @@ export default function AutomationPage() {
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
   const totalEnabled = prebuilts.filter(p => p.enabled).length + customs.filter(c => c.is_active).length;
 
+  // #2872: two reads, each judged by one error flag. TanStack Query keeps `data` when a
+  // revalidation of a read that already succeeded fails, and every mutation on this page
+  // invalidates on success — toggling a pre-built reloads WORKFLOWS_QUERY, creating,
+  // toggling or deleting a custom automation reloads AUTOMATIONS_QUERY — so the ordinary
+  // "the write worked, the reload did not" state replaced both lists with outage cards and
+  // hid the very rows the operator had just changed.
+  const workflowsFailed = Boolean(workflowsError) && !pbData;
+  const workflowsStale = Boolean(workflowsError) && Boolean(pbData);
+  const workflowsReason = workflowsError?.message || 'no response from the server';
+  const automationsFailed = Boolean(automationsError) && !cuData;
+  const automationsStale = Boolean(automationsError) && Boolean(cuData);
+  const automationsReason = automationsError?.message || 'no response from the server';
+  // `totalEnabled` and the two tab counters are sums of the reads, so a read that never
+  // answered has no number to print. `prebuilts` is worse than that: it maps the static
+  // PREBUILT config and only reads `enabled` off the rows, so with nothing in hand every
+  // pre-built reports the shipped `false` and the header would say "0 active automations"
+  // — the banner's own copy already warns about this, and the counter now agrees with it.
+  const countersFailed = workflowsFailed || automationsFailed;
+
   return (
     <div className="max-w-[1600px] mx-auto space-y-6 animate-fade-in">
       {/* Header */}
@@ -198,7 +217,7 @@ export default function AutomationPage() {
         <div>
           <h1 className="text-xl font-bold flex items-center gap-2"><Zap className="w-5 h-5 text-violet-500"/>Automation</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            <span className="text-violet-600 font-semibold">{totalEnabled}</span> active automation{totalEnabled !== 1 ? 's' : ''}
+            <span className="text-violet-600 font-semibold">{countersFailed ? '—' : totalEnabled}</span> active automation{!countersFailed && totalEnabled === 1 ? '' : 's'}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -219,7 +238,9 @@ export default function AutomationPage() {
           <button key={t} onClick={() => setTab(t)}
             className={cn('px-4 py-2 rounded-lg text-sm font-medium transition-all',
               tab === t ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground')}>
-            {t === 'prebuilt' ? `Pre-built (${prebuilts.filter(p=>p.enabled).length}/${prebuilts.length})` : `Custom (${customs.length})`}
+            {t === 'prebuilt'
+              ? workflowsFailed ? 'Pre-built (—)' : `Pre-built (${prebuilts.filter(p=>p.enabled).length}/${prebuilts.length})`
+              : automationsFailed ? 'Custom (—)' : `Custom (${customs.length})`}
           </button>
         ))}
       </div>
@@ -294,9 +315,12 @@ export default function AutomationPage() {
       {/* Pre-built tab */}
       {tab === 'prebuilt' && (
         <div className="space-y-3">
+          {workflowsStale && (
+            <InlineErrorState message={`Could not refresh, so the ON/OFF states below are the last read: ${workflowsReason}. A pre-built you just turned on or off may still be shown the other way.`} onRetry={refetchWorkflows} />
+          )}
           {loading ? [...Array(5)].map((_,i) => <div key={i} className="h-20 bg-muted rounded-2xl animate-pulse" />) :
-          workflowsError ? (
-            <InlineErrorState message={`Failed to load which automations are running: ${workflowsError.message}. The ON/OFF state in this list is then the shipped default, not your tenant's.`} onRetry={refetchWorkflows} />
+          workflowsFailed ? (
+            <InlineErrorState message={`Failed to load which automations are running: ${workflowsReason}. The ON/OFF state in this list is then the shipped default, not your tenant's.`} onRetry={refetchWorkflows} />
           ) : prebuilts.map(w => {
             const Icon = TRIGGER_ICONS[w.trigger_type ?? ''] ?? Zap;
             return (
@@ -331,9 +355,12 @@ export default function AutomationPage() {
       {/* Custom tab */}
       {tab === 'custom' && (
         <div className="space-y-3">
+          {automationsStale && (
+            <InlineErrorState message={`Could not refresh, so the automations below are the last read: ${automationsReason}. One you just created, toggled or deleted is still shown the way it was.`} onRetry={refetchAutomations} />
+          )}
           {loading ? [...Array(3)].map((_,i) => <div key={i} className="h-20 bg-muted rounded-2xl animate-pulse" />) :
-          automationsError ? (
-            <InlineErrorState message={`Failed to load your automations: ${automationsError.message}`} onRetry={refetchAutomations} />
+          automationsFailed ? (
+            <InlineErrorState message={`Failed to load your automations: ${automationsReason}`} onRetry={refetchAutomations} />
           ) : customs.length === 0 ? (
             <div className="text-center py-16 border border-dashed border-border rounded-2xl">
               <Zap className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
