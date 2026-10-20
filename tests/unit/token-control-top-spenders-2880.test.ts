@@ -37,7 +37,17 @@ import { join } from 'node:path';
  *
  * The fake client answers with rows in the shape `pg` returns them for drizzle's
  * `rowMode: 'array'` queries — arrays, not objects — so the mapping under test is
- * drizzle's real one, not a stand-in.
+ * drizzle's real one, not a stand-in. The platform-context `set_config` is a statement
+ * rather than a read, so it is kept out of the fixture queue for the same reason: if
+ * it took a row, the ranked query would answer with the platform total and every
+ * number below it would be off by one.
+ *
+ *   Measured against `main` (`a1a2fa81`) with only these two test files copied over:
+ *   this file never collects — `Cannot find package
+ *   '@/app/api/superadmin/token-control/report/top-spenders/route'` — and
+ *   `api-url-has-handler-2822` convicts exactly that URL, 2 offenders against 1
+ *   allowlisted entry. With the branch's `app/`, `drizzle/` and the shrunken allowlist
+ *   applied on top, the same two files are 19/19.
  */
 
 const TENANT_A = '11111111-1111-4111-8111-111111111111';
