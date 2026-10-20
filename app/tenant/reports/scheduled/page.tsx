@@ -10,6 +10,7 @@ import { useApiQuery } from '@/lib/query/client';
 import { Clock, Plus, Play, Pause, Trash2, Mail, FileText, X } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
 import { confirmThen } from '@/components/ui/confirm-dialog';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import toast from 'react-hot-toast';
 
 const FREQUENCIES = [
@@ -45,12 +46,25 @@ export default function ScheduledReportsPage() {
   const [showCreate, setShowCreate] = useState(false);
 
   // #1328: list via TanStack Query (was raw fetch + useEffect).
-  const { data, isLoading: loading, error } = useApiQuery<{ data?: ScheduledReport[] }>(
+  //
+  // #2829: this page's failure channel was `if (error) toast.error('Failed to load')` sitting in
+  // the RENDER BODY — a four-second toast that re-fired on every render, while the panel underneath
+  // kept answering the refusal with "No scheduled reports / Create a schedule to automate report
+  // delivery". A read that is permanently refused claimed the tenant had no schedules at all, to
+  // someone who is here precisely to find out whether a report is due.
+  const { data, isLoading: loading, error, refetch } = useApiQuery<{ data?: ScheduledReport[] }>(
     SCHEDULED_QUERY,
     '/api/tenant/reports/scheduled',
   );
   const reports: ScheduledReport[] = data?.data ?? [];
-  if (error) toast.error('Failed to load');
+  // #2872: pause, delete and create each call `load()` on success, and `load()` invalidates
+  // SCHEDULED_QUERY — the same key this read is cached under — so a refused refresh is the ordinary
+  // state right after the operator acted, and TanStack keeps `data` clean through it. Keying the
+  // branch off `error` alone ate the whole list and left only "Failed to load", which for a schedule
+  // the operator just paused is the worse outcome: the screen cannot say what its status is now.
+  const failed = Boolean(error) && !data;
+  const stale = Boolean(error) && Boolean(data);
+  const reason = error?.message || 'no response from the server';
 
   const load = () => queryClient.invalidateQueries({ queryKey: SCHEDULED_QUERY });
 
@@ -103,10 +117,21 @@ export default function ScheduledReportsPage() {
         </button>
       </div>
 
+      {stale && (
+        <InlineErrorState
+          message={`Could not refresh, so the schedules below are the last read: ${reason}. A schedule you just paused or deleted may still be listed here.`}
+          onRetry={refetch}
+        />
+      )}
       {loading ? (
         <div className="space-y-2">
           {[1, 2, 3].map(i => <div key={i} className="h-16 bg-card border border-border rounded-xl animate-pulse" />)}
         </div>
+      ) : failed ? (
+        <InlineErrorState
+          message={`Failed to load scheduled reports: ${reason}`}
+          onRetry={refetch}
+        />
       ) : reports.length === 0 ? (
         <div className="admin-card flex flex-col items-center justify-center py-16">
           <Clock className="w-12 h-12 text-muted-foreground/30 mb-4" />
