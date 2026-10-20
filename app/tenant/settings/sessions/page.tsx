@@ -34,6 +34,15 @@ export default function SessionsPage() {
     '/api/user/sessions',
   );
   const sessions: UserSession[] = data?.data ?? [];
+  // #2872: `revoke` and `revokeAll` both end in `reload()`, which invalidates this exact key,
+  // so a refused refresh is the normal state directly after the operator signed a device
+  // out. TanStack Query keeps the `data` it already had, and `sessionsError` alone settled
+  // two different questions: with sessions in hand the refusal went unmentioned, so the
+  // device just signed out was still offered for revoking; and an empty last read got the
+  // outage card, which says "I could not check" where the answer was "nobody else is in".
+  const sessionsFailed = Boolean(sessionsError) && !data;
+  const sessionsStale = Boolean(sessionsError) && Boolean(data);
+  const sessionsReason = sessionsError?.message || 'no response from the server';
   const reload = () => queryClient.invalidateQueries({ queryKey: SESSIONS_QUERY });
 
   const revoke = async (sessionId: string) => {
@@ -85,6 +94,12 @@ export default function SessionsPage() {
         )}
       </div>
 
+      {sessionsStale && (
+        <InlineErrorState
+          message={`Could not refresh, so the sessions below are the last read: ${sessionsReason}. A device you just signed out may still appear here.`}
+          onRetry={() => void refetch()}
+        />
+      )}
       {loading ? (
         <div className="animate-pulse admin-card divide-y divide-border">
           {[...Array(3)].map((_,i) => (
@@ -94,17 +109,15 @@ export default function SessionsPage() {
             </div>
           ))}
         </div>
+      ) : sessionsFailed ? (
+        // #2829: "No sessions found" is a claim about who is logged in. A read
+        // that never reached the sessions table may not make it.
+        <InlineErrorState
+          message={`Could not load your active sessions — this is a failed request, not an empty list. ${sessionsReason}`}
+          onRetry={() => void refetch()}
+        />
       ) : !sessions.length ? (
-        sessionsError ? (
-          // #2829: "No sessions found" is a claim about who is logged in. A read
-          // that never reached the sessions table may not make it.
-          <InlineErrorState
-            message="Could not load your active sessions — this is a failed request, not an empty list."
-            onRetry={() => void refetch()}
-          />
-        ) : (
-          <SettingsEmptyState icon={Monitor} title="No sessions found" description="Active sessions will appear here" />
-        )
+        <SettingsEmptyState icon={Monitor} title="No sessions found" description="Active sessions will appear here" />
       ) : (
         <div className="admin-card divide-y divide-border overflow-hidden">
           {sessions.map(s => {

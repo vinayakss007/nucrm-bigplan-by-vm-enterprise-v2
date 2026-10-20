@@ -45,6 +45,16 @@ export default function APIKeysPage() {
     '/api/tenant/api-keys',
   );
   const keys: ApiKey[] = data?.data ?? [];
+  // #2872: `create` and `del` both end in `reload()`, which invalidates this exact key — so
+  // a refused refresh is the ordinary state right after the operator pressed a button, and
+  // TanStack Query hands the page back the `data` it already had. `keysError` alone settled
+  // two different questions at once: with keys in hand the refusal went unmentioned, so a key
+  // just revoked stayed listed as if it were live while the one just created was simply
+  // missing; and an empty last read got the outage card, which claims a load failure where
+  // the honest answer is "none, as of the last read".
+  const keysFailed = Boolean(keysError) && !data;
+  const keysStale = Boolean(keysError) && Boolean(data);
+  const keysReason = keysError?.message || 'no response from the server';
   const reload = () => queryClient.invalidateQueries({ queryKey: API_KEYS_QUERY });
 
   const create = async (e: React.FormEvent) => {
@@ -122,16 +132,20 @@ export default function APIKeysPage() {
       )}
 
       {/* Keys list */}
+      {keysStale && (
+        <InlineErrorState
+          message={`Could not refresh, so the list below is the last read: ${keysReason}. A key you created or revoked since this was fetched is not reflected in it.`}
+          onRetry={() => void refetch()}
+        />
+      )}
       <div className="admin-card overflow-hidden">
         {loading ? <p className="text-sm text-muted-foreground p-5">Loading...</p>
-        : !keys.length ? (
-          keysError ? (
-            // #2829: a failed read hid live credentials behind "No API keys yet",
-            // next to a create button that invites a duplicate.
-            <div className="p-5"><InlineErrorState message="Could not load this workspace's API keys — this is a failed request, not an empty list." onRetry={() => void refetch()} /></div>
-          ) : (
-            <div className="py-12 text-center"><Key className="w-10 h-10 text-muted-foreground/20 mx-auto mb-3" /><p className="text-sm text-muted-foreground">No API keys yet</p></div>
-          )
+        : keysFailed ? (
+          // #2829: a failed read hid live credentials behind "No API keys yet",
+          // next to a create button that invites a duplicate.
+          <div className="p-5"><InlineErrorState message={`Could not load this workspace's API keys — this is a failed request, not an empty list. ${keysReason}`} onRetry={() => void refetch()} /></div>
+        ) : !keys.length ? (
+          <div className="py-12 text-center"><Key className="w-10 h-10 text-muted-foreground/20 mx-auto mb-3" /><p className="text-sm text-muted-foreground">No API keys yet</p></div>
         ) : (
           <div className="divide-y divide-border">
             {keys.map(k=>(
