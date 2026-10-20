@@ -74,12 +74,25 @@ function InvoicesPageInner() {
   const invoices: Invoice[] = useMemo(() => invoicesData?.data ?? [], [invoicesData]);
   useEffect(() => { if (invoicesError) toast.error('Failed to load invoices'); }, [invoicesError]);
 
-  const { data: contactsData, error: contactsError } = useApiQuery<{ contacts?: Contact[] }>(
+  // #2872: create invalidates INVOICES_QUERY, so the error that reaches this page is usually a
+  // refused *refresh* of rows that are still on screen. The bare flag cannot tell the two apart,
+  // and the list branch treated both as an outage — deleting the ledger one second after a save.
+  const failed = Boolean(invoicesError) && !invoicesData;
+  const stale = Boolean(invoicesError) && Boolean(invoicesData);
+  const reason = invoicesError?.message || 'no response from the server';
+
+  const { data: contactsData, error: contactsError, refetch: refetchContacts } = useApiQuery<{ contacts?: Contact[] }>(
     INVOICE_CONTACTS_QUERY,
     '/api/tenant/contacts',
   );
   const contacts: Contact[] = useMemo(() => contactsData?.contacts ?? [], [contactsData]);
   useEffect(() => { if (contactsError) toast.error('Failed to load contacts'); }, [contactsError]);
+
+  // The secondary read guard:panel-error-state cannot see: it feeds getContactName (every row's
+  // Contact column falls back to '-') and the Contact filter (which then offers nobody).
+  const contactsFailed = Boolean(contactsError) && !contactsData;
+  const contactsStale = Boolean(contactsError) && Boolean(contactsData);
+  const contactsReason = contactsError?.message || 'no response from the server';
 
   const createInvoice = useMutation({
     mutationFn: async () => {
@@ -168,13 +181,15 @@ function InvoicesPageInner() {
       </div>
 
       {/* Stats — every number here is computed from the list, so a failed read would report
-          this tenant's money as zero (#2829). Unread renders unavailable, not 0. */}
+          this tenant's money as zero (#2829). Unread renders unavailable, not 0.
+          #2872: the dash is for an unread list only — a refused refresh still has the rows, and
+          printing — above rows we are also counting contradicts the page itself. */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { label: 'Total', value: invoicesError ? '—' : invoices.length, color: '' },
-          { label: 'Outstanding', value: invoicesError ? '—' : `$${totalOutstanding.toFixed(2)}`, color: 'text-amber-600' },
-          { label: 'Paid', value: invoicesError ? '—' : invoices.filter(i => i.status === 'paid').length, color: 'text-green-600' },
-          { label: 'Overdue', value: invoicesError ? '—' : invoices.filter(i => i.status === 'overdue').length, color: 'text-red-600' },
+          { label: 'Total', value: failed ? '—' : invoices.length, color: '' },
+          { label: 'Outstanding', value: failed ? '—' : `$${totalOutstanding.toFixed(2)}`, color: 'text-amber-600' },
+          { label: 'Paid', value: failed ? '—' : invoices.filter(i => i.status === 'paid').length, color: 'text-green-600' },
+          { label: 'Overdue', value: failed ? '—' : invoices.filter(i => i.status === 'overdue').length, color: 'text-red-600' },
         ].map(s => (
           <div key={s.label} className="admin-card p-3">
             <p className="text-xs text-muted-foreground">{s.label}</p>
@@ -212,15 +227,42 @@ function InvoicesPageInner() {
         </div>
       </div>
 
+      {contactsFailed ? (
+        // #2872: the guard cannot see a secondary read, and this one is invisible in a worse way
+        // than a missing list — an unread contacts list looks like invoices with no customer.
+        <InlineErrorState
+          message={`Failed to load contacts: ${contactsReason} — the Contact column reads “-” and the Contact filter has nobody to offer, which is not the same as these invoices having no contact.`}
+          onRetry={refetchContacts}
+        />
+      ) : contactsStale ? (
+        <InlineErrorState
+          message={`Could not refresh the contacts, so the Contact column and filter are working from the last read: ${contactsReason}`}
+          onRetry={refetchContacts}
+        />
+      ) : null}
+
       {/* Table */}
+      {stale && (
+        <InlineErrorState
+          className="mb-1.5"
+          message={`Could not refresh the invoices, so the rows below are the last read: ${reason}`}
+          onRetry={refetchInvoices}
+        />
+      )}
       {loading ? (
         <ListSkeleton />
-      ) : invoicesError ? (
-        <InlineErrorState message={`Failed to load invoices: ${invoicesError.message}`} onRetry={refetchInvoices} />
+      ) : failed ? (
+        <InlineErrorState message={`Failed to load invoices: ${reason}`} onRetry={refetchInvoices} />
       ) : filtered.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground">
           <FileText className="w-10 h-10 mx-auto mb-3 text-muted-foreground/30" />
-          <p className="text-sm font-medium">No invoices found</p>
+          {invoices.length > 0 ? (
+            // #2872: the read returned rows and the search or filters dropped them. "No invoices
+            // found" describes a tenant with no invoices, which the read just disproved.
+            <p className="text-sm font-medium">No invoice matches this search — the read returned {invoices.length}</p>
+          ) : (
+            <p className="text-sm font-medium">No invoices found</p>
+          )}
         </div>
       ) : (
         <div className="admin-card overflow-hidden">
@@ -310,13 +352,25 @@ function InvoicesPageInner() {
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">Contact</label>
-                <select value={form.contactId} onChange={(e) => setForm({ ...form, contactId: e.target.value })}
-                  className="w-full px-3 py-2 border border-border rounded-lg bg-card text-sm">
-                  <option value="">Select contact...</option>
-                  {contacts.map(c => (
-                    <option key={c.id} value={c.id}>{c.firstName} {c.lastName} {c.email ? `(${c.email})` : ''}</option>
-                  ))}
-                </select>
+                {contactsFailed ? (
+                  <InlineErrorState message={`Failed to load contacts, so there is nobody to pick from: ${contactsReason}. That is not the same as the tenant having no contacts saved.`} onRetry={refetchContacts} />
+                ) : (
+                  <>
+                    {contactsStale && (
+                      <InlineErrorState className="mb-1.5" message={`Could not refresh the contacts, so the names below are the last read: ${contactsReason}`} onRetry={refetchContacts} />
+                    )}
+                    <select value={form.contactId} onChange={(e) => setForm({ ...form, contactId: e.target.value })}
+                      className="w-full px-3 py-2 border border-border rounded-lg bg-card text-sm">
+                      <option value="">Select contact...</option>
+                      {contacts.map(c => (
+                        <option key={c.id} value={c.id}>{c.firstName} {c.lastName} {c.email ? `(${c.email})` : ''}</option>
+                      ))}
+                    </select>
+                    {contacts.length === 0 && (
+                      <p className="text-xs text-muted-foreground mt-1">No contacts saved yet — the list read back empty.</p>
+                    )}
+                  </>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">Due Date</label>

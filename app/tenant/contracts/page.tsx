@@ -4,7 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useMemo, Suspense } from 'react';
+import { useState, useEffect, useMemo, Suspense } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
 import InlineErrorState from '@/components/shared/inline-error-state';
@@ -62,14 +62,29 @@ function ContractsPageInner() {
     '/api/tenant/contracts',
   );
   const contracts: Contract[] = useMemo(() => contractsData?.contracts ?? [], [contractsData]);
-  if (contractsError) toast.error('Failed to load contracts');
+  // #2872: both toasts fired from the render body, so a read that fails once re-announced itself
+  // on every keystroke. A stale state sustains on screen with a live search box in front of it —
+  // it needs an effect, the way the sibling pages already do it.
+  useEffect(() => { if (contractsError) toast.error('Failed to load contracts'); }, [contractsError]);
 
-  const { data: contactsData, error: contactsError } = useApiQuery<{ contacts?: Contact[] }>(
+  // #2872: create invalidates CONTRACTS_QUERY, so the error that reaches this page is usually a
+  // refused *refresh* of rows that are still on screen. The bare flag cannot tell the two apart.
+  const failed = Boolean(contractsError) && !contractsData;
+  const stale = Boolean(contractsError) && Boolean(contractsData);
+  const reason = contractsError?.message || 'no response from the server';
+
+  const { data: contactsData, error: contactsError, refetch: refetchContacts } = useApiQuery<{ contacts?: Contact[] }>(
     CONTRACT_CONTACTS_QUERY,
     '/api/tenant/contacts',
   );
   const contacts: Contact[] = useMemo(() => contactsData?.contacts ?? [], [contactsData]);
-  if (contactsError) toast.error('Failed to load contacts');
+  useEffect(() => { if (contactsError) toast.error('Failed to load contacts'); }, [contactsError]);
+
+  // The secondary read guard:panel-error-state cannot see: it feeds getContactName (every row's
+  // Contact column falls back to '-') and the Contact filter (which then offers nobody).
+  const contactsFailed = Boolean(contactsError) && !contactsData;
+  const contactsStale = Boolean(contactsError) && Boolean(contactsData);
+  const contactsReason = contactsError?.message || 'no response from the server';
 
   const createContract = useMutation({
     mutationFn: async () => {
@@ -141,12 +156,14 @@ function ContractsPageInner() {
       </div>
 
       {/* Stats — every number here is computed from the list, so a failed read would report
-          this tenant's live contract value as zero (#2829). Unread renders unavailable, not 0. */}
+          this tenant's live contract value as zero (#2829). Unread renders unavailable, not 0.
+          #2872: the dash is for an unread list only — a refused refresh still has the rows, and
+          printing — above rows we are also counting contradicts the page itself. */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         {[
-          { label: 'Total', value: contractsError ? '—' : contracts.length, color: '' },
-          { label: 'Active', value: contractsError ? '—' : contracts.filter(c => c.status === 'active').length, color: 'text-green-600' },
-          { label: 'Total Value', value: contractsError ? '—' : `$${activeValue.toFixed(2)}`, color: 'text-violet-600' },
+          { label: 'Total', value: failed ? '—' : contracts.length, color: '' },
+          { label: 'Active', value: failed ? '—' : contracts.filter(c => c.status === 'active').length, color: 'text-green-600' },
+          { label: 'Total Value', value: failed ? '—' : `$${activeValue.toFixed(2)}`, color: 'text-violet-600' },
         ].map(s => (
           <div key={s.label} className="admin-card p-3">
             <p className="text-xs text-muted-foreground">{s.label}</p>
@@ -200,15 +217,42 @@ function ContractsPageInner() {
         </div>
       </div>
 
+      {contactsFailed ? (
+        // #2872: the guard cannot see a secondary read, and this one is invisible in a worse way
+        // than a missing list — an unread contacts list looks like contracts with no customer.
+        <InlineErrorState
+          message={`Failed to load contacts: ${contactsReason} — the Contact column reads “-” and the Contact filter has nobody to offer, which is not the same as these contracts having no contact.`}
+          onRetry={refetchContacts}
+        />
+      ) : contactsStale ? (
+        <InlineErrorState
+          message={`Could not refresh the contacts, so the Contact column and filter are working from the last read: ${contactsReason}`}
+          onRetry={refetchContacts}
+        />
+      ) : null}
+
       {/* Cards Grid */}
+      {stale && (
+        <InlineErrorState
+          className="mb-1.5"
+          message={`Could not refresh the contracts, so the cards below are the last read: ${reason}`}
+          onRetry={refetchContracts}
+        />
+      )}
       {loading ? (
         <div className="flex items-center justify-center py-12 text-muted-foreground"><Loader2 className="w-5 h-5 animate-spin mr-2" />Loading contracts...</div>
-      ) : contractsError ? (
-        <InlineErrorState message={`Failed to load contracts: ${contractsError.message}`} onRetry={refetchContracts} />
+      ) : failed ? (
+        <InlineErrorState message={`Failed to load contracts: ${reason}`} onRetry={refetchContracts} />
       ) : filtered.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground">
           <FileText className="w-10 h-10 mx-auto mb-3 text-muted-foreground/30" />
-          <p className="text-sm font-medium">No contracts found</p>
+          {contracts.length > 0 ? (
+            // #2872: the read returned rows and the search or filters dropped them. "No contracts
+            // found" describes a tenant with no contracts, which the read just disproved.
+            <p className="text-sm font-medium">No contract matches this search — the read returned {contracts.length}</p>
+          ) : (
+            <p className="text-sm font-medium">No contracts found</p>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -243,13 +287,25 @@ function ContractsPageInner() {
             <form onSubmit={handleSubmit} className="p-4 space-y-4">
               <div>
                 <label className="block text-sm font-medium mb-1">Contact</label>
-                <select value={form.contactId} onChange={(e) => setForm({ ...form, contactId: e.target.value })}
-                  className="w-full px-3 py-2 border border-border rounded-lg bg-card text-sm">
-                  <option value="">Select contact...</option>
-                  {contacts.map(c => (
-                    <option key={c.id} value={c.id}>{c.firstName} {c.lastName} {c.email ? `(${c.email})` : ''}</option>
-                  ))}
-                </select>
+                {contactsFailed ? (
+                  <InlineErrorState message={`Failed to load contacts, so there is nobody to pick from: ${contactsReason}. That is not the same as the tenant having no contacts saved.`} onRetry={refetchContacts} />
+                ) : (
+                  <>
+                    {contactsStale && (
+                      <InlineErrorState className="mb-1.5" message={`Could not refresh the contacts, so the names below are the last read: ${contactsReason}`} onRetry={refetchContacts} />
+                    )}
+                    <select value={form.contactId} onChange={(e) => setForm({ ...form, contactId: e.target.value })}
+                      className="w-full px-3 py-2 border border-border rounded-lg bg-card text-sm">
+                      <option value="">Select contact...</option>
+                      {contacts.map(c => (
+                        <option key={c.id} value={c.id}>{c.firstName} {c.lastName} {c.email ? `(${c.email})` : ''}</option>
+                      ))}
+                    </select>
+                    {contacts.length === 0 && (
+                      <p className="text-xs text-muted-foreground mt-1">No contacts saved yet — the list read back empty.</p>
+                    )}
+                  </>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">Title *</label>
