@@ -50,11 +50,31 @@ export default function CallsPage() {
   );
   const calls: CallLog[] = useMemo(() => callsData?.data ?? [], [callsData]);
 
+  // #2872: this read re-runs on every invalidate — `reloadCalls()` (:59) fires
+  // after log / edit / delete, so "the write answered, the refresh did not" is
+  // the routine case here, not an edge one. TanStack Query keeps `callsData`
+  // through a refused refresh, so the bare `callsError` conflates two different
+  // situations and the old body branch printed the outage card over rows that
+  // were still on screen (and, once a search emptied them, claimed the calls
+  // "failed to load" while they sat one row up). GET returns newest-first,
+  // capped: app/api/tenant/calls/route.ts:106 (maxLimit 100) and :160-161.
+  const callsFailed = Boolean(callsError) && !callsData; // a read that never answered
+  const callsStale = Boolean(callsError) && Boolean(callsData); // a refused refresh, rows kept
+  const callsReason = callsError?.message || 'no response from the server';
+
   const { data: contactsData, error: contactsError, refetch: refetchContacts } = useApiQuery<{ data?: CallContact[] }>(
     CALL_CONTACTS_QUERY,
     '/api/tenant/contacts?limit=200',
   );
   const contacts: CallContact[] = contactsData?.data ?? [];
+
+  // Same split for the second read, keyed on `contactsData`: POST /api/tenant/calls
+  // verifies the contact against the live table (app/api/tenant/calls/route.ts:51-62)
+  // and echoes the created row (:78), so the picker only feeds the form — a refused
+  // contacts refresh that keeps the list must not be reported as "there is no contact".
+  const contactsFailed = Boolean(contactsError) && !contactsData;
+  const contactsStale = Boolean(contactsError) && Boolean(contactsData);
+  const contactsReason = contactsError?.message || 'no response from the server';
 
   const reloadCalls = () => queryClient.invalidateQueries({ queryKey: CALLS_QUERY });
 
@@ -135,6 +155,21 @@ export default function CallsPage() {
         </select>
       </div>
 
+      {/* Refused refresh with rows kept: the log below is the last read, and the
+          three actions above it (Log Call POST, Edit PATCH, Delete DELETE) each
+          re-read state server-side — PATCH runs a concurrency guard over the row
+          (app/api/tenant/calls/[id]/route.ts:74-80) and DELETE refuses an
+          already-tombstoned log (:124,:133), while POST verifies the contact
+          against the live table (calls/route.ts:51-62) — so they stay enabled and
+          this banner only names what they can cost. This page has no derived
+          count, duration total or "showing N" line to dash. */}
+      {callsStale && (
+        <InlineErrorState
+          message={`Could not refresh, so the call entries below are the last read: ${callsReason}. A call logged, edited or deleted since this was fetched is missing here, still shown, or shown with its old details — Log Call, Edit and Delete still act on the row you can see, so one someone else changed since the last read may reject your edit or delete.`}
+          onRetry={() => void refetchCalls()}
+        />
+      )}
+
       <div className="admin-card overflow-hidden rounded-xl border border-border">
         <table className="w-full text-sm">
           <thead>
@@ -159,15 +194,17 @@ export default function CallsPage() {
                   <td className="px-4 py-3"><div className="w-16 h-4 rounded bg-muted animate-pulse" /></td>
                 </tr>
               ))
+            ) : callsFailed ? (
+              <tr>
+                <td colSpan={6} className="px-4 py-12 text-center text-muted-foreground">
+                  <InlineErrorState message={`Failed to load calls: ${callsReason}`} onRetry={refetchCalls} />
+                </td>
+              </tr>
             ) : filteredCalls.length === 0 ? (
               <tr>
                 <td colSpan={6} className="px-4 py-12 text-center text-muted-foreground">
-                  {callsError
-                    ? <InlineErrorState message={`Failed to load calls: ${callsError.message}`} onRetry={refetchCalls} />
-                    : <>
-                        <Phone className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                        <p className="text-sm">{calls.length === 0 ? 'No calls logged yet' : 'No calls match your search'}</p>
-                      </>}
+                  <Phone className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                  <p className="text-sm">{calls.length === 0 ? 'No calls logged yet' : 'No calls match your search'}</p>
                 </td>
               </tr>
             ) : (
@@ -222,7 +259,7 @@ export default function CallsPage() {
         </table>
       </div>
 
-      {showForm && <LogCallModal contacts={contacts} contactsError={contactsError} onRetryContacts={() => void refetchContacts()} onSaved={onCallLogged} onClose={() => setShowForm(false)} />}
+      {showForm && <LogCallModal contacts={contacts} contactsFailed={contactsFailed} contactsStale={contactsStale} contactsReason={contactsReason} onRetryContacts={() => void refetchContacts()} onSaved={onCallLogged} onClose={() => setShowForm(false)} />}
       {editingCall && <EditCallModal call={editingCall} onSaved={onCallUpdated} onClose={() => setEditingCall(null)} />}
     </div>
   );
@@ -312,7 +349,7 @@ function EditCallModal({ call, onSaved, onClose }: { call: CallLog; onSaved: (c:
   );
 }
 
-function LogCallModal({ contacts, contactsError, onRetryContacts, onSaved, onClose }: { contacts: { id: string; firstName?: string; first_name?: string; lastName?: string; last_name?: string }[]; contactsError?: Error | null; onRetryContacts?: () => void; onSaved: (c: CallLog) => void; onClose: () => void }) {
+function LogCallModal({ contacts, contactsFailed, contactsStale, contactsReason, onRetryContacts, onSaved, onClose }: { contacts: { id: string; firstName?: string; first_name?: string; lastName?: string; last_name?: string }[]; contactsFailed: boolean; contactsStale: boolean; contactsReason: string; onRetryContacts?: () => void; onSaved: (c: CallLog) => void; onClose: () => void }) {
   const [form, setForm] = useState({
     contact_id: '',
     direction: 'outbound',
@@ -360,7 +397,25 @@ function LogCallModal({ contacts, contactsError, onRetryContacts, onSaved, onClo
               <option value="">Select contact</option>
               {contacts.map(c => <option key={c.id} value={c.id}>{c.firstName || c.first_name} {c.lastName || c.last_name}</option>)}
             </select>
-            {contactsError && <InlineErrorState className="mt-2" message={`The contact list did not load (${contactsError.message}), so there is no contact to log this call against.`} onRetry={onRetryContacts} />}
+            {/* #2872: three states, keyed on `contactsData` in the caller. The old
+                single branch asserted "there is no contact to log this call against"
+                whenever `contactsError` was set — including while a kept contact list
+                was still populating the picker below, which is the sentence this
+                slice exists to stop telling. */}
+            {contactsFailed && (
+              <InlineErrorState
+                className="mt-2"
+                message={`The contact list did not load (${contactsReason}), so there is no contact to log this call against.`}
+                onRetry={onRetryContacts}
+              />
+            )}
+            {contactsStale && (
+              <InlineErrorState
+                className="mt-2"
+                message={`Could not refresh the contact list (${contactsReason}), so the contacts in the picker below are the last read: one added since then cannot be picked, and one deleted since then is still offered and the log will be refused on save.`}
+                onRetry={onRetryContacts}
+              />
+            )}
           </div>
           <div>
             <label className="block text-xs font-medium text-muted-foreground mb-1">Direction</label>
