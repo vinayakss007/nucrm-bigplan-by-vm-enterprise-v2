@@ -66,6 +66,16 @@ export default function SuperAdminModulesPage() {
   // with. Both halves now refuse to answer for a read that never happened.
   const { data, isLoading, error, refetch } = useApiQuery<{ data?: Record<string, unknown>[] }>(['superadmin', 'modules'], '/api/superadmin/modules');
   const loading = isLoading;
+  // #2872: `error` alone cannot tell "this read never answered" from "this read
+  // answered and then refused", and TanStack Query keeps `data` through the second —
+  // which is the state after a remount refetch past `staleTime` (30s) or a refused
+  // "Try again", since nothing here invalidates this key. The rows live in local
+  // state the page seeds once and never clears, so the refused reload hid a matrix
+  // that was still on screen behind "Failed to load the plan offerings" and dashed
+  // the four counts computed from it.
+  const failed = Boolean(error) && !data;
+  const stale = Boolean(error) && Boolean(data);
+  const reason = error?.message || 'no response from the server';
 
   // Seed the editable module list (with pricing→planAccess mapping) once loaded.
   useEffect(() => {
@@ -165,10 +175,10 @@ export default function SuperAdminModulesPage() {
       {/* Stats row */}
       <div className="grid grid-cols-4 gap-4">
         {[
-          { label: 'Total Modules', value: error ? '—' : modules.length, color: 'text-white' },
-          { label: 'Free', value: error ? '—' : modules.filter(m => m.planAccess?.free?.enabled).length, color: 'text-slate-400' },
-          { label: 'Starter', value: error ? '—' : modules.filter(m => m.planAccess?.starter?.enabled).length, color: 'text-blue-400' },
-          { label: 'Pro', value: error ? '—' : modules.filter(m => m.planAccess?.pro?.enabled).length, color: 'text-violet-400' },
+          { label: 'Total Modules', value: failed ? '—' : modules.length, color: 'text-white' },
+          { label: 'Free', value: failed ? '—' : modules.filter(m => m.planAccess?.free?.enabled).length, color: 'text-slate-400' },
+          { label: 'Starter', value: failed ? '—' : modules.filter(m => m.planAccess?.starter?.enabled).length, color: 'text-blue-400' },
+          { label: 'Pro', value: failed ? '—' : modules.filter(m => m.planAccess?.pro?.enabled).length, color: 'text-violet-400' },
         ].map(s => (
           <div key={s.label} className="rounded-xl border border-white/10 bg-white/5 p-4">
             <p className="text-xs text-white/40">{s.label}</p>
@@ -185,6 +195,13 @@ export default function SuperAdminModulesPage() {
         placeholder="Search modules..."
         className="w-full max-w-xs px-3 py-2 rounded-xl border border-white/10 bg-white/5 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-violet-500/50"
       />
+
+      {stale && (
+        <InlineErrorState
+          message={`Could not refresh, so the matrix below is the last read: ${reason}. What each plan offers on the server may have changed since this was fetched.`}
+          onRetry={refetch}
+        />
+      )}
 
       {loading ? (
         <div className="space-y-2">
@@ -208,14 +225,14 @@ export default function SuperAdminModulesPage() {
                 </tr>
               </thead>
               <tbody>
-                {error ? (
+                {failed ? (
                   <tr>
                     <td colSpan={PLANS.length + 3} className="p-4">
                       {/* #2829: the read failed, so nothing below it is known — the
                           two arms of the empty state both state a fact about what
                           each plan offers. */}
                       <InlineErrorState
-                        message={`Failed to load the plan offerings: ${error.message || 'no response from the server'}`}
+                        message={`Failed to load the plan offerings: ${reason}`}
                         onRetry={refetch}
                       />
                     </td>
