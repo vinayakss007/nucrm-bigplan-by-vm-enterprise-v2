@@ -80,6 +80,13 @@ export default function ConversionFunnelPage() {
   const stages: FunnelStage[] = json?.data ?? [];
   const total = json?.total ?? 0;
   const load = () => { refetch(); };
+  // #2872: the branch below keyed off `error` alone, which cannot tell a period that was never
+  // read from one whose last read is on screen while its refresh refused — and the Refresh button
+  // makes the second state one click away. An outage gets the banner; a refused refresh keeps the
+  // funnel and says it is the last read.
+  const failed = Boolean(error) && !json;
+  const stale = Boolean(error) && Boolean(json);
+  const reason = error?.message || 'no response from the server';
 
   const maxCount = Math.max(1, ...stages.map((s) => s.cumulativeCount));
 
@@ -122,13 +129,19 @@ export default function ConversionFunnelPage() {
         </div>
       </div>
 
+      {stale && (
+        <InlineErrorState
+          message={`Could not refresh this report, so the funnel below is the last read: ${reason}`}
+          onRetry={refetch}
+        />
+      )}
       {loading ? (
         <div className="flex items-center gap-2 text-sm text-muted-foreground py-8 justify-center">
           <Loader2 className="w-5 h-5 animate-spin" /> Loading report…
         </div>
-      ) : error ? (
+      ) : failed ? (
         <InlineErrorState
-          message={`Failed to load the conversion funnel: ${error.message || 'no response from the server'}`}
+          message={`Failed to load the conversion funnel: ${reason}`}
           onRetry={refetch}
         />
       ) : stages.length === 0 ? (

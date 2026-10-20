@@ -92,6 +92,13 @@ export default function CustomReportBuilder() {
   );
   const savedReports: SavedReport[] = savedData?.data ?? [];
   const loadSaved = () => queryClient.invalidateQueries({ queryKey: CUSTOM_REPORTS_QUERY });
+  // #2872: saving a report invalidates CUSTOM_REPORTS_QUERY, so "the read that fed this panel
+  // failed while its rows are still on screen" is the state right after the operator pressed
+  // Save. Keying the branch off `savedError` alone ate the panel's own list and turned the
+  // header's honest count into `—`.
+  const failed = Boolean(savedError) && !savedData;
+  const stale = Boolean(savedError) && Boolean(savedData);
+  const reason = savedError?.message || 'no response from the server';
 
   // Picking a type swaps the column picker, so the visible columns have to be
   // reseeded. As an effect keyed on reportType this also fired when a *saved*
@@ -225,16 +232,22 @@ export default function CustomReportBuilder() {
         <button onClick={() => setShowSaved(!showSaved)}
           aria-expanded={showSaved}
           className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-border hover:bg-accent text-xs font-medium transition-colors">
-          <Save className="w-3.5 h-3.5" />Saved Reports ({savedError ? '—' : savedReports.length})
+          <Save className="w-3.5 h-3.5" />Saved Reports ({failed ? '—' : savedReports.length})
         </button>
       </div>
 
       {showSaved && (
         <div className="admin-card p-4 space-y-2">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Saved Reports</p>
-          {savedError ? (
+          {stale && (
             <InlineErrorState
-              message={`Failed to load your saved reports: ${savedError.message || 'no response from the server'}`}
+              message={`Could not refresh, so the list below is the last read: ${reason}`}
+              onRetry={refetchSaved}
+            />
+          )}
+          {failed ? (
+            <InlineErrorState
+              message={`Failed to load your saved reports: ${reason}`}
               onRetry={refetchSaved}
             />
           ) : savedReports.length === 0 ? (
