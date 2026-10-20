@@ -8,6 +8,7 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import Link from 'next/link';
 import { ArrowLeft, Building2, Mail, Users, Calendar, Shield, Edit, Save, Loader2, ExternalLink } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -54,7 +55,7 @@ export default function TenantDetailPage() {
 
   // #1328: TanStack Query replaces fetch + useEffect + useState.
   const queryKey = ['superadmin', 'tenant', tenantId] as const;
-  const { data, isLoading, error } = useApiQuery<{ data?: Tenant }>(
+  const { data, isLoading, error, refetch } = useApiQuery<{ data?: Tenant }>(
     queryKey,
     `/api/superadmin/tenants/${tenantId}`,
     { enabled: !!tenantId, retry: false },
@@ -62,12 +63,21 @@ export default function TenantDetailPage() {
   const tenant: Tenant | null = data?.data ?? null;
   const loading = isLoading;
 
-  useEffect(() => {
-    if (error) {
-      const info = error.info as { error?: string } | undefined;
-      toast.error(info?.error || error.message || 'Failed to load tenant');
-    }
-  }, [error]);
+  // #2872: `saveMutation` invalidates this exact key, so the ordinary state right
+  // after a plan change, a status change or a saved note is "kept tenant + error
+  // flag set" — TanStack Query keeps `data` when the revalidation it triggers
+  // fails. Nothing on the screen said so: an effect toast fading in four seconds
+  // was the whole channel, and below it `if (!tenant)` claimed the tenant does not
+  // exist for a read that never got through at all. `failed` is that outage;
+  // `stale` keeps the fields that did load and says they are the last read.
+  const failed = Boolean(error) && !data;
+  const stale = Boolean(error) && Boolean(data);
+  const reason = error?.message || 'no response from the server';
+  // The tenant's own id is in the key, which makes a 404 a third state again: the
+  // request reached the server and the server answered that this id is not a
+  // tenant. That is a fact about the record, not a load failure, so it keeps
+  // saying "Tenant not found" instead of being reported as an outage.
+  const notFound = failed && error?.status === 404;
 
   // Seed the editable form once the tenant loads.
   useEffect(() => {
@@ -110,9 +120,26 @@ export default function TenantDetailPage() {
     );
   }
 
+  if (failed && !notFound) {
+    return (
+      <div className="space-y-4 max-w-4xl">
+        <Link href="/superadmin/tenants" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
+          <ArrowLeft className="w-4 h-4" /> Back to Tenants
+        </Link>
+        <InlineErrorState message={`Failed to load tenant: ${reason}`} onRetry={refetch} />
+      </div>
+    );
+  }
+
   if (!tenant) {
     return (
       <div className="space-y-4">
+        {stale && (
+          <InlineErrorState
+            message={`Could not refresh, so this page is the last read: ${reason}. A tenant you just created or restored may not be reflected here.`}
+            onRetry={refetch}
+          />
+        )}
         <Link href="/superadmin/tenants" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
           <ArrowLeft className="w-4 h-4" /> Back to Tenants
         </Link>
@@ -125,6 +152,12 @@ export default function TenantDetailPage() {
 
   return (
     <div className="space-y-6 max-w-4xl">
+      {stale && (
+        <InlineErrorState
+          message={`Could not refresh, so the tenant below is the last read: ${reason}. A plan, status or note you just saved may not be reflected here.`}
+          onRetry={refetch}
+        />
+      )}
       {/* Header */}
       <div className="flex items-center gap-4">
         <Link href="/superadmin/tenants" className="p-2 rounded-lg hover:bg-accent text-muted-foreground">
@@ -267,7 +300,9 @@ export default function TenantDetailPage() {
             placeholder="Internal notes about this tenant..."
           />
         ) : (
-          <p className="text-sm text-muted-foreground">{tenant.admin_notes || 'No notes'}</p>
+          <p className="text-sm text-muted-foreground">
+            {tenant.admin_notes || (stale ? 'No notes in the last read' : 'No notes')}
+          </p>
         )}
       </div>
 
