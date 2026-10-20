@@ -30,8 +30,6 @@ import { join } from 'node:path';
 
 /** URL → the issue carrying the missing handler. May only SHRINK, entry by entry. */
 const ALLOWLIST: Record<string, string> = {
-  '/api/superadmin/token-control/report/top-spenders':
-    '#2880: the spenders table has been GETting a handler that was never written, same shape as #2822',
   '/api/tenant/rbac/approval-rules':
     '#2597: the Approval Rules tab renders a list against an endpoint that does not exist',
 };

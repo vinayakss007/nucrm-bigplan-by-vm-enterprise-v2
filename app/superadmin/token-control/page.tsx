@@ -298,8 +298,10 @@ export default function SuperAdminTokenControl() {
               ))}
             </tbody>
           </table>
-          {/* #2823: "No spending data yet" is a claim about the tenants, and this
-              read 404s today because /report/top-spenders has no handler. */}
+          {/* #2823: "No spending data yet" is a claim about the tenants, so a read
+              that did not succeed says so instead of making it. (#2880 wrote the
+              handler this URL has been calling since #1328; before that the branch
+              below was the only thing this tab ever rendered on a real install.) */}
           {topTenants.length === 0 && (
             spendersQuery.error ? (
               <div role="alert" className="m-4 rounded-lg border border-red-800 bg-red-900/20 p-4 text-sm text-red-300">
