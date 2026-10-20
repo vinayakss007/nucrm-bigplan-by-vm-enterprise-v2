@@ -43,12 +43,17 @@ preprod database on 2026-10-04. The numbers they carry are reproducible by the c
 "How current is 'current'?" below.
 
 Two files are current by definition, being the implementation rather than a description of it:
-[`.github/workflows/ci.yml`](../.github/workflows/ci.yml) enforces **16** guards by alias —
-`guard:any-suppressions`, `guard:boundaries`, `guard:chain`, `guard:coords`, `guard:counters`, `guard:cron-lock`,
-`guard:csrf`, `guard:csv`, `guard:filesize`, `guard:migration-rls`, `guard:portal-rls-context`,
-`guard:portal-softdelete`, `guard:public-projection`, `guard:public-ratelimit`, `guard:rls`, `guard:schemas` — plus **2**
-invoked as direct `node` commands (`scripts/check-audit-baseline.mjs`, `scripts/check-semgrep-baseline.mjs`; measured
-2026-10-10, re-measured by this PR, which added `guard:cron-lock`. The list was 7 when this paragraph was first written).
+[`.github/workflows/ci.yml`](../.github/workflows/ci.yml) enforces **20** guards by alias —
+`guard:any-suppressions`, `guard:boundaries`, `guard:catch-empty`, `guard:chain`, `guard:coords`, `guard:counters`, `guard:cron-lock`,
+`guard:csrf`, `guard:csv`, `guard:field-permissions`, `guard:filesize`, `guard:migration-rls`, `guard:panel-error-state`,
+`guard:portal-rls-context`, `guard:portal-softdelete`, `guard:public-projection`, `guard:public-ratelimit`, `guard:raw-sql`,
+`guard:rls`, `guard:schemas` — plus **3** invoked as direct `node` commands (`check-audit-baseline.mjs`,
+`check-semgrep-baseline.mjs`, `check-env-coverage.mjs`). `package.json` defines **28** `guard:*` aliases in total, so
+**5 run on no workflow at all** — `guard:catalog-grants`, `guard:migration-redecl`, `guard:register-drift`,
+`guard:running-config`, `guard:vocab`. They are local commands (`npm run`), not tripwires; a push that breaks one is
+green. Measured 2026-10-19 against `package.json` and `.github/workflows/*.yml`; the paragraph said **16 + 2** when it
+was last measured on 2026-10-10, and the two additions since are `guard:panel-error-state` (`7893b2b0`, #2832) and
+`guard:catch-empty` (`4dbeeaea`, #2828). It said 7 when first written.
 [`scripts/migration-chain-baseline.json`](../scripts/migration-chain-baseline.json) holds the five
 baselined chain defects. `npm run db:verify-isolation` is **not** in CI — nothing runs it on a push.
 
