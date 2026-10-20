@@ -43,6 +43,19 @@ export default function TrashPage() {
   const items: TrashItem[] = data?.data ?? [];
   const load = () => queryClient.invalidateQueries({ queryKey: ['tenant', 'trash'] });
 
+  // #2872: `trashError` alone answered two different questions and got the second
+  // one wrong. TanStack Query keeps `data` when a revalidation of a view that
+  // already answered fails, and `load()` invalidates ['tenant','trash'] after every
+  // restore and every permanent delete — so a refused refresh handed the page back
+  // the tombstones it had already listed. Before, that read either kept its rows and
+  // said nothing (hiding that another user may have restored or purged one since) or,
+  // when the kept payload was empty, printed "Could not load the trash" as if the
+  // request had never answered. The distinction is what the operator acts on: a stale
+  // list is still a list they can Restore or Delete forever from, an outage is not.
+  const failed = Boolean(trashError) && !data;   // the read never answered → outage copy
+  const stale = Boolean(trashError) && Boolean(data); // answered before, refresh refused → keep rows
+  const reason = trashError?.message || 'no response from the server';
+
   const restoreMutation = useMutation({
     mutationFn: async (item: TrashItem) => {
       const res = await fetch('/api/tenant/trash', {
@@ -111,6 +124,19 @@ export default function TrashPage() {
         ))}
       </div>
 
+      {/* #2872: a refused refresh, not a missing read — the rows below are the answer
+          this view already gave. Restore (PATCH) re-reads the row by id + tenant +
+          deletedAt and 404s on one already gone (app/api/tenant/trash/route.ts:232-239),
+          and Delete forever hard-deletes and 404s the same way (route.ts:358-362), so a
+          stale row is refused server-side rather than guessed. The buttons therefore stay
+          attached; what the operator needs is to know which rows may already be gone. */}
+      {stale && (
+        <InlineErrorState
+          message={`Could not refresh, so the deleted items below are the last read: ${reason}. Anything restored or permanently purged elsewhere since this was fetched is still listed here, and its Restore and Delete forever buttons still act on what may already be gone — Delete forever is irreversible, so confirm the row before you click; the type counts above came from the same stale read.`}
+          onRetry={() => void refetch()}
+        />
+      )}
+
       {/* Items list */}
       {loading ? (
         <div className="admin-card divide-y divide-border animate-pulse">
@@ -122,10 +148,12 @@ export default function TrashPage() {
           ))}
         </div>
       ) : !filtered.length ? (
-        trashError && !items.length ? (
+        failed ? (
           // #2829: "Trash is empty" reads as "the retention sweep had nothing to
-          // purge". A failed read never looked at the tombstones. The filter tabs
-          // keep their own sentence — a miss there is honest, as on the KB page.
+          // purge". A read that never answered never looked at the tombstones. The
+          // filter tabs keep their own sentence — a miss there is honest, as on the
+          // KB page. Gated on `failed` now, not the bare flag: a kept-but-empty list
+          // is stale, and reports its caveat above rather than this outage sentence.
           <div className="admin-card p-5"><InlineErrorState message="Could not load the trash — this is a failed request, not an empty one." onRetry={() => void refetch()} /></div>
         ) : (
         <div className="admin-card py-16 text-center">
