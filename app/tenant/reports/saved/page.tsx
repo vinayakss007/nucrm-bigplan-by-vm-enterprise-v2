@@ -57,6 +57,13 @@ export default function SavedReportsPage() {
     '/api/tenant/reports/saved',
   );
   const reports: SavedReport[] = data?.data ?? [];
+  // #2872: delete and run both `reload()` this query, so a refused refresh is the ordinary state
+  // right after the operator acted — and the branch below keyed off `error` alone, which ate the
+  // whole list and left only "Failed to load saved reports". For a delete that is the worst
+  // outcome: the report just removed is gone from the screen for a reason the screen cannot give.
+  const failed = Boolean(error) && !data;
+  const stale = Boolean(error) && Boolean(data);
+  const reason = error?.message || 'no response from the server';
 
   const reload = () => queryClient.invalidateQueries({ queryKey: SAVED_REPORTS_QUERY });
 
@@ -152,9 +159,15 @@ export default function SavedReportsPage() {
         </div>
       )}
 
-      {error ? (
+      {stale && (
         <InlineErrorState
-          message={`Failed to load saved reports: ${error.message || 'no response from the server'}`}
+          message={`Could not refresh, so the list below is the last read: ${reason}. A report you just deleted may still appear here.`}
+          onRetry={refetch}
+        />
+      )}
+      {failed ? (
+        <InlineErrorState
+          message={`Failed to load saved reports: ${reason}`}
           onRetry={refetch}
         />
       ) : reports.length === 0 ? (
