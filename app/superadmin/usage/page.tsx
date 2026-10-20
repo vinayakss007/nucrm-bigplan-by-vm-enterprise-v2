@@ -55,6 +55,21 @@ export default function UsagePage() {
     '/api/superadmin/usage',
   );
 
+  // #2872: this read has two ways to not be current, and the page only knew one of
+  // them. `failed` is #2829's — nothing ever came back, so there is no fleet to
+  // describe. `stale` is the one the refresh button in the header produces on a page
+  // an operator sits on: the request is refused and TanStack keeps the payload it
+  // already has, so the table, the 80% warning and the growth series are all still
+  // on screen and every one of them is older than the operator thinks. `usageError`
+  // alone cannot tell those two apart, and the two arms that keyed off it got the
+  // refused refresh exactly wrong each way: the outage arm fired whenever a search
+  // emptied the kept rows, and the absence arm went silent on a read that had
+  // answered "no tenants" and then refused to refresh — so the fleet showed neither
+  // an absence the read established nor a failure it could not.
+  const failed = Boolean(usageError) && !data;
+  const stale = Boolean(usageError) && Boolean(data);
+  const reason = usageError?.message || 'no response from the server';
+
   const toggleSort = (col: typeof sortBy) => {
     if (sortBy === col) setSortDir(d => d==='desc'?'asc':'desc');
     else { setSortBy(col); setSortDir('desc'); }
@@ -95,6 +110,24 @@ export default function UsagePage() {
         </div>
         <button onClick={() => refetch()} className="p-2 rounded-lg border border-white/10 text-white/30 hover:text-white transition-colors"><RefreshCw className="w-3.5 h-3.5"/></button>
       </div>
+
+      {/* #2829's alert channel used to mean "no fleet was read at all", and the one
+          thing it never said was what the operator was looking at when a refresh was
+          refused. Same channel now, same shape as the other #2872 panels: the rows
+          stay, and the refusal is named.
+
+          The scope the banner describes in operator words lives here, not in the copy
+          (#2872 rule #3 — no source paths or status codes on screen):
+          app/api/superadmin/usage/route.ts:42 — WHERE status IN (active, trialing);
+          :44 — ORDER BY contact count DESC, LIMIT 100. So a tenant that left those
+          statuses, or that ranks below the newest 100 by contacts, is absent from this
+          read rather than cleared by it. */}
+      {stale && (
+        <InlineErrorState
+          message={`Could not refresh, so the organizations, their usage figures and the growth series below are the last read: ${reason}. A tenant that crossed 80% of its contact or user limit since this was fetched is missing from the warning below, a plan whose max moved is still measured against the old one, and every count on the rows is from before the refresh failed. This list only covers active and trialing organizations, and only the hundred with the most contacts, so a tenant that left those statuses since is absent here rather than cleared by it.`}
+          onRetry={() => void refetch()}
+        />
+      )}
 
       {/* Near limit alert */}
       {nearLimit.length > 0 && (
@@ -142,12 +175,17 @@ export default function UsagePage() {
           </tr></thead>
           <tbody>
             {loading && <tr><td colSpan={5} className="text-center py-8 text-white/30 text-sm">Loading...</td></tr>}
-            {!loading && usageError && !tenants.length && (
+            {!loading && failed && (
               // #2829: "No tenants found" is what the fleet table says when the
               // read failed too — the platform panel has no other tell.
               <tr><td colSpan={5} className="py-6 px-4"><InlineErrorState message="Could not load tenant usage — this is a failed request, not an empty fleet." onRetry={() => void refetch()} /></td></tr>
             )}
-            {!loading && !usageError && !tenants.length && <tr><td colSpan={5} className="text-center py-8 text-white/30 text-sm">No tenants found</td></tr>}
+            {/* #2872: this arm used to require `!usageError`, so a refused refresh of
+                a read that came back empty showed neither the rows (there are none)
+                nor the absence the read actually established. `!failed` is the honest
+                condition: the fleet is empty as far as this page knows, and the
+                caveat above says how old that knowledge is. */}
+            {!loading && !failed && !tenants.length && <tr><td colSpan={5} className="text-center py-8 text-white/30 text-sm">No tenants found</td></tr>}
             {tenants.map((t) => (
               <tr key={t.id} className="border-b border-white/5 last:border-0 hover:bg-white/[0.02] transition-colors">
                 <td className="px-4 py-3">

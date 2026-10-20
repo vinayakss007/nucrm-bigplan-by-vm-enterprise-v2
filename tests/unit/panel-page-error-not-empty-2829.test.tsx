@@ -298,7 +298,12 @@ describe('a failed panel read is reported as a failure (#2829)', () => {
     expect(screen.queryByText(/No deleted deals/)).toBeNull();
   });
 
-  it('usage: cached rows survive a failed refetch', () => {
+  it('usage: cached rows survive a failed refetch, and the refusal says so', () => {
+    // #2872 supersedes the second half of this assertion. It was written to pin
+    // "a refused refresh raises no error state", which is the silence the epic is
+    // closing: the rows must stay (still asserted below), but the operator has to
+    // be told they stayed. Same shape as the other #2872 panels — an alert above
+    // the kept rows, naming what the kept payload can no longer claim.
     registry.byUrl[USAGE] = {
       data: { tenantUsage: [usageTenant], growth: [] },
       error: new Error('Request failed (500)'),
@@ -307,7 +312,9 @@ describe('a failed panel read is reported as a failure (#2829)', () => {
     };
     mount(UsagePage);
     expect(screen.getByText('Northwind Trading')).toBeTruthy();
-    expect(screen.queryByRole('alert')).toBeNull();
+    const alert = screen.getByRole('alert');
+    expect(alert.textContent).toContain('the last read');
+    expect(screen.queryByText('No tenants found')).toBeNull();
   });
 
   it('rate limits: the warning stays up while the (empty) form still renders', () => {
