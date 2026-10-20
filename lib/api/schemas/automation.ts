@@ -11,7 +11,19 @@ import { requiredString, uuid, urlField } from './common';
 export const createAutomationSchema = z.object({
   name: requiredString.max(200),
   description: z.string().trim().max(1000).nullable().optional(),
-  event: requiredString.max(100),
+  // #2891: this key was `event`, a name no client of this endpoint has ever used — the dialog's
+  // form (`app/tenant/automation/page.tsx:82-87`), the SDK (`lib/integrations/sdk.ts:192-195`),
+  // the column (`drizzle/schema/automation.ts:20`) and the engine that matches on it all call it
+  // `trigger_type`. Requiring a key nobody sends made every New Automation a 400, while the routes
+  // read the stored value off the raw body and a caller that did send `event` got a 201 whose
+  // trigger fell through to the column default `'event'` — an active automation that can never fire.
+  //
+  // Deliberately a bounded string, not an enum: `automations.trigger_type` carries no CHECK, and
+  // the three vocabularies in play (the dialog's 14 labels, the engine's 12-member `TriggerEvent`,
+  // the 6 events actually emitted) disagree in both directions. Narrowing here would make a
+  // currently-offered option newly unsaveable, which is the decision #2806 still waits on.
+  trigger_type: requiredString.max(100),
+  trigger_config: z.record(z.string(), z.unknown()).optional().default({}),
   conditions: z.array(z.object({
     field: z.string(),
     operator: z.string(),
@@ -24,7 +36,22 @@ export const createAutomationSchema = z.object({
   is_active: z.boolean().optional().default(true),
 });
 
-export const updateAutomationSchema = createAutomationSchema.partial();
+/**
+ * #2891: `.partial()` makes a key optional, it does not undo a `.default()` — so
+ * `createAutomationSchema.partial()` parsed `PATCH /api/tenant/automations/[id]` bodies into
+ * objects *bigger* than the request: measured on `main`, `parse({ is_active: false })` →
+ * `{ conditions: [], is_active: false }` and `parse({})` → `{ conditions: [], is_active: true }`.
+ * The route wrote both back, so pausing an automation deleted its conditions and an empty PATCH
+ * re-activated a paused one. #2627 fixed this shape for deals; the defaults go here too, so an
+ * omitted key stays absent.
+ */
+export const updateAutomationSchema = createAutomationSchema
+  .extend({
+    trigger_config: createAutomationSchema.shape.trigger_config.removeDefault(),
+    conditions: createAutomationSchema.shape.conditions.removeDefault(),
+    is_active: createAutomationSchema.shape.is_active.removeDefault(),
+  })
+  .partial();
 
 // ── Workflow schemas ──
 export const createWorkflowSchema = z.object({

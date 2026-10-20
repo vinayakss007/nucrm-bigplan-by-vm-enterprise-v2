@@ -93,20 +93,23 @@ export const POST = withApiRoute(async (req: NextRequest) => {
     const overLimit = await checkLimit(ctx, 'automations');
     if (overLimit) return overLimit;
 
-    const body = await readJsonBody(req);
-    const validated = validateBody(createAutomationSchema, body);
+    const rawBody = await readJsonBody(req);
+    const validated = validateBody(createAutomationSchema, rawBody);
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;
-    const trigger_type = body.trigger_type;
-    const trigger_config = body.trigger_config || {};
 
+    // #2891: the trigger used to be read off the raw body here, outside the schema that
+    // supposedly guarded it, because the schema called the field `event` while the column and
+    // every client called it `trigger_type`. The raw read is gone: what reaches the column is
+    // the value `validateBody` just approved, `trigger_config` included, so a non-object
+    // trigger config is a 400 here instead of a document for the jsonb CHECK to choke on.
     const [newAutomation] = await db.insert(automations)
       .values({
         tenantId: ctx.tenantId,
         name: v.name,
         description: v.description?.trim() || null,
-        triggerType: trigger_type,
-        triggerConfig: trigger_config,
+        triggerType: v.trigger_type,
+        triggerConfig: v.trigger_config,
         actions: v.actions,
         conditions: v.conditions || [],
         isActive: v.is_active,

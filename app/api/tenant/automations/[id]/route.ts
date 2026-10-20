@@ -117,11 +117,16 @@ export const PATCH = withApiRoute(async (req: NextRequest,
       updatedAt: new Date(),
     };
 
+    // #2891: `trigger_type` and `trigger_config` were the only two fields read off `rawBody`,
+    // i.e. the only two written without passing the schema — and both gates now read the
+    // validated object, because `updateAutomationSchema` stopped synthesising create defaults
+    // for keys the client never sent. `rawBody` stays for `expectedUpdatedAt`, which guards
+    // rather than persists.
     if (body.name !== undefined) updateData['name'] = body.name;
     if (body.description !== undefined) updateData['description'] = body.description;
     if (body.is_active !== undefined) updateData['isActive'] = body.is_active;
-    if (rawBody.trigger_type !== undefined) updateData['triggerType'] = rawBody.trigger_type;
-    if (rawBody.trigger_config !== undefined) updateData['triggerConfig'] = rawBody.trigger_config;
+    if (body.trigger_type !== undefined) updateData['triggerType'] = body.trigger_type;
+    if (body.trigger_config !== undefined) updateData['triggerConfig'] = body.trigger_config;
     if (body.actions !== undefined) updateData['actions'] = body.actions;
     if (body.conditions !== undefined) updateData['conditions'] = body.conditions;
 
