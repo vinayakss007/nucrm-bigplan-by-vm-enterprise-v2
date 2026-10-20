@@ -66,6 +66,14 @@ export default function WebhooksPage() {
     '/api/tenant/webhooks',
   );
   const webhooks = webhooksData?.data ?? [];
+  // #2872: this branched on `webhooksError` alone, and create / edit / the
+  // `is_active` toggle / delete / test all invalidate the key — so the state after
+  // pressing Toggle was the roster vanishing behind an outage banner, with a signing
+  // secret in `secretVisible` (shown once, by design) gone with it. Never-read is the
+  // outage; read-then-refused keeps the rows and says they are the last read.
+  const failed = Boolean(webhooksError) && !webhooksData;
+  const stale = Boolean(webhooksError) && Boolean(webhooksData);
+  const reason = webhooksError?.message || 'no response from the server';
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: WEBHOOKS_QUERY });
 
@@ -333,9 +341,15 @@ export default function WebhooksPage() {
       )}
 
       {/* Webhook list */}
+      {stale && (
+        <InlineErrorState
+          message={`Could not refresh the webhook roster, so the endpoints below are the last read: ${reason}`}
+          onRetry={refetchWebhooks}
+        />
+      )}
       {loading ? [...Array(2)].map((_,i) => <div key={i} className="h-20 bg-muted rounded-2xl animate-pulse" />) :
-      webhooksError ? (
-        <InlineErrorState message={`Failed to load your webhooks: ${webhooksError.message}`} onRetry={refetchWebhooks} />
+      failed ? (
+        <InlineErrorState message={`Failed to load your webhooks: ${reason}`} onRetry={refetchWebhooks} />
       ) : webhooks.length === 0 ? (
         <div className="text-center py-12 border border-dashed border-border rounded-2xl">
           <Globe className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
