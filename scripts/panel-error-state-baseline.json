@@ -1,8 +1,4 @@
 {
-  "_comment": "Panels that still print a 'there are none' sentence when the read failed (#2829). Each entry names the issue carrying it and which of the two shapes the page has: one that destructures no `error`, or one that binds it and routes it to a toast that fades while the sentence stays. The binding spelling does not matter: a page that keeps the whole result object (`const q = useApiQuery(...)`) is judged on whether it reads `q.error`, which is how four super-admin panels that the first pass counted as clean were found. The list may only SHRINK: fix the page, delete its entry, and guard:panel-error-state turns the next one red.",
-  "files": {
-    "app/tenant/chat/page.tsx": "#2829: prints 'No sessions found' for a failed read — destructures no `error` at all",
-    "app/tenant/emails/page.tsx": "#2829: prints 'No emails sent' for a failed read — destructures no `error` at all",
-    "app/tenant/pipelines/page.tsx": "#2829: prints 'No pipelines yet' for a failed read — binds `error` and toasts it, then prints the sentence anyway"
-  }
+  "_comment": "Panels that still print a 'there are none' sentence when the read failed (#2829). Each entry names the issue carrying it and which of the two shapes the page has: one that destructures no `error`, or one that binds it and routes it to a toast that fades while the sentence stays. The binding spelling does not matter: a page that keeps the whole result object (`const q = useApiQuery(...)`) is judged on whether it reads `q.error`, which is how four super-admin panels that the first pass counted as clean were found. The list may only SHRINK: fix the page, delete its entry, and guard:panel-error-state turns the next one red.  EMPTY SINCE #2829'S LAST SLICE — chat, emails and pipelines were the three left, and each was fixed by giving it the shape the guard asks for rather than by arguing its way off the list. An empty file is not an off switch: with no baseline, EVERY offender is novel, so the screen is now stricter than it has ever been.",
+  "files": {}
 }

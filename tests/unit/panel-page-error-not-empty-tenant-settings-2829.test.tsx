@@ -590,17 +590,24 @@ describe('the guard still ratchets, and this slice decays honestly', () => {
     }
   });
 
-  it('keeps pages nobody is fixing in the list, so an empty sweep cannot read as success', () => {
+  it('keeps the list bounded, so an empty sweep still cannot read as success', () => {
     // The bound is a CEILING on purpose: an equality here goes false every time another slice
     // honestly fixes a panel — #2839 is in review with eight more of them.
     const files = doc().files;
     expect(Object.keys(files).length).toBeLessThanOrEqual(32);
-    expect(files['app/tenant/chat/page.tsx']).toBeTruthy();
-    expect(files['app/tenant/emails/page.tsx'], 'the documented #1328 tradeoff stays allowlisted').toBeTruthy();
-    expect(files['app/tenant/pipelines/page.tsx']).toBeTruthy();
     for (const [file, note] of Object.entries(files)) {
       expect(note, `${file} is allowlisted with no reason attached`).toContain('#2829');
     }
+    // This case used to prove itself by naming `chat`, `emails` and `pipelines` as still owed.
+    // #2829's last slice fixed all three, so the honest version of the same proof is that the
+    // guard runs clean over an EMPTY allowlist and still says so with a number — and that a page
+    // joining the class is novel, which is what `panel-page-error-not-empty-last-slice-2829`
+    // re-lights by rewinding those three files.
+    for (const done of ['chat', 'emails', 'pipelines']) {
+      expect(files[`app/tenant/${done}/page.tsx`], `${done} was fixed; it must not stay allowlisted`).toBeUndefined();
+    }
+    const res = spawnSync('node', [SCRIPT], { cwd: ROOT, encoding: 'utf8' });
+    expect(res.stdout, res.stdout + res.stderr).toMatch(/OK — \d+ panel\(s\)/);
   });
 
   it('does not push a fixed page over a size ceiling', () => {

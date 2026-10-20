@@ -10,7 +10,6 @@
   "app/superadmin/templates/[id]/page.tsx": 564,
   "app/superadmin/tenants/page.tsx": 854,
   "app/tenant/calendar/page.tsx": 537,
-  "app/tenant/pipelines/page.tsx": 502,
   "app/tenant/services/page.tsx": 599,
   "app/tenant/settings/backup/page.tsx": 573,
   "app/tenant/settings/billing/subscription/page.tsx": 592,

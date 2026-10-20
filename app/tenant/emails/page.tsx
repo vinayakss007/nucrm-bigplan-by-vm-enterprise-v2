@@ -8,6 +8,7 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import { Button } from '@/components/ui/button';
 import toast from 'react-hot-toast';
 import { Plus, Mail, Send } from 'lucide-react';
@@ -33,10 +34,14 @@ export default function EmailsPage() {
   const [showCompose, setShowCompose] = useState(false);
   const [form, setForm] = useState({ to: '', subject: '', body: '' });
 
-  // #1328: list via TanStack Query. The tracking endpoint may 404 on older
-  // deploys; treat any error as an empty list (retry disabled) to preserve the
-  // previous behaviour.
-  const { data, isLoading: loading } = useApiQuery<EmailsResponse | EmailRecord[]>(
+  // #1328: list via TanStack Query. What this call used to do with its failure was decided
+  // by a comment: "the tracking endpoint may 404 on older deploys; treat any error as an
+  // empty list". `app/api/tenant/email/tracking/route.ts` is not older-deploy territory any
+  // more — it answers today, and `api-url-has-handler-2822` fails CI if a page ever points
+  // at a URL with nothing behind it. So the only way this read comes back empty-handed is a
+  // live refusal, and "No emails sent yet" is not a fact the page is entitled to state on
+  // the strength of one (#2829).
+  const { data, isLoading: loading, error: emailsError, refetch: refetchEmails } = useApiQuery<EmailsResponse | EmailRecord[]>(
     EMAILS_QUERY,
     '/api/tenant/email/tracking',
     { retry: false },
@@ -44,6 +49,12 @@ export default function EmailsPage() {
   const emails: EmailRecord[] = Array.isArray(data)
     ? data
     : data?.data ?? data?.emails ?? [];
+  // #2872's two halves: a read that never arrived, and a refresh that refused while the
+  // rows it was refreshing stayed in the cache. Sending a message invalidates EMAILS_QUERY,
+  // so the second is the state the page is in on ordinary use.
+  const failed = Boolean(emailsError) && !data;
+  const stale = Boolean(emailsError) && Boolean(data);
+  const reason = emailsError?.message || 'no response from the server';
 
   const sendEmail = useMutation({
     mutationFn: async () => {
@@ -94,11 +105,21 @@ export default function EmailsPage() {
         </div>
       )}
 
+      {stale && (
+        <InlineErrorState
+          message={`Could not refresh this list, so what is shown below is the last read: ${reason}. A message you just sent may not appear yet.`}
+          onRetry={refetchEmails}
+        />
+      )}
       {emails.length === 0 ? (
-        <div className="text-center py-12 text-muted-foreground">
-          <Mail className="w-12 h-12 mx-auto mb-4 opacity-50" />
-          <p>No emails sent yet. Compose your first email above.</p>
-        </div>
+        failed ? (
+          <InlineErrorState message={`Failed to load your sent mail: ${reason}`} onRetry={refetchEmails} />
+        ) : (
+          <div className="text-center py-12 text-muted-foreground">
+            <Mail className="w-12 h-12 mx-auto mb-4 opacity-50" />
+            <p>No emails sent yet. Compose your first email above.</p>
+          </div>
+        )
       ) : (
         <div className="border rounded-lg overflow-x-auto">
           <table className="w-full min-w-[560px]">
