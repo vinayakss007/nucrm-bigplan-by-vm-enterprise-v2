@@ -75,12 +75,28 @@ function OrdersPageInner() {
   const orders: Order[] = useMemo(() => ordersData?.orders ?? [], [ordersData]);
   useEffect(() => { if (ordersError) toast.error('Failed to load orders'); }, [ordersError]);
 
-  const { data: contactsData, error: contactsError } = useApiQuery<{ contacts?: Contact[] }>(
+  // #2872: create invalidates ORDERS_QUERY, so the error that reaches this page is usually a
+  // failed *refresh* of rows that are still on screen. `ordersError` alone cannot tell the two
+  // apart, and the list branch treated both as an outage — deleting the rows the operator was
+  // working on, one second after they saved an order.
+  const failed = Boolean(ordersError) && !ordersData;
+  const stale = Boolean(ordersError) && Boolean(ordersData);
+  const reason = ordersError?.message || 'no response from the server';
+
+  const { data: contactsData, error: contactsError, refetch: refetchContacts } = useApiQuery<{ contacts?: Contact[] }>(
     ORDER_CONTACTS_QUERY,
     '/api/tenant/contacts',
   );
   const contacts: Contact[] = useMemo(() => contactsData?.contacts ?? [], [contactsData]);
   useEffect(() => { if (contactsError) toast.error('Failed to load contacts'); }, [contactsError]);
+
+  // The contacts read is the secondary one, which guard:panel-error-state cannot see at all:
+  // it feeds getContactName (so every row's Contact column falls back to '-') and the Contact
+  // filter (so it offers nobody). Same three states, because "no contacts" and "contacts
+  // unread" are different facts about the tenant.
+  const contactsFailed = Boolean(contactsError) && !contactsData;
+  const contactsStale = Boolean(contactsError) && Boolean(contactsData);
+  const contactsReason = contactsError?.message || 'no response from the server';
 
   const createOrder = useMutation({
     mutationFn: async () => {
@@ -166,14 +182,16 @@ function OrdersPageInner() {
       </div>
 
       {/* Stats — every number here is computed from the list, so a failed read would report
-          this tenant's orders and revenue as zero (#2829). Unread renders unavailable, not 0. */}
+          this tenant's orders and revenue as zero (#2829). Unread renders unavailable, not 0.
+          #2872: the dash is for an unread list only — a failed refresh still has the rows, and
+          printing — above rows we are also counting contradicts the page itself. */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         {[
-          { label: 'Total', value: ordersError ? '—' : orders.length, color: '' },
-          { label: 'Processing', value: ordersError ? '—' : orders.filter(o => o.status === 'processing').length, color: 'text-indigo-600' },
-          { label: 'Shipped', value: ordersError ? '—' : orders.filter(o => o.status === 'shipped').length, color: 'text-violet-600' },
-          { label: 'Delivered', value: ordersError ? '—' : orders.filter(o => o.status === 'delivered').length, color: 'text-green-600' },
-          { label: 'Revenue', value: ordersError ? '—' : `$${totalRevenue}`, color: 'text-emerald-600' },
+          { label: 'Total', value: failed ? '—' : orders.length, color: '' },
+          { label: 'Processing', value: failed ? '—' : orders.filter(o => o.status === 'processing').length, color: 'text-indigo-600' },
+          { label: 'Shipped', value: failed ? '—' : orders.filter(o => o.status === 'shipped').length, color: 'text-violet-600' },
+          { label: 'Delivered', value: failed ? '—' : orders.filter(o => o.status === 'delivered').length, color: 'text-green-600' },
+          { label: 'Revenue', value: failed ? '—' : `$${totalRevenue}`, color: 'text-emerald-600' },
         ].map(s => (
           <div key={s.label} className="admin-card p-3">
             <p className="text-xs text-muted-foreground">{s.label}</p>
@@ -209,15 +227,43 @@ function OrdersPageInner() {
         </div>
       </div>
 
+      {contactsFailed ? (
+        // #2872: the guard cannot see a secondary read. This one is invisible in a worse way
+        // than a missing list — getContactName falls back to '-' for every row and the Contact
+        // filter offers nobody, so the page looks like orders with no contact on file.
+        <InlineErrorState
+          message={`Failed to load contacts: ${contactsReason} — the Contact column reads “-” and the Contact filter has nobody to offer, which is not the same as these orders having no contact.`}
+          onRetry={refetchContacts}
+        />
+      ) : contactsStale ? (
+        <InlineErrorState
+          message={`Could not refresh the contacts, so the Contact column and filter are working from the last read: ${contactsReason}`}
+          onRetry={refetchContacts}
+        />
+      ) : null}
+
       {/* Table */}
+      {stale && (
+        <InlineErrorState
+          className="mb-1.5"
+          message={`Could not refresh the orders, so the rows below are the last read: ${reason}`}
+          onRetry={refetchOrders}
+        />
+      )}
       {loading ? (
         <div className="flex items-center justify-center py-12 text-muted-foreground"><Loader2 className="w-5 h-5 animate-spin mr-2" />Loading orders...</div>
-      ) : ordersError ? (
-        <InlineErrorState message={`Failed to load orders: ${ordersError.message}`} onRetry={refetchOrders} />
+      ) : failed ? (
+        <InlineErrorState message={`Failed to load orders: ${reason}`} onRetry={refetchOrders} />
       ) : filtered.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground">
           <Package className="w-10 h-10 mx-auto mb-3 text-muted-foreground/30" />
-          <p className="text-sm font-medium">No orders found</p>
+          {orders.length > 0 ? (
+            // #2872: the read returned rows and the search or filters dropped them. "No orders
+            // found" describes a tenant with no orders, which the read just disproved.
+            <p className="text-sm font-medium">No order matches this search — the read returned {orders.length}</p>
+          ) : (
+            <p className="text-sm font-medium">No orders found</p>
+          )}
         </div>
       ) : (
         <div className="admin-card overflow-hidden">
@@ -299,13 +345,25 @@ function OrdersPageInner() {
             <form onSubmit={handleSubmit} className="p-4 space-y-4">
               <div>
                 <label className="block text-sm font-medium mb-1">Contact</label>
-                <select value={form.contactId} onChange={(e) => setForm({ ...form, contactId: e.target.value })}
-                  className="w-full px-3 py-2 border border-border rounded-lg bg-card text-sm">
-                  <option value="">Select contact...</option>
-                  {contacts.map(c => (
-                    <option key={c.id} value={c.id}>{c.firstName} {c.lastName} {c.email ? `(${c.email})` : ''}</option>
-                  ))}
-                </select>
+                {contactsFailed ? (
+                  <InlineErrorState message={`Failed to load contacts, so there is nobody to pick from: ${contactsReason}. That is not the same as the tenant having no contacts saved.`} onRetry={refetchContacts} />
+                ) : (
+                  <>
+                    {contactsStale && (
+                      <InlineErrorState className="mb-1.5" message={`Could not refresh the contacts, so the names below are the last read: ${contactsReason}`} onRetry={refetchContacts} />
+                    )}
+                    <select value={form.contactId} onChange={(e) => setForm({ ...form, contactId: e.target.value })}
+                      className="w-full px-3 py-2 border border-border rounded-lg bg-card text-sm">
+                      <option value="">Select contact...</option>
+                      {contacts.map(c => (
+                        <option key={c.id} value={c.id}>{c.firstName} {c.lastName} {c.email ? `(${c.email})` : ''}</option>
+                      ))}
+                    </select>
+                    {contacts.length === 0 && (
+                      <p className="text-xs text-muted-foreground mt-1">No contacts saved yet — the list read back empty.</p>
+                    )}
+                  </>
+                )}
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
