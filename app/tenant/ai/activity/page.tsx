@@ -105,7 +105,15 @@ export default function AIActivityPage() {
     AI_ACTIVITY_KEY,
     `/api/tenant/ai/activity?${qs}`,
   );
-  const queryErrorMsg = queryError ? (queryError.message || 'Failed to load') : null;
+  // #2872: `queryError` alone cannot tell "this view never answered" from "this view
+  // answered and then refused", and TanStack Query keeps `data` through the second —
+  // reachable from the Refresh button and the remount refetch past `staleTime`. The
+  // table kept rendering (its rows are not gated), so the page dashed three of the
+  // five 30-day stats that are computed over exactly the payload it was still showing,
+  // and printed "Failed to load AI activity" above them.
+  const failed = Boolean(queryError) && !data;
+  const stale = Boolean(queryError) && Boolean(data);
+  const reason = queryError?.message || 'no response from the server';
   const load = () => refetch();
 
   const rateMutation = useMutation({
@@ -158,14 +166,21 @@ export default function AIActivityPage() {
         </button>
       </div>
 
+      {stale && (
+        <InlineErrorState
+          message={`Could not refresh, so these figures and the entries below are the last read: ${reason}. A call made since this was fetched is not in either.`}
+          onRetry={refetch}
+        />
+      )}
+
       {/* 30-day summary */}
       {/* Both are true and only one is on screen: a tenant with no AI calls reads `0`, a
           tenant whose read was refused reads `—`. Summing an unread array to zero is how a
           billing month silently becomes a free one (#2829). */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        <Stat label="Calls (30d)" value={queryError ? '—' : summary?.total_calls ?? 0} />
-        <Stat label="Tokens (30d)" value={queryError ? '—' : (summary?.total_tokens ?? 0).toLocaleString()} />
-        <Stat label="Cost (30d)" value={queryError ? '—' : fmtCost(summary?.total_cost_cents ?? 0)} />
+        <Stat label="Calls (30d)" value={failed ? '—' : summary?.total_calls ?? 0} />
+        <Stat label="Tokens (30d)" value={failed ? '—' : (summary?.total_tokens ?? 0).toLocaleString()} />
+        <Stat label="Cost (30d)" value={failed ? '—' : fmtCost(summary?.total_cost_cents ?? 0)} />
         <Stat label="Success rate" value={
           summary && summary.total_calls > 0
             ? `${Math.round((summary.success_calls / summary.total_calls) * 100)}%`
@@ -195,14 +210,14 @@ export default function AIActivityPage() {
         )}
       </div>
 
-      {(error || queryError) && (
+      {(error || failed) && (
         <InlineErrorState
           message={
-            queryError
-              ? `Failed to load AI activity: ${queryErrorMsg}`
+            failed
+              ? `Failed to load AI activity: ${reason}`
               : `Could not save your rating: ${error}`
           }
-          onRetry={queryError ? load : undefined}
+          onRetry={failed ? load : undefined}
         />
       )}
 
@@ -230,7 +245,7 @@ export default function AIActivityPage() {
                   <Sparkles className="w-5 h-5 mx-auto mb-2 animate-pulse" />Loading…
                 </td></tr>
               )}
-              {!loading && !queryError && data?.rows.length === 0 && (
+              {!loading && !failed && data?.rows.length === 0 && (
                 <tr><td colSpan={10} className="px-3 py-12 text-center text-muted-foreground">
                   No AI activity yet. Try the AI Hub to make your first call.
                 </td></tr>

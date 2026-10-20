@@ -47,7 +47,15 @@ export default function AILeadScoringPage() {
     '/api/tenant/leads?sort_by=score&sort_order=DESC&limit=100',
   );
   const leads: Lead[] = useMemo(() => data?.data ?? data?.leads ?? [], [data]);
-  const queryErrorMsg = queryError ? (queryError.message || 'Failed to load') : null;
+  // #2872: `queryError` alone cannot tell "this read never answered" from "this read
+  // answered and then refused", and TanStack Query keeps `data` through the second —
+  // which is the ordinary path here, since both `runScoringMutation` and
+  // `recomputeMutation` invalidate this key on success. The queue kept rendering (its
+  // rows are not gated), so the page dashed three counters that are reductions over
+  // those very rows and printed "Failed to load your scored leads" above them.
+  const failed = Boolean(queryError) && !data;
+  const stale = Boolean(queryError) && Boolean(data);
+  const reason = queryError?.message || 'no response from the server';
   const stats = useMemo(() => {
     if (leads.length === 0) return { total: 0, avg: 0, high: 0 };
     const avg = Math.round(leads.reduce((acc, l) => acc + (l.score ?? 0), 0) / leads.length);
@@ -122,14 +130,20 @@ export default function AILeadScoringPage() {
         </div>
       </div>
 
-      {(error || queryError) && (
+      {(error || failed) && (
         <InlineErrorState
           message={
-            queryError
-              ? `Failed to load your scored leads: ${queryErrorMsg}`
+            failed
+              ? `Failed to load your scored leads: ${reason}`
               : `Could not update the scores: ${error}`
           }
-          onRetry={queryError ? refetch : undefined}
+          onRetry={failed ? refetch : undefined}
+        />
+      )}
+      {stale && (
+        <InlineErrorState
+          message={`Could not refresh, so the ranking below is the last read: ${reason}. A lead scored since this was fetched is not ranked here.`}
+          onRetry={refetch}
         />
       )}
 
@@ -137,9 +151,9 @@ export default function AILeadScoringPage() {
       {/* Every one of these is a reduction over the array the list below renders, so a refused
           read ranked the queue at zero rather than not at all (#2829). */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <StatCard icon={TrendingUp} label="Avg. Score" value={queryError ? '—' : stats.avg} sub="Leads scored" />
-        <StatCard icon={Sparkles} label="High Intent" value={queryError ? '—' : stats.high} sub="Score 80+" />
-        <StatCard icon={History} label="Scored Leads" value={queryError ? '—' : stats.total} sub="Total ranked" />
+        <StatCard icon={TrendingUp} label="Avg. Score" value={failed ? '—' : stats.avg} sub="Leads scored" />
+        <StatCard icon={Sparkles} label="High Intent" value={failed ? '—' : stats.high} sub="Score 80+" />
+        <StatCard icon={History} label="Scored Leads" value={failed ? '—' : stats.total} sub="Total ranked" />
       </div>
 
       <div className="grid grid-cols-1 gap-4">
@@ -150,7 +164,7 @@ export default function AILeadScoringPage() {
           </div>
         )}
 
-        {!loading && !queryError && leads.length === 0 && (
+        {!loading && !failed && leads.length === 0 && (
           <div className="py-20 text-center border border-dashed border-border rounded-2xl bg-muted/20">
             <Target className="w-10 h-10 mx-auto text-muted-foreground/30 mb-3" />
             <p className="text-muted-foreground">No leads found to score.</p>
