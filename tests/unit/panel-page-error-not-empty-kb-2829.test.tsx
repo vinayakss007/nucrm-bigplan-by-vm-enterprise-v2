@@ -31,10 +31,16 @@
  *
  * What is pinned here: each read's own banner names that read; the false-empty sentence
  * is unreachable while it is failing; "Try again" re-runs *that* read and not the other
- * one; the failure is announced from the banner rather than the render body. And what is
- * deliberately left alone: the filtered-empty case — a search or a category chip that
- * matches nothing still legitimately prints "No articles found", so that branch is
- * asserted as still working, not converted.
+ * one; the failure is announced from the banner rather than the render body.
+ *
+ * What this slice deliberately did not do, and #2869 picked up: the filtered-empty case —
+ * a search or a chip that matches nothing over a list it DID read — still printed "No
+ * articles found", and one case below asserted that wording as stable. A statement about
+ * the workspace that the read does not support is the same defect as the ones above, just
+ * rarer, so it moved to "No published articles match this search or category" and that
+ * case moved with it. The `failed` / `stale` split, the "shown unfiltered" claim made while
+ * `activeCategory` was still filtering, and the create dialog's one-option dropdown are all
+ * in #2869 too.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
@@ -134,7 +140,7 @@ describe('the knowledge base banners the read that refused it (#2829)', () => {
       Page: KBPage,
       failUrl: ARTICLES,
       withFailure: { [ARTICLES]: failed('Request failed (502)'), [CATEGORIES]: ok(categoryRows) },
-      sentence: /No articles found/,
+      sentence: /No published articles yet/,
       phrase: /knowledge base/i,
       empty: { [ARTICLES]: ok({ data: [] }), [CATEGORIES]: ok(categoryRows) },
       rows: { [ARTICLES]: ok(articleRows), [CATEGORIES]: ok(categoryRows) },
@@ -207,7 +213,7 @@ describe('kb keeps its two reads apart (#2829)', () => {
     registry.byUrl = { [ARTICLES]: failed('Request failed (502)'), [CATEGORIES]: ok(categoryRows) };
     wrapped(<KBPage />);
     expect(alerts()).toMatch(/knowledge base/i);
-    expect(screen.queryByText('No articles found')).toBeNull();
+    expect(screen.queryByText(/No published articles/)).toBeNull();
     // the chips come from the healthy read, so the screen is still navigable
     expect(screen.getByRole('button', { name: 'All' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Billing' })).toBeTruthy();
@@ -219,7 +225,7 @@ describe('kb keeps its two reads apart (#2829)', () => {
     expect(alerts()).toMatch(/categories/i);
     expect(alerts()).toMatch(/unfiltered/i);
     expect(screen.queryAllByText(/Reset a user password/).length).toBeGreaterThan(0);
-    expect(screen.queryByText('No articles found')).toBeNull();
+    expect(screen.queryByText(/No published articles/)).toBeNull();
     // the chips themselves are gone: they would be an empty row of nothing to click
     expect(screen.queryByRole('button', { name: 'Billing' })).toBeNull();
   });
@@ -240,11 +246,15 @@ describe('kb keeps its two reads apart (#2829)', () => {
     expect(registry.byUrl[ARTICLES].refetch).toHaveBeenCalled();
   });
 
-  it('still calls a search that matches nothing "No articles found"', () => {
+  it('calls a search that matches nothing a miss, not an empty knowledge base', () => {
+    // #2863 shipped this as "No articles found" and asserted it on purpose. #2869 changed
+    // it: the read answered, and it answered with articles — the sentence the page prints
+    // has to be about the filter, or it tells the operator their knowledge base is empty
+    // when the box they typed in is the narrow thing.
     registry.byUrl = { [ARTICLES]: ok(articleRows), [CATEGORIES]: ok(categoryRows) };
     wrapped(<KBPage />);
     fireEvent.change(screen.getByPlaceholderText(/search articles/i), { target: { value: 'zzz-nothing' } });
-    expect(screen.getByText('No articles found')).toBeTruthy();
+    expect(screen.getByText(/No published articles match this search or category/i)).toBeTruthy();
     expect(alerts(), 'a search with no matches is not an outage').toBe('');
   });
 
