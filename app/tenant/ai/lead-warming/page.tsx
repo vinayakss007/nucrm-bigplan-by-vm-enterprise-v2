@@ -100,6 +100,24 @@ export default function LeadWarmingPage() {
   const campaigns: Campaign[] = campaignsData?.data ?? [];
   const loading = statsLoading || repliesLoading || campaignsLoading;
 
+  // #2872: three reads, each branched on its own error flag alone. TanStack Query keeps
+  // `data` when a revalidation of a read that already succeeded fails, so pausing or
+  // archiving a campaign — both of which call `loadData()`, which invalidates the whole
+  // `['tenant','lead-warming']` prefix and therefore reloads all three — hid the six
+  // stat cards, dashed the two tab counters over the lists still in hand, and took the
+  // intent pills away, whose counts are `replies.length` reduced by intent.
+  // `filter` is client-side (not part of any key), so unlike SMS there is no view here
+  // that can be "never answered" while another one is fine.
+  const statsFailed = Boolean(statsError) && !statsData;
+  const statsStale = Boolean(statsError) && Boolean(statsData);
+  const statsReason = statsError?.message || 'no response from the server';
+  const campaignsFailed = Boolean(campaignsError) && !campaignsData;
+  const campaignsStale = Boolean(campaignsError) && Boolean(campaignsData);
+  const campaignsReason = campaignsError?.message || 'no response from the server';
+  const repliesFailed = Boolean(repliesError) && !repliesData;
+  const repliesStale = Boolean(repliesError) && Boolean(repliesData);
+  const repliesReason = repliesError?.message || 'no response from the server';
+
   const loadData = () => {
     queryClient.invalidateQueries({ queryKey: ['tenant', 'lead-warming'] });
   };
@@ -149,11 +167,17 @@ export default function LeadWarmingPage() {
       </div>
 
       {/* Stats grid */}
-      {statsError ? (
+      {statsStale && (
+        <InlineErrorState
+          message={`Could not refresh, so the six figures below are the last read: ${statsReason}. A reply that arrived since this was fetched is not counted in them.`}
+          onRetry={refetchStats}
+        />
+      )}
+      {statsFailed ? (
         // Hiding the grid would be the polite version of the same lie: six numbers about
         // how the warmings are going, none of them measured (#2829).
         <InlineErrorState
-          message={`Failed to load your warming stats: ${statsError.message || 'no response from the server'}`}
+          message={`Failed to load your warming stats: ${statsReason}`}
           onRetry={refetchStats}
         />
       ) : stats && (
@@ -176,7 +200,7 @@ export default function LeadWarmingPage() {
             tab === 'campaigns' ? 'border-violet-500 text-violet-700' : 'border-transparent text-muted-foreground hover:text-foreground',
           )}
         >
-          Campaigns ({campaignsError ? '—' : campaigns.length})
+          Campaigns ({campaignsFailed ? '—' : campaigns.length})
         </button>
         <button
           onClick={() => setTab('replies')}
@@ -185,16 +209,22 @@ export default function LeadWarmingPage() {
             tab === 'replies' ? 'border-violet-500 text-violet-700' : 'border-transparent text-muted-foreground hover:text-foreground',
           )}
         >
-          Replies ({repliesError ? '—' : replies.length})
+          Replies ({repliesFailed ? '—' : replies.length})
         </button>
       </div>
 
       {/* Campaigns tab */}
       {tab === 'campaigns' && (
         <div className="space-y-2">
-          {campaignsError ? (
+          {campaignsStale && (
             <InlineErrorState
-              message={`Failed to load your warming campaigns: ${campaignsError.message || 'no response from the server'}`}
+              message={`Could not refresh, so the campaigns below are the last read: ${campaignsReason}. One you just paused or archived is still shown the way it was.`}
+              onRetry={refetchCampaigns}
+            />
+          )}
+          {campaignsFailed ? (
+            <InlineErrorState
+              message={`Failed to load your warming campaigns: ${campaignsReason}`}
               onRetry={refetchCampaigns}
             />
           ) : campaigns.length === 0 ? (
@@ -261,7 +291,7 @@ export default function LeadWarmingPage() {
           {/* Intent filter pills */}
           {/* The pills are counts of the replies array, so an unread inbox would otherwise
               offer a set of filters whose every choice answers "none" (#2829). */}
-          {!repliesError && (
+          {!repliesFailed && (
           <div className="flex flex-wrap gap-1.5">
             <FilterPill label="All" count={replies.length} active={filter === 'all'} onClick={() => setFilter('all')} />
             {Object.entries(intentCounts).sort((a, b) => b[1] - a[1]).map(([intent, count]) => {
@@ -280,10 +310,16 @@ export default function LeadWarmingPage() {
           )}
 
           {/* Replies list */}
+          {repliesStale && (
+            <InlineErrorState
+              message={`Could not refresh, so the replies and the pills above are the last read: ${repliesReason}. A reply that arrived since this was fetched is not classified here.`}
+              onRetry={refetchReplies}
+            />
+          )}
           <div className="space-y-2">
-            {repliesError ? (
+            {repliesFailed ? (
               <InlineErrorState
-                message={`Failed to load warming replies: ${repliesError.message || 'no response from the server'}`}
+                message={`Failed to load warming replies: ${repliesReason}`}
                 onRetry={refetchReplies}
               />
             ) : filtered.length === 0 ? (
