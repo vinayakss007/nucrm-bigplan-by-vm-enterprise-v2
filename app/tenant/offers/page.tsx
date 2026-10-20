@@ -84,7 +84,20 @@ export default function OffersListPage() {
     ['tenant', 'offers', qs],
     `/api/tenant/offers?${qs}`,
   );
-  const error = queryError ? `Failed to load offers: ${queryError.message || 'no response from the server'}` : null;
+  // #2872: one flag was answering two different questions. TanStack Query keeps `data`
+  // when a revalidation of a view that already answered fails — and page/status are in the
+  // key, so the Refresh button, a page step and a pill click all revalidate — while the
+  // rows at the bottom map `filteredOffers` ungated. A refused refresh therefore showed
+  // the offers and told the operator, in the same screen, that they could not be loaded.
+  // The other half is worse: after a read that never answered, `data?.summary` is `{}`,
+  // so the four money cards printed 0 / $0 and every status pill printed a count of 0
+  // above an outage banner. #2829 pinned that discipline for invoices, orders, contracts
+  // and subscriptions; offers was not in that block because its figures come from the
+  // server's `summary` rather than from the rendered array, so the sweep never reached it.
+  const failed = Boolean(queryError) && !data;
+  const stale = Boolean(queryError) && Boolean(data);
+  const reason = queryError?.message || 'no response from the server';
+  const error = failed ? `Failed to load offers: ${reason}` : null;
   const load = () => refetch();
 
   const filteredOffers = useMemo(() => {
@@ -133,10 +146,10 @@ export default function OffersListPage() {
 
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <Stat label="Drafts"     value={summary['draft']?.count ?? 0}    hint={fmtCurrency(summary['draft']?.amount ?? 0)} />
-        <Stat label="Awaiting"   value={(summary['sent']?.count ?? 0) + (summary['viewed']?.count ?? 0)} hint={fmtCurrency(totalSent)} />
-        <Stat label="Accepted"   value={summary['accepted']?.count ?? 0} hint={fmtCurrency(totalAccepted)} tone="emerald" />
-        <Stat label="Declined"   value={summary['declined']?.count ?? 0} hint={fmtCurrency(summary['declined']?.amount ?? 0)} tone="red" />
+        <Stat label="Drafts"     value={failed ? '—' : summary['draft']?.count ?? 0}    hint={failed ? '—' : fmtCurrency(summary['draft']?.amount ?? 0)} />
+        <Stat label="Awaiting"   value={failed ? '—' : (summary['sent']?.count ?? 0) + (summary['viewed']?.count ?? 0)} hint={failed ? '—' : fmtCurrency(totalSent)} />
+        <Stat label="Accepted"   value={failed ? '—' : summary['accepted']?.count ?? 0} hint={failed ? '—' : fmtCurrency(totalAccepted)} tone="emerald" />
+        <Stat label="Declined"   value={failed ? '—' : summary['declined']?.count ?? 0} hint={failed ? '—' : fmtCurrency(summary['declined']?.amount ?? 0)} tone="red" />
       </div>
 
       {/* Status pills */}
@@ -144,7 +157,10 @@ export default function OffersListPage() {
         {STATUSES.map(s => {
           const Icon = s.icon;
           const active = statusFilter === s.id;
-          const count = s.id ? (summary[s.id]?.count ?? 0) : Object.values(summary).reduce((a, b) => a + b.count, 0);
+          // The pill stays clickable after a failed read — it is the way out of the view
+          // the operator is stuck in. Only the count it prints is dashed, because a 0 on
+          // an unread summary offers a filter whose every choice answers "none".
+          const count = failed ? '—' : s.id ? (summary[s.id]?.count ?? 0) : Object.values(summary).reduce((a, b) => a + b.count, 0);
           return (
             <button
               key={s.id || 'all'}
@@ -173,6 +189,18 @@ export default function OffersListPage() {
           />
         </div>
       </div>
+
+      {stale && (
+        // Refused refresh, kept payload. Named by what is actually at risk rather than
+        // "some data may be out of date": the buyer accepts on the public-token route
+        // (app/api/public/offers/[publicToken]/accept/route.ts), which is outside this
+        // page's band entirely, so an accepted offer keeps its Sent badge here until the
+        // read comes back.
+        <InlineErrorState
+          message={`Could not refresh, so the offers, the four figures and the pill counts are the last read: ${reason}. A buyer who accepted or declined on their public link since this was fetched is still listed under its old status, and the money totals are the older ones.`}
+          onRetry={load}
+        />
+      )}
 
       {error && (
         <InlineErrorState message={error} onRetry={load} />
@@ -261,7 +289,7 @@ export default function OffersListPage() {
   );
 }
 
-function Stat({ label, value, hint, tone }: { label: string; value: number; hint?: string; tone?: 'emerald' | 'red' }) {
+function Stat({ label, value, hint, tone }: { label: string; value: number | string; hint?: string; tone?: 'emerald' | 'red' }) {
   const toneClass =
     tone === 'emerald' ? 'text-emerald-700 dark:text-emerald-400' :
     tone === 'red'     ? 'text-red-700 dark:text-red-400' :
