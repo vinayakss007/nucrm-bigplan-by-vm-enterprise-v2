@@ -81,12 +81,21 @@ function ChatInner() {
   const failed = Boolean(sessionsError) && !sessionsData;
   const stale = Boolean(sessionsError) && Boolean(sessionsData);
   const reason = sessionsError?.message || 'no response from the server';
+  // #2872: each sentence has to name the read it came from. The list is fetched under
+  // `?status=<filter>`, so "No sessions found" on the Active tab is a claim about chats nobody
+  // asked for; and interpolating the raw filter produced "The all list below is the last read" on
+  // the tab labelled All, which names nothing at all.
+  const scope = filter === 'all' ? 'chat sessions' : `${filter} sessions`;
 
   // On-demand fetch (only runs when a session is selected) — left as plain fetch.
+  // #2872: it cleared `messages` before it asked, so re-clicking the session already open threw
+  // away the transcript on screen and reported the loss as an outage. Clearing belongs to
+  // switching sessions, not to re-reading one — the same rule the sidebar got in #2893.
   const loadMessages = async (session: ChatSession) => {
     setSelectedSession(session);
     setLoadingMessages(true);
-    setMessages([]);
+    if (session.id !== selectedSession?.id)
+      setMessages([]);
     setMessagesError(null);
     try {
       const res = await fetch(`/api/tenant/chat/${session.id}/messages`);
@@ -100,11 +109,16 @@ function ChatInner() {
     } catch (err: unknown) {
       // A rejection that is not an Error used to leave `messages` at [], and the thread pane
       // reported an unread conversation as one the visitor never wrote in.
-      setMessagesError(err instanceof Error ? err.message : 'no response from the server');
+      setMessagesError(err instanceof Error && err.message ? err.message : 'no response from the server');
     } finally {
       setLoadingMessages(false);
     }
   };
+  // The thread has the same two states as the list, and #2893 gave it only the first: a refused
+  // re-read of a transcript that is still on screen is stale, not unread.
+  const threadFailed = Boolean(messagesError) && messages.length === 0;
+  const threadStale = Boolean(messagesError) && messages.length > 0;
+  const threadReason = messagesError || 'no response from the server';
 
   const sendReplyMutation = useMutation({
     mutationFn: async (content: string) => {
@@ -156,7 +170,7 @@ function ChatInner() {
         <div className="w-80 shrink-0 overflow-y-auto space-y-2">
           {stale && (
             <InlineErrorState
-              message={`The ${filter} list below is the last read: ${reason}`}
+              message={`Could not refresh the ${scope}, so what is below is the last read: ${reason}. A session that opened or closed since then is not reflected here.`}
               onRetry={refetchSessions}
             />
           )}
@@ -164,11 +178,11 @@ function ChatInner() {
             [...Array(4)].map((_, i) => <div key={i} className="h-20 bg-muted rounded-xl animate-pulse" />)
           ) : sessions.length === 0 ? (
             failed ? (
-              <InlineErrorState message={`Failed to load ${filter} sessions: ${reason}`} onRetry={refetchSessions} />
+              <InlineErrorState message={`Failed to load ${scope}: ${reason}`} onRetry={refetchSessions} />
             ) : (
               <div className="text-center py-8 border border-dashed border-border rounded-2xl">
                 <MessageCircle className="w-6 h-6 text-muted-foreground mx-auto mb-2" />
-                <p className="text-sm text-muted-foreground">No sessions found</p>
+                <p className="text-sm text-muted-foreground">No {scope}</p>
               </div>
             )
           ) : (
@@ -229,13 +243,22 @@ function ChatInner() {
 
               {/* Messages */}
               <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                {threadStale && (
+                  <InlineErrorState
+                    message={`Could not re-read this conversation, so the transcript below is the last read: ${threadReason}. A message the visitor sent since then is not on screen.`}
+                    onRetry={() => void loadMessages(selectedSession)}
+                  />
+                )}
                 {loadingMessages ? (
                   <div className="flex items-center justify-center py-8">
                     <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
                   </div>
                 ) : messages.length === 0 ? (
-                  messagesError ? (
-                    <InlineErrorState message={`Failed to load this conversation: ${messagesError}`} />
+                  threadFailed ? (
+                    <InlineErrorState
+                      message={`Failed to load this conversation: ${threadReason}`}
+                      onRetry={() => void loadMessages(selectedSession)}
+                    />
                   ) : (
                     <p className="text-center text-sm text-muted-foreground py-8">No messages yet</p>
                   )
@@ -270,8 +293,10 @@ function ChatInner() {
                 )}
               </div>
 
-              {/* Reply Box */}
-              {selectedSession.status !== 'closed' && (
+              {/* Reply box. #2872's first rule: a read that failed must not drive an action
+                  button. `threadFailed` means "we could not look", not "there is nothing to
+                  answer", so Send belongs to the transcript the server actually handed over. */}
+              {selectedSession.status !== 'closed' && !threadFailed && (
                 <form onSubmit={sendReply} className="p-3 border-t border-border flex gap-2">
                   <input
                     value={replyText}

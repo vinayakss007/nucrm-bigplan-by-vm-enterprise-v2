@@ -195,7 +195,10 @@ describe('chat: a session list nobody can see is not a queue nobody is in (#2829
   it('says the queue is empty only when the read says so', () => {
     registry.byUrl = { [CHAT]: ok({ data: [] }) };
     render_(<ChatPage />);
-    expect(screen.getByText('No sessions found')).toBeTruthy();
+    // #2872's thread slice scoped this sentence to the status that was asked for: this read is
+    // `?status=active`, so it is not evidence about every chat the tenant has.
+    expect(screen.getByText('No active sessions')).toBeTruthy();
+    expect(screen.queryByText('No sessions found')).toBeNull();
     expect(screen.queryByRole('alert')).toBeNull();
   });
 
@@ -355,8 +358,13 @@ describe('the ratchet this slice closes (#2829)', () => {
     // ever guarded by this file. Rewinding the branch must be visible here.
     const src = readFileSync(join(ROOT, 'app/tenant/chat/page.tsx'), 'utf8');
     expect(src).toMatch(/setMessagesError\(d\.error \|\| `Request failed \(\$\{res\.status\}\)`\)/);
-    expect(src).toMatch(/err instanceof Error \? err\.message : 'no response from the server'/);
-    expect(src, 'the thread pane is back to swallowing the failure').toMatch(/messagesError \? \(/);
+    expect(src).toMatch(/err instanceof Error && err\.message \? err\.message : 'no response from the server'/);
+    // #2872's thread slice split `messagesError` into "never read" and "read, but refused to
+    // refresh" — the outage branch is `threadFailed` now, and the rows-still-on-screen branch is
+    // `threadStale`. Either arm going back to swallowing the failure has to trip this file.
+    expect(src, 'the thread pane is back to swallowing the failure').toMatch(/threadFailed \? \(/);
+    expect(src, 'the transcript lost its stale state — a refused re-read is deleting rows again')
+      .toMatch(/\{threadStale && \(/);
     expect(src).not.toMatch(/if \(res\.ok\) \{\n\s*const d = await res\.json\(\);\n\s*setMessages\(d\.data \?\? \[\]\);\n\s*\}\n\s*\} finally/);
   });
 
