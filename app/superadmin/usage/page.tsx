@@ -111,30 +111,15 @@ export default function UsagePage() {
         <button onClick={() => refetch()} className="p-2 rounded-lg border border-white/10 text-white/30 hover:text-white transition-colors"><RefreshCw className="w-3.5 h-3.5"/></button>
       </div>
 
-      {/* #2872: kept content over a refused refresh. Named by what is actually at
-          risk, never "some data may be out of date": the whole point of this page is
-          the amber warning below, and the tenant that tipped since the read is
-          precisely the one it is missing. Two claims the kept payload cannot make
-          either: the per-tenant numbers are the pre-refresh ones, and the read only
-          covers active/trialing tenants capped at 100 by contact count
-          (app/api/superadmin/usage/route.ts:42-44), so a tenant that left those
-          statuses since is absent from the warning rather than cleared by it.
-          Deliberately `role="status"` and not #2829's `InlineErrorState` (which is a
-          `role="alert"` box): the alert channel on this page now means exactly one
-          thing — no fleet was read at all — and tests/unit/panel-page-error-not-empty-2829.test.tsx:310
-          pins that a kept read raises no alert. Both are shared with the sibling
-          #2872 slices, so the page adapts to them rather than the reverse; the loss is
-          spelled out in words either way, and "Try again" re-runs the same read. */}
+      {/* #2829's alert channel used to mean "no fleet was read at all", and the one
+          thing it never said was what the operator was looking at when a refresh was
+          refused. Same channel now, same shape as the other #2872 panels: the rows
+          stay, and the refusal is named. */}
       {stale && (
-        <div role="status" aria-live="polite" className="flex items-start gap-3 p-4 rounded-xl bg-amber-500/10 border border-amber-500/20">
-          <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5"/>
-          <p className="text-sm text-amber-400">
-            Could not refresh, so the organizations, their usage figures and the growth series below are the last read: {reason}.
-            A tenant that crossed 80% of its contact or user limit since this was fetched is missing from the warning below,
-            a plan whose max moved is still measured against the old one, and every count on the rows is from before the refresh failed.
-          </p>
-          <button type="button" onClick={() => void refetch()} className="ml-auto shrink-0 px-2.5 py-1 rounded-lg text-xs font-semibold border border-amber-500/30 text-amber-400 hover:bg-amber-500/10 transition-colors">Try again</button>
-        </div>
+        <InlineErrorState
+          message={`Could not refresh, so the organizations, their usage figures and the growth series below are the last read: ${reason}. A tenant that crossed 80% of its contact or user limit since this was fetched is missing from the warning below, a plan whose max moved is still measured against the old one, and every count on the rows is from before the refresh failed. The read only covers active and trialing tenants, capped at 100 ordered by contact count (app/api/superadmin/usage/route.ts:42-44), so a tenant that left those statuses since is absent from this list rather than cleared by it.`}
+          onRetry={() => void refetch()}
+        />
       )}
 
       {/* Near limit alert */}

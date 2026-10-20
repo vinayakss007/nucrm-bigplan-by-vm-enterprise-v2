@@ -22,11 +22,12 @@
  *     *search* emptied the kept rows, telling the operator the fleet never came
  *     back while the fleet was on the page one row up.
  *
- * `failed` is the first of those, `stale` the second. The channel matters here more
- * than on most pages: #2829's red `role="alert"` box now means one thing —
- * nobody read the fleet — and tests/unit/panel-page-error-not-empty-2829.test.tsx:310
- * pins that a kept read raises no alert, which is why the caveat below is a polite
- * `role="status"` notice rather than a second alert.
+ * `failed` is the first of those, `stale` the second. Both speak on #2829's
+ * `role="alert"` channel, which is what every other #2872 panel does — the channel
+ * is not the discriminator, the sentence is ("Could not load …" only when nothing
+ * came back, "Could not refresh …" when something did). That supersedes
+ * tests/unit/panel-page-error-not-empty-2829.test.tsx's `usage: cached rows survive
+ * a failed refetch`, which pinned silence-on-stale and is updated in this commit.
  *
  * What the read actually is (app/api/superadmin/usage/route.ts): `tenantUsage` is
  * one row per tenant joined to its plan (:40-44), restricted to status
@@ -113,12 +114,11 @@ const staleRead = (data: unknown = fleet, message = 'Request failed (504)'): Que
 
 const OUTAGE = 'Could not load tenant usage — this is a failed request, not an empty fleet.';
 
-/** #2829's channel: nothing was read. */
+/** #2829's channel, now shared: nothing was read, or what was read is old. */
 const alerts = () =>
   screen.queryAllByRole('alert').map((el) => el.textContent ?? '').join(' | ');
-/** #2872's channel: something was read, and it is older than it looks. */
-const notices = () =>
-  screen.queryAllByRole('status').map((el) => el.textContent ?? '').join(' | ');
+/** The kept-read caveat, distinguished from the outage by its sentence, not its role. */
+const notices = alerts;
 /** The amber warning line, whose count is the aggregate this page exists for. */
 const warningLine = () =>
   Array.from(document.querySelectorAll('p')).map((p) => p.textContent ?? '').join(' | ');
@@ -165,8 +165,8 @@ describe('a refused refresh keeps the fleet and says what it is missing (#2872)'
   it('does not describe a refused refresh as a load that never happened', () => {
     registry.byUrl = { [USAGE]: staleRead() };
     mount(<UsagePage />);
-    expect(alerts()).toBe('');
     expect(alerts()).not.toContain(OUTAGE);
+    expect(alerts()).toMatch(/Could not refresh/);
     expect(screen.queryByText('No tenants found')).toBeNull();
   });
 
@@ -224,7 +224,7 @@ describe('a read that never answered still gets #2829\'s outage, and nothing els
     mount(<UsagePage />);
     expect(alerts()).toContain(OUTAGE);
     expect(screen.queryByText('No tenants found')).toBeNull();
-    expect(notices()).toBe('');
+    expect(alerts()).not.toMatch(/last read/i);
   });
 
   it('prints no rows, no warning and no false zero', () => {
@@ -313,7 +313,7 @@ describe('the ratchet this slice closes (#2872)', () => {
     expect(s).toContain('Could not load tenant usage — this is a failed request, not an empty fleet.');
     expect(s, 'the caveat stopped naming a loss').toMatch(/crossed 80% of its contact or user limit/);
     expect(s).toContain('{reason}');
-    expect(s, 'the kept-read notice went back to the outage channel').toMatch(/role="status"/);
+    expect(s, 'the kept-read caveat left the alert channel').toMatch(/\{stale && \(\s*<InlineErrorState/);
     expect(s).toMatch(/onRetry=\{\(\) => void refetch\(\)\}/);
   });
 
