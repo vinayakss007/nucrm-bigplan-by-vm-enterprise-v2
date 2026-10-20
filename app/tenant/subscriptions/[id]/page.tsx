@@ -4,13 +4,14 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
 import Link from 'next/link';
 import { ArrowLeft, Edit2, Save, X, Calendar, DollarSign, CreditCard, RefreshCw, Pause, Play } from 'lucide-react';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
@@ -57,16 +58,23 @@ export default function SubscriptionDetailPage() {
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
 
   // #1328: detail read via TanStack Query.
-  const { data, isLoading: loading, error } = useApiQuery<SubscriptionResponse>(
+  const { data, isLoading: loading, error, refetch } = useApiQuery<SubscriptionResponse>(
     SUBSCRIPTION_QUERY(id),
     `/api/tenant/subscriptions/${id}`,
     { enabled: !!id },
   );
   const subscription = data?.data;
 
-  useEffect(() => {
-    if (error) toast.error('Failed to load subscription');
-  }, [error]);
+  // #2872: a refresh of a read that already succeeded keeps `data`, so the error
+  // flag alone conflates an outage with a stale record. pause / resume / cancel and
+  // save all end in `invalidate()` on this exact key, so right after the operator
+  // pauses a subscription the ordinary state is "kept record + refused revalidation"
+  // — and the page fell through to "Subscription not found", claiming the record is
+  // gone because the refresh was refused. `failed` is the never-answered outage;
+  // `stale` keeps the fields that did load and says they are the last read.
+  const failed = Boolean(error) && !data;
+  const stale = Boolean(error) && Boolean(data);
+  const reason = error?.message || 'no response from the server';
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: SUBSCRIPTION_QUERY(id) });
 
@@ -162,18 +170,43 @@ export default function SubscriptionDetailPage() {
     );
   }
 
+  if (failed) {
+    return (
+      <div className="space-y-4 animate-fade-in">
+        <Link href="/tenant/subscriptions" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors">
+          <ArrowLeft className="w-4 h-4" /> Back to Subscriptions
+        </Link>
+        <InlineErrorState message={`Failed to load subscription: ${reason}`} onRetry={refetch} />
+      </div>
+    );
+  }
+
   if (!subscription) {
     return (
-      <div className="text-center py-12">
-        <CreditCard className="w-12 h-12 mx-auto mb-3 text-muted-foreground/30" />
-        <p className="text-lg font-semibold">Subscription not found</p>
-        <Link href="/tenant/subscriptions" className="text-sm text-violet-600 hover:underline mt-2 inline-block">Back to subscriptions</Link>
+      <div className="space-y-4">
+        {stale && (
+          <InlineErrorState
+            message={`Could not refresh, so this page is the last read: ${reason}. A subscription you just created or restored may not be reflected here.`}
+            onRetry={refetch}
+          />
+        )}
+        <div className="text-center py-12">
+          <CreditCard className="w-12 h-12 mx-auto mb-3 text-muted-foreground/30" />
+          <p className="text-lg font-semibold">Subscription not found</p>
+          <Link href="/tenant/subscriptions" className="text-sm text-violet-600 hover:underline mt-2 inline-block">Back to subscriptions</Link>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="space-y-4 sm:space-y-6 animate-fade-in">
+      {stale && (
+        <InlineErrorState
+          message={`Could not refresh, so the subscription below is the last read: ${reason}. A pause, resume or cancellation you just made may not be reflected here.`}
+          onRetry={refetch}
+        />
+      )}
       <ConfirmDialog
         open={showCancelConfirm}
         onOpenChange={setShowCancelConfirm}

@@ -4,13 +4,14 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
 import Link from 'next/link';
 import { ArrowLeft, Edit2, Trash2, Save, X, Calendar, DollarSign, FileText, User } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import { CONTRACT_TYPES, CONTRACT_TYPE_LABELS } from '@/lib/api/schemas/billing';
@@ -55,16 +56,24 @@ export default function ContractDetailPage() {
   const [form, setForm] = useState<Partial<Contract>>({});
 
   // #1328: detail read via TanStack Query.
-  const { data, isLoading: loading, error } = useApiQuery<ContractResponse>(
+  const { data, isLoading: loading, error, refetch } = useApiQuery<ContractResponse>(
     CONTRACT_QUERY(id),
     `/api/tenant/contracts/${id}`,
     { enabled: !!id },
   );
   const contract = data?.data;
 
-  useEffect(() => {
-    if (error) toast.error('Failed to load contract');
-  }, [error]);
+  // #2872: TanStack Query keeps `data` when a refresh of a read that already
+  // succeeded fails, so the flag alone cannot tell an outage from a stale record.
+  // Every write here (save / status / delete) ends in `invalidate()` on this exact
+  // key, so a refused revalidation is the ordinary state right after the operator
+  // edits or marks a contract expired — and the page used to fall through to
+  // "Contract not found", claiming the record is gone because the refresh was
+  // refused. `failed` is the never-answered outage; `stale` keeps the fields that
+  // did load and says they are the last read.
+  const failed = Boolean(error) && !data;
+  const stale = Boolean(error) && Boolean(data);
+  const reason = error?.message || 'no response from the server';
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: CONTRACT_QUERY(id) });
 
@@ -152,18 +161,43 @@ export default function ContractDetailPage() {
     );
   }
 
+  if (failed) {
+    return (
+      <div className="space-y-4 animate-fade-in">
+        <Link href="/tenant/contracts" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors">
+          <ArrowLeft className="w-4 h-4" /> Back to Contracts
+        </Link>
+        <InlineErrorState message={`Failed to load contract: ${reason}`} onRetry={refetch} />
+      </div>
+    );
+  }
+
   if (!contract) {
     return (
-      <div className="text-center py-12">
-        <FileText className="w-12 h-12 mx-auto mb-3 text-muted-foreground/30" />
-        <p className="text-lg font-semibold">Contract not found</p>
-        <Link href="/tenant/contracts" className="text-sm text-violet-600 hover:underline mt-2 inline-block">Back to contracts</Link>
+      <div className="space-y-4">
+        {stale && (
+          <InlineErrorState
+            message={`Could not refresh, so this page is the last read: ${reason}. A contract you just created or restored may not be reflected here.`}
+            onRetry={refetch}
+          />
+        )}
+        <div className="text-center py-12">
+          <FileText className="w-12 h-12 mx-auto mb-3 text-muted-foreground/30" />
+          <p className="text-lg font-semibold">Contract not found</p>
+          <Link href="/tenant/contracts" className="text-sm text-violet-600 hover:underline mt-2 inline-block">Back to contracts</Link>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="space-y-4 sm:space-y-6 animate-fade-in">
+      {stale && (
+        <InlineErrorState
+          message={`Could not refresh, so the contract below is the last read: ${reason}. An edit or status change you just saved may not be reflected here.`}
+          onRetry={refetch}
+        />
+      )}
       {/* Back button */}
       <Link href="/tenant/contracts" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors">
         <ArrowLeft className="w-4 h-4" /> Back to Contracts
