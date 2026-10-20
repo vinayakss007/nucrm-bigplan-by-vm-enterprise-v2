@@ -88,7 +88,14 @@ function SearchPageContent() {
     { enabled: trimmed.length > 0 && submitted === null },
   );
   const quickResults = quickQuery.data ?? null;
-  const loadingQuery = quickQuery.isFetching && trimmed.length > 0;
+  // #2872: `isFetching` is also true while a key that already answered is being revalidated, so
+  // this swapped a live result set for "Searching…" on every re-entry with `q` in the URL — the
+  // term and the type are the key, so re-entry re-runs the read the answer on screen came from. Only
+  // a term nothing has answered yet has no set to show.
+  const loadingQuery = quickQuery.isLoading && trimmed.length > 0;
+  const quickFailed = Boolean(quickQuery.error) && !quickQuery.data;   // never answered for this term
+  const quickStale = Boolean(quickQuery.error) && Boolean(quickQuery.data); // refused revalidation
+  const quickReason = quickQuery.error?.message || 'no response from the server';
 
   // Sync the input from the URL and focus on mount.
   useEffect(() => {
@@ -157,6 +164,18 @@ function SearchPageContent() {
     enabled: submitted !== null,
     retry: 0,
   });
+  // #2872: nothing on this page writes, so the refusal here is never a mutation's
+  // `invalidateQueries` — it is the same key asked again. `submitted` (term, type, chips and page,
+  // all of it) *is* the advanced key, and `[type, term]` is the typeahead's, so pressing "Try
+  // again", re-entering `/tenant/search?q=…` past the 30-second stale window, or TanStack's
+  // reconnect revalidation re-runs a read that already answered. When that re-run is refused
+  // `useQuery` keeps the answer it had, and the page read only the flag: the outage banner — "did
+  // not run", "nothing was counted" — sat over the rows or the counted zero still on screen, which
+  // is the same false all-clear inverted. Paging or re-filtering makes a NEW key, so that view
+  // stays a failure; only a refused re-run of the key on screen is a last read.
+  const advancedFailed = Boolean(advancedQuery.error) && !advancedQuery.data;
+  const advancedStale = Boolean(advancedQuery.error) && Boolean(advancedQuery.data);
+  const advancedReason = advancedQuery.error?.message || 'no response from the server';
 
   const advancedSearch = () => {
     if (!query.trim() && Object.keys(filters).length === 0) return;
@@ -262,17 +281,35 @@ function SearchPageContent() {
 
       {/* #2829/#2838: a search that did not succeed has to look different from
           one that succeeded and matched nothing — and different from showing
-          nothing at all, which is what a failed typeahead used to render. */}
-      {submitted && !loading && advancedQuery.isError && (
+          nothing at all, which is what a failed typeahead used to render.
+          #2872 splits the first of those in two: this arm is the filtered
+          request that has never answered for the body on the chips. */}
+      {submitted && !loading && advancedFailed && (
         <InlineErrorState
-          message={`The filtered ${submitted.type} search did not run${advancedQuery.error ? `: ${advancedQuery.error.message}` : ''}. Whether anything matches these filters is still unknown.`}
+          message={`The filtered ${submitted.type} search did not run: ${advancedReason}. Whether anything matches these filters is still unknown.`}
           onRetry={() => void advancedQuery.refetch()}
         />
       )}
 
-      {!submitted && !loading && trimmed.length > 0 && quickQuery.isError && (
+      {/* Same key, refused re-run: the filtered answer stays and is labelled as the last read. */}
+      {submitted && !loading && advancedStale && (
         <InlineErrorState
-          message={`Search failed${quickQuery.error ? `: ${quickQuery.error.message}` : ''}. These are not "no results" — nothing was counted.`}
+          message={`Could not re-run the filtered ${submitted.type} search, so the answer below is the last read: ${advancedReason}. Anything created, edited or deleted since that read is not reflected in it.`}
+          onRetry={() => void advancedQuery.refetch()}
+        />
+      )}
+
+      {!submitted && trimmed.length > 0 && quickFailed && (
+        <InlineErrorState
+          message={`Search failed: ${quickReason}. These are not "no results" — nothing was counted.`}
+          onRetry={() => void quickQuery.refetch()}
+        />
+      )}
+
+      {/* The term this key already answered, asked again and refused: the rows it counted stay. */}
+      {!submitted && trimmed.length > 0 && quickStale && (
+        <InlineErrorState
+          message={`Could not refresh the search for "${trimmed}", so the results below are the last read: ${quickReason}. Anything created since that read is not in them.`}
           onRetry={() => void quickQuery.refetch()}
         />
       )}
