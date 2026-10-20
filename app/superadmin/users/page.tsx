@@ -136,6 +136,23 @@ export default function SuperAdminUsersPage() {
   const me: MeData | null = (meQuery.data?.data ?? (meQuery.data as MeData | undefined)) ?? null;
   const loading = usersQuery.isLoading;
 
+  // #2872: this page invalidates its own key after create, deactivate and the edit dialog, and
+  // TanStack keeps `data` when a refetch of a query that already succeeded fails. The three flags
+  // below it were the only states it could name — loading is over, `error` says failed, `filtered`
+  // has rows — so a refused refresh matched none of them and rendered the last read with no
+  // affordance at all. The operator looking for the account they just created got no row, no
+  // banner and no reason, and the obvious second click is a duplicate user.
+  const failed = Boolean(usersQuery.error) && !usersQuery.data;
+  const stale = Boolean(usersQuery.error) && Boolean(usersQuery.data);
+  const reason = usersQuery.error?.message || 'no response from the server';
+  // The identity read gates three claims here, none of them a row action: which account carries the
+  // `YOU` marker, how many *other* super admins there are, and whom admin status may be handed to.
+  // `me === null` answered each of them as "you are not among them", which is a claim the failed
+  // read never established. (Your own row could never be deactivated anyway: you are a super admin
+  // and `!u.is_super_admin` already excludes those from that button.)
+  const meFailed = Boolean(meQuery.error) && !me;
+  const meReason = meQuery.error?.message || 'no response from the server';
+
   const invalidateUsers = () => queryClient.invalidateQueries({ queryKey: ['superadmin', 'users'] });
 
   const transferMutation = useMutation({
@@ -205,7 +222,8 @@ export default function SuperAdminUsersPage() {
   };
 
   const filtered = users.filter(u => !search || u.email?.includes(search) || u.full_name?.toLowerCase()?.includes(search.toLowerCase()));
-  const otherAdmins = users.filter(u => u.is_super_admin && u.id !== me?.userId);
+  const transferTargets = me ? users.filter(u => u.id !== me.userId) : [];
+  const otherAdmins = transferTargets.filter(u => u.is_super_admin);
 
   return (
     <div className="space-y-5 max-w-6xl">
@@ -213,7 +231,7 @@ export default function SuperAdminUsersPage() {
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-lg font-bold text-foreground flex items-center gap-2"><Users className="w-5 h-5 text-violet-400"/>All Users</h1>
-          <p className="text-xs text-muted-foreground">{users.length} users across all organizations · {users.filter(u=>u.is_super_admin).length} super admin(s)</p>
+          <p className="text-xs text-muted-foreground">{failed ? '—' : users.length} users across all organizations · {failed ? '—' : users.filter(u=>u.is_super_admin).length} super admin(s)</p>
         </div>
         <div className="flex gap-2">
           <button onClick={()=>setShowTransfer(s=>!s)} className="flex items-center gap-2 px-4 py-2 rounded-xl border border-amber-300/30 dark:border-amber-500/30 text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/20 text-sm font-semibold transition-colors">
@@ -235,12 +253,13 @@ export default function SuperAdminUsersPage() {
           <p className="text-xs text-muted-foreground">
             This gives the selected user super admin access. You will become a regular user after the transfer.
           </p>
+          {meFailed&&<p className="text-xs font-semibold text-amber-700 dark:text-amber-400">The list below is empty because the identity read failed — the page will not guess which account you are not, so there is no transfer target until it recovers.</p>}
           <div className="flex gap-3 items-end">
             <div className="flex-1">
               <label className={lbl}>Select target user</label>
               <select value={transferTarget} onChange={e=>setTransferTarget(e.target.value)} className={inp}>
                 <option value="">— Choose a user —</option>
-                {users.filter(u => u.id !== me?.userId).map(u => (
+                {transferTargets.map(u => (
                   <option key={u.id} value={u.id} className="bg-card">
                     {u.full_name || u.email} {u.is_super_admin ? '(already admin)' : ''}
                   </option>
@@ -297,7 +316,15 @@ export default function SuperAdminUsersPage() {
           </tr></thead>
           <tbody>
             {loading&&<tr><td colSpan={5} className="text-center py-8 text-muted-foreground text-sm">Loading...</td></tr>}
-            {!loading&&usersQuery.error&&!filtered.length&&(
+            {stale&&(
+              <tr><td colSpan={5}>
+                <InlineErrorState
+                  message={`Could not refresh the user list, so the accounts below are the last read: ${reason}. A user you just created, edited or deactivated is not reflected here — check before creating the same account twice.`}
+                  onRetry={() => void usersQuery.refetch()}
+                />
+              </td></tr>
+            )}
+            {failed&&(
               <tr><td colSpan={5}>
                 {/* #2829: this table lists every super-admin account. "No users
                     found" after a read that never reached the users table tells
@@ -305,6 +332,14 @@ export default function SuperAdminUsersPage() {
                 <InlineErrorState
                   message="Could not load the user list — this is a failed request, not an empty table."
                   onRetry={() => void usersQuery.refetch()}
+                />
+              </td></tr>
+            )}
+            {meFailed&&(
+              <tr><td colSpan={5}>
+                <InlineErrorState
+                  message={`Could not read which account is yours: ${meReason}. No row carries the "you" marker, and admin transfer is unavailable until it recovers.`}
+                  onRetry={() => void meQuery.refetch()}
                 />
               </td></tr>
             )}
