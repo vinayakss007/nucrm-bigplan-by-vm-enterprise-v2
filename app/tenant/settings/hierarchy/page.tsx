@@ -9,6 +9,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
 import { Plus, Building2, X, Loader2, Trash2 } from 'lucide-react';
 import { confirmThen } from '@/components/ui/confirm-dialog';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
@@ -43,13 +44,23 @@ export default function HierarchyPage() {
   const inp = "w-full px-3 py-2 rounded-lg border border-border bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-violet-500";
 
   // #1328: hierarchy via TanStack Query (was raw fetch + useEffect).
-  const { data, isLoading: loading } = useApiQuery<{ data?: { children?: HierarchyEntry[]; parents?: HierarchyEntry[] } }>(
+  const { data, isLoading: loading, error, refetch } = useApiQuery<{ data?: { children?: HierarchyEntry[]; parents?: HierarchyEntry[] } }>(
     HIERARCHY_QUERY,
     '/api/tenant/hierarchy',
   );
   const children: HierarchyEntry[] = data?.data?.children ?? [];
   const parents: HierarchyEntry[] = data?.data?.parents ?? [];
   const reload = () => queryClient.invalidateQueries({ queryKey: HIERARCHY_QUERY });
+
+  // #2872: the read bound neither `error` nor `refetch`, so the only sentence this page had was
+  // "No hierarchy relationships" — and both its writes end in `reload()`, which invalidates
+  // HIERARCHY_QUERY exactly. Create a link, or remove one, and TanStack hands the page back the
+  // payload it already had when that revalidation is refused: the relationship just added is not
+  // on screen, the one just removed still is, and the page reads its own emptiness back at the
+  // operator as the tenant having none.
+  const failed = Boolean(error) && !data;
+  const stale = Boolean(error) && Boolean(data);
+  const reason = error?.message || 'no response from the server';
 
   const openCreate = () => {
     setForm({ childTenantId: '', relationship: 'subsidiary', permissions: [] });
@@ -112,8 +123,19 @@ export default function HierarchyPage() {
         </button>
       </div>
 
+      {stale && (
+        <InlineErrorState
+          message={`Could not refresh, so the relationships below are the last read: ${reason}. A link you just added or removed is not reflected here.`}
+          onRetry={refetch}
+        />
+      )}
       {loading ? (
         [...Array(2)].map((_, i) => <div key={i} className="h-20 bg-muted rounded-2xl animate-pulse" />)
+      ) : failed ? (
+        <InlineErrorState
+          message={`Failed to load the organization hierarchy: ${reason}`}
+          onRetry={refetch}
+        />
       ) : children.length === 0 && parents.length === 0 ? (
         <div className="text-center py-12 border border-dashed border-border rounded-2xl">
           <Building2 className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
