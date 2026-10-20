@@ -40,6 +40,15 @@ export default function AIAtRiskPage() {
   );
   const deals: AtRiskDeal[] = data?.data ?? [];
   const load = () => refetch();
+  // #2872: `error` alone cannot tell "the scan never answered" from "the scan
+  // answered and then refused", and TanStack Query keeps `data` through the second.
+  // Nothing invalidates this key, so the refusals that reach it are the page's own
+  // Refresh button and the remount refetch past the repo-wide 30s `staleTime` — both
+  // ordinary. The three counters dashed a pipeline the page was still listing, and the
+  // list itself fell through to the outage card.
+  const failed = Boolean(error) && !data;
+  const stale = Boolean(error) && Boolean(data);
+  const reason = error?.message || 'no response from the server';
 
   const filtered = deals.filter(d => 
     d.title.toLowerCase().includes(q.toLowerCase()) || 
@@ -76,6 +85,12 @@ export default function AIAtRiskPage() {
         </div>
       </div>
 
+      {stale && (
+        <InlineErrorState
+          message={`Could not refresh, so the pipeline below is the last read: ${reason}. A deal that stalled since this was fetched is not in these counts.`}
+          onRetry={refetch}
+        />
+      )}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-card border rounded-2xl p-6 shadow-sm">
           <div className="flex items-center gap-3 mb-4">
@@ -84,7 +99,7 @@ export default function AIAtRiskPage() {
             </div>
             <div className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Total At-Risk</div>
           </div>
-          <div className="text-3xl font-bold">{loading ? '...' : error ? '—' : deals.length}</div>
+          <div className="text-3xl font-bold">{loading ? '...' : failed ? '—' : deals.length}</div>
           <div className="text-xs text-muted-foreground mt-2">
             Deals matching your detection rules
           </div>
@@ -98,7 +113,7 @@ export default function AIAtRiskPage() {
             <div className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">High Severity</div>
           </div>
           <div className="text-3xl font-bold text-destructive">
-            {loading ? '...' : error ? '—' : deals.filter(d => d.atRisk.severity === 'high').length}
+            {loading ? '...' : failed ? '—' : deals.filter(d => d.atRisk.severity === 'high').length}
           </div>
           <div className="text-xs text-muted-foreground mt-2">
             Multiple risk factors detected
@@ -113,7 +128,7 @@ export default function AIAtRiskPage() {
             <div className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Risk Value</div>
           </div>
           <div className="text-3xl font-bold">
-            {loading ? '...' : error ? '—' : formatCurrency(deals.reduce((sum, d) => sum + parseFloat(d.amount || '0'), 0))}
+            {loading ? '...' : failed ? '—' : formatCurrency(deals.reduce((sum, d) => sum + parseFloat(d.amount || '0'), 0))}
           </div>
           <div className="text-xs text-muted-foreground mt-2">
             Total amount in stalled deals
@@ -138,12 +153,12 @@ export default function AIAtRiskPage() {
           <Loader2 className="w-8 h-8 animate-spin mb-4" />
           <p>Analyzing pipeline...</p>
         </div>
-      ) : error ? (
+      ) : failed ? (
         // "Pipeline healthy" is the claim this page exists to make, so it is the one a
         // refused read may not borrow: the risk scan did not run, which is not the same
         // as the scan finding nothing at all (#2829).
         <InlineErrorState
-          message={`Failed to check your pipeline for at-risk deals: ${error.message || 'no response from the server'}`}
+          message={`Failed to check your pipeline for at-risk deals: ${reason}`}
           onRetry={refetch}
         />
       ) : filtered.length === 0 ? (
