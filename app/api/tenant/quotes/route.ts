@@ -73,8 +73,9 @@ export const POST = withApiRoute(async (request: NextRequest) => {
     const validated = validateBody(createQuoteSchema, rawBody);
     if (validated instanceof NextResponse) return validated;
     const v = validated.data;
-    const { contact_id: contactId, company_id: _companyId, title, line_items: items, notes, terms, discount, status, issue_date: _issueDate, expiry_date: expiryDate } = v;
-    const tax = 0;
+    // #2876: this read `const tax = 0` and discarded the modal's Tax input
+    // (page.tsx:340); `tax` is an amount — documentTotal is subtotal − discount + tax.
+    const { contact_id: contactId, company_id: _companyId, title, line_items: items, notes, terms, discount, status, issue_date: _issueDate, expiry_date: expiryDate, tax } = v;
 
     if (!title) {
       return NextResponse.json({ error: 'Title is required' }, { status: 400 });
