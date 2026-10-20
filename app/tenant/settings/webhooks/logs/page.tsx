@@ -58,6 +58,14 @@ export default function WebhookLogsPage() {
   );
   const logs: WebhookLog[] = data?.data ?? [];
   const total = data?.total ?? 0;
+  // #2872: the branch below keyed on `logsError` alone, and a delivered retry
+  // invalidates this key (its `onSuccess`), so the state right after a successful
+  // retry was the table of deliveries replaced by an outage banner — including the
+  // row the operator just fixed. A page whose whole job is showing failed deliveries
+  // goes blank on the delivery it is supposed to prove.
+  const failed = Boolean(logsError) && !data;
+  const stale = Boolean(logsError) && Boolean(data);
+  const reason = logsError?.message || 'no response from the server';
 
   // #2391: the retry endpoint had never been reachable — it queried columns that
   // do not exist — and nothing in the product called it. The failed rows are
@@ -139,12 +147,18 @@ export default function WebhookLogsPage() {
         )}
       </div>
 
+      {stale && (
+        <InlineErrorState
+          message={`Could not refresh the delivery logs, so the rows below are the last read: ${reason}`}
+          onRetry={refetchLogs}
+        />
+      )}
       {loading ? (
         <div className="admin-card p-5 space-y-4">
           {[...Array(5)].map((_, i) => <div key={i} className="h-12 bg-muted rounded-xl animate-pulse" />)}
         </div>
-      ) : logsError ? (
-        <InlineErrorState message={`Failed to load the delivery logs: ${logsError.message}`} onRetry={refetchLogs} />
+      ) : failed ? (
+        <InlineErrorState message={`Failed to load the delivery logs: ${reason}`} onRetry={refetchLogs} />
       ) : logs.length === 0 ? (
         <div className="text-center py-12 border border-dashed border-border rounded-2xl">
           <Webhook className="w-8 h-8 text-muted-foreground mx-auto mb-3" />

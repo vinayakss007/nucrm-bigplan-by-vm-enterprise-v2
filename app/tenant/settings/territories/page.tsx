@@ -70,6 +70,14 @@ export default function TerritoriesPage() {
     '/api/tenant/territories',
   );
   const territories: Territory[] = data?.data ?? [];
+  // #2872: #2852 gave this page an outage branch, and that branch is now the thing that misbehaves.
+  // `reload()` invalidates TERRITORIES_QUERY after save and after delete, so the error that arrives is
+  // usually a refused *refresh* of a tree that is still on screen — and branching on the bare flag
+  // spent that moment replacing the tree with "Failed to load territories". Never-read and refused-
+  // refresh are two different answers, and only the first one is allowed to hide the rows.
+  const failed = Boolean(error) && !data;
+  const stale = Boolean(error) && Boolean(data);
+  const reason = error?.message || 'no response from the server';
 
   const reload = () => queryClient.invalidateQueries({ queryKey: TERRITORIES_QUERY });
 
@@ -165,11 +173,18 @@ export default function TerritoriesPage() {
         </button>
       </div>
 
+      {stale && (
+        <InlineErrorState
+          className="mb-1.5"
+          message={`Could not refresh the territories, so the tree below is the last read: ${reason}`}
+          onRetry={refetch}
+        />
+      )}
       {loading ? (
         [...Array(3)].map((_, i) => <div key={i} className="h-16 bg-muted rounded-2xl animate-pulse" />)
-      ) : error ? (
+      ) : failed ? (
         <InlineErrorState
-          message={`Failed to load territories: ${error.message || 'no response from the server'}`}
+          message={`Failed to load territories: ${reason}`}
           onRetry={refetch}
         />
       ) : allTerritories.length === 0 ? (
@@ -236,12 +251,32 @@ export default function TerritoriesPage() {
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-muted-foreground mb-1">Parent</label>
-                  <select value={form.parentId} onChange={e => setForm(f => ({ ...f, parentId: e.target.value }))} className={inp}>
-                    <option value="">None (root)</option>
-                    {allTerritories
-                      .filter(t => t.id !== editing?.id)
-                      .map(t => <option key={t.id} value={t.id}>{'  '.repeat(t.depth)}{t.name}</option>)}
-                  </select>
+                  {/* The tree this picker reads is the same read the page just failed. Offered empty, it
+                      silently files every new territory as a root — "no parent" and "never read" look
+                      identical to whoever is typing the name. (#2872) */}
+                  {failed ? (
+                    <InlineErrorState
+                      message={`The territory tree could not be read (${reason}), so there is no parent to pick from.`}
+                      onRetry={refetch}
+                    />
+                  ) : (
+                    <>
+                      {stale && (
+                        <p className="text-xs text-amber-700 dark:text-amber-400 mb-1">
+                          The refresh failed, so these options are the last read: {reason}
+                        </p>
+                      )}
+                      <select value={form.parentId} onChange={e => setForm(f => ({ ...f, parentId: e.target.value }))} className={inp}>
+                        <option value="">None (root)</option>
+                        {allTerritories
+                          .filter(t => t.id !== editing?.id)
+                          .map(t => <option key={t.id} value={t.id}>{'  '.repeat(t.depth)}{t.name}</option>)}
+                      </select>
+                      {allTerritories.length === 0 && (
+                        <p className="text-xs text-muted-foreground mt-1">No territories saved yet — the list read back empty.</p>
+                      )}
+                    </>
+                  )}
                 </div>
               </div>
               <div>

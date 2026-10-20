@@ -148,6 +148,7 @@ const CASES: {
     url: 'invoices',
     page: () => <InvoicesPage />,
     emptyCopy: /No invoices found/,
+    missCopy: /No invoice matches this search/,
     key: 'data',
     searchable: true,
     row: { id: 'inv1', invoiceNumber: 'INV-2041', title: 'Northwind retainer', status: 'sent', issueDate: NOW, dueDate: NOW, totalAmount: '4200.00', balanceDue: '4200.00', contactId: 'ct1' },
@@ -180,6 +181,7 @@ const CASES: {
     url: 'contracts',
     page: () => <ContractsPage />,
     emptyCopy: /No contracts found/,
+    missCopy: /No contract matches this search/,
     key: 'contracts',
     searchable: true,
     row: { id: 'c1', title: 'Master services agreement', contractNumber: 'MSA-12', contractType: 'msa', status: 'active', startDate: NOW, endDate: null, totalValue: '60000.00', contactId: 'ct1' },
@@ -280,8 +282,8 @@ describe.each(CASES)('$name panel renders the failure instead of the absence (#2
       fireEvent.change(box, { target: { value: 'zzz-no-such-row' } });
       expect(screen.queryByRole('alert')).toBeNull();
       if (missCopy) {
-        // #2872: the read answered with rows, so "there are none" is a invented tenant. The
-        // miss gets its own sentence and the count the read established.
+        // #2872: the read answered with rows, so "there are none" invents a tenant. The miss
+        // gets its own sentence and keeps the count the read established.
         expect(screen.getByText(missCopy)).toBeTruthy();
         expect(screen.queryByText(emptyCopy)).toBeNull();
       } else {
