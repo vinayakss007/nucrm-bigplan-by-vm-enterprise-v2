@@ -50,6 +50,16 @@ export default function UsageDashboardPage() {
     '/api/tenant/analytics/usage',
   );
   const data: UsageData | null = resp?.data ?? null;
+  // #2872: `usageError` alone cannot tell a usage read that never answered from one
+  // that answered and then refused to answer again, and TanStack Query keeps `resp`
+  // through the second. A refused remount refetch (past the 30s `staleTime`)
+  // therefore replaced six stat cards, the revenue card and the activity feed with an
+  // outage card — over the payload the page was still holding. Its banner also
+  // interpolated `usageError.message` with no fallback, unlike the shape #2829
+  // standardized on.
+  const failed = Boolean(usageError) && !resp;
+  const stale = Boolean(usageError) && Boolean(resp);
+  const reason = usageError?.message || 'no response from the server';
 
   const formatCurrency = (n: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
 
@@ -69,12 +79,19 @@ export default function UsageDashboardPage() {
         <p className="text-sm text-muted-foreground">Track your CRM usage and recent activity</p>
       </div>
 
+      {stale && (
+        <InlineErrorState
+          message={`Could not refresh, so the figures below are the last read: ${reason}. Records added since this was fetched are not in these counts.`}
+          onRetry={refetchUsage}
+        />
+      )}
+
       {loading ? (
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
           {[...Array(6)].map((_, i) => <div key={i} className="h-28 bg-muted rounded-2xl animate-pulse" />)}
         </div>
-      ) : usageError ? (
-        <InlineErrorState message={`Failed to load your usage: ${usageError.message}`} onRetry={refetchUsage} />
+      ) : failed ? (
+        <InlineErrorState message={`Failed to load your usage: ${reason}`} onRetry={refetchUsage} />
       ) : data ? (
         <>
           {/* Stat cards */}

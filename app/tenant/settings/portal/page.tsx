@@ -59,6 +59,19 @@ export default function PortalSettingsPage() {
   );
   const loading = configLoading || clientsLoading;
   const clients: PortalClient[] = clientsData?.data ?? [];
+  // #2872: two reads, and TanStack Query keeps `data` for either of them when a
+  // revalidation of a read that already succeeded fails. Both branched on the bare
+  // flag. The config one is the worse: `if (configError) return (…banner…)` replaced
+  // the entire page — including the roster — after `saveConfig`'s own
+  // `invalidateQueries` turned refused, so a settings save whose reload failed left the
+  // operator with an outage card and no way to see what had actually been stored. The
+  // roster one hid the client list and read "Client Access (—)" above nothing.
+  const configFailed = Boolean(configError) && !configData;
+  const configStale = Boolean(configError) && Boolean(configData);
+  const clientsFailed = Boolean(clientsError) && !clientsData;
+  const clientsStale = Boolean(clientsError) && Boolean(clientsData);
+  const configReason = configError?.message || 'no response from the server';
+  const clientsReason = clientsError?.message || 'no response from the server';
 
   // Seed the editable config once from the query.
   useEffect(() => {
@@ -147,11 +160,11 @@ export default function PortalSettingsPage() {
   // `config` starts at DEFAULT_CONFIG (enabled: false) and is only overwritten once the read
   // lands, so a refused read renders the portal as switched off, hides the permissions and
   // client roster, and lets the first toggle save defaults over the real settings (#2829).
-  if (configError) {
+  if (configFailed) {
     return (
       <div className="flex items-center justify-center p-8">
         <InlineErrorState
-          message={`Failed to load your portal settings: ${configError.message || 'no response from the server'}`}
+          message={`Failed to load your portal settings: ${configReason}`}
           onRetry={refetchConfig}
         />
       </div>
@@ -166,6 +179,13 @@ export default function PortalSettingsPage() {
         </h1>
         <p className="text-sm text-muted-foreground">Allow external clients to view their quotes, invoices, and cases</p>
       </div>
+
+      {configStale && (
+        <InlineErrorState
+          message={`Could not refresh, so the portal settings below are the last read: ${configReason}. Saving now writes over settings this page has not seen.`}
+          onRetry={refetchConfig}
+        />
+      )}
 
       {/* Enable/Disable */}
       <div className="admin-card p-5 space-y-4">
@@ -232,7 +252,7 @@ export default function PortalSettingsPage() {
         <div className="admin-card p-5 space-y-4">
           <div className="flex items-center justify-between">
             <p className="text-sm font-semibold flex items-center gap-2">
-              <Users className="w-4 h-4" />Client Access ({clientsError ? '—' : clients.length})
+              <Users className="w-4 h-4" />Client Access ({clientsFailed ? '—' : clients.length})
             </p>
             <button
               onClick={() => setShowCreate(true)}
@@ -242,9 +262,16 @@ export default function PortalSettingsPage() {
             </button>
           </div>
 
-          {clientsError ? (
+          {clientsStale && (
             <InlineErrorState
-              message={`Failed to load portal clients: ${clientsError.message || 'no response from the server'}`}
+              message={`Could not refresh, so the roster below is the last read: ${clientsReason}. A client added or revoked since this was fetched is not reflected here.`}
+              onRetry={refetchClients}
+            />
+          )}
+
+          {clientsFailed ? (
+            <InlineErrorState
+              message={`Failed to load portal clients: ${clientsReason}`}
               onRetry={refetchClients}
             />
           ) : clients.length === 0 ? (
