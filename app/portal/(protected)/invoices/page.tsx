@@ -9,6 +9,7 @@ import { useRouter } from 'next/navigation';
 import { FileText, Download } from 'lucide-react';
 import { cn, formatDate, formatCurrency } from '@/lib/utils';
 import { useApiQuery } from '@/lib/query/client';
+import InlineErrorState from '@/components/shared/inline-error-state';
 
 interface PortalSession { email: string; name: string; permissions: { quotes: boolean; invoices: boolean; cases: boolean }; }
 
@@ -43,7 +44,7 @@ export default function PortalInvoicesPage() {
     } catch { router.replace('/portal/login'); }
   }, [router]);
 
-  const { data, isLoading, error } = useApiQuery<{ data: PortalInvoice[] }>(
+  const { data, isLoading, error, refetch } = useApiQuery<{ data: PortalInvoice[] }>(
     ['portal-invoices', session?.email],
     // #2439: no identity in the URL. The httpOnly portal session cookie is the
     // credential (same-origin fetch sends it automatically), exactly as the
@@ -54,6 +55,18 @@ export default function PortalInvoicesPage() {
   );
   const invoices = data?.data ?? [];
   const loading = !session || isLoading;
+
+  // #2872: a customer never writes to this list, so the refused revalidation is the
+  // cache's own — leave the portal, come back through Invoices inside the 5-minute window
+  // and the page mounts on the rows it already has and revalidates behind them, which
+  // `/api/public/invoices` answers 401 once the httpOnly portal session expires or 429
+  // once the route's 30-per-minute budget is spent. The branch below asked only whether
+  // `error` was set *and the list empty*, so a customer whose refresh was refused while
+  // their invoices were still on screen was told nothing about them, on the one screen
+  // where an unqualified all-clear reads as "your account owes nothing".
+  const failed = Boolean(error) && !data;
+  const stale = Boolean(error) && Boolean(data);
+  const reason = error?.message || 'no response from the server';
 
   const statusColor: Record<string, string> = {
     paid: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
@@ -68,24 +81,30 @@ export default function PortalInvoicesPage() {
         <p className="text-sm text-muted-foreground">View and download your invoices</p>
       </div>
 
+      {/* Kept invoices, refused refresh: the list stays and says it is not current. */}
+      {stale && (
+        <InlineErrorState
+          message={`Could not refresh, so the invoices below are the last read: ${reason}. A payment you made since this was fetched is not reflected in it — an invoice you have already paid may still be shown as due.`}
+          onRetry={() => void refetch()}
+        />
+      )}
+
       {loading ? (
         <div className="space-y-3">
           {[1, 2, 3].map(i => <div key={i} className="h-20 bg-card border border-border rounded-xl animate-pulse" />)}
         </div>
+      ) : failed ? (
+        // #2825: #2439 made the route answer 500, but this page read only
+        // {data, isLoading}, so the 500 still landed on "No invoices yet".
+        <InlineErrorState
+          message={`We could not load your invoices. That is a failed request, not an empty list. ${reason}`}
+          onRetry={() => void refetch()}
+        />
       ) : invoices.length === 0 ? (
-        error ? (
-          // #2825: #2439 made the route answer 500, but this page read only
-          // {data, isLoading}, so the 500 still landed on "No invoices yet".
-          <div role="alert" className="p-4 rounded-xl bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 text-sm">
-            We could not load your invoices. That is a failed request, not an empty
-            list — reload the page to try again.
-          </div>
-        ) : (
-          <div className="text-center py-12">
-            <FileText className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
-            <p className="text-sm text-muted-foreground">No invoices yet</p>
-          </div>
-        )
+        <div className="text-center py-12">
+          <FileText className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
+          <p className="text-sm text-muted-foreground">No invoices yet</p>
+        </div>
       ) : (
         <div className="bg-card border border-border rounded-2xl overflow-hidden">
           <div className="overflow-x-auto">

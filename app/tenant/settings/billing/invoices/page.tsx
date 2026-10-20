@@ -52,6 +52,16 @@ export default function InvoicesPage() {
     '/api/tenant/billing/invoices',
   );
   const invoices: Invoice[] = data?.data ?? [];
+  // #2872: nothing on this page writes, so the refused revalidation is a navigation:
+  // the operator reaches the list from `/tenant/settings/billing`, goes Back, and
+  // re-entering past `staleTime: 30_000` mounts the page on the rows it already has
+  // while it revalidates behind them — `requireAuth` answers that 401 the moment the
+  // admin session lapses, and the billing_events read answers 500. #2829's branch asked
+  // only whether the list was empty, so kept rows plus a refused refresh passed without
+  // comment, and a history the last read said was empty was reported as an outage.
+  const invoicesFailed = Boolean(invoicesError) && !data;
+  const invoicesStale = Boolean(invoicesError) && Boolean(data);
+  const invoicesReason = invoicesError?.message || 'no response from the server';
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -65,14 +75,22 @@ export default function InvoicesPage() {
         </div>
       </div>
 
+      {/* Kept rows, refused refresh: the history stays and says it is not current. */}
+      {invoicesStale && (
+        <InlineErrorState
+          message={`Could not refresh, so the invoice list below is the last read: ${invoicesReason}. A payment made since this was fetched is not reflected in it.`}
+          onRetry={refetchInvoices}
+        />
+      )}
+
       {loading ? (
         <div className="space-y-2">
           {[1, 2, 3, 4].map(i => <div key={i} className="h-14 bg-card border border-border rounded-xl animate-pulse" />)}
         </div>
+      ) : invoicesFailed ? (
+        <InlineErrorState message={`Failed to load your invoices: ${invoicesReason}`} onRetry={refetchInvoices} />
       ) : invoices.length === 0 ? (
-        invoicesError
-          ? <InlineErrorState message={`Failed to load your invoices: ${invoicesError.message}`} onRetry={refetchInvoices} />
-          : <div className="admin-card flex flex-col items-center justify-center py-16">
+        <div className="admin-card flex flex-col items-center justify-center py-16">
           <FileText className="w-12 h-12 text-muted-foreground/30 mb-4" />
           <p className="font-semibold mb-1">No invoices yet</p>
           <p className="text-sm text-muted-foreground">Invoices will appear here after your first payment</p>

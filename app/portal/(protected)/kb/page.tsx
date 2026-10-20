@@ -10,6 +10,7 @@ import Link from 'next/link';
 import { Book, Search, ChevronRight, Clock, Eye } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 import { useApiQuery } from '@/lib/query/client';
+import InlineErrorState from '@/components/shared/inline-error-state';
 
 interface PortalArticle {
   id: string;
@@ -35,12 +36,24 @@ export default function PortalKBPage() {
     } catch { router.replace('/portal/login'); return; }
   }, [router]);
 
-  const { data, isLoading, error } = useApiQuery<{ data: PortalArticle[] }>(
+  const { data, isLoading, error, refetch } = useApiQuery<{ data: PortalArticle[] }>(
     ['portal-kb-articles'],
     '/api/public/kb/articles?status=published',
     { enabled: sessionReady },
   );
   const loading = !sessionReady || isLoading;
+
+  // #2872: a customer never writes to this list, so the refused revalidation here is
+  // the cache's own: leave the portal, come back through Knowledge Base inside the
+  // 5-minute window and the page mounts past `staleTime: 30_000` on the articles it
+  // already has and revalidates behind them — which `/api/public/kb/articles` answers
+  // 401 once the httpOnly portal session expires (the one thing the customer cannot
+  // see) or 429 once the route's 30-per-minute budget is spent. The branch below asked
+  // `error && no rows`, so a refusal over articles still on screen passed without
+  // comment, while a list the last read said was empty got the outage card.
+  const failed = Boolean(error) && !data;
+  const stale = Boolean(error) && Boolean(data);
+  const reason = error?.message || 'no response from the server';
 
   const filtered = useMemo(
     () => (data?.data ?? []).filter(a => !search || a.title.toLowerCase().includes(search.toLowerCase())),
@@ -62,17 +75,25 @@ export default function PortalKBPage() {
         />
       </div>
 
+      {/* Kept articles, refused refresh: the list stays and says it is not current. */}
+      {stale && (
+        <InlineErrorState
+          message={`Could not refresh, so the articles below are the last read: ${reason}. An article published since this was fetched is not listed.`}
+          onRetry={() => void refetch()}
+        />
+      )}
+
       {loading ? (
         <div className="space-y-3">
           {[1, 2, 3, 4].map(i => <div key={i} className="h-20 bg-card border border-border rounded-xl animate-pulse" />)}
         </div>
-      ) : error && !(data?.data?.length) ? (
+      ) : failed ? (
         // #2825: "No articles found" also serves a search miss, which is honest —
-        // so the alert only fires when there are no rows to search either.
-        <div role="alert" className="p-4 rounded-xl bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 text-sm">
-          We could not load the knowledge base. That is a failed request, not an
-          empty list — reload the page to try again.
-        </div>
+        // so the outage card only speaks for a read that never answered.
+        <InlineErrorState
+          message={`We could not load the knowledge base. That is a failed request, not an empty list. ${reason}`}
+          onRetry={() => void refetch()}
+        />
       ) : filtered.length === 0 ? (
         <div className="text-center py-12">
           <Book className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
