@@ -64,6 +64,19 @@ export default function SuperAdminRateLimitsPage() {
   const superAdmins: SuperAdmin[] = rlData?.data?.superAdmins ?? [];
   const endpoints: RateLimitEndpoint[] = rlData?.data?.endpoints ?? [];
 
+  // #2872: `rlError` alone cannot tell "this read never answered" from "this read
+  // answered and the refresh was refused", and TanStack Query keeps `rlData`
+  // straight through the second — which is the ordinary state on this page, since
+  // every write (`saveGlobalMutation`, `savePlanMutation`, `resetMutation`,
+  // `toggleAdminMutation`) ends in `invalidateQueries` on this key.
+  // The bare flag therefore sent a refused reload to #2829's outage banner while
+  // the configuration the operator had just saved stayed in the form below it, and
+  // left "No super admin users found" standing as a fact about a read that failed.
+  // `failed` is a configuration that never answered; `stale` is the last read, kept.
+  const failed = Boolean(rlError) && !rlData;
+  const stale = Boolean(rlError) && Boolean(rlData);
+  const reason = rlError?.message || 'no response from the server';
+
   useEffect(() => {
     if (seeded || !rlData?.data) return;
     setEditGlobal(rlData.data.globalDefaults || {});
@@ -98,7 +111,26 @@ export default function SuperAdminRateLimitsPage() {
     setHasChanges(true);
   };
 
-  // #1328: write actions via useMutation; onSuccess invalidates the config query.
+  // #2872 / epic rule #1 — which write survives which read, measured against
+  // app/api/superadmin/rate-limits/route.ts:
+  //   `update_global` (:98-110) upserts `system_settings.global_rate_limits` with
+  //   `JSON.stringify(body.rateLimits)` — no read-back, no precondition — so an
+  //   unseeded (empty) form would erase every platform default at once. Blocked on
+  //   `failed`, allowed on `stale` (the form holds the last read plus the
+  //   operator's own edits; the banner names what the next save costs).
+  //   `update_plan_limits` (:113-127) replaces `plans.rateLimitConfig` wholesale for
+  //   `body.planId`; the `concurrencyGuard` at :116-120 only runs when the body
+  //   carries `expectedUpdatedAt`, which this page never sends. Same gate.
+  //   `reset_to_defaults` (:138-145) sets `rateLimitConfig = {}` for `body.planId`.
+  //   On `failed` the seeding effect never ran, so `selectedPlan` is `''`, the
+  //   uuid shape check fails (`lib/api/schemas/superadmin.ts:82`) and the route
+  //   answers 400 — a button that cannot address the plan it claims to reset, so it
+  //   is blocked on `failed`. It writes no view of the read at all, so `stale`
+  //   leaves it honest about what it does (drop this plan's overrides).
+  //   `toggle_super_admin_unlimited` (:129-136) writes `body.unlimited` verbatim;
+  //   its only button lives inside `superAdmins.map`, so a read that never answered
+  //   renders none of it. On `stale` it flips the value the last read showed — that
+  //   is what the banner is for.
   const putRateLimits = async (body: Record<string, unknown>) => {
     const res = await fetch('/api/superadmin/rate-limits', {
       method: 'PUT',
@@ -194,6 +226,10 @@ export default function SuperAdminRateLimitsPage() {
     </div>
   );
 
+  // #2872: `isLoading` is true only until this read answers for the first time, so
+  // it can never stand in for either arm below — a refused refresh leaves
+  // `isLoading` false with the configuration still rendered underneath. The
+  // sentence stays about the wait, not about the limits.
   if (loading) return <div className="flex items-center gap-3 text-white/40 p-4"><Loader2 className="w-4 h-4 animate-spin" />Loading rate limits...</div>;
 
   return (
@@ -203,10 +239,26 @@ export default function SuperAdminRateLimitsPage() {
         <p className="text-xs text-white/40">All limits are stored in the database. Zero hardcoded values. Changes take effect immediately.</p>
       </div>
 
-      {rlError && (
+      {failed && (
         // #2829: a failed read renders this page as an all-empty configuration,
         // and the save control underneath would write that emptiness back.
+        // #2872: the banner is re-gated on `failed`, so it now speaks only for a
+        // read that never answered; a refused refresh of the configuration the page
+        // is still holding gets its own sentence below instead of this one.
         <InlineErrorState message="Could not load the rate-limit configuration — the limits shown below are not the live ones." onRetry={() => void refetch()} />
+      )}
+
+      {stale && (
+        // The write this state is reached from is the page's own saves: the route
+        // replaces whole maps rather than merging into what the database holds
+        // (`update_global` upserts `global_rate_limits` with the body it is given,
+        // route.ts:98-110; `update_plan_limits` overwrites `plans.rateLimitConfig`,
+        // route.ts:113-127). So the cost of a refused refresh is stated as the cost
+        // of the next save, not as vague drift.
+        <InlineErrorState
+          message={`Could not refresh the rate-limit configuration, so the limits below are the last read: ${reason}. Saving now writes this whole map over whatever the server holds.`}
+          onRetry={() => void refetch()}
+        />
       )}
 
       {/* Super Admin Bypass Section */}
@@ -219,7 +271,15 @@ export default function SuperAdminRateLimitsPage() {
           </div>
         </div>
         <div className="p-5 space-y-2">
-          {superAdmins.length === 0 && <p className="text-xs text-white/30">No super admin users found</p>}
+          {/* #2872: `superAdmins` is `rlData?.data?.superAdmins` above, the same read as the
+              configuration — one `useApiQuery` feeds all four sections. An unread read has no
+              roster to call empty, so it may not claim none exists. */}
+          {!failed && superAdmins.length === 0 && <p className="text-xs text-white/30">No super admin users found</p>}
+          {/* The toggle writes `!current` off this roster (route.ts:129-136), so the banner's
+              "the limits below are the last read" has to be said where the switch is. */}
+          {stale && superAdmins.length > 0 && (
+            <p className="text-[10px] text-white/40">These toggles flip the value this page last read, not what the account is on the server now.</p>
+          )}
           {superAdmins.map(admin => (
             <div key={admin.id} className="flex items-center justify-between p-3 rounded-lg border border-white/5 bg-white/[0.02]">
               <div>
@@ -280,7 +340,7 @@ export default function SuperAdminRateLimitsPage() {
             <div className="flex items-center gap-3 pt-3 border-t border-white/5">
               <button
                 onClick={saveGlobalDefaults}
-                disabled={!hasChanges || saving === 'global'}
+                disabled={!hasChanges || saving === 'global' || failed}
                 className="flex items-center gap-2 px-5 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold disabled:opacity-50 transition-colors"
               >
                 {saving === 'global' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
@@ -333,7 +393,7 @@ export default function SuperAdminRateLimitsPage() {
                 <div className="flex items-center gap-3 pt-3 border-t border-white/5">
                   <button
                     onClick={savePlanLimits}
-                    disabled={!hasChanges || saving === selectedPlan}
+                    disabled={!hasChanges || saving === selectedPlan || failed}
                     className="flex items-center gap-2 px-5 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold disabled:opacity-50 transition-colors"
                   >
                     {saving === selectedPlan ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
@@ -341,7 +401,7 @@ export default function SuperAdminRateLimitsPage() {
                   </button>
                   <button
                     onClick={resetToDefaults}
-                    disabled={saving === selectedPlan}
+                    disabled={saving === selectedPlan || failed}
                     className="flex items-center gap-2 px-4 py-2 rounded-xl border border-white/10 text-white/60 text-sm hover:text-white disabled:opacity-50 transition-colors"
                   >
                     <RotateCcw className="w-3.5 h-3.5" />Reset to Global
