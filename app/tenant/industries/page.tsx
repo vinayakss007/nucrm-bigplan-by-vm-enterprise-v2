@@ -32,12 +32,21 @@ export default function IndustriesPage() {
   // failure spoke for four seconds and left "No templates available." on screen.
   // `check-panel-error-state.mjs` cannot see that sentence at all — its
   // EMPTY_SENTENCE only recognises "No … yet|found|here|configured|…" — so nothing
-  // in CI ever pointed here. The banner is the permanent answer now.
+  // in CI ever pointed here. The banner is the permanent answer now — for a read
+  // that never answered. #2872 below covers the other half.
   const { data, isLoading: loading, error, refetch } = useApiQuery<{ data?: IndustryTemplate[] }>(
     ['tenant', 'industry-templates'],
     '/api/tenant/industry-templates',
   );
   const templates: IndustryTemplate[] = data?.data ?? [];
+  // #2872: the banner branched on the bare `error`, and TanStack Query keeps `data`
+  // when a revalidation of a read that already succeeded fails. `applyTemplate`
+  // invalidates this key on success, so applying a template whose reload then
+  // refused hid the catalogue behind "Failed to load industry templates" — over the
+  // rows the page was still holding.
+  const failed = Boolean(error) && !data;
+  const stale = Boolean(error) && Boolean(data);
+  const reason = error?.message || 'no response from the server';
 
   // Apply via useMutation; `variables` is the templateId so the button can show
   // a per-row spinner without extra state.
@@ -84,9 +93,15 @@ export default function IndustriesPage() {
       </div>
 
       {/* Templates List */}
-      {error ? (
+      {stale && (
         <InlineErrorState
-          message={`Failed to load industry templates: ${error.message || 'no response from the server'}`}
+          message={`Could not refresh, so the templates below are the last read: ${reason}. Applying one again would send a second request for a template this list may already reflect.`}
+          onRetry={refetch}
+        />
+      )}
+      {failed ? (
+        <InlineErrorState
+          message={`Failed to load industry templates: ${reason}`}
           onRetry={refetch}
         />
       ) : templates.length === 0 ? (

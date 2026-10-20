@@ -47,6 +47,17 @@ export default function ActivitiesPage() {
     ? data
     : data?.data ?? data?.activities ?? [];
 
+  // #2872: `error` alone could not tell "this read never answered" from "this read
+  // answered and then refused", and TanStack Query keeps `data` through the second —
+  // which is the reachable state here because `offset` is part of the key. Paging to
+  // page 2 hands page 1's rows to the new key through `placeholderData`, so a refused
+  // page-2 read swapped the rows for an outage card while the header still said
+  // "Page 2", and a refused reload of the page that had already answered lost the log
+  // outright.
+  const failed = Boolean(error) && !data;
+  const stale = Boolean(error) && Boolean(data);
+  const reason = error?.message || 'no response from the server';
+
   const loading = isLoading;
 
   const actionColor = (action: string) => {
@@ -73,9 +84,15 @@ export default function ActivitiesPage() {
         </div>
       </div>
 
-      {error ? (
+      {stale && (
         <InlineErrorState
-          message={`Failed to load the activity log: ${error.message || 'no response from the server'}`}
+          message={`Could not refresh, so the entries below are the last read: ${reason}. The page number above may not match these entries — paging kept the previous read's rows while this one failed.`}
+          onRetry={refetch}
+        />
+      )}
+      {failed ? (
+        <InlineErrorState
+          message={`Failed to load the activity log: ${reason}`}
           onRetry={refetch}
         />
       ) : activities.length === 0 ? (
