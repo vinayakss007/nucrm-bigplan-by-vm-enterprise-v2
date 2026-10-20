@@ -70,6 +70,17 @@ export default function SmsPage() {
     `/api/tenant/sms?${params}`,
   );
   const messages: SmsMessage[] = messagesData?.data ?? [];
+  // #2872: the templates read below already splits these two states (#2868); the
+  // message read did not. TanStack Query keeps `messagesData` when a revalidation of a
+  // read that already succeeded fails, and both the four stat cards and the table
+  // branched on `messagesError` alone — so a refused reload (the send mutation's
+  // invalidate, the filter chip's key change past `staleTime`, or the remount refetch)
+  // dashed four counters that count the very rows still in hand and replaced the log
+  // with the outage card. `filter` is part of the key, so a status view that has never
+  // answered is a failure, not a stale read.
+  const messagesFailed = Boolean(messagesError) && !messagesData;
+  const messagesStale = Boolean(messagesError) && Boolean(messagesData);
+  const messagesReason = messagesError?.message || 'no response from the server';
 
   // #2868: this read destructured only `data`. The page is not judged on its
   // message read — the compose dialog's "Use Template" picker is a second,
@@ -164,24 +175,31 @@ export default function SmsPage() {
         </button>
       </div>
 
+      {messagesStale && (
+        <InlineErrorState
+          message={`Could not refresh, so the message log and the counts below are the last read: ${messagesReason}. A message sent since this was fetched is in neither.`}
+          onRetry={refetchMessages}
+        />
+      )}
+
       {/* Stats Cards — every number here is counted off `messages`, so an unread
           list renders unavailable rather than 0 (#2829). */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="admin-card p-4">
           <p className="text-xs font-medium text-muted-foreground">Total Messages</p>
-          <p className="text-2xl font-bold mt-1">{messagesError ? '—' : stats.total}</p>
+          <p className="text-2xl font-bold mt-1">{messagesFailed ? '—' : stats.total}</p>
         </div>
         <div className="admin-card p-4">
           <p className="text-xs font-medium text-muted-foreground">Sent</p>
-          <p className="text-2xl font-bold mt-1 text-blue-600">{messagesError ? '—' : stats.sent}</p>
+          <p className="text-2xl font-bold mt-1 text-blue-600">{messagesFailed ? '—' : stats.sent}</p>
         </div>
         <div className="admin-card p-4">
           <p className="text-xs font-medium text-muted-foreground">Delivered</p>
-          <p className="text-2xl font-bold mt-1 text-emerald-600">{messagesError ? '—' : stats.delivered}</p>
+          <p className="text-2xl font-bold mt-1 text-emerald-600">{messagesFailed ? '—' : stats.delivered}</p>
         </div>
         <div className="admin-card p-4">
           <p className="text-xs font-medium text-muted-foreground">Failed</p>
-          <p className="text-2xl font-bold mt-1 text-red-600">{messagesError ? '—' : stats.failed}</p>
+          <p className="text-2xl font-bold mt-1 text-red-600">{messagesFailed ? '—' : stats.failed}</p>
         </div>
       </div>
 
@@ -199,9 +217,9 @@ export default function SmsPage() {
       {/* Messages Table */}
       {loading ? (
         [...Array(4)].map((_, i) => <div key={i} className="h-14 bg-muted rounded-2xl animate-pulse" />)
-      ) : messagesError ? (
+      ) : messagesFailed ? (
         <InlineErrorState
-          message={`Failed to load the message log: ${messagesError.message || 'no response from the server'}`}
+          message={`Failed to load the message log: ${messagesReason}`}
           onRetry={refetchMessages}
         />
       ) : messages.length === 0 ? (
