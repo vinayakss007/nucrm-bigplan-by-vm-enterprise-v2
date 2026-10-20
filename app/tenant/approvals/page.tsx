@@ -7,6 +7,7 @@
 import { useState, useMemo } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import Link from 'next/link';
 import {
   ShieldCheck, Check, X, AlertCircle, RefreshCw, Filter, ExternalLink,
@@ -80,7 +81,10 @@ const FILTERS: { id: 'pending' | 'approved' | 'rejected' | 'all'; label: string 
 export default function ApprovalsPage() {
   const queryClient = useQueryClient();
   const [filter, setFilter] = useState<'pending' | 'approved' | 'rejected' | 'all'>('pending');
-  const [error, setError] = useState<string | null>(null);
+  // The strip that used to carry both now carries only a refused decision. A read failure
+  // is not an action failure: the two answer different questions and, above all, the
+  // operator's next move is different — retry the read, or fix the payload and try again.
+  const [mutationError, setMutationError] = useState<string | null>(null);
   const [rejectModal, setRejectModal] = useState<Row | null>(null);
   const [rejectReason, setRejectReason] = useState('');
 
@@ -97,32 +101,55 @@ export default function ApprovalsPage() {
     ['tenant', 'approvals', qs],
     `/api/tenant/approvals?${qs}`,
   );
-  const queryErrorMsg = queryError ? (queryError.message || 'Failed to load') : null;
+  // #2872: this single flag was answering two different questions, and both answers lied.
+  // Approve/Reject invalidate ['tenant','approvals'] below and the rows are gated on `data`
+  // rather than on the flag, so when that refresh was refused TanStack Query handed back the
+  // payload the view already had: the queue stayed on screen while the strip above it said it
+  // could not be loaded. The other half is the one a manager acts on. After a read that never
+  // answered, `data?.summary` is unset, so the three cards reported Pending 0 · Approved 0 ·
+  // Rejected 0 and every filter chip carried a count of 0 — and `summary` is not the view's
+  // tally, it is the tenant's totals per status over every row regardless of the status filter
+  // (app/api/tenant/approvals/route.ts:88-95 groups on status with only the tenant clause,
+  // while `rows` at :55-56 honours the filter). "0 pending" from an unread request therefore
+  // claims nobody is waiting on this approver. #2829's dash-instead-of-zero discipline covers
+  // the money panels whose figures come off a rendered array; this page's come from the
+  // server's `summary`, so the sweep never reached it and there was no outage copy here to
+  // preserve — the bare flag printed the raw `queryError.message`. The copy below is that
+  // established shape, and only its gating changes.
+  const failed = Boolean(queryError) && !data;   // read never answered → outage copy, no figures
+  const stale = Boolean(queryError) && Boolean(data); // answered before, refresh refused → keep everything
+  const reason = queryError?.message || 'no response from the server';
+  const error = failed ? `Failed to load approvals: ${reason}` : null;
   const load = () => refetch();
 
   const decideMutation = useMutation({
-    mutationFn: async ({ row, action, reason }: { row: Row; action: 'approve' | 'reject'; reason?: string }) => {
+    // `note`, not `reason`: the read's `reason` above is the failure the banner names, and
+    // shadowing it inside the mutation would make the two failure kinds easy to confuse.
+    mutationFn: async ({ row, action, reason: note }: { row: Row; action: 'approve' | 'reject'; reason?: string }) => {
       const res = await fetch(`/api/tenant/approvals/${row.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action, reason }),
+        body: JSON.stringify({ action, reason: note }),
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`);
     },
-    onMutate: () => setError(null),
+    onMutate: () => setMutationError(null),
     onSuccess: () => {
       setRejectModal(null);
       setRejectReason('');
       queryClient.invalidateQueries({ queryKey: ['tenant', 'approvals'] });
     },
-    onError: (e: Error) => setError(e.message),
+    onError: (e: Error) => setMutationError(e.message),
   });
   const busyId = decideMutation.isPending ? (decideMutation.variables?.row.id ?? null) : null;
-  function decide(row: Row, action: 'approve' | 'reject', reason?: string) {
-    decideMutation.mutate({ row, action, reason });
+  function decide(row: Row, action: 'approve' | 'reject', note?: string) {
+    decideMutation.mutate({ row, action, reason: note });
   }
 
+  // Reached only where a figure is not dashed, i.e. only once the read has answered: on a
+  // failed read every site below prints '—' instead of consulting this, so the zeros never
+  // stand in for numbers that were never read.
   const summary = data?.summary ?? { pending: 0, approved: 0, rejected: 0 };
 
   return (
@@ -146,11 +173,11 @@ export default function ApprovalsPage() {
         </button>
       </div>
 
-      {/* Stats */}
+      {/* Stats — dashed, never zeroed, when the read never answered (see the #2872 note above) */}
       <div className="grid grid-cols-3 gap-3">
-        <Stat label="Pending" value={summary.pending} tone="amber" />
-        <Stat label="Approved" value={summary.approved} tone="emerald" />
-        <Stat label="Rejected" value={summary.rejected} tone="red" />
+        <Stat label="Pending" value={failed ? '—' : summary.pending} tone="amber" />
+        <Stat label="Approved" value={failed ? '—' : summary.approved} tone="emerald" />
+        <Stat label="Rejected" value={failed ? '—' : summary.rejected} tone="red" />
       </div>
 
       {/* Filter pills */}
@@ -158,7 +185,11 @@ export default function ApprovalsPage() {
         <Filter className="w-4 h-4 text-muted-foreground shrink-0" />
         {FILTERS.map(f => {
           const active = filter === f.id;
-          const count = f.id === 'all'
+          // The chip stays clickable after a failed read — clicking it is the way out of the
+          // view the operator is stuck in. Only the count it prints is dashed, because a 0
+          // here offers four filters that would each answer "none" about a queue that was
+          // never read.
+          const count = failed ? '—' : f.id === 'all'
             ? summary.pending + summary.approved + summary.rejected
             : summary[f.id];
           return (
@@ -179,11 +210,32 @@ export default function ApprovalsPage() {
         })}
       </div>
 
-      {(error || queryErrorMsg) && (
-        <div className="rounded-xl border border-red-300 bg-red-50 dark:border-red-800/50 dark:bg-red-950/20 px-4 py-3 text-sm text-red-700 dark:text-red-300 flex items-start gap-2">
+      {mutationError && (
+        <div role="alert" className="rounded-xl border border-red-300 bg-red-50 dark:border-red-800/50 dark:bg-red-950/20 px-4 py-3 text-sm text-red-700 dark:text-red-300 flex items-start gap-2">
           <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-          <span className="flex-1">{error || queryErrorMsg}</span>
+          <span className="flex-1">{mutationError}</span>
         </div>
+      )}
+
+      {stale && (
+        // Refused refresh, kept queue. The Approve/Reject buttons stay live on purpose: the
+        // PATCH re-reads the row by id and tenant before it decides anything
+        // (app/api/tenant/approvals/[id]/route.ts:57-62), 404s when that read finds nothing
+        // (:63-65), and refuses a decision on a row that is no longer pending with a 409
+        // naming its real status (:66-70), then takes a concurrency guard on the row's
+        // updated_at (:73). So deciding a stale row is answered by the server with the truth
+        // rather than applied twice on a guess — which is why this banner warns instead of
+        // disabling. What the read being old does cost is named here: a request another admin
+        // has since decided still shows as pending, and the three figures are tenant-wide
+        // totals, so the workload they describe is the one from before the refusal.
+        <InlineErrorState
+          message={`Could not refresh, so the approvals below, the three figures and the chip counts are the last read: ${reason}. A request another admin approved or rejected since this was fetched is still listed here as pending with its decision buttons live, and Pending/Approved/Rejected are the older tenant-wide totals.`}
+          onRetry={load}
+        />
+      )}
+
+      {error && (
+        <InlineErrorState message={error} onRetry={load} />
       )}
 
       {/* Cards */}
@@ -193,6 +245,10 @@ export default function ApprovalsPage() {
             <Loader2 className="w-5 h-5 mx-auto mb-2 animate-spin" />Loading…
           </div>
         )}
+        {/* Gated on `data`, not on the read flags: "no pending approval requests" is a claim
+            about the tenant that only an answered read may make, and an outage has no data at
+            all — so the outage card above is what the operator sees, never this. A kept-but-
+            stale empty queue does say it, with the caveat over it. */}
         {!loading && data && data.rows.length === 0 && (
           <div className="rounded-xl border border-border bg-card p-12 text-center text-muted-foreground">
             <ShieldCheck className="w-8 h-8 mx-auto mb-3 text-muted-foreground/40" />
@@ -314,7 +370,7 @@ export default function ApprovalsPage() {
   );
 }
 
-function Stat({ label, value, tone }: { label: string; value: number; tone: 'amber' | 'emerald' | 'red' }) {
+function Stat({ label, value, tone }: { label: string; value: number | string; tone: 'amber' | 'emerald' | 'red' }) {
   const toneClass =
     tone === 'amber'   ? 'text-amber-700 dark:text-amber-400' :
     tone === 'emerald' ? 'text-emerald-700 dark:text-emerald-400' :
