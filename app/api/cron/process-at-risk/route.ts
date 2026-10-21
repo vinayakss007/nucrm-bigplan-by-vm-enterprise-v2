@@ -74,7 +74,11 @@ export async function POST(request: NextRequest) {
       for (const assigneeId in byAssignee) {
         const { email, name, deals } = byAssignee[assigneeId]!;
         
-        await sendEmail({
+        // #2998: the old `.catch()` on this promise could never fire for a
+        // provider rejection — sendEmail resolves with {success:false} instead
+        // of throwing — and the digest was still counted as sent.
+        try {
+          const result = await sendEmail({
           to: email,
           subject: `⚠️ Daily Digest: ${deals.length} At-Risk Deals in your Pipeline`,
           html: `
@@ -112,9 +116,15 @@ export async function POST(request: NextRequest) {
             </div>
           `,
           text: `Hi ${name}, you have ${deals.length} at-risk deals. View them at ${process.env.NEXT_PUBLIC_APP_URL}/tenant/ai/at-risk`
-        }).catch(err => void logError({ error: err, context: 'cron/process-at-risk email', level: 'warning' }));
-        
-        totalEmailsSent++;
+          });
+          if (!result.success) {
+            void logError({ error: result.error ?? 'provider rejection', context: 'cron/process-at-risk email', level: 'warning' });
+          } else {
+            totalEmailsSent++;
+          }
+        } catch (err) {
+          void logError({ error: err, context: 'cron/process-at-risk email', level: 'warning' });
+        }
       }
     });
 

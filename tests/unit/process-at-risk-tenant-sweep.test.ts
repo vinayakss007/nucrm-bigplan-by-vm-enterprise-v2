@@ -205,7 +205,7 @@ describe('process-at-risk cron — per-tenant sweep', () => {
     expect(body.emails_sent).toBe(0);
   });
 
-  it('swallows an email failure the same way the original route did', async () => {
+  it('logs and does not count a thrown email failure (#2998)', async () => {
     mockGetAtRiskDeals.mockResolvedValue([deal('d1', USER_2, 'rep-b@example.com', 'Rep B')]);
     mockSendEmail.mockRejectedValue(new Error('smtp down'));
     const { logError } = await import('@/lib/errors-server');
@@ -216,7 +216,21 @@ describe('process-at-risk cron — per-tenant sweep', () => {
 
     expect(res.status).toBe(200);
     expect(body.ok).toBe(true);
-    expect(body.emails_sent).toBe(1);
+    expect(body.emails_sent).toBe(0);
+    expect(logError).toHaveBeenCalledWith(expect.objectContaining({ context: 'cron/process-at-risk email' }));
+  });
+
+  // #2998: sendEmail resolves with {success:false} on provider rejection —
+  // the old code counted those as sent, and the `.catch()` could never fire.
+  it('does not count a provider rejection ({success:false}) as sent (#2998)', async () => {
+    mockGetAtRiskDeals.mockResolvedValue([deal('d1', USER_2, 'rep-b@example.com', 'Rep B')]);
+    mockSendEmail.mockResolvedValue({ success: false, error: '403 forbidden' });
+    const { logError } = await import('@/lib/errors-server');
+
+    const { POST } = await import('@/app/api/cron/process-at-risk/route');
+    const body = await (await POST(makeRequest())).json();
+
+    expect(body.emails_sent).toBe(0);
     expect(logError).toHaveBeenCalledWith(expect.objectContaining({ context: 'cron/process-at-risk email' }));
   });
 
