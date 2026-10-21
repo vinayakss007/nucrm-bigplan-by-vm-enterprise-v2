@@ -12,7 +12,7 @@ import { eq, and, sql, ne } from 'drizzle-orm';
 import { z } from 'zod';
 import { uuidIdSchemaWith } from '@/lib/validation/uuid';
 import { validateBody, readJsonBody } from '@/lib/api/validate';
-import { isStripeConfigured } from '@/lib/stripe';
+import { isStripeConfigured, stripeFetch } from '@/lib/stripe';
 import { currencyFromProvider } from '@/lib/billing-currency';
 import { withApiRoute } from '@/lib/api/with-api-route';
 
@@ -151,10 +151,8 @@ export const POST = withApiRoute(async (request: NextRequest) => {
       }
       const attemptNumber = nextNumber;
 
-      // TODO: In a real implementation, this would trigger a background job
-      // to retry the payment via Stripe. For now, we'll just record the attempt.
-      
-      // Record billing event
+      // Record billing event (initiation provenance; the settlement event is
+      // appended after the synchronous execution below).
       await tx.insert(billingEvents).values({
         tenantId: ctx.tenantId,
         eventType: 'dunning.retry_initiated',
@@ -168,16 +166,73 @@ export const POST = withApiRoute(async (request: NextRequest) => {
         },
       });
 
+      // #2961: there is no worker that drains 'pending' attempts — nothing
+      // selects them, ever. The attempt is committed as 'pending' by the
+      // transaction, then executed below synchronously against Stripe, and the
+      // row is settled to succeeded/failed in its own update. A queued retry
+      // that nothing runs is indistinguishable from a silent billing failure.
       return [a, attemptNumber] as const;
+    });
+
+    // Execute the retry: pay the subscription's open invoice via Stripe.
+    let execStatus: 'succeeded' | 'failed' = 'failed';
+    let execError: string | null = null;
+    let stripeInvoiceId: string | null = null;
+    let stripePaymentIntentId: string | null = null;
+    try {
+      const listed = await stripeFetch<{
+        data: { id: string; status?: string }[];
+      }>(`/invoices?subscription=${subscription.stripeSubscriptionId}&status=open&limit=1`);
+      const openInvoice = listed.data?.[0];
+      if (!openInvoice) throw new Error('No open invoice for this subscription');
+      stripeInvoiceId = openInvoice.id;
+      const paid = await stripeFetch<{
+        status?: string;
+        payment_intent?: string | null;
+      }>(`/invoices/${openInvoice.id}/pay`, { method: 'POST', params: {} });
+      if (typeof paid.payment_intent === 'string') stripePaymentIntentId = paid.payment_intent;
+      if (paid.status === 'paid') {
+        execStatus = 'succeeded';
+      } else {
+        throw new Error(`Invoice returned status ${String(paid.status)}`);
+      }
+    } catch (err: unknown) {
+      execError = err instanceof Error ? err.message : String(err);
+    }
+
+    await db.update(dunningAttempts).set({
+      status: execStatus,
+      executedAt: new Date(),
+      errorMessage: execError,
+      stripeInvoiceId,
+      stripePaymentIntentId,
+      updatedAt: new Date(),
+    }).where(eq(dunningAttempts.id, attempt.id));
+
+    await db.insert(billingEvents).values({
+      tenantId: ctx.tenantId,
+      eventType: execStatus === 'succeeded' ? 'dunning.retry_succeeded' : 'dunning.retry_failed',
+      amount: billingAmount,
+      currency: billingCurrency,
+      metadata: {
+        subscription_id: subscriptionId,
+        attempt_id: attempt.id,
+        attempt_number: allocatedNumber,
+        stripe_invoice_id: stripeInvoiceId,
+        error: execError,
+      },
     });
 
     return NextResponse.json({
       data: {
         attemptId: attempt.id,
         attemptNumber: allocatedNumber,
-        status: 'pending',
+        status: execStatus,
         scheduledAt: attempt.scheduledAt,
-        message: `Payment retry attempt ${allocatedNumber} initiated`,
+        error: execError,
+        message: execStatus === 'succeeded'
+          ? `Payment retry attempt ${allocatedNumber} succeeded`
+          : `Payment retry attempt ${allocatedNumber} failed: ${execError ?? 'unknown error'}`,
       },
     });
   } catch (err: unknown) {
