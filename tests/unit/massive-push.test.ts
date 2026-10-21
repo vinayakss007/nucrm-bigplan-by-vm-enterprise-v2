@@ -1,10 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const mockDbData = vi.hoisted(() => ({
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  hooks: [] as any[],
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  failedQueue: [] as any[],
+  hooks: [] as unknown[],
+  failedQueue: [] as unknown[],
 }));
 
 const mockQueryResult = vi.hoisted(() => ({
@@ -324,38 +322,32 @@ describe('cache/index.ts - module loads', () => {
 describe('auth/api-key - hasScope', () => {
   it('returns true for super admin', async () => {
     const { hasScope } = await import('@/lib/auth/api-key');
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    expect(hasScope({ isSuperAdmin: true, permissions: {} } as any, 'contacts:read')).toBe(true);
+    expect(hasScope({ isSuperAdmin: true, permissions: {} } as never, 'contacts:read')).toBe(true);
   });
 
   it('returns true for all permission', async () => {
     const { hasScope } = await import('@/lib/auth/api-key');
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    expect(hasScope({ permissions: { all: true } } as any, 'contacts:read')).toBe(true);
+    expect(hasScope({ permissions: { all: true } } as never, 'contacts:read')).toBe(true);
   });
 
   it('returns true for exact scope match', async () => {
     const { hasScope } = await import('@/lib/auth/api-key');
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    expect(hasScope({ permissions: { 'contacts:read': true } } as any, 'contacts:read')).toBe(true);
+    expect(hasScope({ permissions: { 'contacts:read': true } } as never, 'contacts:read')).toBe(true);
   });
 
   it('returns true for resource:all wildcard', async () => {
     const { hasScope } = await import('@/lib/auth/api-key');
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    expect(hasScope({ permissions: { 'contacts:all': true } } as any, 'contacts:write')).toBe(true);
+    expect(hasScope({ permissions: { 'contacts:all': true } } as never, 'contacts:write')).toBe(true);
   });
 
   it('returns false for no matching scope', async () => {
     const { hasScope } = await import('@/lib/auth/api-key');
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    expect(hasScope({ permissions: { 'deals:read': true } } as any, 'contacts:read')).toBe(false);
+    expect(hasScope({ permissions: { 'deals:read': true } } as never, 'contacts:read')).toBe(false);
   });
 
   it('returns false for empty permissions', async () => {
     const { hasScope } = await import('@/lib/auth/api-key');
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    expect(hasScope({ permissions: {} } as any, 'contacts:read')).toBe(false);
+    expect(hasScope({ permissions: {} } as never, 'contacts:read')).toBe(false);
   });
 });
 
@@ -449,8 +441,7 @@ describe('automation/engine - evaluateAutomations', () => {
     for (const event of ['deal.won', 'task.completed', 'contact.updated', 'deal.created']) {
       await expect(evaluateAutomations({
         tenantId: 't1', userId: 'u1',
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-        event: event as any,
+        event: event as never,
         data: {},
       })).resolves.not.toThrow();
     }

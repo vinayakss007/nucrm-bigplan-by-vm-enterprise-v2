@@ -47,32 +47,28 @@ describe('middleware', () => {
   it('skips _next/static paths', async () => {
     const { middleware } = await import('@/lib/dev-middleware');
     const req = makeRequest('/_next/static/chunk.js');
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await middleware(req as any);
+    await middleware(req as never);
     expect(mockDevLogger.request).not.toHaveBeenCalled();
   });
 
   it('skips /static paths', async () => {
     const { middleware } = await import('@/lib/dev-middleware');
     const req = makeRequest('/static/image.png');
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await middleware(req as any);
+    await middleware(req as never);
     expect(mockDevLogger.request).not.toHaveBeenCalled();
   });
 
   it('skips favicon.ico', async () => {
     const { middleware } = await import('@/lib/dev-middleware');
     const req = makeRequest('/favicon.ico');
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await middleware(req as any);
+    await middleware(req as never);
     expect(mockDevLogger.request).not.toHaveBeenCalled();
   });
 
   it('skips /dev/dashboard', async () => {
     const { middleware } = await import('@/lib/dev-middleware');
     const req = makeRequest('/dev/dashboard/overview');
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await middleware(req as any);
+    await middleware(req as never);
     expect(mockDevLogger.request).not.toHaveBeenCalled();
   });
 
@@ -80,8 +76,7 @@ describe('middleware', () => {
     process.env.NODE_ENV = 'development';
     const { middleware } = await import('@/lib/dev-middleware');
     const req = makeRequest('/api/contacts');
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const response = await middleware(req as any);
+    const response = await middleware(req as never);
     expect(response).toBe(mockResponse);
     expect(response.headers.set).toHaveBeenCalledWith('X-Request-Start', expect.any(String));
   });
@@ -89,8 +84,7 @@ describe('middleware', () => {
   it('sets X-Request-Start header', async () => {
     const { middleware } = await import('@/lib/dev-middleware');
     const req = makeRequest('/api/test');
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await middleware(req as any);
+    await middleware(req as never);
     expect(mockResponse.headers.set).toHaveBeenCalledWith('X-Request-Start', expect.any(String));
   });
 
@@ -98,8 +92,7 @@ describe('middleware', () => {
     process.env.NODE_ENV = 'production';
     const { middleware } = await import('@/lib/dev-middleware');
     const req = makeRequest('/api/contacts');
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await middleware(req as any);
+    await middleware(req as never);
     expect(mockDevLogger.request).not.toHaveBeenCalled();
     expect(mockDevLogger.time).not.toHaveBeenCalled();
   });
