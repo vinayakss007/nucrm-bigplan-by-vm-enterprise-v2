@@ -118,7 +118,6 @@
   "tests/unit/tenant-restore-route-lock-2225.test.ts": 5,
   "tests/unit/territories.test.ts": 8,
   "tests/unit/usage-middleware.test.ts": 1,
-  "tests/unit/use-keyboard.test.ts": 16,
   "tests/unit/use-notifications.test.ts": 1,
   "tests/unit/utils.test.ts": 2,
   "tests/unit/visitor-tracking.test.ts": 13,
