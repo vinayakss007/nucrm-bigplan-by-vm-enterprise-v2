@@ -7,6 +7,7 @@
 import { useEffect, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import {
   ListChecks, Save, Loader2, Plus, X, ShieldX, RotateCcw,
   UserCheck, ThumbsDown, Trophy, ListTodo, Layers, Briefcase,
@@ -39,16 +40,39 @@ export default function PicklistsPage() {
   // #1328: reads via TanStack Query (were parallel raw fetch + useEffect). The
   // editable copy (data/original) is seeded from the query once loaded so the
   // existing dirty-tracking + discard flow is preserved.
-  const { data: picklistsData, isLoading: picklistsLoading } = useApiQuery<{ picklists?: Record<Category, Entry[]> | null }>(
+  //
+  // #2872: this read's `error` was never bound, so the panel had one sentence for
+  // failure — `Failed to load picklists.`, with no way to re-run it — and nothing
+  // at all for the far more common state. Nothing invalidates `['tenant','admin',
+  // 'picklists']` (the save only rewrites the local copy), so the refresh that
+  // fails here is the remount past `staleTime` when the admin comes back to
+  // settings: the lists on screen are kept from the previous read, and `save()`
+  // PATCHes exactly those lists back. The route merges per category with
+  // `settings->'picklists' || <payload>` — a replace, not a merge of options — and
+  // the page sends no `expectedUpdatedAt`, so nothing can refuse the collision: an
+  // option another admin added since the last read is deleted by this save, and one
+  // they removed comes back. That is what the caveat has to say out loud.
+  //
+  // `activeCat` is a client-side tab over the one payload that returns all six
+  // categories, so it is never part of what was fetched and no tab can be "unread".
+  const {
+    data: picklistsData, isLoading: picklistsLoading, error: picklistsError, refetch: refetchPicklists,
+  } = useApiQuery<{ picklists?: Record<Category, Entry[]> | null }>(
     ['tenant', 'admin', 'picklists'],
     '/api/tenant/admin/picklists',
   );
+  // The gate read only answers `is_admin`, and defaults open when it has never
+  // answered; there is no list or count here for a refusal to misreport, and the
+  // PATCH re-checks the permission itself with a 403.
   const { data: meData, isLoading: meLoading } = useApiQuery<{ is_admin?: boolean }>(
     ['tenant', 'me'],
     '/api/tenant/me',
   );
   const loading = picklistsLoading || meLoading;
   const isAdmin = meData?.is_admin ?? true;
+  const failed = Boolean(picklistsError) && !picklistsData;
+  const stale = Boolean(picklistsError) && Boolean(picklistsData);
+  const reason = picklistsError?.message || 'no response from the server';
 
   const fetchedPicklists = picklistsData?.picklists ?? null;
   // Seed the editable copy once the picklists load (only when not already
@@ -147,8 +171,19 @@ export default function PicklistsPage() {
     </div>
   );
 
+  if (failed) {
+    return (
+      <div className="space-y-5 animate-fade-in">
+        <h1 className="text-xl font-bold flex items-center gap-2"><ListChecks className="w-5 h-5 text-violet-600" />Picklists</h1>
+        <InlineErrorState message={`Failed to load picklists: ${reason}`} onRetry={refetchPicklists} />
+      </div>
+    );
+  }
+
   if (!data) {
-    return <div className="text-sm text-muted-foreground">Failed to load picklists.</div>;
+    // The editable copy is seeded from the read in an effect, so one frame can pass
+    // between the answer arriving and the copy being in hand. That is not a failure.
+    return <div className="flex items-center justify-center h-48 text-muted-foreground"><Loader2 className="w-5 h-5 animate-spin" /></div>;
   }
 
   const list = data[activeCat] ?? [];
@@ -161,6 +196,13 @@ export default function PicklistsPage() {
           Configure the dropdown lists used everywhere in the workspace. Changes apply to existing records and new ones immediately.
         </p>
       </div>
+
+      {stale && (
+        <InlineErrorState
+          message={`Could not refresh, so the lists below are the last read: ${reason}. Saving now replaces each list with what the server held then, so an option someone added or removed since would be lost.`}
+          onRetry={refetchPicklists}
+        />
+      )}
 
       {/* Category picker */}
       <div className="flex flex-wrap gap-1.5">
@@ -206,7 +248,11 @@ export default function PicklistsPage() {
 
         <div className="space-y-1.5">
           {list.length === 0 && (
-            <p className="text-xs text-muted-foreground text-center py-6">No options. Click "Add option" to start.</p>
+            <p className="text-xs text-muted-foreground text-center py-6">
+              {stale
+                ? 'No options in the last read. Click "Add option" to start.'
+                : 'No options. Click "Add option" to start.'}
+            </p>
           )}
           {list.map((entry, idx) => (
             <div key={idx} className="flex items-center gap-2 px-2 py-1.5 rounded-lg border border-border bg-background hover:bg-accent/30 transition-colors">
