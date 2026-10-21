@@ -8,6 +8,7 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import InlineErrorState from '@/components/shared/inline-error-state';
 
 type Tab = 'retention' | 'gdpr' | 'soc2';
 
@@ -37,15 +38,21 @@ export default function ComplianceSettingsPage() {
   const [newPolicy, setNewPolicy] = useState({ entityType: 'contacts', retentionDays: 365, action: 'archive' });
 
   // #1328: reads via TanStack Query (were parallel raw fetch + useEffect).
-  const { data: retData, isLoading: retLoading } = useApiQuery<{ data?: RetentionPolicy[] }>(
+  const {
+    data: retData, isLoading: retLoading, error: retError, refetch: refetchRetention,
+  } = useApiQuery<{ data?: RetentionPolicy[] }>(
     ['tenant', 'compliance', 'retention'],
     '/api/tenant/compliance/retention',
   );
-  const { data: gdprData, isLoading: gdprLoading } = useApiQuery<{ data?: { exports: ComplianceRequest[]; deletions: ComplianceRequest[] } }>(
+  const {
+    data: gdprData, isLoading: gdprLoading, error: gdprError, refetch: refetchGdpr,
+  } = useApiQuery<{ data?: { exports: ComplianceRequest[]; deletions: ComplianceRequest[] } }>(
     ['tenant', 'compliance', 'gdpr'],
     '/api/tenant/compliance/gdpr',
   );
-  const { data: soc2Data, isLoading: soc2Loading } = useApiQuery<{ data?: ComplianceRequest[] }>(
+  const {
+    data: soc2Data, isLoading: soc2Loading, error: soc2Error, refetch: refetchSoc2,
+  } = useApiQuery<{ data?: ComplianceRequest[] }>(
     ['tenant', 'compliance', 'soc2'],
     '/api/tenant/compliance/soc2',
   );
@@ -53,6 +60,30 @@ export default function ComplianceSettingsPage() {
   const gdprRequests = gdprData?.data ?? { exports: [], deletions: [] };
   const soc2Reports: ComplianceRequest[] = soc2Data?.data ?? [];
   const loading = retLoading || gdprLoading || soc2Loading;
+
+  // #2872: these three reads used to bind `data` and nothing else, so a failure had
+  // no channel at all — the tab rendered its create form over an absent table, and
+  // "no policies", "no requests" and "no reports" were indistinguishable from three
+  // reads that never answered. The refused half is the routine one on this page: all
+  // three writes finish with `invalidate(<key>)` on the exact key of the read feeding
+  // the tab the operator is standing in, so the reload that fails lands right after
+  // Create Policy / Request Export / Generate Report, and TanStack Query hands `data`
+  // back through it (staleTime 30s, retry 2) — kept rows, error flag set, no mention
+  // anywhere that the row just written may not be the one on screen.
+  // Nothing here is gated: no write replaces a whole array or map. Retention POST
+  // inserts one row (and the route 409s a duplicate entity type — a collision the
+  // server can and does refuse), and the GDPR and SOC 2 POSTs append a request row
+  // whose payload comes from the button, not from the read, so a save over an unread
+  // read cannot clobber what the read did not show.
+  const retFailed = Boolean(retError) && !retData;
+  const retStale = Boolean(retError) && Boolean(retData);
+  const retReason = retError?.message || 'no response from the server';
+  const gdprFailed = Boolean(gdprError) && !gdprData;
+  const gdprStale = Boolean(gdprError) && Boolean(gdprData);
+  const gdprReason = gdprError?.message || 'no response from the server';
+  const soc2Failed = Boolean(soc2Error) && !soc2Data;
+  const soc2Stale = Boolean(soc2Error) && Boolean(soc2Data);
+  const soc2Reason = soc2Error?.message || 'no response from the server';
 
   const invalidate = (key: string) => queryClient.invalidateQueries({ queryKey: ['tenant', 'compliance', key] });
 
@@ -159,6 +190,18 @@ export default function ComplianceSettingsPage() {
       {/* Data Retention Tab */}
       {activeTab === 'retention' && (
         <div className="space-y-6">
+          {retFailed && (
+            <InlineErrorState
+              message={`Could not load the retention policies: ${retReason}. An absent list below means this read failed, not that no policy is set.`}
+              onRetry={() => void refetchRetention()}
+            />
+          )}
+          {retStale && (
+            <InlineErrorState
+              message={`Could not refresh, so the retention policies below are the last read: ${retReason}. The policy you just created is not in this list, and one another admin changed in the same window still shows the way this page last saw it.`}
+              onRetry={() => void refetchRetention()}
+            />
+          )}
           <form onSubmit={createRetentionPolicy} className="rounded-lg border border-gray-200 p-4 dark:border-gray-700">
             <h3 className="mb-4 text-sm font-medium text-gray-900 dark:text-gray-100">New Retention Policy</h3>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -243,6 +286,18 @@ export default function ComplianceSettingsPage() {
       {/* GDPR Tab */}
       {activeTab === 'gdpr' && (
         <div className="space-y-6">
+          {gdprFailed && (
+            <InlineErrorState
+              message={`Could not load the GDPR request log: ${gdprReason}. Nothing listed below means this read failed, not that the tenant has never filed an export or an erasure.`}
+              onRetry={() => void refetchGdpr()}
+            />
+          )}
+          {gdprStale && (
+            <InlineErrorState
+              message={`Could not refresh, so the GDPR requests below are the last read: ${gdprReason}. The export or erasure you just submitted is not in this list, and a stalled request the server would reap as failed on its next read still shows as running here.`}
+              onRetry={() => void refetchGdpr()}
+            />
+          )}
           <div className="flex gap-3">
             <button
               onClick={() => requestGDPR('export')}
@@ -300,6 +355,18 @@ export default function ComplianceSettingsPage() {
       {/* SOC 2 Tab */}
       {activeTab === 'soc2' && (
         <div className="space-y-6">
+          {soc2Failed && (
+            <InlineErrorState
+              message={`Could not load the SOC 2 report history: ${soc2Reason}. Nothing listed below means this read failed, not a tenant that has never generated a report.`}
+              onRetry={() => void refetchSoc2()}
+            />
+          )}
+          {soc2Stale && (
+            <InlineErrorState
+              message={`Could not refresh, so the reports below are the last read: ${soc2Reason}. The report you just generated is not in this list, and a generation the server would now reap as failed still shows as running.`}
+              onRetry={() => void refetchSoc2()}
+            />
+          )}
           <button
             onClick={generateSOC2Report}
             disabled={saving}
