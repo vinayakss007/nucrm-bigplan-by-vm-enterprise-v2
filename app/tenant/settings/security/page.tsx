@@ -13,7 +13,7 @@ import { Shield, Lock, Key, Download, RefreshCw, Trash2, Eye, EyeOff, Loader2, C
 import toast from 'react-hot-toast';
 import { cn } from '@/lib/utils';
 import InlineErrorState from '@/components/shared/inline-error-state';
-import { sanitizeHTML } from '@/lib/sanitize';
+import { sanitizeHTML } from '@/lib/sanitize-dompurify';
 
 interface PendingDeletion { contacts?: number; companies?: number; deals?: number; tasks?: number; leads?: number; total?: number }
 

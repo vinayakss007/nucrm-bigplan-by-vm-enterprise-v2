@@ -12,7 +12,7 @@ import { Mail, Plus, Pencil, Trash2, Eye, Copy, Save, X, Variable, Blocks } from
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import toast from 'react-hot-toast';
 import { cn } from '@/lib/utils';
-import { sanitizeHTML } from '@/lib/sanitize';
+import { sanitizeHTML } from '@/lib/sanitize-dompurify';
 import { EmailBuilder, type EmailBlock, blocksToHtml } from '@/components/tenant/email-builder';
 import { ErrorBoundary } from '@/components/ui/error-boundary';
 
