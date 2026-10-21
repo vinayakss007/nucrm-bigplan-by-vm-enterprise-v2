@@ -32,6 +32,13 @@
  * route.ts:104-446, are reached from other panels), so there is nothing to gate on
  * `failed` — that absence is asserted too.
  *
+ * RED AT BASE. Against the page as `origin/main` carries it, measured by rewinding the page and
+ * running this file: 20 failed | 6 passed (26). The six that pass at base are the controls — the
+ * healthy renders (rows on both reads, empty on both reads), the two cases that assert this page
+ * adds no write control to gate, and the two source pins (the guard baseline sweep and the line
+ * ceiling). Every case about a refused or missing read falls at base, because the page had no word
+ * for either of its reads.
+ *
  * Fixtures are documentation-only (`*.test`, RFC 2606 names).
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
