@@ -20,8 +20,7 @@ const {
   mockSet,
   dbMocks,
 } = vi.hoisted(() => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const mockRequireAuth = { current: null as any, fn: null as any };
+  const mockRequireAuth: { current: { isSuperAdmin: boolean; userId: string } | null } = { current: null };
   const mockAcquireLock = vi.fn();
   const mockReleaseLock = vi.fn();
   const mockRestore = vi.fn();
@@ -38,8 +37,7 @@ const {
 });
 
 vi.mock('@/lib/api/with-api-route', () => ({
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  withApiRoute: (handler: any) => handler,
+  withApiRoute: (handler: unknown) => handler,
 }));
 
 vi.mock('@/lib/auth/middleware', () => ({
@@ -52,17 +50,14 @@ vi.mock('@/lib/errors-server', () => ({
 
 vi.mock('@/lib/api-error', async () => {
   const { NextResponse } = await import('next/server');
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return { apiError: (err: any) => NextResponse.json({ error: err?.message ?? 'Internal server error' }, { status: 500 }) };
+  return { apiError: (err: unknown) => NextResponse.json({ error: (err as { message?: string })?.message ?? 'Internal server error' }, { status: 500 }) };
 });
 
 vi.mock('@/lib/api/validate', async () => {
   const { NextResponse } = await import('next/server');
   return {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    readJsonBody: async (req: any) => req.json(),
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    validateBody: (schema: any, body: unknown) => {
+    readJsonBody: async (req: { json: () => Promise<unknown> }) => req.json(),
+    validateBody: (schema: { parse: (b: unknown) => unknown }, body: unknown) => {
       try {
         return { data: schema.parse(body) };
       } catch {
