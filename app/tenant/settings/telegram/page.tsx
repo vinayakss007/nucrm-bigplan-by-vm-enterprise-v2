@@ -10,6 +10,7 @@ import { useApiQuery } from '@/lib/query/client';
 import { Send, Bell, BellOff, TestTube, Shield, Lock, KeyRound, LogIn, UserPlus, Eye, EyeOff, Save } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { cn } from '@/lib/utils';
+import InlineErrorState from '@/components/shared/inline-error-state';
 
 interface TelegramSettings {
   // #2523: the API no longer returns the bot token — it reports whether one is
@@ -47,14 +48,27 @@ export default function TelegramSettingsPage() {
 
   // #1328: settings via TanStack Query (was raw fetch + useEffect). The form is
   // seeded once from the query result.
-  const { data, isLoading: loading, error } = useApiQuery<{ ok?: boolean; settings?: TelegramSettings }>(
+  const { data, isLoading: loading, error, refetch } = useApiQuery<{ ok?: boolean; settings?: TelegramSettings }>(
     ['tenant', 'telegram'],
     '/api/user/telegram',
   );
   useEffect(() => {
     if (data?.ok && data.settings && !seeded) { setSettings(data.settings); setSeeded(true); }
   }, [data, seeded]);
-  useEffect(() => { if (error) toast.error('Failed to load Telegram settings'); }, [error]);
+
+  // #2872: this read's only failure channel was a `useEffect` toast — four seconds, then gone —
+  // while the form below went on stating the tenant's Telegram setup either way. Nothing in the
+  // app invalidates `['tenant', 'telegram']`, and the save/test PATCHes deliberately do not: the
+  // token is write-only (#2523), so a reload could not return what was just typed. The refresh
+  // that fails is therefore the remount past the repo-wide 30s `staleTime` — leave Settings →
+  // Telegram and come back — after `retry: 2` gives up, and TanStack hands the page the payload it
+  // had already given it plus the error. That is a real last read the toast let the page state as
+  // fact; and with nothing ever answered the same form renders its own defaults — no token on file,
+  // the five security alert types ON, Enable Notifications OFF — one edit from writing that over
+  // what is stored. So `failed` blanks the form, and `stale` keeps it and says which it is.
+  const failed = Boolean(error) && !data;
+  const stale = Boolean(error) && Boolean(data);
+  const reason = error?.message || 'no response from the server';
 
   const saveMutation = useMutation({
     mutationFn: async () => {
@@ -138,6 +152,17 @@ export default function TelegramSettingsPage() {
     );
   }
 
+  if (failed) {
+    return (
+      <div className="flex items-center justify-center h-48 px-4">
+        <InlineErrorState
+          message={`Failed to load Telegram settings: ${reason}`}
+          onRetry={refetch}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Header */}
@@ -149,6 +174,13 @@ export default function TelegramSettingsPage() {
           Get instant notifications on your phone via Telegram — login alerts, security events, and more.
         </p>
       </div>
+
+      {stale && (
+        <InlineErrorState
+          message={`Could not refresh, so the settings below are the last read: ${reason}. A token or chat ID changed since is not reflected here, and saving now writes over settings this page has not seen.`}
+          onRetry={refetch}
+        />
+      )}
 
       {/* Setup Guide */}
       <div className="admin-card p-5 border-l-4 border-violet-500">
