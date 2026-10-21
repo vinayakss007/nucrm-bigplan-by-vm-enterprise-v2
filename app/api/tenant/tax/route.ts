@@ -19,9 +19,9 @@ import { withApiRoute } from '@/lib/api/with-api-route';
 
 export const createTaxRateSchema = z.object({
   name: z.string().min(1, 'name is required'),
-  // #658 BUG-12: rate is stored/returned as a string (DB text/decimal), so the
-  // edit round-trip sends a numeric string back. Coerce accepts both a number
-  // and a numeric string; a non-numeric string still fails validation.
+  // #658 BUG-12: rate column is numeric in the DB; pass the number directly
+  // instead of coercing to string. z.coerce.number() accepts both a number
+  // and a numeric string on input; the stored value is numeric.
   rate: z.coerce.number().min(0, 'rate is required'),
   type: z.enum(['percentage', 'fixed']).optional().default('percentage'),
   country: z.string().max(100).optional().nullable(),
@@ -32,7 +32,7 @@ export const createTaxRateSchema = z.object({
 export const updateTaxRateSchema = z.object({
   id: uuidIdSchemaWith('Tax rate ID is required'),
   name: z.string().optional(),
-  // #658 BUG-12: accept the numeric-string round-trip (see create schema note).
+  // #658 BUG-12: rate column is numeric in the DB; pass the number directly.
   rate: z.coerce.number().min(0).optional(),
   type: z.enum(['percentage', 'fixed']).optional(),
   country: z.string().max(100).optional().nullable(),
@@ -92,7 +92,7 @@ export const POST = withApiRoute(async (req: NextRequest) => {
     const [row] = await db.insert(taxRates).values({
       tenantId: ctx.tenantId,
       name,
-      rate: String(rate),
+      rate: rate as unknown as string,
       type,
       country: country || null,
       state: state || null,
@@ -130,7 +130,7 @@ export const PUT = withApiRoute(async (req: NextRequest) => {
 
     const updateData = { ...updates, updatedAt: new Date() } as Record<string, unknown>;
     if (updateData.rate !== undefined) {
-      updateData.rate = String(updateData.rate);
+      updateData.rate = updateData.rate as number;
     }
     delete updateData.id;
 
