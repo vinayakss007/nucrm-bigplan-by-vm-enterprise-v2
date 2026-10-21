@@ -52,8 +52,58 @@ export default function ModulesPage() {
   const modules: ModuleData[] = data?.data ?? [];
   const load = () => queryClient.invalidateQueries({ queryKey: MODULES_QUERY });
 
+  // #2872: `modulesError` alone cannot tell "this read never answered" from "this read
+  // answered and the refresh was refused", and TanStack Query keeps `data` — the RAW
+  // payload, unwrapped only on the line above — straight through the second
+  // (lib/query/client.tsx:37-44: `apiFetcher` throws `Request failed (<code>)`, and the
+  // shared client runs `retry: 2`, `staleTime: 30_000`). The refused refresh is not
+  // exotic here: all three writes below finish in `load()` → `invalidateQueries` on
+  // MODULES_QUERY, the exact key this read lives under, so the ordinary screen after an
+  // install or a disable is "kept cards + error flag set".
+  // The base branched on the bare flag INSIDE `filtered.length === 0`, which got both
+  // answers wrong: a last read that legitimately held nothing for the chosen category
+  // printed the outage sentence ("Failed to load the modules for this category"), while
+  // kept cards with the flag set fell past every arm and said nothing about the refusal.
+  // `modulesFailed` is the read that never answered; `modulesStale` is the last read,
+  // kept on screen with the cost of the refusal attached to it.
+  const modulesFailed = Boolean(modulesError) && !data;
+  const modulesStale = Boolean(modulesError) && Boolean(data);
+  const modulesReason = modulesError?.message || 'no response from the server';
+
   const filtered = category === 'all' ? modules : modules.filter(m => m.category === category);
 
+  // #2872 / epic rule #1 — what these three writes cost, read off the code they run,
+  // which is what decides where each one is gated:
+  //   POST (app/api/tenant/modules/route.ts:33-46) takes ONE `module_id` from the body
+  //   (:38-40) and never accepts the whole tenant map, so a toggle here cannot silently
+  //   remove modules nobody touched. It does re-read server state before writing:
+  //   ModuleRegistry.install (lib/modules/registry.ts:326-370) runs checkPlanGate
+  //   (:295-322) against the tenant's plan and the DB-stored pricing and refuses with
+  //   `Module not available on your … plan` — a precondition, but one about entitlement,
+  //   not about the picture on this screen. Its onConflictDoUpdate (:352-360) then sets
+  //   `settings` to the body's map verbatim, and the body is `settingsForm` seeded from
+  //   THIS read (see `openModule` below).
+  //   PATCH (route.ts:48-65) dispatches on `action` for the same single `module_id`:
+  //   `disable` (:57 → registry.ts:372-376) and `update_settings` (:58 → registry.ts:
+  //   392-400) enforce NO precondition and re-read nothing — an unconditional UPDATE of
+  //   the (tenantId, moduleId) row, with `settings` replaced wholesale by whatever the
+  //   page sends.
+  //   Concurrency for the owner: this path has no optimistic-concurrency guard at all,
+  //   not even the kind two merged slices found inert — `expectedUpdatedAt`/`_updated_at`
+  //   is not read anywhere in route.ts or registry.ts, and no client on this page sends
+  //   it, so there is nothing for a guard to compare. GET already hands back
+  //   `installed_at` (route.ts:25) and this page ignores it; threading it through the
+  //   PATCH body would give the row a version to check.
+  // Blast radius, which is why the copy says "every user": the row these writes flip is
+  // the one the whole workspace is gated on — lib/auth/middleware.ts:446
+  // (requireModule → ModuleRegistry.hasModule, registry.ts:268-274),
+  // lib/modules/client-gate.tsx:139,173 and components/tenant/layout/sidebar.tsx:171 all
+  // read `status === 'active'` for the tenant, from this same URL.
+  // So: all three controls are blocked on `modulesFailed` and stay clickable on
+  // `modulesStale`. Blocking the disable over a kept read would refuse the one action
+  // the operator came for while the write it prevents is addressed by the card they
+  // clicked; instead the refusal is said out loud twice — above the cards, and again
+  // inside the modal where the map actually goes out.
   const installMutation = useMutation({
     mutationFn: async (mod: ModuleData) => {
       const res = await fetch('/api/tenant/modules', {
@@ -129,16 +179,39 @@ export default function ModulesPage() {
       </div>
 
       {/* Modules grid */}
+      {/* #2872: the refused refresh sits ABOVE the cards it did not replace, and speaks
+          for the one thing that is actually at stake on this page — the badge each card
+          wears decides which button that card offers, and every user of this workspace
+          is gated on the row this page writes. */}
+      {modulesStale && (
+        <InlineErrorState
+          message={`Could not refresh, so the cards below and their Installed/Disabled badges are the last read: ${modulesReason}. A module someone installed, disabled or reconfigured since this was fetched is still shown the way it was, and pressing Install or Disable below switches that module for every user of this workspace from a badge the server has not confirmed.`}
+          onRetry={() => void refetchModules()}
+        />
+      )}
+      {/* #2872: per-read wait, not a union — there is one read here, and `loading` is
+          true only until it answers for the first time, so it can never stand in for
+          either arm below. The skeletons say nothing about the workspace's modules. */}
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {[...Array(6)].map((_,i) => (
             <div key={i} className="h-52 rounded-2xl bg-muted animate-pulse" />
           ))}
         </div>
+      ) : modulesFailed ? (
+        // #2829 put an error in this branch and #2872 re-gated it: this arm now speaks
+        // only for a read that never answered. The sentence it replaces — the claim that
+        // the workspace has nothing in the chosen category, plus the invitation to pick
+        // another — is a fact about which modules are switched on, and a read that failed
+        // never established it. Nothing derived off `modules` renders here either: no
+        // price, no "+N more features", no Installed badge, because the array this would
+        // count is the absence of an answer.
+        <InlineErrorState
+          message={`Failed to load the modules for this workspace: ${modulesReason}. The grid shows nothing because this read never answered, which is not a statement about which modules are switched on — and with no cards to open, nothing here can be installed or disabled until it does.`}
+          onRetry={() => void refetchModules()}
+        />
       ) : filtered.length === 0 ? (
-        modulesError
-          ? <InlineErrorState message={`Failed to load the modules for this category: ${modulesError.message}`} onRetry={refetchModules} />
-          : <div className="py-20 text-center">
+        <div className="py-20 text-center">
           <Puzzle className="w-12 h-12 text-muted-foreground/20 mx-auto mb-4" />
           <p className="text-sm font-medium text-muted-foreground">No modules in this category</p>
           <p className="text-xs text-muted-foreground/60 mt-1">Try selecting a different category</p>
@@ -283,23 +356,38 @@ export default function ModulesPage() {
               </div>
 
               {/* Actions */}
+              {/* #2872 / rule #1: the banner above the cards is three sections away from
+                  the button that actually writes, so the cost is repeated here, in the
+                  words that fit this dialog: the badge deciding which button appears and
+                  the configuration in the fields above both come from the read the
+                  refresh could not replace, and the body this dialog sends is that older
+                  copy of the map (see the audit above `installMutation`). */}
+              {modulesStale && (
+                <p className="text-[11px] text-muted-foreground">
+                  This card is the last read ({modulesReason}). The status that picked which of these
+                  two buttons you get is the one this page last read, not the one the server holds, and
+                  Save Settings or Install sends the configuration in the fields above over what this
+                  module has stored now — switching it on or off changes it for every user of this
+                  workspace.
+                </p>
+              )}
               <div className="flex gap-3">
                 {selected.status === 'active' ? (
                   <>
                     {selected.settings_schema && selected.settings_schema.length > 0 && (
-                      <button onClick={() => saveSettings(selected)} disabled={saving}
+                      <button onClick={() => saveSettings(selected)} disabled={saving || modulesFailed}
                         className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold disabled:opacity-50">
                         {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Settings className="w-4 h-4" />}
                         Save Settings
                       </button>
                     )}
-                    <button onClick={() => disable(selected)}
-                      className="flex-1 py-2.5 rounded-xl border border-border text-sm font-medium hover:bg-accent text-muted-foreground">
+                    <button onClick={() => disable(selected)} disabled={modulesFailed}
+                      className="flex-1 py-2.5 rounded-xl border border-border text-sm font-medium hover:bg-accent text-muted-foreground disabled:opacity-50">
                       Disable
                     </button>
                   </>
                 ) : (
-                  <button onClick={() => install(selected)} disabled={installing === selected.id}
+                  <button onClick={() => install(selected)} disabled={installing === selected.id || modulesFailed}
                     className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold disabled:opacity-50">
                     {installing === selected.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
                     {installing === selected.id ? 'Installing...' : selected.status === 'disabled' ? 'Re-enable' : 'Install Module'}
