@@ -5,7 +5,8 @@ dotenv.config({ path: path.resolve(__dirname, '..', '.env.local') });
 
 import { db } from '../drizzle/db';
 import * as schema from '../drizzle/schema';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, and, sql, type InferInsertModel } from 'drizzle-orm';
+import type { PgTable } from 'drizzle-orm/pg-core';
 import crypto from 'crypto';
 
 const BATCH = parseInt(process.env['STRESS_BATCH'] || '100', 10);
@@ -69,16 +70,14 @@ async function cleanup(tid: string) {
       const col = 'tenantId' in t.table ? t.table.tenantId : undefined;
       if (col) {
         const _deleted = await db.delete(t.table)
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-          .where(and(eq(col as any, tid), sql`metadata->>'stress' = ${STRESS_TAG}`));
+          .where(and(sql`${col} = ${tid}`, sql`metadata->>'stress' = ${STRESS_TAG}`));
         console.log(`  cleaned ${t.name}`);
       }
     } catch (e) { console.error('[stress-test] cleanup failed:', e); }
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function insertRows(tableName: string, table: any, values: () => Record<string, any>, _refs: Awaited<ReturnType<typeof getExistingRefs>>) {
+async function insertRows<T extends PgTable>(tableName: string, table: T, values: () => Record<string, unknown>, _refs: Awaited<ReturnType<typeof getExistingRefs>>) {
   if (DRY_RUN) {
     console.log(`[dry-run] would insert ${BATCH} into ${tableName}`);
     return;
@@ -90,7 +89,7 @@ async function insertRows(tableName: string, table: any, values: () => Record<st
   for (let i = 0; i < BATCH; i++) {
     try {
       const row = { ...values(), metadata: { stress: STRESS_TAG, batch: i } };
-      await db.insert(table).values(row);
+      await db.insert(table).values(row as InferInsertModel<T>);
       inserted++;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
