@@ -100,7 +100,15 @@ const emailWorker = new Worker(
         html: html || body,
         text: body,
       });
-      
+
+      // #2998: sendEmail resolves with {success:false} on provider rejection
+      // instead of throwing, so the old code marked rejected mail as sent.
+      // Throwing hands the job back to BullMQ for its retry schedule.
+      if (!result.success) {
+        console.error(`[Email Worker] Rejected for ${maskedEmail}: ${result.error ?? 'unknown provider error'}`);
+        throw new Error(result.error ?? 'Email rejected by provider');
+      }
+
       console.log(`[Email Worker] Email sent successfully to ${maskedEmail}`);
       // #1288: the job return value is persisted in Redis (BullMQ completed
       // set). Never store the raw recipient address there — return the masked
@@ -170,12 +178,17 @@ const bulkEmailWorker = new Worker(
           // The plaintext part uses the raw value (no markup interpretation).
           const rawFirstName = recipient.first_name || '';
           const safeFirstName = escapeHtml(String(rawFirstName));
-          await sendEmail({
+          const sendResult = await sendEmail({
             to: recipient.email,
             subject,
             html: body.replace(/\{first_name\}/g, safeFirstName),
             text: body.replace(/\{first_name\}/g, rawFirstName),
           });
+          // #2998: a provider rejection comes back as {success:false}, never
+          // throws — without this check every recipient was reported as sent.
+          if (!sendResult.success) {
+            throw new Error(sendResult.error ?? 'Email rejected by provider');
+          }
           return { email: redactEmail(recipient.email), success: true };
         })
       );

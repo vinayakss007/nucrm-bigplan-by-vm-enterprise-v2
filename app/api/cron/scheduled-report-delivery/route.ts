@@ -238,13 +238,19 @@ export async function POST(req: NextRequest) {
               };
             }
 
-            await sendEmail({
+            const sendResult = await sendEmail({
               to: recipients,
               subject: `Scheduled report: ${report.name} (${report.format?.toUpperCase?.() ?? 'CSV'})`,
               text: `Your scheduled report ${report.name} (${report.type}) is attached.`,
               html: `<p>Your scheduled report <strong>${escapeHtml(report.name)}</strong> (${escapeHtml(report.type)}) is attached.</p>`,
               attachments: [attachment],
             });
+            // #2998: sendEmail reports provider rejection as {success:false}
+            // without throwing; the failure-counter logic below only runs from
+            // the catch, so rejections must become throws to be counted.
+            if (!sendResult.success) {
+              throw new Error(sendResult.error ?? 'Report email rejected by provider');
+            }
           }
 
           // Success: reset the failure counter and advance to the next run.
