@@ -11,6 +11,7 @@ import { cn, formatDate, formatCurrency } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ApiQueryError } from '@/lib/query/client';
+import InlineErrorState from '@/components/shared/inline-error-state';
 
 interface PortalSession {
   email: string;
@@ -73,7 +74,11 @@ export default function PortalQuotesPage() {
     setSession(s);
   }, [router]);
 
-  const { data, isLoading, error } = useQuery<{ data: PortalQuote[] }, ApiQueryError>({
+  // #2872's split does not reach this gate: a `localStorage` read cannot have a
+  // refresh refused, and when it comes back absent the customer is sent to sign in
+  // instead of being shown a list — so it is nothing the page asserts about quotes.
+
+  const { data, isLoading, error, refetch } = useQuery<{ data: PortalQuote[] }, ApiQueryError>({
     queryKey: ['portal-quotes', session?.email],
     enabled: !!session?.email,
     queryFn: async () => {
@@ -90,6 +95,23 @@ export default function PortalQuotesPage() {
   });
   const quotes = data?.data ?? [];
   const loading = !session || isLoading;
+
+  // #2872: neither mutation here asks for this read again — accepting or declining
+  // a quote writes the new status straight into the cache with `setQueryData`, and
+  // nothing invalidates ['portal-quotes', session?.email]. So the refused refresh is
+  // the cache's own: leave the portal and come back through Quotes past the client's
+  // 30-second stale window and inside its 5-minute cache, and the page mounts on the
+  // quotes it already holds and revalidates behind them, which `/api/public/quotes`
+  // refuses with 401 once the portal session cookie lapses and 429 past 30 reads a
+  // minute. #2825's branch asked only whether the list was empty, so that customer
+  // saw a quote list stated as current — and every Accept and Decline on it writes
+  // against a status the refused refresh could not re-check, which the server
+  // answers as a quote that can no longer be answered. (That write also clears this
+  // banner, since `setQueryData` is a success inside the cache: settling it belongs
+  // with moving this page onto `useApiQuery`, not with the read split.)
+  const failed = Boolean(error) && !data;
+  const stale = Boolean(error) && Boolean(data);
+  const reason = error?.message || 'no response from the server';
 
   const acceptMutation = useMutation<void, Error, string>({
     mutationFn: async (quoteId: string) => {
@@ -159,20 +181,26 @@ export default function PortalQuotesPage() {
         <p className="text-sm text-muted-foreground">View and respond to your quotes</p>
       </div>
 
-      {quotes.length === 0 ? (
-        error ? (
-          // #2825: "No quotes yet" is a claim about the customer's data; a
-          // failed read may not make it.
-          <div role="alert" className="p-4 rounded-xl bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 text-sm">
-            We could not load your quotes. That is a failed request, not an empty
-            list — reload the page to try again.
-          </div>
-        ) : (
-          <div className="text-center py-12">
-            <FileText className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
-            <p className="text-sm text-muted-foreground">No quotes yet</p>
-          </div>
-        )
+      {/* Kept quotes, refused refresh: the list stays and says it is not current. */}
+      {stale && (
+        <InlineErrorState
+          message={`Could not refresh, so the quotes below are the last read: ${reason}. A quote that has since expired or been withdrawn is still shown here as one you can answer.`}
+          onRetry={() => void refetch()}
+        />
+      )}
+
+      {failed ? (
+        // #2825: "No quotes yet" is a claim about the customer's own history; a read
+        // that never answered may not make it, and it must not be the only thing said.
+        <InlineErrorState
+          message={`We could not load your quotes. That is a failed request, not an empty list. ${reason}`}
+          onRetry={() => void refetch()}
+        />
+      ) : quotes.length === 0 ? (
+        <div className="text-center py-12">
+          <FileText className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
+          <p className="text-sm text-muted-foreground">No quotes yet</p>
+        </div>
       ) : (
         <div className="space-y-3">
           {quotes.map(quote => {

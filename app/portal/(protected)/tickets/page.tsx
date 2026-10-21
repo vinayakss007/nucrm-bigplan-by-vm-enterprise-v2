@@ -11,6 +11,7 @@ import { cn, formatDate } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiQueryError } from '@/lib/query/client';
+import InlineErrorState from '@/components/shared/inline-error-state';
 
 interface PortalSession { email: string; name: string; permissions: { quotes: boolean; invoices: boolean; cases: boolean }; }
 
@@ -39,7 +40,11 @@ export default function PortalTicketsPage() {
     } catch { router.replace('/portal/login'); }
   }, [router]);
 
-  const { data, isLoading, error } = useQuery<{ data: PortalTicket[] }, ApiQueryError>({
+  // #2872's split does not reach this gate: a `localStorage` read cannot have its
+  // refresh refused, and when it comes back absent the customer is sent to sign in
+  // instead of being shown a list — so it is nothing the page asserts about tickets.
+
+  const { data, isLoading, error, refetch } = useQuery<{ data: PortalTicket[] }, ApiQueryError>({
     queryKey: ['portal-tickets', session?.email],
     enabled: !!session?.email,
     queryFn: async () => {
@@ -56,6 +61,23 @@ export default function PortalTicketsPage() {
   });
   const tickets = data?.data ?? [];
   const loading = !session || isLoading;
+
+  // #2872: this read calls `useQuery` directly instead of `useApiQuery`, so the
+  // failure it holds is the `ApiQueryError` thrown above rather than the one
+  // `apiFetcher` normalizes — the client's own defaults (30s stale, 2 retries)
+  // still apply, since those live on the QueryClient and not on the helper. The
+  // refused refresh here is the customer's own write: the create modal ends in
+  // `invalidateQueries(['portal-tickets', session?.email])`, this exact key, so
+  // the ordinary state one moment after filing a ticket is kept rows plus the
+  // error flag, and the ticket just filed is the thing the kept rows cannot have.
+  // `/api/public/tickets` refuses that refresh with 401 once the portal session
+  // cookie lapses and 429 past its 30 reads a minute. #2825's branch asked only
+  // whether the list was empty, so either refusal said nothing at all while the
+  // customer's other tickets stayed on screen — and a refusal over a list the last
+  // read really did call empty replaced "No tickets yet" with an outage card.
+  const failed = Boolean(error) && !data;
+  const stale = Boolean(error) && Boolean(data);
+  const reason = error?.message || 'no response from the server';
 
   const statusColor: Record<string, string> = {
     open: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30',
@@ -77,24 +99,30 @@ export default function PortalTicketsPage() {
         </button>
       </div>
 
+      {/* Kept tickets, refused refresh: the list stays and says it is not current. */}
+      {stale && (
+        <InlineErrorState
+          message={`Could not refresh, so the tickets below are the last read: ${reason}. The ticket you just created may not be in them yet.`}
+          onRetry={() => void refetch()}
+        />
+      )}
+
       {loading ? (
         <div className="space-y-3">
           {[1, 2, 3].map(i => <div key={i} className="h-24 bg-card border border-border rounded-xl animate-pulse" />)}
         </div>
+      ) : failed ? (
+        // #2825: "No tickets yet" is a claim about the customer's own history, and
+        // a read that never answered may not make it. Retry is wired to this read.
+        <InlineErrorState
+          message={`We could not load your tickets. That is a failed request, not an empty list. ${reason}`}
+          onRetry={() => void refetch()}
+        />
       ) : tickets.length === 0 ? (
-        error ? (
-          // #2825: "No tickets yet" is a claim about the customer's data; a
-          // failed read may not make it.
-          <div role="alert" className="p-4 rounded-xl bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 text-sm">
-            We could not load your tickets. That is a failed request, not an empty
-            list — reload the page to try again.
-          </div>
-        ) : (
-          <div className="text-center py-12">
-            <LifeBuoy className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
-            <p className="text-sm text-muted-foreground">No tickets yet. Create one to get help.</p>
-          </div>
-        )
+        <div className="text-center py-12">
+          <LifeBuoy className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
+          <p className="text-sm text-muted-foreground">No tickets yet. Create one to get help.</p>
+        </div>
       ) : (
         <div className="space-y-3">
           {tickets.map(ticket => (
