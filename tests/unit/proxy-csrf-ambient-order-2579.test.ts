@@ -28,21 +28,17 @@ type MockHeaders = Map<string, string> & { set: ReturnType<typeof vi.fn>; get: R
 
 function makeHeaders(): MockHeaders {
   const map = new Map<string, string>() as MockHeaders;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  map.set = vi.fn((k: string, v: string) => { Map.prototype.set.call(map, k, v); return map; }) as any;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  map.get = vi.fn((k: string) => Map.prototype.get.call(map, k) || null) as any;
+  map.set = vi.fn((k: string, v: string) => { Map.prototype.set.call(map, k, v); return map; }) as MockHeaders['set'];
+  map.get = vi.fn((k: string) => Map.prototype.get.call(map, k) || null) as MockHeaders['get'];
   return map;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function makeResponse(overrides: Record<string, any> = {}) {
+function makeResponse(overrides: Record<string, unknown> = {}) {
   const headers = makeHeaders();
   return { headers, status: overrides.status ?? 200, _isResponse: true, ...overrides };
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function NextResponse(this: any, body: any, init?: { status?: number; headers?: Record<string, string> }) {
+function NextResponse(this: Record<string, unknown>, body: unknown, init?: { status?: number; headers?: Record<string, string> }) {
   const headers = makeHeaders();
   if (init?.headers) for (const [k, v] of Object.entries(init.headers)) headers.set(k, v);
   this.headers = headers;
@@ -51,11 +47,9 @@ function NextResponse(this: any, body: any, init?: { status?: number; headers?: 
   this._isResponse = true;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-NextResponse.next = (init?: { request?: { headers?: any } }) =>
+NextResponse.next = (init?: { request?: { headers?: { get?: (k: string) => unknown } } }) =>
   makeResponse({ _isNext: true, _requestHeaders: init?.request?.headers });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-NextResponse.json = (body: any, init?: any) => makeResponse({ ...init, body, _isJson: true });
+NextResponse.json = (body: unknown, init?: Record<string, unknown>) => makeResponse({ ...init, body, _isJson: true });
 NextResponse.redirect = (url: string) => ({ url, _isRedirect: true, headers: makeHeaders() });
 
 vi.mock('next/server', () => ({ NextResponse, NextRequest: class MockNextRequest {} }));
@@ -84,8 +78,7 @@ vi.mock('@/lib/auth/csrf', async (importOriginal) => {
 const edgeCheckMock = vi.fn(() => ({ allowed: true, remaining: 59, reset: Date.now() + 60000, limit: 60 }));
 vi.mock('@/lib/rate-limit-edge', () => ({
   edgeLimiter: { check: edgeCheckMock, reset: vi.fn(), clear: vi.fn(), size: 0 },
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  getRateLimitHeaders: vi.fn((r: any) => ({
+  getRateLimitHeaders: vi.fn((r: { allowed: boolean; remaining: number; reset: number; limit: number }) => ({
     'X-RateLimit-Limit': String(r.limit),
     'X-RateLimit-Remaining': String(r.remaining),
     'X-RateLimit-Reset': String(Math.ceil(r.reset / 1000)),
