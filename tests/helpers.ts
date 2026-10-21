@@ -61,9 +61,8 @@ export function createMockDb() {
     set: vi.fn().mockReturnThis(),
     delete: vi.fn().mockReturnThis(),
     returning: vi.fn().mockResolvedValue([]),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    transaction: vi.fn(async (cb: any) => {
-      const tx = { execute: vi.fn().mockResolvedValue({ rows: [], rowCount: 0 }), insert: vi.fn().mockReturnThis(), values: vi.fn().mockReturnThis(), returning: vi.fn().mockResolvedValue([]) };
+    transaction: vi.fn(async (cb: (tx: Record<string, unknown>) => Promise<unknown>) => {
+      const tx: Record<string, unknown> = { execute: vi.fn().mockResolvedValue({ rows: [], rowCount: 0 }), insert: vi.fn().mockReturnThis(), values: vi.fn().mockReturnThis(), returning: vi.fn().mockResolvedValue([]) };
       return cb(tx);
     }),
     query: {
@@ -78,8 +77,7 @@ export function createMockDb() {
   };
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function createMockRequest(path: string, options?: { method?: string; headers?: Record<string, string>; body?: any }) {
+export function createMockRequest(path: string, options?: { method?: string; headers?: Record<string, string>; body?: unknown }) {
   const url = new URL(path, 'http://localhost:3000');
   return {
     url: url.toString(),
@@ -87,12 +85,9 @@ export function createMockRequest(path: string, options?: { method?: string; hea
     method: options?.method || 'GET',
     headers: new Map(Object.entries(options?.headers || {})),
     json: vi.fn().mockResolvedValue(options?.body || {}),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } as any;
+  };
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function createMockResponse(data?: any, status = 200) {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return { status, json: vi.fn().mockResolvedValue(data), headers: new Map() } as any;
+export function createMockResponse(data?: unknown, status = 200) {
+  return { status, json: vi.fn().mockResolvedValue(data), headers: new Map() };
 }
