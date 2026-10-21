@@ -13,15 +13,11 @@ const mockTxUpdate = vi.fn(() => ({ set: mockTxSet }));
 
 vi.mock('@/drizzle/db', () => ({
   db: {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    insert: (...args: any[]) => mockInsert(...args),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    update: (...args: any[]) => mockUpdate(...args),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    select: (...args: any[]) => mockSelect(...args),
+    insert: (...args: unknown[]) => mockInsert(...args),
+    update: (...args: unknown[]) => mockUpdate(...args),
+    select: (...args: unknown[]) => mockSelect(...args),
     query: {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      chatSessions: { findFirst: (...args: any[]) => mockFindFirst(...args) },
+      chatSessions: { findFirst: (...args: unknown[]) => mockFindFirst(...args) },
     },
     transaction: vi.fn(async (cb: (tx: unknown) => Promise<unknown>) => {
       return await cb({ insert: mockTxInsert, update: mockTxUpdate });
@@ -46,14 +42,10 @@ vi.mock('@/drizzle/schema', () => ({
 }));
 
 vi.mock('drizzle-orm', () => ({
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  eq: vi.fn((...args: any[]) => ['eq', ...args]),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  and: vi.fn((...args: any[]) => ['and', ...args]),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  desc: vi.fn((col: any) => ['desc', col]),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  ne: vi.fn((...args: any[]) => ['ne', ...args]),
+  eq: vi.fn((...args: unknown[]) => ['eq', ...args]),
+  and: vi.fn((...args: unknown[]) => ['and', ...args]),
+  desc: vi.fn((col: unknown) => ['desc', col]),
+  ne: vi.fn((...args: unknown[]) => ['ne', ...args]),
   sql: vi.fn(),
 }));
 
