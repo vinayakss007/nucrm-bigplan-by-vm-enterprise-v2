@@ -10,6 +10,7 @@
  */
 import { verifySecret } from '@/lib/crypto';
 import { refuseIfCronLockHeld } from '@/lib/cron/cron-lock';
+import { reminderWindows } from '@/lib/cron/renewal-windows';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/drizzle/db';
 import { serviceSubscriptions, users, activities } from '@/drizzle/schema';
@@ -37,18 +38,17 @@ export async function POST(request: NextRequest) {
     let remindersSent = 0;
     let pastDueCount = 0;
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    // #2997: UTC calendar windows — the local-midnight-then-toISOString form
+    // matched subscriptions one day early on hosts east of Greenwich, so the
+    // "renews in N days" label was always off by one there.
+    const windows = reminderWindows(new Date(), REMINDER_DAYS);
 
     // service_subscriptions, activities and notifications each enforce a plain
     // tenant_isolation policy with no super-admin branch, so the bare `db`
     // handle (whose tenant GUC the pool pins to '') sees none of their rows.
     // The work has to run once per tenant — see lib/cron/tenant-scope.ts.
     const sweep = await sweepTenants('cron/subscription-renewal-check', async (tenantId) => {
-      for (const days of REMINDER_DAYS) {
-        const targetDate = new Date(today);
-        targetDate.setDate(targetDate.getDate() + days);
-        const targetStr = targetDate.toISOString().split('T')[0];
+      for (const { days, targetStr } of windows) {
 
         // Find active subscriptions ending on exactly `days` from now
         const endingSoon = await db.select({
