@@ -132,6 +132,10 @@ export default function ProfileSettingsPage() {
         />
       ) : (
       <form onSubmit={saveProfile} className="admin-card p-5 space-y-4">
+        {/* The identity block is the account the read answered with; `user` is only ever null on
+            the arm this form does not render on, so it is guarded rather than assumed — a missing
+            email would otherwise print the verification line as a fact about no account. */}
+        {user && (
         <div className="flex items-center gap-4 pb-3 border-b border-border">
           <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-violet-500 to-indigo-500 flex items-center justify-center text-white text-xl font-bold">
             {profile.full_name?.charAt(0)?.toUpperCase() || user.email?.charAt(0)?.toUpperCase()}
@@ -142,6 +146,7 @@ export default function ProfileSettingsPage() {
             </p>
           </div>
         </div>
+        )}
         <div className="grid grid-cols-2 gap-3">
           <div className="col-span-2"><label className="block text-xs font-medium text-muted-foreground mb-1">Full Name</label><input value={profile.full_name} onChange={e=>setProfile(p=>({...p,full_name:e.target.value}))} required className={inp}/></div>
           <div><label className="block text-xs font-medium text-muted-foreground mb-1">Phone</label><input value={profile.phone} onChange={e=>setProfile(p=>({...p,phone:e.target.value}))} className={inp} placeholder="+1 555 0100"/></div>
