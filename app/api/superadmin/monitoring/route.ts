@@ -133,17 +133,10 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       .limit(10);
     }, []);
 
-    // Get API usage stats (simulated from request logs if available)
-    const apiStats = await safeQuery<Record<string, unknown>>(async () => {
-      return {
-        requests_today: 0,
-        requests_this_month: 0,
-        avg_response_time_ms: 0,
-        error_rate_pct: 0,
-        top_endpoints: [],
-        _note: 'API usage tracking not yet implemented — values are placeholders',
-      };
-    }, {});
+    // #2964: this used to return a hardcoded all-zeros "API usage" object labeled
+    // as data. There is no request-log source to compute it from (#98 owns real
+    // metrics), and no consumer ever read it — shipping fabricated zeros as
+    // instrumentation is how an outage gets reported as a healthy idle system.
 
     // Get tenant activity (active in last 24h)
     const activeTenants = await safeQuery<{ rows: { count: number | string }[] }>(async () => {
@@ -187,7 +180,6 @@ export const GET = withApiRoute(async (request: NextRequest) => {
       backupStatus,
       restoreStatus,
       recentBackups,
-      apiStats,
       // db.execute() resolves to a result wrapper, not a rows array — the rest
       // of this route reads `.rows[0]` (see platform_stats above). Indexing the
       // wrapper itself made both of these permanently fall through to the
