@@ -22,10 +22,17 @@ vi.mock('@/drizzle/schema/visitors', () => ({
   },
 }));
 
+vi.mock('@/drizzle/schema/crm', () => ({
+  contacts: {
+    id: 'id', tenantId: 'tenant_id', email: 'email', deletedAt: 'deleted_at',
+  },
+}));
+
 vi.mock('drizzle-orm', () => ({
   eq: vi.fn((...args: unknown[]) => ['eq', ...args]),
   and: vi.fn((...args: unknown[]) => ['and', ...args]),
   desc: vi.fn((col: unknown) => ['desc', col]),
+  isNull: vi.fn((col: unknown) => ['isNull', col]),
   sql: vi.fn(),
 }));
 
@@ -72,12 +79,18 @@ function mockInsert() {
 }
 
 function mockUpdate() {
+  const set = vi.fn(() => ({
+    where: vi.fn(() => Promise.resolve([])),
+  }));
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (db.update as any).mockReturnValue({
-    set: vi.fn(() => ({
-      where: vi.fn(() => Promise.resolve([])),
-    })),
-  });
+  (db.update as any).mockReturnValue({ set });
+  return set;
+}
+
+function mockSelectLimit(returnValue: unknown[]) {
+  vi.mocked(db.select).mockImplementation((() => ({
+    from: () => ({ where: () => ({ limit: () => returnValue }) }),
+  })) as never);
 }
 
 describe('scorePageUrl', () => {
@@ -183,14 +196,32 @@ describe('identifyVisitor', () => {
     vi.clearAllMocks();
   });
 
-  it('links visitor to contact email', async () => {
-    mockUpdate();
+  // #2959: identified_contact_id is a uuid column — the function must resolve the
+  // email to contacts.id first, never write the email itself into the column.
+  it('links the visitor to the resolved contact id, not the email', async () => {
+    mockSelectLimit([{ id: 'contact-uuid-1' }]);
+    const set = mockUpdate();
 
     const { identifyVisitor } = await import('@/lib/visitor-tracking');
-    const result = await identifyVisitor('v-1', 'test@example.com', 'tenant-1');
+    const result = await identifyVisitor('v-1', 'Test@Example.com', 'tenant-1');
 
     expect(result).toEqual({ identified: true });
     expect(db.update).toHaveBeenCalled();
+    expect(set).toHaveBeenCalledWith({ identifiedContactId: 'contact-uuid-1' });
+    expect(set).not.toHaveBeenCalledWith(
+      expect.objectContaining({ identifiedContactId: expect.stringContaining('@') }),
+    );
+  });
+
+  it('reports not identified when no contact matches the email', async () => {
+    mockSelectLimit([]);
+    mockUpdate();
+
+    const { identifyVisitor } = await import('@/lib/visitor-tracking');
+    const result = await identifyVisitor('v-1', 'ghost@example.com', 'tenant-1');
+
+    expect(result).toEqual({ identified: false });
+    expect(db.update).not.toHaveBeenCalled();
   });
 });
 

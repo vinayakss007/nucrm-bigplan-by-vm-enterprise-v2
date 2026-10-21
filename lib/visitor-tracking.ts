@@ -11,7 +11,8 @@
  */
 import { db } from '@/drizzle/db';
 import { visitors, pageViews } from '@/drizzle/schema/visitors';
-import { eq, and, desc, sql } from 'drizzle-orm';
+import { contacts } from '@/drizzle/schema/crm';
+import { eq, and, desc, sql, isNull } from 'drizzle-orm';
 
 /**
  * #1074: visitor-supplied url/title/referrer are stored raw and could be
@@ -99,11 +100,23 @@ export async function identifyVisitor(
   email: string,
   tenantId: string
 ): Promise<{ identified: boolean }> {
-  // In a real implementation, we'd look up the contact by email
-  // For now we store the identification link
+  // #2959: identified_contact_id is a uuid column referencing contacts.id —
+  // the old code wrote the raw email into it, which Postgres rejects (22P02).
+  const [contact] = await db
+    .select({ id: contacts.id })
+    .from(contacts)
+    .where(and(
+      eq(contacts.tenantId, tenantId),
+      sql`lower(${contacts.email}) = lower(${email})`,
+      isNull(contacts.deletedAt),
+    ))
+    .limit(1);
+
+  if (!contact) return { identified: false };
+
   await db
     .update(visitors)
-    .set({ identifiedContactId: email }) // storing email as reference placeholder
+    .set({ identifiedContactId: contact.id })
     .where(and(eq(visitors.id, visitorId), eq(visitors.tenantId, tenantId)));
 
   return { identified: true };
