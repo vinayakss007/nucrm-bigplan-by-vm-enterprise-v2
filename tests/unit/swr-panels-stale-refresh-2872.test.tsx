@@ -525,7 +525,9 @@ describe('the ratchet this slice is measured by (#2872)', () => {
     const sameSuite = spawnSync('npx', ['vitest', 'run',
       'tests/unit/swr-read-failed-not-none-2849.test.tsx'], { cwd: ROOT, encoding: 'utf8', timeout: 300_000 });
     expect(sameSuite.status, sameSuite.stdout + sameSuite.stderr).toBe(0);
-  });
+    // #2968: the nested vitest spawn alone costs ~5s idle and stretches under full-suite
+    // load; the default 15s made this ratchet flaky. The spawn's own ceiling is 300s.
+  }, 120_000);
 
   it('stays inside the line ceiling each file is allowed', () => {
     for (const f of FILES) {
