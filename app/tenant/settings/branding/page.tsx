@@ -8,6 +8,7 @@
 import { useState, useEffect } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import { brandingFormSchema, validateForm } from '@/lib/validation/forms';
 
 interface BrandingFormData {
@@ -41,10 +42,40 @@ export default function BrandingSettingsPage() {
 
   // #1328: load branding via TanStack Query (was raw fetch + useEffect). The
   // form is seeded once from the query result.
-  const { data, isLoading: loading } = useApiQuery<{ data?: Partial<BrandingFormData> }>(
+  const {
+    data,
+    isLoading: loading,
+    error: brandingError,
+    refetch: refetchBranding,
+  } = useApiQuery<{ data?: Partial<BrandingFormData> }>(
     ['tenant', 'branding'],
     '/api/tenant/branding',
   );
+  // #2872: this page read only `data` and `isLoading`, so the two states it could tell
+  // apart were "still loading" and "here is your branding" — and the second one was
+  // rendered from `useState` defaults whenever the read answered with nothing at all.
+  // Nothing anywhere invalidates `['tenant', 'branding']` (`saveMutation.onSuccess` only
+  // sets a message and never re-reads), so the refused revalidation on this page is the
+  // one a remount performs once the cached result is older than `staleTime: 30_000` —
+  // leaving Settings → Branding and coming back inside `gcTime`, with `retry: 2` then
+  // exhausting on a dead pool or an RLS refusal. TanStack hands that failure back WITH
+  // `data`, which is why the bare flag could not be the branch.
+  //
+  // The arm that matters is `failed`: `handleSave` below converts every empty field to
+  // `null`, and `app/api/tenant/branding/route.ts:68-71` writes those `null`s straight
+  // into `tenants.logoUrl` / `faviconUrl` / `customDomain`, while `companyName`,
+  // `hidePoweredBy`, `customCss` and `headerLayout` merge into `settings.branding` at
+  // :96-98 and :119. An unseeded form therefore was not a harmless blank page — one click
+  // on Save wiped the tenant's logo, custom domain and CSS and repainted the three colors
+  // with this file's defaults. Same data-loss shape as #2922's rate-limit form: a save
+  // over an unread read is the outage, so the outage says so and the submit is disabled
+  // until the read answers. On `stale` the form holds the last read plus the operator's
+  // own edits, so Save stays offered under the caveat — blocking it would refuse the write
+  // the page can still make correctly.
+  const failed = Boolean(brandingError) && !data;
+  const stale = Boolean(brandingError) && Boolean(data);
+  const reason = brandingError?.message || 'no response from the server';
+
   useEffect(() => {
     const d = data?.data;
     if (d && !seeded) {
@@ -91,6 +122,11 @@ export default function BrandingSettingsPage() {
 
   function handleSave(e: React.FormEvent) {
     e.preventDefault();
+    // #2872: the disabled button is the visible gate; this is the same gate for a submit
+    // that reaches the handler another way, because the unseeded form sends `null` for
+    // every stored field and drops its own default colors.
+    if (failed) return;
+
     setMessage(null);
 
     const validation = validateForm(brandingFormSchema, form);
@@ -116,6 +152,20 @@ export default function BrandingSettingsPage() {
           Customize the look and feel of your workspace. These settings apply to your branded portal and external-facing pages.
         </p>
       </div>
+
+      {failed && (
+        <InlineErrorState
+          message={`Failed to load your branding settings: ${reason}. The values below are this page's own defaults, not your workspace's, and saving now writes them over the logo, colors, custom domain and CSS on file.`}
+          onRetry={refetchBranding}
+        />
+      )}
+
+      {stale && (
+        <InlineErrorState
+          message={`Could not refresh, so the branding settings below are the last read: ${reason}. What another admin saved since is not reflected here, and saving now writes over it.`}
+          onRetry={refetchBranding}
+        />
+      )}
 
       {message && (
         <div className={`rounded-md p-3 text-sm ${message.type === 'success' ? 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-300' : 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-300'}`}>
@@ -277,7 +327,7 @@ export default function BrandingSettingsPage() {
         <div className="flex justify-end">
           <button
             type="submit"
-            disabled={saving}
+            disabled={saving || failed}
             className="rounded-md bg-violet-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-violet-700 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2 disabled:opacity-50"
           >
             {saving ? 'Saving...' : 'Save Branding'}
