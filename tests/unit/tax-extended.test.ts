@@ -24,12 +24,9 @@ vi.mock('@/drizzle/schema/financial', () => ({
 }));
 
 vi.mock('drizzle-orm', () => ({
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  eq: vi.fn((...args: any[]) => args),
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  and: vi.fn((...args: any[]) => args),
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  desc: vi.fn((col: any) => col),
+  eq: vi.fn((...args: unknown[]) => args),
+  and: vi.fn((...args: unknown[]) => args),
+  desc: vi.fn((col: unknown) => col),
   sql: vi.fn(),
 }));
 
@@ -39,10 +36,8 @@ import { db } from '@/drizzle/db';
 // Helpers
 // ---------------------------------------------------------------------------
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function mockTaxRate(overrides: Record<string, any> = {}) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (db.query.taxRates.findFirst as any).mockResolvedValue({
+function mockTaxRate(overrides: Record<string, unknown> = {}) {
+  vi.mocked(db.query.taxRates.findFirst).mockResolvedValue({
     id: 'rate-1',
     name: 'Default Rate',
     rate: '10',
@@ -56,10 +51,8 @@ function mockTaxRate(overrides: Record<string, any> = {}) {
   });
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function mockSelectResult(rows: any[]) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (db.select as any).mockReturnValue({
+function mockSelectResult(rows: unknown[]) {
+  vi.mocked(db.select).mockReturnValue({
     from: vi.fn().mockReturnValue({
       where: vi.fn().mockResolvedValue(rows),
     }),
@@ -154,8 +147,7 @@ describe('Tax - calculateCompoundTax (extended)', () => {
 
   it('handles mix of fixed and percentage rates', async () => {
     let calls = 0;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (db.query.taxRates.findFirst as any).mockImplementation(async () => {
+    vi.mocked(db.query.taxRates.findFirst).mockImplementation(async () => {
       calls++;
       if (calls === 1) {
         return { id: 'fee', name: 'Service Fee', rate: '2.50', type: 'fixed', tenantId: 'tenant-1', isActive: true };
@@ -171,8 +163,7 @@ describe('Tax - calculateCompoundTax (extended)', () => {
 
   it('throws error when a middle rate is not found', async () => {
     let calls = 0;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (db.query.taxRates.findFirst as any).mockImplementation(async () => {
+    vi.mocked(db.query.taxRates.findFirst).mockImplementation(async () => {
       calls++;
       if (calls === 1) return { id: 'gst', name: 'GST', rate: '5', type: 'percentage', tenantId: 'tenant-1', isActive: true };
       if (calls === 2) return null;
@@ -184,8 +175,7 @@ describe('Tax - calculateCompoundTax (extended)', () => {
   });
 
   it('applies the same rate ID multiple times', async () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (db.query.taxRates.findFirst as any).mockResolvedValue({
+    vi.mocked(db.query.taxRates.findFirst).mockResolvedValue({
       id: 'vat', name: 'VAT', rate: '10', type: 'percentage', tenantId: 'tenant-1', isActive: true,
     });
     const { calculateCompoundTax } = await import('@/lib/tax');
@@ -196,8 +186,7 @@ describe('Tax - calculateCompoundTax (extended)', () => {
 
   it('rounds total tax with many fractional rates', async () => {
     let calls = 0;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (db.query.taxRates.findFirst as any).mockImplementation(async () => {
+    vi.mocked(db.query.taxRates.findFirst).mockImplementation(async () => {
       calls++;
       const rates = [
         { id: 'r1', name: 'R1', rate: '5.55', type: 'percentage', tenantId: 'tenant-1', isActive: true },
@@ -213,8 +202,7 @@ describe('Tax - calculateCompoundTax (extended)', () => {
   });
 
   it('handles zero amount with multiple rates', async () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (db.query.taxRates.findFirst as any).mockResolvedValue({
+    vi.mocked(db.query.taxRates.findFirst).mockResolvedValue({
       id: 'vat', name: 'VAT', rate: '10', type: 'percentage', tenantId: 'tenant-1', isActive: true,
     });
     const { calculateCompoundTax } = await import('@/lib/tax');
@@ -224,8 +212,7 @@ describe('Tax - calculateCompoundTax (extended)', () => {
   });
 
   it('rounds individual line items with fractional amounts', async () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (db.query.taxRates.findFirst as any).mockResolvedValue({
+    vi.mocked(db.query.taxRates.findFirst).mockResolvedValue({
       id: 'r1', name: 'R1', rate: '8.25', type: 'percentage', tenantId: 'tenant-1', isActive: true,
     });
     const { calculateCompoundTax } = await import('@/lib/tax');
@@ -309,8 +296,7 @@ describe('Tax - isEntityExempt', () => {
   });
 
   it('returns true when exemption exists', async () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (db.query.taxExemptions.findFirst as any).mockResolvedValue({
+    vi.mocked(db.query.taxExemptions.findFirst).mockResolvedValue({
       id: 'ex-1',
       tenantId: 'tenant-1',
       entityType: 'customer',
@@ -322,24 +308,21 @@ describe('Tax - isEntityExempt', () => {
   });
 
   it('returns false when no exemption record exists', async () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (db.query.taxExemptions.findFirst as any).mockResolvedValue(null);
+    vi.mocked(db.query.taxExemptions.findFirst).mockResolvedValue(null);
     const { isEntityExempt } = await import('@/lib/tax');
     const result = await isEntityExempt('tenant-1', 'customer', 'nonexistent');
     expect(result).toBe(false);
   });
 
   it('returns false when exemption query returns undefined', async () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (db.query.taxExemptions.findFirst as any).mockResolvedValue(undefined);
+    vi.mocked(db.query.taxExemptions.findFirst).mockResolvedValue(undefined);
     const { isEntityExempt } = await import('@/lib/tax');
     const result = await isEntityExempt('tenant-1', 'vendor', 'v-99');
     expect(result).toBe(false);
   });
 
   it('queries with correct tenant, entity type, and entity ID', async () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (db.query.taxExemptions.findFirst as any).mockResolvedValue(null);
+    vi.mocked(db.query.taxExemptions.findFirst).mockResolvedValue(null);
     const { isEntityExempt } = await import('@/lib/tax');
     await isEntityExempt('tenant-42', 'organization', 'org-7');
     expect(db.query.taxExemptions.findFirst).toHaveBeenCalledWith(
@@ -371,8 +354,7 @@ describe('Tax - applyTaxToLineItems (extended)', () => {
   });
 
   it('defaults quantity to 1 when omitted', async () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (db.query.taxRates.findFirst as any).mockResolvedValue({
+    vi.mocked(db.query.taxRates.findFirst).mockResolvedValue({
       id: 'vat', name: 'VAT', rate: '10', type: 'percentage', tenantId: 'tenant-1', isActive: true,
     });
     const { applyTaxToLineItems } = await import('@/lib/tax');
@@ -385,8 +367,7 @@ describe('Tax - applyTaxToLineItems (extended)', () => {
   });
 
   it('handles items without id or description fields', async () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (db.query.taxRates.findFirst as any).mockResolvedValue({
+    vi.mocked(db.query.taxRates.findFirst).mockResolvedValue({
       id: 'vat', name: 'VAT', rate: '10', type: 'percentage', tenantId: 'tenant-1', isActive: true,
     });
     const { applyTaxToLineItems } = await import('@/lib/tax');
@@ -398,8 +379,7 @@ describe('Tax - applyTaxToLineItems (extended)', () => {
   });
 
   it('merges breakdown entries with the same taxRateId across items', async () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (db.query.taxRates.findFirst as any).mockResolvedValue({
+    vi.mocked(db.query.taxRates.findFirst).mockResolvedValue({
       id: 'vat', name: 'VAT', rate: '10', type: 'percentage', tenantId: 'tenant-1', isActive: true,
     });
     const { applyTaxToLineItems } = await import('@/lib/tax');
@@ -415,8 +395,7 @@ describe('Tax - applyTaxToLineItems (extended)', () => {
   });
 
   it('handles mix of exempt and non-exempt items with merged breakdown', async () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (db.query.taxRates.findFirst as any).mockResolvedValue({
+    vi.mocked(db.query.taxRates.findFirst).mockResolvedValue({
       id: 'vat', name: 'VAT', rate: '10', type: 'percentage', tenantId: 'tenant-1', isActive: true,
     });
     const { applyTaxToLineItems } = await import('@/lib/tax');
@@ -435,8 +414,7 @@ describe('Tax - applyTaxToLineItems (extended)', () => {
   });
 
   it('preserves item properties in output', async () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (db.query.taxRates.findFirst as any).mockResolvedValue({
+    vi.mocked(db.query.taxRates.findFirst).mockResolvedValue({
       id: 'vat', name: 'VAT', rate: '10', type: 'percentage', tenantId: 'tenant-1', isActive: true,
     });
     const { applyTaxToLineItems } = await import('@/lib/tax');
@@ -452,8 +430,7 @@ describe('Tax - applyTaxToLineItems (extended)', () => {
   });
 
   it('rounds merged breakdown amounts correctly', async () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (db.query.taxRates.findFirst as any).mockResolvedValue({
+    vi.mocked(db.query.taxRates.findFirst).mockResolvedValue({
       id: 'r1', name: 'R1', rate: '8.25', type: 'percentage', tenantId: 'tenant-1', isActive: true,
     });
     const { applyTaxToLineItems } = await import('@/lib/tax');
