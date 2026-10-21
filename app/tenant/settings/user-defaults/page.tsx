@@ -11,6 +11,7 @@ import { Settings as SettingsIcon, Save, Loader2, RotateCcw, ShieldX, AlertCircl
   Palette, Calendar, Zap, Mail, Lock,
   type LucideIcon,
 } from 'lucide-react';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import { confirmThen } from '@/components/ui/confirm-dialog';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
@@ -34,7 +35,20 @@ export default function UserDefaultsPage() {
 
   // #1328: reads via TanStack Query (were parallel raw fetch + useEffect). The
   // editable copy is seeded once so the dirty-tracking + discard flow persists.
-  const { data: defaultsData, isLoading: defaultsLoading } = useApiQuery<{ user_defaults?: Defaults }>(
+  //
+  // #2872: this read bound neither `error` nor `refetch`, so the panel had one shape for every
+  // outcome. The editable copy seeds off the payload once (`original === null`), so a read that
+  // never answered leaves `defaults` at `{}` and the page renders every field as
+  // "— Unset (use platform default) —" above "0 defaults currently set." — the workspace's real
+  // defaults reported as none, with a Save bar and a destructive Clear-all next to them. Nothing
+  // invalidates this key: both writes rewrite the local copy only. So the refresh that fails here is
+  // the remount past `staleTime` when the admin comes back to Settings, or the browser reconnecting
+  // (`refetchOnReconnect` is on by default) — and TanStack hands that refusal back WITH the previous
+  // payload, which is the state where the values on screen are a last read rather than the
+  // workspace's current one.
+  const {
+    data: defaultsData, isLoading: defaultsLoading, error: defaultsError, refetch: refetchDefaults,
+  } = useApiQuery<{ user_defaults?: Defaults }>(
     ['tenant', 'admin', 'user-defaults'],
     '/api/tenant/admin/user-defaults',
   );
@@ -43,7 +57,13 @@ export default function UserDefaultsPage() {
     '/api/tenant/me',
   );
   const loading = defaultsLoading || meLoading;
+  // The gate read only answers `is_admin`, and defaults open when it has never answered; there is no
+  // list or count here for a refusal to misreport, and both writes re-check admin themselves with a
+  // 403 — the same ruling #2932 made for the picklists gate.
   const isAdmin = meData?.is_admin ?? true;
+  const failed = Boolean(defaultsError) && !defaultsData;
+  const stale = Boolean(defaultsError) && Boolean(defaultsData);
+  const reason = defaultsError?.message || 'no response from the server';
 
   useEffect(() => {
     if (defaultsData && original === null) {
@@ -107,6 +127,22 @@ export default function UserDefaultsPage() {
 
   const setCount = Object.keys(defaults).length;
 
+  if (failed) {
+    // The form is not rendered for a read that never answered, because with nothing seeded it would
+    // be a wall of "— Unset —" fields under "0 defaults currently set." — and the header's Clear-all
+    // arms as soon as the operator touches one field, so the first write they reach would be the
+    // DELETE that removes every stored default this page never saw.
+    return (
+      <div className="space-y-5 animate-fade-in">
+        <h1 className="text-xl font-bold flex items-center gap-2"><SettingsIcon className="w-5 h-5 text-violet-600" />Workspace User Defaults</h1>
+        <InlineErrorState
+          message={`Failed to load workspace user defaults: ${reason}. The form is hidden rather than shown unset, so nothing here can be saved or cleared blind.`}
+          onRetry={refetchDefaults}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-5 animate-fade-in">
       <div className="flex items-start justify-between gap-3 flex-wrap">
@@ -122,6 +158,13 @@ export default function UserDefaultsPage() {
           <RotateCcw className="w-3 h-3" /> Clear all defaults
         </button>
       </div>
+
+      {stale && (
+        <InlineErrorState
+          message={`Could not refresh, so the defaults below are the last read: ${reason}. Saving what you touch only replaces the fields you touched, but clearing now removes every stored default — including any set since this read.`}
+          onRetry={refetchDefaults}
+        />
+      )}
 
       <div className="rounded-xl border border-dashed border-border p-3 flex items-start gap-2 text-xs">
         <AlertCircle className="w-3.5 h-3.5 text-amber-600 mt-0.5 shrink-0" />

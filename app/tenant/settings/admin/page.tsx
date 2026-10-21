@@ -66,6 +66,21 @@ export default function OrganizationAdminPage() {
   const members: Member[] = membersData?.data ?? [];
   const usage: Usage = orgData?.usage ?? {};
 
+  // #2872: both reads bound their `error`, but the page branched on the bare flag — `orgError ||
+  // membersError` — and threw the entire panel away for it. TanStack keeps `data` when a refresh of a
+  // read that already succeeded is refused, so the routine state after the admin walks back from
+  // /tenant/settings/team past `staleTime` — or after the browser reconnects, since
+  // `refetchOnReconnect` is on by default and NOTHING invalidates `['tenant','workspace']` or
+  // `['tenant','members']` (the Team page writes with plain fetch) — was a full set of real rows in
+  // scope and an outage card in their place: plan, seats, usage and roster all reported as unloadable,
+  // with a retry that refetched both reads whichever one refused.
+  const orgFailed = Boolean(orgError) && !orgData;
+  const orgStale = Boolean(orgError) && Boolean(orgData);
+  const orgReason = orgError?.message || 'no response from the server';
+  const membersFailed = Boolean(membersError) && !membersData;
+  const membersStale = Boolean(membersError) && Boolean(membersData);
+  const membersReason = membersError?.message || 'no response from the server';
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -74,16 +89,25 @@ export default function OrganizationAdminPage() {
     );
   }
 
-  // Nothing below survives an unread read: the organization card renders blank, the plan as
-  // "Free"/"active", the seats as 0/1 and the team as having no members (#2829). Say the read
-  // failed instead of describing the tenant's workspace from what is left in scope.
-  if (orgError || membersError) {
+  // #2829's ruling stands for a read that never answered: nothing below survives it — the
+  // organization card renders blank, the plan as "Free"/"active", the seats as 0/1 and the team as
+  // having no members. Say the read failed instead of describing the tenant's workspace from what is
+  // left in scope, and put only the refused read's own refetch behind "Try again".
+  if (orgFailed || membersFailed) {
     return (
-      <div className="flex items-center justify-center h-64 px-4">
-        <InlineErrorState
-          message={`Failed to load your organization: ${(orgError ?? membersError)?.message || 'no response from the server'}`}
-          onRetry={() => { refetchOrg(); refetchMembers(); }}
-        />
+      <div className="flex flex-col items-center justify-center gap-3 h-64 px-4">
+        {orgFailed && (
+          <InlineErrorState
+            message={`Failed to load your organization: ${orgReason}`}
+            onRetry={refetchOrg}
+          />
+        )}
+        {membersFailed && (
+          <InlineErrorState
+            message={`Failed to load your team members: ${membersReason}`}
+            onRetry={refetchMembers}
+          />
+        )}
       </div>
     );
   }
@@ -101,6 +125,19 @@ export default function OrganizationAdminPage() {
           Manage your organization, team, and subscription
         </p>
       </div>
+
+      {orgStale && (
+        <InlineErrorState
+          message={`Could not refresh, so the organization, plan and usage below are the last read: ${orgReason}. A plan change or a seat limit moved since then is not reflected here.`}
+          onRetry={refetchOrg}
+        />
+      )}
+      {membersStale && (
+        <InlineErrorState
+          message={`Could not refresh, so the roster and the seats used below are the last read: ${membersReason}. A colleague invited or removed since then is not reflected here.`}
+          onRetry={refetchMembers}
+        />
+      )}
 
       {/* Organization Info */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
