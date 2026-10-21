@@ -67,7 +67,9 @@ export const GET = withApiRoute(async (req: NextRequest, { params }: { params: P
 
     if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-    return NextResponse.json({ data: row });
+    // #2973: node-postgres returns Postgres `decimal` columns as strings, so
+    // taxRate arrived as "5.00" instead of 5. Coerce to a number.
+    return NextResponse.json({ data: { ...row, taxRate: money(row.taxRate) } });
 
 
   } catch (err) {
@@ -267,7 +269,9 @@ export const PUT = withApiRoute(async (req: NextRequest, { params }: { params: P
       metadata: { changes: allowedFields },
     });
 
-    return NextResponse.json({ data: updated });
+    // #2973: node-postgres returns Postgres `decimal` columns as strings, so
+    // coerce taxRate to a number in the response.
+    return NextResponse.json({ data: { ...updated, taxRate: money(updated?.taxRate) } });
 
 
   } catch (err) {
