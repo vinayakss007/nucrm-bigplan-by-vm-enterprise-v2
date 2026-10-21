@@ -141,6 +141,17 @@ export const triggerWorkflowSchema = z.object({
   trigger_entity_id: uuidIdSchema,
 });
 
+// ── Test Workflow schema ──
+/** #2806 — the builder's Test button posts to `/api/tenant/workflows/[id]/test`.
+ *  Unlike `/run`, the entity is optional here: a test with no entity exercises
+ *  the workflow's plumbing (nodes, actions, template context) against nothing,
+ *  which is what the button had to offer before an entity picker exists. When
+ *  an id IS sent it must be a uuid — the engine scopes it by tenant either way. */
+export const testWorkflowSchema = z.object({
+  trigger_entity_type: z.string().trim().max(100).optional(),
+  trigger_entity_id: uuidIdSchema.optional(),
+});
+
 // ── WhatsApp Send schema ──
 export const sendWhatsAppSchema = z.object({
   to: requiredString.max(20),

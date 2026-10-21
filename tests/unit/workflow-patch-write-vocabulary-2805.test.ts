@@ -18,16 +18,13 @@
  * So these tests pin the request side of the round trip: a snake_case body has to
  * land in the camelCase columns, unchanged by this issue.
  *
- * The last test records a deliberate non-fix. `PATCH` never maps `trigger_type`,
- * so editing the trigger is silently dropped (`updateData` at `:132-137` has no
- * `triggerType`). Adding the mapping is *not* safe on its own: the column is
- * gated by `chk_workflows_trigger_type`
- * (`drizzle/migrations/0050_data_validation_checks.sql:87-88`), which admits only
- * `manual|schedule|event|webhook`, while the builder posts one of nine dotted
- * values unconditionally (`workflow-builder.tsx:91-101`, `:401`). Wiring it up
- * before #2806 decides which vocabulary wins converts today's no-op into a 23514
- * on every save. This test therefore documents the gap in place, where #2806 has
- * to change it knowingly rather than discover it.
+ * The last two tests record #2806's decision landing. `PATCH` used to never map
+ * `trigger_type`, so editing the trigger was silently dropped; the owner picked
+ * option (a) — `trigger_type` is the kind (`chk_workflows_trigger_type`'s set:
+ * `manual|schedule|event|webhook`) and the dotted event moved to
+ * `trigger_config`. The route now maps a legal kind onto `triggerType` and
+ * answers any other value with a 400 at the door, so a stray dotted value can
+ * never reach the CHECK and surface as a 23514 on save.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { NextRequest } from 'next/server';
@@ -137,15 +134,23 @@ describe('the workflows update route takes snake_case and stores camelCase (#280
     });
   });
 
-  it('leaves trigger_type on the floor — the gap #2806 has to close deliberately', async () => {
-    const res = await patch({ name: 'Deal onboarding', trigger_type: 'contact.created' });
+  it('maps trigger_type through the CHECK set instead of dropping it (#2806 a)', async () => {
+    // PATCH used to leave trigger_type on the floor: the builder posted one of
+    // nine dotted event names and wiring it straight through would have been a
+    // 23514 on every save. The owner took #2806's decision — trigger_type is
+    // the kind, the event lives in trigger_config — so the route now maps a
+    // legal kind onto `triggerType` and rejects anything else with a 400.
+    const res = await patch({ name: 'Deal onboarding', trigger_type: 'event', trigger_config: { entity: 'deal', event: 'won' } });
 
     expect(res.status).toBe(200);
-    // `updateData` (`[id]/route.ts:132-137`) never sets triggerType, so the value
-    // the builder posts is dropped and the stored trigger is untouched. Asserting
-    // the drop is asserting today's behaviour, not endorsing it: the value is
-    // also one `chk_workflows_trigger_type` would reject, which is why this fix
-    // does not simply forward it.
-    expect(workflowRow()).not.toHaveProperty('triggerType');
+    expect(workflowRow()).toMatchObject({ triggerType: 'event', triggerConfig: { entity: 'deal', event: 'won' } });
+  });
+
+  it('answers a dotted or otherwise out-of-set trigger_type with a 400, never a 23514', async () => {
+    for (const bad of ['contact.created', 'webhooks', 'WEBHOOK', '']) {
+      const res = await patch({ name: 'Deal onboarding', trigger_type: bad });
+      expect(res.status, `${JSON.stringify(bad)} must not reach the database`).toBe(400);
+    }
+    expect(updated).toHaveLength(0);
   });
 });

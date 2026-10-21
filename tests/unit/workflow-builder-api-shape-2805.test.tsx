@@ -44,14 +44,11 @@
  * The `trigger_type` values below are the four the column can hold:
  * `chk_workflows_trigger_type`
  * (`drizzle/migrations/0050_data_validation_checks.sql:87-88`) admits only
- * `'manual' | 'schedule' | 'event' | 'webhook'`. The builder's `TRIGGER_OPTIONS`
- * (`contact.created`, `deal.won`, …) is a second vocabulary and
- * `createWorkflowSchema`'s `z.enum(['event','schedule','manual'])`
- * (`lib/api/schemas.ts`) a third — and that third is itself narrower than the
- * CHECK it is guarding, omitting `'webhook'`. Which means *creating* a workflow
- * from the builder is a 400 before any of the above is reached. Choosing among
- * the three is a decision about the endpoint's contract, so it is deliberately
- * not folded into this fix; see the follow-up issue.
+ * `'manual' | 'schedule' | 'event' | 'webhook'`. The builder used to keep a
+ * second vocabulary — nine dotted event names posted as `trigger_type`, every
+ * create a 400 — until #2806's option (a) landed: kind in `trigger_type`, event
+ * in `trigger_config` (`tests/unit/workflow-trigger-vocab-2806.test.ts` pins
+ * all three sites to the same set).
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
@@ -182,13 +179,15 @@ describe('#2805 — the builder reads the payload the workflows route actually s
 
     fireEvent.click(screen.getByRole('button', { name: /^Test$/i }));
 
-    // `testWorkflow()` posts `triggerType.split('.')[0]`. With the state set from
-    // `wf.trigger_type` — a key the route never sends — that is
-    // `undefined.split` and the request is never made.
+    // The route answers `triggerType: 'event'` with an empty `triggerConfig`,
+    // so the kind reaches the state and the event keeps the builder's default.
+    // `testWorkflow()` posts the *entity* from that pair (#2806 (a)) — before
+    // the fix it posted `triggerType.split('.')[0]` of the dotted value, or
+    // threw on `undefined.split` when the read used the snake_case key.
     await waitFor(() => {
       const test = calls.find(c => c.method === 'POST' && c.url.endsWith('/test'));
       expect(test?.body).toBeTruthy();
-      expect((test!.body as { trigger_entity_type?: string }).trigger_entity_type).toBe('event');
+      expect((test!.body as { trigger_entity_type?: string }).trigger_entity_type).toBe('contact');
     });
   });
 
@@ -245,16 +244,17 @@ describe('#2805 — the builder reads the payload the workflows route actually s
       expect(patch).toBeTruthy();
     });
     const patch = calls.find(c => c.method === 'PATCH')!;
-    const body = patch.body as { nodes: unknown[]; actions?: unknown[]; trigger_type?: string };
+    const body = patch.body as { nodes: unknown[]; actions?: unknown[]; trigger_type?: string; trigger_config?: { entity: string; event: string } };
     expect(body.nodes).toEqual(storedNodes);
     // `nodeType` is the builder's own prefix, so the round trip yields the
     // unprefixed `action_type` the write handlers destructure.
     expect(body.actions).toEqual([
       { action_type: 'send_email', action_config: { subject: 'Welcome aboard' }, condition_type: 'always', condition_config: {} },
     ]);
-    // TRIGGER_OPTIONS does not contain 'event' — that gap is the follow-up
-    // issue's subject, and this test pins only that the stored value is what
-    // reaches the wire.
+    // #2806 (a): the kind goes on the wire in trigger_type — a value both the
+    // schema and chk_workflows_trigger_type accept — and the event the picker
+    // shows goes in trigger_config.
     expect(body.trigger_type).toBe('event');
+    expect(body.trigger_config).toEqual({ entity: 'contact', event: 'created' });
   });
 });
