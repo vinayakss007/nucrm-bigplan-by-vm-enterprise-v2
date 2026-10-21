@@ -4,7 +4,7 @@
  * Proprietary & confidential. Unauthorized copying or distribution is prohibited.
  */
 'use client';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiQuery } from '@/lib/query/client';
@@ -12,6 +12,7 @@ import Link from 'next/link';
 import { ArrowLeft, Edit2, Trash2, Save, X, Package, Truck, CheckCircle, Clock, Calendar } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { confirmThen } from '@/components/ui/confirm-dialog';
+import InlineErrorState from '@/components/shared/inline-error-state';
 import toast from 'react-hot-toast';
 
 interface Order {
@@ -66,17 +67,27 @@ export default function OrderDetailPage() {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<Partial<Order>>({});
 
-  // #1328: detail read via TanStack Query.
-  const { data, isLoading: loading, error } = useApiQuery<OrderResponse>(
+  // #1328: detail read via TanStack Query. Money, dates, status and shipping are all fields
+  // of this one response, so a refused refresh stales the whole document — there is no second
+  // read on the page to retry by accident.
+  const { data, isLoading: loading, error, refetch } = useApiQuery<OrderResponse>(
     ORDER_QUERY(id),
     `/api/tenant/orders/${id}`,
     { enabled: !!id },
   );
   const order = data?.data;
 
-  useEffect(() => {
-    if (error) toast.error('Failed to load order');
-  }, [error]);
+  // #2872: saving the edit form and every status move (Move to…, Cancel Order) end in
+  // `invalidate()`, which targets ORDER_QUERY(id) — this exact key — so the normal state right
+  // after the operator acts is the order still on screen plus a set flag. The page keyed only
+  // off that flag: it toasted and then fell into `if (!order)`, telling the operator the order
+  // they had just shipped was not found. A 404 is a different answer: orders/[id] 404s only
+  // when no live row matches this id and tenant (a refusal is a 403), so "does not exist"
+  // stays separate from "could not load".
+  const failed = Boolean(error) && !data;
+  const notFound = failed && error?.status === 404;
+  const stale = Boolean(error) && Boolean(data);
+  const reason = error?.message || 'no response from the server';
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ORDER_QUERY(id) });
 
@@ -173,12 +184,36 @@ export default function OrderDetailPage() {
     );
   }
 
+  // The read never answered, and the server was not asked whether this order exists. Nothing
+  // here may offer a write against an id this session only failed to read.
+  if (failed && !notFound) {
+    return (
+      <div className="space-y-4 animate-fade-in">
+        <Link href="/tenant/orders" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors">
+          <ArrowLeft className="w-4 h-4" /> Back to Orders
+        </Link>
+        <InlineErrorState message={`Failed to load order: ${reason}`} onRetry={() => void refetch()} />
+      </div>
+    );
+  }
+
+  // The read answered and there is no order in it — reachable through the 404 above, or a 2xx
+  // with an empty body. It says so plainly, and a refused refresh on top of it still carries
+  // the caveat rather than silently claiming the order is gone.
   if (!order) {
     return (
-      <div className="text-center py-12">
-        <Package className="w-12 h-12 mx-auto mb-3 text-muted-foreground/30" />
-        <p className="text-lg font-semibold">Order not found</p>
-        <Link href="/tenant/orders" className="text-sm text-violet-600 hover:underline mt-2 inline-block">Back to orders</Link>
+      <div className="space-y-4 animate-fade-in">
+        {stale && (
+          <InlineErrorState
+            message={`Could not refresh, so this page is the last read: ${reason}. The order may have been deleted since it last answered — that is not the same as never loading.`}
+            onRetry={() => void refetch()}
+          />
+        )}
+        <div className="text-center py-12">
+          <Package className="w-12 h-12 mx-auto mb-3 text-muted-foreground/30" />
+          <p className="text-lg font-semibold">Order not found</p>
+          <Link href="/tenant/orders" className="text-sm text-violet-600 hover:underline mt-2 inline-block">Back to orders</Link>
+        </div>
       </div>
     );
   }
@@ -191,6 +226,14 @@ export default function OrderDetailPage() {
       <Link href="/tenant/orders" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors">
         <ArrowLeft className="w-4 h-4" /> Back to Orders
       </Link>
+
+      {/* Kept document, refused refresh: the order stays on screen and says what it may not show. */}
+      {stale && (
+        <InlineErrorState
+          message={`Could not refresh, so this order is the last read: ${reason}. The edit you just saved or the status you just moved may not be reflected here.`}
+          onRetry={() => void refetch()}
+        />
+      )}
 
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
