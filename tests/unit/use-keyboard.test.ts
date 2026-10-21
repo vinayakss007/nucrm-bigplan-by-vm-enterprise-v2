@@ -1,48 +1,77 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const listeners = new Map<string, Set<(...args: any[]) => void>>();
+// #1269: the fake-DOM harness below was `any`-typed; the shapes it actually
+// needs are small enough to state outright, so the suppressions are gone.
+type EventHandler = (...args: unknown[]) => void;
+
+interface FakeKeyboardEventInit {
+  key?: string;
+  metaKey?: boolean;
+  ctrlKey?: boolean;
+}
+
+interface FakeKeyboardEvent {
+  key: string;
+  metaKey: boolean;
+  ctrlKey: boolean;
+  preventDefault(): void;
+  target: FakeElement | null;
+}
+
+interface FakeKeyboardEventCtor {
+  new (type: string, init?: FakeKeyboardEventInit): FakeKeyboardEvent;
+  setCurrentTarget(el: FakeElement | null): void;
+}
+
+interface FakeElement {
+  tagName: string;
+  setAttribute(attr: string, val: string): void;
+  readonly dataset: Record<string, string>;
+  parentElement: FakeElement | null;
+  appendChild(child: FakeElement): void;
+  dispatchEvent(event: FakeKeyboardEvent): void;
+  focus(): void;
+  click(): void;
+  querySelector(sel: string): FakeElement | null;
+  addEventListener(event: string, handler: EventHandler): void;
+  removeEventListener(): void;
+}
+
+const listeners = new Map<string, Set<EventHandler>>();
 
 beforeEach(() => {
   listeners.clear();
   vi.clearAllMocks();
   vi.stubGlobal('window', {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    addEventListener: vi.fn((event: string, handler: (...args: any[]) => void) => {
+    addEventListener: vi.fn((event: string, handler: EventHandler) => {
       if (!listeners.has(event)) listeners.set(event, new Set());
       listeners.get(event)!.add(handler);
     }),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    removeEventListener: vi.fn((event: string, handler: (...args: any[]) => void) => {
+    removeEventListener: vi.fn((event: string, handler: EventHandler) => {
       listeners.get(event)?.delete(handler);
     }),
   });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let currentTarget: any = null;
-  vi.stubGlobal('KeyboardEvent', class {
+  let currentTarget: FakeElement | null = null;
+  vi.stubGlobal('KeyboardEvent', class implements FakeKeyboardEvent {
     key: string;
     metaKey: boolean;
     ctrlKey: boolean;
     preventDefault: ReturnType<typeof vi.fn>;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    target: any;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    constructor(type: string, init?: any) {
+    target: FakeElement | null;
+    constructor(type: string, init?: FakeKeyboardEventInit) {
       this.key = init?.key ?? '';
       this.metaKey = init?.metaKey ?? false;
       this.ctrlKey = init?.ctrlKey ?? false;
       this.preventDefault = vi.fn();
       this.target = currentTarget;
     }
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    static setCurrentTarget(el: any) { currentTarget = el; }
+    static setCurrentTarget(el: FakeElement | null) { currentTarget = el; }
   });
   vi.stubGlobal('document', {
-    createElement: (tag: string) => {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const elListeners = new Map<string, Set<(...args: any[]) => void>>();
+    createElement: (tag: string): FakeElement => {
+      const elListeners = new Map<string, Set<EventHandler>>();
       const dataAttrs: Record<string, string> = {};
-      const self = {
+      const self: FakeElement = {
         tagName: tag.toUpperCase(),
         setAttribute: vi.fn((attr: string, val: string) => {
           if (attr.startsWith('data-')) {
@@ -52,18 +81,15 @@ beforeEach(() => {
         }),
         get dataset() { return dataAttrs; },
         parentElement: null,
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-        appendChild: vi.fn((child: any) => { child.parentElement = self; }),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-        dispatchEvent: vi.fn((event: any) => {
+        appendChild: vi.fn((child: FakeElement) => { child.parentElement = self; }),
+        dispatchEvent: vi.fn((event: FakeKeyboardEvent) => {
           elListeners.get('keydown')?.forEach(h => h(event));
           if (self.parentElement) self.parentElement.dispatchEvent(event);
         }),
         focus: vi.fn(),
         click: vi.fn(),
         querySelector: vi.fn(),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-        addEventListener: vi.fn((event: string, handler: (...args: any[]) => void) => {
+        addEventListener: vi.fn((event: string, handler: EventHandler) => {
           if (!elListeners.has(event)) elListeners.set(event, new Set());
           elListeners.get(event)!.add(handler);
         }),
@@ -84,8 +110,7 @@ vi.mock('react', () => ({
     if (cleanup) {
       const event = 'cleanup';
       if (!listeners.has(event)) listeners.set(event, new Set());
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      listeners.get(event)!.add(cleanup as any);
+      listeners.get(event)!.add(cleanup);
     }
   },
   useRef: (initial?: unknown) => ({ current: initial ?? null }),
@@ -93,17 +118,13 @@ vi.mock('react', () => ({
 }));
 
 function triggerKey(key: string, metaKey = false, ctrlKey = false) {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { KeyboardEvent: KE } = globalThis as any;
+  const KE: FakeKeyboardEventCtor = (globalThis as unknown as { KeyboardEvent: FakeKeyboardEventCtor }).KeyboardEvent;
   const event = new KE('keydown', { key, metaKey, ctrlKey });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  listeners.get('keydown')?.forEach((h: any) => h(event));
+  listeners.get('keydown')?.forEach(h => h(event));
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function triggerKeyOnElement(el: any, key: string) {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { KeyboardEvent: KE } = globalThis as any;
+function triggerKeyOnElement(el: FakeElement, key: string) {
+  const KE: FakeKeyboardEventCtor = (globalThis as unknown as { KeyboardEvent: FakeKeyboardEventCtor }).KeyboardEvent;
   KE.setCurrentTarget(el);
   const event = new KE('keydown', { key });
   KE.setCurrentTarget(null);
