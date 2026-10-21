@@ -26,12 +26,9 @@ vi.mock('@/drizzle/schema/financial', () => ({
 }));
 
 vi.mock('drizzle-orm', () => ({
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  eq: vi.fn((...args: any[]) => args),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  and: vi.fn((...args: any[]) => args),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  desc: vi.fn((col: any) => col),
+  eq: vi.fn((...args: unknown[]) => args),
+  and: vi.fn((...args: unknown[]) => args),
+  desc: vi.fn((col: unknown) => col),
   sql: vi.fn(),
 }));
 
@@ -44,8 +41,7 @@ describe('Tax - calculateTax', () => {
   });
 
   it('calculates percentage-based tax correctly', async () => {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (db.query.taxRates.findFirst as any).mockResolvedValue({
+    vi.mocked(db.query.taxRates.findFirst).mockResolvedValue({
       id: 'tax-1',
       name: 'Sales Tax',
       rate: '10',
@@ -64,8 +60,7 @@ describe('Tax - calculateTax', () => {
   });
 
   it('calculates fixed-amount tax correctly', async () => {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (db.query.taxRates.findFirst as any).mockResolvedValue({
+    vi.mocked(db.query.taxRates.findFirst).mockResolvedValue({
       id: 'tax-2',
       name: 'Flat Fee',
       rate: '5',
@@ -83,16 +78,14 @@ describe('Tax - calculateTax', () => {
   });
 
   it('throws error for non-existent tax rate', async () => {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (db.query.taxRates.findFirst as any).mockResolvedValue(null);
+    vi.mocked(db.query.taxRates.findFirst).mockResolvedValue(null);
 
     await expect(calculateTax(100, 'invalid', 'tenant-1'))
       .rejects.toThrow("Tax rate 'invalid' not found or inactive");
   });
 
   it('handles decimal amounts with rounding', async () => {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (db.query.taxRates.findFirst as any).mockResolvedValue({
+    vi.mocked(db.query.taxRates.findFirst).mockResolvedValue({
       id: 'tax-3',
       name: 'GST',
       rate: '7.5',
@@ -115,8 +108,7 @@ describe('Tax - calculateCompoundTax', () => {
 
   it('calculates compound tax with multiple rates', async () => {
     let callCount = 0;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (db.query.taxRates.findFirst as any).mockImplementation(async () => {
+    vi.mocked(db.query.taxRates.findFirst).mockImplementation(async () => {
       callCount++;
       if (callCount === 1) {
         return { id: 'gst', name: 'GST', rate: '5', type: 'percentage', tenantId: 'tenant-1', isActive: true };
@@ -150,8 +142,7 @@ describe('Tax - applyTaxToLineItems', () => {
   });
 
   it('applies tax to non-exempt items', async () => {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (db.query.taxRates.findFirst as any).mockResolvedValue({
+    vi.mocked(db.query.taxRates.findFirst).mockResolvedValue({
       id: 'tax-1',
       name: 'VAT',
       rate: '20',
@@ -178,8 +169,7 @@ describe('Tax - applyTaxToLineItems', () => {
   });
 
   it('skips tax-exempt items', async () => {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (db.query.taxRates.findFirst as any).mockResolvedValue({
+    vi.mocked(db.query.taxRates.findFirst).mockResolvedValue({
       id: 'tax-1',
       name: 'VAT',
       rate: '20',

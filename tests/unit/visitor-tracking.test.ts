@@ -38,10 +38,8 @@ vi.mock('drizzle-orm', () => ({
 
 import { db } from '@/drizzle/db';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function _mockSelect(returnValue: any) {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (db.select as any).mockReturnValue({
+function _mockSelect(returnValue: unknown) {
+  vi.mocked(db.select).mockReturnValue({
     from: vi.fn(() => ({
       where: vi.fn(() => ({
         orderBy: vi.fn(() => returnValue),
@@ -50,10 +48,8 @@ function _mockSelect(returnValue: any) {
   });
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function mockSelectBasic(returnValue: any) {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (db.select as any).mockReturnValue({
+function mockSelectBasic(returnValue: unknown) {
+  vi.mocked(db.select).mockReturnValue({
     from: vi.fn(() => ({
       where: vi.fn(() => returnValue),
     })),
@@ -61,8 +57,7 @@ function mockSelectBasic(returnValue: any) {
 }
 
 function _mockSelectEmpty() {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (db.select as any).mockReturnValue({
+  vi.mocked(db.select).mockReturnValue({
     from: vi.fn(() => ({
       where: vi.fn(() => []),
     })),
@@ -70,8 +65,7 @@ function _mockSelectEmpty() {
 }
 
 function mockInsert() {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (db.insert as any).mockReturnValue({
+  vi.mocked(db.insert).mockReturnValue({
     values: vi.fn(() => ({
       returning: vi.fn(() => [{ id: 'new-id' }]),
     })),
@@ -82,8 +76,7 @@ function mockUpdate() {
   const set = vi.fn(() => ({
     where: vi.fn(() => Promise.resolve([])),
   }));
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (db.update as any).mockReturnValue({ set });
+  vi.mocked(db.update).mockReturnValue({ set });
   return set;
 }
 
@@ -155,8 +148,7 @@ describe('trackPageView', () => {
 
   it('inserts page view and updates existing visitor', async () => {
     const { db } = await import('@/drizzle/db');
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (db.select as any).mockReturnValue({
+    vi.mocked(db.select).mockReturnValue({
       from: vi.fn(() => ({
         where: vi.fn(() => [
           { id: 'v-1', totalPageViews: 3, score: 10 },
@@ -175,8 +167,7 @@ describe('trackPageView', () => {
 
   it('does not update when visitor is new (no existing record)', async () => {
     const { db } = await import('@/drizzle/db');
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (db.select as any).mockReturnValue({
+    vi.mocked(db.select).mockReturnValue({
       from: vi.fn(() => ({
         where: vi.fn(() => []),
       })),
@@ -242,8 +233,7 @@ describe('getVisitorScore', () => {
   it('calculates full score with frequency and recency bonuses', async () => {
     const { db } = await import('@/drizzle/db');
     const recentDate = new Date();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (db.select as any)
+    vi.mocked(db.select)
       .mockReturnValueOnce({
         from: vi.fn(() => ({
           where: vi.fn(() => [
@@ -272,8 +262,7 @@ describe('getVisitorScore', () => {
   it('no frequency bonus for fewer than 5 visits', async () => {
     const { db } = await import('@/drizzle/db');
     const oldDate = new Date(Date.now() - 48 * 60 * 60 * 1000);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (db.select as any)
+    vi.mocked(db.select)
       .mockReturnValueOnce({
         from: vi.fn(() => ({
           where: vi.fn(() => [
@@ -301,8 +290,7 @@ describe('getVisitorScore', () => {
 
   it('skips recency bonus when lastSeenAt is null', async () => {
     const { db } = await import('@/drizzle/db');
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (db.select as any)
+    vi.mocked(db.select)
       .mockReturnValueOnce({
         from: vi.fn(() => ({
           where: vi.fn(() => [
@@ -345,8 +333,7 @@ describe('getVisitorProfile', () => {
       { url: '/demo', viewedAt: new Date() },
     ];
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (db.select as any)
+    vi.mocked(db.select)
       .mockReturnValueOnce({
         from: vi.fn(() => ({
           where: vi.fn(() => [visitorData]),
