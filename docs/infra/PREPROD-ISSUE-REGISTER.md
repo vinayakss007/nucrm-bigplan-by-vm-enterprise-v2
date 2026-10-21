@@ -20,7 +20,7 @@
 > own **22 pending at `32d252b9`** and PP-060's 24 — see PP-057's 2026-10-12 bullet. And the deploy-hop
 > history now has its full walk (**1,359 runs · 3 successes**, **#2582**), superseding PP-060's windowed
 > 778/0 and PP-063's 1,319. This bullet re-pins the `docs/README.md:75` pointer to the keep-the-entry
-> rule's line here (`docs/infra/PREPROD-ISSUE-REGISTER.md:5425`, re-pinned 2026-10-18 from `:5312`: **#2825**, **#2829**, **#2587** and **#2530** part 2 each grew this file above it) — the seventeenth such re-pin; **#2566**,
+> rule's line here (`docs/infra/PREPROD-ISSUE-REGISTER.md:5428`, re-pinned 2026-10-18 from `:5312`: **#2825**, **#2829**, **#2587** and **#2530** part 2 each grew this file above it; re-pinned again 2026-10-21 from `:5425`: this tree's own PP-045 re-pin added three lines above it) — the eighteenth such re-pin; **#2566**,
 > **#2569**, **#2578** and **#2581** each re-pin the same sentence from their own trees, so whichever docs
 > PR merges last re-derives it. Filed beside the host inventory **#2585**. **PP-075** and **PP-077** sit
 > with the open PRs **#2569** and **#2578**; **PP-076** shipped as **#2581**, so this takes **078** and **079** is free.
@@ -1987,8 +1987,11 @@ NOW() - interval '30 days'`, each followed by `v_count := v_count + 1`, and `RET
   (a) `leads` and `projects` are not in it, and (b) **`v_count` counts DELETE statements, not rows** —
   it returns at most 4 no matter whether 0 or 40,000 rows went.
 - **What that cost the tenant-facing endpoint.** `app/api/tenant/trash` `DELETE {purge_all:true}` called
-  the function and returned its value as `purged`, which `app/superadmin/settings/page.tsx:262` renders
-  as `Purged ${d.purged ?? 0} items`. Every click of "Purge Trash (30+ days old)" therefore claimed four
+  the function and returned its value as `purged`, which `app/superadmin/settings/page.tsx:314` renders
+  as `Purged ${d.purged ?? 0} items`. (The coordinate was re-pinned 2026-10-21 from `:262`, where it sat
+  when this entry was written: **#2938** grew that page's platform-settings block 52 lines above it, so
+  the pointer still landed on a live line — just not the one described here.) Every click of "Purge
+  Trash (30+ days old)" therefore claimed four
   items, and the six types the same endpoint lists (`TRASH_TABLES`: contact, deal, task, company,
   **lead**, **project**) meant two of them were never purged by it at all. The confirm dialog's promise
   ("permanently purge **all** trash items older than 30 days") was wider than the code behind it.
