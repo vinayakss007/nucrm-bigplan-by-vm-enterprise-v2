@@ -116,6 +116,19 @@ export default function NotificationsPage() {
 
   const dirty = original !== null && JSON.stringify(matrix) !== JSON.stringify(original);
 
+  // #2872: one flag was answering two different questions, because TanStack Query keeps `data`
+  // through a failed revalidation. The refresh that gets refused is ordinary here: the inbox at
+  // `app/tenant/notifications/page.tsx` reloads with `invalidateQueries({ queryKey: ['tenant',
+  // 'notifications'] })` — a PREFIX, so marking a row read or clearing the inbox invalidates this
+  // `['tenant', 'notifications', 'matrix']` key as well, and tidying the inbox and then coming
+  // here to change what gets sent is the normal route through it. This page's own Save never
+  // reloads the query (it only re-bases `original`), so the rule just saved sits in local state
+  // and in the cache while the reload comes back refused — which `if (error)` reported as an
+  // outage, taking the matrix, the unsaved edits and Discard/Save away with it.
+  const failed = Boolean(error) && !data;
+  const stale = Boolean(error) && Boolean(data);
+  const reason = error?.message || 'no response from the server';
+
   const setCell = (eventKey: string, channel: Channel, value: boolean) => {
     setMatrix(prev => ({
       ...prev,
@@ -173,15 +186,16 @@ export default function NotificationsPage() {
     return <div className="flex items-center justify-center h-48 text-muted-foreground"><Loader2 className="w-5 h-5 animate-spin" /></div>;
   }
 
-  // Every switch below defaults to OFF when `matrix` is empty, so a refused read renders a
-  // wall of choices the tenant never made (#2829). Nothing here is editable until the read
-  // succeeds — `dirty` already refuses to arm Save without `original`, and this keeps the
-  // page from claiming the current setup is all-off in the first place.
-  if (error) {
+  // Every switch below defaults to OFF when `matrix` is empty, so a matrix that has never
+  // answered this session renders a wall of choices the tenant never made (#2829). Nothing here is
+  // editable until the read lands — `dirty` already refuses to arm Save without `original`, and
+  // this keeps the page from claiming the current setup is all-off in the first place. A read that
+  // DID land is kept by `stale` above, because there the switches are the tenant's own answers.
+  if (failed) {
     return (
       <div className="flex items-center justify-center h-48 px-4">
         <InlineErrorState
-          message={`Failed to load your notification settings: ${error.message || 'no response from the server'}`}
+          message={`Failed to load your notification settings: ${reason}`}
           onRetry={refetch}
         />
       </div>
@@ -207,6 +221,13 @@ export default function NotificationsPage() {
           />
         </div>
       </div>
+
+      {stale && (
+        <InlineErrorState
+          message={`Could not refresh, so the choices below are the last read: ${reason}. A rule you just saved is not reflected here, and saving now writes over settings this page has not seen.`}
+          onRetry={refetch}
+        />
+      )}
 
       {/* Channel column toggles */}
       <div className="rounded-xl border border-border bg-card p-4">
@@ -250,6 +271,8 @@ export default function NotificationsPage() {
           <div className="text-center text-[10px] normal-case font-semibold">Row</div>
         </div>
 
+        {/* `query` filters the static GROUPS list and is not part of the query key, so a miss is a
+            search miss on rows the page holds — never a view that has yet to answer. */}
         {filteredGroups.length === 0 && (
           <div className="px-4 py-10 text-center text-sm text-muted-foreground">No events match "{query}"</div>
         )}
