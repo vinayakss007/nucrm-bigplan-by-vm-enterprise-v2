@@ -48,6 +48,14 @@
       "severity": "high",
       "title": "braces vulnerable to stack-exhaustion denial of service through deeply nested patterns",
       "reason": "braces 3.0.3 transitive of tailwindcss 3.4.19/chokidar/micromatch (dev build toolchain only). Only listed fix is the tailwindcss 4.3.3 semver-major, which is a separate tracked upgrade. Build-time DoS; no server-runtime exposure."
+    },
+    {
+      "ghsa": "GHSA-587H-7WMJ-H5PM",
+      "pkg": "vite",
+      "range": ">=8.2.0 <=8.2.3",
+      "severity": "high",
+      "title": "launch-editor: `fs.existsSync()` existence check can be bypassed on Windows",
+      "reason": "vite 8.2.2 (installed) is not a package.json dependency — it is the dev-toolchain peer pulled in by vitest and @vitejs/plugin-react. The advisory is vite's dev-server editor-launch middleware (`launch-editor` existence-check bypass, chained with GHSA-698v-4r3x-3vcv into command injection) and the advisory itself limits impact to Windows; nothing in the shipped app imports vite, and the running topology is `next start` in Linux Docker, where that middleware never executes. Clearing it needs a vite >8.2.3 refresh in a dedicated dependency PR."
     }
   ]
 }
